@@ -78,6 +78,7 @@ resource "aws_nat_gateway" "cabal_nat" {
 
 resource "aws_route_table" "cabal_private_rt" {
   count      = var.az_count
+  vpc_id     = aws_vpc.cabal_vpc.id
   tags       = {
     Name                 = "cabal-private-rt-${count.index}"
     managed_by_terraform = "y"
@@ -99,6 +100,7 @@ resource "aws_route_table_association" "cabal_private_rta" {
 }
 
 resource "aws_route_table" "cabal_public_rt" {
+  vpc_id   = aws_vpc.cabal_vpc.id
   tags     = {
     Name                 = "cabal-public-rt"
     managed_by_terraform = "y"
