@@ -5,6 +5,3 @@ variable "cidr_block" {
 variable "az_count" {
   type = number
 }
-
-variable "regional_provider" {
-}
