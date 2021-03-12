@@ -6,5 +6,5 @@ variable "az_count" {
   type = number
 }
 
-variable "provider" {
+variable "regional_provider" {
 }
