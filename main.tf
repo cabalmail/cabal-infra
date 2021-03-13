@@ -29,9 +29,9 @@ module "cabal_secondary_vpc" {
 
 module "cabal_primary_load_balancer" {
   source         = "./modules/elb"
-  public_subnets = module.cabal_primary_vpc.private_subnets
+  public_subnets = module.cabal_primary_vpc.public_subnets
   vpc            = module.cabal_primary_vpc.vpc
-  providers     = {
+  providers      = {
     aws = aws.aws_primary
   }
 }
@@ -39,7 +39,7 @@ module "cabal_primary_load_balancer" {
 module "cabal_secondary_load_balancer" {
   count          = var.create_secondary ? 1 : 0
   source         = "./modules/elb"
-  public_subnets = module.cabal_secondary_vpc.private_subnets
+  public_subnets = module.cabal_secondary_vpc.public_subnets
   vpc            = module.cabal_secondary_vpc.vpc
   providers      = {
     aws = aws.aws_secondary
