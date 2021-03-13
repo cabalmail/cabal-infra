@@ -32,7 +32,7 @@ module "cabal_primary_load_balancer" {
   private_subnets = module.cabal_primary_vpc.private_subnets
   vpc             = module.cabal_primary_vpc.vpc
   providers       = {
-    awd = aws.aws_primary
+    aws = aws.aws_primary
   }
 }
 
@@ -42,6 +42,6 @@ module "cabal_secondary_load_balancer" {
   private_subnets = module.cabal_secondary_vpc.private_subnets
   vpc             = module.cabal_secondary_vpc.vpc
   providers       = {
-    awd = aws.aws_secondary
+    aws = aws.aws_secondary
   }
 }
