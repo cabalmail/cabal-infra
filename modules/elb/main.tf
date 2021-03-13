@@ -50,11 +50,6 @@ resource "aws_lb_listener" "cabal_imaps_listener" {
     type             = "forward"
     target_group_arn = aws_lb_target_group.cabal_imap_tg.arn
   }
-  tags              = {
-    Name                 = "cabal-imaps-listener"
-    managed_by_terraform = "y"
-    terraform_repo       = local.repo
-  }
 }
 
 resource "aws_lb_target_group" "cabal_smtp_tg" {
@@ -91,11 +86,6 @@ resource "aws_lb_listener" "cabal_smtp_relay_listener" {
     type             = "forward"
     target_group_arn = aws_lb_target_group.cabal_smtp_tg.arn
   }
-  tags              = {
-    Name                 = "cabal-smtp-relay-listener"
-    managed_by_terraform = "y"
-    terraform_repo       = local.repo
-  }
 }
 
 resource "aws_lb_listener" "cabal_smtp_submission_listener" {
@@ -105,11 +95,6 @@ resource "aws_lb_listener" "cabal_smtp_submission_listener" {
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.cabal_smtp_tg.arn
-  }
-  tags              = {
-    Name                 = "cabal-smtp-submission-listener"
-    managed_by_terraform = "y"
-    terraform_repo       = local.repo
   }
 }
 
