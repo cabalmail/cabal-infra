@@ -44,4 +44,7 @@ module "cabal_secondary_load_balancer" {
   providers      = {
     aws = aws.aws_secondary
   }
+  depends_on     = [
+    module.cabal_secondary_vpc
+  ]
 }
