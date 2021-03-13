@@ -5,7 +5,3 @@ variable "vpc" {
 variable "private_subnets" {
   description = "Subnets for load balancer targets."
 }
-
-variable "public_subnets" {
-  description = "Subnets for load balancer."
-}
