@@ -145,11 +145,11 @@ resource "aws_lb_target_group" "cabal_smtp_submission_tg" {
   protocol             = "TCP"
   vpc_id               = var.vpc.id
   deregistration_delay = 30
-  stickiness           = {
+  stickiness {
     type    = source_ip
     enabled = true
   }
-  health_check         = {
+  health_check {
     enabled           = true
     interval          = 120
     port              = 587
