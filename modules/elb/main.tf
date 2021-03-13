@@ -113,9 +113,9 @@ resource "aws_lb_listener" "cabal_smtp_submission_listener" {
   }
 }
 
-resource "aws_lb_target_group" "cabal_imap_tg" {
-  name                 = "cabal-imap-tg"
-  port                 = "143"
+resource "aws_lb_target_group" "cabal_smtp_relay_tg" {
+  name                 = "cabal-smtp-relay-tg"
+  port                 = "25"
   protocol             = "TCP"
   vpc_id               = var.vpc.id
   deregistration_delay = 30
@@ -126,7 +126,7 @@ resource "aws_lb_target_group" "cabal_imap_tg" {
   health_check         = {
     enabled           = true
     interval          = 120
-    port              = 143
+    port              = 25
     protocol          = "TCP"
     healthy_threshold = 2
   }
@@ -139,18 +139,28 @@ resource "aws_lb_target_group" "cabal_imap_tg" {
   }
 }
 
-resource "aws_lb_listener" "cabal_imaps_listener" {
-  load_balancer_arn = aws_lb.cabal_nlb.arn
-  protocol          = "TLS"
-  port              = "993"
-  # certificate_arn   = TODO: get from dns module?
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.cabal_imap_tg.arn
+resource "aws_lb_target_group" "cabal_smtp_submission_tg" {
+  name                 = "cabal-smtp-submission-tg"
+  port                 = "587"
+  protocol             = "TCP"
+  vpc_id               = var.vpc.id
+  deregistration_delay = 30
+  stickiness           = {
+    type    = source_ip
+    enabled = true
   }
-  tags              = {
-    Name                 = "cabal-imaps-listener"
-    managed_by_terraform = "y"
-    terraform_repo       = local.repo
+  health_check         = {
+    enabled           = true
+    interval          = 120
+    port              = 587
+    protocol          = "TCP"
+    healthy_threshold = 2
+  }
+  depends_on           = [
+    aws_lb.cabal_nlb
+  ]
+
+  lifecycle {
+    create_before_destroy = true
   }
 }
