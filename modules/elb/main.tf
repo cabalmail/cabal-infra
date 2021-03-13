@@ -21,17 +21,17 @@ resource "aws_lb_target_group" "cabal_imap_tg" {
   protocol             = "TCP"
   vpc_id               = var.vpc.id
   deregistration_delay = 30
-  stickiness           = [
-    type    = source_ip,
+  stickiness           = {
+    type    = source_ip
     enabled = true
-  ]
-  health_check         = [
+  }
+  health_check         = {
     enabled           = true
     interval          = 120
     port              = 143
     protocol          = "TCP"
     healthy_threshold = 2
-  ]
+  }
   depends_on           = [
     aws_lb.cabal_nlb
   ]
@@ -63,17 +63,17 @@ resource "aws_lb_target_group" "cabal_smtp_tg" {
   protocol             = "TCP"
   vpc_id               = var.vpc.id
   deregistration_delay = 30
-  stickiness           = [
-    type    = source_ip,
+  stickiness           = {
+    type    = source_ip
     enabled = true
-  ]
-  health_check         = [
+  }
+  health_check         = {
     enabled           = true
     interval          = 120
     port              = 587
     protocol          = "TCP"
     healthy_threshold = 2
-  ]
+  }
   depends_on           = [
     aws_lb.cabal_nlb
   ]
@@ -119,17 +119,17 @@ resource "aws_lb_target_group" "cabal_imap_tg" {
   protocol             = "TCP"
   vpc_id               = var.vpc.id
   deregistration_delay = 30
-  stickiness           = [
-    type    = source_ip,
+  stickiness           = {
+    type    = source_ip
     enabled = true
-  ]
-  health_check         = [
+  }
+  health_check         = {
     enabled           = true
     interval          = 120
     port              = 143
     protocol          = "TCP"
     healthy_threshold = 2
-  ]
+  }
   depends_on           = [
     aws_lb.cabal_nlb
   ]
