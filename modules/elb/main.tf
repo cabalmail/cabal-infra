@@ -1,5 +1,7 @@
-locals {
-  repo = "https://github.com/ccarr-cabal/cabal-infra/tree/main"
+resource "aws_acm_certificate" "cabal_cert" {
+  private_key       = var.cert_key
+  certificate_body  = var.cert_body
+  certificate_chain = var.cert_chain
 }
 
 resource "aws_lb" "cabal_nlb" {
@@ -11,7 +13,7 @@ resource "aws_lb" "cabal_nlb" {
   tags                             = {
     Name                 = "cabal-nlb"
     managed_by_terraform = "y"
-    terraform_repo       = local.repo
+    terraform_repo       = var.repo
   }
 }
 
@@ -46,7 +48,7 @@ resource "aws_lb_listener" "cabal_imaps_listener" {
   load_balancer_arn = aws_lb.cabal_nlb.arn
   protocol          = "TLS"
   port              = "993"
-  # certificate_arn   = TODO: get from cert module
+  certificate_arn   = aws_acm_certificate.cabal_cert.id
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.cabal_imap_tg.arn

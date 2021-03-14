@@ -1,15 +1,6 @@
 locals {
-  private_cidr_blocks = [
-    cidrsubnet(var.cidr_block, 4, 0),
-    cidrsubnet(var.cidr_block, 4, 1),
-    cidrsubnet(var.cidr_block, 4, 2),
-  ]
-  public_cidr_blocks  = [
-    cidrsubnet(var.cidr_block, 4, 4),
-    cidrsubnet(var.cidr_block, 4, 5),
-    cidrsubnet(var.cidr_block, 4, 6),
-  ]
-  repo                = "https://github.com/ccarr-cabal/cabal-infra/tree/main"
+  bit_offsets = [ 0,1,2,2,3,3,3,3,4,4,4,4,4,4,4,4 ]
+  bit_offset  = local.bit_offsets[length(var.az_list)]
 }
 
 resource "aws_vpc" "cabal_vpc" {
@@ -17,29 +8,31 @@ resource "aws_vpc" "cabal_vpc" {
   tags       = {
     Name                 = "cabal-vpc"
     managed_by_terraform = "y"
-    terraform_repo       = local.repo
+    terraform_repo       = var.repo
   }
 }
 
 resource "aws_subnet" "cabal_private_subnet" {
-  count      = var.az_count
-  vpc_id     = aws_vpc.cabal_vpc.id
-  cidr_block = local.private_cidr_blocks[count.index]
-  tags       = {
+  count             = length(var.az_list)
+  vpc_id            = aws_vpc.cabal_vpc.id
+  availability_zone = var.az_list[count.index]
+  cidr_block        = cidrsubnet(var.cidr_block, local.bit_offset, count.index)
+  tags              = {
     Name                 = "cabal-private-subnet-${count.index}"
     managed_by_terraform = "y"
-    terraform_repo       = local.repo
+    terraform_repo       = var.repo
   }
 }
 
 resource "aws_subnet" "cabal_public_subnet" {
-  count      = var.az_count
-  vpc_id     = aws_vpc.cabal_vpc.id
-  cidr_block = local.public_cidr_blocks[count.index]
-  tags       = {
+  count             = length(var.az_list)
+  vpc_id            = aws_vpc.cabal_vpc.id
+  availability_zone = var.az_list[count.index]
+  cidr_block        = cidrsubnet(var.cidr_block, local.bit_offset, length(var.az_list) + count.index)
+  tags              = {
     Name                 = "cabal-public-subnet-${count.index}"
     managed_by_terraform = "y"
-    terraform_repo       = local.repo
+    terraform_repo       = var.repo
   }
 }
 
@@ -48,7 +41,7 @@ resource "aws_internet_gateway" "cabal_ig" {
   tags     = {
     Name                 = "cabal-igw"
     managed_by_terraform = "y"
-    terraform_repo       = local.repo
+    terraform_repo       = var.repo
   }
 }
 
@@ -61,7 +54,7 @@ resource "aws_eip" "cabal_nat_eip" {
   tags       = {
     Name                 = "cabal-nat-eip-${count.index}"
     managed_by_terraform = "y"
-    terraform_repo       = local.repo
+    terraform_repo       = var.repo
   }
 }
 
@@ -72,7 +65,7 @@ resource "aws_nat_gateway" "cabal_nat" {
   tags          = {
     Name                 = "cabal-nat-${count.index}"
     managed_by_terraform = "y"
-    terraform_repo       = local.repo
+    terraform_repo       = var.repo
   }
 }
 
@@ -82,7 +75,7 @@ resource "aws_route_table" "cabal_private_rt" {
   tags       = {
     Name                 = "cabal-private-rt-${count.index}"
     managed_by_terraform = "y"
-    terraform_repo       = local.repo
+    terraform_repo       = var.repo
   }
 }
 
@@ -104,7 +97,7 @@ resource "aws_route_table" "cabal_public_rt" {
   tags     = {
     Name                 = "cabal-public-rt"
     managed_by_terraform = "y"
-    terraform_repo       = local.repo
+    terraform_repo       = var.repo
   }
 }
 
