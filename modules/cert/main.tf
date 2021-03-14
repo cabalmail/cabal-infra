@@ -23,13 +23,18 @@ resource "tls_private_key" "cabal_cert_private_key" {
 resource "tls_cert_request" "cabal_request" {
   key_algorithm             = "RSA"
   private_key_pem           = tls_private_key.cabal_cert_private_key.private_key_pem
-  common_name               = var.domain
-  subject_alternative_names = var.sans
+  dns_names                 = ["*.${var.domain}"]
+
+  subject {
+    common_name = var.domain
+  }
 }
 
 resource "acme_certificate" "cabal_certificate" {
-  account_key_pem         = acme_registration.reg.account_key_pem
-  certificate_request_pem = tls_cert_request.cabal_request.cert_request_pem
+  account_key_pem           = acme_registration.reg.account_key_pem
+  certificate_request_pem   = tls_cert_request.cabal_request.cert_request_pem
+  common_name               = var.domain
+  subject_alternative_names = ["*.${var.domain}"]
 
   dns_challenge {
     provider = "route53"

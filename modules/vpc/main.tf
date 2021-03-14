@@ -46,7 +46,7 @@ resource "aws_internet_gateway" "cabal_ig" {
 }
 
 resource "aws_eip" "cabal_nat_eip" {
-  count      = var.az_count
+  count      = length(var.az_list)
   vpc        = true
   depends_on = [
     aws_internet_gateway.cabal_ig
@@ -59,7 +59,7 @@ resource "aws_eip" "cabal_nat_eip" {
 }
 
 resource "aws_nat_gateway" "cabal_nat" {
-  count         = var.az_count
+  count         = length(var.az_list)
   allocation_id = aws_eip.cabal_nat_eip[count.index].id
   subnet_id     = aws_subnet.cabal_public_subnet[count.index].id
   tags          = {
@@ -70,7 +70,7 @@ resource "aws_nat_gateway" "cabal_nat" {
 }
 
 resource "aws_route_table" "cabal_private_rt" {
-  count      = var.az_count
+  count      = length(var.az_list)
   vpc_id     = aws_vpc.cabal_vpc.id
   tags       = {
     Name                 = "cabal-private-rt-${count.index}"
@@ -80,14 +80,14 @@ resource "aws_route_table" "cabal_private_rt" {
 }
 
 resource "aws_route" "cabal_private_route" {
-  count                  = var.az_count
+  count                  = length(var.az_list)
   route_table_id         = aws_route_table.cabal_private_rt[count.index].id
   destination_cidr_block = "0.0.0.0/0"
   nat_gateway_id         = aws_nat_gateway.cabal_nat[count.index].id
 }
 
 resource "aws_route_table_association" "cabal_private_rta" {
-  count          = var.az_count
+  count          = length(var.az_list)
   subnet_id      = aws_subnet.cabal_private_subnet[count.index].id
   route_table_id = aws_route_table.cabal_private_rt[count.index].id
 }
@@ -108,7 +108,7 @@ resource "aws_route" "cabal_public_route" {
 }
 
 resource "aws_route_table_association" "cabal_public_rta" {
-  count          = var.az_count
+  count          = length(var.az_list)
   subnet_id      = aws_subnet.cabal_public_subnet[count.index].id
   route_table_id = aws_route_table.cabal_public_rt.id
 }
