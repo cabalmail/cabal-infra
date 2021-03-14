@@ -112,11 +112,14 @@ You must register your desired domains (control and mail) with your chosen regis
 1. Set up the prerequisites above.
 2. Clone this repository.
 3. Upload the cookbooks to your Chef Infra Server organization using knife (which ships with Chef-Workstation).
+
         cd cookbooks
         knife cookbook upload imap -o ./
         knife cookbook upload smtp -o ./
+
 4. Create a tfvars file to supply appropriate values for the variables above.
 5. Run Terraform apply
+
         terraform init
         terraform apply
 
