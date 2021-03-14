@@ -35,7 +35,7 @@ You _could_ use a CabalMail system along with client-side filters, but I recomme
 
 Admitedly, CabalMail is a special use case, which is definitely not be for everyone. To get the benefits of a CabalMail system, you must get used to creating a new email address *each and every time you provide your contact information to a third party.* The administrative interface makes this easy, but it _is_ an additional step. One way to make this a bit less onerous is to pre-allocate a few random addresses in advance and keep them handy for the next time you need to fill out an online form.
 
-(I assume that practice also prevents companies and governments from tracking you across different accounts, though this may not work so well if lots of people start using it.)
+(I assume this practice also prevents companies and governments from tracking you across different accounts, though this may not work so well if lots of people start using it.)
 
 When I create a new address, I always leave it active until any of the following happen:
 - An address gets abused.
