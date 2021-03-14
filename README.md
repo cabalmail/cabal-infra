@@ -9,7 +9,7 @@ CabalMail is a suite of infrastructure code ([Terraform](https://www.terraform.i
 - Administrative interface for managing addresses
 - Other supporting infrastructure
 
-CabalMail grew out of a bunch of scripts and configuration files that I originally set up when I wanted to take control of my own email hosting. Some time in the late 1990s, I started getting spammed at a third-party address that I had used for years, and I reluctantly went through the pain of contacting all my friends, family, and corporate interloqutors to update my contact information. I decided to take control of my mail system so that I would not have to go through that pain again.
+CabalMail grew out of a bunch of scripts and configuration files that I originally set up when I wanted to take control of my own email hosting. Some time in the late 1990s, I started getting spammed at a third-party address that I had used for years. Spam filters were unreliable at the time, and my inbox quickly became unusable. I reluctantly went through the pain of contacting all my friends, family, and corporate interloqutors to update my contact information. I decided to take control of my mail system so that I would not have to go through that pain again.
 
 With CabalMail, you can manage your own self-hosted email system as I do.
 
