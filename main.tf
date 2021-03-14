@@ -9,7 +9,7 @@ provider "aws" {
 }
 
 module "cabal_control_zone" {
-  source     = "./moules/control-domain"
+  source     = "./modules/control-domain"
   name       = var.control_name
 }
 

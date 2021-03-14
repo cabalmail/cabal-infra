@@ -1,5 +1,5 @@
 variable "repo" {
-  description "This repository. Used for tagging resources."
+  description = "This repository. Used for tagging resources."
 }
 
 variable "vpc" {
