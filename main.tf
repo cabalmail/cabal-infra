@@ -10,7 +10,7 @@ provider "aws" {
 
 module "cabal_control_zone" {
   source = "./modules/control-domain"
-  name   = var.control_name
+  name   = var.control_domain
   repo   = var.repo
 }
 
