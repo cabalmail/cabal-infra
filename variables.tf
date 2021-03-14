@@ -13,7 +13,7 @@ variable "aws_secondary_region" {
 variable "primary_availability_zones" {
   type        = list(string)
   description = "List of availability zones to use for the primary region."
-  value       = [
+  default     = [
     "us-west-1a"
   ]
 }
@@ -21,7 +21,7 @@ variable "primary_availability_zones" {
 variable "secondary_availability_zones" {
   type        = list(string)
   description = "List of availability zones to use for the secondary region."
-  value       = [
+  default     = [
     "us-east-1a"
   ]
 }
