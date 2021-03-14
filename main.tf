@@ -9,8 +9,9 @@ provider "aws" {
 }
 
 module "cabal_control_zone" {
-  source     = "./modules/control-domain"
-  name       = var.control_name
+  source = "./modules/control-domain"
+  name   = var.control_name
+  repo   = var.repo
 }
 
 module "cabal_certificate" {
