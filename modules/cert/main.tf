@@ -31,7 +31,7 @@ resource "tls_cert_request" "cabal_request" {
 }
 
 resource "acme_certificate" "cabal_certificate" {
-  account_key_pem           = acme_registration.reg.account_key_pem
+  account_key_pem           = acme_registration.cabal_registration.account_key_pem
   certificate_request_pem   = tls_cert_request.cabal_request.cert_request_pem
   common_name               = var.domain
   subject_alternative_names = ["*.${var.domain}"]
