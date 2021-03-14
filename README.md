@@ -29,7 +29,7 @@ There isn't any. Nor is there a "Junk" folder. By not running Bayesian filters, 
 
 I almost never get spam. And when I do, I have a quick and easy solution.
 
-You _could_ use a CabalMail system along with client-side filters, but I recommend against it. By making your spam visible, you can reduce load on your infrastructure and keep humming along with small machines. Also, you eliminate false positives; never again will important mail be misidentified as junk.
+You _could_ use a CabalMail system along with client-side filters, but I recommend against it. By making your spam visible, you can easily intercede to reduce load on your infrastructure and keep humming along with small machines. Also, you eliminate false positives; never again will important mail be misidentified as junk. And, you can easily tell who shared and/or abused your address.
 
 ## Use Case
 
