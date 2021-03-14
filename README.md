@@ -25,7 +25,7 @@ What's special about CabalMail is that it forces you to create new subdomains fo
 
 There isn't any. Nor is there a "Junk" folder. By not running Bayesian filters, machine learning algorithms, or other compute-intensive measures, you can operate your own email infrastructure with very small machines. Mine (which serves seven domains and four users) runs just fine on four t2.micros. My monthly AWS cost is less than $100. (That's a lot of money in a world of free Gmail accounts, but if you value enhanced control and privacy, you may find it worthwhile as I do. And bear in mind that you can spread the cost among several users.)
 
-"But what if I start to get spam?" That's the best part. Simply go to the admin interface and revoke the address. Because each address has a unique subdomain, the spam-sending relays can't even find your SMTP servers, so there is no need to accept the connection, evaluate the reputation of the sender, match the To: header against a list of supported addresses, etc.
+"But what if I start to get spam?" That's the best part. Simply go to the admin interface and revoke the address. Because each address has a unique subdomain, the spam-sending relays can't even find your SMTP servers, so there is no need for your machines to accept the connection, evaluate the reputation of the sender, match the To: header against a list of supported addresses, etc.
 
 I almost never get spam. And when I do, I have a quick and easy solution.
 
