@@ -33,7 +33,6 @@ resource "tls_cert_request" "cabal_request" {
 resource "acme_certificate" "cabal_certificate" {
   account_key_pem           = acme_registration.cabal_registration.account_key_pem
   certificate_request_pem   = tls_cert_request.cabal_request.cert_request_pem
-  subject_alternative_names = ["*.${var.domain}"]
 
   dns_challenge {
     provider = "route53"
