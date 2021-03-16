@@ -17,7 +17,7 @@ module "cabal_control_zone" {
 module "cabal_certificate" {
   source = "./modules/cert"
   repo   = var.repo
-  domain = "@.${var.control_domain}"
+  domain = var.control_domain
   sans   = []
   prod   = var.prod_cert
   email  = var.cert_email
