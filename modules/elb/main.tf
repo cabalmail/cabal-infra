@@ -29,7 +29,7 @@ resource "aws_lb_target_group" "cabal_imap_tg" {
   }
   health_check {
     enabled             = true
-    interval            = 120
+    interval            = 30
     port                = 143
     protocol            = "TCP"
     healthy_threshold   = 2
@@ -67,7 +67,7 @@ resource "aws_lb_target_group" "cabal_smtp_tg" {
   }
   health_check {
     enabled             = true
-    interval            = 120
+    interval            = 30
     port                = 587
     protocol            = "TCP"
     healthy_threshold   = 2
@@ -114,7 +114,7 @@ resource "aws_lb_target_group" "cabal_smtp_relay_tg" {
   }
   health_check {
     enabled             = true
-    interval            = 120
+    interval            = 30
     port                = 25
     protocol            = "TCP"
     healthy_threshold   = 2
@@ -141,7 +141,7 @@ resource "aws_lb_target_group" "cabal_smtp_submission_tg" {
   }
   health_check {
     enabled             = true
-    interval            = 120
+    interval            = 30
     port                = 587
     protocol            = "TCP"
     healthy_threshold   = 2
