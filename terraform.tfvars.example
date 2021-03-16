@@ -1,0 +1,81 @@
+# Pick the AWS region closest to your end user population. A
+# single VPC will be created, and all primary infrastructure
+# will be inside of it.
+
+aws_primary_region = "us-west-1"
+
+# List the availability zones you wish to use in the primary
+# region. For non-production, you can specify as few as one.
+# For production three is recommended.
+
+primary_availability_zones = [
+  "us-west-1a",
+  "us-west-1b",
+  "us-west-1c"
+]
+
+# Specify a CIDR block for the primary VPC.
+
+primary_cidr_block = "10.0.0.0/17"
+
+# Pick another AWS region. This can improve latency if you have a 
+# widely dispursed user base. In any case, it aids redundancy and
+# should be different from the primary region.
+#
+# This value is ignored unless create_secondary is true.
+
+aws_secondary_region = "us-east-1"
+
+# List the availability zones you wish to use in the secondary
+# region. For non-production, you can specify as few as one.
+# For production three is recommended.
+#
+# This value is ignored unless create_secondary is true.
+
+secondary_availability_zones = [
+  "us-east-1a",
+  "us-east-1b",
+  "us-east-1c"
+]
+
+# Specify a CIDR block for the secondary VPC.
+#
+# This value is ignored unless create_secondary is true.
+
+secondary_cidr_block = "10.128.0.0/17"
+
+# Set to true if you want to provision infrastructure in the
+# secondary region. Recommended for production.
+
+create_secondary = true
+
+# This value is used to tag resources. If you have forked the
+# repository and wish to tag with your own repository, uncomment
+# this line and replace the value with your own.
+
+#repo = "https://github.com/ccarr-cabal/cabal-infra/tree/main"
+
+# By default, we use the staging API endpoint when requesting
+# SSL certiicates from Let's Encrypt. For production, uncomment
+# this line.
+
+#prod_cert = true
+
+# Specify an email address for Certiicate Signing Requests sent
+# to Let's Encrypt.
+
+cert_email = "youremail@cabal.example.com"
+
+# Specify the root domain to be used to name control nodes on the
+# CabalMail system. For example, if you want to host IMAP at
+# imap.example.net, and SMTP at smtprelay1.example.net, then this
+# should be set to "example.net"
+
+control_domain = "example.net"
+
+# List the domains that you want to use for email addresses.
+
+mail_domains = [
+  "example.com",
+  "example.org"
+]
