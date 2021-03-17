@@ -32,7 +32,7 @@ module "cabal_vpc" {
   az_list    = var.primary_availability_zones
   repo       = var.repo
   providers  = {
-    aws = local.provider[count.index]
+    aws = "aws-${local.provider[count.index]}"
   }
 }
 
