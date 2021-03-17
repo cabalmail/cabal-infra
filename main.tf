@@ -8,6 +8,34 @@ provider "aws" {
   alias  = "aws_secondary"
 }
 
+locals {
+  providers = [
+    "us-east-1",
+    "us-west-1"
+  ]
+}
+
+provider "aws" {
+  region = local.providers[0]
+  alias  = "aws-${local.providers[0]}"
+}
+
+provider "aws" {
+  region = local.providers[1]
+  alias  = "aws-${local.providers[1]}"
+}
+
+module "cabal_vpc" {
+  count      = length(local.provider)
+  source     = "./modules/vpc"
+  cidr_block = var.primary_cidr_block
+  az_list    = var.primary_availability_zones
+  repo       = var.repo
+  providers  = {
+    aws = local.provider[count.index]
+  }
+}
+
 module "cabal_control_zone" {
   source = "./modules/control-domain"
   name   = var.control_domain
