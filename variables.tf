@@ -54,6 +54,21 @@ variable "repo" {
   default     = "https://github.com/ccarr-cabal/cabal-infra/tree/main"
 }
 
+variable "chef_organization_url" {
+  type        = string
+  description = "URL for your chef organization. E.g. https://api.chef.io/organizations/cabal-example"
+}
+
+variable "chef_client" {
+  type        = string
+  description = "User for making API calls to Chef Server."
+}
+
+variable "chef_client_key" {
+  type        = string
+  description = "RSA private key for making API calls to Chef Server."
+}
+
 variable "prod_cert" {
   type        = bool
   description = "Whether to use the production Let's Encrypt API. Default false."
