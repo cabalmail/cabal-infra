@@ -34,7 +34,6 @@ module "cabal_primary_vpc" {
 }
 
 module "cabal_secondary_vpc" {
-  # count      = var.create_secondary ? 1 : 0
   source     = "./modules/vpc"
   cidr_block = var.secondary_cidr_block
   az_list    = var.secondary_availability_zones
@@ -58,10 +57,9 @@ module "cabal_primary_load_balancer" {
 }
 
 module "cabal_secondary_load_balancer" {
-  count          = var.create_secondary ? 1 : 0
   source         = "./modules/elb"
-  public_subnets = var.create_secondary ? module.cabal_secondary_vpc.public_subnets : []
-  vpc            = var.create_secondary ? module.cabal_secondary_vpc.vpc : {}
+  public_subnets = module.cabal_secondary_vpc.public_subnets
+  vpc            = module.cabal_secondary_vpc.vpc
   cert_key       = module.cabal_certificate.private_key
   cert_body      = module.cabal_certificate.cert
   cert_chain     = module.cabal_certificate.intermediate
