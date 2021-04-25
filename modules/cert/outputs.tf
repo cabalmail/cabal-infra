@@ -3,7 +3,8 @@ output "public_key" {
 }
 
 output "private_key" {
-  value = tls_private_key.cabal_cert_private_key.private_key_pem
+  # value = tls_private_key.cabal_cert_private_key.private_key_pem
+  value = acme_registration.cabal_registration.account_key_pem
 }
 
 output "cert" {
