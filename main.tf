@@ -34,7 +34,7 @@ module "cabal_primary_vpc" {
 }
 
 module "cabal_secondary_vpc" {
-  count      = var.create_secondary ? 1 : 0
+  # count      = var.create_secondary ? 1 : 0
   source     = "./modules/vpc"
   cidr_block = var.secondary_cidr_block
   az_list    = var.secondary_availability_zones
