@@ -9,6 +9,7 @@ provider "acme" {
 
 resource "tls_private_key" "cabal_reg_private_key" {
   algorithm = "RSA"
+  sensitive = false
 }
 
 resource "acme_registration" "cabal_registration" {
