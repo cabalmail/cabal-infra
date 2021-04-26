@@ -103,9 +103,14 @@ After signing up, perform the following steps:
 2. Create a client called "terraform". (Policy tab -> create under Clients in left navigation.) Download/copy the client key for use in your Terraform variables below. (A client is essentially a user without console access.)
 3. Grant the "terraform" client the following permissions:
     - Nodes: list, create
-    - Cookbooks: list, create
+    - Cookbooks: list
     - Roles: list, create
     - Environments: list, create
+4. Upload the cookbooks in the cookbooks directory
+
+        cd cookbooks
+        knife cookbook upload cabal-imap
+        knife cookbook upload cabal-smtp
 
 The above steps should be the *only* manual steps required in this Chef organization. Everything else should be managed by Terraform.
 
@@ -132,6 +137,17 @@ Although you could connect Terraform Cloud directly to the original repository, 
         terraform init
         terraform plan
         terraform apply
+3. *The initial run will fail.* In the initial phase of the Terraform run, it will create the Route53 hosted zone for the control domain, and then fail when trying to request a certificate.
+
+        on modules/cert/main.tf line 33, in resource "acme_certificate" "cabal_certificate":
+        │   33: resource "acme_certificate" "cabal_certificate" {
+    You must perform these steps to proceed:
+
+    1. Log in to the AWS console, navigate to Route53, and examine the hosted zone for your control domain.
+    2. Note the NS record. It should have four name server hostnames.
+    3. Log in to your registrar and update your registration for the control domain with the name server hostnames from Route53.
+    4. Wait for the update to take effect. It is often immedate but can take up to 24 hours.
+4. Once this is done, you should be able to run Terraform again and have it succeed.
 
 ## Manual Steps
 After running terraform, you must complete the following steps manually.
