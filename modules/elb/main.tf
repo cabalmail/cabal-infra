@@ -1,15 +1,23 @@
+resource "time_rotating" "cabal_cert_rotator" {
+  rotation_days = 1
+}
+
 resource "aws_acm_certificate" "cabal_cert" {
   private_key       = var.cert_key
   certificate_body  = var.cert_body
   certificate_chain = var.cert_chain
-  tags                             = {
+  tags              = {
     Name                 = "cabal-nlb-${timestamp()}"
     created              = timestamp()
     rotate_after         = timeadd(timestamp(), "7900h")
     managed_by_terraform = "y"
     terraform_repo       = var.repo
   }
+  keepers = {
+    rotation = time_rotating.cabal_cert_rotator
+  }
   lifecycle {
+    create_before_destroy = true
     ignore_changes = [
       # We want the timestamp computed at create-time,
       # not recomputed with each run.
