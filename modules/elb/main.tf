@@ -5,7 +5,7 @@ resource "aws_acm_certificate" "cabal_cert" {
   tags                             = {
     Name                 = "cabal-nlb-${timestamp}"
     created              = timestamp()
-    rotate_after         = timeadd(timestamp, "7900h")
+    rotate_after         = timeadd(timestamp(), "7900h")
     managed_by_terraform = "y"
     terraform_repo       = var.repo
   }
