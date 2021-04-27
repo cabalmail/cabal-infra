@@ -24,6 +24,13 @@ variable "primary_availability_zones" {
   default     = [
     "us-west-1a"
   ]
+  validation {
+    condition = length([
+      for str in var.primary_availability_zones : true
+      if regex("^[[:alpha:]]{2}-(central|(north|south)?(east|west))-[[:digit:]][[:alpha:]]$", str)
+    ]) == length(var.primary_availability_zones)
+    error_message = "One or more of the primary_availability_zones do not appear to be valid AWS availability strings."
+  }
 }
 
 variable "secondary_availability_zones" {
