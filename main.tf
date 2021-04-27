@@ -14,13 +14,28 @@ module "cabal_control_zone" {
   repo   = var.repo
 }
 
-module "cabal_certificate" {
+module "cabal_primary_certificate" {
   source = "./modules/cert"
   repo   = var.repo
   domain = var.control_domain
   sans   = []
   prod   = var.prod_cert
   email  = var.cert_email
+  providers  = {
+    aws = aws.aws_primary
+  }
+}
+
+module "cabal_secondary_certificate" {
+  source = "./modules/cert"
+  repo   = var.repo
+  domain = var.control_domain
+  sans   = []
+  prod   = var.prod_cert
+  email  = var.cert_email
+  providers  = {
+    aws = aws.aws_secondary
+  }
 }
 
 module "cabal_primary_vpc" {
