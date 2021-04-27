@@ -64,12 +64,10 @@ variable "primary_cidr_block" {
 variable "secondary_cidr_block" {
   type        = string
   description = "CIDR block for the VPC in the secondary region."
-}
-
-variable "az_count" {
-  type        = number
-  description = "Number of Availability Zones to use. 3 recommended for prod. Default 1."
-  default     = 1
+  validation {
+    condition     = can(cidrnetmask(var.secondary_cidr_block))
+    error_message = "The secondary_cidr_block does not appear to be a valid CIDR."
+  }
 }
 
 variable "repo" {
