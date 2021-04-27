@@ -13,9 +13,6 @@ resource "aws_acm_certificate" "cabal_cert" {
     managed_by_terraform = "y"
     terraform_repo       = var.repo
   }
-  keepers = {
-    rotation = time_rotating.cabal_cert_rotator
-  }
   lifecycle {
     create_before_destroy = true
     ignore_changes = [
