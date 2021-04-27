@@ -21,7 +21,7 @@ resource "tls_private_key" "cabal_cert_private_key" {
 }
 
 resource "aws_secretsmanager_secret" "cabal_private_key_secret" {
-  name                    = "/caba/control_domain_ssl_key"
+  name                    = "/cabal/control_domain_ssl_key"
   recovery_window_in_days = 0
 }
 
