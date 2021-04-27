@@ -83,6 +83,7 @@ After signing up, perform the following steps:
                 "acm:DeleteCertificate",
                 "acm:ImportCertificate",
                 "acm:ListTagsForCertificate",
+                "acm:AddTagsToCertificate",
                 "ec2:DescribeNatGateways",
                 "ec2:DescribeRouteTables",
                 "ec2:DescribeVpcClassicLinkDnsSupport",

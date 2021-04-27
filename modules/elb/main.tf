@@ -9,6 +9,13 @@ resource "aws_acm_certificate" "cabal_cert" {
     managed_by_terraform = "y"
     terraform_repo       = var.repo
   }
+  lifecycle {
+    ignore_changes = [
+      # We want the timestamp computed at create-time,
+      # not recomputed with each run.
+      tags,
+    ]
+  }
 }
 
 resource "aws_lb" "cabal_nlb" {
