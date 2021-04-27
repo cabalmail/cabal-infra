@@ -22,7 +22,7 @@ But CabalMail is a little different than traditional email.
 
 What's special about CabalMail is that it forces you to create new subdomains for each address. If we assume your mail domain is example.com, then CabalMail will NOT support addresses of the form foo@example.com. Rather, each address will be hosted at a subdomain of example.com, such as foo@bar.example.com.
 
-By making it easy to create new address that point to a given inbox, you can (and should!) create new addresses for each person, company, etc., that needs to contact you. This approach is similar to the technique of ["plus-addressing" or "subaddressing"](https://tools.ietf.org/id/draft-newman-email-subaddr-01.html).
+By making it easy to create new addresses that point to a given inbox, you can (and should!) create new addresses for each person, company, etc., that needs to contact you. This approach is similar to the technique of ["plus-addressing" or "subaddressing"](https://tools.ietf.org/id/draft-newman-email-subaddr-01.html).
 
 "So why not just use plus-addressing?" Good question. See the next section.
 
@@ -40,7 +40,11 @@ You _could_ use a CabalMail system along with client-side spam filters, but I re
 
 ## Use Case
 
-Admitedly, CabalMail serves a specialized use case, which is definitely not for everyone. To get the benefits of a CabalMail system, you must get used to creating a new email address *each and every time you provide your contact information to a third party.* The administrative interface makes this easy, but it _is_ an additional step. One way to make this a bit less onerous is to pre-allocate a few random addresses in advance and keep them handy for the next time you need to fill out an online form.
+Admitedly, CabalMail serves a specialized use case, which is definitely not for everyone. With Google offering free mail with included spam filters, maybe CabalMail isn't for anyone. Maybe I'm the only cloud solution architect who doesn't like my inbox being scanned by anything I don't control. Maybe...
+
+But I digress.
+
+To get the benefits of a CabalMail system, you must get used to creating a new email address *each and every time you provide your contact information to a third party.* The administrative interface makes this easy, but it _is_ an additional step. One way to make this a bit less onerous is to pre-allocate a few random addresses in advance and keep them handy for the next time you need to fill out an online form.
 
 In addition to being an extra step, it also requires an adjustment in the way one thinks about email. Often, when I give someone an address that they can use to contact me, and they see someting like "myname@yourname.example.com", they ask, "but, what's your *real* address." The notion that more than one email address can feed a single inbox is not hard to grasp, but scaling the idea to hudreds or thousands challenges the imagination. We tend to think of addresses and inboxes as having a one-to-one relationship, and the occasional alias is an exception. In fact, the true relationship is many-to-one, and no particular address is any more genuine or "real" than any other.
 
@@ -152,22 +156,23 @@ After signing up, perform the following steps:
 If you have followed the recommendation to create a dedicated account, then the above steps should be the *only* manual steps required in this account. Everything else should be managed by Terraform.
 
 ### Chef Infra Server and Chef Workstation
-You must have an organization set up on [Chef Infra Server](https://www.chef.io/products/chef-infra). Chef offers a [managed service](https://manage.chef.io/signup) with a free tier. If you want to stay within AWS, you could try OpsWorks, but I have not tested it. And you must have [Chef Workstation](https://downloads.chef.io/tools/workstation) configured to administer your Chef organization.
+You must have an organization set up on [Chef Infra Server](https://www.chef.io/products/chef-infra). Chef offers a [managed service](https://manage.chef.io/signup) with a free tier. If you want to stay within AWS, you could try OpsWorks, but I have not tested it. And you must have [Chef Workstation](https://downloads.chef.io/tools/workstation) configured to administer your Chef organization. These instructions assume that you're using managed Chef.
 
 After signing up, perform the following steps:
 
 1. Create an organization. (Administration tab -> create under Organizations in left navigation.)
-2. Create a client called "terraform". (Policy tab -> create under Clients in left navigation.) Download/copy the client key for use in your Terraform variables below. (A client is essentially a user without console access.)
-3. Grant the "terraform" client the following permissions:
+2. Download the [starter kit](https://docs.chef.io/workstation/getting_started/#starter-kit) and install Chef Workstation.
+3. Create a client called "terraform". (Policy tab -> create under Clients in left navigation.) Download/copy the client key for use in your Terraform variables below. (A client is essentially a user without console access.)
+4. Grant the "terraform" client the following permissions:
     - Nodes: list, create
     - Cookbooks: list
     - Roles: list, create
     - Environments: list, create
-4. Upload the cookbooks in the cookbooks directory
+5. Upload the cookbooks in the cookbooks directory
 
         cd cookbooks
-        knife cookbook upload cabal-imap
-        knife cookbook upload cabal-smtp
+        knife cookbook upload cabal-imap -o ./
+        knife cookbook upload cabal-smtp -o ./
 
 The above steps should be the *only* manual steps required in this Chef organization. Everything else should be managed by Terraform.
 
