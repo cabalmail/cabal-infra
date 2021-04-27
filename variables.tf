@@ -57,7 +57,7 @@ variable "primary_cidr_block" {
   type        = string
   description = "CIDR block for the VPC in the primary region."
   validation {
-    condition     = 
+    condition     = can()
     error_message = "The primary_cidr_block does not appear to be a valid CIDR."
   }
 }
