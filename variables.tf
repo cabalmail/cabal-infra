@@ -39,6 +39,12 @@ variable "secondary_availability_zones" {
   default     = [
     "us-east-1a"
   ]
+  validation {
+    condition = alltrue([
+      for str in var.rules : can(regex("^[[:alpha:]]{2}-(central|(north|south)?(east|west))-[[:digit:]][[:alpha:]]$", str))
+      ])
+      error_message = "One or more of the secondary_availability_zones do not appear to be valid AWS availability strings."
+  }
 }
 
 variable "create_secondary" {
@@ -50,6 +56,10 @@ variable "create_secondary" {
 variable "primary_cidr_block" {
   type        = string
   description = "CIDR block for the VPC in the primary region."
+  validation {
+    condition     = 
+    error_message = "The primary_cidr_block does not appear to be a valid CIDR."
+  }
 }
 
 variable "secondary_cidr_block" {
