@@ -14,6 +14,18 @@ module "cabal_control_zone" {
   repo   = var.repo
 }
 
+module "cabal_certificate" {
+  source = "./modules/cert-tmp"
+  repo   = var.repo
+  domain = var.control_domain
+  sans   = []
+  prod   = var.prod_cert
+  email  = var.cert_email
+  providers  = {
+    aws = aws.aws_primary
+  }
+}
+
 module "cabal_primary_certificate" {
   source = "./modules/cert"
   repo   = var.repo
