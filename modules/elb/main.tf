@@ -1,7 +1,3 @@
-resource "time_rotating" "cabal_cert_rotator" {
-  rotation_days = 1
-}
-
 resource "aws_acm_certificate" "cabal_cert" {
   private_key       = var.cert_key
   certificate_body  = var.cert_body
