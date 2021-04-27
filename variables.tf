@@ -25,10 +25,9 @@ variable "primary_availability_zones" {
     "us-west-1a"
   ]
   validation {
-    condition = length([
-      for str in var.primary_availability_zones : true
-      if can(regex("^[[:alpha:]]{2}-(central|(north|south)?(east|west))-[[:digit:]][[:alpha:]]$", str))
-    ]) == length(var.primary_availability_zones)
+    condition = alltrue([
+      for str in var.primary_availability_zones : can(regex("^[[:alpha:]]{2}-(central|(north|south)?(east|west))-[[:digit:]][[:alpha:]]$", str))
+    ])
     error_message = "One or more of the primary_availability_zones do not appear to be valid AWS availability strings."
   }
 }
@@ -42,8 +41,8 @@ variable "secondary_availability_zones" {
   validation {
     condition = alltrue([
       for str in var.secondary_availability_zones : can(regex("^[[:alpha:]]{2}-(central|(north|south)?(east|west))-[[:digit:]][[:alpha:]]$", str))
-      ])
-      error_message = "One or more of the secondary_availability_zones do not appear to be valid AWS availability strings."
+    ])
+    error_message = "One or more of the secondary_availability_zones do not appear to be valid AWS availability strings."
   }
 }
 
@@ -57,7 +56,7 @@ variable "primary_cidr_block" {
   type        = string
   description = "CIDR block for the VPC in the primary region."
   validation {
-    condition     = can(cidrsubnet(var.primary_cidr_block, 0, 1))
+    condition     = can(cidrnetmask(var.primary_cidr_block))
     error_message = "The primary_cidr_block does not appear to be a valid CIDR."
   }
 }
