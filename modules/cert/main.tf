@@ -20,6 +20,16 @@ resource "tls_private_key" "cabal_cert_private_key" {
   algorithm = "RSA"
 }
 
+resource "aws_secretsmanager_secret" "cabal_private_key_secret" {
+  name                    = "control_domain_ssl_key"
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "cabal_private_key_secret_version" {
+  secret_id     = aws_secretsmanager_secret.cabal_private_key_secret.id
+  secret_string = tls_private_key.cabal_cert_private_key.private_key_pem
+}
+
 resource "tls_cert_request" "cabal_request" {
   key_algorithm             = "RSA"
   private_key_pem           = tls_private_key.cabal_cert_private_key.private_key_pem
@@ -40,4 +50,24 @@ resource "acme_certificate" "cabal_certificate" {
   dns_challenge {
     provider = "route53"
   }
+}
+
+resource "aws_secretsmanager_secret" "cabal_cert_secret" {
+  name                    = "control_domain_ssl_cert"
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "cabal_cert_secret_version" {
+  secret_id     = aws_secretsmanager_secret.cabal_cert_secret.id
+  secret_string = acme_certificate.cabal_certificate.certificate_pem
+}
+
+resource "aws_secretsmanager_secret" "cabal_chain_secret" {
+  name                    = "control_domain_ssl_cert"
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "cabal_chain_secret_version" {
+  secret_id     = aws_secretsmanager_secret.cabal_cert_secret.id
+  secret_string = acme_certificate.cabal_certificate.issuer_pem
 }
