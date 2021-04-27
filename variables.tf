@@ -4,7 +4,7 @@ variable "aws_primary_region" {
   default     = "us-west-1"
   validation {
     condition     = can(regex("^[[:alpha:]]{2}-(central|(north|south)?(east|west))-[[:digit:]]$", var.aws_primary_region))
-    error_message = "aws_primary_region does not appear to be a valid AWS region string."
+    error_message = "The aws_primary_region does not appear to be a valid AWS region string."
   }
 }
 
@@ -14,7 +14,7 @@ variable "aws_secondary_region" {
   default     = "us-east-1"
   validation {
     condition     = can(regex("^[[:alpha:]]{2}-(central|(north|south)?(east|west))-[[:digit:]]$", var.aws_secondary_region))
-    error_message = "aws_secondary_region does not appear to be a valid AWS region string."
+    error_message = "The aws_secondary_region does not appear to be a valid AWS region string."
   }
 }
 
