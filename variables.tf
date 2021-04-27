@@ -41,7 +41,7 @@ variable "secondary_availability_zones" {
   ]
   validation {
     condition = alltrue([
-      for str in var.rules : can(regex("^[[:alpha:]]{2}-(central|(north|south)?(east|west))-[[:digit:]][[:alpha:]]$", str))
+      for str in var.secondary_availability_zones : can(regex("^[[:alpha:]]{2}-(central|(north|south)?(east|west))-[[:digit:]][[:alpha:]]$", str))
       ])
       error_message = "One or more of the secondary_availability_zones do not appear to be valid AWS availability strings."
   }
