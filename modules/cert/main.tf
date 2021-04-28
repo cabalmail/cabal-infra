@@ -63,7 +63,7 @@ resource "aws_secretsmanager_secret_version" "cabal_cert_secret_version" {
 }
 
 resource "aws_secretsmanager_secret" "cabal_chain_secret" {
-  name                    = "/cabal/control_domain_ssl_cert"
+  name                    = "/cabal/control_domain_chain_cert"
   recovery_window_in_days = 0
 }
 
