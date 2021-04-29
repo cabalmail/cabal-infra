@@ -28,7 +28,7 @@ resource "aws_route53_record" "cabal_elb_cert_dns" {
   zone_id         = var.zone_id
 }
 
-resource "aws_acm_certificate_validation" "example" {
+resource "aws_acm_certificate_validation" "cabal_elb_cert_validation" {
   certificate_arn         = aws_acm_certificate.cabal_elb_cert.arn
   validation_record_fqdns = [for record in aws_route53_record.cabal_elb_cert_dns : record.fqdn]
 }
@@ -78,6 +78,7 @@ resource "aws_lb_listener" "cabal_imaps_listener" {
   protocol          = "TLS"
   port              = "993"
   certificate_arn   = aws_acm_certificate.cabal_elb_cert.id
+  certificate_arn   = aws_acm_certificate_validation.cabal_elb_cert_validation.certificate_arn
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.cabal_imap_tg.arn
