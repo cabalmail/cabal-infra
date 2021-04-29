@@ -5,8 +5,8 @@ terraform {
       version = "~> 3.33.0"
     }
     git = {
-      source  = "innovationnorway/terraform-provider-git"
-      version = "~> "
+      source  = "innovationnorway/git"
+      version = "~> 0.1.3"
     }
   }
 
