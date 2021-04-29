@@ -107,6 +107,8 @@ After signing up, perform the following steps:
                 "route53:ChangeResourceRecordSets",
                 "ec2:CreateRouteTable",
                 "acm:AddTagsToCertificate",
+                "acm:RequestCertificate",
+                "acm:RenewCertificate",
                 "ec2:DetachInternetGateway",
                 "ec2:DisassociateRouteTable",
                 "acm:ListTagsForCertificate",
