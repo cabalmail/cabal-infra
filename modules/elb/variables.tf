@@ -1,3 +1,7 @@
+variable "control_domain" {
+  description = "Root domain for infrastructure."
+}
+
 variable "repo" {
   description = "This repository. Used for tagging resources."
 }
