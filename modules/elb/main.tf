@@ -77,7 +77,6 @@ resource "aws_lb_listener" "cabal_imaps_listener" {
   load_balancer_arn = aws_lb.cabal_nlb.arn
   protocol          = "TLS"
   port              = "993"
-  certificate_arn   = aws_acm_certificate.cabal_elb_cert.id
   certificate_arn   = aws_acm_certificate_validation.cabal_elb_cert_validation.certificate_arn
   default_action {
     type             = "forward"
