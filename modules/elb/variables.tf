@@ -13,3 +13,7 @@ variable "vpc" {
 variable "public_subnets" {
   description = "Subnets for load balancer targets."
 }
+
+variable "zone_id" {
+  description = "Route 53 Zone ID for control domain"
+}
