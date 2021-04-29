@@ -66,6 +66,7 @@ module "cabal_primary_load_balancer" {
   cert_body      = module.cabal_primary_certificate.cert
   cert_chain     = module.cabal_primary_certificate.intermediate
   repo           = var.repo
+  control_domain = var.control_domain
   providers      = {
     aws = aws.aws_primary
   }
@@ -79,6 +80,7 @@ module "cabal_secondary_load_balancer" {
   cert_body      = module.cabal_secondary_certificate.cert
   cert_chain     = module.cabal_secondary_certificate.intermediate
   repo           = var.repo
+  control_domain = var.control_domain
   providers      = {
     aws = aws.aws_secondary
   }
