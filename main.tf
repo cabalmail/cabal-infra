@@ -62,9 +62,6 @@ module "cabal_primary_load_balancer" {
   source         = "./modules/elb"
   public_subnets = module.cabal_primary_vpc.public_subnets
   vpc            = module.cabal_primary_vpc.vpc
-  cert_key       = module.cabal_primary_certificate.private_key
-  cert_body      = module.cabal_primary_certificate.cert
-  cert_chain     = module.cabal_primary_certificate.intermediate
   repo           = var.repo
   control_domain = var.control_domain
   providers      = {
@@ -76,9 +73,6 @@ module "cabal_secondary_load_balancer" {
   source         = "./modules/elb"
   public_subnets = module.cabal_secondary_vpc.public_subnets
   vpc            = module.cabal_secondary_vpc.vpc
-  cert_key       = module.cabal_secondary_certificate.private_key
-  cert_body      = module.cabal_secondary_certificate.cert
-  cert_chain     = module.cabal_secondary_certificate.intermediate
   repo           = var.repo
   control_domain = var.control_domain
   providers      = {

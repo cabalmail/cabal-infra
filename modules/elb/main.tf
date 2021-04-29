@@ -1,24 +1,13 @@
 resource "aws_acm_certificate" "cabal_elb_cert" {
-  # private_key       = var.cert_key
-  # certificate_body  = var.cert_body
-  # certificate_chain = var.cert_chain
   domain_name       = "*.${var.control_domain}"
   validation_method = "DNS"
   tags              = {
     Name                 = "cabal-nlb"
-    # Name                 = "cabal-nlb-${timestamp()}"
-    # created              = timestamp()
-    # rotate_after         = timeadd(timestamp(), "7900h")
     managed_by_terraform = "y"
     terraform_repo       = var.repo
   }
   lifecycle {
     create_before_destroy = true
-    ignore_changes = [
-      # We want the timestamp computed at create-time,
-      # not recomputed with each run.
-      tags,
-    ]
   }
 }
 
