@@ -1,7 +1,7 @@
 # cabal-infra
 Creates AWS infrastructure and machine configuration for a CabalMail system -- a system for hosting and managing your personal email.
 
-WARNING: This should not be regarded as an enterprise or ISP-grade email solution. It has been tested on a small pool of users for their personal email.
+WARNING: This should not be regarded as an enterprise or ISP-grade email solution. It has been tested on a small pool of users for their personal email. Use at your own risk!
 
 # About
 CabalMail is a suite of infrastructure code ([Terraform](https://www.terraform.io/)) and configuration management code ([Chef Infra](https://www.chef.io/)) that together create the following system components:
@@ -20,7 +20,7 @@ But CabalMail is a little different than traditional email.
 
 ## Subdomains
 
-What's special about CabalMail is that it forces you to create new subdomains for each address. If we assume your mail domain is example.com, then CabalMail will NOT support addresses of the form foo@example.com. Rather, each address will be hosted at a subdomain of example.com, such as foo@bar.example.com.
+What's special about CabalMail is that it forces you to create new subdomains for each address. If we assume your mail domain is example.com, then CabalMail will *not* support addresses of the form foo@example.com. Rather, each address will be hosted at a subdomain of example.com, such as foo@bar.example.com.
 
 By making it easy to create new addresses that point to a given inbox, you can (and should!) create new addresses for each person, company, etc., that needs to contact you. This approach is similar to the technique of ["plus-addressing" or "subaddressing"](https://tools.ietf.org/id/draft-newman-email-subaddr-01.html).
 

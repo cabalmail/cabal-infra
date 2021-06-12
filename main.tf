@@ -18,6 +18,12 @@ module "cabal_load_balancer" {
   zone_id        = var.zone_id
 }
 
+module "cabal_opsworks" {
+  source = "./modules/opsworks"
+  repo   = var.repo
+  region = var.aws_region
+}
+
 # TODO
 # Create user pool
 # Create DynamoDB Table
