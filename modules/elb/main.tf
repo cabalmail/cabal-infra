@@ -111,26 +111,6 @@ resource "aws_lb_target_group" "cabal_smtp_tg" {
   }
 }
 
-resource "aws_lb_listener" "cabal_smtp_relay_listener" {
-  load_balancer_arn = aws_lb.cabal_nlb.arn
-  protocol          = "TCP"
-  port              = "25"
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.cabal_smtp_tg.arn
-  }
-}
-
-resource "aws_lb_listener" "cabal_smtp_submission_listener" {
-  load_balancer_arn = aws_lb.cabal_nlb.arn
-  protocol          = "TCP"
-  port              = "587"
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.cabal_smtp_tg.arn
-  }
-}
-
 resource "aws_lb_target_group" "cabal_smtp_relay_tg" {
   name                 = "cabal-smtp-relay-tg"
   port                 = "25"
@@ -158,6 +138,16 @@ resource "aws_lb_target_group" "cabal_smtp_relay_tg" {
   }
 }
 
+resource "aws_lb_listener" "cabal_smtp_relay_listener" {
+  load_balancer_arn = aws_lb.cabal_nlb.arn
+  protocol          = "TCP"
+  port              = "25"
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.cabal_smtp_relay_tg.arn
+  }
+}
+
 resource "aws_lb_target_group" "cabal_smtp_submission_tg" {
   name                 = "cabal-smtp-submission-tg"
   port                 = "587"
@@ -182,5 +172,15 @@ resource "aws_lb_target_group" "cabal_smtp_submission_tg" {
 
   lifecycle {
     create_before_destroy = true
+  }
+}
+
+resource "aws_lb_listener" "cabal_smtp_submission_listener" {
+  load_balancer_arn = aws_lb.cabal_nlb.arn
+  protocol          = "TCP"
+  port              = "587"
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.cabal_smtp_submission_tg.arn
   }
 }
