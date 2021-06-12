@@ -17,19 +17,21 @@ resource "aws_s3_bucket" "cabal_bucket" {
 }
 
 resource "aws_iam_role" "cabal_stack_role" {
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Sid    = ""
-        Principal = {
-          Service = "ec2.amazonaws.com"
+  assume_role_policy = <<EOF
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Action": "sts:AssumeRole",
+            "Principal": {
+               "Service": "ec2.amazonaws.com"
+            },
+            "Effect": "Allow",
+            "Sid": ""
         }
-      },
     ]
-  })
+}
+EOF
   
   inline_policy {
     name   = "cabal-stack-policy"
