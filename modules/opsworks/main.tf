@@ -86,11 +86,6 @@ EOF
 resource "aws_iam_instance_profile" "cabal_stack_instance_profile" {
   name = "cabal-instance-profile"
   role = aws_iam_role.cabal_instance_profile_role
-  tags = {
-    Name                 = "cabal-stack-instance-profile"
-    managed_by_terraform = "y"
-    terraform_repo       = var.repo
-  }
 }
 
 resource "aws_opsworks_stack" "cabal_stack" {
