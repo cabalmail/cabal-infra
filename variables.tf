@@ -1,24 +1,14 @@
-variable "aws_primary_region" {
+variable "aws_region" {
   type        = string
   description = "AWS region in which to provision primary infrastructure. Default us-west-1."
   default     = "us-west-1"
   validation {
-    condition     = can(regex("^[[:alpha:]]{2}-(central|(north|south)?(east|west))-[[:digit:]]$", var.aws_primary_region))
-    error_message = "The aws_primary_region does not appear to be a valid AWS region string."
+    condition     = can(regex("^[[:alpha:]]{2}-(central|(north|south)?(east|west))-[[:digit:]]$", var.aws_region))
+    error_message = "The aws_region does not appear to be a valid AWS region string."
   }
 }
 
-variable "aws_secondary_region" {
-  type        = string
-  description = "AWS region in which to provision secondary infrastructure. Default us-east-1."
-  default     = "us-east-1"
-  validation {
-    condition     = can(regex("^[[:alpha:]]{2}-(central|(north|south)?(east|west))-[[:digit:]]$", var.aws_secondary_region))
-    error_message = "The aws_secondary_region does not appear to be a valid AWS region string."
-  }
-}
-
-variable "primary_availability_zones" {
+variable "availability_zones" {
   type        = list(string)
   description = "List of availability zones to use for the primary region."
   default     = [
@@ -26,47 +16,18 @@ variable "primary_availability_zones" {
   ]
   validation {
     condition = alltrue([
-      for str in var.primary_availability_zones : can(regex("^[[:alpha:]]{2}-(central|(north|south)?(east|west))-[[:digit:]][[:alpha:]]$", str))
+      for str in var.availability_zones : can(regex("^[[:alpha:]]{2}-(central|(north|south)?(east|west))-[[:digit:]][[:alpha:]]$", str))
     ])
-    error_message = "One or more of the primary_availability_zones do not appear to be valid AWS availability strings."
+    error_message = "One or more of the availability_zones do not appear to be valid AWS availability strings."
   }
 }
 
-variable "secondary_availability_zones" {
-  type        = list(string)
-  description = "List of availability zones to use for the secondary region."
-  default     = [
-    "us-east-1a"
-  ]
-  validation {
-    condition = alltrue([
-      for str in var.secondary_availability_zones : can(regex("^[[:alpha:]]{2}-(central|(north|south)?(east|west))-[[:digit:]][[:alpha:]]$", str))
-    ])
-    error_message = "One or more of the secondary_availability_zones do not appear to be valid AWS availability strings."
-  }
-}
-
-variable "create_secondary" {
-  type        = bool
-  description = "Whether to create infrastructure in a second region. Recommended for prod. Default false."
-  default     = false
-}
-
-variable "primary_cidr_block" {
+variable "cidr_block" {
   type        = string
   description = "CIDR block for the VPC in the primary region."
   validation {
-    condition     = can(cidrnetmask(var.primary_cidr_block))
-    error_message = "The primary_cidr_block does not appear to be a valid CIDR."
-  }
-}
-
-variable "secondary_cidr_block" {
-  type        = string
-  description = "CIDR block for the VPC in the secondary region."
-  validation {
-    condition     = can(cidrnetmask(var.secondary_cidr_block))
-    error_message = "The secondary_cidr_block does not appear to be a valid CIDR."
+    condition     = can(cidrnetmask(var.cidr_block))
+    error_message = "The cidr_block does not appear to be a valid CIDR."
   }
 }
 

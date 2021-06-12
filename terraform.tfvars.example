@@ -1,53 +1,22 @@
 # Pick the AWS region closest to your end user population. A
-# single VPC will be created, and all primary infrastructure
-# will be inside of it.
+# single VPC will be created, and all infrastructure will be
+# inside of it.
 
-aws_primary_region = "us-west-1"
+aws_region = "us-west-1"
 
-# List the availability zones you wish to use in the primary
-# region. For non-production, you can specify as few as one.
+# List the availability zones you wish to use in the region.
+# For non-production, you can specify as few as one.
 # For production three is recommended.
 
-primary_availability_zones = [
+availability_zones = [
   "us-west-1a",
   "us-west-1b",
   "us-west-1c"
 ]
 
-# Specify a CIDR block for the primary VPC.
+# Specify a CIDR block for the VPC.
 
-primary_cidr_block = "10.0.0.0/9"
-
-# Pick another AWS region. This can improve latency if you have a 
-# widely dispursed user base. In any case, it aids redundancy and
-# should be different from the primary region.
-#
-# This value is ignored unless create_secondary is true.
-
-aws_secondary_region = "us-east-1"
-
-# List the availability zones you wish to use in the secondary
-# region. For non-production, you can specify as few as one.
-# For production three is recommended.
-#
-# This value is ignored unless create_secondary is true.
-
-secondary_availability_zones = [
-  "us-east-1a",
-  "us-east-1b",
-  "us-east-1c"
-]
-
-# Specify a CIDR block for the secondary VPC.
-#
-# This value is ignored unless create_secondary is true.
-
-secondary_cidr_block = "10.128.0.0/9"
-
-# Set to true if you want to provision infrastructure in the
-# secondary region. Recommended for production.
-
-create_secondary = true
+cidr_block = "10.0.0.0/9"
 
 # This value is used to tag resources. If you have forked the
 # repository and wish to tag with your own repository, uncomment
