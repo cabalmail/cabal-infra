@@ -56,7 +56,6 @@ resource "aws_iam_role" "cabal_stack_role" {
         ]
       }
 EOF
-    }
   }
   tags   = {
     Name                 = "cabal-stack-role"
