@@ -1,11 +1,11 @@
 provider "aws" {
-  region = var.aws_primary_region
+  region = var.aws_region
 }
 
 module "cabal_vpc" {
   source     = "./modules/vpc"
-  cidr_block = var.primary_cidr_block
-  az_list    = var.primary_availability_zones
+  cidr_block = var.cidr_block
+  az_list    = var.availability_zones
   repo       = var.repo
 }
 
@@ -15,7 +15,7 @@ module "cabal_load_balancer" {
   vpc            = module.cabal_vpc.vpc
   repo           = var.repo
   control_domain = var.control_domain
-  zone_id        = module.cabal_control_zone.zone_id
+  zone_id        = var.zone_id
 }
 
 # TODO

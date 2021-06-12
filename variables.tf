@@ -68,6 +68,11 @@ variable "control_domain" {
   description = "The domain used for naming your email infrastructure. E.g., if you want to host imap.example.com and smtp-relay-west.example.com, then this would be 'example.com'."
 }
 
+variable "zone_id" {
+  type        = string
+  description = "The AWS Zone ID for the control_domain"
+}
+
 variable "mail_domains" {
   type        = list(string)
   description = "List of domains from which you want to send mail, and to which you want to allow mail to be sent. Must have at least one."
