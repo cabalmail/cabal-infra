@@ -6,7 +6,7 @@ resource "random_string" "cabal_bucket_name" {
 }
 
 resource "aws_s3_bucket" "cabal_bucket" {
-  bucket = "cabal-${random_string.cabal_bucket_name}"
+  bucket = "cabal-${random_string.cabal_bucket_name.result}"
   acl    = "private"
 
   tags   = {
@@ -85,7 +85,7 @@ EOF
 
 resource "aws_iam_instance_profile" "cabal_stack_instance_profile" {
   name = "cabal-instance-profile"
-  role = aws_iam_role.cabal_instance_profile_role
+  role = aws_iam_role.cabal_instance_profile_role.name
 }
 
 resource "aws_opsworks_stack" "cabal_stack" {
