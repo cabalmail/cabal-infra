@@ -36,41 +36,25 @@ EOF
   inline_policy {
     name   = "cabal-stack-policy"
     policy = <<EOF
-      {
-        "Version": "2012-10-17",
-        "Statement": [
-          {
-            "Effect": "Allow",
+{
+    "Statement": [
+        {
             "Action": [
-              "cloudwatch:DescribeAlarms",
-              "cloudwatch:GetMetricStatistics",
-              "ec2:*",
-              "ecs:*",
-              "elasticloadbalancing:*",
-              "iam:GetRolePolicy",
-              "iam:ListInstanceProfiles",
-              "iam:ListRoles",
-              "iam:ListUsers",
-              "rds:*"
+                "ec2:*",
+                "iam:PassRole",
+                "cloudwatch:GetMetricStatistics",
+                "cloudwatch:DescribeAlarms",
+                "ecs:*",
+                "elasticloadbalancing:*",
+                "rds:*"
             ],
+            "Effect": "Allow",
             "Resource": [
-              "*"
+                "*"
             ]
-          },
-          {
-            "Effect": "Allow",
-            "Action": [
-              "iam:PassRole"
-            ],
-            "Resource": "*",
-            "Condition": {
-              "StringEquals": {
-                "iam:PassedToService": "ec2.amazonaws.com"
-              }
-            }
-          }
-        ]
-      }
+        }
+    ]
+}
 EOF
   }
   tags   = {
@@ -97,11 +81,6 @@ resource "aws_iam_role" "cabal_instance_profile_role" {
 }
 EOF
 
-  tags               = {
-    Name                 = "cabal-instance-profile-role"
-    managed_by_terraform = "y"
-    terraform_repo       = var.repo
-  }
 }
 
 resource "aws_iam_instance_profile" "cabal_stack_instance_profile" {
