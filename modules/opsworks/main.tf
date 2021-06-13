@@ -16,35 +16,47 @@ resource "aws_s3_bucket" "cabal_bucket" {
   }
 }
 
-data "archive_file" "cabal_cookbook_imap" {
-  type        = "zip"
-  output_path = "${path.module}/imap.zip"
-  source_dir  = "${path.module}/cookbooks//imap/"
+resource "null_resource" "cabal_cookbook_imap" {
+  provisioner "local-exec" {
+    command = "cd ${path.module}/cookbooks/imap ; zip imap ."
+  }
 }
 
-data "archive_file" "cabal_cookbook_smtp" {
-  type        = "zip"
-  output_path = "${path.module}/smtp.zip"
-  source_dir  = "${path.module}/cookbooks//smtp/"
+resource "null_resource" "cabal_cookbook_smtp" {
+  provisioner "local-exec" {
+    command = "cd ${path.module}/cookbooks/smtp ; zip smtp ."
+  }
 }
+
+# data "archive_file" "cabal_cookbook_imap" {
+#   type        = "zip"
+#   output_path = "${path.module}/imap.zip"
+#   source_dir  = "${path.module}/cookbooks//imap/"
+# }
+#
+# data "archive_file" "cabal_cookbook_smtp" {
+#   type        = "zip"
+#   output_path = "${path.module}/smtp.zip"
+#   source_dir  = "${path.module}/cookbooks//smtp/"
+#}
 
 resource "aws_s3_bucket_object" "cabal_cookbook_imap_zip" {
   bucket = "cabal-${random_string.cabal_bucket_name.result}"
   key    = "/cookbooks/imap.zip"
   source = "${path.module}/imap.zip"
-  etag = filemd5("${path.module}/imap.zip")
+  etag = filemd5("${path.module}/cookbooks/imap/imap.zip")
   depends_on = [
-    archive_file.cabal_cookbook_imap
+    null_resource.cabal_cookbook_imap
   ]
 }
 
 resource "aws_s3_bucket_object" "cabal_cookbook_smtp_zip" {
   bucket = "cabal-${random_string.cabal_bucket_name.result}"
   key    = "/cookbooks/smtp.zip"
-  source = "${path.module}/smtp.zip"
-  etag = filemd5("${path.module}/smtp.zip")
+  source = "${path.module}/cookbooks/smtp/smtp.zip"
+  etag = filemd5("${path.module}/cookbooks/smtp/smtp.zip")
   depends_on = [
-    archive_file.cabal_cookbook_smtp
+    null_resource.cabal_cookbook_smtp
   ]
 }
 
