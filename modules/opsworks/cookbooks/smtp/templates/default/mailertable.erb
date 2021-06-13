@@ -1,0 +1,4 @@
+<% for tld in @domains.keys.sort do %>
+.<%= tld %>	smtp:[<%= @imap %>]
+<%= tld %>	smtp:[<%= @imap %>]
+<% end %>

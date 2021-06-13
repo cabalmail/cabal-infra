@@ -16,6 +16,20 @@ resource "aws_s3_bucket" "cabal_bucket" {
   }
 }
 
+# TODO: upload cookbooks as zip files to aws_s3_bucket_object
+
+data "archive_file" "cabal_cookbook_imap" {
+  type        = "zip"
+  output_path = "${path.module}/imap.zip"
+  source_dir  = "${path.module}/cookbooks//imap/"
+}
+
+data "archive_file" "cabal_cookbook_smtp" {
+  type        = "zip"
+  output_path = "${path.module}/smtp.zip"
+  source_dir  = "${path.module}/cookbooks//smtp/"
+}
+
 resource "aws_iam_role" "cabal_stack_role" {
   assume_role_policy = <<EOF
 {
