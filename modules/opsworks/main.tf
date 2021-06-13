@@ -33,6 +33,9 @@ resource "aws_s3_bucket_object" "cabal_cookbook_imap_zip" {
   key    = "/cookbooks/imap.zip"
   source = "${path.module}/imap.zip"
   etag = filemd5("${path.module}/imap.zip")
+  depends_on = [
+    archive_file.cabal_cookbook_imap
+  ]
 }
 
 resource "aws_s3_bucket_object" "cabal_cookbook_smtp_zip" {
@@ -40,6 +43,9 @@ resource "aws_s3_bucket_object" "cabal_cookbook_smtp_zip" {
   key    = "/cookbooks/smtp.zip"
   source = "${path.module}/smtp.zip"
   etag = filemd5("${path.module}/smtp.zip")
+  depends_on = [
+    archive_file.cabal_cookbook_smtp
+  ]
 }
 
 resource "aws_iam_role" "cabal_stack_role" {
