@@ -86,7 +86,7 @@ NODE_NAME=node-$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 4 | head -n 1)
 # Create client.rb
 cat > '/etc/chef/client.rb' << EOF
 log_location            STDOUT
-node_name               "${NODE_NAME}"
+node_name               "$${NODE_NAME}"
 EOF
 
 chef-client -j /etc/chef/first-boot.json
