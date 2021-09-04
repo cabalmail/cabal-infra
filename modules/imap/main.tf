@@ -40,5 +40,5 @@ resource "aws_autoscaling_group" "cabal_imap_asg" {
   desired_capacity     = 1
   max_size             = 1
   min_size             = 1
-  launch_configuration = aws_launch_template.cabal_imap_cfg.id
+  launch_configuration = aws_launch_configuration.cabal_imap_cfg.id
 }
