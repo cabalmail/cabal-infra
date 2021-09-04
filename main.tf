@@ -1,5 +1,10 @@
 provider "aws" {
-  region = var.aws_region
+  region       = var.aws_region
+  default_tags = {
+    managed_by_terraform = "y"
+    terraform_repo       = var.repo
+  }
+}
 }
 
 module "cabal_vpc" {

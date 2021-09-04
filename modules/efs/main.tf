@@ -5,7 +5,5 @@ resource "aws_efs_file_system" "cabal_efs" {
   }
   tags      = {
     Name                 = "cabal-efs"
-    managed_by_terraform = "y"
-    terraform_repo       = var.repo
   }
 }

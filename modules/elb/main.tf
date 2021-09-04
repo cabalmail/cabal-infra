@@ -3,8 +3,6 @@ resource "aws_acm_certificate" "cabal_elb_cert" {
   validation_method = "DNS"
   tags              = {
     Name                 = "cabal-nlb"
-    managed_by_terraform = "y"
-    terraform_repo       = var.repo
   }
   lifecycle {
     create_before_destroy = true
@@ -41,8 +39,6 @@ resource "aws_lb" "cabal_nlb" {
   enable_cross_zone_load_balancing = false
   tags                             = {
     Name                 = "cabal-nlb"
-    managed_by_terraform = "y"
-    terraform_repo       = var.repo
   }
 }
 
