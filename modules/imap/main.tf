@@ -41,7 +41,7 @@ EOF
 
 resource "aws_iam_role_policy_attachment" "cabal_imap_role_attachment" {
   role       = aws_iam_role.cabal_imap_role.name
-  policy_arn = aws_iam_policy.ssm_policy.arn
+  policy_arn = data.aws_iam_policy.ssm_policy.arn
 }
 
 resource "aws_launch_configuration" "cabal_imap_cfg" {
