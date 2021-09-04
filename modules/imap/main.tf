@@ -50,11 +50,12 @@ resource "aws_iam_instance_profile" "cabal_imap_instance_profile" {
 # - run chef
 
 resource "aws_launch_configuration" "cabal_imap_cfg" {
-  name_prefix          = "imap-"
-  image_id             = data.aws_ami.amazon_linux_2.id
-  instance_type        = "t2.micro"
-  iam_instance_profile = aws_iam_instance_profile.cabal_imap_instance_profile.name
-  user_data            = <<EOD
+  name_prefix           = "imap-"
+  image_id              = data.aws_ami.amazon_linux_2.id
+  instance_type         = "t2.micro"
+  iam_instance_profile  = aws_iam_instance_profile.cabal_imap_instance_profile.name
+  create_before_destroy = true
+  user_data             = <<EOD
 #!/bin/bash -xev
 sudo yum install -y git
 cd /tmp
@@ -94,9 +95,10 @@ EOD
 }
 
 resource "aws_autoscaling_group" "cabal_imap_asg" {
-  availability_zones   = var.private_subnets[*].availability_zone
-  desired_capacity     = 1
-  max_size             = 1
-  min_size             = 1
-  launch_configuration = aws_launch_configuration.cabal_imap_cfg.id
+  availability_zones    = var.private_subnets[*].availability_zone
+  desired_capacity      = 1
+  max_size              = 1
+  min_size              = 1
+  launch_configuration  = aws_launch_configuration.cabal_imap_cfg.id
+  create_before_destroy = true
 }
