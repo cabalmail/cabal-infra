@@ -1,9 +1,10 @@
 data "aws_ami" "amazon_linux_2" {
   most_recent = true
   owners      = ["amazon"]
+  name_regex  = "^amzn2-"
   filter {
-    name   = "name"
-    values = ["amzn2-ami-hvm*"]
+    name   = "virtualization-type"
+    values = ["hvm"]
   }
 }
 
