@@ -4,7 +4,6 @@ provider "aws" {
     tags = {
       managed_by_terraform = "y"
       terraform_repo       = var.repo
-      Name                 = "Provider Tag"
     }
   }
 }
