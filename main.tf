@@ -5,7 +5,6 @@ provider "aws" {
     terraform_repo       = var.repo
   }
 }
-}
 
 module "cabal_vpc" {
   source     = "./modules/vpc"
