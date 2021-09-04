@@ -1,4 +1,4 @@
-data "aws_ami" "amazon-linux-2" {
+data "aws_ami" "amazon_linux_2" {
   most_recent = true
   owners      = ["amazon"]
   filter {
@@ -16,7 +16,7 @@ data "aws_ami" "amazon-linux-2" {
 
 resource "aws_launch_configuration" "cabal_imap_cfg" {
   name_prefix   = "imap-"
-  image_id      = data.aws_ami.amazon-linux-2.id
+  image_id      = data.aws_ami.amazon_linux_2.id
   instance_type = "t2.micro"
   user_data     = <<EOD
 #!/bin/bash
