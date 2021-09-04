@@ -15,11 +15,16 @@ data "aws_ami" "amazon_linux_2" {
 # - install chef in local mode
 # - run chef
 
+data "aws_iam_instance_profile" "ssm_profile" {
+  name = "AmazonSSMManagedInstanceCore"
+}
+
 resource "aws_launch_configuration" "cabal_imap_cfg" {
-  name_prefix   = "imap-"
-  image_id      = data.aws_ami.amazon_linux_2.id
-  instance_type = "t2.micro"
-  user_data     = <<EOD
+  name_prefix          = "imap-"
+  image_id             = data.aws_ami.amazon_linux_2.id
+  instance_type        = "t2.micro"
+  iam_instance_profile = data.aws_iam_instance_profile.ssm_profile
+  user_data            = <<EOD
 #!/bin/bash
 sudo yum install -y git
 cd /tmp
