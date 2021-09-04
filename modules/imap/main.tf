@@ -69,7 +69,7 @@ sudo systemctl start amazon-ssm-agent
 
 # Do some chef pre-work
 /bin/mkdir -p /etc/chef
-/bin/mkdir -p /var/lib/chef
+/bin/mkdir -p /var/lib/chef/cookbooks
 /bin/mkdir -p /var/log/chef
 
 cd /etc/chef/
@@ -77,25 +77,17 @@ cd /etc/chef/
 # Install chef
 curl -L https://omnitruck.chef.io/install.sh | bash || error_exit 'could not install chef'
 
-# Create first-boot.json
-cat > "/etc/chef/first-boot.json" << EOF
-{
-   "run_list" :[
-   "role[base]"
-   ]
-}
-EOF
-
 NODE_NAME=node-$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 4 | head -n 1)
 
-# Create client.rb
-cat > '/etc/chef/client.rb' << EOF
+# Create solo.rb
+cat > '/etc/chef/solo.rb' << EOF
 chef_license            'accept'
 log_location            STDOUT
 node_name               "$${NODE_NAME}"
+cookbook_path [ '/var/lib/chef/cookbooks' ]
 EOF
 
-chef-client -j /etc/chef/first-boot.json
+chef-solo -c /etc/chef/solo.rb
 EOD
 }
 
