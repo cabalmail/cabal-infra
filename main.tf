@@ -30,11 +30,7 @@ module "cabal_imap" {
 }
 
 # TODO
-# Create EC2 autoscale-groups with userdata:
-# - mount efs
-# - git clone https://... cookbook
-# - install chef in local mode
-# - run chef
+# Create SMTP
 # Create user pool
 # Create DynamoDB Table
 # Create lambda/api-gateway admin application

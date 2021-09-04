@@ -12,13 +12,6 @@ data "aws_iam_policy" "ssm_policy" {
   arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
-# TODO
-# Create EC2 autoscale-groups with userdata:
-# - mount efs
-# - git clone https://... cookbook
-# - install chef in local mode
-# - run chef
-
 resource "aws_iam_role" "cabal_imap_role" {
   name = "cabal-imap-role"
 
@@ -49,18 +42,54 @@ resource "aws_iam_instance_profile" "cabal_imap_instance_profile" {
   role = aws_iam_role.cabal_imap_role.name
 }
 
+# TODO
+# Create EC2 autoscale-groups with userdata:
+# - mount efs
+# - git clone https://... cookbook
+# - install chef in local mode
+# - run chef
+
 resource "aws_launch_configuration" "cabal_imap_cfg" {
   name_prefix          = "imap-"
   image_id             = data.aws_ami.amazon_linux_2.id
   instance_type        = "t2.micro"
   iam_instance_profile = aws_iam_instance_profile.cabal_imap_instance_profile.name
   user_data            = <<EOD
-#!/bin/bash
+#!/bin/bash -xev
 sudo yum install -y git
 cd /tmp
 sudo yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
 sudo systemctl enable amazon-ssm-agent
 sudo systemctl start amazon-ssm-agent
+
+# Do some chef pre-work
+/bin/mkdir -p /etc/chef
+/bin/mkdir -p /var/lib/chef
+/bin/mkdir -p /var/log/chef
+
+cd /etc/chef/
+
+# Install chef
+curl -L https://omnitruck.chef.io/install.sh | bash || error_exit 'could not install chef'
+
+# Create first-boot.json
+cat > "/etc/chef/first-boot.json" << EOF
+{
+   "run_list" :[
+   "role[base]"
+   ]
+}
+EOF
+
+NODE_NAME=node-$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 4 | head -n 1)
+
+# Create client.rb
+cat > '/etc/chef/client.rb' << EOF
+log_location            STDOUT
+node_name               "${NODE_NAME}"
+EOF
+
+chef-client -j /etc/chef/first-boot.json
 EOD
 }
 
