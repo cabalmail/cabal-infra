@@ -24,16 +24,14 @@ module "cabal_efs" {
 }
 
 module "cabal_imap" {
-  source          = "./modules/efs"
+  source          = "./modules/imap"
   private_subnets = module.cabal_vpc.private_subnets
   repo            = var.repo
 }
 
 # TODO
 # Create EC2 autoscale-groups with userdata:
-# - SSM
 # - mount efs
-# - yum install -y git
 # - git clone https://... cookbook
 # - install chef in local mode
 # - run chef
