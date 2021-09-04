@@ -75,7 +75,7 @@ sudo systemctl start amazon-ssm-agent
 cd /etc/chef/
 
 # Install chef
-curl -L https://omnitruck.chef.io/install.sh | bash || error_exit 'could not install chef'
+curl -L https://omnitruck.chef.io/install.sh | bash
 
 NODE_NAME=node-$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 4 | head -n 1)
 
