@@ -20,8 +20,6 @@ module "cabal_load_balancer" {
 
 module "cabal_efs" {
   source         = "./modules/efs"
-  public_subnets = module.cabal_vpc.public_subnets
-  vpc            = module.cabal_vpc.vpc
   repo           = var.repo
 }
 
