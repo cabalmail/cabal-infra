@@ -19,7 +19,7 @@ data "aws_iam_policy" "ssm_policy" {
 # - install chef in local mode
 # - run chef
 
-resrouce "aws_iam_role" "cabal_imap_role" {
+resource "aws_iam_role" "cabal_imap_role" {
   name = "cabal-imap-role"
 
   assume_role_policy = <<EOF
