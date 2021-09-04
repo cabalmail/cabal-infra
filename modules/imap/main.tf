@@ -56,7 +56,9 @@ resource "aws_launch_configuration" "cabal_imap_cfg" {
   image_id              = data.aws_ami.amazon_linux_2.id
   instance_type         = "t2.micro"
   iam_instance_profile  = aws_iam_instance_profile.cabal_imap_instance_profile.name
-  create_before_destroy = true
+  lifecycle {
+    create_before_destroy = true
+  }
   user_data             = <<EOD
 #!/bin/bash -xev
 sudo yum install -y git
@@ -102,7 +104,9 @@ resource "aws_autoscaling_group" "cabal_imap_asg" {
   max_size              = 1
   min_size              = 1
   launch_configuration  = aws_launch_configuration.cabal_imap_cfg.id
-  create_before_destroy = true
+  lifecycle {
+    create_before_destroy = true
+  }
   dynamic "tag" {
     for_each = data.aws_default_tags.current.tags
     content {
