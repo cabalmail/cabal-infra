@@ -8,6 +8,10 @@ data "aws_ami" "amazon_linux_2" {
   }
 }
 
+data "aws_iam_policy" "ssm_policy" {
+  arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
 # TODO
 # Create EC2 autoscale-groups with userdata:
 # - mount efs
@@ -15,8 +19,29 @@ data "aws_ami" "amazon_linux_2" {
 # - install chef in local mode
 # - run chef
 
-data "aws_iam_instance_profile" "ssm_profile" {
-  name = "AmazonSSMManagedInstanceCore"
+resrouce "aws_iam_role" "cabal_imap_role" {
+  name = "cabal-imap-role"
+
+  assume_role_policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Action": "sts:AssumeRole",
+      "Principal": {
+        "Service": "ec2.amazonaws.com"
+      },
+      "Effect": "Allow",
+      "Sid": ""
+    }
+  ]
+}
+EOF
+}
+
+resource "aws_iam_role_policy_attachment" "cabal_imap_role_attachment" {
+  role       = aws_iam_role.cabal_imap_role.name
+  policy_arn = aws_iam_policy.ssm_policy.arn
 }
 
 resource "aws_launch_configuration" "cabal_imap_cfg" {
