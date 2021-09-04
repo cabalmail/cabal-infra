@@ -18,9 +18,17 @@ module "cabal_load_balancer" {
   zone_id        = var.zone_id
 }
 
+module "cabal_efs" {
+  source         = "./modules/efs"
+  public_subnets = module.cabal_vpc.public_subnets
+  vpc            = module.cabal_vpc.vpc
+  repo           = var.repo
+}
+
 # TODO
-# Create EC2 instances with userdata:
+# Create EC2 autoscale-groups with userdata:
 # - SSM
+# - mount efs
 # - yum install -y git
 # - git clone https://... cookbook
 # - install chef in local mode
