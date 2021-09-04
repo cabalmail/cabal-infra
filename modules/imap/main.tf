@@ -75,7 +75,7 @@ sudo systemctl start amazon-ssm-agent
 cd /etc/chef/
 
 # Install chef
-curl -L https://omnitruck.chef.io/install.sh | bash
+# curl -L https://omnitruck.chef.io/install.sh | bash
 
 NODE_NAME=node-$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 4 | head -n 1)
 
@@ -83,7 +83,7 @@ NODE_NAME=node-$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 4 | head -n 1)
 cat > '/etc/chef/solo.rb' << EOF
 chef_license            'accept'
 log_location            STDOUT
-node_name               "$${NODE_NAME}"
+node_name               'imap'
 cookbook_path [ '/var/lib/chef/cookbooks' ]
 EOF
 
