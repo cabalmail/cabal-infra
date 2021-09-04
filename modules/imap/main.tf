@@ -18,7 +18,7 @@ resource "aws_launch_configuration" "cabal_imap_cfg" {
   name_prefix   = "imap-"
   image_id      = data.aws_ami.amazon-linux-2.id
   instance_type = "t2.micro"
-  userdata      = <<EOD
+  user_data     = <<EOD
 #!/bin/bash
 sudo yum install -y git
 cd /tmp
