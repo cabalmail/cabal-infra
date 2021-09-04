@@ -1,6 +1,6 @@
 provider "aws" {
-  region       = var.aws_region
-  default_tags = {
+  region = var.aws_region
+  default_tags {
     managed_by_terraform = "y"
     terraform_repo       = var.repo
   }
