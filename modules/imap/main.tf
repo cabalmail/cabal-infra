@@ -12,6 +12,8 @@ data "aws_iam_policy" "ssm_policy" {
   arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+data "aws_default_tags" "current" {}
+
 resource "aws_iam_role" "cabal_imap_role" {
   name = "cabal-imap-role"
 
@@ -101,4 +103,12 @@ resource "aws_autoscaling_group" "cabal_imap_asg" {
   min_size              = 1
   launch_configuration  = aws_launch_configuration.cabal_imap_cfg.id
   create_before_destroy = true
+  dynamic "tag" {
+    for_each = data.aws_default_tags.current.tags
+    content {
+      key                 = tag.key
+      value               = tag.value
+      propagate_at_launch = true
+    }
+  }
 }
