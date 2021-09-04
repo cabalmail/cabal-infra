@@ -45,6 +45,9 @@ resource "aws_iam_instance_profile" "cabal_imap_instance_profile" {
 }
 
 # TODO
+# Place in correct subnets
+# Squelch public IP
+# Register with LB
 # Create EC2 autoscale-groups with userdata:
 # - mount efs
 # - git clone https://... cookbook
@@ -75,9 +78,9 @@ sudo systemctl start amazon-ssm-agent
 cd /etc/chef/
 
 # Install chef
-# curl -L https://omnitruck.chef.io/install.sh | bash
+curl -L https://omnitruck.chef.io/install.sh | bash
 
-NODE_NAME=node-$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 4 | head -n 1)
+# NODE_NAME=node-$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 4 | head -n 1)
 
 # Create solo.rb
 cat > '/etc/chef/solo.rb' << EOF
