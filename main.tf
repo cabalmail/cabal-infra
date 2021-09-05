@@ -8,6 +8,19 @@ provider "aws" {
   }
 }
 
+resource "aws_s3_bucket" "cabal_cookbook_bucket" {
+  acl           = "private"
+  bucket_prefix = "cabal-artifacts"
+}
+
+resource "aws_s3_bucket_object" "cabal_cookbook_files" {
+  for_each = fileset(path.module, "cookbooks/**/*.txt")
+
+  bucket = aws_s3_bucket.test.bucket
+  key    = each.value
+  source = "${path.module}/${each.value}"
+}
+
 module "cabal_vpc" {
   source     = "./modules/vpc"
   cidr_block = var.cidr_block
