@@ -56,27 +56,28 @@ resource "aws_security_group" "cabal_imap_sg" {
   name        = "cabal_imap_sg"
   description = "Allow IMAP inbound traffic"
   vpc_id      = var.vpc.id
+}
 
-  ingress = [
-    {
-      description      = "IMAP from anywhere"
-      from_port        = 143
-      to_port          = 143
-      protocol         = "tcp"
-      cidr_blocks      = ["0.0.0.0/0"]
-      ipv6_cidr_blocks = ["::/0"]
-    }
-  ]
+resource "aws_security_group_rule" "allow_all" {
+  type              = "egress"
+  protocol          = "-1"
+  to_port           = 0
+  from_port         = 0
+  description       = "Allow all outgoing"
+  cidr_blocks       = ["0.0.0.0/0"]
+  ipv6_cidr_blocks  = ["::/0"]
+  security_group_id = aws_security_group.cabal_imap_sg.id
+}
 
-  egress = [
-    {
-      from_port        = 0
-      to_port          = 0
-      protocol         = "-1"
-      cidr_blocks      = ["0.0.0.0/0"]
-      ipv6_cidr_blocks = ["::/0"]
-    }
-  ]
+resource "aws_security_group_rule" "allow_imap" {
+  type              = "ingress"
+  protocol          = "tcp"
+  to_port           = 143
+  from_port         = 143
+  description       = "Allow incoming imap from anywhere"
+  cidr_blocks       = ["0.0.0.0/0"]
+  ipv6_cidr_blocks  = ["::/0"]
+  security_group_id = aws_security_group.cabal_imap_sg.id
 }
 
 resource "aws_launch_configuration" "cabal_imap_cfg" {
