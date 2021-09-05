@@ -6,6 +6,4 @@ description 'Installs/Configures imap for Cabalmail'
 version '2.2.1'
 
 depends 'yum-epel'
-depends 'chef-vault'
-depends 'acme'
 depends 'dynamodb-query'

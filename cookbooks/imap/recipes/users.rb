@@ -1,11 +1,10 @@
 chef_gem 'ruby-shadow'
 include_recipe 'yum-epel'
-chef_gem 'chef-vault'
-require 'chef-vault'
 
-data_bag('users').each do |u|
-  item = ChefVault::Item.load('secret', u)
-  password = item['password']
+# TODO: Get these from some user pool
+%w(test1 test2 test3).each do |u|
+# TODO: Get from some kink of vault
+  password = 'test1234'
   user u do
     password password
   end
