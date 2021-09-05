@@ -74,15 +74,8 @@ sudo systemctl start amazon-ssm-agent
 /bin/mkdir -p /etc/chef
 /bin/mkdir -p /var/lib/chef/cookbooks
 /bin/mkdir -p /var/log/chef
-
 cd /etc/chef/
-
-# Install chef
 curl -L https://omnitruck.chef.io/install.sh | bash
-
-# NODE_NAME=node-$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 4 | head -n 1)
-
-# Create solo.rb
 cat > '/etc/chef/solo.rb' << EOF
 chef_license            'accept'
 log_location            STDOUT
@@ -95,7 +88,7 @@ EOD
 }
 
 resource "aws_autoscaling_group" "cabal_imap_asg" {
-  availability_zones    = var.private_subnets[*].availability_zone
+  vpc_zone_identifier   = var.private_subnets[*].id
   desired_capacity      = 1
   max_size              = 1
   min_size              = 1
