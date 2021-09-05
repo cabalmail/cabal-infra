@@ -1,0 +1,6 @@
+<% for tld in @domains.keys.sort do %>
+  <% tldobj = @domains[tld] %>
+  <% for subd in tldobj['subdomains'].keys.sort do %>
+<%= node.chef_environment -%>._domainkey.<%= subd -%>.<%= tld -%> <%= subd -%>.<%= tld -%>:<%= node.chef_environment -%>:/etc/opendkim/keys/<%= subd -%>.<%= tld -%>/<%= node.chef_environment %>
+  <% end %>
+<% end %>
