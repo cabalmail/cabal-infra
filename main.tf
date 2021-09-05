@@ -43,7 +43,7 @@ module "cabal_efs" {
 module "cabal_imap" {
   source           = "./modules/imap"
   private_subnets  = module.cabal_vpc.private_subnets
-  target_group_arn = module.cabal_elb.imap_tg.arn
+  target_group_arn = module.cabal_load_balancer.imap_tg.arn
   repo             = var.repo
 }
 
