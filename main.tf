@@ -10,7 +10,7 @@ provider "aws" {
 
 resource "aws_s3_bucket" "cabal_cookbook_bucket" {
   acl           = "private"
-  bucket_prefix = "cabal-artifacts"
+  bucket_prefix = "cabal-artifacts-"
 }
 
 resource "aws_s3_bucket_object" "cabal_cookbook_files" {
