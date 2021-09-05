@@ -14,7 +14,7 @@ resource "aws_s3_bucket" "cabal_cookbook_bucket" {
 }
 
 resource "aws_s3_bucket_object" "cabal_cookbook_files" {
-  for_each = fileset(path.module, "cookbooks/**/*.txt")
+  for_each = fileset(path.module, "cookbooks/**/*")
 
   bucket = aws_s3_bucket.cabal_cookbook_bucket.bucket
   key    = each.value
