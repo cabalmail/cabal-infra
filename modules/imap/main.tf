@@ -8,11 +8,30 @@ data "aws_ami" "amazon_linux_2" {
   }
 }
 
+data "aws_default_tags" "current" {}
+
 data "aws_iam_policy" "ssm_policy" {
   arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
-data "aws_default_tags" "current" {}
+resource "aws_iam_policy" "cabal_imap_policy" {
+  name        = "test_policy"
+  path        = "/"
+  description = "Policies for IMAP machines"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "s3:*",
+        ]
+        Effect   = "Allow"
+        Resource = "*"
+      },
+    ]
+  })
+}
 
 resource "aws_iam_role" "cabal_imap_role" {
   name = "cabal-imap-role"
@@ -34,9 +53,14 @@ resource "aws_iam_role" "cabal_imap_role" {
 EOF
 }
 
-resource "aws_iam_role_policy_attachment" "cabal_imap_role_attachment" {
+resource "aws_iam_role_policy_attachment" "cabal_imap_role_attachment_1" {
   role       = aws_iam_role.cabal_imap_role.name
   policy_arn = data.aws_iam_policy.ssm_policy.arn
+}
+
+resource "aws_iam_role_policy_attachment" "cabal_imap_role_attachment_2" {
+  role       = aws_iam_role.cabal_imap_role.name
+  policy_arn = aws_iam_policy.cabal_imap_policy.arn
 }
 
 resource "aws_iam_instance_profile" "cabal_imap_instance_profile" {
@@ -111,7 +135,7 @@ EOF
 
 aws s3 cp s3://$${var.artifact_bucket}/cookbooks /var/lib/chef/ --recursive
 
-chef-solo -c /etc/chef/solo.rb -r "recipe[imap]"
+chef-solo -c /etc/chef/solo.rb -z -o "recipe[imap]"
 EOD
 }
 
