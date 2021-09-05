@@ -91,7 +91,6 @@ resource "aws_launch_configuration" "cabal_imap_cfg" {
   }
   user_data             = <<EOD
 #!/bin/bash -xev
-sudo yum install -y git
 cd /tmp
 sudo yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
 sudo systemctl enable amazon-ssm-agent
@@ -99,7 +98,7 @@ sudo systemctl start amazon-ssm-agent
 
 # Do some chef pre-work
 /bin/mkdir -p /etc/chef
-/bin/mkdir -p /var/lib/chef/cookbooks
+/bin/mkdir -p /var/lib/chef
 /bin/mkdir -p /var/log/chef
 cd /etc/chef/
 curl -L https://omnitruck.chef.io/install.sh | bash
@@ -110,7 +109,9 @@ node_name               'imap'
 cookbook_path [ '/var/lib/chef/cookbooks' ]
 EOF
 
-chef-solo -c /etc/chef/solo.rb
+aws s3 cp s3://$${var.artifact_bucket}/cookbooks /var/lib/chef/ --recursive
+
+chef-solo -c /etc/chef/solo.rb -r "recipe[imap]"
 EOD
 }
 

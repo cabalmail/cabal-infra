@@ -13,3 +13,7 @@ variable "repo" {
 variable "target_group_arn" {
   description = "Load balancer target group in which to register IMAP instances."
 }
+
+variable "artifact_bucket" {
+  description = "S3 bucket where cookbooks are stored."
+}
