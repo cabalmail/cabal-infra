@@ -93,6 +93,7 @@ resource "aws_autoscaling_group" "cabal_imap_asg" {
   max_size              = 1
   min_size              = 1
   launch_configuration  = aws_launch_configuration.cabal_imap_cfg.id
+  target_group_arns     = [var.target_group_arn]
   lifecycle {
     create_before_destroy = true
   }
