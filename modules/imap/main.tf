@@ -45,19 +45,45 @@ resource "aws_iam_instance_profile" "cabal_imap_instance_profile" {
 }
 
 # TODO
-# Place in correct subnets
-# Squelch public IP
-# Register with LB
+# Security group to allow 143
 # Create EC2 autoscale-groups with userdata:
 # - mount efs
-# - git clone https://... cookbook
+# - fetch cookbook from s3
 # - install chef in local mode
 # - run chef
+
+resource "aws_security_group" "cabal_imap_sg" {
+  name        = "cabal_imap_sg"
+  description = "Allow IMAP inbound traffic"
+  vpc_id      = var.vpc.id
+
+  ingress = [
+    {
+      description      = "IMAP from anywhere"
+      from_port        = 143
+      to_port          = 143
+      protocol         = "tcp"
+      cidr_blocks      = ["0.0.0.0/0"]
+      ipv6_cidr_blocks = ["::/0"]
+    }
+  ]
+
+  egress = [
+    {
+      from_port        = 0
+      to_port          = 0
+      protocol         = "-1"
+      cidr_blocks      = ["0.0.0.0/0"]
+      ipv6_cidr_blocks = ["::/0"]
+    }
+  ]
+}
 
 resource "aws_launch_configuration" "cabal_imap_cfg" {
   name_prefix           = "imap-"
   image_id              = data.aws_ami.amazon_linux_2.id
   instance_type         = "t2.micro"
+  security_groups       = [aws_security_group.cabal_imap_sg.id]
   iam_instance_profile  = aws_iam_instance_profile.cabal_imap_instance_profile.name
   lifecycle {
     create_before_destroy = true
