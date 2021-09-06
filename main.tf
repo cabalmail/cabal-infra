@@ -40,6 +40,9 @@ module "cabal_efs" {
   source         = "./modules/efs"
 }
 
+# TODO
+# Create DynamoDB Table
+
 module "cabal_imap" {
   source           = "./modules/imap"
   private_subnets  = module.cabal_vpc.private_subnets
@@ -55,7 +58,6 @@ module "cabal_imap" {
 # TODO
 # Create SMTP
 # Create user pool
-# Create DynamoDB Table
 # Create lambda/api-gateway admin application
 # Add some users
 # Create chef environent
