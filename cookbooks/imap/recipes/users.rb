@@ -1,5 +1,4 @@
 chef_gem 'ruby-shadow'
-include_recipe 'yum-epel'
 
 # TODO: Get these from some user pool
 %w(test1 test2 test3).each do |u|

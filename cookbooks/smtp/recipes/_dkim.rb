@@ -1,4 +1,3 @@
-include_recipe 'yum-epel'
 include_recipe 'route53'
 
 package 'dkim-milter'

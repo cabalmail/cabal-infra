@@ -1,5 +1,4 @@
 chef_gem 'ruby-shadow'
-include_recipe 'yum-epel'
 package 'squirrelmail'
 chef_gem 'chef-vault'
 require 'chef-vault'

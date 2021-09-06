@@ -114,17 +114,23 @@ resource "aws_launch_configuration" "cabal_imap_cfg" {
   user_data             = <<EOD
 #!/bin/bash -xev
 cd /tmp
+# AWS Systems Manager agent
 yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
 systemctl enable amazon-ssm-agent
 systemctl start amazon-ssm-agent
+
+# AWS CLI
 yum install -y awscli
 
-# Do some chef pre-work
+# EPEL repo
+sudo amazon-linux-extras install epel -y
+
+# Chef
 sudo /bin/mkdir -p /etc/chef
 sudo /bin/mkdir -p /var/lib/chef/cookbooks
 sudo /bin/mkdir -p /var/log/chef
 cd /etc/chef/
-curl -L https://omnitruck.chef.io/install.sh | sudo bash -s -- -v 15.8.23
+curl -L https://omnitruck.chef.io/install.sh | sudo bash
 sudo cat > '/etc/chef/solo.rb' << EOF
 chef_license            'accept'
 log_location            STDOUT
