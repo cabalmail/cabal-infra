@@ -1,6 +1,6 @@
 #
 # Cookbook Name:: imap
-# Recipe:: default
+# Recipe:: dovecot
 #
 # Copyright (c) 2015 chefsnarl, All Rights Reserved.
 
@@ -29,5 +29,3 @@ end
 service 'dovecot' do
   action [:start, :enable]
 end
-
-include_recipe 'imap::common'

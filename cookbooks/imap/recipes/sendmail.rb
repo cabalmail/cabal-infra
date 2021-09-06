@@ -74,5 +74,3 @@ end
 service 'sendmail' do
   action [ :start, :enable ]
 end
-
-include_recipe 'imap::common'
