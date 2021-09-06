@@ -121,7 +121,7 @@ yum install -y awscli
 
 # Do some chef pre-work
 /bin/mkdir -p /etc/chef
-/bin/mkdir -p /var/lib/chef
+/bin/mkdir -p /var/lib/chef/cookbooks
 /bin/mkdir -p /var/log/chef
 cd /etc/chef/
 curl -L https://omnitruck.chef.io/install.sh | bash
@@ -132,7 +132,7 @@ node_name               'imap'
 cookbook_path [ '/var/lib/chef/cookbooks' ]
 EOF
 
-aws s3 cp s3://${var.artifact_bucket}/cookbooks /var/lib/chef/ --recursive
+aws s3 cp s3://${var.artifact_bucket}/cookbooks /var/lib/chef/cookbooks --recursive
 
 chef-solo -c /etc/chef/solo.rb -z -o "recipe[imap]"
 EOD
