@@ -73,7 +73,6 @@ resource "aws_iam_instance_profile" "cabal_imap_instance_profile" {
 # Create EC2 autoscale-groups with userdata:
 # - mount efs
 # - fetch cookbook from s3
-# - install chef in local mode
 # - run chef
 
 resource "aws_security_group" "cabal_imap_sg" {
@@ -133,7 +132,7 @@ node_name               'imap'
 cookbook_path [ '/var/lib/chef/cookbooks' ]
 EOF
 
-aws s3 cp s3://$${var.artifact_bucket}/cookbooks /var/lib/chef/ --recursive
+aws s3 cp s3://${var.artifact_bucket}/cookbooks /var/lib/chef/ --recursive
 
 chef-solo -c /etc/chef/solo.rb -z -o "recipe[imap]"
 EOD
