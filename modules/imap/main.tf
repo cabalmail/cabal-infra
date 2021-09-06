@@ -69,9 +69,9 @@ resource "aws_iam_instance_profile" "cabal_imap_instance_profile" {
 }
 
 # TODO
+# Update policy to allow dynamodb table read
 # Create EC2 autoscale-groups with userdata:
 # - mount efs
-# - fetch cookbook from s3
 # - run chef
 
 resource "aws_security_group" "cabal_imap_sg" {
