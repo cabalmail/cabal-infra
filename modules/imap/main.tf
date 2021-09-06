@@ -120,21 +120,21 @@ systemctl start amazon-ssm-agent
 yum install -y awscli
 
 # Do some chef pre-work
-/bin/mkdir -p /etc/chef
-/bin/mkdir -p /var/lib/chef/cookbooks
-/bin/mkdir -p /var/log/chef
+sudo /bin/mkdir -p /etc/chef
+sudo /bin/mkdir -p /var/lib/chef/cookbooks
+sudo /bin/mkdir -p /var/log/chef
 cd /etc/chef/
-curl -L https://omnitruck.chef.io/install.sh | bash
-cat > '/etc/chef/solo.rb' << EOF
+curl -L https://omnitruck.chef.io/install.sh | sudo bash -s -- -v 15.8.23
+sudo cat > '/etc/chef/solo.rb' << EOF
 chef_license            'accept'
 log_location            STDOUT
 node_name               'imap'
 cookbook_path [ '/var/lib/chef/cookbooks' ]
 EOF
 
-aws s3 cp s3://${var.artifact_bucket}/cookbooks /var/lib/chef/cookbooks --recursive
+sudo aws s3 cp s3://${var.artifact_bucket}/cookbooks /var/lib/chef/cookbooks --recursive
 
-chef-solo -c /etc/chef/solo.rb -z -o "recipe[imap]"
+sudo chef-solo -c /etc/chef/solo.rb -z -o "recipe[imap]"
 EOD
 }
 
