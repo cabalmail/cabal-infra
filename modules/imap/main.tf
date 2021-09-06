@@ -15,7 +15,7 @@ data "aws_iam_policy" "ssm_policy" {
 }
 
 resource "aws_iam_policy" "cabal_imap_policy" {
-  name        = "test_policy"
+  name        = "cabal-s3-access"
   path        = "/"
   description = "Policies for IMAP machines"
 
