@@ -153,7 +153,7 @@ sudo cat > '/var/lib/chef/environments/_default.json' << EOF
   },
   "chef_type": "environment"
 }
-
+EOF
 
 sudo aws s3 cp s3://${var.artifact_bucket}/cookbooks /var/lib/chef/cookbooks --recursive
 
