@@ -69,7 +69,6 @@ resource "aws_iam_instance_profile" "cabal_imap_instance_profile" {
 }
 
 # TODO
-# Security group to allow 143
 # Create EC2 autoscale-groups with userdata:
 # - mount efs
 # - fetch cookbook from s3
@@ -115,9 +114,10 @@ resource "aws_launch_configuration" "cabal_imap_cfg" {
   user_data             = <<EOD
 #!/bin/bash -xev
 cd /tmp
-sudo yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
-sudo systemctl enable amazon-ssm-agent
-sudo systemctl start amazon-ssm-agent
+yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
+systemctl enable amazon-ssm-agent
+systemctl start amazon-ssm-agent
+yum install -y awscli
 
 # Do some chef pre-work
 /bin/mkdir -p /etc/chef
