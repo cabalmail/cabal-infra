@@ -131,23 +131,23 @@ resource "aws_launch_configuration" "cabal_imap_cfg" {
 #!/bin/bash -xev
 cd /tmp
 # AWS Systems Manager agent
-sudo yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
-sudo systemctl enable amazon-ssm-agent
-sudo systemctl start amazon-ssm-agent
+yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
+systemctl enable amazon-ssm-agent
+systemctl start amazon-ssm-agent
 
 # AWS CLI
-sudo yum install -y awscli
+yum install -y awscli
 
 # EPEL repo
-sudo amazon-linux-extras install epel -y
+amazon-linux-extras install epel -y
 
 # Chef
-sudo /bin/mkdir -p /etc/chef
-sudo /bin/mkdir -p /var/lib/chef/{cookbooks,environments}
-sudo /bin/mkdir -p /var/log/chef
+/bin/mkdir -p /etc/chef
+/bin/mkdir -p /var/lib/chef/{cookbooks,environments}
+/bin/mkdir -p /var/log/chef
 cd /etc/chef/
 curl -L https://omnitruck.chef.io/install.sh | sudo bash
-sudo cat > '/etc/chef/solo.rb' << EOF
+cat > '/etc/chef/solo.rb' << EOF
 chef_license            'accept'
 log_location            STDOUT
 node_name               'imap'
@@ -155,7 +155,7 @@ cookbook_path [ '/var/lib/chef/cookbooks' ]
 environment_path [ '/var/lib/chef/environments' ]
 EOF
 
-sudo cat > '/var/lib/chef/environments/_default.json' << EOF
+cat > '/var/lib/chef/environments/_default.json' << EOF
 {
   "name": "_default",
   "default_attributes": {
@@ -171,9 +171,9 @@ sudo cat > '/var/lib/chef/environments/_default.json' << EOF
 }
 EOF
 
-sudo aws s3 cp s3://${var.artifact_bucket}/cookbooks /var/lib/chef/cookbooks --recursive
+aws s3 cp s3://${var.artifact_bucket}/cookbooks /var/lib/chef/cookbooks --recursive
 
-sudo chef-solo -c /etc/chef/solo.rb -z -o "recipe[imap]"
+chef-solo -c /etc/chef/solo.rb -z -o "recipe[imap]"
 EOD
 }
 
