@@ -17,3 +17,7 @@ variable "target_group_arn" {
 variable "artifact_bucket" {
   description = "S3 bucket where cookbooks are stored."
 }
+
+variable "table_arn" {
+  description = "DynamoDB table object"
+}

@@ -22,6 +22,10 @@ resource "aws_s3_bucket_object" "cabal_cookbook_files" {
   etag   = filemd5("${path.module}/${each.value}")
 }
 
+module "cabal_table" {
+  source     = "./modules/table"
+}
+
 module "cabal_vpc" {
   source     = "./modules/vpc"
   cidr_block = var.cidr_block
@@ -49,6 +53,7 @@ module "cabal_imap" {
   vpc              = module.cabal_vpc.vpc
   artifact_bucket  = aws_s3_bucket.cabal_cookbook_bucket.id
   target_group_arn = module.cabal_load_balancer.imap_tg.arn
+  table_arn        = module.cabal_table.table_arn
   repo             = var.repo
   depends_on       = [
     aws_s3_bucket_object.cabal_cookbook_files
