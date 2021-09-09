@@ -51,6 +51,7 @@ module "cabal_imap" {
   source           = "./modules/imap"
   private_subnets  = module.cabal_vpc.private_subnets
   vpc              = module.cabal_vpc.vpc
+  control_domain   = var.control_domain
   artifact_bucket  = aws_s3_bucket.cabal_cookbook_bucket.id
   target_group_arn = module.cabal_load_balancer.imap_tg.arn
   table_arn        = module.cabal_table.table_arn

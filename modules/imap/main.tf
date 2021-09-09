@@ -156,7 +156,7 @@ amazon-linux-extras install epel -y
 
 # Chef
 /bin/mkdir -p /etc/chef
-/bin/mkdir -p /var/lib/chef/{cookbooks,environments}
+/bin/mkdir -p /var/lib/chef/{cookbooks,attributes}
 /bin/mkdir -p /var/log/chef
 cd /etc/chef/
 curl -L https://omnitruck.chef.io/install.sh | sudo bash
@@ -165,28 +165,19 @@ chef_license            'accept'
 log_location            STDOUT
 node_name               'imap'
 cookbook_path [ '/var/lib/chef/cookbooks' ]
-environment_path [ '/var/lib/chef/environments' ]
 EOF
 
-cat > '/var/lib/chef/environments/_default.json' << EOF
+cat > '/var/lib/chef/attributes/imap.json' << EOF
 {
-  "name": "_default",
-  "default_attributes": {
-    {
-
-    }
-  },
-  "json_class": "Chef::Environment",
-  "description": "Default environment",
-  "cookbook_versions": {
-  },
-  "chef_type": "environment"
+  "sendmail": {
+    "cert": "$${var.control_domain}"
+  }
 }
 EOF
 
 aws s3 cp s3://${var.artifact_bucket}/cookbooks /var/lib/chef/cookbooks --recursive
 
-chef-solo -c /etc/chef/solo.rb -z -o "recipe[imap]"
+chef-solo -c /etc/chef/solo.rb -z -o "recipe[imap]" --j /var/lib/chef/attributes/imap.json
 EOD
 }
 
