@@ -19,5 +19,9 @@ variable "artifact_bucket" {
 }
 
 variable "table_arn" {
-  description = "DynamoDB table object"
+  description = "DynamoDB table arn"
+}
+
+variable "s3_arn" {
+  description = "S3 bucket arn"
 }

@@ -27,7 +27,7 @@ resource "aws_iam_policy" "cabal_imap_policy" {
           "s3:*",
         ]
         Effect   = "Allow"
-        Resource = "*"
+        Resource = var.s3_arn
       },
       {
         Action = [
