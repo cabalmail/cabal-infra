@@ -23,7 +23,7 @@ resource "aws_iam_policy" "cabal_imap_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Action = [
+        Action   = [
           "s3:*",
         ]
         Effect   = "Allow"
@@ -33,7 +33,17 @@ resource "aws_iam_policy" "cabal_imap_policy" {
         ]
       },
       {
-        Action = [
+        Action   = [
+          "secretsmanager:DescribeSecret",
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:ListSecretVersionIds",
+        ]
+        Effect   = "Allow"
+        Resource = [
+          "arn:aws:secretsmanager:us-east-1:715401949493:secret:/cabal/*",
+        ]
+      {
+        Action   = [
           "dynamodb:DeleteItem",
           "dynamodb:GetItem",
           "dynamodb:PutItem",
@@ -44,7 +54,7 @@ resource "aws_iam_policy" "cabal_imap_policy" {
           "dynamodb:ListTables",
           "dynamodb:Query",
           "dynamodb:ListTagsOfResource",
-          ]
+        ]
         Effect   = "Allow"
         Resource = var.table_arn
       },
