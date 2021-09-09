@@ -9,9 +9,4 @@ resource "aws_dynamodb_table" "cabal_addresses_table" {
     name = "address"
     type = "S"
   }
-
-  ttl {
-    attribute_name = "TimeToExist"
-    enabled        = false
-  }
 }
