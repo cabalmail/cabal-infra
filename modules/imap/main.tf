@@ -131,12 +131,12 @@ resource "aws_launch_configuration" "cabal_imap_cfg" {
 #!/bin/bash -xev
 cd /tmp
 # AWS Systems Manager agent
-yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
-systemctl enable amazon-ssm-agent
-systemctl start amazon-ssm-agent
+sudo yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
+sudo systemctl enable amazon-ssm-agent
+sudo systemctl start amazon-ssm-agent
 
 # AWS CLI
-yum install -y awscli
+sudo yum install -y awscli
 
 # EPEL repo
 sudo amazon-linux-extras install epel -y
