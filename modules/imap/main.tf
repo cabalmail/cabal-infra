@@ -31,19 +31,19 @@ resource "aws_iam_policy" "cabal_imap_policy" {
       },
       {
         Action = [
-                "dynamodb:DeleteItem",
-                "dynamodb:GetItem",
-                "dynamodb:PutItem",
-                "dynamodb:Scan",
-                "dynamodb:UpdateItem",
-                "dynamodb:BatchGetItem",
-                "dynamodb:DescribeTable",
-                "dynamodb:ListTables",
-                "dynamodb:Query",
-                "dynamodb:ListTagsOfResource",
+          "dynamodb:DeleteItem",
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:Scan",
+          "dynamodb:UpdateItem",
+          "dynamodb:BatchGetItem",
+          "dynamodb:DescribeTable",
+          "dynamodb:ListTables",
+          "dynamodb:Query",
+          "dynamodb:ListTagsOfResource",
           ]
         Effect   = "Allow"
-        Resource = ${var.table_arn}
+        Resource = var.table_arn
       },
     ]
   })
