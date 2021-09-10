@@ -42,6 +42,7 @@ resource "aws_iam_policy" "cabal_imap_policy" {
         Resource = [
           "arn:aws:secretsmanager:us-east-1:715401949493:secret:/cabal/*",
         ]
+      },
       {
         Action   = [
           "dynamodb:DeleteItem",
