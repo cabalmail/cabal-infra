@@ -171,7 +171,7 @@ EOF
 cat > '/var/lib/chef/attributes/imap.json' << EOF
 {
   "sendmail": {
-    "cert": "$${var.control_domain}"
+    "cert": "${var.control_domain}"
   }
 }
 EOF
