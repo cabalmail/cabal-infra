@@ -6,6 +6,7 @@ chef_gem 'ruby-shadow'
   password = 'test1234'
   user u do
     password password
+    manage_home
   end
   directory "/home/#{u}/Maildir" do
     owner u
