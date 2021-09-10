@@ -169,27 +169,6 @@ After signing up, perform the following steps:
 
 If you have followed the recommendation to create a dedicated account, then the above steps should be the *only* manual steps required in this account. Everything else should be managed by Terraform.
 
-### Chef Infra Server and Chef Workstation
-You must have an organization set up on [Chef Infra Server](https://www.chef.io/products/chef-infra). Chef offers a [managed service](https://manage.chef.io/signup) with a free tier. If you want to stay within AWS, you could try OpsWorks, but I have not tested it. And you must have [Chef Workstation](https://downloads.chef.io/tools/workstation) configured to administer your Chef organization. These instructions assume that you're using managed Chef.
-
-After signing up, perform the following steps:
-
-1. Create an organization. (Administration tab -> create under Organizations in left navigation.)
-2. Download the [starter kit](https://docs.chef.io/workstation/getting_started/#starter-kit) and install Chef Workstation.
-3. Create a client called "terraform". (Policy tab -> create under Clients in left navigation.) Download/copy the client key for use in your Terraform variables below. (A client is essentially a user without console access.)
-4. Grant the "terraform" client the following permissions:
-    - Nodes: list, create
-    - Cookbooks: list
-    - Roles: list, create
-    - Environments: list, create
-5. Upload the cookbooks in the cookbooks directory
-
-        cd cookbooks
-        knife cookbook upload cabal-imap -o ./
-        knife cookbook upload cabal-smtp -o ./
-
-The above steps should be the *only* manual steps required in this Chef organization. Everything else should be managed by Terraform.
-
 ### Terraform
 You must install Terraform or set up an account with [Terraform Cloud](https://app.terraform.io/signup/account). HashiCorp offers a free tier. These instructions assume you are using Terraform Cloud.
 

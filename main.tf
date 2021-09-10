@@ -67,7 +67,5 @@ module "cabal_imap" {
 # Create user pool
 # Create lambda/api-gateway admin application
 # Add some users
-# Create chef environent
-# Create chef roles
 # Create autoscaling group configs
 # Create autoscaling group
