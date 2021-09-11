@@ -141,7 +141,8 @@ resource "aws_launch_configuration" "cabal_imap_cfg" {
   }
   user_data             = templatefile("${path.module}/userdata", {
     control_domain  = var.control_domain,
-    artifact_bucket = var.artifact_bucket
+    artifact_bucket = var.artifact_bucket,
+    efs_id          = var.efs_dns
   })
 }
 

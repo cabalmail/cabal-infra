@@ -29,3 +29,7 @@ variable "table_arn" {
 variable "s3_arn" {
   description = "S3 bucket arn"
 }
+
+variable "efs_dns" {
+  description = "DNS of Elastic File System"
+}
