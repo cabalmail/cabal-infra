@@ -13,14 +13,14 @@ resource "aws_security_group" "cabal_efs_sg" {
    vpc_id = var.vpc.id
 
    ingress {
-     cidr_blocks = [vpc.cidr_block]
+     cidr_blocks = [var.vpc.cidr_block]
      from_port   = 2049
      to_port     = 2049
      protocol    = "tcp"
    }
 
    egress {
-     cidr_blocks = [vpc.cidr_block]
+     cidr_blocks = [var.vpc.cidr_block]
      from_port   = 0
      to_port     = 0
      protocol    = -1
