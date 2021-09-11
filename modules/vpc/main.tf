@@ -4,9 +4,10 @@ locals {
 }
 
 resource "aws_vpc" "cabal_vpc" {
-  cidr_block = var.cidr_block
-  tags       = {
-    Name                 = "cabal-vpc"
+  cidr_block          = var.cidr_block
+  enable_dns_support = true
+  tags               = {
+    Name = "cabal-vpc"
   }
 }
 
@@ -16,7 +17,7 @@ resource "aws_subnet" "cabal_private_subnet" {
   availability_zone = var.az_list[count.index]
   cidr_block        = cidrsubnet(var.cidr_block, local.bit_offset, count.index)
   tags              = {
-    Name                 = "cabal-private-subnet-${count.index}"
+    Name = "cabal-private-subnet-${count.index}"
   }
 }
 
@@ -26,14 +27,14 @@ resource "aws_subnet" "cabal_public_subnet" {
   availability_zone = var.az_list[count.index]
   cidr_block        = cidrsubnet(var.cidr_block, local.bit_offset, length(var.az_list) + count.index)
   tags              = {
-    Name                 = "cabal-public-subnet-${count.index}"
+    Name = "cabal-public-subnet-${count.index}"
   }
 }
 
 resource "aws_internet_gateway" "cabal_ig" {
   vpc_id   = aws_vpc.cabal_vpc.id
   tags     = {
-    Name                 = "cabal-igw"
+    Name = "cabal-igw"
   }
 }
 
@@ -44,7 +45,7 @@ resource "aws_eip" "cabal_nat_eip" {
     aws_internet_gateway.cabal_ig
   ]
   tags       = {
-    Name                 = "cabal-nat-eip-${count.index}"
+    Name = "cabal-nat-eip-${count.index}"
   }
 }
 
@@ -53,7 +54,7 @@ resource "aws_nat_gateway" "cabal_nat" {
   allocation_id = aws_eip.cabal_nat_eip[count.index].id
   subnet_id     = aws_subnet.cabal_public_subnet[count.index].id
   tags          = {
-    Name                 = "cabal-nat-${count.index}"
+    Name = "cabal-nat-${count.index}"
   }
 }
 
@@ -61,7 +62,7 @@ resource "aws_route_table" "cabal_private_rt" {
   count      = length(var.az_list)
   vpc_id     = aws_vpc.cabal_vpc.id
   tags       = {
-    Name                 = "cabal-private-rt-${count.index}"
+    Name = "cabal-private-rt-${count.index}"
   }
 }
 
@@ -81,7 +82,7 @@ resource "aws_route_table_association" "cabal_private_rta" {
 resource "aws_route_table" "cabal_public_rt" {
   vpc_id   = aws_vpc.cabal_vpc.id
   tags     = {
-    Name                 = "cabal-public-rt"
+    Name = "cabal-public-rt"
   }
 }
 
