@@ -41,7 +41,8 @@ module "cabal_load_balancer" {
 }
 
 module "cabal_efs" {
-  source         = "./modules/efs"
+  source           = "./modules/efs"
+  private_subnets  = module.cabal_vpc.private_subnets
 }
 
 # TODO
