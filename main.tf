@@ -56,7 +56,7 @@ module "cabal_imap" {
   target_group_arn = module.cabal_load_balancer.imap_tg.arn
   table_arn        = module.cabal_table.table_arn
   s3_arn           = aws_s3_bucket.cabal_cookbook_bucket.arn
-  efs_dns          = module.efs_dns
+  efs_dns          = module.cabal_efs.efs_dns
   repo             = var.repo
   depends_on       = [
     aws_s3_bucket_object.cabal_cookbook_files
