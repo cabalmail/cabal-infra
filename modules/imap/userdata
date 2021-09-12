@@ -7,7 +7,8 @@ sudo mount -t nfs -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retr
 /bin/mkdir -p /var/lib/chef/{cookbooks,attributes}
 /bin/mkdir -p /var/log/chef
 cd /etc/chef/
-curl -L https://omnitruck.chef.io/install.sh | sudo bash
+curl -L https://omnitruck.chef.io/install.sh | sudo bash -s -- -v 17.4.38
+
 cat > '/etc/chef/solo.rb' << EOF
 chef_license            'accept'
 log_location            STDOUT
