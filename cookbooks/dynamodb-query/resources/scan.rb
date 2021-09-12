@@ -1,4 +1,5 @@
 resource_name :dynamodb_scan
+unified_mode true
 property :table, String, required: true
 property :apikey, String, required: false
 property :secretkey, String, required: false
