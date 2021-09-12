@@ -4,8 +4,8 @@ maintainer_email 'you@example.com'
 license 'All Rights Reserved'
 description 'Installs/Configures dynamodb-query'
 long_description 'Installs/Configures dynamodb-query'
-version '0.1.2'
-chef_version '>= 14.0'
+version '0.1.0'
+chef_version '>= 17.0, < 18.0'
 
 gem 'aws-sdk-dynamodb', '~> 1.28.0'
 
