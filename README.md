@@ -73,95 +73,116 @@ After signing up, perform the following steps:
 5. [Create an IAM policy](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_create-console.html) called "terraform" with the following permissions:
 
         {
-          "Version": "2012-10-17",
-          "Statement": [
-            {
-              "Sid": "VisualEditor0",
-              "Effect": "Allow",
-              "Action": [
-                "ec2:DeleteSubnet",
-                "acm:DeleteCertificate",
-                "route53:GetHostedZone",
-                "ec2:AttachInternetGateway",
-                "route53:ListHostedZonesByName",
-                "ec2:DeleteRouteTable",
-                "ec2:AssociateRouteTable",
-                "ec2:DescribeInternetGateways",
-                "secretsmanager:GetRandomPassword",
-                "ec2:CreateRoute",
-                "ec2:CreateInternetGateway",
-                "route53:ListResourceRecordSets",
-                "ec2:DescribeAccountAttributes",
-                "acm:ImportCertificate",
-                "ec2:DeleteInternetGateway",
-                "ec2:DescribeNetworkAcls",
-                "ec2:DescribeRouteTables",
-                "elasticloadbalancing:*",
-                "route53:CreateHostedZone",
-                "ec2:DescribeVpcClassicLinkDnsSupport",
-                "ec2:CreateTags",
-                "route53domains:UpdateDomainNameservers",
-                "route53:ChangeResourceRecordSets",
-                "ec2:CreateRouteTable",
-                "acm:AddTagsToCertificate",
-                "acm:RequestCertificate",
-                "acm:RenewCertificate",
-                "ec2:DetachInternetGateway",
-                "ec2:DisassociateRouteTable",
-                "acm:ListTagsForCertificate",
-                "ec2:DescribeVpcClassicLink",
-                "acm:DescribeCertificate",
-                "route53:ChangeTagsForResource",
-                "ec2:DeleteNatGateway",
-                "ec2:DeleteVpc",
-                "ec2:CreateSubnet",
-                "ec2:DescribeSubnets",
-                "secretsmanager:ListSecrets",
-                "ec2:DescribeAddresses",
-                "route53:GetChange",
-                "ec2:CreateNatGateway",
-                "ec2:CreateVpc",
-                "ec2:DescribeVpcAttribute",
-                "ec2:DescribeNetworkInterfaces",
-                "kms:DescribeKey",
-                "route53:DeleteHostedZone",
-                "kms:CreateGrant",
-                "ec2:ReleaseAddress",
-                "ec2:DeleteRoute",
-                "ec2:DescribeNatGateways",
-                "route53:ListTagsForResource",
-                "ec2:AllocateAddress",
-                "ec2:DescribeSecurityGroups",
-                "ec2:DescribeVpcs",
-                "sts:GetCallerIdentity",
-                ],
-              "Resource": "*"
-            },
-            {
-              "Sid": "VisualEditor1",
-              "Effect": "Allow",
-              "Action": [
-                "secretsmanager:UntagResource",
-                "secretsmanager:DescribeSecret",
-                "secretsmanager:DeleteResourcePolicy",
-                "secretsmanager:PutSecretValue",
-                "secretsmanager:CreateSecret",
-                "secretsmanager:DeleteSecret",
-                "secretsmanager:CancelRotateSecret",
-                "secretsmanager:ListSecretVersionIds",
-                "secretsmanager:UpdateSecret",
-                "secretsmanager:GetResourcePolicy",
-                "secretsmanager:GetSecretValue",
-                "secretsmanager:PutResourcePolicy",
-                "secretsmanager:RestoreSecret",
-                "secretsmanager:RotateSecret",
-                "secretsmanager:UpdateSecretVersionStage",
-                "secretsmanager:ValidateResourcePolicy",
-                "secretsmanager:TagResource"
-              ],
-              "Resource": "arn:aws:secretsmanager:*:715401949493:secret:/cabal/*"
-            }
-          ]
+             "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Sid": "general-policy",
+                    "Effect": "Allow",
+                    "Action": [
+                        "elasticfilesystem:DescribeBackupPolicy",
+                        "acm:DeleteCertificate",
+                        "elasticfilesystem:DeleteAccessPoint",
+                        "elasticfilesystem:PutAccountPreferences",
+                        "route53:GetHostedZone",
+                        "dynamodb:*",
+                        "elasticfilesystem:DescribeAccountPreferences",
+                        "autoscaling:*",
+                        "acm:RenewCertificate",
+                        "route53:ListHostedZonesByName",
+                        "elasticloadbalancing:DeleteLoadBalancer",
+                        "elasticloadbalancing:DescribeLoadBalancers",
+                        "secretsmanager:GetRandomPassword",
+                        "acm:RequestCertificate",
+                        "elasticfilesystem:ClientMount",
+                        "route53:ListResourceRecordSets",
+                        "acm:ImportCertificate",
+                        "elasticloadbalancing:ModifyTargetGroupAttributes",
+                        "elasticfilesystem:PutFileSystemPolicy",
+                        "elasticfilesystem:DeleteFileSystemPolicy",
+                        "elasticfilesystem:ModifyMountTargetSecurityGroups",
+                        "route53:CreateHostedZone",
+                        "elasticloadbalancing:CreateTargetGroup",
+                        "route53domains:UpdateDomainNameservers",
+                        "route53:ChangeResourceRecordSets",
+                        "acm:AddTagsToCertificate",
+                        "acm:ListTagsForCertificate",
+                        "iam:*",
+                        "elasticloadbalancing:DescribeLoadBalancerAttributes",
+                        "acm:DescribeCertificate",
+                        "elasticfilesystem:CreateMountTarget",
+                        "elasticloadbalancing:DescribeTargetGroupAttributes",
+                        "elasticloadbalancing:AddTags",
+                        "route53:ChangeTagsForResource",
+                        "ec2:*",
+                        "elasticfilesystem:ClientRootAccess",
+                        "elasticloadbalancing:ModifyLoadBalancerAttributes",
+                        "elasticfilesystem:DeleteFileSystem",
+                        "secretsmanager:ListSecrets",
+                        "elasticfilesystem:UntagResource",
+                        "route53:GetChange",
+                        "elasticfilesystem:CreateFileSystem",
+                        "elasticfilesystem:ListTagsForResource",
+                        "elasticfilesystem:ClientWrite",
+                        "elasticfilesystem:DeleteTags",
+                        "elasticloadbalancing:CreateListener",
+                        "elasticloadbalancing:DescribeListeners",
+                        "elasticfilesystem:DescribeLifecycleConfiguration",
+                        "elasticfilesystem:DescribeFileSystemPolicy",
+                        "elasticfilesystem:PutLifecycleConfiguration",
+                        "kms:DescribeKey",
+                        "route53:DeleteHostedZone",
+                        "elasticfilesystem:DescribeFileSystems",
+                        "elasticfilesystem:DeleteMountTarget",
+                        "elasticfilesystem:CreateAccessPoint",
+                        "kms:CreateGrant",
+                        "elasticfilesystem:DescribeMountTargets",
+                        "elasticloadbalancing:CreateLoadBalancer",
+                        "s3:*",
+                        "elasticfilesystem:Restore",
+                        "elasticloadbalancing:DescribeTags",
+                        "elasticfilesystem:DescribeAccessPoints",
+                        "elasticloadbalancing:*",
+                        "elasticloadbalancing:DeleteTargetGroup",
+                        "route53:ListTagsForResource",
+                        "elasticfilesystem:TagResource",
+                        "elasticfilesystem:CreateTags",
+                        "elasticfilesystem:DescribeTags",
+                        "elasticloadbalancing:DescribeTargetGroups",
+                        "elasticfilesystem:Backup",
+                        "elasticfilesystem:PutBackupPolicy",
+                        "sts:GetCallerIdentity",
+                        "elasticfilesystem:DescribeMountTargetSecurityGroups",
+                        "elasticfilesystem:UpdateFileSystem",
+                        "elasticloadbalancing:ModifyTargetGroup",
+                        "elasticloadbalancing:DeleteListener"
+                    ],
+                    "Resource": "*"
+                },
+                {
+                    "Sid": "secrets-policy",
+                    "Effect": "Allow",
+                    "Action": [
+                        "secretsmanager:UntagResource",
+                        "secretsmanager:DescribeSecret",
+                        "secretsmanager:DeleteResourcePolicy",
+                        "secretsmanager:PutSecretValue",
+                        "secretsmanager:CreateSecret",
+                        "secretsmanager:DeleteSecret",
+                        "secretsmanager:CancelRotateSecret",
+                        "secretsmanager:ListSecretVersionIds",
+                        "secretsmanager:UpdateSecret",
+                        "secretsmanager:GetResourcePolicy",
+                        "secretsmanager:GetSecretValue",
+                        "secretsmanager:PutResourcePolicy",
+                        "secretsmanager:RestoreSecret",
+                        "secretsmanager:RotateSecret",
+                        "secretsmanager:UpdateSecretVersionStage",
+                        "secretsmanager:ValidateResourcePolicy",
+                        "secretsmanager:TagResource"
+                    ],
+                    "Resource": "arn:aws:secretsmanager:*:715401949493:secret:/cabal/*"
+                }
+            ]
         }
         
 6. Create an IAM Group called "terraform" and assign the above policy.
@@ -176,13 +197,16 @@ After signing up, perform the following steps:
 
 1. [Create a worspace](https://learn.hashicorp.com/tutorials/terraform/cloud-workspace-create?in=terraform/cloud-get-started) of type version control workflow. Connect it to your cloned repository.
 2. Using [terraform.tfvars.example](./terraform.tfvars.example) as a guide, [create variables in your workspace](https://learn.hashicorp.com/tutorials/terraform/cloud-workspace-configure?in=terraform/cloud-get-started).
-3. [Create environment variables](https://learn.hashicorp.com/tutorials/terraform/cloud-workspace-configure?in=terraform/cloud-get-started) for `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` using the values you saved from the AWS section step 7. Finally, create a third environment variable for `AWS_DEFAULT_REGION`. Set it to the same region you use for your primary infrastructure.
+3. [Create environment variables](https://learn.hashicorp.com/tutorials/terraform/cloud-workspace-configure?in=terraform/cloud-get-started) for `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` using the values you saved from the AWS section step 7. The secret access key should be designated "sensitive". Finally, create a third environment variable for `AWS_DEFAULT_REGION`. Set it to the same region you use for your primary infrastructure.
 
 ### Domain registration
 You must register your desired domains (control and mail) with your chosen registrar. CabalMail requires exactly one control domain and at least one mail domain. Registration requires an email address. You can use a temporary account with any of the free providers for this address, and later, you can update the registration records with a self-hosted address once your hosting infrastructure is up and running.
 
 ### Fork this repository
 Although you could connect Terraform Cloud directly to the original repository, it is safer to fork it. If you want to contribute to it, or extend it for your your own use, then forking is essential. Use the Github URL for your fork where called for in tfvars.
+
+### Fork the cabal-cert repository
+TODO: explain the cabal-cert repo
 
 ## Provisioning
 
@@ -192,23 +216,6 @@ Although you could connect Terraform Cloud directly to the original repository, 
         terraform init
         terraform plan
         terraform apply
-3. *The initial run will fail.* In the initial phase of the Terraform run, it will create the Route53 hosted zone for the control domain, and then fail when trying to request a certificate.
 
-        on modules/cert/main.tf line 33, in resource "acme_certificate" "cabal_certificate":
-        │   33: resource "acme_certificate" "cabal_certificate" {
-    You must perform these steps to proceed:
-
-    1. Log in to the AWS console, navigate to Route53, and examine the hosted zone for your control domain.
-    2. Note the NS record. It should have four name server hostnames.
-    3. Log in to your registrar and update your registration for the control domain with the name server hostnames from Route53.
-    4. Wait for the update to take effect. It is often immedate but can take up to 24 hours.
-4. Once this is done, you should be able to run Terraform again and have it succeed.
-
-## Manual Steps
-After running terraform, you must complete the following steps manually.
-
-### Name servers
-The output contains name servers for each of the domains (control and mail) you specify. You must update the whois records with your domain registrar with this information.
-
-### PTR Records
+## PTR Records
 The output contains the IP addresses of each of your outgoing mail relays. In order to send mail reliably, you must [set up PTR records](https://blog.mailtrap.io/ptr-record/) for each outgoing SMTP server. Only AWS can do this for their EIPs, and there is no API, so the process cannot be automated. Fill out [this form](https://console.aws.amazon.com/support/contacts?#/rdns-limits) for each outgoing SMTP sever. In addition to creating the necessary PTR records, it will also cause them to relax the rate limit on outgoing mail.
