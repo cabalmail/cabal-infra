@@ -100,5 +100,3 @@ module "cabal_smtp_out" {
 # Create user pool
 # Create lambda/api-gateway admin application
 # Add some users
-# Create autoscaling group configs
-# Create autoscaling group
