@@ -178,7 +178,6 @@ resource "aws_autoscaling_group" "cabal_smtp_asg" {
   dynamic "tag" {
     for_each = data.aws_default_tags.current.tags
     content {
-      Name                = "smtp-${var.type}"
       key                 = tag.key
       value               = tag.value
       propagate_at_launch = true
