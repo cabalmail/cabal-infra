@@ -99,7 +99,7 @@ resource "aws_iam_instance_profile" "cabal_smtp_instance_profile" {
 }
 
 resource "aws_security_group" "cabal_smtp_sg" {
-  name        = "cabal_smtp_sg"
+  name        = "cabal-smtp-${var.type}-sg"
   description = "Allow SMTP inbound traffic"
   vpc_id      = var.vpc.id
 }
