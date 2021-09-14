@@ -64,7 +64,7 @@ resource "aws_iam_policy" "cabal_smtp_policy" {
 }
 
 resource "aws_iam_role" "cabal_smtp_role" {
-  name = "cabal-smtp-role"
+  name = "cabal-smtp-${var.type}-role"
 
   assume_role_policy = <<EOF
 {
@@ -94,7 +94,7 @@ resource "aws_iam_role_policy_attachment" "cabal_smtp_role_attachment_2" {
 }
 
 resource "aws_iam_instance_profile" "cabal_smtp_instance_profile" {
-  name = "cabal-smtp-profile"
+  name = "cabal-smtp-${var.type}-profile"
   role = aws_iam_role.cabal_smtp_role.name
 }
 
