@@ -6,6 +6,10 @@ variable "vpc" {
   description = "VPC for the load balancer."
 }
 
+variable "type" {
+  description = "Type of SMTP server ('in' for inbound, 'out' for outbound)."
+}
+
 variable "control_domain" {
   description = "Control domain"
 }
