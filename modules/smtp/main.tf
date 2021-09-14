@@ -15,7 +15,7 @@ data "aws_iam_policy" "ssm_policy" {
 }
 
 resource "aws_iam_policy" "cabal_smtp_policy" {
-  name        = "cabal-s3-access"
+  name        = "cabal-smtp-${var.type}-access"
   path        = "/"
   description = "Policies for SMTP machines"
 
@@ -149,7 +149,7 @@ resource "aws_security_group_rule" "allow_smtp587" {
 }
 
 resource "aws_launch_configuration" "cabal_smtp_cfg" {
-  name_prefix           = "smtp-"
+  name_prefix           = "smtp-${var.type}-"
   image_id              = data.aws_ami.amazon_linux_2.id
   instance_type         = "t2.micro"
   security_groups       = [aws_security_group.cabal_smtp_sg.id]
@@ -178,6 +178,7 @@ resource "aws_autoscaling_group" "cabal_smtp_asg" {
   dynamic "tag" {
     for_each = data.aws_default_tags.current.tags
     content {
+      Name                = "smtp-${var.type}"
       key                 = tag.key
       value               = tag.value
       propagate_at_launch = true
