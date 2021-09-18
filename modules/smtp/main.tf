@@ -175,7 +175,7 @@ resource "aws_autoscaling_group" "cabal_smtp_asg" {
   lifecycle {
     create_before_destroy = true
   }
-  tags {
+  tag {
     Name = "smtp-${var.type}-${formatdate("YYYYMMDDhhmmss", timestamp())}"
   }
   dynamic "tag" {
