@@ -77,3 +77,66 @@ variable "mail_domains" {
   type        = list(string)
   description = "List of domains from which you want to send mail, and to which you want to allow mail to be sent. Must have at least one."
 }
+
+variable "imap_scale" {
+  type        = object(
+    min = number,
+    max = number,
+    des = number,
+  )
+  description = "Minimum, maximum, and desired number of IMAP servers. IMPORTANT: This stack uses open source Dovecot, which does not support multiple instances accessing the same mailstore over NFS. Since this stack also uses NFS for the mailstore, all three of these numbers should always be set to 1. Defaults to { min = 0, max = 0, des = 0 } in order to prevent unexpected AWS charges."
+  default     = {
+    min = 0,
+    max = 0,
+    des = 0,
+  }
+  validation {
+    condition = alltrue([
+      (var.imap_scale.min <= var.imap_scale.des),
+      (var.imap_scale.des <= var.imap_scale.max),
+      (var.imap_scale.min <= 1),
+      (var.imap_scale.max <= 1),
+      (var.imap_scale.des <= 1),
+    ])
+  }
+}
+
+variable "smtpin_scale" {
+  type        = object(
+    min = number
+    max = number
+    des = number
+  )
+  description = "Minimum, maximum, and desired number of incoming SMTP servers. All three should be at least 1, and must satisfy minimum <= desired <= maximum. Defaults to { min = 0, max = 0, des = 0 } in order to prevent unexpected AWS charges."
+  default     = {
+    min = 0,
+    max = 0,
+    des = 0,
+  }
+  validation {
+    condition = alltrue([
+      (var.smtpin_scale.min <= var.smtpin_scale.des),
+      (var.smtpin_scale.des <= var.smtpin_scale.max),
+    ])
+  }
+}
+
+variable "smtpout_scale" {
+  type        = object(
+    min = number
+    max = number
+    des = number
+  )
+  description = "Minimum, maximum, and desired number of outgoing SMTP servers. All three should be at least 1, and must satisfy minimum <= desired <= maximum. Defaults to { min = 0, max = 0, des = 0 } in order to prevent unexpected AWS charges."
+  default     = {
+    min = 0,
+    max = 0,
+    des = 0,
+  }
+  validation {
+    condition = alltrue([
+      (var.smtpout_scale.min <= var.smtpout_scale.des),
+      (var.smtpout_scale.des <= var.smtpout_scale.max),
+    ])
+  }
+}

@@ -29,3 +29,7 @@ variable "s3_arn" {
 variable "efs_dns" {
   description = "DNS of Elastic File System"
 }
+
+variable "scale" {
+  description = "Min, max, and desired settings for autoscale group"
+}

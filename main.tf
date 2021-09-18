@@ -59,6 +59,7 @@ module "cabal_imap" {
   table_arn        = module.cabal_table.table_arn
   s3_arn           = aws_s3_bucket.cabal_cookbook_bucket.arn
   efs_dns          = module.cabal_efs.efs_dns
+  scale            = var.imap_scale
   depends_on       = [
     aws_s3_bucket_object.cabal_cookbook_files
   ]
@@ -75,6 +76,7 @@ module "cabal_smtp_in" {
   table_arn        = module.cabal_table.table_arn
   s3_arn           = aws_s3_bucket.cabal_cookbook_bucket.arn
   efs_dns          = module.cabal_efs.efs_dns
+  scale            = var.smtpin_scale
   depends_on       = [
     aws_s3_bucket_object.cabal_cookbook_files
   ]
@@ -91,6 +93,7 @@ module "cabal_smtp_out" {
   table_arn        = module.cabal_table.table_arn
   s3_arn           = aws_s3_bucket.cabal_cookbook_bucket.arn
   efs_dns          = module.cabal_efs.efs_dns
+  scale            = var.smtpout_scale
   depends_on       = [
     aws_s3_bucket_object.cabal_cookbook_files
   ]

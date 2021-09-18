@@ -148,9 +148,9 @@ resource "aws_launch_configuration" "cabal_imap_cfg" {
 
 resource "aws_autoscaling_group" "cabal_imap_asg" {
   vpc_zone_identifier   = var.private_subnets[*].id
-  desired_capacity      = 1
-  max_size              = 1
-  min_size              = 1
+  desired_capacity      = var.scale.des
+  max_size              = var.scale.max
+  min_size              = var.scale.min
   launch_configuration  = aws_launch_configuration.cabal_imap_cfg.id
   target_group_arns     = [var.target_group_arn]
   lifecycle {
