@@ -158,7 +158,7 @@ resource "aws_autoscaling_group" "cabal_imap_asg" {
   }
   tag {
     key                 = "Name"
-    value               = "smtp-${var.type}-${formatdate("YYYYMMDDhhmmss", timestamp())}"
+    value               = "imap-${formatdate("YYYYMMDDhhmmss", timestamp())}"
     propagate_at_launch = true
   }
   dynamic "tag" {
