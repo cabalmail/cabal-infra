@@ -156,6 +156,11 @@ resource "aws_autoscaling_group" "cabal_imap_asg" {
   lifecycle {
     create_before_destroy = true
   }
+  tag {
+    key                 = "Name"
+    value               = "smtp-${var.type}-${formatdate("YYYYMMDDhhmmss", timestamp())}"
+    propagate_at_launch = true
+  }
   dynamic "tag" {
     for_each = data.aws_default_tags.current.tags
     content {
