@@ -175,17 +175,11 @@ resource "aws_autoscaling_group" "cabal_smtp_asg" {
   lifecycle {
     create_before_destroy = true
   }
+  tags {
+    Name = "smtp-${var.type}-${formatdate("YYYYMMDDhhmmss", timestamp())}"
+  }
   dynamic "tag" {
-    for_each = concat(
-      data.aws_default_tags.current.tags,
-      [
-        {
-          key                 = "Name"
-          value               = "smtp-${var.type}-${formatdate("YYYYMMDDhhmmss", timestamp())}"
-          propagate_at_launch = true
-        }
-      ]
-    )
+    for_each = data.aws_default_tags.current.tags,
     content {
       key                 = tag.key
       value               = tag.value
