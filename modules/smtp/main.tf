@@ -180,7 +180,7 @@ resource "aws_autoscaling_group" "cabal_smtp_asg" {
       data.aws_default_tags.current.tags,
       [
         {
-          key                 = Name
+          key                 = "Name"
           value               = "smtp-${var.type}-${formatdate("YYYYMMDDhhmmss", timestamp())}"
           propagate_at_launch = true
         }
