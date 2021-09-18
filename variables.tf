@@ -79,16 +79,16 @@ variable "mail_domains" {
 }
 
 variable "imap_scale" {
-  type        = object(
-    min = number,
-    max = number,
-    des = number,
-  )
+  type        = object({
+    min = number
+    max = number
+    des = number
+  })
   description = "Minimum, maximum, and desired number of IMAP servers. IMPORTANT: This stack uses open source Dovecot, which does not support multiple instances accessing the same mailstore over NFS. Since this stack also uses NFS for the mailstore, all three of these numbers should always be set to 1. Defaults to { min = 0, max = 0, des = 0 } in order to prevent unexpected AWS charges."
   default     = {
-    min = 0,
-    max = 0,
-    des = 0,
+    min = 0
+    max = 0
+    des = 0
   }
   validation {
     condition = alltrue([
@@ -102,16 +102,16 @@ variable "imap_scale" {
 }
 
 variable "smtpin_scale" {
-  type        = object(
+  type        = object({
     min = number
     max = number
     des = number
-  )
+  })
   description = "Minimum, maximum, and desired number of incoming SMTP servers. All three should be at least 1, and must satisfy minimum <= desired <= maximum. Defaults to { min = 0, max = 0, des = 0 } in order to prevent unexpected AWS charges."
   default     = {
-    min = 0,
-    max = 0,
-    des = 0,
+    min = 0
+    max = 0
+    des = 0
   }
   validation {
     condition = alltrue([
@@ -122,16 +122,16 @@ variable "smtpin_scale" {
 }
 
 variable "smtpout_scale" {
-  type        = object(
+  type        = object({
     min = number
     max = number
     des = number
-  )
+  })
   description = "Minimum, maximum, and desired number of outgoing SMTP servers. All three should be at least 1, and must satisfy minimum <= desired <= maximum. Defaults to { min = 0, max = 0, des = 0 } in order to prevent unexpected AWS charges."
   default     = {
-    min = 0,
-    max = 0,
-    des = 0,
+    min = 0
+    max = 0
+    des = 0
   }
   validation {
     condition = alltrue([
