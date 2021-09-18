@@ -91,13 +91,30 @@ variable "imap_scale" {
     des = 0
   }
   validation {
-    condition = alltrue([
+    condition     = alltrue([
+      (floor(var.imap_scale.min) == var.imap_scale.min),
+      (floor(var.imap_scale.max) == var.imap_scale.max),
+      (floor(var.imap_scale.des) == var.imap_scale.des),
+      (var.imap_scale.min >= 0),
+      (var.imap_scale.max >= 0),
+      (var.imap_scale.des >= 0),
+    ])
+    error_message = "The imap_scale attributes must be non-negative integers."
+  }
+  validation {
+    condition     = alltrue([
       (var.imap_scale.min <= var.imap_scale.des),
       (var.imap_scale.des <= var.imap_scale.max),
+    ])
+    error_message = "The imap_scale attributes must satisfy the relationship min <= des <= max."
+  }
+  validation {
+    condition     = alltrue([
       (var.imap_scale.min <= 1),
       (var.imap_scale.max <= 1),
       (var.imap_scale.des <= 1),
     ])
+    error_message = "The imap_scale attributes cannot be greater than 1."
   }
 }
 
@@ -114,10 +131,22 @@ variable "smtpin_scale" {
     des = 0
   }
   validation {
-    condition = alltrue([
+    condition     = alltrue([
+      (floor(var.smtpin_scale.min) == var.smtpin_scale.min),
+      (floor(var.smtpin_scale.max) == var.smtpin_scale.max),
+      (floor(var.smtpin_scale.des) == var.smtpin_scale.des),
+      (var.smtpin_scale.min >= 0),
+      (var.smtpin_scale.max >= 0),
+      (var.smtpin_scale.des >= 0),
+    ])
+    error_message = "The smtpin_scale attributes must be non-negative integers."
+  }
+  validation {
+    condition     = alltrue([
       (var.smtpin_scale.min <= var.smtpin_scale.des),
       (var.smtpin_scale.des <= var.smtpin_scale.max),
     ])
+    error_message = "The smtpin_scale attributes must satisfy the relationship min <= des <= max."
   }
 }
 
@@ -134,9 +163,21 @@ variable "smtpout_scale" {
     des = 0
   }
   validation {
-    condition = alltrue([
+    condition     = alltrue([
+      (floor(var.smtpout_scale.min) == var.smtpout_scale.min),
+      (floor(var.smtpout_scale.max) == var.smtpout_scale.max),
+      (floor(var.smtpout_scale.des) == var.smtpout_scale.des),
+      (var.smtpout_scale.min >= 0),
+      (var.smtpout_scale.max >= 0),
+      (var.smtpout_scale.des >= 0),
+    ])
+    error_message = "The smtpin_scale attributes must be non-negative integers."
+  }
+  validation {
+    condition     = alltrue([
       (var.smtpout_scale.min <= var.smtpout_scale.des),
       (var.smtpout_scale.des <= var.smtpout_scale.max),
     ])
+    error_message = "The smtpout_scale attributes must satisfy the relationship min <= des <= max."
   }
 }
