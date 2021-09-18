@@ -176,7 +176,9 @@ resource "aws_autoscaling_group" "cabal_smtp_asg" {
     create_before_destroy = true
   }
   tag {
-    Name = "smtp-${var.type}-${formatdate("YYYYMMDDhhmmss", timestamp())}"
+    key                 = "Name"
+    value               = "smtp-${var.type}-${formatdate("YYYYMMDDhhmmss", timestamp())}"
+    propagate_at_launch = true
   }
   dynamic "tag" {
     for_each = data.aws_default_tags.current.tags
