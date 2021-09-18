@@ -158,7 +158,7 @@ resource "aws_autoscaling_group" "cabal_imap_asg" {
   }
   tag {
     key                 = "Name"
-    value               = "imap-${formatdate("YYYYMMDDhhmmss", timestamp())}"
+    value               = "imap-asg-${formatdate("YYYYMMDDhhmmss", timestamp())}"
     propagate_at_launch = true
   }
   dynamic "tag" {
