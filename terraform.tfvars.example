@@ -24,52 +24,6 @@ cidr_block = "10.0.0.0/9"
 
 #repo = "https://github.com/example/cabal-infra/tree/main"
 
-# URL for your Chef organization. In this example, if you are
-# using Chef's hosted Chef Server, then your URL will be like
-# the one below with the short name of your organization
-# standing in for "cabal-example". If you are using a self-
-# hosted server, substitute your hostname for api.chef.io.
-# A self-hosted Chef Server must be exposed to the public
-# internet in order for Terraform Cloud to connect to it and
-# in order for managed machines that Terraform creates to be
-# able to  access it.
-chef_organization_url = "https://api.chef.io/organizations/cabal-example"
-
-# Name of client for making API calls to Chef Server.
-chef_client = "cabal"
-
-# Client key for making API calls to Chef Server. The provided
-# example will not work; you must create your own.
-chef_client_key = <<EOK
------BEGIN RSA PRIVATE KEY-----
-MIIEogIBAAKCAQEAvEFtePK3jOnlqtP6m/Vwf+v9kuwMg0jCNHuuPenBzjim2U0X
-tJON4DL2OA9Lw5VY47RCfDqny05TRAZ1Put1RQNHTMhSV+BXUNk43AeGvrm5+Mn7
-Fl0SvH7uWqqG3PMZ4SGw6xWyuo/pVeDwfNTIj74MsoM4hHaOp/nFkQwQpimLRuT+
-/KcfOhnC9R8et5sAJdZo1wLhV6fltosbTX6jQ2SMjmVOmD45BGyRB0yUX5CyRytt
-jqjtVb9H+wtk+EDrMY2bWf8v9NxHdMh5BqWXA/KyaiN7Bcy549A1ep7jtJ9PAGFQ
-r5ENbF3W5rPXwvPaqz329scC7oXZ7ZekykpGDwIDAQABAoIBABb9GmQxp45ypZQl
-zK2s3C8S32VIpAKIKQcFr3JqEDuhmWZhzqpDdojRUFXqMENTAobT5WaMNx9RkkN1
-Um37jNd/nf5XXA7VG3SJAjOES8UQoxApghrqBLa1/V9fAZcLrLZcSeF7RdcYadMN
-4/Aqf89l0uEduxIZ9DO5AZJD2eigZj/pCRDdT+K4zTcNEFpRivc5YD05X6ZVgm/y
-uU5mhAP+fHJ+p6svc8TDetYMyum85eNVFt7wLZImi1zhkCH8BuCfjuBjxkHlaRyj
-XpQ5AwX3PBNWk9VmdHX90iKW2cLYH/GblgWYtg0F3vFZsqcq7kXb6Tn0QdoW6def
-/RZDiakCgYEA8ZZHtWpmjvwSD6s+XA19Ap+VeSZsjBBAYpDq6Ad1s90E0e+0vALp
-GLPcC3ebSOsbO/msIQ/HTDLTXq2N9HHEZNOOSZDM+sdS5ZHAdSwkl31OHPRmAJIY
-Rf7YZCelnuaKg4a65cIiyAux1YyrKFA5Y149gxbadUyLjO8nMkVYVqsCgYEAx3yf
-8XKSbcIWKTN6OdbviN8jLDEgnw14DrItCQuhaJ49rfw4Kh2Y+WkPNP+hZdwrhI/f
-gyFYzOrf9qDKBLVPz1//p8V29hN6H7O81hd8cq74tgFg/tndh53htbzCLJmPgfF9
-/ydu/Gvm9dQ1JggwjTgjw8DIw88vLdozxnrRHi0CgYBnrDIBrDNu0MV/a+FK547p
-/UnLv619PcwjgEUOZYUhNovG+7L3q9gT/btEQIOm+x2o0zAG0BqanIUQcDIm4FuD
-WTYKY9VTGQ597dpFbjgVunQ3ALp1LDy2bPK3qDvuwMhYQQ0bZABBEKO0HLWmiybV
-ea+z/a6p/7szM74CWLfcGQKBgGEjrZrcSLOLxFDR0V3i7QeAaNc3IQRygZjeaJG0
-CSgxjiVv4UWY3gntf8s2A7jfKo3FpXhsP5qhcOfeyiDazX9U5uAihtgzCc/wLS8v
-hpkt3Mx8BWh0XKySU/u0a/Vd3YTQPKOH50KhpHjmme7oJARQZxIGiXzYIcg5Lecj
-nTsNAoGAc9Ur1IfBMto1i+u7TyWkjTfkCBjs9Z9muJa0GNhOTPjafNrTqoBXBh9t
-6gX8+IPyD/vIXy4aQs5mE7HQeodRbQ8KF28AHhqWO8zEw8aiZBMzpOUmXBQvY+fT
-5dn5pbWK/XfhojVc86JvqMQOJYlpY1l5ovxDWReWeEkGWMRpXVc=
------END RSA PRIVATE KEY-----
-EOK
-
 # By default, we use the staging API endpoint when requesting
 # SSL certiicates from Let's Encrypt. For production, uncomment
 # this line.
