@@ -1,6 +1,8 @@
 # cabal-infra
 Creates AWS infrastructure and machine configuration for a CabalMail system -- a system for hosting and managing your personal email.
 
+![CabalMail logo](./docs/logo.png)
+
 WARNING: This should not be regarded as an enterprise or ISP-grade email solution. It has been tested on a small pool of users for their personal email. Use at your own risk!
 
 # About
