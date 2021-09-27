@@ -79,7 +79,7 @@ After signing up, perform the following steps:
     "Version": "2012-10-17",
     "Statement": [
         {
-            "Sid": "SidTheGreat",
+            "Sid": "SidTheGreater",
             "Effect": "Allow",
             "Action": [
                 "elasticfilesystem:DescribeBackupPolicy",
