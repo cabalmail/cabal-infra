@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <title>Cabalmail Administration</title>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Serverless web application example">
+    <meta name="author" content="">
+
+
+    <link href="https://fonts.googleapis.com/css?family=Gugi" rel="stylesheet">
+    <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
+    <link rel="manifest" href="/images/site.webmanifest">
+    <link rel="mask-icon" href="/images/safari-pinned-tab.svg" color="#5bbad5">
+    <meta name="msapplication-TileColor" content="#da532c">
+    <meta name="theme-color" content="#ffffff">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://js.arcgis.com/4.3/esri/css/main.css">
+    <link rel="stylesheet" href="css/admin.css">
+    <link rel="stylesheet" href="css/message.css">
+</head>
+
+<body class="new">
+  <header>
+    <ul class="tabs" aria-labelledby="accountLink">
+        <li class="tab-new"><a href="#">New address</a></li>
+        <li class="tab-list"><a href="#">View addresses</a></li>
+        <li class="tab-signOut"><a href="#">Sign out</a></li>
+    </ul>
+  </header>
+            <input type="text" style="position:absolute;top:0;left:-99999px;" id="copytext" />
+
+    <div id="main">
+<section class="form-wrap new">
+<input type="text" class="request" id="cabalusername" placeholder="user" required autocomplete="off" autocorrect="off" autocapitalize="none"><span class="amphora">@</span><input type="text" class="request" id="subdomain" placeholder="subdomain" required autocomplete="off" autocorrect="off" autocapitalize="none"><span class="amphora">.</span><select class="request" id="zone_id">
+<option value="Z1FO2MQJDQEPLA">cabalmail.com</option>
+<option value="ZBYS915K03BC2" >cathycarr.org</option>
+<option value="Z2UFK0POOZL6IV">ccarr.com</option>
+<option value="Z1YIW2SGWFY5A7">chriscarr.org</option>
+<option value="Z1H7RU5O7WHDJH">constancedu.com</option>
+<option value="Z1U9GPZMPLPCS7">depre.world</option>
+<option value="Z33IB65UD0QYKU">hackthumb.com</option>
+<option value="Z2GS79AAMTQXNV">randomsound.org</option>
+</select><br />
+<select id="user" class="request">
+<option value="cathy">Cathy</option>
+<option value="chris">Chris</option>
+<option value="tristan">Depre</option>
+<option value="jake">Jake</option>
+</select><br />
+<input type="text" id="comment" placeholder="comment" autocomplete="off" autocorrect="off" autocapitalize="none"><br />
+            <button id="random" class="btn">Generate Random</button>
+            <button id="clear" class="btn">Clear</button>
+            <button id="request" class="btn btn-primary">Request Address</button>
+            <p>All fields are required.</p>
+</section>
+  <section class="form-wrap list">
+    <div id="filter">
+      <select class="request" id="user-filter" name="user">
+        <option value="all">Show all users</option>
+        <option value="cathy">Cathy</option>
+        <option value="chris">Chris</option>
+        <option value="tristan">Depre</option>
+        <option value="jake">Jake</option>
+      </select>
+      <select class="request" id="zone_id-filter" name="zone_id">
+        <option value="all">Show all domains</option>
+        <option value="Z1FO2MQJDQEPLA">cabalmail.com</option>
+        <option value="ZBYS915K03BC2" >cathycarr.org</option>
+        <option value="Z2UFK0POOZL6IV">ccarr.com</option>
+        <option value="Z1YIW2SGWFY5A7">chriscarr.org</option>
+        <option value="Z1H7RU5O7WHDJH">constancedu.com</option>
+        <option value="Z1U9GPZMPLPCS7">depre.world</option>
+        <option value="Z33IB65UD0QYKU">hackthumb.com</option>
+        <option value="Z2GS79AAMTQXNV">randomsound.org</option>
+      </select>
+      <input class="request" id="text" name="text" type="text" placeholder="filter..." autocomplete="off" autocorrect="off" autocapitalize="none"></input><span id="reload">↻</span>
+    </div>
+    <div id="address-list"></div>
+  </section>
+  <section class="address-view" id="address-view">
+    <button id="view-back">&lt;</button>
+    <button id="copy-address" class="btn"></button>
+    <dl>
+      <dt>Address</dt>
+      <dd id="view-address" class="view-dd"></dd>
+      <dt>Comment</dt>
+      <dd id="view-comment" class="view-dd"></dd>
+      <dt>Inbox user</dt>
+      <dd id="view-user" class="view-dd"></dd>
+      <dt>Username</dt>
+      <dd id="view-username" class="view-dd"></dd>
+      <dt>Subdomain</dt>
+      <dd id="view-subdomain" class="view-dd"></dd>
+      <dt>Top-level domain</dt>
+      <dd id="view-tld" class="view-dd"></dd>
+      <dt>AWS Route53 Zone ID</dt>
+      <dd id="view-zone-id" class="view-dd"></dd>
+    </dl>
+    <button id="view-revoke" class="btn">Revoke</button>
+    <button id="view-close" class="btn">Close</button>
+  </section>
+    </div>
+    <div class="alert-box success"></div>
+
+<footer>
+    <ul class="tabs" aria-labelledby="accountLink">
+        <li class="tab-new">☼</li>
+        <li class="tab-list">☷</li>
+        <li class="tab-signOut">⍈</li>
+    </ul>
+    <div class="panel-body">
+        <ol id="updates">
+        </ol>
+    </div>
+</footer>
+
+    <script src="js/vendor/jquery-3.1.0.js"></script>
+    <script src="js/vendor/aws-cognito-sdk.min.js"></script>
+    <script src="js/vendor/amazon-cognito-identity.min.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/cognito-auth.js"></script>
+    <script src="js/admin.js"></script>
+    <script src="js/vendor/jquery-ui-1.12.1/jquery-ui.min.js"></script>
+</body>
+
+</html>
