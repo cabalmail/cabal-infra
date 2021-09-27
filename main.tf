@@ -22,6 +22,12 @@ resource "aws_s3_bucket_object" "cabal_cookbook_files" {
   etag   = filemd5("${path.module}/${each.value}")
 }
 
+module "cabal_pool" {
+  source         = "./modules/user_pool"
+  control_domain = var.control_domain
+  zone_id        = var.zone_id
+}
+
 module "cabal_table" {
   source     = "./modules/table"
 }
@@ -101,5 +107,10 @@ module "cabal_smtp_out" {
 
 # TODO
 # Create user pool
+# - auth sufficient pam_exec.so expose_authtok /usr/bin/cognito.bash
+# - COGNITO_PASSWORD=`cat -`
+# - COGNITO_USER="${PAM_USER}"
+# - AUTH_TYPE="${PAM_TYPE}"
+# - https://docs.aws.amazon.com/cli/latest/reference/cognito-idp/admin-initiate-auth.html
 # Create lambda/api-gateway admin application
 # Add some users
