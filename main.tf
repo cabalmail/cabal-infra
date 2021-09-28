@@ -8,18 +8,8 @@ provider "aws" {
   }
 }
 
-resource "aws_s3_bucket" "cabal_cookbook_bucket" {
-  acl           = "private"
-  bucket_prefix = "cabal-artifacts-"
-}
-
-resource "aws_s3_bucket_object" "cabal_cookbook_files" {
-  for_each = fileset(path.module, "cookbooks/**/*")
-
-  bucket = aws_s3_bucket.cabal_cookbook_bucket.bucket
-  key    = each.value
-  source = "${path.module}/${each.value}"
-  etag   = filemd5("${path.module}/${each.value}")
+module "cabal_cookbooks" {
+  source = "./modules/cookbooks"
 }
 
 module "cabal_pool" {
@@ -60,14 +50,14 @@ module "cabal_imap" {
   private_subnets  = module.cabal_vpc.private_subnets
   vpc              = module.cabal_vpc.vpc
   control_domain   = var.control_domain
-  artifact_bucket  = aws_s3_bucket.cabal_cookbook_bucket.id
+  artifact_bucket  = module.cabal_cookbooks.bucket.id
   target_group_arn = module.cabal_load_balancer.imap_tg.arn
   table_arn        = module.cabal_table.table_arn
-  s3_arn           = aws_s3_bucket.cabal_cookbook_bucket.arn
+  s3_arn           = module.cabal_cookbooks.bucket.arn
   efs_dns          = module.cabal_efs.efs_dns
   scale            = var.imap_scale
   depends_on       = [
-    aws_s3_bucket_object.cabal_cookbook_files
+    module.cabal_cookbooks
   ]
 }
 
@@ -77,14 +67,14 @@ module "cabal_smtp_in" {
   private_subnets  = module.cabal_vpc.private_subnets
   vpc              = module.cabal_vpc.vpc
   control_domain   = var.control_domain
-  artifact_bucket  = aws_s3_bucket.cabal_cookbook_bucket.id
+  artifact_bucket  = module.cabal_cookbooks.bucket.id
   target_group_arn = module.cabal_load_balancer.imap_tg.arn
   table_arn        = module.cabal_table.table_arn
-  s3_arn           = aws_s3_bucket.cabal_cookbook_bucket.arn
+  s3_arn           = module.cabal_cookbooks.bucket.arn
   efs_dns          = module.cabal_efs.efs_dns
   scale            = var.smtpin_scale
   depends_on       = [
-    aws_s3_bucket_object.cabal_cookbook_files
+    module.cabal_cookbooks
   ]
 }
 
@@ -94,14 +84,14 @@ module "cabal_smtp_out" {
   private_subnets  = module.cabal_vpc.private_subnets
   vpc              = module.cabal_vpc.vpc
   control_domain   = var.control_domain
-  artifact_bucket  = aws_s3_bucket.cabal_cookbook_bucket.id
+  artifact_bucket  = module.cabal_cookbooks.bucket.id
   target_group_arn = module.cabal_load_balancer.imap_tg.arn
   table_arn        = module.cabal_table.table_arn
-  s3_arn           = aws_s3_bucket.cabal_cookbook_bucket.arn
+  s3_arn           = module.cabal_cookbooks.bucket.arn
   efs_dns          = module.cabal_efs.efs_dns
   scale            = var.smtpout_scale
   depends_on       = [
-    aws_s3_bucket_object.cabal_cookbook_files
+    module.cabal_cookbooks
   ]
 }
 
