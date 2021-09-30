@@ -1,4 +1,6 @@
 # TODO:
+# s3 for static content
+# CloudFront for static website
 # Lambdas
 # API Gateway
 # window._config = {

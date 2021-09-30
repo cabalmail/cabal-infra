@@ -18,6 +18,12 @@ module "cabal_pool" {
   zone_id        = var.zone_id
 }
 
+module "cabal_admin" {
+  source              = "./modules/app"
+  user_pool_id        = module.cabal_pool.user_pool_id
+  user_pool_client_id = module.cabal_pool.user_pool_client_id
+}
+
 module "cabal_table" {
   source     = "./modules/table"
 }

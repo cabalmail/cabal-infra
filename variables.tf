@@ -46,11 +46,23 @@ variable "prod_cert" {
 variable "cert_email" {
   type        = string
   description = "Email address to use in certificate signing requests. If your CabalMail system is not yet opperational, you should specify an address where you can receive mail elsewhere. Once CabalMail is running, you can safely change this value."
+  validation {
+    condition = alltrue([
+      for str in var.cert_email : can(regex("^\S?@([[:alpha:]]?\.)?[[:alpha:]]$", str))
+    ])
+    error_message = "The cert_email does not appear to be a valid email address."
+  }
 }
 
 variable "control_domain" {
   type        = string
   description = "The domain used for naming your email infrastructure. E.g., if you want to host imap.example.com and smtp-relay-west.example.com, then this would be 'example.com'."
+  validation {
+    condition = alltrue([
+      for str in var.control_domain : can(regex("^([[:alpha:]]?\.)?[[:alpha:]]$", str))
+    ])
+    error_message = "The control_domain does not appear to be a valid domain name."
+  }
 }
 
 variable "zone_id" {
