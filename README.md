@@ -36,7 +36,7 @@ There isn't any. Nor is there a "Junk" folder (unless a user creates one). By no
 
 I almost never get spam. And when I do, I have a quick and easy solution.
 
-Moreover, I can easily identify where the leak came from. When I start getting phishing email from a friend, I warn that friend that their account has been compromised. And while I'm at it, I give them a new address whith which to contact me. I can confidently identify which friend was affected, even if the phisher spoofs the From: address, as long as I have been careful to give each friend their own unique address at which to contact me.
+Moreover, I can easily identify where the leak came from. When I start getting phishing email from a friend, I warn that friend that their account has been compromised. And while I'm at it, I give them a new address with which to contact me. I can confidently identify which friend was affected, even if the phisher spoofs the From: address, as long as I have been careful to give each friend their own unique address at which to contact me.
 
 You _could_ use a CabalMail system along with client-side spam filters, but I recommend against it. Client-side spam filters process mail only after your servers have received and processed it. This hides the spam from you at the cost of gradually (or not-so-gradually) increasing the load on your infrastructure. By making your spam visible, you can easily intercede to reduce load on your infrastructure and keep humming along with small machines. Also, you eliminate false positives; never again will important mail be misidentified as junk.
 
