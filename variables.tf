@@ -59,7 +59,7 @@ variable "control_domain" {
   description = "The domain used for naming your email infrastructure. E.g., if you want to host imap.example.com and smtp-relay-west.example.com, then this would be 'example.com'."
   validation {
     condition = alltrue([
-      for str in var.control_domain : can(regex("^([[:alpha:]]?\.)?[[:alpha:]]$", str))
+      for str in var.control_domain : can(regex("^([[:alpha:]]?\\.)?[[:alpha:]]$", str))
     ])
     error_message = "The control_domain does not appear to be a valid domain name."
   }
