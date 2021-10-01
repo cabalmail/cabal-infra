@@ -48,7 +48,7 @@ variable "cert_email" {
   description = "Email address to use in certificate signing requests. If your CabalMail system is not yet opperational, you should specify an address where you can receive mail elsewhere. Once CabalMail is running, you can safely change this value."
   validation {
     condition = alltrue([
-      for str in var.cert_email : can(regex("^\S?@([[:alpha:]]?\.)?[[:alpha:]]$", str))
+      for str in var.cert_email : can(regex("^\\S?@([[:alpha:]]?\.)?[[:alpha:]]$", str))
     ])
     error_message = "The cert_email does not appear to be a valid email address."
   }
