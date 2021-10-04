@@ -1,6 +1,5 @@
 include_recipe 'route53'
 
-package 'dkim-milter'
 package 'opendkim'
 
 access_key = node['sendmail']['aws_access_key_id']

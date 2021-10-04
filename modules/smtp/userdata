@@ -2,8 +2,6 @@
 cd /tmp
 yum install -y awscli jq
 amazon-linux-extras install epel -y
-sudo mount -t nfs -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport ${efs_dns}:/ /home
-grep -q ${efs_dns} /etc/fstab || grep ${efs_dns} /etc/mtab | sudo tee -a /etc/fstab
 /bin/mkdir -p /etc/chef
 /bin/mkdir -p /var/lib/chef/{cookbooks,attributes}
 /bin/mkdir -p /var/log/chef

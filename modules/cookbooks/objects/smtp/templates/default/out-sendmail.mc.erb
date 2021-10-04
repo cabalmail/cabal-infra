@@ -29,6 +29,7 @@ define(`confCACERT_PATH', `<%=node['smtp']['cert_path']%>/certs')dnl
 define(`confCACERT', `<%=node['smtp']['cert_path']%>/certs/smtp-out.<%=node['sendmail']['cert']%>.ca-bundle')dnl
 define(`confSERVER_CERT', `<%=node['smtp']['cert_path']%>/certs/smtp-out.<%=node['sendmail']['cert']%>.crt')dnl
 define(`confSERVER_KEY', `<%=node['smtp']['cert_path']%>/private/smtp-out.<%=node['sendmail']['cert']%>.key')dnl
+DAEMON_OPTIONS(`Family=inet, Port=465, Name=MTA-SSL, M=s')dnl
 FEATURE(`always_add_domain')dnl
 MASQUERADE_DOMAIN_FILE(`/etc/mail/masq-domains')dnl
 define(`confDOMAIN_NAME', `smtp-out.<%=node['sendmail']['main']['mydomain']%>')dnl
