@@ -49,7 +49,7 @@ resource "aws_s3_bucket_object" "cabal_website_files" {
 }
 
 resource "aws_s3_bucket_object" "cabal_website_templates" {
-  for_each = fileset(path.module, "objects/**/*")
+  for_each = fileset(path.module, "templates/**/*")
 
   bucket   = aws_s3_bucket.cabal_website_bucket.bucket
   key      = each.value
