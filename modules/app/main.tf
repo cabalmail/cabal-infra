@@ -60,7 +60,7 @@ resource "aws_s3_bucket_object" "cabal_website_templates" {
     invoke_url     = "http://example.com/"
   })
   source   = "${path.module}/${each.value}"
-  etag     = filemd5(templatefile("${path.module}/${each.value}", {
+  etag     = md5(templatefile("${path.module}/${each.value}", {
       pool_id        = var.user_pool_id,
       pool_client_id = var.user_pool_client_id,
       region         = var.region,
