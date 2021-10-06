@@ -3,7 +3,7 @@
 # Lambdas
 # API Gateway
 
-resrouce "aws_api_gateway_rest_api" "cabal_gateway" {
+resource "aws_api_gateway_rest_api" "cabal_gateway" {
   name = "cabal_gateway"
 }
 
