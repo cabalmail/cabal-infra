@@ -94,6 +94,7 @@ After signing up, perform the following steps:
                 "apigateway:PUT",
                 "autoscaling:*",
                 "cognito-identity:*",
+                "cognito-idp:*",
                 "dynamodb:*",
                 "ec2:*",
                 "elasticfilesystem:*",
