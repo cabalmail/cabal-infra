@@ -93,6 +93,7 @@ After signing up, perform the following steps:
                 "apigateway:PATCH",
                 "apigateway:PUT",
                 "autoscaling:*",
+                "cognito-identity:*",
                 "dynamodb:*",
                 "ec2:*",
                 "elasticfilesystem:*",
