@@ -115,7 +115,7 @@ After signing up, perform the following steps:
                 "secretsmanager:GetRandomPassword",
                 "secretsmanager:ListSecrets",
                 "sts:GetCallerIdentity"
-                ],
+            ],
             "Resource": "*"
         },
         {
