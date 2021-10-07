@@ -15,7 +15,7 @@ resource "aws_api_gateway_resource" "cabal_resource" {
 resource "aws_api_gateway_method" "cabal_method" {
   rest_api_id   = "${aws_api_gateway_rest_api.cabal_gateway.id}"
   resource_id   = "${aws_api_gateway_resource.cabal_resource.id}"
-  http_method   = "ANY"
+  http_method   = "GET"
   authorization = "NONE"
   request_parameters = {
     "method.request.path.proxy" = true
