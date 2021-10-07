@@ -20,6 +20,7 @@ module "cabal_pool" {
 
 module "cabal_admin" {
   source              = "./modules/app"
+  control_domain      = var.control_domain
   user_pool_id        = module.cabal_pool.user_pool_id
   user_pool_client_id = module.cabal_pool.user_pool_client_id
   region              = var.aws_region

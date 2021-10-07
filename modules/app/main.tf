@@ -10,7 +10,7 @@ resource "aws_api_gateway_rest_api" "cabal_gateway" {
 resource "aws_api_gateway_resource" "cabal_resource" {
   rest_api_id = "${aws_api_gateway_rest_api.cabal_gateway.id}"
   parent_id   = "${aws_api_gateway_rest_api.cabal_gateway.root_resource_id}"
-  path_part   = "{proxy+}"
+  path_part   = "list"
 }
 resource "aws_api_gateway_method" "cabal_method" {
   rest_api_id   = "${aws_api_gateway_rest_api.cabal_gateway.id}"
@@ -25,9 +25,9 @@ resource "aws_api_gateway_integration" "cabal_integration" {
   rest_api_id = "${aws_api_gateway_rest_api.cabal_gateway.id}"
   resource_id = "${aws_api_gateway_resource.cabal_resource.id}"
   http_method = "${aws_api_gateway_method.cabal_method.http_method}"
-  integration_http_method = "ANY"
+  integration_http_method = "GET"
   type                    = "HTTP_PROXY"
-  uri                     = "http://your.domain.com/{proxy}"
+  uri                     = "http://admin.${var.control_domain}/list"
  
   request_parameters =  {
     "integration.request.path.proxy" = "method.request.path.proxy"
