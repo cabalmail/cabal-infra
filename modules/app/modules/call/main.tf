@@ -2,7 +2,7 @@ data "aws_caller_identity" "current" {}
 
 data "archive_file" "cabal_lambda_zip" {
   type        = "zip"
-  source_dir  = "../../${var.name}_source"
+  source_dir  = "${path.module}/../../${var.name}_source"
   output_path = "${var.name}_lambda.zip"
 }
 
