@@ -8,7 +8,7 @@ data "archive_file" "cabal_lambda_zip" {
 
 resource "aws_api_gateway_resource" "cabal_resource" {
   rest_api_id = var.gateway_id
-  parent_id   = aws_api_gateway_rest_api.cabal_gateway.root_resource_id
+  parent_id   = var.root_resource_id
   path_part   = var.name
 }
 
