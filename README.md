@@ -100,6 +100,7 @@ After signing up, perform the following steps:
                 "iam:*",
                 "kms:CreateGrant",
                 "kms:DescribeKey",
+                "lambda:*",
                 "route53:ChangeResourceRecordSets",
                 "route53:ChangeTagsForResource",
                 "route53:CreateHostedZone",
@@ -110,6 +111,7 @@ After signing up, perform the following steps:
                 "route53:ListResourceRecordSets",
                 "route53:ListTagsForResource",
                 "s3:*",
+                "s3-object-lambda:*",
                 "secretsmanager:GetRandomPassword",
                 "secretsmanager:ListSecrets",
                 "sts:GetCallerIdentity"
