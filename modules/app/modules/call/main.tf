@@ -57,7 +57,7 @@ resource "aws_lambda_function" "cabal_lambda" {
   filename = "${var.name}_lambda.zip"
   source_code_hash = data.archive_file.cabal_lambda_zip.output_base64sha256
   function_name = var.name
-  role = aws_iam_role.lambda.arn
+  role = aws_iam_role.cabal_apigw_lambda_permission.arn
   handler = "index.handler"
   runtime = var.runtime
 }
