@@ -7,31 +7,25 @@ resource "aws_api_gateway_rest_api" "cabal_gateway" {
   name = "cabal_gateway"
 }
 
-resource "aws_api_gateway_resource" "cabal_resource" {
-  rest_api_id = "${aws_api_gateway_rest_api.cabal_gateway.id}"
-  parent_id   = "${aws_api_gateway_rest_api.cabal_gateway.root_resource_id}"
-  path_part   = "list"
+module "cabal_list_method" {
+  source     = "./modules/call"
+  name       = "list"
+  runtime    = "nodejs6.10"
+  gateway_id = aws_api_gateway_rest_api.cabal_gateway.id
 }
-resource "aws_api_gateway_method" "cabal_method" {
-  rest_api_id   = "${aws_api_gateway_rest_api.cabal_gateway.id}"
-  resource_id   = "${aws_api_gateway_resource.cabal_resource.id}"
-  http_method   = "GET"
-  authorization = "NONE"
-  request_parameters = {
-    "method.request.path.proxy" = true
-  }
+
+module "cabal_request_method" {
+  source     = "./modules/call"
+  name       = "request"
+  runtime    = "nodejs6.10"
+  gateway_id = aws_api_gateway_rest_api.cabal_gateway.id
 }
-resource "aws_api_gateway_integration" "cabal_integration" {
-  rest_api_id = "${aws_api_gateway_rest_api.cabal_gateway.id}"
-  resource_id = "${aws_api_gateway_resource.cabal_resource.id}"
-  http_method = "${aws_api_gateway_method.cabal_method.http_method}"
-  integration_http_method = "GET"
-  type                    = "HTTP_PROXY"
-  uri                     = "http://admin.${var.control_domain}/list"
- 
-  request_parameters =  {
-    "integration.request.path.proxy" = "method.request.path.proxy"
-  }
+
+module "cabal_revoke_method" {
+  source     = "./modules/call"
+  name       = "revoke"
+  runtime    = "nodejs6.10"
+  gateway_id = aws_api_gateway_rest_api.cabal_gateway.id
 }
 
 resource "aws_s3_bucket" "cabal_website_bucket" {
