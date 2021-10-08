@@ -13,3 +13,7 @@ variable "gateway_id" {
 variable "root_resource_id" {
   type = string
 }
+
+variable "region" {
+  type = string
+}
