@@ -11,6 +11,7 @@ module "cabal_list_method" {
   source           = "./modules/call"
   name             = "list"
   runtime          = "nodejs6.10"
+  method           = "GET"
   region           = var.region
   gateway_id       = aws_api_gateway_rest_api.cabal_gateway.id
   root_resource_id = aws_api_gateway_rest_api.cabal_gateway.root_resource_id
@@ -20,6 +21,7 @@ module "cabal_request_method" {
   source           = "./modules/call"
   name             = "request"
   runtime          = "nodejs6.10"
+  method           = "POST"
   region           = var.region
   gateway_id       = aws_api_gateway_rest_api.cabal_gateway.id
   root_resource_id = aws_api_gateway_rest_api.cabal_gateway.root_resource_id
@@ -29,6 +31,7 @@ module "cabal_revoke_method" {
   source           = "./modules/call"
   name             = "revoke"
   runtime          = "nodejs6.10"
+  method           = "DELETE"
   region           = var.region
   gateway_id       = aws_api_gateway_rest_api.cabal_gateway.id
   root_resource_id = aws_api_gateway_rest_api.cabal_gateway.root_resource_id

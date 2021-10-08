@@ -17,3 +17,7 @@ variable "root_resource_id" {
 variable "region" {
   type = string
 }
+
+variable "method" {
+  type = string
+}

@@ -15,7 +15,7 @@ resource "aws_api_gateway_resource" "cabal_resource" {
 resource "aws_api_gateway_method" "cabal_method" {
   rest_api_id   = var.gateway_id
   resource_id   = aws_api_gateway_resource.cabal_resource.id
-  http_method   = "GET"
+  http_method   = var.method
   authorization = "NONE"
   request_parameters = {
     "method.request.path.proxy" = true
@@ -54,7 +54,7 @@ resource "aws_lambda_permission" "cabal_apigw_lambda_permission" {
 }
 
 resource "aws_iam_role" "cabal_lambda_role" {
-  name = "myrole"
+  name = "${var.name}_role"
 
   assume_role_policy = <<POLICY
 {
