@@ -22,6 +22,16 @@ resource "aws_api_gateway_method" "cabal_method" {
   }
 }
 
+resource "aws_api_gateway_method" "cabal_options_method" {
+  rest_api_id        = var.gateway_id
+  resource_id        = aws_api_gateway_resource.cabal_resource.id
+  http_method        = "OPTIONS"
+  authorization      = "NONE"
+  request_parameters = {
+    "method.request.path.proxy" = true
+  }
+}
+
 resource "aws_api_gateway_integration" "cabal_integration" {
   rest_api_id             = var.gateway_id
   resource_id             = aws_api_gateway_resource.cabal_resource.id
@@ -47,7 +57,7 @@ resource "aws_api_gateway_method_response" "cabal_response_proxy" {
 resource "aws_api_gateway_integration" "cabal_options_integration" {
   rest_api_id             = var.gateway_id
   resource_id             = aws_api_gateway_resource.cabal_resource.id
-  http_method             = "OPTIONS"
+  http_method             = aws_api_gateway_method.cabal_options_method.http_method
   type                    = "MOCK"
 }
 
