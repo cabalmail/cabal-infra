@@ -35,6 +35,13 @@ resource "aws_api_gateway_integration" "cabal_integration" {
   }
 }
 
+resource "aws_api_gateway_method_response" "response_200" {
+  rest_api_id = var.gateway_id
+  resource_id = aws_api_gateway_resource.cabal_resource.id
+  http_method = aws_api_gateway_method.cabal_method.http_method
+  status_code = "Proxy"
+}
+
 resource "aws_lambda_permission" "cabal_apigw_lambda_permission" {
   statement_id  = "AllowExecutionFromAPIGateway"
   action        = "lambda:InvokeFunction"
