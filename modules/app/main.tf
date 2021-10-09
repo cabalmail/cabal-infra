@@ -59,7 +59,7 @@ module "cabal_revoke_method" {
 
 resource "aws_s3_bucket" "cabal_website_bucket" {
   acl           = "private"
-  bucket_prefix = "cabal-website-"
+  bucket_name = "admin.${var.control_domain}"
 }
 
 resource "aws_s3_bucket_object" "cabal_website_files" {
