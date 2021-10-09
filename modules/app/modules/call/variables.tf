@@ -25,3 +25,7 @@ variable "method" {
 variable "account" {
   type = string
 }
+
+variable "authorizer" {
+  type = string
+}

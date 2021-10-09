@@ -30,6 +30,7 @@ module "cabal_list_method" {
   account          = data.aws_caller_identity.current.account_id
   gateway_id       = aws_api_gateway_rest_api.cabal_gateway.id
   root_resource_id = aws_api_gateway_rest_api.cabal_gateway.root_resource_id
+  authorizer       = aws_api_gateway_authorizer.cabal_api_authorizer.id
 }
 
 module "cabal_request_method" {
@@ -41,6 +42,7 @@ module "cabal_request_method" {
   account          = data.aws_caller_identity.current.account_id
   gateway_id       = aws_api_gateway_rest_api.cabal_gateway.id
   root_resource_id = aws_api_gateway_rest_api.cabal_gateway.root_resource_id
+  authorizer       = aws_api_gateway_authorizer.cabal_api_authorizer.id
 }
 
 module "cabal_revoke_method" {
@@ -52,6 +54,7 @@ module "cabal_revoke_method" {
   account          = data.aws_caller_identity.current.account_id
   gateway_id       = aws_api_gateway_rest_api.cabal_gateway.id
   root_resource_id = aws_api_gateway_rest_api.cabal_gateway.root_resource_id
+  authorizer       = aws_api_gateway_authorizer.cabal_api_authorizer.id
 }
 
 resource "aws_s3_bucket" "cabal_website_bucket" {

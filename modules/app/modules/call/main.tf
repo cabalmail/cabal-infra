@@ -24,7 +24,8 @@ resource "aws_api_gateway_method" "cabal_options_method" {
   rest_api_id        = var.gateway_id
   resource_id        = aws_api_gateway_resource.cabal_resource.id
   http_method        = "OPTIONS"
-  authorization      = "NONE"
+  authorization = "COGNITO_USER_POOLS"
+  authorizer_id = var.authorizer
   request_parameters = {
     "method.request.path.proxy" = true
   }
