@@ -47,8 +47,7 @@ resource "aws_api_gateway_method_response" "cabal_response_proxy" {
 resource "aws_api_gateway_integration" "cabal_options_integration" {
   rest_api_id             = var.gateway_id
   resource_id             = aws_api_gateway_resource.cabal_resource.id
-  http_method             = "OPTION"
-  integration_http_method = "OPTIONS"
+  http_method             = "OPTIONS"
   type                    = "MOCK"
 }
 
