@@ -13,36 +13,43 @@ resource "aws_api_gateway_resource" "cabal_resource" {
 }
 
 resource "aws_api_gateway_method" "cabal_method" {
-  rest_api_id   = var.gateway_id
-  resource_id   = aws_api_gateway_resource.cabal_resource.id
-  http_method   = var.method
-  authorization = "NONE"
+  rest_api_id        = var.gateway_id
+  resource_id        = aws_api_gateway_resource.cabal_resource.id
+  http_method        = var.method
+  authorization      = "NONE"
   request_parameters = {
     "method.request.path.proxy" = true
   }
 }
 
 resource "aws_api_gateway_integration" "cabal_integration" {
-  rest_api_id = var.gateway_id
-  resource_id = aws_api_gateway_resource.cabal_resource.id
-  http_method = aws_api_gateway_method.cabal_method.http_method
+  rest_api_id             = var.gateway_id
+  resource_id             = aws_api_gateway_resource.cabal_resource.id
+  http_method             = aws_api_gateway_method.cabal_method.http_method
   integration_http_method = "GET"
   type                    = "AWS_PROXY"
   uri                     = aws_lambda_function.cabal_lambda.invoke_arn
- 
-  request_parameters =  {
+  request_parameters      =  {
     "integration.request.path.proxy" = "method.request.path.proxy"
   }
 }
 
-resource "aws_api_gateway_method_response" "response_proxy" {
-  rest_api_id = var.gateway_id
-  resource_id = aws_api_gateway_resource.cabal_resource.id
-  http_method = aws_api_gateway_method.cabal_method.http_method
-  status_code = "200"
+resource "aws_api_gateway_method_response" "cabal_response_proxy" {
+  rest_api_id     = var.gateway_id
+  resource_id     = aws_api_gateway_resource.cabal_resource.id
+  http_method     = aws_api_gateway_method.cabal_method.http_method
+  status_code     = "200"
   response_models = {
     "application/json" = "Empty"
   }
+}
+
+resource "aws_api_gateway_integration" "cabal_options_integration" {
+  rest_api_id             = var.gateway_id
+  resource_id             = aws_api_gateway_resource.cabal_resource.id
+  http_method             = aws_api_gateway_method.cabal_method.http_method
+  integration_http_method = "OPTIONS"
+  type                    = "MOCK"
 }
 
 resource "aws_lambda_permission" "cabal_apigw_lambda_permission" {
