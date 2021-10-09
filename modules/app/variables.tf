@@ -14,6 +14,6 @@ variable "control_domain" {
   type = string
 }
 
-variable "cert" {
+variable "cert_arn" {
   type = string
 }

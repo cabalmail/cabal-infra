@@ -100,7 +100,7 @@ resource "aws_cloudfront_distribution" "cabal_cdn" {
 
   viewer_certificate {
     cloudfront_default_certificate = false
-    acm_certificate_arn            = var.cert
+    acm_certificate_arn            = var.cert_arn
   }
 }
 
