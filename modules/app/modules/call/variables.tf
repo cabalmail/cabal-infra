@@ -21,3 +21,7 @@ variable "region" {
 variable "method" {
   type = string
 }
+
+variable "account" {
+  type = string
+}

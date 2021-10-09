@@ -1,10 +1,26 @@
 # TODO:
 # CloudFront for static website
-# Lambdas
-# API Gateway
+
+data "aws_caller_identity" "current" {}
 
 resource "aws_api_gateway_rest_api" "cabal_gateway" {
   name = "cabal_gateway"
+}
+
+resource "aws_api_gateway_authorizer" "cabal_api_authorizer" {
+  name                   = "cabal_pool"
+  rest_api_id            = aws_api_gateway_rest_api.cabal_gateway.id
+  type                   = "COGNITO_USER_POOLS"
+  provider_arns          = join("",[
+    "arn:aws:cognito-idp:",
+    var.region,
+    ":",
+    data.aws_caller_identity.current.account_id,
+    ":userpool/",
+    var.user_pool_id
+  ])
+  authorizer_uri         = aws_lambda_function.authorizer.invoke_arn
+  authorizer_credentials = aws_iam_role.invocation_role.arn
 }
 
 module "cabal_list_method" {
@@ -13,6 +29,7 @@ module "cabal_list_method" {
   runtime          = "nodejs14.x"
   method           = "GET"
   region           = var.region
+  account          = data.aws_caller_identity.current.account_id
   gateway_id       = aws_api_gateway_rest_api.cabal_gateway.id
   root_resource_id = aws_api_gateway_rest_api.cabal_gateway.root_resource_id
 }
@@ -23,6 +40,7 @@ module "cabal_request_method" {
   runtime          = "nodejs14.x"
   method           = "POST"
   region           = var.region
+  account          = data.aws_caller_identity.current.account_id
   gateway_id       = aws_api_gateway_rest_api.cabal_gateway.id
   root_resource_id = aws_api_gateway_rest_api.cabal_gateway.root_resource_id
 }
@@ -33,6 +51,7 @@ module "cabal_revoke_method" {
   runtime          = "nodejs14.x"
   method           = "DELETE"
   region           = var.region
+  account          = data.aws_caller_identity.current.account_id
   gateway_id       = aws_api_gateway_rest_api.cabal_gateway.id
   root_resource_id = aws_api_gateway_rest_api.cabal_gateway.root_resource_id
 }

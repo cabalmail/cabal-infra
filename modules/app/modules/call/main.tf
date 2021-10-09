@@ -1,5 +1,3 @@
-data "aws_caller_identity" "current" {}
-
 data "archive_file" "cabal_lambda_zip" {
   type        = "zip"
   source_dir  = "${path.module}/../../${var.name}_source"
@@ -77,7 +75,7 @@ resource "aws_lambda_permission" "cabal_apigw_lambda_permission" {
     join(":", [
       "arn:aws:execute-api",
       var.region,
-      data.aws_caller_identity.current.account_id,
+      var.account,
       var.gateway_id
     ]),
     "/*/",
