@@ -19,8 +19,6 @@ resource "aws_api_gateway_authorizer" "cabal_api_authorizer" {
     ":userpool/",
     var.user_pool_id
   ])
-  authorizer_uri         = aws_lambda_function.authorizer.invoke_arn
-  authorizer_credentials = aws_iam_role.invocation_role.arn
 }
 
 module "cabal_list_method" {
