@@ -54,6 +54,13 @@ resource "aws_api_gateway_method_response" "cabal_response_proxy" {
   }
 }
 
+resource "aws_api_gateway_integration_response" "MyDemoIntegrationResponse" {
+  rest_api_id = var.gateway_id
+  resource_id = aws_api_gateway_resource.cabal_resource.id
+  http_method = aws_api_gateway_method.cabal_method.http_method
+  status_code = aws_api_gateway_method_response.cabal_response_proxy.status_code
+}
+
 resource "aws_api_gateway_integration" "cabal_options_integration" {
   rest_api_id             = var.gateway_id
   resource_id             = aws_api_gateway_resource.cabal_resource.id
