@@ -11,14 +11,14 @@ resource "aws_api_gateway_authorizer" "cabal_api_authorizer" {
   name                   = "cabal_pool"
   rest_api_id            = aws_api_gateway_rest_api.cabal_gateway.id
   type                   = "COGNITO_USER_POOLS"
-  provider_arns          = join("",[
+  provider_arns          = [ join("",[
     "arn:aws:cognito-idp:",
     var.region,
     ":",
     data.aws_caller_identity.current.account_id,
     ":userpool/",
     var.user_pool_id
-  ])
+  ]) ]
 }
 
 module "cabal_list_method" {
