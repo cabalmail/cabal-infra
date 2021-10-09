@@ -13,3 +13,7 @@ variable "public_subnets" {
 variable "zone_id" {
   description = "Route 53 Zone ID for control domain"
 }
+
+variable "cert_arn" {
+  type = string
+}

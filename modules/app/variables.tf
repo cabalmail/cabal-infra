@@ -13,3 +13,7 @@ variable "region" {
 variable "control_domain" {
   type = string
 }
+
+variable "cert" {
+  type = string
+}

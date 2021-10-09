@@ -8,6 +8,12 @@ provider "aws" {
   }
 }
 
+module "cabal_cert" {
+  source         = "./modules/cert"
+  control_domain = var.control_domain
+  zone_id        = var.zone_id
+}
+
 module "cabal_cookbooks" {
   source = "./modules/cookbooks"
 }
@@ -24,6 +30,7 @@ module "cabal_admin" {
   user_pool_id        = module.cabal_pool.user_pool_id
   user_pool_client_id = module.cabal_pool.user_pool_client_id
   region              = var.aws_region
+  cert_arn            = module.cabal_cert.cert_arn
 }
 
 module "cabal_table" {
@@ -42,6 +49,7 @@ module "cabal_load_balancer" {
   vpc            = module.cabal_vpc.vpc
   control_domain = var.control_domain
   zone_id        = var.zone_id
+  cert_arn       = module.cabal_cert.cert_arn
 }
 
 module "cabal_efs" {
@@ -49,9 +57,6 @@ module "cabal_efs" {
   vpc              = module.cabal_vpc.vpc
   private_subnets  = module.cabal_vpc.private_subnets
 }
-
-# TODO
-# Create DynamoDB Table
 
 module "cabal_imap" {
   source           = "./modules/imap"
