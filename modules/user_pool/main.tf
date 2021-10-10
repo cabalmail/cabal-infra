@@ -24,12 +24,12 @@ resource "aws_cognito_user_pool" "cabal_pool" {
       max_length = 24
     }
   }
-  account_recovery_setting {
-    recovery_mechanism {
-      name     = "verified_phone_number"
-      priority = 1
-    }
-  }
+  # account_recovery_setting {
+  #   recovery_mechanism {
+  #     name     = "verified_phone_number"
+  #     priority = 1
+  #   }
+  # }
 }
 
 resource "aws_cognito_user_pool_client" "cabal_pool_client" {
