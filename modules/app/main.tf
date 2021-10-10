@@ -57,6 +57,22 @@ module "cabal_revoke_method" {
   authorizer       = aws_api_gateway_authorizer.cabal_api_authorizer.id
 }
 
+resource "aws_api_gateway_deployment" "cabal_api_deployment" {
+  rest_api_id = aws_api_gateway_rest_api.cabal_gateway.id
+  triggers = {
+    redeployment = sha1(jsonencode(aws_api_gateway_rest_api.cabal_gateway.body))
+  }
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_api_gateway_stage" "cabal_api_stage" {
+  deployment_id = aws_api_gateway_deployment.cabal_api_deployment.id
+  rest_api_id   = aws_api_gateway_rest_api.cabal_gateway.id
+  stage_name    = "prod"
+}
+
 resource "aws_cloudfront_origin_access_identity" "cabal_s3_origin" {
   comment = "Static admin website"
 }
@@ -167,13 +183,13 @@ resource "aws_s3_bucket_object" "cabal_website_templates" {
     pool_id        = var.user_pool_id,
     pool_client_id = var.user_pool_client_id,
     region         = var.region,
-    invoke_url     = "http://example.com/"
+    invoke_url     = aws_api_gateway_stage.cabal_api_stage.invoke_url
   })
   etag         = md5(templatefile("${path.module}/templates/${each.value}", {
       pool_id        = var.user_pool_id,
       pool_client_id = var.user_pool_client_id,
       region         = var.region,
-      invoke_url     = "http://example.com/"
+      invoke_url     = aws_api_gateway_stage.cabal_api_stage.invoke_url
     })
   )
 }
