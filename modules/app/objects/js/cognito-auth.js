@@ -52,14 +52,14 @@ var CabalAdmin = window.CabalAdmin || {};
      * Cognito User Pool functions
      */
 
-    function register(email, password, onSuccess, onFailure) {
-        var dataEmail = {
-            Name: 'email',
-            Value: email
+    function register(username, password, onSuccess, onFailure) {
+        var dataUsername = {
+            Name: 'username',
+            Value: username
         };
-        var attributeEmail = new AmazonCognitoIdentity.CognitoUserAttribute(dataEmail);
+        var attributeUsername = new AmazonCognitoIdentity.CognitoUserAttribute(dataUsername);
 
-        userPool.signUp(email, password, [attributeEmail], null,
+        userPool.signUp(username, password, [attributeUsername], null,
             function signUpCallback(err, result) {
                 if (!err) {
                     onSuccess(result);
@@ -70,21 +70,21 @@ var CabalAdmin = window.CabalAdmin || {};
         );
     }
 
-    function signin(email, password, onSuccess, onFailure) {
+    function signin(username, password, onSuccess, onFailure) {
         var authenticationDetails = new AmazonCognitoIdentity.AuthenticationDetails({
-            Username: email,
+            Username: username,
             Password: password
         });
 
-        var cognitoUser = createCognitoUser(email);
+        var cognitoUser = createCognitoUser(username);
         cognitoUser.authenticateUser(authenticationDetails, {
             onSuccess: onSuccess,
             onFailure: onFailure
         });
     }
 
-    function verify(email, code, onSuccess, onFailure) {
-        createCognitoUser(email).confirmRegistration(code, true, function confirmCallback(err, result) {
+    function verify(username, code, onSuccess, onFailure) {
+        createCognitoUser(username).confirmRegistration(code, true, function confirmCallback(err, result) {
             if (!err) {
                 onSuccess(result);
             } else {
@@ -93,9 +93,9 @@ var CabalAdmin = window.CabalAdmin || {};
         });
     }
 
-    function createCognitoUser(email) {
+    function createCognitoUser(username) {
         return new AmazonCognitoIdentity.CognitoUser({
-            Username: email,
+            Username: username,
             Pool: userPool
         });
     }
@@ -111,10 +111,10 @@ var CabalAdmin = window.CabalAdmin || {};
     });
 
     function handleSignin(event) {
-        var email = $('#emailInputSignin').val();
+        var username = $('#usernameInputSignin').val();
         var password = $('#passwordInputSignin').val();
         event.preventDefault();
-        signin(email, password,
+        signin(username, password,
             function signinSuccess() {
                 console.log('Successfully Logged In');
                 window.location.href = 'admin.html';
@@ -126,14 +126,14 @@ var CabalAdmin = window.CabalAdmin || {};
     }
 
     function handleRegister(event) {
-        var email = $('#emailInputRegister').val();
+        var username = $('#usernameInputRegister').val();
         var password = $('#passwordInputRegister').val();
         var password2 = $('#password2InputRegister').val();
 
         var onSuccess = function registerSuccess(result) {
             var cognitoUser = result.user;
             console.log('user name is ' + cognitoUser.getUsername());
-            var confirmation = ('Registration successful. Please check your email inbox or spam folder for your verification code.');
+            var confirmation = ('Registration successful. An administrator will approve or reject your registration.');
             if (confirmation) {
                 window.location.href = 'verify.html';
             }
@@ -144,17 +144,17 @@ var CabalAdmin = window.CabalAdmin || {};
         event.preventDefault();
 
         if (password === password2) {
-            register(email, password, onSuccess, onFailure);
+            register(username, password, onSuccess, onFailure);
         } else {
             alert('Passwords do not match');
         }
     }
 
     function handleVerify(event) {
-        var email = $('#emailInputVerify').val();
+        var username = $('#usernameInputVerify').val();
         var code = $('#codeInputVerify').val();
         event.preventDefault();
-        verify(email, code,
+        verify(username, code,
             function verifySuccess(result) {
                 console.log('call result: ' + result);
                 console.log('Successfully verified');
