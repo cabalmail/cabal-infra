@@ -2,34 +2,11 @@ data "aws_caller_identity" "current" {}
 
 resource "aws_cognito_user_pool" "cabal_pool" {
   name                     = "cabal"
-  # alias_attributes         = [ "preferred_username" ]
   auto_verified_attributes = [ "phone_number" ]
   sms_configuration {
     external_id    = "${data.aws_caller_identity.current.account_id}_DgEGa1t3qz"
     sns_caller_arn = aws_iam_role.cabal_sns_role.arn
   }
-  # schema {
-  #   name                     = "preferred_username"
-  #   attribute_data_type      = "String"
-  #   developer_only_attribute = false
-  #   mutable                  = false
-  #   required                 = true
-  #   string_attribute_constraints {
-  #     min_length = 1
-  #     max_length = 24
-  #   }
-  # }
-  # schema {
-  #   name                     = "phone_number"
-  #   attribute_data_type      = "String"
-  #   developer_only_attribute = false
-  #   mutable                  = true
-  #   required                 = true
-  #   string_attribute_constraints {
-  #     min_length = 10
-  #     max_length = 24
-  #   }
-  # }
   account_recovery_setting {
     recovery_mechanism {
       name     = "verified_phone_number"
