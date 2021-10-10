@@ -118,20 +118,19 @@ resource "aws_route53_record" "cabal_admin_cname" {
 }
 
 resource "aws_s3_bucket" "cabal_website_bucket" {
-  # acl    = "public-read"
-  acl    = "private"
+  acl    = "public-read"
   bucket = "admin.${var.control_domain}"
-  # website {
-  #   index_document = "index.html"
-  #   error_document = "error.html"
-  # }
-  # cors_rule {
-  #   allowed_headers = ["*"]
-  #   allowed_methods = ["PUT", "POST"]
-  #   allowed_origins = ["https://admin.${var.control_domain}"]
-  #   expose_headers  = ["ETag"]
-  #   max_age_seconds = 3000
-  # }
+  website {
+    index_document = "index.html"
+    error_document = "error.html"
+  }
+  cors_rule {
+    allowed_headers = ["*"]
+    allowed_methods = ["PUT", "POST"]
+    allowed_origins = ["https://admin.${var.control_domain}"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3000
+  }
 }
 
 resource "aws_s3_bucket_policy" "cabal_website_bucket_policy" {
