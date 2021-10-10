@@ -145,22 +145,31 @@ resource "aws_s3_bucket_object" "cabal_website_files" {
   for_each     = fileset("${path.module}/objects", "**/*")
   bucket       = aws_s3_bucket.cabal_website_bucket.bucket
   key          = each.value
-  content_type = length(regexall("\\.html$", each.value)) > 0 ? "text/html" : "application/octet-stream"
+  content_type = length(regexall("\\.html$", each.value)) > 0 ? "text/html" : (
+                   length(regexall("\\.css$", each.value)) > 0 ? "text/css" : (
+                     length(regexall("\\.png$", each.value)) > 0 ? "image/png" : (
+                       length(regexall("\\.js$", each.value)) > 0 ? "text/javascript" : (
+                         "application/octet-stream"
+                       )
+                     )
+                   )
+                 )
   source       = "${path.module}/objects/${each.value}"
   etag         = filemd5("${path.module}/objects/${each.value}")
 }
 
 resource "aws_s3_bucket_object" "cabal_website_templates" {
-  for_each = fileset("${path.module}/templates", "**/*")
-  bucket   = aws_s3_bucket.cabal_website_bucket.bucket
-  key      = each.value
-  content  = templatefile("${path.module}/templates/${each.value}", {
+  for_each     = fileset("${path.module}/templates", "**/*")
+  bucket       = aws_s3_bucket.cabal_website_bucket.bucket
+  key          = each.value
+  content_type = "text/javascript"
+  content      = templatefile("${path.module}/templates/${each.value}", {
     pool_id        = var.user_pool_id,
     pool_client_id = var.user_pool_client_id,
     region         = var.region,
     invoke_url     = "http://example.com/"
   })
-  etag     = md5(templatefile("${path.module}/templates/${each.value}", {
+  etag         = md5(templatefile("${path.module}/templates/${each.value}", {
       pool_id        = var.user_pool_id,
       pool_client_id = var.user_pool_client_id,
       region         = var.region,
