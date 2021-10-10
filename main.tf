@@ -19,6 +19,12 @@ module "cabal_domains" {
   mail_domains = var.mail_domains
 }
 
+# module.cabal_domains.domains contains
+# {
+#   cabal-mail.com: xxx
+#   cabal-mail.io: YYY
+# }
+
 module "cabal_cookbooks" {
   source = "./modules/cookbooks"
 }
