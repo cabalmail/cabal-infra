@@ -1,5 +1,17 @@
 resource "aws_cognito_user_pool" "cabal_pool" {
-  name = "cabal"
+  name             = "cabal"
+  alias_attributes = [ "username" ]
+  schema {
+    name                     = "username"
+    attribute_data_type      = "String"
+    developer_only_attribute = false
+    mutable                  = false
+    required                 = true
+    string_attribute_constraints {
+      min_length = 1
+      max_length = 24
+    }
+  }
 }
 
 resource "aws_cognito_user_pool_client" "cabal_pool_client" {
