@@ -1,8 +1,8 @@
 resource "aws_cognito_user_pool" "cabal_pool" {
   name             = "cabal"
-  alias_attributes = [ "username" ]
+  alias_attributes = [ "preferred_username" ]
   schema {
-    name                     = "username"
+    name                     = "preferred_username"
     attribute_data_type      = "String"
     developer_only_attribute = false
     mutable                  = false
