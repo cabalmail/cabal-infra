@@ -52,14 +52,19 @@ var CabalAdmin = window.CabalAdmin || {};
      * Cognito User Pool functions
      */
 
-    function register(username, password, onSuccess, onFailure) {
+    function register(username, phone, password, onSuccess, onFailure) {
         var dataUsername = {
             Name: 'preferred_username',
             Value: username
         };
+        var dataPhone = {
+            Name: 'phone_number',
+            Value: phone
+        };
         var attributeUsername = new AmazonCognitoIdentity.CognitoUserAttribute(dataUsername);
-
-        userPool.signUp(username, password, [attributeUsername], null,
+        var attributePhone = new AmazonCognitoIdentity.CognitoUserAttribute(dataPhonee);
+                
+        userPool.signUp(username, password, [attributeUsername, attributePhone], null,
             function signUpCallback(err, result) {
                 if (!err) {
                     onSuccess(result);
@@ -127,6 +132,7 @@ var CabalAdmin = window.CabalAdmin || {};
 
     function handleRegister(event) {
         var username = $('#usernameInputRegister').val();
+        var phone = $('#phoneInputRegister').val();
         var password = $('#passwordInputRegister').val();
         var password2 = $('#password2InputRegister').val();
 
@@ -144,7 +150,7 @@ var CabalAdmin = window.CabalAdmin || {};
         event.preventDefault();
 
         if (password === password2) {
-            register(username, password, onSuccess, onFailure);
+            register(username, phone, password, onSuccess, onFailure);
         } else {
             alert('Passwords do not match');
         }
