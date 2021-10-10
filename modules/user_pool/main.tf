@@ -2,7 +2,7 @@ data "aws_caller_identity" "current" {}
 
 resource "aws_cognito_user_pool" "cabal_pool" {
   name                     = "cabal"
-  alias_attributes         = [ "preferred_username" ]
+  # alias_attributes         = [ "preferred_username" ]
   auto_verified_attributes = [ "phone_number" ]
   sms_configuration {
     external_id    = "${data.aws_caller_identity.current.account_id}_DgEGa1t3qz"
