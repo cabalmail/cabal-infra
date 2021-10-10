@@ -101,6 +101,7 @@ resource "aws_cloudfront_distribution" "cabal_cdn" {
   viewer_certificate {
     cloudfront_default_certificate = false
     acm_certificate_arn            = var.cert_arn
+    ssl_support_method             = "sni-only"
   }
 }
 
