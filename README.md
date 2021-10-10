@@ -91,6 +91,7 @@ After signing up, perform the following steps:
                 "acm:RequestCertificate",
                 "apigateway:*",
                 "autoscaling:*",
+                "cloudfront:*",
                 "cognito-identity:*",
                 "cognito-idp:*",
                 "dynamodb:*",
