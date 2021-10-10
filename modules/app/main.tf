@@ -57,13 +57,17 @@ module "cabal_revoke_method" {
   authorizer       = aws_api_gateway_authorizer.cabal_api_authorizer.id
 }
 
+resource "aws_cloudfront_origin_access_identity" "cabal_s3_origin" {
+  comment = "Static admin website"
+}
+
 resource "aws_cloudfront_distribution" "cabal_cdn" {
   origin {
     domain_name = aws_s3_bucket.cabal_website_bucket.bucket_regional_domain_name
     origin_id   = "cabal_admin_s3"
 
     s3_origin_config {
-      origin_access_identity = "origin-access-identity/cloudfront/ABCDEFG1234567"
+      origin_access_identity = "origin-access-identity/cloudfront/${aws_cloudfront_origin_access_identity.cabal_s3_origin.id}"
     }
   }
   enabled             = true
@@ -131,7 +135,7 @@ resource "aws_s3_bucket_policy" "cabal_website_bucket_policy" {
           "Sid": "Viscious",
           "Effect": "Allow",
           "Principal": {
-            "AWS": "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${aws_cloudfront_distribution.cabal_cdn.id}"
+            "AWS": aws_cloudfront_origin_access_identity.cabal_s3_origin.iam_arn
           },
           "Action": "s3:GetObject",
           "Resource": "arn:aws:s3:::admin.${var.control_domain}/*"
