@@ -98,10 +98,6 @@ resource "aws_iam_instance_profile" "cabal_imap_instance_profile" {
   role = aws_iam_role.cabal_imap_role.name
 }
 
-# TODO
-# Create EC2 autoscale-groups with userdata:
-# - mount efs
-
 resource "aws_security_group" "cabal_imap_sg" {
   name        = "cabal_imap_sg"
   description = "Allow IMAP inbound traffic"
