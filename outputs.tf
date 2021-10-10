@@ -8,5 +8,5 @@ output "relay_ips" {
 }
 
 output "domains" {
-  value = odule.cabal_domains.domains
+  value = module.cabal_domains.domains
 }
