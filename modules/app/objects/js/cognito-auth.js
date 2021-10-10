@@ -62,7 +62,7 @@ var CabalAdmin = window.CabalAdmin || {};
             Value: phone
         };
         var attributeUsername = new AmazonCognitoIdentity.CognitoUserAttribute(dataUsername);
-        var attributePhone = new AmazonCognitoIdentity.CognitoUserAttribute(dataPhonee);
+        var attributePhone = new AmazonCognitoIdentity.CognitoUserAttribute(dataPhone);
                 
         userPool.signUp(username, password, [attributeUsername, attributePhone], null,
             function signUpCallback(err, result) {
