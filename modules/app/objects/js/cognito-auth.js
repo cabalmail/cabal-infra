@@ -54,7 +54,7 @@ var CabalAdmin = window.CabalAdmin || {};
 
     function register(username, password, onSuccess, onFailure) {
         var dataUsername = {
-            Name: 'username',
+            Name: 'preferred_username',
             Value: username
         };
         var attributeUsername = new AmazonCognitoIdentity.CognitoUserAttribute(dataUsername);
