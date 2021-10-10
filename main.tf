@@ -14,6 +14,11 @@ module "cabal_cert" {
   zone_id        = var.zone_id
 }
 
+module "cabal_domains" {
+  source       = "./modules/domains"
+  mail_domains = var.mail_domains
+}
+
 module "cabal_cookbooks" {
   source = "./modules/cookbooks"
 }
@@ -110,11 +115,9 @@ module "cabal_smtp_out" {
 }
 
 # TODO
-# Create user pool
 # - auth sufficient pam_exec.so expose_authtok /usr/bin/cognito.bash
 # - COGNITO_PASSWORD=`cat -`
 # - COGNITO_USER="${PAM_USER}"
 # - AUTH_TYPE="${PAM_TYPE}"
 # - https://docs.aws.amazon.com/cli/latest/reference/cognito-idp/admin-initiate-auth.html
-# Create lambda/api-gateway admin application
 # Add some users

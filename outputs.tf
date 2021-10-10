@@ -6,3 +6,7 @@ output "relay_ips" {
   value       = module.cabal_vpc.relay_ips
   description = "IP addresses that will be used for outbound mail. See README.md section on PTR records for important instructions."
 }
+
+output "domains" {
+  value = odule.cabal_domains.domains
+}
