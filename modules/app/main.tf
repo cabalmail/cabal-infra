@@ -152,26 +152,26 @@ resource "aws_s3_bucket_policy" "cabal_website_bucket_policy" {
 }
 
 resource "aws_s3_bucket_object" "cabal_website_files" {
-  for_each = fileset(path.module, "objects/**/*")
+  for_each = fileset("${path.module}/objects", "**/*")
 
   bucket   = aws_s3_bucket.cabal_website_bucket.bucket
   key      = each.value
-  source   = "${path.module}/${each.value}"
-  etag     = filemd5("${path.module}/${each.value}")
+  source   = "${path.module}/objects/${each.value}"
+  etag     = filemd5("${path.module}/objects/${each.value}")
 }
 
 resource "aws_s3_bucket_object" "cabal_website_templates" {
-  for_each = fileset(path.module, "templates/**/*")
+  for_each = fileset("${path.module}/templates", "**/*")
 
   bucket   = aws_s3_bucket.cabal_website_bucket.bucket
   key      = each.value
-  content  = templatefile("${path.module}/${each.value}", {
+  content  = templatefile("${path.module}/templates/${each.value}", {
     pool_id        = var.user_pool_id,
     pool_client_id = var.user_pool_client_id,
     region         = var.region,
     invoke_url     = "http://example.com/"
   })
-  etag     = md5(templatefile("${path.module}/${each.value}", {
+  etag     = md5(templatefile("${path.module}/templates/${each.value}", {
       pool_id        = var.user_pool_id,
       pool_client_id = var.user_pool_client_id,
       region         = var.region,
