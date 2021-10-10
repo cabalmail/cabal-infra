@@ -88,9 +88,6 @@ resource "aws_cloudfront_distribution" "cabal_cdn" {
     }
 
     viewer_protocol_policy = "allow-all"
-    min_ttl                = 0
-    default_ttl            = 3600
-    max_ttl                = 86400
   }
 
   price_class = "PriceClass_100"
@@ -123,13 +120,6 @@ resource "aws_s3_bucket" "cabal_website_bucket" {
   website {
     index_document = "index.html"
     error_document = "error.html"
-  }
-  cors_rule {
-    allowed_headers = ["*"]
-    allowed_methods = ["PUT", "POST"]
-    allowed_origins = ["https://admin.${var.control_domain}"]
-    expose_headers  = ["ETag"]
-    max_age_seconds = 3000
   }
 }
 
