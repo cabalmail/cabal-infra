@@ -190,6 +190,11 @@ resource "aws_s3_bucket_object" "cabal_website_templates" {
       pool_client_id = var.user_pool_client_id,
       region         = var.region,
       invoke_url     = aws_api_gateway_stage.cabal_api_stage.invoke_url
+      domains        = [
+        {
+          domain_name: "example.com"
+        }
+      ]
     })
   )
 }
