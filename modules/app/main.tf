@@ -145,7 +145,7 @@ resource "aws_s3_bucket_object" "cabal_website_files" {
   for_each     = fileset("${path.module}/objects", "**/*")
   bucket       = aws_s3_bucket.cabal_website_bucket.bucket
   key          = each.value
-  content_type = length(regexall("\.html$", each.value)) > 0 ? "text/html" : "application/octet-stream"
+  content_type = length(regexall("\\.html$", each.value)) > 0 ? "text/html" : "application/octet-stream"
   source       = "${path.module}/objects/${each.value}"
   etag         = filemd5("${path.module}/objects/${each.value}")
 }
