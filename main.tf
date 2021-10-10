@@ -31,6 +31,7 @@ module "cabal_admin" {
   user_pool_client_id = module.cabal_pool.user_pool_client_id
   region              = var.aws_region
   cert_arn            = module.cabal_cert.cert_arn
+  zone_id             = var.zone_id
 }
 
 module "cabal_table" {

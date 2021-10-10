@@ -109,6 +109,14 @@ resource "aws_cloudfront_distribution" "cabal_cdn" {
   }
 }
 
+resource "aws_route53_record" "cabal_admin_cname" {
+  zone_id = var.zone_id
+  name    = "admin.${var.control_domain}"
+  type    = "CNAME"
+  ttl     = "300"
+  records = [aws_cloudfront_distribution.cabal_cdn.domain_name]
+}
+
 resource "aws_s3_bucket" "cabal_website_bucket" {
   # acl    = "public-read"
   acl    = "private"

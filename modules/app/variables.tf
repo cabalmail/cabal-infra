@@ -17,3 +17,7 @@ variable "control_domain" {
 variable "cert_arn" {
   type = string
 }
+
+variable "zone_id" {
+  type = string
+}
