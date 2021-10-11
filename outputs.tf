@@ -8,5 +8,5 @@ output "relay_ips" {
 }
 
 output "domains" {
-  value = module.cabal_domains.domains
+  value = local.domains
 }
