@@ -19,11 +19,14 @@ module "cabal_domains" {
   mail_domains = var.mail_domains
 }
 
-# module.cabal_domains.domains contains
-# {
-#   cabal-mail.com: xxx
-#   cabal-mail.io: YYY
-# }
+locals {
+  domains = [
+    for k, v in aws_route53_zone.cabal_mail_zone : {
+      "domain"  = k,
+      "zone_id" = v.id
+    }
+  ]
+}
 
 module "cabal_cookbooks" {
   source = "./modules/cookbooks"
@@ -43,6 +46,7 @@ module "cabal_admin" {
   region              = var.aws_region
   cert_arn            = module.cabal_cert.cert_arn
   zone_id             = var.zone_id
+  domains             = local.domains
 }
 
 module "cabal_table" {

@@ -21,3 +21,7 @@ variable "cert_arn" {
 variable "zone_id" {
   type = string
 }
+
+variable "domains" {
+  type = list
+}
