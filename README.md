@@ -5,7 +5,7 @@ Creates AWS infrastructure and machine configuration for a CabalMail system -- a
 
 WARNING: This should not be regarded as an enterprise or ISP-grade email solution. It has been tested on a small pool of users for their personal email. Use at your own risk!
 
-# About
+# About TL;DR
 CabalMail is a suite of infrastructure code ([Terraform](https://www.terraform.io/)) and configuration management code ([Chef Infra](https://www.chef.io/)) that together create the following system components:
 
 * IMAP hosts
@@ -14,7 +14,12 @@ CabalMail is a suite of infrastructure code ([Terraform](https://www.terraform.i
 * Administrative interface for managing addresses
 * Other supporting infrastructure
 
-CabalMail grew out of a bunch of scripts and configuration files that I originally set up when I wanted to take control of my own email hosting. Some time in the late 1990s, I started getting spammed at a third-party address that I had used for years. Spam filters were unreliable at the time, and my inbox quickly became unusable. I reluctantly abandoned that long-held account and went through the pain of contacting all my friends, family, and corporate interloqutors to update my contact information. I decided to take control of my mail system so that I would not have to go through that pain again. Later, when my son graduated from college, he and I made a project out of converting my scripts to Chef cookbooks. It was my son who chose the name "Cabal" for our project. More recently, I added Terraform code to manage the infrastructure.
+CabalMail allows you to self-host your email and to create unique addresses for all the people, institutions, corporations, etc., with whom you communicate. This allows fine-grained control of who is allowed to insert mail in your inbox.
+
+# About Continued
+
+## Genesis
+CabalMail grew out of a bunch of scripts and configuration files that I originally set up when I wanted to take control of my own email hosting. Some time in the late 1990s, I started getting spammed at a third-party address that I had used for years. Spam filters were unreliable at the time, and my inbox quickly became unusable. I reluctantly abandoned that long-held account and went through the pain of contacting all my friends, family, and corporate interloqutors to update my contact information. I resolved to run my own mail system so that I would not have to go through that pain again. Later, when my son graduated from college, he and I made a project out of converting my scripts to Chef cookbooks. It was my son who chose the name "Cabal" for our project. More recently, I added Terraform code to manage the infrastructure.
 
 With CabalMail, you can manage your own self-hosted email system as I do.
 
@@ -42,13 +47,9 @@ You _could_ use a CabalMail system along with client-side spam filters, but I re
 
 ## Use Case
 
-Admitedly, CabalMail serves a specialized use case, which is definitely not for everyone. With Google offering free mail with included spam filters, maybe CabalMail isn't for anyone. Maybe I'm the only cloud solution architect who doesn't like my inbox being scanned by anything I don't control. Maybe...
+Admitedly, CabalMail serves a specialized use case, which is definitely not for everyone. (With Google offering free mail with included spam filters, maybe CabalMail isn't for *anyone*.)
 
-But I digress.
-
-To get the benefits of a CabalMail system, you must get used to creating a new email address *each and every time you provide your contact information to a third party.* The administrative interface makes this easy, but it _is_ an additional step. One way to make this a bit less onerous is to pre-allocate a few random addresses in advance and keep them handy for the next time you need to fill out an online form.
-
-In addition to being an extra step, it also requires an adjustment in the way one thinks about email. Often, when I give someone an address that they can use to contact me, and they see someting like "myname@yourname.example.com", they ask, "but, what's your *real* address." The notion that more than one email address can feed a single inbox is not hard to grasp, but scaling the idea to hudreds or thousands challenges the imagination. We tend to think of addresses and inboxes as having a one-to-one relationship, and the occasional alias is an exception. In fact, the true relationship is many-to-one, and no particular address is any more genuine or "real" than any other.
+To get the benefits of a CabalMail system, you must get used to creating a new email address *each and every time you provide your contact information to a third party.* The administrative interface makes this easy, but it _is_ an additional step.
 
 When I create a new address, I always leave it active until any of the following happen:
 
@@ -58,7 +59,7 @@ When I create a new address, I always leave it active until any of the following
 
 I do not use this system to fool or defraud, and I urge you not to do so either. If you sign up for a service, either free or paid, the provider has a legitimate right to contact you regarding the provision of that service, and they have a right to expect that the information you give them about yourself is true and accurate. However, I do not believe that they have a legitimate expectation that you are giving them the same address that you give others.
 
-# Use
+# Set Up
 
 ## Prerequisites
 Before using this repo, you must set up an appropriate environment.
@@ -161,23 +162,54 @@ After signing up, perform the following steps:
 2. Using [terraform.tfvars.example](./terraform.tfvars.example) as a guide, [create variables in your workspace](https://learn.hashicorp.com/tutorials/terraform/cloud-workspace-configure?in=terraform/cloud-get-started).
 3. [Create environment variables](https://learn.hashicorp.com/tutorials/terraform/cloud-workspace-configure?in=terraform/cloud-get-started) for `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` using the values you saved from the AWS section step 7. The secret access key should be designated "sensitive". (Don't forget to rotate this key regularly!) Finally, create a third environment variable for `AWS_DEFAULT_REGION`. Set it to the same region you use for your primary infrastructure.
 
+In addition to creating a workspace for this repository, there are two other repositories that will each need their own workspace. See below.
+
 ### Domain registration
 You must register your desired domains (control and mail) with your chosen registrar. CabalMail requires exactly one control domain and at least one mail domain. Registration requires an email address. You can use a temporary account with any of the free providers for this address, and later, you can update the registration records with a self-hosted address once your hosting infrastructure is up and running.
 
-### Fork this repository
-Although you could connect Terraform Cloud directly to the original repository, it is safer to fork it. If you want to contribute to it, or extend it for your your own use, then forking is essential. Use the Github URL for your fork where called for in tfvars.
+The control domain is for infrastructure, not for email addresses. If you like to send mail from example.com, you might use example.net as your control domain. If so, then you would retrieve your mail from imap.example.net, send mail to smtp-out.example.net, and manage your addresses and admin.example.net.
 
-### Fork the cabal-cert repository
-Fork the [cabal-cert repository](https://github.com/ccarr-cabal/cabal-cert) and follow the instructions in the README.
+### Fork the cabal-dns repository
+When you register your control domain, use the [cabal-dns repository](https://github.com/ccarr-cabal/cabal-dns) to create the zone in Route 53. That repo will issue the zone ID in the output. Copy the ID and add it to your tfvars in this repository. This step is not necessary for the mail domains.
 
-## Provisioning
+Follow the steps above to create a Terraform Cloud workspace for this repository.
 
-1. Set up the prerequisites above.
-2. Queue a plan in your Terraform Cloud workspace. When it finishes the plan phase, confirm and apply. If you are instead using Terraform locally, then create a terraform.tfvars file from the included example, and run Terraform apply:
+1. Queue a plan in your Terraform Cloud workspace.
+2. When it finishes the plan phase, confirm and apply. If you are instead using Terraform locally, then create a terraform.tfvars file from the included example, and run Terraform apply:
 
         terraform init
         terraform plan
         terraform apply
 
-## PTR Records
+### Fork this repository
+Although you could connect Terraform Cloud directly to the original repository, it is safer to fork it. If you want to contribute to it, or extend it for your your own use, then forking is essential. Use the Github URL for your fork where called for in tfvars.
+
+### Fork the cabal-cert repository
+Fork the [cabal-cert repository](https://github.com/ccarr-cabal/cabal-cert) to create an SSL certificate.
+
+Follow the steps above to create a Terraform Cloud workspace for this repository.
+
+1. Queue a plan in your Terraform Cloud workspace.
+2. When it finishes the plan phase, confirm and apply. If you are instead using Terraform locally, then create a terraform.tfvars file from the included example, and run Terraform apply:
+
+        terraform init
+        terraform plan
+        terraform apply
+
+## Provisioning
+
+1. Set up the prerequisites above.
+2. Queue a plan in your Terraform Cloud workspace.
+3. When it finishes the plan phase, confirm and apply. If you are instead using Terraform locally, then create a terraform.tfvars file from the included example, and run Terraform apply:
+
+        terraform init
+        terraform plan
+        terraform apply
+
+## Post-Automation Steps
+
+### PTR Records
 The output contains the IP addresses of each of your outgoing mail relays. In order to send mail reliably, you must [set up PTR records](https://blog.mailtrap.io/ptr-record/) for each outgoing SMTP server. Only AWS can do this for their EIPs, and there is no API, so the process cannot be automated. Fill out [this form](https://console.aws.amazon.com/support/contacts?#/rdns-limits) for each outgoing SMTP sever. In addition to creating the necessary PTR records, it will also cause them to relax the rate limit on outgoing mail.
+
+### Name Servers
+The output contains the name servers that AWS assigned to your mail domains. To work at all, you must update your registrations with these name servers.
