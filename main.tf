@@ -8,12 +8,14 @@ provider "aws" {
   }
 }
 
+# Creates an AWS Certificate Manager certificate for use on load balancers and CloudFront
 module "cabal_cert" {
   source         = "./modules/cert"
   control_domain = var.control_domain
   zone_id        = var.zone_id
 }
 
+# Sets up Route 53 hosted zones for mail domains
 module "cabal_domains" {
   source       = "./modules/domains"
   mail_domains = var.mail_domains
@@ -23,16 +25,19 @@ locals {
   domains = module.cabal_domains.domains
 }
 
+# Creates an s3 bucket and uploads cookbooks to it for retrieval by ec2 instances
 module "cabal_cookbooks" {
   source = "./modules/cookbooks"
 }
 
+# Creates a Cognito User Pool
 module "cabal_pool" {
   source         = "./modules/user_pool"
   control_domain = var.control_domain
   zone_id        = var.zone_id
 }
 
+# Infrastructure and code for the administrative web site
 module "cabal_admin" {
   source              = "./modules/app"
   control_domain      = var.control_domain
@@ -44,16 +49,19 @@ module "cabal_admin" {
   domains             = local.domains
 }
 
+# Creates a DynamoDB table for storing address data
 module "cabal_table" {
   source     = "./modules/table"
 }
 
+# Creates the VPC and network infrastructure
 module "cabal_vpc" {
   source     = "./modules/vpc"
   cidr_block = var.cidr_block
   az_list    = var.availability_zones
 }
 
+# Creates a network load balancer shared by machines in the stack
 module "cabal_load_balancer" {
   source         = "./modules/elb"
   public_subnets = module.cabal_vpc.public_subnets
@@ -63,12 +71,14 @@ module "cabal_load_balancer" {
   cert_arn       = module.cabal_cert.cert_arn
 }
 
+# Creates an elastic file system for the mailstore
 module "cabal_efs" {
   source           = "./modules/efs"
   vpc              = module.cabal_vpc.vpc
   private_subnets  = module.cabal_vpc.private_subnets
 }
 
+# Creates an auto-scale group for IMAP servers
 module "cabal_imap" {
   source           = "./modules/imap"
   private_subnets  = module.cabal_vpc.private_subnets
@@ -85,6 +95,7 @@ module "cabal_imap" {
   ]
 }
 
+# Creates an auto-scale group for inbound SMTP servers
 module "cabal_smtp_in" {
   source           = "./modules/smtp"
   type             = "in"
@@ -102,6 +113,7 @@ module "cabal_smtp_in" {
   ]
 }
 
+# Creates an auto-scale group for outbound SMTP servers
 module "cabal_smtp_out" {
   source           = "./modules/smtp"
   type             = "out"
