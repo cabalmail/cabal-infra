@@ -7,6 +7,6 @@ window._config = {
     api: {
         invokeUrl: '${invoke_url}'
     },
-    ${jsonencode(domains: {for domain in domains : "\"${domain.domain}\":\"${domain.zone_id}\""})}
+    ${jsonencode(domains: {for domain in domains : "\"${domain.domain}\":\"${domain.zone_id}\""},)}
   };
 
