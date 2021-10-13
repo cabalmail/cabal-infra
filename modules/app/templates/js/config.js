@@ -9,7 +9,7 @@ window._config = {
     },
     domains: [
 %{ for domain in domains ~}
-      {}
+      "${domain.domain}": "${domain.zone_id}"
 %{ endfor ~}
     ]
 };

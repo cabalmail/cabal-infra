@@ -21,10 +21,6 @@ module "cabal_domains" {
   mail_domains = var.mail_domains
 }
 
-locals {
-  domains = module.cabal_domains.domains
-}
-
 # Creates an s3 bucket and uploads cookbooks to it for retrieval by ec2 instances
 module "cabal_cookbooks" {
   source = "./modules/cookbooks"
@@ -46,7 +42,7 @@ module "cabal_admin" {
   region              = var.aws_region
   cert_arn            = module.cabal_cert.cert_arn
   zone_id             = var.zone_id
-  domains             = local.domains
+  domains             = module.cabal_domains.domains
 }
 
 # Creates a DynamoDB table for storing address data
@@ -90,9 +86,6 @@ module "cabal_imap" {
   s3_arn           = module.cabal_cookbooks.bucket.arn
   efs_dns          = module.cabal_efs.efs_dns
   scale            = var.imap_scale
-  depends_on       = [
-    module.cabal_cookbooks
-  ]
 }
 
 # Creates an auto-scale group for inbound SMTP servers
@@ -108,9 +101,6 @@ module "cabal_smtp_in" {
   s3_arn           = module.cabal_cookbooks.bucket.arn
   efs_dns          = module.cabal_efs.efs_dns
   scale            = var.smtpin_scale
-  depends_on       = [
-    module.cabal_cookbooks
-  ]
 }
 
 # Creates an auto-scale group for outbound SMTP servers
@@ -126,9 +116,6 @@ module "cabal_smtp_out" {
   s3_arn           = module.cabal_cookbooks.bucket.arn
   efs_dns          = module.cabal_efs.efs_dns
   scale            = var.smtpout_scale
-  depends_on       = [
-    module.cabal_cookbooks
-  ]
 }
 
 # TODO
@@ -137,4 +124,3 @@ module "cabal_smtp_out" {
 # - COGNITO_USER="${PAM_USER}"
 # - AUTH_TYPE="${PAM_TYPE}"
 # - https://docs.aws.amazon.com/cli/latest/reference/cognito-idp/admin-initiate-auth.html
-# Add some users
