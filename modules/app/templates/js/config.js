@@ -7,10 +7,10 @@ window._config = {
     api: {
         invokeUrl: '${invoke_url}'
     },
-    domains: [
-%{ for domain in domains ~}
-      "${domain.domain}": "${domain.zone_id}"
-%{ endfor ~}
-    ]
+%{
+  ${jsonencode({
+    domains: [for domain in domains : "${domain.domain}": "${domain.zone_id}"],
+  })}
+~}
 };
 
