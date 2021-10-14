@@ -109,6 +109,9 @@ resource "aws_iam_policy" "cabal_lambda_policy" {
   name   = "${var.name}_policy"
   path   = "/"
   policy = <<RUNPOLICY
+{
+    "Version": "2012-10-17",
+    "Statement": [
         {
             "Effect": "Allow",
             "Action": "logs:CreateLogGroup",
@@ -140,7 +143,9 @@ resource "aws_iam_policy" "cabal_lambda_policy" {
             "Resource": [
                 "arn:aws:dynamodb:${var.region}:*:table/cabal-addresses"
             ]
-          }
+        }
+    ]
+}
 RUNPOLICY
 }
 
