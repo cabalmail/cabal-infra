@@ -83,35 +83,8 @@ CabalAdmin.address = CabalAdmin.address || {};
     function displayList() {
       $('#address-list').empty();
       for (var i = 0; i < CabalAdmin.items.length; i++) {
-        switch (CabalAdmin.user) {
-          case 'leader@admin.cabalmail.com':
-            break;
-          case 'jake.carr@mail.randomsound.org':
-            if (CabalAdmin.items[i].user != 'jake') {
-              continue;
-            }
-            break;
-          case 'depreisthecrist@gmail.com':
-            if (CabalAdmin.items[i].user != 'tristan') {
-              continue;
-            }
-            break;
-          case 'cathy_carr@info.ccarr.com':
-            if (CabalAdmin.items[i].user != 'cathy') {
-              continue;
-            }
-            break;
-          default:
-        }
-        if ($('#user-filter').val() != 'all') {
-          if (CabalAdmin.items[i].user != $('#user-filter').val()) {
-            continue;
-          }
-        }
-        if ($('#zone_id-filter').val() != 'all') {
-          if (CabalAdmin.items[i]['zone-id'] != $('#zone_id-filter').val()) {
-            continue;
-          }
+        if (CabalAdmin.items[i].user != 'jake') {
+          continue;
         }
         if ($('#text').val() != '') {
           if (
@@ -180,83 +153,21 @@ CabalAdmin.address = CabalAdmin.address || {};
       }
     }
 
-    function adjustFilters() {
-      switch (CabalAdmin.user) {
-        case 'leader@admin.cabalmail.com':
-          $('#user-filter').val('chris');
-          break;
-        case 'cathy_carr@info.ccarr.com':
-          $('#zone_id-filter').val('ZBYS915K03BC2');
-          $("#zone_id-filter option[value='Z1FO2MQJDQEPLA']").remove();
-          $("#zone_id-filter option[value='Z2UFK0POOZL6IV']").remove();
-          $("#zone_id-filter option[value='Z1YIW2SGWFY5A7']").remove();
-          $("#zone_id-filter option[value='Z1H7RU5O7WHDJH']").remove();
-          $("#zone_id-filter option[value='Z1U9GPZMPLPCS7']").remove();
-          $("#zone_id-filter option[value='Z33IB65UD0QYKU']").remove();
-          $("#zone_id-filter option[value='Z2GS79AAMTQXNV']").remove();
-          $("#zone_id-filter").css('display', 'none');
-          $('#user-filter').val('cathy');
-          $("#user-filter option[value='chris']").remove();
-          $("#user-filter option[value='jake']").remove();
-          $("#user-filter option[value='tristan']").remove();
-          $("#user-filter").css('display', 'none');
-          break;
-        case 'jake.carr@mail.randomsound.org':
-          $('#zone_id-filter').val('Z2GS79AAMTQXNV');
-          $("#zone_id-filter option[value='ZBYS915K03BC2']").remove();
-          $("#zone_id-filter option[value='Z2UFK0POOZL6IV']").remove();
-          $("#zone_id-filter option[value='Z1YIW2SGWFY5A7']").remove();
-          $("#zone_id-filter option[value='Z1H7RU5O7WHDJH']").remove();
-          $("#zone_id-filter option[value='Z1U9GPZMPLPCS7']").remove();
-          $('#user-filter').val('jake');
-          $("#user-filter option[value='chris']").remove();
-          $("#user-filter option[value='cathy']").remove();
-          $("#user-filter option[value='tristan']").remove();
-          $("#user-filter").css('display', 'none');
-          break;
-        case 'depreisthecrist@gmail.com':
-          $('#zone_id-filter').val('Z1U9GPZMPLPCS7');
-          $("#zone_id-filter option[value='Z1FO2MQJDQEPLA']").remove();
-          $("#zone_id-filter option[value='ZBYS915K03BC2']").remove();
-          $("#zone_id-filter option[value='Z2UFK0POOZL6IV']").remove();
-          $("#zone_id-filter option[value='Z1YIW2SGWFY5A7']").remove();
-          $("#zone_id-filter option[value='Z1H7RU5O7WHDJH']").remove();
-          $("#zone_id-filter option[value='Z33IB65UD0QYKU']").remove();
-          $("#zone_id-filter option[value='Z2GS79AAMTQXNV']").remove();
-          $("#zone_id-filter").css('display', 'none');
-          $('#user-filter').val('tristan');
-          $("#user-filter option[value='chris']").remove();
-          $("#user-filter option[value='cathy']").remove();
-          $("#user-filter option[value='jake']").remove();
-          $("#user-filter").css('display', 'none');
-          break;
-        default:
-          $("#zone_id-filter option[value='Z1FO2MQJDQEPLA']").remove();
-          $("#zone_id-filter option[value='ZBYS915K03BC2']").remove();
-          $("#zone_id-filter option[value='Z2UFK0POOZL6IV']").remove();
-          $("#zone_id-filter option[value='Z1YIW2SGWFY5A7']").remove();
-          $("#zone_id-filter option[value='Z1H7RU5O7WHDJH']").remove();
-          $("#zone_id-filter option[value='Z33IB65UD0QYKU']").remove();
-          $("#zone_id-filter option[value='Z2GS79AAMTQXNV']").remove();
-          $("#zone_id-filter option[value='Z1U9GPZMPLPCS7']").remove();
-          $("#zone_id-filter").css('display', 'none');
-          $("#user-filter option[value='chris']").remove();
-          $("#user-filter option[value='cathy']").remove();
-          $("#user-filter option[value='jake']").remove();
-          $("#user-filter option[value='tristan']").remove();
-          $("#user-filter").css('display', 'none');
-      }
-    }
-
     // Register click handler for #request button
     $(function onDocReady() {
         CabalAdmin.user = localStorage.getItem('CognitoIdentityServiceProvider.' + window._config.cognito.userPoolClientId + '.LastAuthUser');
-        adjustFilters();
         $("#user-filter").change(displayList);
         $('#view-back').click(e => {
           $('#address-view').hide("slide",{direction:"right"},300);
         });
         $("#zone_id-filter").change(displayList);
+        var zone_options = '';
+        for (const domain in window._config.domains) {
+          zone_options += '<option value="' + window._config.domains[domain] +
+                          '">' + domain + '</option>'
+        }
+        $("#zone_id").html(zone_options);
+        $("#zone_id-filter").html('<option value="all">Show all domains</option>' + zone_options);
         $("#text").keyup(displayList);
         listAddresses();
         $('#reload').click(listAddresses);
@@ -278,67 +189,6 @@ CabalAdmin.address = CabalAdmin.address || {};
         $('.tab-list').on('click tap', function() {
           $('body').attr('class', 'list');
         });
-
-        switch (CabalAdmin.user) {
-          case 'leader@admin.cabalmail.com':
-            $('#zone_id').val('Z2UFK0POOZL6IV');
-            $('#user').val('chris');
-            break;
-          case 'cathy_carr@info.ccarr.com':
-            $('#zone_id').val('ZBYS915K03BC2');
-            $("#zone_id option[value='Z1FO2MQJDQEPLA']").remove();
-            $("#zone_id option[value='Z2UFK0POOZL6IV']").remove();
-            $("#zone_id option[value='Z1YIW2SGWFY5A7']").remove();
-            $("#zone_id option[value='Z1H7RU5O7WHDJH']").remove();
-            $("#zone_id option[value='Z1U9GPZMPLPCS7']").remove();
-            $("#zone_id option[value='Z33IB65UD0QYKU']").remove();
-            $("#zone_id option[value='Z2GS79AAMTQXNV']").remove();
-            $('#user').val('cathy');
-            $("#user option[value='chris']").remove();
-            $("#user option[value='jake']").remove();
-            $("#user option[value='tristan']").remove();
-            break;
-          case 'jake.carr@mail.randomsound.org':
-            $('#zone_id').val('Z2GS79AAMTQXNV');
-            $("#zone_id option[value='ZBYS915K03BC2']").remove();
-            $("#zone_id option[value='Z2UFK0POOZL6IV']").remove();
-            $("#zone_id option[value='Z1YIW2SGWFY5A7']").remove();
-            $("#zone_id option[value='Z1H7RU5O7WHDJH']").remove();
-            $("#zone_id option[value='Z1U9GPZMPLPCS7']").remove();
-            $('#user').val('jake');
-            $("#user option[value='chris']").remove();
-            $("#user option[value='cathy']").remove();
-            $("#user option[value='tristan']").remove();
-            break;
-          case 'depreisthecrist@gmail.com':
-            $('#zone_id').val('Z1U9GPZMPLPCS7');
-            $("#zone_id option[value='Z1FO2MQJDQEPLA']").remove();
-            $("#zone_id option[value='ZBYS915K03BC2']").remove();
-            $("#zone_id option[value='Z2UFK0POOZL6IV']").remove();
-            $("#zone_id option[value='Z1YIW2SGWFY5A7']").remove();
-            $("#zone_id option[value='Z1H7RU5O7WHDJH']").remove();
-            $("#zone_id option[value='Z33IB65UD0QYKU']").remove();
-            $("#zone_id option[value='Z2GS79AAMTQXNV']").remove();
-            $('#user').val('tristan');
-            $("#user option[value='chris']").remove();
-            $("#user option[value='cathy']").remove();
-            $("#user option[value='jake']").remove();
-            break;
-          default:
-            $("#zone_id option[value='Z1FO2MQJDQEPLA']").remove();
-            $("#zone_id option[value='ZBYS915K03BC2']").remove();
-            $("#zone_id option[value='Z2UFK0POOZL6IV']").remove();
-            $("#zone_id option[value='Z1YIW2SGWFY5A7']").remove();
-            $("#zone_id option[value='Z1H7RU5O7WHDJH']").remove();
-            $("#zone_id option[value='Z33IB65UD0QYKU']").remove();
-            $("#zone_id option[value='Z2GS79AAMTQXNV']").remove();
-            $("#zone_id option[value='Z1U9GPZMPLPCS7']").remove();
-            $("#user option[value='chris']").remove();
-            $("#user option[value='cathy']").remove();
-            $("#user option[value='jake']").remove();
-            $("#user option[value='tristan']").remove();
-        }
-
     });
 
     function handleRequestClick(event) {
