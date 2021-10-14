@@ -99,7 +99,7 @@ resource "aws_iam_role" "cabal_lambda_role" {
       },
       "Effect": "Allow",
       "Sid": "${var.name}_sid"
-    },
+    }
   ]
 }
 ROLEPOLICY
