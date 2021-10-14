@@ -53,7 +53,22 @@ resource "aws_api_gateway_method_response" "cabal_response_proxy" {
   }
 }
 
-resource "aws_api_gateway_integration_response" "MyDemoIntegrationResponse" {
+resource "aws_api_gateway_method_response" "cabal_options_response_proxy" {
+  rest_api_id         = var.gateway_id
+  resource_id         = aws_api_gateway_resource.cabal_resource.id
+  http_method         = aws_api_gateway_method.cabal_options_method.http_method
+  status_code         = "200"
+  response_models     = {
+    "application/json" = "Empty"
+  }
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true,
+    "method.response.header.Access-Control-Allow-Methods" = true,
+    "method.response.header.Access-Control-Allow-Origin" = true
+  }
+}
+
+resource "aws_api_gateway_integration_response" "cabal_integration_response" {
   rest_api_id = var.gateway_id
   resource_id = aws_api_gateway_resource.cabal_resource.id
   http_method = aws_api_gateway_method.cabal_method.http_method
@@ -61,10 +76,32 @@ resource "aws_api_gateway_integration_response" "MyDemoIntegrationResponse" {
 }
 
 resource "aws_api_gateway_integration" "cabal_options_integration" {
+  rest_api_id = var.gateway_id
+  resource_id = aws_api_gateway_resource.cabal_resource.id
+  http_method = aws_api_gateway_method.cabal_options_method.http_method
+  type        = "MOCK"
+}
+
+locals {
+  allowed_headers = join(",", [
+    "Content-Type",
+    "X-Amz-Date",
+    "Authorization",
+    "X-Api-Key",
+    "X-Amz-Security-Token"
+  ])
+}
+
+resource "aws_api_gateway_integration_response" "cabal_options_integration_response" {
   rest_api_id             = var.gateway_id
-  resource_id             = aws_api_gateway_resource.cabal_resource.id
+  resource_id             = aws_api_gateway_resource.cabal_cors_resource.id
   http_method             = aws_api_gateway_method.cabal_options_method.http_method
-  type                    = "MOCK"
+  status_code             = aws_api_gateway_method_response.cabal_options_response_proxy.status_code
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'${local.allowed_headers}'",
+    "method.response.header.Access-Control-Allow-Methods" = "'GET,OPTIONS,POST,PUT'",
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+  }
 }
 
 resource "aws_lambda_permission" "cabal_apigw_lambda_permission" {
