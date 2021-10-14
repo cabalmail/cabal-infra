@@ -88,7 +88,7 @@ resource "aws_lambda_permission" "cabal_apigw_lambda_permission" {
 resource "aws_iam_role" "cabal_lambda_role" {
   name = "${var.name}_role"
 
-  assume_role_policy = <<POLICY
+  assume_role_policy = <<ROLEPOLICY
 {
   "Version": "2012-10-17",
   "Statement": [
@@ -102,13 +102,13 @@ resource "aws_iam_role" "cabal_lambda_role" {
     },
   ]
 }
-POLICY
+ROLEPOLICY
 }
 
 resource "aws_iam_policy" "cabal_lambda_policy" {
   name   = "${var.name}_policy"
   path   = "/"
-  policy = <<POLICY
+  policy = <<RUNPOLICY
         {
             "Effect": "Allow",
             "Action": "logs:CreateLogGroup",
@@ -141,7 +141,7 @@ resource "aws_iam_policy" "cabal_lambda_policy" {
                 "arn:aws:dynamodb:${var.region}:*:table/cabal-addresses"
             ]
           }
-POLICY
+RUNPOLICY
 }
 
 resource "aws_iam_role_policy_attachment" "cabal_lambda_policy_attachment" {
