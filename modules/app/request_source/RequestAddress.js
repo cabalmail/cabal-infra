@@ -18,30 +18,6 @@ exports.handler = (event, context, callback) => {
     const zone_id = requestBody.zone_id;
     const subdomain = requestBody.subdomain;
     const comment = requestBody.comment;
-    const tlds = {
-      "Z2GS79AAMTQXNV": "randomsound.org",
-      "ZBYS915K03BC2": "cathycarr.org",
-      "Z33IB65UD0QYKU": "hackthumb.com",
-      "Z2UFK0POOZL6IV": "ccarr.com",
-      "Z1FO2MQJDQEPLA": "cabalmail.com",
-      "Z1YIW2SGWFY5A7": "chriscarr.org",
-      "Z1H7RU5O7WHDJH": "constancedu.com",
-      "Z1U9GPZMPLPCS7": "depre.world",
-    };
-
-    const allowedZones = {
-      "leader@admin.cabalmail.com": {
-        "Z2GS79AAMTQXNV": true,
-        "ZBYS915K03BC2": true,
-        "Z33IB65UD0QYKU": true,
-        "Z2UFK0POOZL6IV": true,
-        "Z1FO2MQJDQEPLA": true,
-        "Z1YIW2SGWFY5A7": true,
-        "Z1H7RU5O7WHDJH": true,
-        "Z1U9GPZMPLPCS7": true,
-      },
-    }
-
     console.log('Received event (', address, '): ', event);
 
     recordAddress(address, user, cabalusername, zone_id, subdomain, comment, tlds).then(() => {
