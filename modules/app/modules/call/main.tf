@@ -94,7 +94,7 @@ locals {
 
 resource "aws_api_gateway_integration_response" "cabal_options_integration_response" {
   rest_api_id             = var.gateway_id
-  resource_id             = aws_api_gateway_resource.cabal_cors_resource.id
+  resource_id             = aws_api_gateway_resource.cabal_resource.id
   http_method             = aws_api_gateway_method.cabal_options_method.http_method
   status_code             = aws_api_gateway_method_response.cabal_options_response_proxy.status_code
   response_parameters = {
