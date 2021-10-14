@@ -98,7 +98,7 @@ resource "aws_iam_role" "cabal_lambda_role" {
         "Service": "lambda.amazonaws.com"
       },
       "Effect": "Allow",
-      "Sid": "${var.name}_sid"
+      "Sid": "${var.name}Sid"
     }
   ]
 }
