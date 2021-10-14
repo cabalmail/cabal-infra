@@ -9,31 +9,7 @@ exports.handler = (event, context, callback) => {
     }
 
     const username = event.requestContext.authorizer.claims['cognito:username'];
-
-    const tlds = {
-      "Z2GS79AAMTQXNV": "randomsound.org",
-      "ZBYS915K03BC2": "cathycarr.org",
-      "Z33IB65UD0QYKU": "hackthumb.com",
-      "Z2UFK0POOZL6IV": "ccarr.com",
-      "Z1FO2MQJDQEPLA": "cabalmail.com",
-      "Z1YIW2SGWFY5A7": "chriscarr.org",
-      "Z1H7RU5O7WHDJH": "constancedu.com",
-      "Z1U9GPZMPLPCS7": "depre.world",
-    }
-
-    const allowedZones = {
-      "leader@admin.cabalmail.com": {
-        "Z2GS79AAMTQXNV": true,
-        "ZBYS915K03BC2": true,
-        "Z33IB65UD0QYKU": true,
-        "Z2UFK0POOZL6IV": true,
-        "Z1FO2MQJDQEPLA": true,
-        "Z1YIW2SGWFY5A7": true,
-        "Z1H7RU5O7WHDJH": true,
-        "Z1U9GPZMPLPCS7": true,
-      },
-    }
-
+    
     listAddresses().then(result => {
         callback(null, {
             statusCode: 200,
@@ -53,6 +29,33 @@ function listAddresses() {
     return ddb.scan({
         TableName: 'cabal-addresses'
     }).promise();
+  //   const params = {
+  //   // Specify which items in the results are returned.
+  //   FilterExpression: "Subtitle = :topic AND Season = :s AND Episode = :e",
+  //   // Define the expression attribute value, which are substitutes for the values you want to compare.
+  //   ExpressionAttributeValues: {
+  //     ":topic": {S: "SubTitle2"},
+  //     ":s": {N: 1},
+  //     ":e": {N: 2},
+  //   },
+  //   // Set the projection expression, which are the attributes that you want.
+  //   ProjectionExpression: "Season, Episode, Title, Subtitle",
+  //   TableName: "EPISODES_TABLE",
+  // };
+  
+  // ddb.scan(params, function (err, data) {
+  //   if (err) {
+  //     console.log("Error", err);
+  //   } else {
+  //     console.log("Success", data);
+  //     data.Items.forEach(function (element, index, array) {
+  //       console.log(
+  //           "printing",
+  //           element.Title.S + " (" + element.Subtitle.S + ")"
+  //       );
+  //     });
+  //   }
+  // });
 }
 
 function toUrlString(buffer) {

@@ -98,11 +98,55 @@ resource "aws_iam_role" "cabal_lambda_role" {
         "Service": "lambda.amazonaws.com"
       },
       "Effect": "Allow",
-      "Sid": ""
-    }
+      "Sid": "${var.name}_sid"
+    },
   ]
 }
 POLICY
+}
+
+resource "aws_iam_policy" "cabal_lambda_policy" {
+  name   = "${var.name}_policy"
+  path   = "/"
+  policy = <<POLICY
+        {
+            "Effect": "Allow",
+            "Action": "logs:CreateLogGroup",
+            "Resource": "arn:aws:logs:${var.region}:*:*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+            ],
+            "Resource": [
+                "arn:aws:logs:${var.region}:*:log-group:/aws/lambda/cabal:*"
+            ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "dynamodb:BatchGetItem",
+                "dynamodb:DescribeTable",
+                "dynamodb:GetItem",
+                "dynamodb:ListTables",
+                "dynamodb:Query",
+                "dynamodb:Scan",
+                "dynamodb:ListTagsOfResource",
+                "dynamodb:ListGlobalTables",
+                "dynamodb:DescribeGlobalTable"
+            ],
+            "Resource": [
+                "arn:aws:dynamodb:${var.region}:*:table/cabal-addresses"
+            ]
+          }
+POLICY
+}
+
+resource "aws_iam_role_policy_attachment" "cabal_lambda_policy_attachment" {
+  role       = aws_iam_role.cabal_lambda_role.name
+  policy_arn = aws_iam_policy.cabal_lambda_policy.arn
 }
 
 resource "aws_lambda_function" "cabal_lambda" {
