@@ -44,7 +44,7 @@ resource "aws_api_gateway_integration_response" "cabal_options_integration_respo
   response_parameters = {
     "method.response.header.Access-Control-Allow-Headers" = "'${local.allowed_headers}'",
     "method.response.header.Access-Control-Allow-Methods" = "'${local.allowed_methods}'",
-    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'https://admin.${var.control_domain}'"
   }
   depends_on          = [
     aws_api_gateway_integration.cabal_options_integration
