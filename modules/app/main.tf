@@ -31,9 +31,9 @@ module "cabal_list_method" {
   control_domain   = var.control_domain
 }
 
-module "cabal_request_method" {
+module "cabal_new_method" {
   source           = "./modules/call"
-  name             = "request"
+  name             = "new"
   runtime          = "nodejs14.x"
   method           = "POST"
   region           = var.region
@@ -63,7 +63,7 @@ resource "aws_api_gateway_deployment" "cabal_api_deployment" {
     redeployment = sha1(jsonencode([
       aws_api_gateway_rest_api.cabal_gateway.body,
       module.cabal_list_method.hash_key,
-      module.cabal_request_method.hash_key,
+      module.cabal_new_method.hash_key,
       module.cabal_revoke_method.hash_key,
     ]))
   }
