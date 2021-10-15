@@ -1,22 +1,3 @@
-locals {
-  allowed_headers = join(",", [
-    "Content-Type",
-    "X-Amz-Date",
-    "Authorization",
-    "X-Api-Key",
-    "X-Amz-Security-Token"
-  ])
-  allowed_methods = join(",", [
-    "DELETE",
-    "GET",
-    "HEAD",
-    "OPTIONS",
-    "PATCH",
-    "POST",
-    "PUT"
-  ])
-}
-
 resource "aws_api_gateway_method" "cabal_options_method" {
   rest_api_id   = var.gateway_id
   resource_id   = aws_api_gateway_resource.cabal_resource.id
