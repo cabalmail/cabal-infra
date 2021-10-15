@@ -5,7 +5,7 @@ window._config = {
         region: '${region}'
     },
     api: {
-        invokeUrl: '${invoke_url}/prod'
+        invokeUrl: '${invoke_url}prod'
     },
     domains: ${jsonencode(domains)}
   };
