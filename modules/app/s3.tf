@@ -51,14 +51,14 @@ resource "aws_s3_bucket_object" "cabal_website_templates" {
     pool_id        = var.user_pool_id,
     pool_client_id = var.user_pool_client_id,
     region         = var.region,
-    invoke_url     = aws_api_gateway_stage.cabal_api_deployment.invoke_url
+    invoke_url     = aws_api_gateway_deployment.cabal_api_deployment.invoke_url
     domains        = {for domain in var.domains : domain.domain => domain.zone_id}
   })
   etag         = md5(templatefile("${path.module}/templates/${each.value}", {
       pool_id        = var.user_pool_id,
       pool_client_id = var.user_pool_client_id,
       region         = var.region,
-      invoke_url     = aws_api_gateway_stage.cabal_api_deployment.invoke_url
+      invoke_url     = aws_api_gateway_deployment.cabal_api_deployment.invoke_url
       domains        = {for domain in var.domains : domain.domain => domain.zone_id}
     })
   )
