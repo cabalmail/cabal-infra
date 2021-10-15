@@ -25,7 +25,7 @@ exports.handler = (event, context, callback) => {
                 address: address,
                 tld: tld,
                 user: user,
-                username: cabalusername,
+                username: username,
                 "zone-id": zone_id,
                 subdomain: subdomain,
                 comment: comment,
