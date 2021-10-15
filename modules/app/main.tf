@@ -61,7 +61,7 @@ resource "aws_api_gateway_deployment" "cabal_api_deployment" {
   rest_api_id = aws_api_gateway_rest_api.cabal_gateway.id
   triggers = {
     redeployment = sha1(jsonencode([
-      aws_api_gateway_rest_api.cabal_gateway.body,
+      jsonencode(aws_api_gateway_rest_api.cabal_gateway),
       module.cabal_list_method.hash_key,
       module.cabal_new_method.hash_key,
       module.cabal_revoke_method.hash_key,
