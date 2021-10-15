@@ -12,14 +12,13 @@ exports.handler = (event, context, callback) => {
     const requestBody = JSON.parse(event.body);
     const address = requestBody.address;
     const user = requestBody.user;
-    const cabalusername = requestBody.cabalusername;
     const zone_id = requestBody.zone_id;
     const subdomain = requestBody.subdomain;
     const comment = requestBody.comment;
     const tld = requestBody.tld
     console.log('Received event (', address, '): ', event);
 
-    recordAddress(address, user, cabalusername, zone_id, subdomain, comment, tld).then(() => {
+    recordAddress(username, address, user, zone_id, subdomain, comment, tld).then(() => {
         callback(null, {
             statusCode: 201,
             body: JSON.stringify({
@@ -41,14 +40,14 @@ exports.handler = (event, context, callback) => {
     });
 };
 
-function recordAddress(address, user, cabalusername, zone_id, subdomain, comment, tld) {
+function recordAddress(username, address, user, zone_id, subdomain, comment, tld) {
     return ddb.put({
         TableName: 'cabal-addresses',
         Item: {
             address: address,
             tld: tld,
             user: user,
-            username: cabalusername,
+            username: username,
             "zone-id": zone_id,
             subdomain: subdomain,
             comment: comment,
