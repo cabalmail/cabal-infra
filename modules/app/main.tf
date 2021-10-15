@@ -28,6 +28,7 @@ module "cabal_list_method" {
   gateway_id       = aws_api_gateway_rest_api.cabal_gateway.id
   root_resource_id = aws_api_gateway_rest_api.cabal_gateway.root_resource_id
   authorizer       = aws_api_gateway_authorizer.cabal_api_authorizer.id
+  control_domain   = var.control_domain
 }
 
 module "cabal_request_method" {
@@ -40,6 +41,7 @@ module "cabal_request_method" {
   gateway_id       = aws_api_gateway_rest_api.cabal_gateway.id
   root_resource_id = aws_api_gateway_rest_api.cabal_gateway.root_resource_id
   authorizer       = aws_api_gateway_authorizer.cabal_api_authorizer.id
+  control_domain   = var.control_domain
 }
 
 module "cabal_revoke_method" {
@@ -52,6 +54,7 @@ module "cabal_revoke_method" {
   gateway_id       = aws_api_gateway_rest_api.cabal_gateway.id
   root_resource_id = aws_api_gateway_rest_api.cabal_gateway.root_resource_id
   authorizer       = aws_api_gateway_authorizer.cabal_api_authorizer.id
+  control_domain   = var.control_domain
 }
 
 resource "aws_api_gateway_deployment" "cabal_api_deployment" {

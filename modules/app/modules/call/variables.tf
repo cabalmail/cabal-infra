@@ -29,3 +29,7 @@ variable "account" {
 variable "authorizer" {
   type = string
 }
+
+variable "control_domain" {
+  type = string
+}
