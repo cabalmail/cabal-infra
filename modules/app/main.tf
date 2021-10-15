@@ -130,7 +130,7 @@ resource "aws_api_gateway_method_settings" "cabal_method_settings" {
   rest_api_id = aws_api_gateway_rest_api.cabal_gateway.id
   stage_name  = aws_api_gateway_stage.cabal_api_stage.stage_name
   method_path = "*/*"
-  settings    = {
+  settings {
     metrics_enabled        = true
     data_trace_enabled     = true
     logging_level          = "INFO"
