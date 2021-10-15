@@ -82,7 +82,7 @@ resource "aws_iam_role" "cabal_cloudwatch_role" {
   name               = "cabal_cloudwatch_role"
   assume_role_policy = <<DOC
 {
-  "Version": "2021-10-17",
+  "Version": "2012-10-17",
   "Statement": [
     {
       "Sid": "TheSloth",
