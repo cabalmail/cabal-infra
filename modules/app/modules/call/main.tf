@@ -38,6 +38,9 @@ resource "aws_api_gateway_method_response" "cabal_response_proxy" {
   response_models = {
     "application/json" = "Empty"
   }
+  depends_on = [
+    aws_api_gateway_method.cabal_method
+  ]
 }
 
 
@@ -46,4 +49,7 @@ resource "aws_api_gateway_integration_response" "cabal_integration_response" {
   resource_id = aws_api_gateway_resource.cabal_resource.id
   http_method = aws_api_gateway_method.cabal_method.http_method
   status_code = aws_api_gateway_method_response.cabal_response_proxy.status_code
+  depends_on = [
+    aws_api_gateway_integration.cabal_integration
+  ]
 }
