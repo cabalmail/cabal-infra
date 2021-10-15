@@ -90,6 +90,15 @@ locals {
     "X-Api-Key",
     "X-Amz-Security-Token"
   ])
+  allowed_methods = join(",", [
+    "DELETE",
+    "GET",
+    "HEAD",
+    "OPTIONS",
+    "PATCH",
+    "POST",
+    "PUT"
+  ])
 }
 
 resource "aws_api_gateway_integration_response" "cabal_options_integration_response" {
@@ -99,7 +108,7 @@ resource "aws_api_gateway_integration_response" "cabal_options_integration_respo
   status_code             = aws_api_gateway_method_response.cabal_options_response_proxy.status_code
   response_parameters = {
     "method.response.header.Access-Control-Allow-Headers" = "'${local.allowed_headers}'",
-    "method.response.header.Access-Control-Allow-Methods" = "'GET,OPTIONS,POST,PUT'",
+    "method.response.header.Access-Control-Allow-Methods" = "'${local.allowed_methods}'",
     "method.response.header.Access-Control-Allow-Origin"  = "'*'"
   }
 }
