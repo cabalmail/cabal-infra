@@ -76,6 +76,9 @@ resource "aws_api_gateway_stage" "cabal_api_stage" {
   deployment_id = aws_api_gateway_deployment.cabal_api_deployment.id
   rest_api_id   = aws_api_gateway_rest_api.cabal_gateway.id
   stage_name    = "prod"
+  depends_on    = [
+    aws_api_gateway_method_settings.cabal_method_settings
+  ]
 }
 
 resource "aws_iam_role" "cabal_cloudwatch_role" {
@@ -128,7 +131,7 @@ resource "aws_api_gateway_account" "cabal_apigw_account" {
 
 resource "aws_api_gateway_method_settings" "cabal_method_settings" {
   rest_api_id = aws_api_gateway_rest_api.cabal_gateway.id
-  stage_name  = aws_api_gateway_stage.cabal_api_stage.stage_name
+  stage_name  = "prod"
   method_path = "*/*"
   settings {
     metrics_enabled        = true
