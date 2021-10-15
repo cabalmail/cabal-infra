@@ -74,7 +74,6 @@ resource "aws_iam_role_policy" "cabal_lambda_policy" {
             ],
             "Resource": [
                 "arn:aws:dynamodb:${var.region}:*:table/cabal-addresses"
-                 arn:aws:dynamodb:${var.region}:*:table/cabal-addresses
             ]
         }
     ]
