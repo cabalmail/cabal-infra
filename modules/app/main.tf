@@ -122,7 +122,7 @@ resource "aws_iam_role_policy" "cabal_cloudwatch_policy" {
 POLICY
 }
 
-resource "aws_api_gateway_acccount" "cabal_apigw_account" {
+resource "aws_api_gateway_account" "cabal_apigw_account" {
   cloudwatch_role_arn = aws_iam_role.cabal_cloudwatch_role.arn
 }
 
