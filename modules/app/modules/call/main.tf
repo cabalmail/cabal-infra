@@ -44,7 +44,7 @@ resource "aws_api_gateway_integration" "cabal_integration" {
   rest_api_id             = var.gateway_id
   resource_id             = aws_api_gateway_resource.cabal_resource.id
   http_method             = aws_api_gateway_method.cabal_method.http_method
-  integration_http_method = "GET"
+  integration_http_method = "POST"
   type                    = "AWS_PROXY"
   uri                     = aws_lambda_function.cabal_lambda.invoke_arn
 }
