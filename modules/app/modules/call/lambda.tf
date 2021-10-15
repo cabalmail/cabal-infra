@@ -67,12 +67,14 @@ resource "aws_iam_role_policy" "cabal_lambda_policy" {
                 "dynamodb:ListTables",
                 "dynamodb:Query",
                 "dynamodb:Scan",
+                "dynamodb:PutItem",
                 "dynamodb:ListTagsOfResource",
                 "dynamodb:ListGlobalTables",
                 "dynamodb:DescribeGlobalTable"
             ],
             "Resource": [
                 "arn:aws:dynamodb:${var.region}:*:table/cabal-addresses"
+                 arn:aws:dynamodb:${var.region}:*:table/cabal-addresses
             ]
         }
     ]
