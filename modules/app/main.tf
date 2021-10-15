@@ -77,3 +77,64 @@ resource "aws_api_gateway_stage" "cabal_api_stage" {
   rest_api_id   = aws_api_gateway_rest_api.cabal_gateway.id
   stage_name    = "prod"
 }
+
+resource "aws_iam_role" "cabal_cloudwatch_role" {
+  name               = "cabal_cloudwatch_role"
+  assume_role_policy = <<DOC
+{
+  "Version": "2021-10-17",
+  "Statement": [
+    {
+      "Sid": "TheSloth",
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "apigateway.amazonaws.com"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}
+DOC
+}
+
+resource "aws_iam_role_policy" "cabal_cloudwatch_policy" {
+  name   = "cabal_cloudwatch_role"
+  role   = aws_iam_role.cabal_cloudwatch_role.id
+  policy = <<POLICY
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:DescribeLogGroups",
+        "logs:DescribeLogStreams",
+        "logs:FilterLogEvents",
+        "logs:GetLogEvents",
+        "logs:PutLogEvents"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+POLICY
+}
+
+resource "aws_api_gateway_acccount" "cabal_apigw_account" {
+  cloudwatch_role_arn - aws_iam_role.cabal_cloudwatch_role.arn
+}
+
+resource "aws_api_gateway_method_settings" "cabal_method_settings" {
+  rest_api_id = aws_api_gateway_rest_api.cabal_gateway.id
+  stage_name  = aws_api_gateway_stage.cabal_api_stage.stage_name
+  method_path = "*/*"
+  settings    = {
+    metrics_enabled        = true
+    data_trace_enabled     = true
+    logging_level          = "INFO"
+    throttling_rate_limit  = 100
+    throttling_burst_limit = 50
+  }
+}
