@@ -28,9 +28,6 @@ resource "aws_api_gateway_integration" "cabal_integration" {
   integration_http_method = "GET"
   type                    = "AWS_PROXY"
   uri                     = aws_lambda_function.cabal_lambda.invoke_arn
-  request_parameters      =  {
-    "integration.request.path.proxy" = "method.request.path.proxy"
-  }
 }
 
 resource "aws_api_gateway_method_response" "cabal_response_proxy" {
