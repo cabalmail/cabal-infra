@@ -198,7 +198,8 @@ CabalAdmin.address = CabalAdmin.address || {};
           cabalusername: $('#cabalusername').val(),
           subdomain: $('#subdomain').val(),
           user: $('#user option:selected').val(),
-          comment: $('#comment').val()
+          comment: $('#comment').val(),
+          tld: $('#zone_id option:selected').text()
         };
         var copytarget = document.getElementById('copytext');
         copytarget.value = obj.address;

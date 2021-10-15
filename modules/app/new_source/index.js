@@ -9,23 +9,22 @@ exports.handler = (event, context, callback) => {
     }
 
     const username = event.requestContext.authorizer.claims['cognito:username'];
-
     const requestBody = JSON.parse(event.body);
-
     const address = requestBody.address;
     const user = requestBody.user;
     const cabalusername = requestBody.cabalusername;
     const zone_id = requestBody.zone_id;
     const subdomain = requestBody.subdomain;
     const comment = requestBody.comment;
+    const tld = requestBody.tld
     console.log('Received event (', address, '): ', event);
 
-    recordAddress(address, user, cabalusername, zone_id, subdomain, comment, tlds).then(() => {
+    recordAddress(address, user, cabalusername, zone_id, subdomain, comment, tld).then(() => {
         callback(null, {
             statusCode: 201,
             body: JSON.stringify({
                 address: address,
-                tld: tlds[zone_id],
+                tld: tld,
                 user: user,
                 username: cabalusername,
                 "zone-id": zone_id,
@@ -42,12 +41,12 @@ exports.handler = (event, context, callback) => {
     });
 };
 
-function recordAddress(address, user, cabalusername, zone_id, subdomain, comment, tlds) {
+function recordAddress(address, user, cabalusername, zone_id, subdomain, comment, tld) {
     return ddb.put({
         TableName: 'cabal-addresses',
         Item: {
             address: address,
-            tld: tlds[zone_id],
+            tld: tld,
             user: user,
             username: cabalusername,
             "zone-id": zone_id,
