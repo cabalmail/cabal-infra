@@ -28,7 +28,6 @@ exports.handler = (event, context, callback) => {
 function listAddresses(username) {
     const parameters = {
         "TableName": "cabal-addresses",
-        //"ScanIndexForward": true,
         "FilterExpression": "#username = :username",
         "ExpressionAttributeNames": {
             "#username": "username"
