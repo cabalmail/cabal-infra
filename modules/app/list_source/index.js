@@ -27,26 +27,21 @@ exports.handler = (event, context, callback) => {
 
 function listAddresses(username) {
     return ddb.scan({
-        ScanFilter: {
-          "username" : {
-            "AttributeValueList":[
-              {"S":username}
-            ],
-            "ComparisonOperator": "EQ"
-          }
-        },
+        FilterExpression: "#n0 = :v0",
+        ExpressionAttributeNames: {"#n0":"username"},
+        ExpressionAttributeValues: {":v0":{"S":username}},
         TableName: 'cabal-addresses'
     }).promise();
 }
 
-//{
-//"TableName":"cabal-addresses",
-//"ReturnConsumedCapacity":"TOTAL",
-//"Limit":50,
-//"FilterExpression":"#n0 = :v0",
-//"ExpressionAttributeNames":{"#n0":"username"},
-//"ExpressionAttributeValues":{":v0":{"S":"chris"}}
-//}
+        // ScanFilter: {
+        //   "username" : {
+        //     AttributeValueList:[
+        //       {"S":username}
+        //     ],
+        //     ComparisonOperator: "EQ"
+        //   }
+        // },
 
 function toUrlString(buffer) {
     return buffer.toString('base64')
