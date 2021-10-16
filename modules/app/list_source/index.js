@@ -34,10 +34,19 @@ function listAddresses(username) {
             ],
             "ComparisonOperator": "EQ"
           }
-        }
+        },
         TableName: 'cabal-addresses'
     }).promise();
 }
+
+//{
+//"TableName":"cabal-addresses",
+//"ReturnConsumedCapacity":"TOTAL",
+//"Limit":50,
+//"FilterExpression":"#n0 = :v0",
+//"ExpressionAttributeNames":{"#n0":"username"},
+//"ExpressionAttributeValues":{":v0":{"S":"chris"}}
+//}
 
 function toUrlString(buffer) {
     return buffer.toString('base64')
