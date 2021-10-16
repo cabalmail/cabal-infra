@@ -174,6 +174,9 @@ resource "aws_autoscaling_group" "cabal_smtp_asg" {
   target_group_arns     = [var.target_group_arn]
   lifecycle {
     create_before_destroy = true
+    ignore_changes        = [
+      tags,
+    ]
   }
   tag {
     key                 = "Name"
