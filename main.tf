@@ -77,6 +77,7 @@ module "cabal_efs" {
 # Creates an auto-scale group for IMAP servers
 module "cabal_imap" {
   source           = "./modules/imap"
+  type             = "imap"
   private_subnets  = module.cabal_vpc.private_subnets
   vpc              = module.cabal_vpc.vpc
   control_domain   = var.control_domain
@@ -91,7 +92,7 @@ module "cabal_imap" {
 # Creates an auto-scale group for inbound SMTP servers
 module "cabal_smtp_in" {
   source           = "./modules/smtp"
-  type             = "in"
+  type             = "smtp-in"
   private_subnets  = module.cabal_vpc.private_subnets
   vpc              = module.cabal_vpc.vpc
   control_domain   = var.control_domain
@@ -106,7 +107,7 @@ module "cabal_smtp_in" {
 # Creates an auto-scale group for outbound SMTP servers
 module "cabal_smtp_out" {
   source           = "./modules/smtp"
-  type             = "out"
+  type             = "smtp-out"
   private_subnets  = module.cabal_vpc.private_subnets
   vpc              = module.cabal_vpc.vpc
   control_domain   = var.control_domain
