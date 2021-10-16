@@ -26,11 +26,13 @@ exports.handler = (event, context, callback) => {
 };
 
 function listAddresses(username) {
-    return ddb.scan({
+    const parameters = {
         FilterExpression: "username = :v",
         ExpressionAttributeValues: {":v":{"S":"chris"}},
         TableName: 'cabal-addresses'
-    }).promise();
+        IndexName: 'usernameIndex'
+    };
+    return ddb.scan(parameters).promise();
 }
 
         // ScanFilter: {
@@ -41,13 +43,6 @@ function listAddresses(username) {
         //     ComparisonOperator: "EQ"
         //   }
         // },
-
-function toUrlString(buffer) {
-    return buffer.toString('base64')
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=/g, '');
-}
 
 function errorResponse(errorMessage, awsRequestId, callback) {
   callback(null, {
