@@ -10,7 +10,7 @@ exports.handler = (event, context, callback) => {
 
     const username = event.requestContext.authorizer.claims['cognito:username'];
     
-    listAddresses().then(result => {
+    listAddresses(username).then(result => {
         callback(null, {
             statusCode: 200,
             headers: {
@@ -25,37 +25,18 @@ exports.handler = (event, context, callback) => {
     });
 };
 
-function listAddresses() {
+function listAddresses(username) {
     return ddb.scan({
+        ScanFilter: {
+          "username" : {
+            "AttributeValueList":[
+              {"S":username}
+            ],
+            "ComparisonOperator": "EQ"
+          }
+        }
         TableName: 'cabal-addresses'
     }).promise();
-  //   const params = {
-  //   // Specify which items in the results are returned.
-  //   FilterExpression: "Subtitle = :topic AND Season = :s AND Episode = :e",
-  //   // Define the expression attribute value, which are substitutes for the values you want to compare.
-  //   ExpressionAttributeValues: {
-  //     ":topic": {S: "SubTitle2"},
-  //     ":s": {N: 1},
-  //     ":e": {N: 2},
-  //   },
-  //   // Set the projection expression, which are the attributes that you want.
-  //   ProjectionExpression: "Season, Episode, Title, Subtitle",
-  //   TableName: "EPISODES_TABLE",
-  // };
-  
-  // ddb.scan(params, function (err, data) {
-  //   if (err) {
-  //     console.log("Error", err);
-  //   } else {
-  //     console.log("Success", data);
-  //     data.Items.forEach(function (element, index, array) {
-  //       console.log(
-  //           "printing",
-  //           element.Title.S + " (" + element.Subtitle.S + ")"
-  //       );
-  //     });
-  //   }
-  // });
 }
 
 function toUrlString(buffer) {
