@@ -27,15 +27,20 @@ exports.handler = (event, context, callback) => {
 
 function listAddresses(username) {
     const parameters = {
-        FilterExpression: "username = :u",
-        ExpressionAttributeValues: {":u":{"S":"chris"}},
-        TableName: 'cabal-addresses',
-        IndexName: 'usernameIndex'
+        "TableName": "cabal-addresses",
+        "ScanIndexForward": true,
+        "FilterExpression": "#username = :username",
+        "ExpressionAttributeNames": {
+            "#username": "username"
+        },
+        "ExpressionAttributeValues": {
+            ":username": "chris"
+        }
     };
     return ddb.scan(parameters).promise();
 }
 
-        // ScanFilter: {
+// ScanFilter: {
         //   "username" : {
         //     AttributeValueList:[
         //       {"S":username}
