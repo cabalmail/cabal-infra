@@ -27,9 +27,9 @@ exports.handler = (event, context, callback) => {
 
 function listAddresses(username) {
     return ddb.scan({
-        FilterExpression: "#n0 = :v0",
-        ExpressionAttributeNames: {"#n0":"username"},
-        ExpressionAttributeValues: {":v0":{"S":username}},
+        FilterExpression: "#n = :v",
+        ExpressionAttributeNames: {"#n":"username"},
+        ExpressionAttributeValues: {":v":{"S":"chris"}},
         TableName: 'cabal-addresses'
     }).promise();
 }
