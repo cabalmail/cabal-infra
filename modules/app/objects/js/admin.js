@@ -83,9 +83,6 @@ CabalAdmin.address = CabalAdmin.address || {};
     function displayList() {
       $('#address-list').empty();
       for (var i = 0; i < CabalAdmin.items.length; i++) {
-        if (CabalAdmin.items[i].user != 'jake') {
-          continue;
-        }
         if ($('#text').val() != '') {
           if (
             (CabalAdmin.items[i].address + CabalAdmin.items[i].comment)
@@ -113,12 +110,6 @@ CabalAdmin.address = CabalAdmin.address || {};
           var item = CabalAdmin.items[index];
           $('#view-address').text(item.address);
           $('#view-comment').text(item.comment ? item.comment : '<No Comment>');
-          $('#view-user').text(item.user);
-          $('#view-username').text(item.username);
-          $('#view-subdomain').text(item.subdomain);
-          $('#view-tld').text(item.tld);
-          $('#view-zone-id').text(item['zone-id']);
-          // $('#address-view').css('display', 'block');
           $('#copy-address').text("Copy " + item.address);
           $('#copy-address').off().on('click', null, item.address, handleCopy);
           $('#view-revoke').off().on('click', null, item, e => {
@@ -156,7 +147,6 @@ CabalAdmin.address = CabalAdmin.address || {};
     // Register click handler for #request button
     $(function onDocReady() {
         CabalAdmin.user = localStorage.getItem('CognitoIdentityServiceProvider.' + window._config.cognito.userPoolClientId + '.LastAuthUser');
-        $("#user-filter").change(displayList);
         $('#view-back').click(e => {
           $('#address-view').hide("slide",{direction:"right"},300);
         });
