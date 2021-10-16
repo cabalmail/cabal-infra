@@ -175,7 +175,7 @@ resource "aws_autoscaling_group" "cabal_smtp_asg" {
   lifecycle {
     create_before_destroy = true
     ignore_changes        = [
-      tags,
+      tag,
     ]
   }
   tag {
