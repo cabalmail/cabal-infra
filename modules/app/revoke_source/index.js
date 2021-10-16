@@ -12,23 +12,15 @@ exports.handler = (event, context, callback) => {
     }
 
     const username = event.requestContext.authorizer.claims['cognito:username'];
+    
+    // TODO: Compare username to recorded username before allowing delete
 
     const requestBody = JSON.parse(event.body);
 
     const address = requestBody.address;
     const subdomain = requestBody.subdomain;
     const zone_id = requestBody.zone_id;
-    const tlds = {
-      "Z2GS79AAMTQXNV": "randomsound.org",
-      "ZBYS915K03BC2": "cathycarr.org",
-      "Z33IB65UD0QYKU": "hackthumb.com",
-      "Z2UFK0POOZL6IV": "ccarr.com",
-      "Z1FO2MQJDQEPLA": "cabalmail.com",
-      "Z1YIW2SGWFY5A7": "chriscarr.org",
-      "Z1H7RU5O7WHDJH": "constancedu.com",
-      "Z1U9GPZMPLPCS7": "depre.world",
-    };
-    const tld = tlds[zone_id];
+    const tld = requestBody.tld;
     console.log('Received event (', address, '): ', event);
 
     var promise1 = revokeAddress(address);
