@@ -17,4 +17,9 @@ resource "aws_dynamodb_table" "cabal_addresses_table" {
     name = "address"
     type = "S"
   }
+
+  attribute {
+    name = "username"
+    type = "S"
+  }
 }
