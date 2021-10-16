@@ -31,7 +31,7 @@ function listAddresses(username) {
         "ScanIndexForward": true,
         "FilterExpression": "#username = :username",
         "ExpressionAttributeNames": {
-            "#username": "username"
+            "#username": username
         },
         "ExpressionAttributeValues": {
             ":username": "chris"
@@ -39,15 +39,6 @@ function listAddresses(username) {
     };
     return ddb.scan(parameters).promise();
 }
-
-// ScanFilter: {
-        //   "username" : {
-        //     AttributeValueList:[
-        //       {"S":username}
-        //     ],
-        //     ComparisonOperator: "EQ"
-        //   }
-        // },
 
 function errorResponse(errorMessage, awsRequestId, callback) {
   callback(null, {
