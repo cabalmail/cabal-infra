@@ -29,7 +29,7 @@ But CabalMail is a little different than traditional email.
 
 What's special about CabalMail is that it forces you to create new subdomains for each address. If we assume your mail domain is example.com, then CabalMail will *not* support addresses of the form foo@example.com. Rather, each address will be hosted at a subdomain of example.com, such as foo@bar.example.com.
 
-By making it easy to create new addresses that point to a given inbox, you can (and should!) create new addresses for each person, company, etc., that needs to contact you. This approach is similar to the technique of ["plus-addressing" or "subaddressing"](https://tools.ietf.org/id/draft-newman-email-subaddr-01.html).
+By making it easy to create new addresses that point to a given inbox, CabalMail makes it feasible to create new addresses for each person, company, etc., that needs to contact you. This approach is similar to the technique of ["plus-addressing" or "subaddressing"](https://tools.ietf.org/id/draft-newman-email-subaddr-01.html).
 
 "So why not just use plus-addressing?" Good question. See the next section.
 
@@ -37,7 +37,7 @@ By making it easy to create new addresses that point to a given inbox, you can (
 
 There isn't any. Nor is there a "Junk" folder (unless a user creates one). By not running Bayesian filters, machine learning algorithms, or other compute-intensive measures, you can operate your own email infrastructure with very small machines. Mine (which serves seven domains and four users) runs just fine on four t2.micros. My monthly AWS cost is less than $100. That's a lot of money in a world of free Gmail accounts, but if you value enhanced control and privacy, you may find it worthwhile as I do. And bear in mind that you can spread the cost among several users.
 
-"But what if I start to get spam?" That's the best part. Simply go to the admin interface and revoke the address. This process does more than simply removing the address from your aliases; it also revokes any related DNS records. Because each address has a unique subdomain, the spam-sending relays can't even find your SMTP servers, so there is no need for your machines to accept the connection, evaluate the reputation of the sender, match the To: header against a list of supported addresses, apply spam filters, etc.
+"But what if I start to get spam?" That's the best part. Simply go to the admin interface and revoke the address. This process does more than simply remove the address from your aliases; it also revokes any related DNS records. Because each address has a unique subdomain, the spam-sending relays can't even find your SMTP servers, so there is no need for your machines to accept the connection, evaluate the reputation of the sender, match the To: header against a list of supported addresses, apply spam filters, etc.
 
 I almost never get spam. And when I do, I have a quick and easy solution.
 
@@ -170,7 +170,7 @@ In addition to creating a workspace for this repository, there are two other rep
 ### Domain registration
 You must register your desired domains (control and mail) with your chosen registrar. CabalMail requires exactly one control domain and at least one mail domain. Registration requires an email address. You can use a temporary account with any of the free providers for this address, and later, you can update the registration records with a self-hosted address once your hosting infrastructure is up and running.
 
-The control domain is for infrastructure, not for email addresses. If you like to send mail from example.com, you might use example.net as your control domain. If so, then you would retrieve your mail from imap.example.net, send mail to smtp-out.example.net, and manage your addresses and admin.example.net.
+The control domain is for infrastructure, not for email addresses. If you like to send mail from example.com, you might use example.net as your control domain. If so, then you would retrieve your mail from imap.example.net, send mail to smtp-out.example.net, and manage your addresses at admin.example.net.
 
 ### Fork the cabal-dns repository
 When you register your control domain, use the [cabal-dns repository](https://github.com/ccarr-cabal/cabal-dns) to create the zone in Route 53. That repo will issue the zone ID in the output. Copy the ID and add it to your tfvars in this repository. This step is not necessary for the mail domains.
