@@ -59,6 +59,14 @@ resource "aws_iam_policy" "cabal_policy" {
         Effect   = "Allow"
         Resource = var.table_arn
       },
+      {
+        Action   = [
+          "cognito-idp:Get*",
+          "cognito-idp:List*",
+          "cognito-idp:Describe*",
+          "cognito-idp:Verify*",
+        ]
+      },
     ]
   })
 }
