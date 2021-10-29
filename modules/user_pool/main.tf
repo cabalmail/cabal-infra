@@ -20,3 +20,5 @@ resource "aws_cognito_user_pool_client" "cabal_pool_client" {
   user_pool_id = aws_cognito_user_pool.cabal_pool.id
   explicit_auth_flows = [ "USER_PASSWORD_AUTH" ]
 }
+
+# auth sufficient pam_exec.so expose_authtok /usr/bin/cognito.bash

@@ -8,10 +8,10 @@ exports.handler = (event, context, callback) => {
       return;
     }
 
-    const username = event.requestContext.authorizer.claims['cognito:username'];
+    const user = event.requestContext.authorizer.claims['cognito:username'];
     const requestBody = JSON.parse(event.body);
     const address = requestBody.address;
-    const user = requestBody.user;
+    const username = requestBody.username;
     const zone_id = requestBody.zone_id;
     const subdomain = requestBody.subdomain;
     const comment = requestBody.comment;

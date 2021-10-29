@@ -8,7 +8,7 @@ exports.handler = (event, context, callback) => {
       return;
     }
 
-    const username = event.requestContext.authorizer.claims['cognito:username'];
+    const user = event.requestContext.authorizer.claims['cognito:username'];
     
     listAddresses(username).then(result => {
         callback(null, {
@@ -25,15 +25,15 @@ exports.handler = (event, context, callback) => {
     });
 };
 
-function listAddresses(username) {
+function listAddresses(user) {
     const parameters = {
         "TableName": "cabal-addresses",
-        "FilterExpression": "#username = :username",
+        "FilterExpression": "#user = :user",
         "ExpressionAttributeNames": {
-            "#username": "username"
+            "#user": "user"
         },
         "ExpressionAttributeValues": {
-            ":username": username
+            ":user": user
         }
     };
     return ddb.scan(parameters).promise();

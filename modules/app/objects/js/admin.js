@@ -185,9 +185,8 @@ CabalAdmin.address = CabalAdmin.address || {};
         var obj = {
           address: $('#cabalusername').val() + '@' + $('#subdomain').val() + '.' + $('#zone_id option:selected').text(),
           zone_id: $('#zone_id option:selected').val(),
-          cabalusername: $('#cabalusername').val(),
+          username: $('#cabalusername').val(),
           subdomain: $('#subdomain').val(),
-          user: $('#user option:selected').val(),
           comment: $('#comment').val(),
           tld: $('#zone_id option:selected').text()
         };

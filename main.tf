@@ -124,7 +124,15 @@ module "cabal_smtp_out" {
 
 # TODO
 # - auth sufficient pam_exec.so expose_authtok /usr/bin/cognito.bash
-# - COGNITO_PASSWORD=`cat -`
-# - COGNITO_USER="${PAM_USER}"
-# - AUTH_TYPE="${PAM_TYPE}"
-# - https://docs.aws.amazon.com/cli/latest/reference/cognito-idp/admin-initiate-auth.html
+
+# #!/bin/bash
+
+# COGNITO_PASSWORD=`cat -`
+# COGNITO_USER="${PAM_USER}"
+# AUTH_TYPE="${PAM_TYPE}"
+
+# aws cognito-idp initiate-auth \
+#   --region us-east-1 aws cognito-idp initiate-auth \
+#   --auth-flow USER_PASSWORD_AUTH aws cognito-idp initiate-auth \
+#   --client-id 3etvjfji72cd9sbp25it8n9pm5 aws cognito-idp initiate-auth \
+#   --auth-parameters "USERNAME=${COGNITO_USER},PASSWORD=${COGNITO_PASSWORD}"
