@@ -87,7 +87,7 @@ module "cabal_imap" {
   s3_arn           = module.cabal_cookbooks.bucket.arn
   efs_dns          = module.cabal_efs.efs_dns
   user_pool_arn    = module.cabal_pool.user_pool_arn
-  region           = var.region
+  region           = var.aws_region
   client_id        = module.cabal_pool.user_pool_client_id
   user_pool_id     = module.cabal_pool.user_pool_id
   scale            = var.imap_scale
