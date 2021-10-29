@@ -38,6 +38,18 @@ variable "user_pool_arn" {
   description = "ARN of the Cognito User Pool"
 }
 
+variable "user_pool_id" {
+  description = "ID of the Cognito User Pool"
+}
+
+variable "region" {
+  description = "AWS region"
+}
+
+variable "client_id" {
+  description = "App client ID for Cognito User Pool"
+}
+
 variable "scale" {
   description = "Min, max, and desired settings for autoscale group"
 }

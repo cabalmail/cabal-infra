@@ -148,7 +148,10 @@ resource "aws_launch_configuration" "cabal_cfg" {
   user_data             = templatefile("${path.module}/userdata", {
     control_domain  = var.control_domain,
     artifact_bucket = var.artifact_bucket,
-    efs_dns         = var.efs_dns
+    efs_dns         = var.efs_dns,
+    region          = var.region,
+    client_id       = var.client_id,
+    pool_id         = var.user_pool_id
   })
 }
 
