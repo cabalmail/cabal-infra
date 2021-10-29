@@ -161,13 +161,10 @@ resource "aws_autoscaling_group" "cabal_asg" {
   target_group_arns     = [var.target_group_arn]
   lifecycle {
     create_before_destroy = true
-    ignore_changes        = [
-      tag,
-    ]
   }
   tag {
     key                 = "Name"
-    value               = "asg-${var.type}-${formatdate("YYYYMMDDhhmmss", timestamp())}"
+    value               = "asg-${var.type}-${data.aws_ami.amazon_linux_2.id}"
     propagate_at_launch = true
   }
   dynamic "tag" {
