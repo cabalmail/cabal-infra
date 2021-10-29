@@ -10,7 +10,7 @@ exports.handler = (event, context, callback) => {
 
     const user = event.requestContext.authorizer.claims['cognito:username'];
     
-    listAddresses(username).then(result => {
+    listAddresses(user).then(result => {
         callback(null, {
             statusCode: 200,
             headers: {
