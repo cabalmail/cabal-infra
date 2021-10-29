@@ -18,11 +18,5 @@ resource "aws_cognito_user_pool" "cabal_pool" {
 resource "aws_cognito_user_pool_client" "cabal_pool_client" {
   name         = "cabal_admin_client"
   user_pool_id = aws_cognito_user_pool.cabal_pool.id
-  explicit_auth_flows = [
-    "USER_PASSWORD_AUTH",
-    "ALLOW_USER_PASSWORD_AUTH",
-    "ALLOW_CUSTOM_AUTH",
-    "ALLOW_USER_SRP_AUTH",
-    "ALLOW_REFRESH_TOKEN_AUTH",
-  ]
+  explicit_auth_flows = [ "USER_PASSWORD_AUTH" ]
 }
