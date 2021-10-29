@@ -34,6 +34,10 @@ variable "efs_dns" {
   description = "DNS of Elastic File System"
 }
 
+variable "user_pool_arn" {
+  description = "ARN of the Cognito User Pool"
+}
+
 variable "scale" {
   description = "Min, max, and desired settings for autoscale group"
 }

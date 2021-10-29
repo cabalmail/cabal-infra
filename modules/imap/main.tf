@@ -66,6 +66,8 @@ resource "aws_iam_policy" "cabal_policy" {
           "cognito-idp:Describe*",
           "cognito-idp:Verify*",
         ]
+        Effect   = "Allow"
+        Resource = var.user_pool_arn
       },
     ]
   })

@@ -86,6 +86,7 @@ module "cabal_imap" {
   table_arn        = module.cabal_table.table_arn
   s3_arn           = module.cabal_cookbooks.bucket.arn
   efs_dns          = module.cabal_efs.efs_dns
+  user_pool_arn    = module.cabal_pool.user_pool_arn
   scale            = var.imap_scale
 }
 
@@ -101,6 +102,7 @@ module "cabal_smtp_in" {
   table_arn        = module.cabal_table.table_arn
   s3_arn           = module.cabal_cookbooks.bucket.arn
   efs_dns          = module.cabal_efs.efs_dns
+  user_pool_arn    = module.cabal_pool.user_pool_arn
   scale            = var.smtpin_scale
 }
 
@@ -116,6 +118,7 @@ module "cabal_smtp_out" {
   table_arn        = module.cabal_table.table_arn
   s3_arn           = module.cabal_cookbooks.bucket.arn
   efs_dns          = module.cabal_efs.efs_dns
+  user_pool_arn    = module.cabal_pool.user_pool_arn
   scale            = var.smtpout_scale
 }
 
