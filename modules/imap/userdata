@@ -34,14 +34,14 @@ cat > '/usr/bin/cognito.bash' << EOF
 #!/bin/bash
 
 COGNITO_PASSWORD=`cat -`
-COGNITO_USER="${PAM_USER}"
-AUTH_TYPE="${PAM_TYPE}"
+COGNITO_USER="$${PAM_USER}"
+AUTH_TYPE="$${PAM_TYPE}"
 
 aws cognito-idp initiate-auth \
   --region ${region} aws cognito-idp initiate-auth \
   --auth-flow USER_PASSWORD_AUTH aws cognito-idp initiate-auth \
   --client-id ${client_id} aws cognito-idp initiate-auth \
-  --auth-parameters "USERNAME=${COGNITO_USER},PASSWORD=${COGNITO_PASSWORD}"
+  --auth-parameters "USERNAME=$${COGNITO_USER},PASSWORD=$${COGNITO_PASSWORD}"
 EOF
 chmod +x /usr/bin/cognito.bash
 
