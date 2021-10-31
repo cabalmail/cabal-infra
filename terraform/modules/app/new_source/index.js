@@ -34,7 +34,7 @@ exports.handler = (event, context, callback) => {
       public_key = public_key;
       private_key = private_key;
     });
-
+    console.log(public_key);
     var params = {
       ChangeBatch: {
         Changes: [
@@ -82,7 +82,9 @@ exports.handler = (event, context, callback) => {
       HostedZone: requestBody.zone_id
     }
     r53.changeResourceRecordSets(params, function(err, data) {
-      
+      if (err) {
+        console.error(err);
+      }
     });
     const payload = {
       user: user,
