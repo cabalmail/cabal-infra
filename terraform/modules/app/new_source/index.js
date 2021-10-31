@@ -32,9 +32,9 @@ exports.handler = (event, context, callback) => {
       }
       globalThis.public_key = publicKey;
       globalThis.private_key = privateKey;
-      console.log("pub1:" + public_key);
+      console.log("pub1:" + globalThis.public_key);
     });
-    console.log("pub2:" + public_key);
+    console.log("pub2:" + globalThis.public_key);
     var params = {
       ChangeBatch: {
         Changes: [
@@ -94,8 +94,8 @@ exports.handler = (event, context, callback) => {
       subdomain: requestBody.subdomain,
       comment: requestBody.comment,
       tld: requestBody.tld,
-      public_key: public_key,
-      private_key: private_key
+      public_key: globalThis.public_key,
+      private_key: globalThis.private_key
     };
 
     recordAddress(payload).then(() => {
