@@ -1,8 +1,6 @@
 property :domain, String, name_property: true, required: true
 property :realm, String, default: 'default'
 property :key_directory, String, default: '/etc/opendkim/keys'
-property :access_key_id, String, required: true
-property :secret_access_key, String, required: true
 property :dns_zone, String, required: true
 
 action :create do
@@ -29,8 +27,6 @@ action :create do
       value get_txt(::File.read("#{new_resource.key_directory}/#{new_resource.domain}/#{new_resource.realm}.txt"))
       type 'TXT'
       zone_id new_resource.dns_zone
-      aws_access_key_id new_resource.access_key_id
-      aws_secret_access_key new_resource.secret_access_key
       overwrite true
       action :create
       not_if "nslookup -type=txt #{new_resource.realm}._domainkey.#{new_resource.domain}"

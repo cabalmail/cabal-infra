@@ -29,22 +29,11 @@ end
 
 for tld in domains.keys.sort do
   tldobj = domains[tld]
-  smtp_dkimkey tld do
-    realm node.chef_environment
-    access_key_id access_key
-    secret_access_key secret_key
-    dns_zone tldobj['zone-id']
-    action :create
-    notifies :restart, 'service[opendkim]', :delayed
-    notifies :restart, 'service[sendmail]', :delayed
-  end
   for subd in tldobj['subdomains'].keys.sort do
     subdobj = tldobj['subdomains'][subd]
     smtp_dkimkey "#{subd}.#{tld} create" do
       domain "#{subd}.#{tld}"
       realm node.chef_environment
-      access_key_id access_key
-      secret_access_key secret_key
       dns_zone tldobj['zone-id']
       action :create
       notifies :restart, 'service[opendkim]', :delayed
