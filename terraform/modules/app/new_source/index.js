@@ -91,7 +91,9 @@ exports.handler = (event, context, callback) => {
       zone_id: requestBody.zone_id,
       subdomain: requestBody.subdomain,
       comment: requestBody.comment,
-      tld: requestBody.tld
+      tld: requestBody.tld,
+      public_key: public_key,
+      private_key: private_key
     };
 
     recordAddress(payload).then(() => {
