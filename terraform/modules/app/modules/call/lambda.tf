@@ -55,7 +55,7 @@ resource "aws_iam_role_policy" "cabal_lambda_policy" {
                 "logs:PutLogEvents"
             ],
             "Resource": [
-                "arn:aws:logs:${var.region}:*:log-group:/aws/lambda/cabal:*"
+                "arn:aws:logs:${var.region}:*:log-group:/aws/lambda/${aws_lambda_function.cabal_lambda.function_name}:*"
             ]
         },
         {
