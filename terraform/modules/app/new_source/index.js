@@ -1,8 +1,6 @@
 const AWS = require('aws-sdk');
 const ddb = new AWS.DynamoDB.DocumentClient();
 const r53 = new AWS.Route53();
-var public_key;
-var private_key;
 
 exports.handler = (event, context, callback) => {
     if (!event.requestContext.authorizer) {
@@ -16,7 +14,7 @@ exports.handler = (event, context, callback) => {
     const eips = event.headers['X-Egress-IPs'];
     const user = event.requestContext.authorizer.claims['cognito:username'];
     const { generateKeyPair } = require('crypto');
-    generateKeyPair('rsa', {
+    const { public_key, private_key } = generateKeyPairSync('rsa', {
       modulusLength: 1024,
       publicKeyEncoding: {
         type: 'pkcs1',
@@ -26,15 +24,8 @@ exports.handler = (event, context, callback) => {
         type: 'pkcs1',
         format: 'pem'
       }
-    }, (err, publicKey, privateKey) => {
-      if (err) {
-        console.error(err);
-      }
-      globalThis.public_key = publicKey;
-      globalThis.private_key = privateKey;
-      console.log("pub1:" + globalThis.public_key);
     });
-    console.log("pub2:" + globalThis.public_key);
+    console.log("pub2:" + public_key);
     var params = {
       ChangeBatch: {
         Changes: [
@@ -94,8 +85,8 @@ exports.handler = (event, context, callback) => {
       subdomain: requestBody.subdomain,
       comment: requestBody.comment,
       tld: requestBody.tld,
-      public_key: globalThis.public_key,
-      private_key: globalThis.private_key
+      public_key: public_key,
+      private_key: private_key
     };
 
     recordAddress(payload).then(() => {
