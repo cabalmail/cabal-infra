@@ -27,12 +27,12 @@ exports.handler = (event, context, callback) => {
         type: 'pkcs1',
         format: 'pem'
       }
-    }, (err, public_key, private_key) => {
+    }, (err, public, private) => {
       if (err) {
         console.error(err);
       }
-      public_key = public_key;
-      private_key = private_key;
+      public_key = public;
+      private_key = private;
     });
     console.log(public_key);
     var params = {
@@ -79,7 +79,7 @@ exports.handler = (event, context, callback) => {
           }
         ]
       },
-      HostedZone: requestBody.zone_id
+      HostedZoneId: requestBody.zone_id
     }
     r53.changeResourceRecordSets(params, function(err, data) {
       if (err) {
