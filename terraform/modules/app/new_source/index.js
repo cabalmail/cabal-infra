@@ -13,7 +13,7 @@ exports.handler = (event, context, callback) => {
     const control_domain = event.headers['X-Control-Domain'];
     const eips = event.headers['X-Egress-IPs'];
     const user = event.requestContext.authorizer.claims['cognito:username'];
-    const { generateKeyPair } = require('crypto');
+    const { generateKeyPairSync } = require('crypto');
     const { public_key, private_key } = generateKeyPairSync('rsa', {
       modulusLength: 1024,
       publicKeyEncoding: {
