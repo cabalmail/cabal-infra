@@ -33,3 +33,7 @@ variable "authorizer" {
 variable "control_domain" {
   type = string
 }
+
+variable "relay_ips" {
+  type = list(string)
+}

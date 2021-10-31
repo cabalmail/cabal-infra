@@ -43,6 +43,7 @@ module "cabal_admin" {
   cert_arn            = module.cabal_cert.cert_arn
   zone_id             = var.zone_id
   domains             = module.cabal_domains.domains
+  relay_ips           = module.cabal_vpc.relay_ips
 }
 
 # Creates a DynamoDB table for storing address data

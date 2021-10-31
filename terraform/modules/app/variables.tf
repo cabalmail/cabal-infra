@@ -14,6 +14,10 @@ variable "control_domain" {
   type = string
 }
 
+variable "relay_ips" {
+  type = list(string)
+}
+
 variable "cert_arn" {
   type = string
 }
