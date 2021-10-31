@@ -1,6 +1,8 @@
 const AWS = require('aws-sdk');
 const ddb = new AWS.DynamoDB.DocumentClient();
 const r53 = new AWS.Route53();
+var public_key;
+var private_key;
 
 exports.handler = (event, context, callback) => {
     if (!event.requestContext.authorizer) {
@@ -13,8 +15,6 @@ exports.handler = (event, context, callback) => {
     const control_domain = event.headers['X-Control-Domain'];
     const eips = event.headers['X-Egress-IPs'];
     const user = event.requestContext.authorizer.claims['cognito:username'];
-    var public_key;
-    var private_key;
     const { generateKeyPair } = require('crypto');
     generateKeyPair('rsa', {
       modulusLength: 1024,
@@ -26,14 +26,18 @@ exports.handler = (event, context, callback) => {
         type: 'pkcs1',
         format: 'pem'
       }
-    }, (err, public, private) => {
+    }, (err, publicKey, privateKey) => {
       if (err) {
         console.error(err);
       }
-      public_key = public;
-      private_key = private;
+      public_key = publicKey;
+      private_key = privateKey;
       console.log("pub1:" + public_key);
-  });
+      return {
+        public_key: publicKey,
+        private_key: privateKey
+      };
+    });
     console.log("pub2:" + public_key);
     var params = {
       ChangeBatch: {
