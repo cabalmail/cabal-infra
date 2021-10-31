@@ -9,11 +9,11 @@ exports.handler = (event, context, callback) => {
       errorResponse('Authorization not configured', context.awsRequestId, callback);
       return;
     }
+    const requestBody = JSON.parse(event.body);
     console.log('Received event (', requestBody.address, '): ', event);
     const control_domain = event.headers['X-Control-Domain'];
     const eips = event.headers['X-Egress-IPs'];
     const user = event.requestContext.authorizer.claims['cognito:username'];
-    const requestBody = JSON.parse(event.body);
     var public_key;
     var private_key;
     const { generateKeyPair } = require('crypto');
