@@ -30,13 +30,9 @@ exports.handler = (event, context, callback) => {
       if (err) {
         console.error(err);
       }
-      public_key = publicKey;
-      private_key = privateKey;
+      globalThis.public_key = publicKey;
+      globalThis.private_key = privateKey;
       console.log("pub1:" + public_key);
-      return {
-        public_key: publicKey,
-        private_key: privateKey
-      };
     });
     console.log("pub2:" + public_key);
     var params = {
