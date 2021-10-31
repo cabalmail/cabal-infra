@@ -49,7 +49,7 @@ resource "aws_api_gateway_integration" "cabal_integration" {
   uri                     = aws_lambda_function.cabal_lambda.invoke_arn
   request_parameters      = {
     "integration.request.header.X-Control-Domain" = "'${var.control_domain}'"
-    "integration.request.header.X-Egress-IPs"     = "'${join(" ", [for ip in var.relay_ips : "ip4:${ip}/32"])}'"'
+    "integration.request.header.X-Egress-IPs"     = "'${join(" ", [for ip in var.relay_ips : "ip4:${ip}/32"])}'"
   }
 }
 
