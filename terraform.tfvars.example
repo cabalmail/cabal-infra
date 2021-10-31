@@ -48,3 +48,10 @@ mail_domains = [
   "example.com",
   "example.org"
 ]
+
+# This repository installs Chef Infra Client on EC2 instances.
+# For Chef Client to run, you must accept the Chef license.
+# It is available here:
+# https://www.chef.io/end-user-license-agreement
+
+# chef_license = "accept"

@@ -91,6 +91,7 @@ module "cabal_imap" {
   client_id        = module.cabal_pool.user_pool_client_id
   user_pool_id     = module.cabal_pool.user_pool_id
   scale            = var.imap_scale
+  chef_license     = var.chef_license
 }
 
 # Creates an auto-scale group for inbound SMTP servers

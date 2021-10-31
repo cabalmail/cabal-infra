@@ -151,7 +151,8 @@ resource "aws_launch_configuration" "cabal_cfg" {
     efs_dns         = var.efs_dns,
     region          = var.region,
     client_id       = var.client_id,
-    pool_id         = var.user_pool_id
+    pool_id         = var.user_pool_id,
+    chef_license    = var.chef_license,
   })
 }
 

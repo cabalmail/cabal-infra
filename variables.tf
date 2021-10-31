@@ -174,3 +174,13 @@ variable "smtpout_scale" {
     error_message = "The smtpout_scale attributes must satisfy the relationship min <= des <= max."
   }
 }
+
+variable "chef_license" {
+  type        = string
+  description = "Must be the word 'accept' in order to indicate your acceptance of the Chef license. The license text can be viewed here: https://www.chef.io/end-user-license-agreement"
+  default     = "not accepted"
+  validation {
+    condition     = var.chef_license == "accept"
+    error_message = "You cannot use this stack without accepting the Chef license. Indicate your acceptance by setting the chef_license variable to 'accept'. The license text can be viewed here: https://www.chef.io/end-user-license-agreement"
+  }
+}

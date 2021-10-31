@@ -53,3 +53,7 @@ variable "client_id" {
 variable "scale" {
   description = "Min, max, and desired settings for autoscale group"
 }
+
+variable "chef_license" {
+  description = "Must be the string 'accept' in order to install and use Chef Infra Client"
+}

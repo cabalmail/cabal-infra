@@ -11,7 +11,7 @@ cd /etc/chef/
 curl -L https://omnitruck.chef.io/install.sh | sudo bash -s -- -v 17.4.38
 
 cat > '/etc/chef/solo.rb' << EOF
-chef_license            'accept'
+chef_license            '${chef_license}'
 log_location            STDOUT
 node_name               'imap'
 cookbook_path [ '/var/lib/chef/cookbooks' ]
