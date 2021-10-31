@@ -1,5 +1,4 @@
 const AWS = require('aws-sdk');
-
 const ddb = new AWS.DynamoDB.DocumentClient();
 const r53 = new AWS.Route53();
 
@@ -33,8 +32,9 @@ exports.handler = (event, context, callback) => {
       }
       public_key = public;
       private_key = private;
-    });
-    console.log(public_key);
+      console.log("pub1:" + public_key);
+  });
+    console.log("pub2:" + public_key);
     var params = {
       ChangeBatch: {
         Changes: [

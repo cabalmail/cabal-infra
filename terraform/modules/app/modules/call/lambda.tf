@@ -45,6 +45,11 @@ resource "aws_iam_role_policy" "cabal_lambda_policy" {
     "Statement": [
         {
             "Effect": "Allow",
+            "Action": "route53:ChangeResourceRecordSets",
+            "Resource": "arn:aws:route53:::hostedzone/*"
+        },
+        {
+            "Effect": "Allow",
             "Action": "logs:CreateLogGroup",
             "Resource": "arn:aws:logs:${var.region}:*:*"
         },
