@@ -87,11 +87,11 @@ exports.handler = (event, context, callback) => {
     const payload = {
       user: user,
       address: requestBody.address,
-      username: requestBody.username;
-      zone_id: requestBody.zone_id;
-      subdomain: requestBody.subdomain;
-      comment: requestBody.comment;
-      tld: requestBody.tld;
+      username: requestBody.username,
+      zone_id: requestBody.zone_id,
+      subdomain: requestBody.subdomain,
+      comment: requestBody.comment,
+      tld: requestBody.tld
     };
 
     recordAddress(payload).then(() => {
