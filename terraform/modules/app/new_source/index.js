@@ -14,7 +14,7 @@ exports.handler = (event, context, callback) => {
     const eips = event.headers['X-Egress-IPs'];
     const user = event.requestContext.authorizer.claims['cognito:username'];
     const { generateKeyPairSync } = require('crypto');
-    const { public_key, private_key } = generateKeyPairSync('rsa', {
+    const { publicKey, privateKey } = generateKeyPairSync('rsa', {
       modulusLength: 1024,
       publicKeyEncoding: {
         type: 'pkcs1',
@@ -25,7 +25,7 @@ exports.handler = (event, context, callback) => {
         format: 'pem'
       }
     });
-    console.log("pub2:" + public_key);
+    console.log("pub2:" + publicKey);
     var params = {
       ChangeBatch: {
         Changes: [
@@ -61,7 +61,7 @@ exports.handler = (event, context, callback) => {
               Name: 'cabal._domainkey.' + requestBody.subdomain + '.' + requestBody.tld,
               ResourceRecords: [
                 {
-                  Value: "v=DKIM1; k=rsa; p=" + public_key
+                  Value: "v=DKIM1; k=rsa; p=" + publicKey
                 }
               ],
               TTL: 360,
@@ -85,8 +85,8 @@ exports.handler = (event, context, callback) => {
       subdomain: requestBody.subdomain,
       comment: requestBody.comment,
       tld: requestBody.tld,
-      public_key: public_key,
-      private_key: private_key
+      public_key: publicKey,
+      private_key: privateKey
     };
 
     recordAddress(payload).then(() => {
@@ -100,7 +100,7 @@ exports.handler = (event, context, callback) => {
                 "zone-id": requestBody.zone_id,
                 subdomain: requestBody.subdomain,
                 comment: requestBody.comment,
-                public_key: public_key
+                public_key: publicKey
             }),
             headers: {
                 'Access-Control-Allow-Origin': '*',
