@@ -5,7 +5,6 @@ data "archive_file" "cabal_lambda_zip" {
 }
 
 locals {
-  h_prefix = "integration.request.header."
   allowed_headers = join(",", [
     "Content-Type",
     "X-Amz-Date",
@@ -49,8 +48,8 @@ resource "aws_api_gateway_integration" "cabal_integration" {
   type                    = "AWS_PROXY"
   uri                     = aws_lambda_function.cabal_lambda.invoke_arn
   request_parameters      = {
-    "${local.h_prefix}X-Control-Domain" = var.control_domain
-    "${local.h_prefix}X-Egress-IPs"     = join(" ", [for ip in var.relay_ips : "ip4:${ip}/32"])
+    "integration.request.header.X-Control-Domain" = "'${var.control_domain}'"
+    "integration.request.header.X-Egress-IPs"     = "'${join(" ", [for ip in var.relay_ips : "ip4:${ip}/32"])}'"'
   }
 }
 
