@@ -25,7 +25,7 @@ exports.handler = (event, context, callback) => {
         format: 'pem'
       }
     });
-    const lines = publicKey.match(/[^\r\n]+/g);
+    const lines = publicKey.split(/\r?\n/);
     const key_record = lines[1] + lines[2] + lines[3];
     var params = {
       ChangeBatch: {
