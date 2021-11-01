@@ -43,18 +43,18 @@ resource "aws_s3_bucket_object" "cabal_website_files" {
 }
 
 resource "aws_s3_bucket_object" "cabal_website_templates" {
-  for_each     = fileset("${path.module}/templates", "**/*")
+  for_each     = fileset("${path.module}/object_templates", "**/*")
   bucket       = aws_s3_bucket.cabal_website_bucket.bucket
   key          = each.value
   content_type = "text/javascript"
-  content      = templatefile("${path.module}/templates/${each.value}", {
+  content      = templatefile("${path.module}/object_templates/${each.value}", {
     pool_id        = var.user_pool_id,
     pool_client_id = var.user_pool_client_id,
     region         = var.region,
     invoke_url     = aws_api_gateway_deployment.cabal_api_deployment.invoke_url
     domains        = {for domain in var.domains : domain.domain => domain.zone_id}
   })
-  etag         = md5(templatefile("${path.module}/templates/${each.value}", {
+  etag         = md5(templatefile("${path.module}/object_templates/${each.value}", {
       pool_id        = var.user_pool_id,
       pool_client_id = var.user_pool_client_id,
       region         = var.region,

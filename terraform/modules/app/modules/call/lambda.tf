@@ -1,3 +1,21 @@
+data "archive_file" "cabal_lambda_zip" {
+  type        = "zip"
+  source_dir  = "${path.module}/../../${var.name}_source"
+  output_path = "${var.name}_lambda.zip"
+
+  source {
+    content  = file("${path.module}/../../${var.name}_source/index.js")
+    filename = "index.js"
+  }
+  source {
+    content  = templatefile("${path.module}/../../templates/config.js", {
+      control_domain = var.control_domain
+      domains        = {for domain in var.domains : domain.domain => domain.zone_id}
+    })
+    filename = "config.js"
+  }
+}
+
 resource "aws_lambda_permission" "cabal_apigw_lambda_permission" {
   statement_id  = "AllowExecutionFromAPIGateway"
   action        = "lambda:InvokeFunction"
@@ -85,11 +103,6 @@ resource "aws_iam_role_policy" "cabal_lambda_policy" {
 }
 RUNPOLICY
 }
-
-# resource "aws_iam_role_policy_attachment" "cabal_lambda_policy_attachment" {
-#   role       = aws_iam_role.cabal_lambda_role.name
-#   policy_arn = aws_iam_policy.cabal_lambda_policy.arn
-# }
 
 resource "aws_lambda_function" "cabal_lambda" {
   filename = "${var.name}_lambda.zip"

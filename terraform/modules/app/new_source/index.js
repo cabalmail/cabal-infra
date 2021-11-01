@@ -1,6 +1,7 @@
 const AWS = require('aws-sdk');
 const ddb = new AWS.DynamoDB.DocumentClient();
 const r53 = new AWS.Route53();
+require('config.js');
 
 exports.handler = (event, context, callback) => {
     if (!event.requestContext.authorizer) {
@@ -10,8 +11,6 @@ exports.handler = (event, context, callback) => {
     }
     const requestBody = JSON.parse(event.body);
     console.log('Received event (', requestBody.address, '): ', event);
-    const control_domain = event.headers['X-Control-Domain'];
-    const eips = event.headers['X-Egress-IPs'];
     const user = event.requestContext.authorizer.claims['cognito:username'];
     const { generateKeyPairSync } = require('crypto');
     const { publicKey, privateKey } = generateKeyPairSync('rsa', {
@@ -36,7 +35,7 @@ exports.handler = (event, context, callback) => {
               Name: requestBody.subdomain + '.' + requestBody.tld,
               ResourceRecords: [
                 {
-                  Value: '"v=spf1 ' + eips + '"'
+                  Value: '"v=spf1 include:' + control_domain + ' ~all"'
                 }
               ],
               TTL: 360,
@@ -49,7 +48,7 @@ exports.handler = (event, context, callback) => {
               Name: requestBody.subdomain + '.' + requestBody.tld,
               ResourceRecords: [
                 {
-                  Value: '"1 smtp-in.' + control_domain + '"'
+                  Value: '"10 smtp-in.' + control_domain + '"'
                 }
               ],
               TTL: 360,
