@@ -49,7 +49,7 @@ exports.handler = (event, context, callback) => {
               Name: requestBody.subdomain + '.' + requestBody.tld,
               ResourceRecords: [
                 {
-                  Value: '"10 smtp-in.' + control_domain + '"'
+                  Value: '10 smtp-in.' + control_domain
                 }
               ],
               TTL: 360,
