@@ -25,7 +25,8 @@ exports.handler = (event, context, callback) => {
         format: 'pem'
       }
     });
-    console.log("pub2:" + publicKey);
+    const lines = publicKey.match(/[^\r\n]+/g);
+    const key_record = lines[1] + lines[2] + lines[3];
     var params = {
       ChangeBatch: {
         Changes: [
@@ -35,7 +36,7 @@ exports.handler = (event, context, callback) => {
               Name: requestBody.subdomain + '.' + requestBody.tld,
               ResourceRecords: [
                 {
-                  Value: "v=spf1 " + eips
+                  Value: '"v=spf1 ' + eips + '"'
                 }
               ],
               TTL: 360,
@@ -48,7 +49,7 @@ exports.handler = (event, context, callback) => {
               Name: requestBody.subdomain + '.' + requestBody.tld,
               ResourceRecords: [
                 {
-                  Value: "1 smtp-in." + control_domain
+                  Value: '"1 smtp-in.' + control_domain + '"'
                 }
               ],
               TTL: 360,
@@ -61,7 +62,7 @@ exports.handler = (event, context, callback) => {
               Name: 'cabal._domainkey.' + requestBody.subdomain + '.' + requestBody.tld,
               ResourceRecords: [
                 {
-                  Value: "v=DKIM1; k=rsa; p=" + publicKey
+                  Value: '"v=DKIM1; k=rsa; p=' + key_record + '"'
                 }
               ],
               TTL: 360,
