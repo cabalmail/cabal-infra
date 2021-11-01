@@ -37,3 +37,7 @@ variable "control_domain" {
 variable "relay_ips" {
   type = list(string)
 }
+
+variable "domains" {
+  type = list
+}

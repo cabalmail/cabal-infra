@@ -30,6 +30,7 @@ module "cabal_list_method" {
   authorizer       = aws_api_gateway_authorizer.cabal_api_authorizer.id
   control_domain   = var.control_domain
   relay_ips        = var.relay_ips
+  domains          = var.domains
 }
 
 module "cabal_new_method" {
@@ -44,6 +45,7 @@ module "cabal_new_method" {
   authorizer       = aws_api_gateway_authorizer.cabal_api_authorizer.id
   control_domain   = var.control_domain
   relay_ips        = var.relay_ips
+  domains          = var.domains
 }
 
 module "cabal_revoke_method" {
@@ -58,6 +60,7 @@ module "cabal_revoke_method" {
   authorizer       = aws_api_gateway_authorizer.cabal_api_authorizer.id
   control_domain   = var.control_domain
   relay_ips        = var.relay_ips
+  domains          = var.domains
 }
 
 resource "aws_api_gateway_deployment" "cabal_api_deployment" {
