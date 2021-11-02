@@ -39,7 +39,7 @@ exports.handler = (event, context, callback) => {
                   Value: '"v=spf1 include:' + control_domain + ' ~all"'
                 }
               ],
-              TTL: 360,
+              TTL: 3600,
               Type: 'TXT'
             }
           },
@@ -52,7 +52,7 @@ exports.handler = (event, context, callback) => {
                   Value: '10 smtp-in.' + control_domain
                 }
               ],
-              TTL: 360,
+              TTL: 3600,
               Type: 'MX'
             }
           },
@@ -65,7 +65,7 @@ exports.handler = (event, context, callback) => {
                   Value: '"v=DKIM1; k=rsa; p=' + key_record + '"'
                 }
               ],
-              TTL: 360,
+              TTL: 3600,
               Type: 'TXT'
             }
           }

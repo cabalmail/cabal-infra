@@ -41,10 +41,10 @@ exports.handler = (event, context, callback) => {
                 "Name": subdomain + '.' + tld,
                 "TTL": 3600,
                 "Type": "MX",
-                "ResourceRecords": [
-                  {
-                    "Value": values[1][1].priority + ' ' + values[1][1].exchange
-                  },
+                "ResourceRecords": values[1].map(v => {
+                  return { Value: v.priority + ' ' + v.exchange }
+                }),
+                [
                   {
                     "Value": values[1][0].priority + ' ' + values[1][0].exchange
                   }
@@ -54,7 +54,7 @@ exports.handler = (event, context, callback) => {
             {
               "Action": "DELETE",
               "ResourceRecordSet": {
-                "Name": 'services._domainkey.' + subdomain + '.' + tld,
+                "Name": 'cabal._domainkey.' + subdomain + '.' + tld,
                 "TTL": 3600,
                 "Type": "TXT",
                 "ResourceRecords":  values[2].map(v => {
