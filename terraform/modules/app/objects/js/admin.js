@@ -116,7 +116,7 @@ CabalAdmin.address = CabalAdmin.address || {};
             var item = e.data;
             var obj = {
               address: item.address,
-              zone_id: item['zone-id'],
+              tld: item.tld,
               subdomain: item.subdomain,
             };
             $.ajax({

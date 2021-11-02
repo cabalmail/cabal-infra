@@ -21,8 +21,8 @@ exports.handler = (event, context, callback) => {
 
     const address = requestBody.address;
     const subdomain = requestBody.subdomain;
-    const zone_id = requestBody.zone_id;
     const tld = requestBody.tld;
+    const zone_id = domains[tld];
     console.log('Received event (', address, '): ', event);
 
     var promise1 = revokeAddress(address);
