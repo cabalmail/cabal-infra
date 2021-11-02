@@ -44,11 +44,6 @@ exports.handler = (event, context, callback) => {
                 "ResourceRecords": values[1].map(v => {
                   return { Value: v.priority + ' ' + v.exchange }
                 }),
-                [
-                  {
-                    "Value": values[1][0].priority + ' ' + values[1][0].exchange
-                  }
-                ],
               }
             },
             {
