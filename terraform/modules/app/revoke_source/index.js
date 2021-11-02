@@ -4,6 +4,8 @@ const dns = promisify(dnsCallback.resolve);
 const AWS = require('aws-sdk');
 const ddb = new AWS.DynamoDB.DocumentClient();
 const route53 = new AWS.Route53();
+const control_domain = "${control_domain}";
+const domains = ${jsonencode(domains)};
 
 exports.handler = (event, context, callback) => {
     if (!event.requestContext.authorizer) {
@@ -25,7 +27,7 @@ exports.handler = (event, context, callback) => {
 
     var promise1 = revokeAddress(address);
     var promise2 = dns(subdomain + '.' + tld, 'MX');
-    var promise3 = dns('services._domainkey.' + subdomain + '.' + tld, 'TXT');
+    var promise3 = dns('cabal._domainkey.' + subdomain + '.' + tld, 'TXT');
     var promise4 = dns(subdomain + '.' + tld, 'TXT');
 
     Promise.all([promise1, promise2, promise3, promise4]).then(values => {
