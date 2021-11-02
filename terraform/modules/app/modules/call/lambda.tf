@@ -80,6 +80,7 @@ resource "aws_iam_role_policy" "cabal_lambda_policy" {
             "Effect": "Allow",
             "Action": [
                 "dynamodb:BatchGetItem",
+                "dynamodb:DeleteItem",
                 "dynamodb:DescribeTable",
                 "dynamodb:GetItem",
                 "dynamodb:ListTables",
