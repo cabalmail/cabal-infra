@@ -23,7 +23,7 @@ variable "vpc" {
 }
 
 variable "type" {
-  description = "Type of server, 'imap', 'smtpin', or 'smtpout."
+  description = "Type of server, 'imap', 'smtp-in', or 'smtp-out."
 }
 
 variable "control_domain" {
