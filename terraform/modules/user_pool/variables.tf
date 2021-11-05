@@ -1,3 +1,5 @@
+data "aws_caller_identity" "current" {}
+
 variable "control_domain" {
   type        = string
   description = "Base for auth domain. E.g., if control_domain is example.com, then the autho domain will be auth.example.com."

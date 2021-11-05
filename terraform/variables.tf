@@ -37,21 +37,6 @@ variable "repo" {
   default     = "https://github.com/ccarr-cabal/cabal-infra/tree/main"
 }
 
-variable "prod_cert" {
-  type        = bool
-  description = "Whether to use the production Let's Encrypt API. Default false."
-  default     = false
-}
-
-variable "cert_email" {
-  type        = string
-  description = "Email address to use in certificate signing requests. If your CabalMail system is not yet opperational, you should specify an address where you can receive mail elsewhere. Once CabalMail is running, you can safely change this value."
-  validation {
-    condition = can(regex("^\\S+@(([[:alpha:]]|-|_|[[:digit:]])+\\.)+[[:alpha:]]+$", var.cert_email))
-    error_message = "The cert_email does not appear to be a valid email address."
-  }
-}
-
 variable "control_domain" {
   type        = string
   description = "The domain used for naming your email infrastructure. E.g., if you want to host imap.example.com and smtp-relay-west.example.com, then this would be 'example.com'."
@@ -69,6 +54,12 @@ variable "zone_id" {
 variable "mail_domains" {
   type        = list(string)
   description = "List of domains from which you want to send mail, and to which you want to allow mail to be sent. Must have at least one."
+  validation {
+    condition = alltrue([
+    for str in var.mail_domains : can(regex("^(([[:alpha:]]|-|_|[[:digit:]])+\\.)+[[:alpha:]]+$", var.control_domain))
+    ])
+    error_message = "One or more of the mail_domains does not appear to be a valid domain name."
+  }
 }
 
 variable "imap_scale" {

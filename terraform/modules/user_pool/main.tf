@@ -1,5 +1,3 @@
-data "aws_caller_identity" "current" {}
-
 resource "aws_cognito_user_pool" "cabal_pool" {
   name                     = "cabal"
   auto_verified_attributes = [ "phone_number" ]

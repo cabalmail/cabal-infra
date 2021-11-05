@@ -1,5 +1,3 @@
-data "aws_caller_identity" "current" {}
-
 resource "aws_api_gateway_rest_api" "cabal_gateway" {
   name = "cabal_gateway"
 }

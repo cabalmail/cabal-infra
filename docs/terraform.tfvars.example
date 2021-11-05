@@ -22,18 +22,7 @@ cidr_block = "10.0.0.0/9"
 # repository and wish to tag with your own repository, uncomment
 # this line and replace the value with your own.
 
-#repo = "https://github.com/example/cabal-infra/tree/main"
-
-# By default, we use the staging API endpoint when requesting
-# SSL certiicates from Let's Encrypt. For production, uncomment
-# this line.
-
-#prod_cert = true
-
-# Specify an email address for Certiicate Signing Requests sent
-# to Let's Encrypt.
-
-cert_email = "youremail@cabal.example.com"
+# repo = "https://github.com/example/cabal-infra/tree/main"
 
 # Specify the root domain to be used to name control nodes on the
 # CabalMail system. For example, if you want to host IMAP at
@@ -42,12 +31,37 @@ cert_email = "youremail@cabal.example.com"
 
 control_domain = "example.net"
 
+# Route 53 Zone ID for the control domain.
+
+zone_id = "Z04XXXXXXXXXXXXXXXX1U"
+
 # List the domains that you want to use for email addresses.
 
 mail_domains = [
   "example.com",
   "example.org"
 ]
+
+# Specify minimum, maximum, and desired instance counts for
+# autoscaling.
+
+imap_scale = {
+  min = 1
+  max = 1
+  des = 1
+}
+
+smtpin_scale = {
+  min = 1
+  max = 5
+  des = 1
+}
+
+smtpout_scale = {
+  min = 1
+  max = 2
+  des = 1
+}
 
 # This repository installs Chef Infra Client on EC2 instances.
 # For Chef Client to run, you must accept the Chef license.

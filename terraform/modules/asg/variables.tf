@@ -1,3 +1,19 @@
+data "aws_ami" "amazon_linux_2" {
+  most_recent = true
+  owners      = ["amazon"]
+  name_regex  = "^amzn2-"
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
+data "aws_default_tags" "current" {}
+
+data "aws_iam_policy" "ssm_policy" {
+  arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
 variable "private_subnets" {
   description = "Subnets for imap ec2 instances."
 }
@@ -48,6 +64,10 @@ variable "region" {
 
 variable "client_id" {
   description = "App client ID for Cognito User Pool"
+}
+
+variable "ports" {
+  description = "Ports to open in security group"
 }
 
 variable "scale" {

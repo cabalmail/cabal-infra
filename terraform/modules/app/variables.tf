@@ -1,3 +1,5 @@
+data "aws_caller_identity" "current" {}
+
 variable "user_pool_id" {
   type = string
 }

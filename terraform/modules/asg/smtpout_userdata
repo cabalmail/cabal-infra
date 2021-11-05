@@ -1,0 +1,33 @@
+#!/bin/bash -xev
+cd /tmp
+yum install -y awscli jq
+amazon-linux-extras install epel -y
+/bin/mkdir -p /etc/chef
+/bin/mkdir -p /var/lib/chef/{cookbooks,attributes}
+/bin/mkdir -p /var/log/chef
+cd /etc/chef/
+curl -L https://omnitruck.chef.io/install.sh | sudo bash -s -- -v 17.4.38
+
+cat > '/etc/chef/solo.rb' << EOF
+chef_license            'accept'
+log_location            STDOUT
+node_name               'smtp-${type}'
+cookbook_path [ '/var/lib/chef/cookbooks' ]
+EOF
+
+cat > '/var/lib/chef/attributes/smtp.json' << EOF
+{
+  "sendmail": {
+    "cert": "${control_domain}"
+  }
+}
+EOF
+
+aws --region us-east-1 secretsmanager get-secret-value --secret-id "/cabal/control_domain_chain_cert" | jq -r '.SecretString' > /tmp/${control_domain}.ca-bundle
+aws --region us-east-1 secretsmanager get-secret-value --secret-id "/cabal/control_domain_ssl_cert" | jq -r '.SecretString' > /tmp/${control_domain}.crt
+aws --region us-east-1 secretsmanager get-secret-value --secret-id "/cabal/control_domain_ssl_key" | jq -r '.SecretString' > /tmp/${control_domain}.key
+mv /tmp/${control_domain}.ca-bundle /etc/pki/tls/certs/cabal-mail.net.ca-bundle
+mv /tmp/${control_domain}.crt /etc/pki/tls/certs/cabal-mail.net.crt
+mv /tmp/${control_domain}.key /etc/pki/tls/private/cabal-mail.net.key
+aws s3 cp s3://${artifact_bucket}/cookbooks /var/lib/chef/cookbooks --recursive
+chef-solo -c /etc/chef/solo.rb -z -o "recipe[smtp::${type}]" -j /var/lib/chef/attributes/smtp.json

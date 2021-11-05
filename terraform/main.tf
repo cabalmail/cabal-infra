@@ -77,7 +77,7 @@ module "cabal_efs" {
 
 # Creates an auto-scale group for IMAP servers
 module "cabal_imap" {
-  source           = "./modules/imap"
+  source           = "./modules/asg"
   type             = "imap"
   private_subnets  = module.cabal_vpc.private_subnets
   vpc              = module.cabal_vpc.vpc
@@ -89,6 +89,7 @@ module "cabal_imap" {
   efs_dns          = module.cabal_efs.efs_dns
   user_pool_arn    = module.cabal_pool.user_pool_arn
   region           = var.aws_region
+  ports            = [443]
   client_id        = module.cabal_pool.user_pool_client_id
   user_pool_id     = module.cabal_pool.user_pool_id
   scale            = var.imap_scale
@@ -97,7 +98,7 @@ module "cabal_imap" {
 
 # Creates an auto-scale group for inbound SMTP servers
 module "cabal_smtp_in" {
-  source           = "./modules/smtp"
+  source           = "./modules/asg"
   type             = "smtp-in"
   private_subnets  = module.cabal_vpc.private_subnets
   vpc              = module.cabal_vpc.vpc
@@ -107,13 +108,18 @@ module "cabal_smtp_in" {
   table_arn        = module.cabal_table.table_arn
   s3_arn           = module.cabal_cookbooks.bucket.arn
   efs_dns          = module.cabal_efs.efs_dns
+  region           = var.aws_region
+  ports            = [25, 465, 587]
+  client_id        = module.cabal_pool.user_pool_client_id
+  user_pool_id     = module.cabal_pool.user_pool_id
   user_pool_arn    = module.cabal_pool.user_pool_arn
   scale            = var.smtpin_scale
+  chef_license     = var.chef_license
 }
 
 # Creates an auto-scale group for outbound SMTP servers
 module "cabal_smtp_out" {
-  source           = "./modules/smtp"
+  source           = "./modules/asg"
   type             = "smtp-out"
   private_subnets  = module.cabal_vpc.private_subnets
   vpc              = module.cabal_vpc.vpc
@@ -123,21 +129,11 @@ module "cabal_smtp_out" {
   table_arn        = module.cabal_table.table_arn
   s3_arn           = module.cabal_cookbooks.bucket.arn
   efs_dns          = module.cabal_efs.efs_dns
+  region           = var.aws_region
+  ports            = [465, 587]
+  client_id        = module.cabal_pool.user_pool_client_id
+  user_pool_id     = module.cabal_pool.user_pool_id
   user_pool_arn    = module.cabal_pool.user_pool_arn
   scale            = var.smtpout_scale
+  chef_license     = var.chef_license
 }
-
-# TODO
-# - auth sufficient pam_exec.so expose_authtok /usr/bin/cognito.bash
-
-# #!/bin/bash
-
-# COGNITO_PASSWORD=`cat -`
-# COGNITO_USER="${PAM_USER}"
-# AUTH_TYPE="${PAM_TYPE}"
-
-# aws cognito-idp initiate-auth \
-#   --region us-east-1 aws cognito-idp initiate-auth \
-#   --auth-flow USER_PASSWORD_AUTH aws cognito-idp initiate-auth \
-#   --client-id 3etvjfji72cd9sbp25it8n9pm5 aws cognito-idp initiate-auth \
-#   --auth-parameters "USERNAME=${COGNITO_USER},PASSWORD=${COGNITO_PASSWORD}"

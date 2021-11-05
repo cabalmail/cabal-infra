@@ -1,19 +1,3 @@
-data "aws_ami" "amazon_linux_2" {
-  most_recent = true
-  owners      = ["amazon"]
-  name_regex  = "^amzn2-"
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
-}
-
-data "aws_default_tags" "current" {}
-
-data "aws_iam_policy" "ssm_policy" {
-  arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-}
-
 resource "aws_iam_policy" "cabal_policy" {
   name        = "cabal-${var.type}-access"
   path        = "/"
@@ -125,34 +109,13 @@ resource "aws_security_group_rule" "allow_all" {
   security_group_id = aws_security_group.cabal_sg.id
 }
 
-resource "aws_security_group_rule" "allow_smtp25" {
+resource "aws_security_group_rule" "allow" {
+  count             = length(var.ports)
   type              = "ingress"
   protocol          = "tcp"
-  to_port           = 25
-  from_port         = 25
-  description       = "Allow incoming ${var.type} from anywhere"
-  cidr_blocks       = ["0.0.0.0/0"]
-  ipv6_cidr_blocks  = ["::/0"]
-  security_group_id = aws_security_group.cabal_sg.id
-}
-
-resource "aws_security_group_rule" "allow_smtp465" {
-  type              = "ingress"
-  protocol          = "tcp"
-  to_port           = 465
-  from_port         = 465
-  description       = "Allow incoming ${var.type} from anywhere"
-  cidr_blocks       = ["0.0.0.0/0"]
-  ipv6_cidr_blocks  = ["::/0"]
-  security_group_id = aws_security_group.cabal_sg.id
-}
-
-resource "aws_security_group_rule" "allow_smtp587" {
-  type              = "ingress"
-  protocol          = "tcp"
-  to_port           = 587
-  from_port         = 587
-  description       = "Allow incoming ${var.type} from anywhere"
+  to_port           = var.ports[count.index]
+  from_port         = var.ports[count.index]
+  description       = "Allow incoming port ${var.ports[count.index]} ${var.type} from anywhere"
   cidr_blocks       = ["0.0.0.0/0"]
   ipv6_cidr_blocks  = ["::/0"]
   security_group_id = aws_security_group.cabal_sg.id
@@ -167,10 +130,14 @@ resource "aws_launch_configuration" "cabal_cfg" {
   lifecycle {
     create_before_destroy = true
   }
-  user_data             = templatefile("${path.module}/userdata", {
+  user_data             = templatefile("${path.module}/${var.type}_userdata", {
     control_domain  = var.control_domain,
     artifact_bucket = var.artifact_bucket,
     efs_dns         = var.efs_dns,
+    region          = var.region,
+    client_id       = var.client_id,
+    pool_id         = var.user_pool_id,
+    chef_license    = var.chef_license,
     type            = var.type
   })
 }
