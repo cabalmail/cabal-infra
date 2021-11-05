@@ -56,7 +56,7 @@ variable "mail_domains" {
   description = "List of domains from which you want to send mail, and to which you want to allow mail to be sent. Must have at least one."
   validation {
     condition = alltrue([
-    for str in var.mail_domains : can(regex("^(([[:alpha:]]|-|_|[[:digit:]])+\\.)+[[:alpha:]]+$", var.control_domain))
+    for str in var.mail_domains : can(regex("^(([[:alpha:]]|-|_|[[:digit:]])+\\.)+[[:alpha:]]+$", str))
     ])
     error_message = "One or more of the mail_domains does not appear to be a valid domain name."
   }
