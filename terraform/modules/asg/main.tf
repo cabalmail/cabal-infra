@@ -145,18 +145,6 @@ resource "aws_launch_configuration" "cabal_cfg" {
 # TODO
 # - auth sufficient pam_exec.so expose_authtok /usr/bin/cognito.bash
 
-# #!/bin/bash
-
-# COGNITO_PASSWORD=`cat -`
-# COGNITO_USER="${PAM_USER}"
-# AUTH_TYPE="${PAM_TYPE}"
-
-# aws cognito-idp initiate-auth \
-#   --region us-east-1 aws cognito-idp initiate-auth \
-#   --auth-flow USER_PASSWORD_AUTH aws cognito-idp initiate-auth \
-#   --client-id 3etvjfji72cd9sbp25it8n9pm5 aws cognito-idp initiate-auth \
-#   --auth-parameters "USERNAME=${COGNITO_USER},PASSWORD=${COGNITO_PASSWORD}"
-
 resource "aws_autoscaling_group" "cabal_asg" {
   vpc_zone_identifier   = var.private_subnets[*].id
   desired_capacity      = var.scale.des
