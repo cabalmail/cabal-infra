@@ -1,5 +1,5 @@
 users = []
-Cognito.list(node['cognito']['pool_id'], { region: node['ec2']['region'] }).each do |user|
+CognitoUsers.list(node['cognito']['pool_id'], { region: node['ec2']['region'] }).each do |user|
   users.push(user.username)
 end
 
