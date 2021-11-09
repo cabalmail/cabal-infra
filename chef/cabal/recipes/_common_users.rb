@@ -1,10 +1,9 @@
-# TODO: Get these from some user pool
-%w(test1 test2 test3).each do |u|
-# TODO: Get from some kink of vault
-  password = 'test1234'
-  user u do
-    password password
-  end
+users = []
+Cognito.list(node['cognito']['pool_id'], { region: node['ec2']['region'] }).each do |user|
+  users.push(user.username)
+end
+
+users.each do |u|
   directory "/home/#{u}" do
     owner u
     group u
