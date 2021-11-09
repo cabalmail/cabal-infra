@@ -38,9 +38,9 @@ COGNITO_USER="$${PAM_USER}"
 AUTH_TYPE="$${PAM_TYPE}"
 
 aws cognito-idp initiate-auth \
-  --region ${region} aws cognito-idp initiate-auth \
-  --auth-flow USER_PASSWORD_AUTH aws cognito-idp initiate-auth \
-  --client-id ${client_id} aws cognito-idp initiate-auth \
+  --region ${region} \
+  --auth-flow USER_PASSWORD_AUTH \
+  --client-id ${client_id} \
   --auth-parameters "USERNAME=$${COGNITO_USER},PASSWORD=$${COGNITO_PASSWORD}"
 EOF
 chmod +x /usr/bin/cognito.bash
@@ -51,5 +51,5 @@ aws --region us-east-1 secretsmanager get-secret-value --secret-id "/cabal/contr
 mv /tmp/${control_domain}.ca-bundle /etc/pki/tls/certs/cabal-mail.net.ca-bundle
 mv /tmp/${control_domain}.crt /etc/pki/tls/certs/cabal-mail.net.crt
 mv /tmp/${control_domain}.key /etc/pki/tls/private/cabal-mail.net.key
-aws s3 cp s3://${artifact_bucket}/objects/cookbooks /var/lib/chef/cookbooks --recursive
-chef-solo -c /etc/chef/solo.rb -z -o "recipe[imap]" -j /var/lib/chef/attributes/imap.json
+aws s3 cp s3://${artifact_bucket}/chef/ /var/lib/chef/cookbooks --recursive
+chef-solo -c /etc/chef/solo.rb -z -o "recipe[cabal::imap]" -j /var/lib/chef/attributes/imap.json
