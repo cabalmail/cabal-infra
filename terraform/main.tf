@@ -22,8 +22,8 @@ module "cabal_domains" {
 }
 
 # Creates an s3 bucket and uploads cookbooks to it for retrieval by ec2 instances
-module "cabal_cookbooks" {
-  source = "./modules/cookbooks"
+module "cabal_cookbook" {
+  source = "./modules/cookbook"
 }
 
 # Creates a Cognito User Pool
