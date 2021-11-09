@@ -5,4 +5,4 @@ license 'all rights reserved'
 description 'Installs/Configures servers for Cabalmail'
 version '1.0.0'
 
-gem 'aws-sdk', '~> 2'
+gem 'aws-sdk-dynamodb', '~> 1.28.0'
