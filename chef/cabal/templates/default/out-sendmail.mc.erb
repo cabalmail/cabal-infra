@@ -32,7 +32,7 @@ define(`confSERVER_KEY', `/etc/pki/tls/private/<%=node['sendmail']['cert']%>.key
 DAEMON_OPTIONS(`Family=inet, Port=465, Name=MTA-SSL, M=s')dnl
 FEATURE(`always_add_domain')dnl
 MASQUERADE_DOMAIN_FILE(`/etc/mail/masq-domains')dnl
-define(`confDOMAIN_NAME', `smtp-out.<%=node['sendmail']['main']['mydomain']%>')dnl
+define(`confDOMAIN_NAME', `smtp-out.<%=node['sendmail']['cert']%>')dnl
 FEATURE(`nouucp',`reject')dnl
 FEATURE(`genericstable', `hash -o /etc/mail/genericstable')dnl
 FEATURE(`mailertable', `hash -o /etc/mail/mailertable')dnl
