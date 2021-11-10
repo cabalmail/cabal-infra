@@ -8,6 +8,3 @@ resource "aws_lb" "cabal_nlb" {
     Name = "cabal-nlb"
   }
 }
-
-
-
