@@ -4,10 +4,6 @@ resource "aws_lb_target_group" "cabal_imap_tg" {
   protocol             = "TLS"
   vpc_id               = var.vpc.id
   deregistration_delay = 30
-  stickiness {
-    type    = "source_ip"
-    enabled = true
-  }
   health_check {
     enabled             = true
     interval            = 30
