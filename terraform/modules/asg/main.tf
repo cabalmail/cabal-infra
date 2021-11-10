@@ -151,7 +151,7 @@ resource "aws_autoscaling_group" "cabal_asg" {
   max_size              = var.scale.max
   min_size              = var.scale.min
   launch_configuration  = aws_launch_configuration.cabal_cfg.id
-  target_group_arns     = [var.target_group_arn]
+  target_group_arns     = var.target_groups
   lifecycle {
     create_before_destroy = true
   }

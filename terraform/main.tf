@@ -83,7 +83,7 @@ module "cabal_imap" {
   vpc              = module.cabal_vpc.vpc
   control_domain   = var.control_domain
   artifact_bucket  = module.cabal_cookbook.bucket.id
-  target_group_arn = module.cabal_load_balancer.imap_tg
+  target_group_arn = [module.cabal_load_balancer.imap_tg]
   table_arn        = module.cabal_table.table_arn
   s3_arn           = module.cabal_cookbook.bucket.arn
   efs_dns          = module.cabal_efs.efs_dns
@@ -104,7 +104,7 @@ module "cabal_smtp_in" {
   vpc              = module.cabal_vpc.vpc
   control_domain   = var.control_domain
   artifact_bucket  = module.cabal_cookbook.bucket.id
-  target_group_arn = module.cabal_load_balancer.relay_tg
+  target_group_arn = [module.cabal_load_balancer.relay_tg]
   table_arn        = module.cabal_table.table_arn
   s3_arn           = module.cabal_cookbook.bucket.arn
   efs_dns          = module.cabal_efs.efs_dns
@@ -125,7 +125,10 @@ module "cabal_smtp_out" {
   vpc              = module.cabal_vpc.vpc
   control_domain   = var.control_domain
   artifact_bucket  = module.cabal_cookbook.bucket.id
-  target_group_arn = module.cabal_load_balancer.submission_tg
+  target_group_arn = [
+    module.cabal_load_balancer.submission_tg,
+    module.cabal_load_balancer.starttls_tg
+  ]
   table_arn        = module.cabal_table.table_arn
   s3_arn           = module.cabal_cookbook.bucket.arn
   efs_dns          = module.cabal_efs.efs_dns

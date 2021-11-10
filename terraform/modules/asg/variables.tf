@@ -30,8 +30,8 @@ variable "control_domain" {
   description = "Control domain"
 }
 
-variable "target_group_arn" {
-  description = "Load balancer target group in which to register IMAP instances."
+variable "target_groups" {
+  description = "List of load balancer target groups in which to register IMAP instances."
 }
 
 variable "artifact_bucket" {
