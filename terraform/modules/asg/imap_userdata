@@ -33,7 +33,7 @@ EOF
 cat > '/usr/bin/cognito.bash' << EOF
 #!/bin/bash
 
-COGNITO_PASSWORD=\$$(cat -)
+COGNITO_PASSWORD=\`cat -\`
 COGNITO_USER="\$${PAM_USER}"
 AUTH_TYPE="\$${PAM_TYPE}"
 
