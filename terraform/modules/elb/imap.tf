@@ -1,7 +1,7 @@
 resource "aws_lb_target_group" "cabal_imap_tg" {
   name                 = "cabal-imap-tg"
   port                 = "993"
-  protocol             = "TCP"
+  protocol             = "TLS"
   vpc_id               = var.vpc.id
   deregistration_delay = 30
   stickiness {
@@ -12,7 +12,7 @@ resource "aws_lb_target_group" "cabal_imap_tg" {
     enabled             = true
     interval            = 30
     port                = 993
-    protocol            = "TCP"
+    protocol            = "TLS"
     healthy_threshold   = 2
     unhealthy_threshold = 2
   }
