@@ -27,8 +27,9 @@ resource "aws_lb_target_group" "cabal_smtp_submission_tg" {
 
 resource "aws_lb_listener" "cabal_smtp_submission_listener" {
   load_balancer_arn = aws_lb.cabal_nlb.arn
-  protocol          = "TCP"
+  protocol          = "TLS"
   port              = "465"
+  certificate_arn   = var.cert_arn
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.cabal_smtp_submission_tg.arn
