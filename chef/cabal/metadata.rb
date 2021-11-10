@@ -6,4 +6,4 @@ description 'Installs/Configures servers for Cabalmail'
 version '1.0.0'
 
 gem 'aws-sdk-dynamodb', '~> 1.28.0'
-gem 'aws-sdk-cognitoidentity', '~> 1.18.0'
+gem 'aws-sdk-cognitoidentityprovider', '~> 1.18.0'
