@@ -1,6 +1,6 @@
 resource "aws_lb_target_group" "cabal_smtp_submission_tg" {
   name                 = "cabal-smtp-submission-tg"
-  port                 = "25"
+  port                 = "465"
   protocol             = "TCP"
   vpc_id               = var.vpc.id
   deregistration_delay = 30
@@ -11,7 +11,7 @@ resource "aws_lb_target_group" "cabal_smtp_submission_tg" {
   health_check {
     enabled             = true
     interval            = 30
-    port                = 25
+    port                = 465
     protocol            = "TCP"
     healthy_threshold   = 2
     unhealthy_threshold = 2
@@ -27,9 +27,8 @@ resource "aws_lb_target_group" "cabal_smtp_submission_tg" {
 
 resource "aws_lb_listener" "cabal_smtp_submission_listener" {
   load_balancer_arn = aws_lb.cabal_nlb.arn
-  protocol          = "TLS"
+  protocol          = "TCP"
   port              = "465"
-  certificate_arn   = var.cert_arn
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.cabal_smtp_submission_tg.arn
