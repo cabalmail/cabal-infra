@@ -10,6 +10,11 @@ cookbook_file '/etc/dovecot/conf.d/10-mail.conf' do
   notifies :restart, 'service[dovecot]', :delayed
 end
 
+cookbook_file '/etc/dovecot/conf.d/15-mailboxes.conf' do
+  source 'dovecot-10-mail.conf'
+  notifies :restart, 'service[dovecot]', :delayed
+end
+
 template '/etc/dovecot/conf.d/10-ssl.conf' do
   source 'dovecot-10-ssl.conf.erb'
   notifies :restart, 'service[dovecot]', :delayed
