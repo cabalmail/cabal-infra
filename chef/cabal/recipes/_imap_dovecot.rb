@@ -20,6 +20,11 @@ cookbook_file '/etc/dovecot/conf.d/20-imap.conf' do
   notifies :restart, 'service[dovecot]', :delayed
 end
 
+cookbook_file '/etc/pam.d/dovecot' do
+  source 'pam-dovecot'
+  notifies :restart, 'service[dovecot]', :delayed
+end
+
 service 'dovecot' do
   action [:start, :enable]
 end
