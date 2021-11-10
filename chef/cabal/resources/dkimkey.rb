@@ -10,10 +10,10 @@ action :create do
     group 'opendkim'
     recursive true
   end
-  file "#{new_resource.key_directory}/#{new_resource.domain}/#{realm}" do
+  file "#{new_resource.key_directory}/#{new_resource.domain}/#{new_resource.realm}" do
     user 'root'
     content new_resource.private_key
-    not_if { ::File.exist?("#{new_resource.key_directory}/#{new_resource.domain}/#{realm}") }
+    not_if { ::File.exist?("#{new_resource.key_directory}/#{new_resource.domain}/#{new_resource.realm}") }
   end
 end
 
