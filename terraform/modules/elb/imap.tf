@@ -1,7 +1,7 @@
 resource "aws_lb_target_group" "cabal_imap_tg" {
   name                 = "cabal-imap-tg"
   port                 = "993"
-  protocol             = "TLS"
+  protocol             = "TCP"
   vpc_id               = var.vpc.id
   deregistration_delay = 30
   health_check {
