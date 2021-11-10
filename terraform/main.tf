@@ -89,7 +89,7 @@ module "cabal_imap" {
   efs_dns          = module.cabal_efs.efs_dns
   user_pool_arn    = module.cabal_pool.user_pool_arn
   region           = var.aws_region
-  ports            = [143]
+  ports            = [143, 993]
   client_id        = module.cabal_pool.user_pool_client_id
   user_pool_id     = module.cabal_pool.user_pool_id
   scale            = var.imap_scale
