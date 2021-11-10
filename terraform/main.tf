@@ -133,7 +133,7 @@ module "cabal_smtp_out" {
   s3_arn           = module.cabal_cookbook.bucket.arn
   efs_dns          = module.cabal_efs.efs_dns
   region           = var.aws_region
-  ports            = [465, 587]
+  ports            = [25, 465, 587]
   client_id        = module.cabal_pool.user_pool_client_id
   user_pool_id     = module.cabal_pool.user_pool_id
   user_pool_arn    = module.cabal_pool.user_pool_arn
