@@ -5,7 +5,7 @@ resource "aws_lb" "cabal_nlb" {
   subnets                          = var.public_subnets[*].id
   enable_cross_zone_load_balancing = false
   tags                             = {
-    Name                 = "cabal-nlb"
+    Name = "cabal-nlb"
   }
 }
 
