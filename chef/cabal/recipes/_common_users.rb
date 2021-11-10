@@ -4,6 +4,7 @@ CognitoUsers.list(node['cognito']['pool_id'], { region: node['ec2']['region'] })
 end
 
 users.each do |u|
+  user u
   directory "/home/#{u}" do
     owner u
     group u
