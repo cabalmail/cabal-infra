@@ -1,18 +1,3 @@
-package 'sendmail'
-package 'sendmail-cf'
-
-execute 'make_sendmail' do
-  cwd ::File.dirname('/etc/mail')
-  command 'make -C /etc/mail'
-  notifies :restart, 'service[sendmail]', :delayed
-  action :nothing
-end
-
-template '/etc/mail/sendmail.mc' do
-  source 'imap-sendmail.mc.erb'
-  notifies :run, 'execute[make_sendmail]', :immediately
-end
-
 domains = {}
 DynamoDBQuery.scan('cabal-addresses', { region: node['ec2']['region'] }).each do |item|
   if ! domains.has_key? item['tld']
@@ -35,8 +20,19 @@ DynamoDBQuery.scan('cabal-addresses', { region: node['ec2']['region'] }).each do
   end
 end
 
-template '/etc/mail/local-host-names' do
-  source 'relay-domains.erb'
+template '/etc/mail/masq-domains' do
+  source 'masq-domains.erb'
+  variables('domains' => domains)
+  notifies :restart, 'service[sendmail]', :delayed
+end
+
+template '/etc/mail/sendmail.mc' do
+  source 'in-sendmail.mc.erb'
+  notifies :run, 'bash[make_sendmail.cf]', :immediate
+end
+
+template '/etc/mail/access' do
+  source 'in-access.erb'
   variables('domains' => domains)
   notifies :restart, 'service[sendmail]', :delayed
 end
@@ -47,30 +43,11 @@ template '/etc/mail/relay-domains' do
   notifies :restart, 'service[sendmail]', :delayed
 end
 
-template '/etc/mail/access' do
-  source 'imap-access.erb'
-  variables('domains' => domains)
-  notifies :restart, 'service[sendmail]', :delayed
-end
-
-template '/etc/mail/virtusertable' do
-  source 'virtusertable.erb'
-  variables('domains' => domains)
-  notifies :restart, 'service[sendmail]', :delayed
-end
-
-execute 'newaliases' do
-  command '/usr/bin/newaliases'
+bash 'make_sendmail.cf' do
+  cwd ::File.dirname('/etc/mail')
+  code <<-EOH
+    make -C /etc/mail
+  EOH
   action :nothing
-end
-
-template '/etc/aliases' do
-  helpers(DomainHelper)
-  source 'aliases.erb'
-  variables('domains' => domains)
-  notifies :run, 'execute[newaliases]', :immediately
-end
-
-service 'sendmail' do
-  action [ :start, :enable ]
+  notifies :restart, 'service[sendmail]', :delayed
 end
