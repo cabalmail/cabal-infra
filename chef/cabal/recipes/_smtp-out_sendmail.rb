@@ -24,3 +24,8 @@ bash 'make_sendmail.cf' do
   action :nothing
   notifies :restart, 'service[sendmail]', :delayed
 end
+
+cookbook_file '/etc/pam.d/smtp' do
+  source 'pam-sendmail'
+  notifies :restart, 'service[sendmail]', :delayed
+end
