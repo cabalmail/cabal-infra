@@ -1,3 +1,6 @@
+package 'postfix' do
+  action :remove
+end
 package 'sendmail'
 package 'sendmail-cf'
 
