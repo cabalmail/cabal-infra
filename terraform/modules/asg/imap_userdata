@@ -1,4 +1,5 @@
 #!/bin/bash -xev
+sudo yum install -y https://s3.${region}.amazonaws.com/amazon-ssm-${region}/latest/linux_amd64/amazon-ssm-agent.rpm
 cd /tmp
 yum install -y awscli jq
 amazon-linux-extras install epel -y
