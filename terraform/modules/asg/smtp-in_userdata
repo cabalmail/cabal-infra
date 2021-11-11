@@ -46,8 +46,9 @@ chmod +x /usr/bin/cognito.bash
 aws --region us-east-1 secretsmanager get-secret-value --secret-id "/cabal/control_domain_chain_cert" | jq -r '.SecretString' > /tmp/${control_domain}.ca-bundle
 aws --region us-east-1 secretsmanager get-secret-value --secret-id "/cabal/control_domain_ssl_cert" | jq -r '.SecretString' > /tmp/${control_domain}.crt
 aws --region us-east-1 secretsmanager get-secret-value --secret-id "/cabal/control_domain_ssl_key" | jq -r '.SecretString' > /tmp/${control_domain}.key
-mv /tmp/${control_domain}.ca-bundle /etc/pki/tls/certs/cabal-mail.net.ca-bundle
-mv /tmp/${control_domain}.crt /etc/pki/tls/certs/cabal-mail.net.crt
-mv /tmp/${control_domain}.key /etc/pki/tls/private/cabal-mail.net.key
+mv /tmp/${control_domain}.ca-bundle /etc/pki/tls/certs/${control_domain}.ca-bundle
+mv /tmp/${control_domain}.crt /etc/pki/tls/certs/${control_domain}.crt
+mv /tmp/${control_domain}.key /etc/pki/tls/private/${control_domain}.key
+chmod go-rwx /etc/pki/tls/private/${control_domain}.key
 aws s3 cp s3://${artifact_bucket}/chef/ /var/lib/chef/cookbooks --recursive
 chef-solo -c /etc/chef/solo.rb -z -o "recipe[cabal::smtp-in]" -j /var/lib/chef/attributes/smtp.json
