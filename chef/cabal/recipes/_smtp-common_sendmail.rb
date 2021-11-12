@@ -39,6 +39,6 @@ end
 template '/etc/mail/mailertable' do
   source 'mailertable.erb'
   variables(domains: domains,
-            imap: node['sendmail']['imap'])
+            imap: "imap.#{node['sendmail']['cert']}")
   notifies :restart, 'service[sendmail]', :delayed
 end

@@ -11,7 +11,8 @@ action :create do
     recursive true
   end
   file "#{new_resource.key_directory}/#{new_resource.domain}/#{new_resource.realm}" do
-    user 'root'
+    user 'opendkim'
+    mode '0400'
     content new_resource.private_key
     not_if { ::File.exist?("#{new_resource.key_directory}/#{new_resource.domain}/#{new_resource.realm}") }
   end
