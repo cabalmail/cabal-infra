@@ -70,6 +70,10 @@ variable "ports" {
   description = "Ports to open in security group"
 }
 
+variable "private_ports" {
+  description = "Ports to open for local traffic in security group"
+}
+
 variable "scale" {
   description = "Min, max, and desired settings for autoscale group"
 }
