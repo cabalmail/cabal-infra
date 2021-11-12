@@ -27,7 +27,7 @@ cat > '/var/lib/chef/attributes/smtp.json' << EOF
     "pool_id": "${pool_id}"
   },
   "route53": {
-    "zone_id": ${private_zone_id}
+  "zone_id": "${private_zone_id}"
   }
 }
 EOF
