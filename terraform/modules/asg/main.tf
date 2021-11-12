@@ -53,6 +53,13 @@ resource "aws_iam_policy" "cabal_policy" {
         Effect   = "Allow"
         Resource = var.user_pool_arn
       },
+      {
+        Action   = [
+          "route53:ChangeResourceRecordSets",
+        ]
+        Effect   = "Allow"
+        Resource = var.private_zone.arn
+      },
     ]
   })
 }
