@@ -53,9 +53,10 @@ module "cabal_table" {
 
 # Creates the VPC and network infrastructure
 module "cabal_vpc" {
-  source     = "./modules/vpc"
-  cidr_block = var.cidr_block
-  az_list    = var.availability_zones
+  source         = "./modules/vpc"
+  cidr_block     = var.cidr_block
+  control_domain = var.control_domain
+  az_list        = var.availability_zones
 }
 
 # Creates a network load balancer shared by machines in the stack
