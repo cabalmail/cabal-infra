@@ -90,6 +90,8 @@ module "cabal_imap" {
   user_pool_arn    = module.cabal_pool.user_pool_arn
   region           = var.aws_region
   ports            = [143, 993]
+  private_ports    = [25]
+  private_zone     = module.cabal_vpc.private_zone
   client_id        = module.cabal_pool.user_pool_client_id
   user_pool_id     = module.cabal_pool.user_pool_id
   scale            = var.imap_scale
@@ -110,6 +112,8 @@ module "cabal_smtp_in" {
   efs_dns          = module.cabal_efs.efs_dns
   region           = var.aws_region
   ports            = [25, 465, 587]
+  private_ports    = []
+  private_zone     = module.cabal_vpc.private_zone
   client_id        = module.cabal_pool.user_pool_client_id
   user_pool_id     = module.cabal_pool.user_pool_id
   user_pool_arn    = module.cabal_pool.user_pool_arn
@@ -134,6 +138,8 @@ module "cabal_smtp_out" {
   efs_dns          = module.cabal_efs.efs_dns
   region           = var.aws_region
   ports            = [25, 465, 587]
+  private_ports    = []
+  private_zone     = module.cabal_vpc.private_zone
   client_id        = module.cabal_pool.user_pool_client_id
   user_pool_id     = module.cabal_pool.user_pool_id
   user_pool_arn    = module.cabal_pool.user_pool_arn

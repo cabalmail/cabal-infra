@@ -13,3 +13,7 @@ output "public_subnets" {
 output "relay_ips" {
   value = aws_eip.cabal_nat_eip[*].public_ip
 }
+
+output "private_zone" {
+  value = aws_route53_zone.cabal_private_control_zone
+}

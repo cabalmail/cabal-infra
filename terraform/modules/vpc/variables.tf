@@ -12,3 +12,8 @@ variable "az_list" {
   type        = list(string)
   description = "List of availability zones to use."
 }
+
+variable "control_domain" {
+  type        = string
+  description = "Control domain."
+}

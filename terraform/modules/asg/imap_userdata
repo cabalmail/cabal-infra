@@ -27,6 +27,9 @@ cat > '/var/lib/chef/attributes/imap.json' << EOF
     "region": "${region}",
     "client_id": "${client_id}",
     "pool_id": "${pool_id}"
+  },
+  "route53": {
+    "zone_id": ${private_zone_id}
   }
 }
 EOF

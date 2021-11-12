@@ -138,7 +138,8 @@ resource "aws_launch_configuration" "cabal_cfg" {
     client_id       = var.client_id,
     pool_id         = var.user_pool_id,
     chef_license    = var.chef_license,
-    type            = var.type
+    type            = var.type,
+    private_zone_id = var.private_zone.zone_id
   })
 }
 

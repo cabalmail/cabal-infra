@@ -77,3 +77,7 @@ variable "scale" {
 variable "chef_license" {
   description = "Must be the string 'accept' in order to install and use Chef Infra Client"
 }
+
+variable "private_zone" {
+  description = "Zone for internal lookups"
+}

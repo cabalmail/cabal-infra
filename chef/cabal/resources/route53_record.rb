@@ -1,9 +1,9 @@
-property :name,                        String, required: true, name_property: true
-property :value,                       [String, Array]
-property :type,                        String, required: true
-property :ttl,                         Integer, default: 3600
-property :zone_id,                     String
-property :aws_region,                  String
+property :name, String, required: true, name_property: true
+property :value, [String, Array]
+property :type, String, required: true
+property :ttl, Integer, default: 3600
+property :zone_id, String
+property :aws_region, String
 
 action :create do
   require 'aws-sdk'
