@@ -29,3 +29,7 @@ cookbook_file '/etc/pam.d/smtp' do
   source 'pam-sendmail'
   notifies :restart, 'service[sendmail]', :delayed
 end
+
+service 'saslauthd' do
+  action [ :start, :enable ]
+end
