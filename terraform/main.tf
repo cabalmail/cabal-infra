@@ -91,6 +91,7 @@ module "cabal_imap" {
   region           = var.aws_region
   ports            = [143, 993]
   private_ports    = [25]
+  cidr_block       = var.cidr_block
   private_zone     = module.cabal_vpc.private_zone
   client_id        = module.cabal_pool.user_pool_client_id
   user_pool_id     = module.cabal_pool.user_pool_id
@@ -113,6 +114,7 @@ module "cabal_smtp_in" {
   region           = var.aws_region
   ports            = [25, 465, 587]
   private_ports    = []
+  cidr_block       = var.cidr_block
   private_zone     = module.cabal_vpc.private_zone
   client_id        = module.cabal_pool.user_pool_client_id
   user_pool_id     = module.cabal_pool.user_pool_id
@@ -139,6 +141,7 @@ module "cabal_smtp_out" {
   region           = var.aws_region
   ports            = [25, 465, 587]
   private_ports    = []
+  cidr_block       = var.cidr_block
   private_zone     = module.cabal_vpc.private_zone
   client_id        = module.cabal_pool.user_pool_client_id
   user_pool_id     = module.cabal_pool.user_pool_id

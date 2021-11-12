@@ -81,3 +81,7 @@ variable "chef_license" {
 variable "private_zone" {
   description = "Zone for internal lookups"
 }
+
+variable "cidr_block" {
+  description = "Local CIDR range"
+}

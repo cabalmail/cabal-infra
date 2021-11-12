@@ -121,6 +121,17 @@ resource "aws_security_group_rule" "allow" {
   security_group_id = aws_security_group.cabal_sg.id
 }
 
+resource "aws_security_group_rule" "allow_local" {
+  count             = length(var.private_ports)
+  type              = "ingress"
+  protocol          = "tcp"
+  to_port           = var.private_ports[count.index]
+  from_port         = var.private_ports[count.index]
+  description       = "Allow incoming port ${var.private_ports[count.index]} ${var.type} from the local CIDR"
+  cidr_blocks       = [var.cidr_block]
+  security_group_id = aws_security_group.cabal_sg.id
+}
+
 resource "aws_launch_configuration" "cabal_cfg" {
   name_prefix           = "${var.type}-"
   image_id              = data.aws_ami.amazon_linux_2.id
