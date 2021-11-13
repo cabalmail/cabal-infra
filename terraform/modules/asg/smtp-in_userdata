@@ -54,5 +54,7 @@ mv /tmp/${control_domain}.ca-bundle /etc/pki/tls/certs/${control_domain}.ca-bund
 mv /tmp/${control_domain}.crt /etc/pki/tls/certs/${control_domain}.crt
 mv /tmp/${control_domain}.key /etc/pki/tls/private/${control_domain}.key
 chmod go-rwx /etc/pki/tls/private/${control_domain}.key
-aws s3 cp s3://${artifact_bucket}/chef/ /var/lib/chef/cookbooks --recursive
+aws s3 cp s3://${artifact_bucket}/cabal.zip /var/lib/chef/cookbooks/cabal.zip
+cd /var/lib/chef/cookbooks
+unzip cabal.zip
 chef-solo -c /etc/chef/solo.rb -z -o "recipe[cabal::smtp-in]" -j /var/lib/chef/attributes/smtp.json

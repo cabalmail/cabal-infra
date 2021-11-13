@@ -15,12 +15,3 @@ resource "aws_s3_bucket_object" "cabal_cookbook_object" {
   source   = data.archive_file.cabal_cookbook_archive.output_path
   etag     = filemd5(data.archive_file.cabal_cookbook_archive.output_path)
 }
-
-# resource "aws_s3_bucket_object" "cabal_cookbook_files" {
-#   for_each = fileset(path.module, "../../../chef/cabal/**/*")
-
-#   bucket   = aws_s3_bucket.cabal_cookbook_bucket.bucket
-#   key      = each.value
-#   source   = "${path.module}/${each.value}"
-#   etag     = filemd5("${path.module}/${each.value}")
-# }
