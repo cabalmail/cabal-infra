@@ -1,144 +1,3 @@
-resource "aws_iam_policy" "cabal_policy" {
-  name        = "cabal-${var.type}-access"
-  path        = "/"
-  description = "Policies for ${var.type} machines"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action   = [
-          "s3:*",
-        ]
-        Effect   = "Allow"
-        Resource = [
-          var.s3_arn,
-          "${var.s3_arn}/*",
-        ]
-      },
-      {
-        Action   = [
-          "secretsmanager:DescribeSecret",
-          "secretsmanager:GetSecretValue",
-          "secretsmanager:ListSecretVersionIds",
-        ]
-        Effect   = "Allow"
-        Resource = [
-          "arn:aws:secretsmanager:us-east-1:715401949493:secret:/cabal/*",
-        ]
-      },
-      {
-        Action   = [
-          "dynamodb:DeleteItem",
-          "dynamodb:GetItem",
-          "dynamodb:PutItem",
-          "dynamodb:Scan",
-          "dynamodb:UpdateItem",
-          "dynamodb:BatchGetItem",
-          "dynamodb:DescribeTable",
-          "dynamodb:ListTables",
-          "dynamodb:Query",
-          "dynamodb:ListTagsOfResource",
-        ]
-        Effect   = "Allow"
-        Resource = var.table_arn
-      },
-      {
-        Action   = [
-          "cognito-idp:Get*",
-          "cognito-idp:List*",
-          "cognito-idp:Describe*",
-          "cognito-idp:Verify*",
-        ]
-        Effect   = "Allow"
-        Resource = var.user_pool_arn
-      },
-      {
-        Action   = [
-          "route53:ChangeResourceRecordSets",
-        ]
-        Effect   = "Allow"
-        Resource = var.private_zone.arn
-      },
-    ]
-  })
-}
-
-resource "aws_iam_role" "cabal_role" {
-  name = "cabal-${var.type}-role"
-
-  assume_role_policy = <<EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Action": "sts:AssumeRole",
-      "Principal": {
-        "Service": "ec2.amazonaws.com"
-      },
-      "Effect": "Allow",
-      "Sid": ""
-    }
-  ]
-}
-EOF
-}
-
-resource "aws_iam_role_policy_attachment" "cabal_role_attachment_1" {
-  role       = aws_iam_role.cabal_role.name
-  policy_arn = data.aws_iam_policy.ssm_policy.arn
-}
-
-resource "aws_iam_role_policy_attachment" "cabal_role_attachment_2" {
-  role       = aws_iam_role.cabal_role.name
-  policy_arn = aws_iam_policy.cabal_policy.arn
-}
-
-resource "aws_iam_instance_profile" "cabal_instance_profile" {
-  name = "cabal-${var.type}-profile"
-  role = aws_iam_role.cabal_role.name
-}
-
-resource "aws_security_group" "cabal_sg" {
-  name        = "cabal-${var.type}-sg"
-  description = "Allow ${var.type} inbound traffic"
-  vpc_id      = var.vpc.id
-}
-
-resource "aws_security_group_rule" "allow_all" {
-  type              = "egress"
-  protocol          = "-1"
-  to_port           = 0
-  from_port         = 0
-  description       = "Allow all outgoing"
-  cidr_blocks       = ["0.0.0.0/0"]
-  ipv6_cidr_blocks  = ["::/0"]
-  security_group_id = aws_security_group.cabal_sg.id
-}
-
-resource "aws_security_group_rule" "allow" {
-  count             = length(var.ports)
-  type              = "ingress"
-  protocol          = "tcp"
-  to_port           = var.ports[count.index]
-  from_port         = var.ports[count.index]
-  description       = "Allow incoming port ${var.ports[count.index]} ${var.type} from anywhere"
-  cidr_blocks       = ["0.0.0.0/0"]
-  ipv6_cidr_blocks  = ["::/0"]
-  security_group_id = aws_security_group.cabal_sg.id
-}
-
-resource "aws_security_group_rule" "allow_local" {
-  count             = length(var.private_ports)
-  type              = "ingress"
-  protocol          = "tcp"
-  to_port           = var.private_ports[count.index]
-  from_port         = var.private_ports[count.index]
-  description       = "Allow incoming port ${var.private_ports[count.index]} ${var.type} from the local CIDR"
-  cidr_blocks       = [var.cidr_block]
-  security_group_id = aws_security_group.cabal_sg.id
-}
-
 resource "aws_launch_configuration" "cabal_cfg" {
   name_prefix           = "${var.type}-"
   image_id              = data.aws_ami.amazon_linux_2.id
@@ -171,6 +30,13 @@ resource "aws_autoscaling_group" "cabal_asg" {
   min_size              = var.scale.min
   launch_configuration  = aws_launch_configuration.cabal_cfg.id
   target_group_arns     = var.target_groups
+  instance_refresh {
+    strategy = "Rolling"
+    preferences {
+      min_healthy_percentage = 50
+    }
+    triggers = ["tag"]
+  }
   lifecycle {
     create_before_destroy = true
   }
