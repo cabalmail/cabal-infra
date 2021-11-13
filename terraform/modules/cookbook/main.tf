@@ -12,8 +12,8 @@ data "archive_file" "cabal_cookbook_archive" {
 resource "aws_s3_bucket_object" "cabal_cookbook_object" {
   bucket   = aws_s3_bucket.cabal_cookbook_bucket.bucket
   key      = "/cabal.zip"
-  source   = "${path.module}/cabal_cookbook.zip"
-  etag     = filemd5("${path.module}/cabal_cookbook.zip")
+  source   = data.archive_file.cabal_cookbook_archive.output_path
+  etag     = filemd5(data.archive_file.cabal_cookbook_archive.output_path)
 }
 
 # resource "aws_s3_bucket_object" "cabal_cookbook_files" {
