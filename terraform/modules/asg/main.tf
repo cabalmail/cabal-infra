@@ -21,12 +21,12 @@ resource "aws_launch_configuration" "cabal_cfg" {
 }
 
 resource "aws_autoscaling_group" "cabal_asg" {
-  vpc_zone_identifier   = var.private_subnets[*].id
-  desired_capacity      = var.scale.des
-  max_size              = var.scale.max
-  min_size              = var.scale.min
-  launch_configuration  = aws_launch_configuration.cabal_cfg.id
-  target_group_arns     = var.target_groups
+  vpc_zone_identifier  = var.private_subnets[*].id
+  desired_capacity     = var.scale.des
+  max_size             = var.scale.max
+  min_size             = var.scale.min
+  launch_configuration = aws_launch_configuration.cabal_cfg.id
+  target_group_arns    = var.target_groups
   instance_refresh {
     strategy = "Rolling"
     preferences {
