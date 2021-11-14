@@ -20,9 +20,6 @@ resource "aws_launch_configuration" "cabal_cfg" {
   })
 }
 
-# TODO
-# - auth sufficient pam_exec.so expose_authtok /usr/bin/cognito.bash
-
 resource "aws_autoscaling_group" "cabal_asg" {
   vpc_zone_identifier   = var.private_subnets[*].id
   desired_capacity      = var.scale.des
