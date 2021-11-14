@@ -19,7 +19,7 @@ Cabalmail allows you to self-host your email and to create unique addresses for 
 # About Continued
 
 ## Genesis
-Cabalmail grew out of a bunch of scripts and configuration files that I originally set up when I wanted to take control of my own email hosting. Some time in the late 1990s, I started getting spammed at a third-party address that I had used for years. Spam filters were unreliable at the time, and my inbox quickly became unusable. I reluctantly abandoned that long-held account and went through the pain of contacting all my friends, family, and corporate interlocutors to update my contact information. I resolved to run my own mail system so that I would not have to go through that pain again. Later, when my son graduated from college, he and I made a project out of converting my scripts to Chef cookbooks. It was my son who chose the name "Cabal" for our project. More recently, I added Terraform code to manage the infrastructure.
+Cabalmail grew out of a bunch of scripts and configuration files that I originally set up when I wanted to take control of my own email hosting. Some time in the late 1990s, I started getting spammed at a third-party address that I had used for years. Spam filters were unreliable at the time, and my inbox quickly became unusable. I reluctantly abandoned that long-held account and went through the pain of contacting all my friends, family, and corporate interlocutors to update my contact information. I resolved to run my own mail system so that I would not have to go through that pain again. Later, when my son graduated from college, he and I made a project out of converting my scripts to Chef cookbooks. It was my son, with his unerring sense of whimsy, who chose the name "Cabal" for our project. More recently, I added Terraform code to manage the infrastructure.
 
 With Cabalmail, you can manage your own self-hosted email system as I do.
 
@@ -75,78 +75,78 @@ After signing up, perform the following steps:
 4. Log in with the IAM user.
 5. [Create an IAM policy](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_create-console.html) called "terraform" with the following permissions:
 
-```json
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Sid": "SidTheGreater",
-            "Effect": "Allow",
-            "Action": [
-                "acm:AddTagsToCertificate",
-                "acm:DeleteCertificate",
-                "acm:DescribeCertificate",
-                "acm:ImportCertificate",
-                "acm:ListTagsForCertificate",
-                "acm:RenewCertificate",
-                "acm:RequestCertificate",
-                "apigateway:*",
-                "autoscaling:*",
-                "cloudfront:*",
-                "cognito-identity:*",
-                "cognito-idp:*",
-                "dynamodb:*",
-                "ec2:*",
-                "elasticfilesystem:*",
-                "elasticloadbalancing:*",
-                "iam:*",
-                "kms:CreateGrant",
-                "kms:DescribeKey",
-                "lambda:*",
-                "route53:ChangeResourceRecordSets",
-                "route53:ChangeTagsForResource",
-                "route53:CreateHostedZone",
-                "route53:DeleteHostedZone",
-                "route53:GetChange",
-                "route53:GetHostedZone",
-                "route53:ListHostedZonesByName",
-                "route53:ListResourceRecordSets",
-                "route53:ListTagsForResource",
-                "s3:*",
-                "s3-object-lambda:*",
-                "secretsmanager:GetRandomPassword",
-                "secretsmanager:ListSecrets",
-                "sts:GetCallerIdentity"
-            ],
-            "Resource": "*"
-        },
-        {
-            "Sid": "SidTheLesser",
-            "Effect": "Allow",
-            "Action": [
-                "secretsmanager:UntagResource",
-                "secretsmanager:DescribeSecret",
-                "secretsmanager:DeleteResourcePolicy",
-                "secretsmanager:PutSecretValue",
-                "secretsmanager:CreateSecret",
-                "secretsmanager:DeleteSecret",
-                "secretsmanager:CancelRotateSecret",
-                "secretsmanager:ListSecretVersionIds",
-                "secretsmanager:UpdateSecret",
-                "secretsmanager:GetResourcePolicy",
-                "secretsmanager:GetSecretValue",
-                "secretsmanager:PutResourcePolicy",
-                "secretsmanager:RestoreSecret",
-                "secretsmanager:RotateSecret",
-                "secretsmanager:UpdateSecretVersionStage",
-                "secretsmanager:ValidateResourcePolicy",
-                "secretsmanager:TagResource"
-            ],
-            "Resource": "arn:aws:secretsmanager:*:715401949493:secret:/cabal/*"
-        }
-    ]
-}
-```
+    ```json
+    {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Sid": "SidTheGreater",
+                "Effect": "Allow",
+                "Action": [
+                    "acm:AddTagsToCertificate",
+                    "acm:DeleteCertificate",
+                    "acm:DescribeCertificate",
+                    "acm:ImportCertificate",
+                    "acm:ListTagsForCertificate",
+                    "acm:RenewCertificate",
+                    "acm:RequestCertificate",
+                    "apigateway:*",
+                    "autoscaling:*",
+                    "cloudfront:*",
+                    "cognito-identity:*",
+                    "cognito-idp:*",
+                    "dynamodb:*",
+                    "ec2:*",
+                    "elasticfilesystem:*",
+                    "elasticloadbalancing:*",
+                    "iam:*",
+                    "kms:CreateGrant",
+                    "kms:DescribeKey",
+                    "lambda:*",
+                    "route53:ChangeResourceRecordSets",
+                    "route53:ChangeTagsForResource",
+                    "route53:CreateHostedZone",
+                    "route53:DeleteHostedZone",
+                    "route53:GetChange",
+                    "route53:GetHostedZone",
+                    "route53:ListHostedZonesByName",
+                    "route53:ListResourceRecordSets",
+                    "route53:ListTagsForResource",
+                    "s3:*",
+                    "s3-object-lambda:*",
+                    "secretsmanager:GetRandomPassword",
+                    "secretsmanager:ListSecrets",
+                    "sts:GetCallerIdentity"
+                ],
+                "Resource": "*"
+            },
+            {
+                "Sid": "SidTheLesser",
+                "Effect": "Allow",
+                "Action": [
+                    "secretsmanager:UntagResource",
+                    "secretsmanager:DescribeSecret",
+                    "secretsmanager:DeleteResourcePolicy",
+                    "secretsmanager:PutSecretValue",
+                    "secretsmanager:CreateSecret",
+                    "secretsmanager:DeleteSecret",
+                    "secretsmanager:CancelRotateSecret",
+                    "secretsmanager:ListSecretVersionIds",
+                    "secretsmanager:UpdateSecret",
+                    "secretsmanager:GetResourcePolicy",
+                    "secretsmanager:GetSecretValue",
+                    "secretsmanager:PutResourcePolicy",
+                    "secretsmanager:RestoreSecret",
+                    "secretsmanager:RotateSecret",
+                    "secretsmanager:UpdateSecretVersionStage",
+                    "secretsmanager:ValidateResourcePolicy",
+                    "secretsmanager:TagResource"
+                ],
+                "Resource": "arn:aws:secretsmanager:*:715401949493:secret:/cabal/*"
+            }
+        ]
+    }
+    ```
 
 6. Create an IAM Group called "terraform" and assign the above policy.
 7. Create an IAM User called "terraform" and assign the above group. This user should be progamatic only -- *no console*. Save the API key ID and secret. Note: you should rotate this key regularly!
@@ -163,7 +163,7 @@ After signing up, perform the following steps:
 
 1. [Create a worspace](https://learn.hashicorp.com/tutorials/terraform/cloud-workspace-create?in=terraform/cloud-get-started) of type version control workflow. Connect it to your forked repository.
 2. Using [terraform.tfvars.example](./terraform.tfvars.example) as a guide, [create variables in your workspace](https://learn.hashicorp.com/tutorials/terraform/cloud-workspace-configure?in=terraform/cloud-get-started).
-3. [Create environment variables](https://learn.hashicorp.com/tutorials/terraform/cloud-workspace-configure?in=terraform/cloud-get-started) for `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` using the values you saved from the AWS section step 7. The secret access key should be designated "sensitive". (Don't forget to rotate this key regularly!) Finally, create a third environment variable for `AWS_DEFAULT_REGION`. Set it to the same region you use for your primary infrastructure.
+3. [Create environment variables](https://learn.hashicorp.com/tutorials/terraform/cloud-workspace-configure?in=terraform/cloud-get-started) for `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` using the values you saved from the AWS section step 7. The secret access key should be designated "sensitive". (Don't forget to rotate this key regularly!) Finally, create a third environment variable for `AWS_DEFAULT_REGION`. Set it to the same region you use for your infrastructure.
 
 In addition to creating a workspace for this repository, there are two other repositories that will each need their own workspace. See below.
 
