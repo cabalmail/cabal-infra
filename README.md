@@ -1,12 +1,12 @@
 # cabal-infra
-Creates AWS infrastructure and machine configuration for a CabalMail system -- a system for hosting and managing your personal email.
+Creates AWS infrastructure and machine configuration for a Cabalmail system -- a system for hosting and managing your personal email.
 
-![CabalMail logo](./docs/logo.png)
+![Cabalmail logo](./docs/logo.png)
 
 WARNING: This should not be regarded as an enterprise or ISP-grade email solution. It has been tested on a small pool of users for their personal email. Use at your own risk!
 
 # About TL;DR
-CabalMail is a suite of infrastructure code ([Terraform](https://www.terraform.io/)) and configuration management code ([Chef Infra](https://www.chef.io/)) that together create the following system components:
+Cabalmail is a suite of infrastructure code ([Terraform](https://www.terraform.io/)) and configuration management code ([Chef Infra](https://www.chef.io/)) that together create the following system components:
 
 * IMAP hosts
 * SMTP relay hosts
@@ -14,22 +14,22 @@ CabalMail is a suite of infrastructure code ([Terraform](https://www.terraform.i
 * Administrative interface for managing addresses
 * Other supporting infrastructure
 
-CabalMail allows you to self-host your email and to create unique addresses for all the people, institutions, corporations, etc., with whom you communicate. This allows fine-grained control of who is allowed to insert mail in your inbox.
+Cabalmail allows you to self-host your email and to create unique addresses for all the people, institutions, corporations, etc., with whom you communicate. This allows fine-grained control of who is allowed to insert mail in your inbox.
 
 # About Continued
 
 ## Genesis
-CabalMail grew out of a bunch of scripts and configuration files that I originally set up when I wanted to take control of my own email hosting. Some time in the late 1990s, I started getting spammed at a third-party address that I had used for years. Spam filters were unreliable at the time, and my inbox quickly became unusable. I reluctantly abandoned that long-held account and went through the pain of contacting all my friends, family, and corporate interloqutors to update my contact information. I resolved to run my own mail system so that I would not have to go through that pain again. Later, when my son graduated from college, he and I made a project out of converting my scripts to Chef cookbooks. It was my son who chose the name "Cabal" for our project. More recently, I added Terraform code to manage the infrastructure.
+Cabalmail grew out of a bunch of scripts and configuration files that I originally set up when I wanted to take control of my own email hosting. Some time in the late 1990s, I started getting spammed at a third-party address that I had used for years. Spam filters were unreliable at the time, and my inbox quickly became unusable. I reluctantly abandoned that long-held account and went through the pain of contacting all my friends, family, and corporate interlocutors to update my contact information. I resolved to run my own mail system so that I would not have to go through that pain again. Later, when my son graduated from college, he and I made a project out of converting my scripts to Chef cookbooks. It was my son who chose the name "Cabal" for our project. More recently, I added Terraform code to manage the infrastructure.
 
-With CabalMail, you can manage your own self-hosted email system as I do.
+With Cabalmail, you can manage your own self-hosted email system as I do.
 
-But CabalMail is a little different than traditional email.
+But Cabalmail is a little different than traditional email.
 
 ## Subdomains
 
-What's special about CabalMail is that it forces you to create new subdomains for each address. If we assume your mail domain is example.com, then CabalMail will *not* support addresses of the form foo@example.com. Rather, each address will be hosted at a subdomain of example.com, such as foo@bar.example.com.
+What's special about Cabalmail is that it forces you to create new subdomains for each address. If we assume your mail domain is example.com, then Cabalmail will *not* support addresses of the form foo@example.com. Rather, each address will be hosted at a subdomain of example.com, such as foo@bar.example.com.
 
-By making it easy to create new addresses that point to a given inbox, CabalMail makes it feasible to create new addresses for each person, company, etc., that needs to contact you. This approach is similar to the technique of ["plus-addressing" or "subaddressing"](https://tools.ietf.org/id/draft-newman-email-subaddr-01.html).
+By making it easy to create new addresses that point to a given inbox, Cabalmail makes it feasible to create new addresses for each person, company, etc., that needs to contact you. This approach is similar to the technique of ["plus-addressing" or "subaddressing"](https://tools.ietf.org/id/draft-newman-email-subaddr-01.html).
 
 "So why not just use plus-addressing?" Good question. See the next section.
 
@@ -43,13 +43,13 @@ I almost never get spam. And when I do, I have a quick and easy solution.
 
 Moreover, I can easily identify where the leak came from. When I start getting phishing email from a friend, I warn that friend that their account has been compromised. And while I'm at it, I give them a new address with which to contact me. I can confidently identify which friend was affected, even if the phisher spoofs the From: address, as long as I have been careful to give each friend their own unique address at which to contact me.
 
-You _could_ use a CabalMail system along with client-side spam filters, but I recommend against it. Client-side spam filters process mail only after your servers have received and processed it. This hides the spam from you at the cost of gradually (or not-so-gradually) increasing the load on your infrastructure. By making your spam visible, you can easily intercede to reduce load on your infrastructure and keep humming along with small machines. Also, you eliminate false positives; never again will important mail be misidentified as junk.
+You _could_ use a Cabalmail system along with client-side spam filters, but I recommend against it. Client-side spam filters process mail only after your servers have received and processed it. This hides the spam from you at the cost of gradually (or not-so-gradually) increasing the load on your infrastructure. By making your spam visible, you can easily intercede to reduce load on your infrastructure and keep humming along with small machines. Also, you eliminate false positives; never again will important mail be misidentified as junk.
 
 ## Use Case
 
-Admitedly, CabalMail serves a specialized use case, which is definitely not for everyone. (With Google offering free mail with included spam filters, maybe CabalMail isn't for *anyone*.)
+Admitedly, Cabalmail serves a specialized use case, which is definitely not for everyone. (With Google offering free mail with included spam filters, maybe Cabalmail isn't for *anyone*.)
 
-To get the benefits of a CabalMail system, you must get used to creating a new email address *each and every time you provide your contact information to a third party.* The administrative interface makes this easy, but it _is_ an additional step.
+To get the benefits of a Cabalmail system, you must get used to creating a new email address *each and every time you provide your contact information to a third party.* The administrative interface makes this easy, but it _is_ an additional step.
 
 When I create a new address, I always leave it active until any of the following happen:
 
@@ -168,7 +168,7 @@ After signing up, perform the following steps:
 In addition to creating a workspace for this repository, there are two other repositories that will each need their own workspace. See below.
 
 ### Domain registration
-You must register your desired domains (control and mail) with your chosen registrar. CabalMail requires exactly one control domain and at least one mail domain. Registration requires an email address. You can use a temporary account with any of the free providers for this address, and later, you can update the registration records with a self-hosted address once your hosting infrastructure is up and running.
+You must register your desired domains (control and mail) with your chosen registrar. Cabalmail requires exactly one control domain and at least one mail domain. Registration requires an email address. You can use a temporary account with any of the free providers for this address, and later, you can update the registration records with a self-hosted address once your hosting infrastructure is up and running.
 
 The control domain is for infrastructure, not for email addresses. If you like to send mail from example.com, you might use example.net as your control domain. If so, then you would retrieve your mail from imap.example.net, send mail to smtp-out.example.net, and manage your addresses at admin.example.net.
 
