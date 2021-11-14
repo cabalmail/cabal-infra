@@ -208,8 +208,8 @@ Follow the steps above to create a Terraform Cloud workspace for this repository
 
 ## Post-Automation Steps
 
-### PTR Records
-The output contains the IP addresses of each of your outgoing mail relays. In order to send mail reliably, you must [set up PTR records](https://blog.mailtrap.io/ptr-record/) for each outgoing SMTP server. Only AWS can do this for their EIPs, and there is no API, so the process cannot be automated. Fill out [this form](https://console.aws.amazon.com/support/contacts?#/rdns-limits) for each outgoing SMTP sever. In addition to creating the necessary PTR records, it will also cause them to relax the rate limit on outgoing mail.
+### PTR Records and Port 25 Block
+The output contains the IP addresses of each of your outgoing mail relays. In order to send mail reliably, you must [set up PTR records](https://blog.mailtrap.io/ptr-record/) for each outgoing SMTP server, and [get AWS to allow outbound traffic on port 25](https://aws.amazon.com/premiumsupport/knowledge-center/ec2-port-25-throttle/). There is no API for this, so the process cannot be automated. Both tasks can be accomplished by filling out [this form](https://console.aws.amazon.com/support/contacts?#/rdns-limits) for each outgoing SMTP IP address.
 
 ### Name Servers
 The output contains the name servers that AWS assigned to your mail domains. To work at all, you must update your registrations with these name servers.
