@@ -6,7 +6,7 @@ resource "aws_route53_record" "cabal_imap_cname" {
   alias {
     name                   = aws_lb.cabal_nlb.dns_name
     zone_id                = aws_lb.cabal_nlb.zone_id
-    evaluate_target_health = true
+    evaluate_target_health = false
   }
 }
 
@@ -18,7 +18,7 @@ resource "aws_route53_record" "cabal_smtpout_cname" {
   alias {
     name                   = aws_lb.cabal_nlb.dns_name
     zone_id                = aws_lb.cabal_nlb.zone_id
-    evaluate_target_health = true
+    evaluate_target_health = false
   }
 }
 
@@ -30,6 +30,6 @@ resource "aws_route53_record" "cabal_smtpin_cname" {
   alias {
     name                   = aws_lb.cabal_nlb.dns_name
     zone_id                = aws_lb.cabal_nlb.zone_id
-    evaluate_target_health = true
+    evaluate_target_health = false
   }
 }
