@@ -1,0 +1,2 @@
+Copyright is asserted dating from the most recent commit on any particular file.
+All rights reserved.
