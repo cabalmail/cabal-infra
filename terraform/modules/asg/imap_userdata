@@ -18,7 +18,7 @@ node_name               'imap'
 cookbook_path [ '/var/lib/chef/cookbooks' ]
 EOF
 
-cat > '/var/lib/chef/attributes/imap.json' << EOF
+cat > '/var/lib/chef/attributes/node.json' << EOF
 {
   "sendmail": {
     "cert": "${control_domain}"
@@ -59,4 +59,4 @@ chmod go-rwx /etc/pki/tls/private/${control_domain}.key
 aws s3 cp s3://${artifact_bucket}/cabal.zip /var/lib/chef/cookbooks/cabal.zip
 cd /var/lib/chef/cookbooks
 unzip cabal.zip
-chef-solo -c /etc/chef/solo.rb -z -o "recipe[cabal::imap]" -j /var/lib/chef/attributes/imap.json
+chef-solo -c /etc/chef/solo.rb -z -o "recipe[cabal::imap]" -j /var/lib/chef/attributes/node.json

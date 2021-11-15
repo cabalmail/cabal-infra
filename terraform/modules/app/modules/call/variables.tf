@@ -41,3 +41,5 @@ variable "relay_ips" {
 variable "domains" {
   type = list
 }
+
+variable "documents" {}

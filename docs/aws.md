@@ -49,6 +49,7 @@ After signing up, perform the following steps:
                     "route53:ListTagsForResource",
                     "s3:*",
                     "s3-object-lambda:*",
+                    "ssm:*",
                     "secretsmanager:GetRandomPassword",
                     "secretsmanager:ListSecrets",
                     "sts:GetCallerIdentity"
