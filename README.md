@@ -94,8 +94,7 @@ Theoretically, it should also be safe to change any of the variables except the 
 ## Post-Automation Steps
 Look at the output from Terraform! If you are using Terraform Cloud, it is not shown by default; you have to expand it.
 
-<img src="./docs/output.jpg" width="250" />
-[full-size image](./docs/output.jpg)
+<a href="./docs/output.jpg"><img src="./docs/output.jpg" width="250" /></a>
 
 It should look something like this:
 
