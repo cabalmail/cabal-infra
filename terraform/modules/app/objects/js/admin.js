@@ -215,22 +215,25 @@ CabalAdmin.address = CabalAdmin.address || {};
       $("div.success").text(text);
       $("div.success").fadeIn( 300 ).delay( 15000 ).fadeOut( 400 );
     }
-
-    function uuidv4() {
-      return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
-        (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
-      )
-    }
+    
+    function randomString(length) {
+      var result = '';
+      var characters = 'abcdefghijklmnopqrstuvwxyz0123456789';
+   var charactersLength = characters.length;
+   for ( var i = 0; i < length; i++ ) {
+      result += characters.charAt(Math.floor(Math.random() * charactersLength));
+   }
+   return result;
+}
     
     function handleRandomClick(event) {
-      var uuid = uuidv4().split('-');
-      $('#cabalusername').val(uuid[0]+'-'+uuid[1]+'-'+uuid[2])
-      $('#subdomain').val(uuid[3]+'-'+uuid[4])
+      $('#cabalusername').val(randomString(8));
+      $('#subdomain').val(randomString(8));
     }
 
     function handleClearClick(event) {
-      $('#cabalusername').val('')
-      $('#subdomain').val('')
+      $('#cabalusername').val('');
+      $('#subdomain').val('');
     }
 
 }(jQuery));
