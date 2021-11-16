@@ -9,7 +9,8 @@ resource "aws_ssm_document" "cabal_document" {
       "parameters": {
         "commands": {
           "type": "String",
-          "description": "Run chef-solo on ${each.key} machines"
+          "description": "Run chef-solo on ${each.key} machines",
+          "default": "chef-solo -c /etc/chef/solo.rb -z -o 'recipe[cabal::${each.key}]' -j /var/lib/chef/attributes/node.json"
         }
       },
       "mainSteps": [
@@ -18,7 +19,7 @@ resource "aws_ssm_document" "cabal_document" {
         "inputs": {
           "timeoutSeconds": "300",
           "runCommand": [
-            "chef-solo -c /etc/chef/solo.rb -z -o 'recipe[cabal::${each.key}]' -j /var/lib/chef/attributes/node.json"
+            "{{ commands }}"
           ]
         }
       ]
