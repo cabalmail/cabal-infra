@@ -59,6 +59,11 @@ resource "aws_iam_role_policy" "cabal_lambda_policy" {
     "Statement": [
         {
             "Effect": "Allow",
+            "Action": "ssm:SendCommand",
+            "Resource": "arn:aws:ssm:${var.region}:${var.account}:document/cabal_*"
+        },
+        {
+            "Effect": "Allow",
             "Action": "route53:ChangeResourceRecordSets",
             "Resource": "arn:aws:route53:::hostedzone/*"
         },
