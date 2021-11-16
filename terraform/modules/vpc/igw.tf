@@ -23,3 +23,19 @@ resource "aws_route53_record" "cabal_smtp" {
   ttl     = 360
   records = aws_eip.cabal_nat_eip[*].public_ip
 }
+
+# No native way to do this in the aws terraform provider
+resource "null_resource" "create-endpoint" {
+  count = length(aws_eip.cabal_nat_eip)
+  triggers = {
+    ip_addresses = join(",", aws_eip.cabal_nat_eip.*.public_ip)
+    domain_name  = "smtp.${var.control_domain}"
+  }
+  provisioner "local-exec" {
+    command = join(" ", [
+      "aws ec2 modify-address-attribute",
+      "--allocation-id ${aws_eip.cabal_nat_eip[count.index]}.association_id",
+      "--domain-name smtp.${var.control_domain}"
+    ])
+  }
+}
