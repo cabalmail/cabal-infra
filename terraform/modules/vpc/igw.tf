@@ -15,3 +15,11 @@ resource "aws_eip" "cabal_nat_eip" {
     Name = "cabal-nat-eip-${count.index}"
   }
 }
+
+resource "aws_route53_record" "cabal_smtp" {
+  zone_id = var.zone_id
+  name    = "smtp.${control-domain}"
+  type    = "A"
+  ttl     = 360
+  records = aws_eip.cabal_nat_eip[*].public_ip
+}
