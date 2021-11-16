@@ -3,9 +3,9 @@ const ddb = new AWS.DynamoDB.DocumentClient();
 const r53 = new AWS.Route53();
 const control_domain = "${control_domain}";
 const chef_documents = {
-  "imap": "${documents['imap']}",
-  "smtp-in": "${documents['smtp-in']}",
-  "smtp-out": "${documents['smtp-out']}"
+  "imap": "${ssm_documents['imap']}",
+  "smtp-in": "${ssm_documents['smtp-in']}",
+  "smtp-out": "${ssm_documents['smtp-out']}"
 }
 const domains = ${jsonencode(domains)};
 

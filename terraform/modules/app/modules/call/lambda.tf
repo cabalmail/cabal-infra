@@ -6,7 +6,7 @@ data "archive_file" "cabal_lambda_zip" {
     content  = templatefile("${path.module}/../../${var.name}_source/index.js", {
       control_domain = var.control_domain
       domains        = {for domain in var.domains : domain.domain => domain.zone_id}
-      documents      = var.ssm_documents
+      ssm_documents  = var.ssm_documents
     })
     filename = "index.js"
   }
