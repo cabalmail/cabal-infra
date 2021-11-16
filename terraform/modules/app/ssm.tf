@@ -6,19 +6,22 @@ resource "aws_ssm_document" "cabal_document" {
   {
     "schemaVersion": "2.2",
     "description": "Run chef-solo",
-    "parameters": {
-    },
-    "mainSteps": {
-      "aws:runShellScript": {
-        "properties": [
-          {
-            "id": "0.aws:runShellScript",
-            "runCommand": [
-              "chef-solo -c /etc/chef/solo.rb -z -o 'recipe[cabal::${each.key}]' -j /var/lib/chef/attributes/node.json"
-            ]
-          }
-        ]
-      }
+      "parameters": {
+        "commands": {
+          "type": "String",
+          "description": "Run chef-solo on ${each.key} machines"
+        }
+      },
+      "mainSteps": [
+        "action": "aws:runShellScript",
+        "name": "runShellScript",
+        "inputs": {
+          "timeoutSeconds": "300",
+          "runCommand": [
+            "chef-solo -c /etc/chef/solo.rb -z -o 'recipe[cabal::${each.key}]' -j /var/lib/chef/attributes/node.json"
+          ]
+        }
+      ]
     }
   }
 DOC
