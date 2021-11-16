@@ -34,7 +34,7 @@ resource "null_resource" "create-endpoint" {
   provisioner "local-exec" {
     command = join(" ", [
       "aws ec2 modify-address-attribute",
-      "--allocation-id ${aws_eip.cabal_nat_eip[count.index].association_id}",
+      "--allocation-id ${aws_eip.cabal_nat_eip[count.index].allocation_id}",
       "--domain-name smtp.${var.control_domain}"
     ])
   }
