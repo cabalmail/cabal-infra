@@ -29,7 +29,7 @@ module "cabal_list_method" {
   control_domain   = var.control_domain
   relay_ips        = var.relay_ips
   domains          = var.domains
-  documents        = {
+  ssm_documents    = {
     for k, v in aws_ssm_document.cabal_document : k => v.arn
   }
 }
@@ -47,7 +47,7 @@ module "cabal_new_method" {
   control_domain   = var.control_domain
   relay_ips        = var.relay_ips
   domains          = var.domains
-  documents        = {
+  ssm_documents    = {
     for k, v in aws_ssm_document.cabal_document : k => v.arn
   }
 }
@@ -65,7 +65,7 @@ module "cabal_revoke_method" {
   control_domain   = var.control_domain
   relay_ips        = var.relay_ips
   domains          = var.domains
-  documents        = {
+  ssm_documents    = {
     for k, v in aws_ssm_document.cabal_document : k => v.arn
   }
 }

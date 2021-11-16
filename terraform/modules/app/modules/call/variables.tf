@@ -42,4 +42,4 @@ variable "domains" {
   type = list
 }
 
-variable "documents" {}
+variable "ssm_documents" {}
