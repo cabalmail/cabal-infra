@@ -18,7 +18,7 @@ resource "aws_eip" "cabal_nat_eip" {
 
 resource "aws_route53_record" "cabal_smtp" {
   zone_id = var.zone_id
-  name    = "smtp.${var.control-domain}"
+  name    = "smtp.${var.control_domain}"
   type    = "A"
   ttl     = 360
   records = aws_eip.cabal_nat_eip[*].public_ip
