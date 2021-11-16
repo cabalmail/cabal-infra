@@ -14,13 +14,15 @@ resource "aws_ssm_document" "cabal_document" {
       }
     },
     "mainSteps": [
-      "action": "aws:runShellScript",
-      "name": "runShellScript",
-      "inputs": {
-        "timeoutSeconds": "300",
-        "runCommand": [
-          "{{ commands }}"
-        ]
+      {
+        "action": "aws:runShellScript",
+        "name": "runShellScript",
+        "inputs": {
+          "timeoutSeconds": "300",
+          "runCommand": [
+            "{{ commands }}"
+          ]
+        }
       }
     ]
   }
