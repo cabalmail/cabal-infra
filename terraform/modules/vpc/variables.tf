@@ -17,3 +17,8 @@ variable "control_domain" {
   type        = string
   description = "Control domain."
 }
+
+variable "zone_id" {
+  type        = string
+  description = "Public zone for control domain."
+}

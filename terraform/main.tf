@@ -57,6 +57,7 @@ module "cabal_vpc" {
   cidr_block     = var.cidr_block
   control_domain = var.control_domain
   az_list        = var.availability_zones
+  zone_id        = var.zone_id
 }
 
 # Creates a network load balancer shared by machines in the stack
