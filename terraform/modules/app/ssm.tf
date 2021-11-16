@@ -4,7 +4,7 @@ resource "aws_ssm_document" "cabal_document" {
   document_type = "Command"
   content = <<DOC
   {
-    "schemaVersion": "1.2",
+    "schemaVersion": "2.0",
     "description": "Run chef-solo",
     "parameters": {
     },
