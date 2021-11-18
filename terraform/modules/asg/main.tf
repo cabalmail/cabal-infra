@@ -7,7 +7,7 @@ resource "aws_launch_configuration" "cabal_cfg" {
   lifecycle {
     create_before_destroy = true
   }
-  user_data             = templatefile("${path.module}/${var.type}_userdata", {
+  user_data             = templatefile("${path.module}/templates/${var.type}_userdata", {
     control_domain  = var.control_domain,
     artifact_bucket = var.artifact_bucket,
     efs_dns         = var.efs_dns,
