@@ -60,6 +60,10 @@ variable "mail_domains" {
     ])
     error_message = "One or more of the mail_domains does not appear to be a valid domain name."
   }
+  validation {
+    condition = length(var.mail_domains) > 0
+    error_message = "You must have at least one mail_domain."
+  }
 }
 
 variable "imap_scale" {
