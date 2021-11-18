@@ -5,7 +5,7 @@ resource "aws_s3_bucket" "cabal_cookbook_bucket" {
 
 data "archive_file" "cabal_cookbook_archive" {
   type        = "zip"
-  source_dir  = "${path.module}/../../../chef/"
+  source_dir  = "${path.module}/../../../../chef/"
   output_path = "${path.module}/cabal_cookbook.zip"
 }
 
