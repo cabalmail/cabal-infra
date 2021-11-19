@@ -67,14 +67,23 @@ The control domain is for infrastructure, not for email addresses. If you like t
 ## Provisioning
 
 1. Set up the prerequisites above.
-2. Queue a plan in your Terraform Cloud terraform/dns workspace.
-3. When it finishes the plan phase, confirm and apply.
-4. The output will include name servers. Update the domain registration with these name servers.
-5. The output will also include a zone ID. Update the `zone_id` variable for the terraform/infra workspace with this ID.
-6. Queue a plan in your Terraform Cloud terraform/cert workspace.
-7. When it finishes the plan phase, confirm and apply.
-8. Queue a plan in your Terraform Cloud terraform/infra workspace.
-9. When it finishes the plan phase, confirm and apply.
+
+2. Run the terraform/dns stack.
+
+    1. Queue a plan in your Terraform Cloud terraform/dns workspace.
+    2. When it finishes the plan phase, confirm and apply.
+    3. The output will include name servers. Update the domain registration with these name servers.
+    4. The output will also include a zone ID. Update the `zone_id` variable for the terraform/infra workspace with this ID.
+
+3. Run the terraform/cert workspace.
+
+    1. Queue a plan in your Terraform Cloud terraform/cert workspace.
+    2. When it finishes the plan phase, confirm and apply.
+
+4. Run the terraform/infra workspace.
+
+    1. Queue a plan in your Terraform Cloud terraform/infra workspace.
+    2. When it finishes the plan phase, confirm and apply.
 
 ## Reprovisioning
 
