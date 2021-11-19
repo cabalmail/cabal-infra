@@ -86,5 +86,6 @@ After signing up, perform the following steps:
 
 6. Create an IAM Group called "terraform" and assign the above policy.
 7. Create an IAM User called "terraform" and assign the above group. This user should be progamatic only -- *no console*. Save the API key ID and secret. Note: you should rotate this key regularly!
+8. Optional but recommended: delete the default VPC in all regions.
 
 If you have followed the recommendation to create a dedicated account, then the above steps should be the *only* manual steps required in this account. Everything else should be managed by Terraform.
