@@ -13,7 +13,7 @@ variable "repo" {
   description = "This repository. Used for tagging resources."
 }
 
-variable "domain" {
+variable "control_domain" {
   type        = string
   description = "The domain for the certificate."
 }

@@ -37,10 +37,10 @@ resource "aws_secretsmanager_secret_version" "cabal_private_key_secret_version" 
 resource "tls_cert_request" "cabal_request" {
   key_algorithm             = "RSA"
   private_key_pem           = tls_private_key.cabal_cert_private_key.private_key_pem
-  dns_names                 = ["*.${var.domain}"]
+  dns_names                 = ["*.${var.control_domain}"]
 
   subject {
-    common_name = var.domain
+    common_name = var.control_domain
   }
 }
 

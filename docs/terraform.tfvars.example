@@ -1,3 +1,62 @@
+###################################
+## for terraform/cert workspace  ##
+###################################
+
+# Pick the AWS region closest to your end user population. A
+# single VPC will be created, and all infrastructure will be
+# inside of it.
+
+aws_region = "us-west-1"
+
+# This value is used to tag resources. If you have forked the
+# repository and wish to tag with your own repository, uncomment
+# this line and replace the value with your own.
+
+# repo = "https://github.com/example/cabal-infra/tree/main"
+
+# Specify the root domain to be used to name control nodes on the
+# CabalMail system. For example, if you want to host IMAP at
+# imap.example.net, and SMTP at smtprelay1.example.net, then this
+# should be set to "example.net"
+
+control_domain = "example.net"
+
+# Set this to true to use Lets Encrypt's production API. Defaults
+# to false.
+
+# prod = true
+
+# Email to use for Lets Encrypt's API.
+
+email = "your_email@example.com"
+
+###################################
+## for terraform/dns workspace   ##
+###################################
+
+# Pick the AWS region closest to your end user population. A
+# single VPC will be created, and all infrastructure will be
+# inside of it.
+
+aws_region = "us-west-1"
+
+# This value is used to tag resources. If you have forked the
+# repository and wish to tag with your own repository, uncomment
+# this line and replace the value with your own.
+
+# repo = "https://github.com/example/cabal-infra/tree/main"
+
+# Specify the root domain to be used to name control nodes on the
+# CabalMail system. For example, if you want to host IMAP at
+# imap.example.net, and SMTP at smtprelay1.example.net, then this
+# should be set to "example.net"
+
+control_domain = "example.net"
+
+###################################
+## for terraform/infra workspace ##
+###################################
+
 # Pick the AWS region closest to your end user population. A
 # single VPC will be created, and all infrastructure will be
 # inside of it.
