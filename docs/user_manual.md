@@ -10,7 +10,7 @@ The included serverless app can be used to create and revoke email addresses.
 : Approves or rejects requests to create new accounts
 
 ## Working with the App (End User)<a name="user"></a>
-As an end user, you must first establish an account. Once approved, you can use the app to create and revoke addresses. All addresses that you create are aliased to a single inbox. You can reach the app at `https://admin.example.com/` (substituting your control domain for `example.com`).
+As an end user, you must first establish an account. Once approved, you can use the app to create and revoke addresses. All addresses that you create are aliased to a single inbox. You can reach the app at `https://admin.example.net/` (substituting your control domain for `example.net`).
 
 ### Creating an Account
 1. Visit the login page at the admin URL.
