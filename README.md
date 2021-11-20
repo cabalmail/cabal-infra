@@ -72,7 +72,7 @@ The control domain is for infrastructure, not for email addresses. If you like t
 
     1. Queue a plan in your Terraform Cloud terraform/dns workspace.
     2. When it finishes the plan phase, confirm and apply.
-    3. The output will include name servers. Update the domain registration with these name servers.
+    3. The output will include name servers. Update the domain registration for your control domain with these name servers.
     4. The output will also include a zone ID. Update the `zone_id` variable for the terraform/infra workspace with this ID.
 
 3. Run the terraform/cert workspace.
@@ -93,9 +93,7 @@ Theoretically, it should also be safe to change any of the variables except the 
 
 ## Post-Automation Steps
 
-Look at the output from Terraform! If you are using Terraform Cloud, it is not shown by default; you have to expand it.
-
-<a href="./docs/output.jpg"><img src="./docs/output.jpg" width="250" /></a>
+Look at the output from Terraform! If you are using Terraform Cloud, it is not shown by default; you have to expand it in the UI.
 
 It should look something like this:
 
