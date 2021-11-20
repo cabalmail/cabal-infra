@@ -72,7 +72,7 @@ The control domain is for infrastructure, not for email addresses. If you like t
 
     1. Queue a plan in your Terraform Cloud terraform/dns workspace.
     2. When it finishes the plan phase, confirm and apply.
-    3. The output will include name servers. Update the domain registration for your control domain with these name servers.
+    3. The output will include name servers. [Update the domain registration](./docs/registrar.md) for your control domain with these name servers. Before proceeding to the next step, make sure this change is complete.
     4. The output will also include a zone ID. Update the `zone_id` variable for the terraform/infra workspace with this ID.
 
 3. Run the terraform/cert workspace.
@@ -133,7 +133,7 @@ It should look something like this:
 
 ### Name Servers (What to do with the `domains` output)
 
-The output contains the name servers that AWS assigned to your mail domains. To work at all, you must update your domain registrations with these name servers. Consult your registrar for instructions on changing your DNS servers. If you use AWS as your registrar, you can follow their instructions [here](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/domain-name-servers-glue-records.html).
+The output contains the name servers that AWS assigned to your mail domains. To work at all, you must [update your domain registrations with these name servers](./docs/registrar.md).
 
 ### PTR Records and Port 25 Block (What to do with the `relay_ips` output)
 
