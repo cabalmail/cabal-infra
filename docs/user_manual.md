@@ -3,11 +3,11 @@ The included serverless app can be used to create and revoke email addresses.
 
 ## Personas
 
-[Administrator](#admin)
-: Approves or rejects requests to create new accounts
-
 [End User](#user)
 : Creates and revokes email addresses for their own use
+
+[Administrator](#admin)
+: Approves or rejects requests to create new accounts
 
 ## Working with the App (End User)<a name="user"></a>
 As an end user, you must first establish an account. Once approved, you can use the app to create and revoke addresses. All addresses that you create are aliased to a single inbox. You can reach the app at `https://admin.example.com/` (substituting your control domain for `example.com`).
@@ -78,6 +78,8 @@ When done, log out of the application by tapping the exit-door icon in the lower
 
 ## Managing Accounts (Administrator)<a name="admin"></a>
 
+Cabalmail does not create a custom user interface for administering end user accounts. Rather, this is done in the AWS Cognito console.
+
 ### Approving Account Requests
 1. Log in to your AWS account using the IAM user that you created during [AWS setup step 2](./aws.md).
 2. Make sure you are in the correct AWS region (as specified in your Terraform variables). Use the menu in the upper right of the AWS console if you need to change regions.
@@ -103,29 +105,3 @@ When done, log out of the application by tapping the exit-door icon in the lower
 ### Deleting an Account
 1. Follow the steps in [Disabling an Account](#disable).
 2. Click the "Delete user" button.
-
-# Configuring Mail User Agentss (Email Clients)
-Email clients differ, but the basic settings are these (substituting your control domain for `example.com`):
-
-## Incoming Settings
-|Setting |Value                   |
-|--------|------------------------|
-|Type    |IMAP                    |
-|Port    |993                     |
-|SSL     |Yes                     |
-|Login   |Plain                   |
-|Server  |imap.example.com        |
-|Username|As entered during signup|
-|Password|As entered during signup|
-
-## Outgoing Settings
-|Setting  |Value                  |
-|---------|-----------------------|
-|Type     |SMTP or SMTPS          |
-|Port     |465                    |
-|SSL      |Yes                    |
-|StartTLS |No                     |
-|Login    |Plain                  |
-|Server   |smtp-out.example.com   |
-|Username|As entered during signup|
-|Password|As entered during signup|
