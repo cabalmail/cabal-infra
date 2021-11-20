@@ -143,10 +143,14 @@ The output contains the IP address of each of your outgoing mail relay. In order
 
 # Backups
 
-The code in this repository *does not* establish any form of backup. Mail is stored in AWS Elastic File System, and address data is stored in DynamoDB. AWS EFS is designed to achieve [99.999999999% (eleven nines) durability](https://aws.amazon.com/efs/faq/#Data_protection_.26_availability). AWS does not publish a durability rating for DynamoDB, but they [do say](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Introduction.html#ddb_highavailability) that they replicate DynamoDB tables across multiple availability zones for "high durability".
+The code in this repository *does not* establish any form of backup. Mail is stored in AWS Elastic File System, and address data is stored in DynamoDB. AWS EFS is designed to achieve [99.999999999% (eleven nines) durability](https://aws.amazon.com/efs/faq/#Data_protection_.26_availability). AWS does not publish a durability rating for DynamoDB, but they [do say](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Introduction.html#ddb_highavailability) that they replicate DynamoDB tables across multiple availability zones for "high durability". But AWS's SLA cannot save you from a user who says they accidentally deleted something important and needs your help to restore it.
 
 You are responsible for your own backups.
 
 # Everyday Use
 
 See the [User Manual](./docs/user_manual.md) for instructions on using the included application for creating and revoking email addresses.
+
+# Contributing
+
+This is my first open source project, so I don't have a rich
