@@ -49,6 +49,7 @@ See [these suggestions](./docs/operations.md) for assuring the continued smooth 
 # End User Set Up and Day-to-day Use
 
 See the linked docouments for information on:
+
 * Setting up [Mail User Agents](./docs/mua_setup.md) such as Outlook, Thunderbird, iOS Mail, etc.
 * Working with [the Cabalmail App](./docs/user_manual.md) and managing user accounts.
 
