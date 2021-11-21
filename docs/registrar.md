@@ -10,7 +10,7 @@ To update the name servers for a domain registration, follow the instructions at
 * [Google](https://support.google.com/domains/answer/3290309?hl=en)
 * [HostGator](https://www.hostgator.com/help/article/changing-name-servers-with-launchpad)
 * [Hostinger](https://www.hostinger.com/tutorials/how-to-change-domain-nameservers)
-* [Inmotion Hosting](https://www.inmotionhosting.com/support/domain-names/changing-your-domains-nameservers/)
+* [Inmotion Hosting](https://www.inmotionhosting.com/support/domain-names/change-domain-nameservers-amp/)
 * [Ionos](https://www.ionos.com/help/domains/using-your-own-name-servers/add-change-or-delete-an-ns-record-for-a-subdomain/)
 * [Just Host](https://my.justhost.com/cgi/help/222)
 * [Media Temple](https://mediatemple.net/community/products/dv/204643220/how-do-i-edit-my-domain%27s-nameservers)
