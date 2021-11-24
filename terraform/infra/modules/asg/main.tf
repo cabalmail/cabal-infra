@@ -7,7 +7,7 @@ resource "aws_launch_configuration" "cabal_cfg" {
   lifecycle {
     create_before_destroy = true
   }
-  user_data             = templatefile("${path.module}/templates/${var.type}_userdata", {
+  user_data             = templatefile("${path.module}/templates/userdata", {
     control_domain  = var.control_domain,
     artifact_bucket = var.artifact_bucket,
     efs_dns         = var.efs_dns,
@@ -16,7 +16,8 @@ resource "aws_launch_configuration" "cabal_cfg" {
     pool_id         = var.user_pool_id,
     chef_license    = var.chef_license,
     type            = var.type,
-    private_zone_id = var.private_zone.zone_id
+    private_zone_id = var.private_zone.zone_id,
+    cidr            = var.cidr_block
   })
 }
 
