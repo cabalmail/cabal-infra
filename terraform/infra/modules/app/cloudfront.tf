@@ -4,7 +4,7 @@ resource "aws_cloudfront_origin_access_identity" "origin" {
 
 resource "aws_cloudfront_distribution" "cdn" {
   origin {
-    domain_name = aws_s3_bucket.website_bucket.bucket_regional_domain_name
+    domain_name = aws_s3_bucket.website.bucket_regional_domain_name
     origin_id   = "cabal_admin_s3"
 
     s3_origin_config {
