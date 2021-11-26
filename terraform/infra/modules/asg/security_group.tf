@@ -1,10 +1,10 @@
-resource "aws_security_group" "cabal_sg" {
+resource "aws_security_group" "sg" {
   name        = "cabal-${var.type}-sg"
   description = "Allow ${var.type} inbound traffic"
   vpc_id      = var.vpc.id
 }
 
-resource "aws_security_group_rule" "allow_all" {
+resource "aws_security_group_rule" "allow_out" {
   type              = "egress"
   protocol          = "-1"
   to_port           = 0
@@ -12,10 +12,10 @@ resource "aws_security_group_rule" "allow_all" {
   description       = "Allow all outgoing"
   cidr_blocks       = ["0.0.0.0/0"]
   ipv6_cidr_blocks  = ["::/0"]
-  security_group_id = aws_security_group.cabal_sg.id
+  security_group_id = aws_security_group.sg.id
 }
 
-resource "aws_security_group_rule" "allow" {
+resource "aws_security_group_rule" "allow_in_world" {
   count             = length(var.ports)
   type              = "ingress"
   protocol          = "tcp"
@@ -24,10 +24,10 @@ resource "aws_security_group_rule" "allow" {
   description       = "Allow incoming port ${var.ports[count.index]} ${var.type} from anywhere"
   cidr_blocks       = ["0.0.0.0/0"]
   ipv6_cidr_blocks  = ["::/0"]
-  security_group_id = aws_security_group.cabal_sg.id
+  security_group_id = aws_security_group.sg.id
 }
 
-resource "aws_security_group_rule" "allow_local" {
+resource "aws_security_group_rule" "allow_in_local" {
   count             = length(var.private_ports)
   type              = "ingress"
   protocol          = "tcp"
@@ -35,5 +35,5 @@ resource "aws_security_group_rule" "allow_local" {
   from_port         = var.private_ports[count.index]
   description       = "Allow incoming port ${var.private_ports[count.index]} ${var.type} from the local CIDR"
   cidr_blocks       = [var.cidr_block]
-  security_group_id = aws_security_group.cabal_sg.id
+  security_group_id = aws_security_group.sg.id
 }

@@ -10,7 +10,7 @@ data "aws_ami" "amazon_linux_2" {
 
 data "aws_default_tags" "current" {}
 
-data "aws_iam_policy" "ssm_policy" {
+data "aws_iam_policy" "ssm" {
   arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 

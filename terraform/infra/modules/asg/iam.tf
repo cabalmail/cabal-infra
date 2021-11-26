@@ -1,4 +1,4 @@
-resource "aws_iam_policy" "cabal_policy" {
+resource "aws_iam_policy" "node_permissions" {
   name        = "cabal-${var.type}-access"
   path        = "/"
   description = "Policies for ${var.type} machines"
@@ -64,7 +64,7 @@ resource "aws_iam_policy" "cabal_policy" {
   })
 }
 
-resource "aws_iam_role" "cabal_role" {
+resource "aws_iam_role" "node_permissions" {
   name = "cabal-${var.type}-role"
 
   assume_role_policy = <<EOF
@@ -84,17 +84,17 @@ resource "aws_iam_role" "cabal_role" {
 EOF
 }
 
-resource "aws_iam_role_policy_attachment" "cabal_role_attachment_1" {
-  role       = aws_iam_role.cabal_role.name
-  policy_arn = data.aws_iam_policy.ssm_policy.arn
+resource "aws_iam_role_policy_attachment" "attachment_1" {
+  role       = aws_iam_role.node_permissions.name
+  policy_arn = data.aws_iam_policy.ssm.arn
 }
 
-resource "aws_iam_role_policy_attachment" "cabal_role_attachment_2" {
-  role       = aws_iam_role.cabal_role.name
-  policy_arn = aws_iam_policy.cabal_policy.arn
+resource "aws_iam_role_policy_attachment" "attachment_2" {
+  role       = aws_iam_role.node_permissions.name
+  policy_arn = aws_iam_policy.node_permissions.arn
 }
 
-resource "aws_iam_instance_profile" "cabal_instance_profile" {
+resource "aws_iam_instance_profile" "asg" {
   name = "cabal-${var.type}-profile"
-  role = aws_iam_role.cabal_role.name
+  role = aws_iam_role.node_permissions.name
 }
