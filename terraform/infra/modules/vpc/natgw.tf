@@ -47,4 +47,12 @@ resource "null_resource" "create-endpoint" {
       "--domain-name smtp.${var.control_domain}"
     ])
   }
+  provisioner "local-exec" {
+    when    = destroy
+    command = join(" ", [
+      "aws ec2 modify-address-attribute",
+      "--allocation-id ${aws_nat_gateway.nat[count.index].allocation_id}",
+      "--domain-name ''"
+    ])
+  }
 }
