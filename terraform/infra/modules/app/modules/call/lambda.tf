@@ -25,12 +25,12 @@ resource "aws_lambda_permission" "api_exec" {
       var.gateway_id
     ]),
     "/*/",
-    aws_api_gateway_method.cabal_method.http_method,
-    aws_api_gateway_resource.cabal_resource.path
+    aws_api_gateway_method.api_call.http_method,
+    aws_api_gateway_resource.api_call.path
   ])
 }
 
-resource "aws_iam_role" "cabal_lambda_role" {
+resource "aws_iam_role" "lambda" {
   name = "${var.name}_role"
 
   assume_role_policy = <<ROLEPOLICY
@@ -50,9 +50,9 @@ resource "aws_iam_role" "cabal_lambda_role" {
 ROLEPOLICY
 }
 
-resource "aws_iam_role_policy" "cabal_lambda_policy" {
+resource "aws_iam_role_policy" "lambda" {
   name   = "${var.name}_policy"
-  role   = aws_iam_role.cabal_lambda_role.id
+  role   = aws_iam_role.lambda.id
   policy = <<RUNPOLICY
 {
     "Version": "2012-10-17",
@@ -110,7 +110,7 @@ resource "aws_lambda_function" "api_call" {
   filename = "${var.name}_lambda.zip"
   source_code_hash = data.archive_file.code.output_base64sha256
   function_name = var.name
-  role = aws_iam_role.cabal_lambda_role.arn
+  role = aws_iam_role.lambda.arn
   handler = "index.handler"
   runtime = var.runtime
 }
