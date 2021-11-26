@@ -1,4 +1,4 @@
-resource "aws_acm_certificate" "cabal_elb_cert" {
+resource "aws_acm_certificate" "cert" {
   domain_name       = "*.${var.control_domain}"
   validation_method = "DNS"
   tags              = {
@@ -9,9 +9,9 @@ resource "aws_acm_certificate" "cabal_elb_cert" {
   }
 }
 
-resource "aws_route53_record" "cabal_elb_cert_dns" {
+resource "aws_route53_record" "cert" {
   for_each = {
-    for dvo in aws_acm_certificate.cabal_elb_cert.domain_validation_options : dvo.domain_name => {
+    for dvo in aws_acm_certificate.cert.domain_validation_options : dvo.domain_name => {
       name   = dvo.resource_record_name
       record = dvo.resource_record_value
       type   = dvo.resource_record_type
@@ -26,7 +26,7 @@ resource "aws_route53_record" "cabal_elb_cert_dns" {
   zone_id         = var.zone_id
 }
 
-resource "aws_acm_certificate_validation" "cabal_elb_cert_validation" {
-  certificate_arn         = aws_acm_certificate.cabal_elb_cert.arn
-  validation_record_fqdns = [for record in aws_route53_record.cabal_elb_cert_dns : record.fqdn]
+resource "aws_acm_certificate_validation" "cert" {
+  certificate_arn         = aws_acm_certificate.cert.arn
+  validation_record_fqdns = [for record in aws_route53_record.cert : record.fqdn]
 }
