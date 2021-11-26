@@ -22,9 +22,9 @@ resource "aws_nat_gateway" "nat" {
   provisioner "local-exec" {
     when    = destroy
     command = join(" ", [
-      "aws ec2 modify-address-attribute",
+      "aws ec2 reset-address-attribute",
       "--allocation-id ${self.allocation_id}",
-      "--domain-name ''"
+      "--attribute domain-name"
     ])
   }
 }
