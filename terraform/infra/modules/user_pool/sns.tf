@@ -1,9 +1,9 @@
 resource "aws_iam_role" "users" {
   name               = "cabal_sns_role"
-  assume_role_policy = data.aws_iam_policy_document.users.json
+  assume_role_policy = data.aws_iam_policy_document.sns_users.json
 }
 
-data "aws_iam_policy_document" "users" {
+data "aws_iam_policy_document" "sns_users" {
   statement {
     actions = [
       "sns:Publish",
