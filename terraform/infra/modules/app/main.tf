@@ -144,7 +144,7 @@ resource "aws_api_gateway_account" "apigw_account" {
 
 resource "aws_api_gateway_method_settings" "settings" {
   rest_api_id = aws_api_gateway_rest_api.gateway.id
-  stage_name  = aws_api_gateway_stage.api_stage.stage_name
+  stage_name  = "prod"
   method_path = "*/*"
   settings {
     metrics_enabled        = true
@@ -153,4 +153,7 @@ resource "aws_api_gateway_method_settings" "settings" {
     throttling_rate_limit  = 100
     throttling_burst_limit = 50
   }
+  depends_on [
+    aws_api_gateway_stage.api_stage
+  ]
 }
