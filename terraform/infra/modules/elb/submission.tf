@@ -54,7 +54,7 @@ resource "aws_lb_target_group" "starttls" {
     unhealthy_threshold = 2
   }
   depends_on           = [
-    aws_lb.cabal_nlb
+    aws_lb.elb
   ]
 
   lifecycle {
