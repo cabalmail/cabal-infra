@@ -11,32 +11,33 @@ provider "acme" {
   server_url = var.prod ? local.prod_url : local.stage_url
 }
 
-resource "tls_private_key" "cabal_reg_private_key" {
+resource "tls_private_key" "key" {
   algorithm = "RSA"
 }
 
-resource "acme_registration" "cabal_registration" {
-  account_key_pem = tls_private_key.cabal_reg_private_key.private_key_pem
+resource "acme_registration" "reg" {
+  account_key_pem = tls_private_key.key.private_key_pem
   email_address   = var.email
 }
 
-resource "tls_private_key" "cabal_cert_private_key" {
+resource "tls_private_key" "pk" {
   algorithm = "RSA"
 }
 
-resource "aws_secretsmanager_secret" "cabal_private_key_secret" {
-  name                    = "/cabal/control_domain_ssl_key"
-  recovery_window_in_days = 0
+resource "aws_ssm_parameter" "cabal_private_key" {
+  name        = "/cabal/control_domain_ssl_key"
+  description = "Cabal SSL Key"
+  type        = "SecureString"
+  value       = tls_private_key.pk.private_key_pem
+
+  tags = {
+    environment = "production"
+  }
 }
 
-resource "aws_secretsmanager_secret_version" "cabal_private_key_secret_version" {
-  secret_id     = aws_secretsmanager_secret.cabal_private_key_secret.id
-  secret_string = tls_private_key.cabal_cert_private_key.private_key_pem
-}
-
-resource "tls_cert_request" "cabal_request" {
+resource "tls_cert_request" "csr" {
   key_algorithm             = "RSA"
-  private_key_pem           = tls_private_key.cabal_cert_private_key.private_key_pem
+  private_key_pem           = tls_private_key.pk.private_key_pem
   dns_names                 = ["*.${var.control_domain}"]
 
   subject {
@@ -44,9 +45,9 @@ resource "tls_cert_request" "cabal_request" {
   }
 }
 
-resource "acme_certificate" "cabal_certificate" {
-  account_key_pem           = acme_registration.cabal_registration.account_key_pem
-  certificate_request_pem   = tls_cert_request.cabal_request.cert_request_pem
+resource "acme_certificate" "cert" {
+  account_key_pem           = acme_registration.reg.account_key_pem
+  certificate_request_pem   = tls_cert_request.csr.cert_request_pem
   recursive_nameservers = [
     "8.8.8.8:53",
     "8.8.4.4:53"
@@ -56,22 +57,24 @@ resource "acme_certificate" "cabal_certificate" {
   }
 }
 
-resource "aws_secretsmanager_secret" "cabal_cert_secret" {
-  name                    = "/cabal/control_domain_ssl_cert"
-  recovery_window_in_days = 0
+resource "aws_ssm_parameter" "cabal_cert" {
+  name        = "/cabal/control_domain_ssl_cert"
+  description = "Cabal SSL Certificate"
+  type        = "SecureString"
+  value       = acme_certificate.cert.certificate_pem
+
+  tags = {
+    environment = "production"
+  }
 }
 
-resource "aws_secretsmanager_secret_version" "cabal_cert_secret_version" {
-  secret_id     = aws_secretsmanager_secret.cabal_cert_secret.id
-  secret_string = acme_certificate.cabal_certificate.certificate_pem
-}
+resource "aws_ssm_parameter" "cabal_chain" {
+  name        = "/cabal/control_domain_chain_cert"
+  description = "Cabal Chain Certificate"
+  type        = "SecureString"
+  value       = acme_certificate.cert.issuer_pem
 
-resource "aws_secretsmanager_secret" "cabal_chain_secret" {
-  name                    = "/cabal/control_domain_chain_cert"
-  recovery_window_in_days = 0
-}
-
-resource "aws_secretsmanager_secret_version" "cabal_chain_secret_version" {
-  secret_id     = aws_secretsmanager_secret.cabal_chain_secret.id
-  secret_string = acme_certificate.cabal_certificate.issuer_pem
+  tags = {
+    environment = "production"
+  }
 }
