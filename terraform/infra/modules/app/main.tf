@@ -153,7 +153,7 @@ resource "aws_api_gateway_method_settings" "settings" {
     throttling_rate_limit  = 100
     throttling_burst_limit = 50
   }
-  depends_on [
+  depends_on = [
     aws_api_gateway_stage.api_stage
   ]
 }
