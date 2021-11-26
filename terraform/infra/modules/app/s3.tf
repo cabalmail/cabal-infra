@@ -16,7 +16,7 @@ resource "aws_s3_bucket_policy" "cabal_website_bucket_policy" {
           "Sid": "Viscious",
           "Effect": "Allow",
           "Principal": {
-            "AWS": aws_cloudfront_origin_access_identity.cabal_s3_origin.iam_arn
+            "AWS": aws_cloudfront_origin_access_identity.origin.iam_arn
           },
           "Action": "s3:GetObject",
           "Resource": "arn:aws:s3:::admin.${var.control_domain}/*"
