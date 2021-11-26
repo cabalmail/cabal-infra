@@ -11,6 +11,18 @@ data "aws_iam_policy_document" "users" {
   }
 }
 
+data "aws_iam_policy_document" "sns_users" {
+  statement {
+    actions = [
+      "sns:Publish",
+    ]
+
+    resources = [
+      "*",
+    ]
+  }
+}
+
 variable "control_domain" {
   type        = string
   description = "Base for auth domain. E.g., if control_domain is example.com, then the autho domain will be auth.example.com."
