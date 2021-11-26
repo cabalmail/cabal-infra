@@ -88,10 +88,7 @@ resource "aws_api_gateway_deployment" "deployment" {
 resource "aws_api_gateway_stage" "api_stage" {
   deployment_id = aws_api_gateway_deployment.deployment.id
   rest_api_id   = aws_api_gateway_rest_api.gateway.id
-  stage_name    = "prod"
-  depends_on    = [
-    aws_api_gateway_method_settings.settings
-  ]
+  stage_name    = aws_api_gateway_method_settings.settings.stage_name
 }
 
 resource "aws_iam_role" "cloudwatch" {
@@ -153,7 +150,4 @@ resource "aws_api_gateway_method_settings" "settings" {
     throttling_rate_limit  = 100
     throttling_burst_limit = 50
   }
-  depends_on = [
-    aws_api_gateway_stage.api_stage
-  ]
 }
