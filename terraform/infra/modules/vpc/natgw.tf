@@ -26,7 +26,7 @@ resource "aws_eip" "nat_eip" {
   provisioner "local-exec" {
     command = join(" ", [
       "aws ec2 modify-address-attribute",
-      "--allocation-id ${self[count.index].allocation_id}",
+      "--allocation-id ${self.allocation_id}",
       "--domain-name smtp.${var.control_domain}"
     ])
   }
@@ -34,7 +34,7 @@ resource "aws_eip" "nat_eip" {
     when    = destroy
     command = join(" ", [
       "aws ec2 modify-address-attribute",
-      "--allocation-id ${self[count.index].allocation_id}",
+      "--allocation-id ${self.allocation_id}",
       "--domain-name ''"
     ])
   }
