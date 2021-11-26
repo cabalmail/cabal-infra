@@ -15,7 +15,7 @@ data "archive_file" "code" {
 resource "aws_lambda_permission" "api_exec" {
   statement_id  = "AllowExecutionFromAPIGateway"
   action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.cabal_lambda.function_name
+  function_name = aws_lambda_function.api_call.function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = join("", [
     join(":", [
@@ -79,7 +79,7 @@ resource "aws_iam_role_policy" "cabal_lambda_policy" {
                 "logs:PutLogEvents"
             ],
             "Resource": [
-                "arn:aws:logs:${var.region}:*:log-group:/aws/lambda/${aws_lambda_function.cabal_lambda.function_name}:*"
+                "arn:aws:logs:${var.region}:*:log-group:/aws/lambda/${aws_lambda_function.api_call.function_name}:*"
             ]
         },
         {
