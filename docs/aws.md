@@ -43,6 +43,7 @@ After signing up, perform the following steps:
                     "route53:CreateHostedZone",
                     "route53:DeleteHostedZone",
                     "route53:GetChange",
+                    "route53:GetDNSSEC",
                     "route53:GetHostedZone",
                     "route53:ListHostedZonesByName",
                     "route53:ListResourceRecordSets",
