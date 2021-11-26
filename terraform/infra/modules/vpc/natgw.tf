@@ -12,14 +12,15 @@ resource "aws_nat_gateway" "nat" {
   tags          = {
     Name = "cabal-nat-${count.index}"
   }
-  provisioner "local-exec" {
+  # No native way to do this in the aws terraform provider
+  provisioner "local-exec" { # Create reverse DNS
     command = join(" ", [
       "aws ec2 modify-address-attribute",
       "--allocation-id ${self.allocation_id}",
       "--domain-name smtp.${var.control_domain}"
     ])
   }
-  provisioner "local-exec" {
+  provisioner "local-exec" { # Remove reverse DNS
     when    = destroy
     command = join(" ", [
       "aws ec2 reset-address-attribute",
@@ -47,28 +48,3 @@ resource "aws_route53_record" "smtp" {
   ttl     = 360
   records = aws_eip.nat_eip[*].public_ip
 }
-
-# No native way to do this in the aws terraform provider
-# resource "null_resource" "create-endpoint" {
-#   count = length(aws_eip.nat_eip)
-#   triggers = {
-#     ip_addresses = aws_eip.nat_eip[count.index].public_ip
-#     domain_name  = "smtp.${var.control_domain}"
-#     allocations  = aws_eip.nat_eip[count.index].allocation_id
-#   }
-#   provisioner "local-exec" {
-#     command = join(" ", [
-#       "aws ec2 modify-address-attribute",
-#       "--allocation-id ${aws_nat_gateway.nat[count.index].allocation_id}",
-#       "--domain-name smtp.${var.control_domain}"
-#     ])
-#   }
-#   provisioner "local-exec" {
-#     when    = destroy
-#     command = join(" ", [
-#       "aws ec2 modify-address-attribute",
-#       "--allocation-id ${self.triggers.allocations[count.index].allocation_id}",
-#       "--domain-name ''"
-#     ])
-#   }
-# }
