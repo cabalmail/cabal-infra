@@ -1,11 +1,11 @@
 output "user_pool_id" {
-  value = aws_cognito_user_pool.cabal_pool.id
+  value = aws_cognito_user_pool.users.id
 }
 
 output "user_pool_arn" {
-  value = aws_cognito_user_pool.cabal_pool.arn
+  value = aws_cognito_user_pool.users.arn
 }
 
 output "user_pool_client_id" {
-  value = aws_cognito_user_pool_client.cabal_pool_client.id
+  value = aws_cognito_user_pool_client.users.id
 }

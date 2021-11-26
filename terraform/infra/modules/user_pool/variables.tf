@@ -1,5 +1,16 @@
 data "aws_caller_identity" "current" {}
 
+data "aws_iam_policy_document" "users" {
+  statement {
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["cognito-idp.amazonaws.com"]
+    }
+  }
+}
+
 variable "control_domain" {
   type        = string
   description = "Base for auth domain. E.g., if control_domain is example.com, then the autho domain will be auth.example.com."

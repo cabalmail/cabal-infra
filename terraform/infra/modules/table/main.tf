@@ -1,4 +1,4 @@
-resource "aws_dynamodb_table" "cabal_addresses_table" {
+resource "aws_dynamodb_table" "addresses" {
   name           = "cabal-addresses"
   billing_mode   = "PROVISIONED"
   read_capacity  = 5
