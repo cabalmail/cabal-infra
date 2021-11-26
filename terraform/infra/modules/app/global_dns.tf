@@ -1,4 +1,4 @@
-resource "aws_route53_record" "cabal_spf" {
+resource "aws_route53_record" "spf" {
   zone_id = var.zone_id
   name    = var.control_domain
   type    = "TXT"

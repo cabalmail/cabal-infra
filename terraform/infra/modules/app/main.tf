@@ -1,10 +1,10 @@
-resource "aws_api_gateway_rest_api" "cabal_gateway" {
+resource "aws_api_gateway_rest_api" "gateway" {
   name = "cabal_gateway"
 }
 
-resource "aws_api_gateway_authorizer" "cabal_api_authorizer" {
+resource "aws_api_gateway_authorizer" "api_auth" {
   name                   = "cabal_pool"
-  rest_api_id            = aws_api_gateway_rest_api.cabal_gateway.id
+  rest_api_id            = aws_api_gateway_rest_api.gateway.id
   type                   = "COGNITO_USER_POOLS"
   provider_arns          = [ join("",[
     "arn:aws:cognito-idp:",
@@ -23,14 +23,14 @@ module "cabal_list_method" {
   method           = "GET"
   region           = var.region
   account          = data.aws_caller_identity.current.account_id
-  gateway_id       = aws_api_gateway_rest_api.cabal_gateway.id
-  root_resource_id = aws_api_gateway_rest_api.cabal_gateway.root_resource_id
-  authorizer       = aws_api_gateway_authorizer.cabal_api_authorizer.id
+  gateway_id       = aws_api_gateway_rest_api.gateway.id
+  root_resource_id = aws_api_gateway_rest_api.gateway.root_resource_id
+  authorizer       = aws_api_gateway_authorizer.api_auth.id
   control_domain   = var.control_domain
   relay_ips        = var.relay_ips
   domains          = var.domains
   ssm_documents    = {
-    for k, v in aws_ssm_document.cabal_document : k => v.arn
+    for k, v in aws_ssm_document.run_chef : k => v.arn
   }
 }
 
@@ -41,14 +41,14 @@ module "cabal_new_method" {
   method           = "POST"
   region           = var.region
   account          = data.aws_caller_identity.current.account_id
-  gateway_id       = aws_api_gateway_rest_api.cabal_gateway.id
-  root_resource_id = aws_api_gateway_rest_api.cabal_gateway.root_resource_id
-  authorizer       = aws_api_gateway_authorizer.cabal_api_authorizer.id
+  gateway_id       = aws_api_gateway_rest_api.gateway.id
+  root_resource_id = aws_api_gateway_rest_api.gateway.root_resource_id
+  authorizer       = aws_api_gateway_authorizer.api_auth.id
   control_domain   = var.control_domain
   relay_ips        = var.relay_ips
   domains          = var.domains
   ssm_documents    = {
-    for k, v in aws_ssm_document.cabal_document : k => v.arn
+    for k, v in aws_ssm_document.run_chef : k => v.arn
   }
 }
 
@@ -59,22 +59,22 @@ module "cabal_revoke_method" {
   method           = "DELETE"
   region           = var.region
   account          = data.aws_caller_identity.current.account_id
-  gateway_id       = aws_api_gateway_rest_api.cabal_gateway.id
-  root_resource_id = aws_api_gateway_rest_api.cabal_gateway.root_resource_id
-  authorizer       = aws_api_gateway_authorizer.cabal_api_authorizer.id
+  gateway_id       = aws_api_gateway_rest_api.gateway.id
+  root_resource_id = aws_api_gateway_rest_api.gateway.root_resource_id
+  authorizer       = aws_api_gateway_authorizer.api_auth.id
   control_domain   = var.control_domain
   relay_ips        = var.relay_ips
   domains          = var.domains
   ssm_documents    = {
-    for k, v in aws_ssm_document.cabal_document : k => v.arn
+    for k, v in aws_ssm_document.run_chef : k => v.arn
   }
 }
 
-resource "aws_api_gateway_deployment" "cabal_api_deployment" {
-  rest_api_id = aws_api_gateway_rest_api.cabal_gateway.id
+resource "aws_api_gateway_deployment" "deployment" {
+  rest_api_id = aws_api_gateway_rest_api.gateway.id
   triggers = {
     redeployment = sha1(jsonencode([
-      jsonencode(aws_api_gateway_rest_api.cabal_gateway),
+      jsonencode(aws_api_gateway_rest_api.gateway),
       module.cabal_list_method.hash_key,
       module.cabal_new_method.hash_key,
       module.cabal_revoke_method.hash_key,
@@ -85,16 +85,16 @@ resource "aws_api_gateway_deployment" "cabal_api_deployment" {
   }
 }
 
-resource "aws_api_gateway_stage" "cabal_api_stage" {
-  deployment_id = aws_api_gateway_deployment.cabal_api_deployment.id
-  rest_api_id   = aws_api_gateway_rest_api.cabal_gateway.id
+resource "aws_api_gateway_stage" "api_stage" {
+  deployment_id = aws_api_gateway_deployment.deployment.id
+  rest_api_id   = aws_api_gateway_rest_api.gateway.id
   stage_name    = "prod"
   depends_on    = [
-    aws_api_gateway_method_settings.cabal_method_settings
+    aws_api_gateway_method_settings.settings
   ]
 }
 
-resource "aws_iam_role" "cabal_cloudwatch_role" {
+resource "aws_iam_role" "cloudwatch" {
   name               = "cabal_cloudwatch_role"
   assume_role_policy = <<DOC
 {
@@ -113,9 +113,9 @@ resource "aws_iam_role" "cabal_cloudwatch_role" {
 DOC
 }
 
-resource "aws_iam_role_policy" "cabal_cloudwatch_policy" {
+resource "aws_iam_role_policy" "cloudwatch" {
   name   = "cabal_cloudwatch_role"
-  role   = aws_iam_role.cabal_cloudwatch_role.id
+  role   = aws_iam_role.cloudwatch.id
   policy = <<POLICY
 {
   "Version": "2012-10-17",
@@ -138,12 +138,12 @@ resource "aws_iam_role_policy" "cabal_cloudwatch_policy" {
 POLICY
 }
 
-resource "aws_api_gateway_account" "cabal_apigw_account" {
-  cloudwatch_role_arn = aws_iam_role.cabal_cloudwatch_role.arn
+resource "aws_api_gateway_account" "apigw_account" {
+  cloudwatch_role_arn = aws_iam_role.cloudwatch.arn
 }
 
-resource "aws_api_gateway_method_settings" "cabal_method_settings" {
-  rest_api_id = aws_api_gateway_rest_api.cabal_gateway.id
+resource "aws_api_gateway_method_settings" "settings" {
+  rest_api_id = aws_api_gateway_rest_api.gateway.id
   stage_name  = "prod"
   method_path = "*/*"
   settings {

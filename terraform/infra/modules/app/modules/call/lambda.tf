@@ -1,4 +1,4 @@
-data "archive_file" "cabal_lambda_zip" {
+data "archive_file" "code" {
   type        = "zip"
   output_path = "${var.name}_lambda.zip"
 
@@ -12,7 +12,7 @@ data "archive_file" "cabal_lambda_zip" {
   }
 }
 
-resource "aws_lambda_permission" "cabal_apigw_lambda_permission" {
+resource "aws_lambda_permission" "api_exec" {
   statement_id  = "AllowExecutionFromAPIGateway"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.cabal_lambda.function_name
@@ -106,9 +106,9 @@ resource "aws_iam_role_policy" "cabal_lambda_policy" {
 RUNPOLICY
 }
 
-resource "aws_lambda_function" "cabal_lambda" {
+resource "aws_lambda_function" "api_call" {
   filename = "${var.name}_lambda.zip"
-  source_code_hash = data.archive_file.cabal_lambda_zip.output_base64sha256
+  source_code_hash = data.archive_file.code.output_base64sha256
   function_name = var.name
   role = aws_iam_role.cabal_lambda_role.arn
   handler = "index.handler"

@@ -1,4 +1,4 @@
-resource "aws_ssm_document" "cabal_document" {
+resource "aws_ssm_document" "run_chef" {
   for_each      = toset( [ "imap", "smtp-in", "smtp-out" ] )
   name          = "cabal_${each.key}_document"
   document_type = "Command"

@@ -1,4 +1,4 @@
-resource "aws_s3_bucket" "cabal_website_bucket" {
+resource "aws_s3_bucket" "website" {
   acl    = "public-read"
   bucket = "admin.${var.control_domain}"
   website {
@@ -7,8 +7,8 @@ resource "aws_s3_bucket" "cabal_website_bucket" {
   }
 }
 
-resource "aws_s3_bucket_policy" "cabal_website_bucket_policy" {
-  bucket = aws_s3_bucket.cabal_website_bucket.id
+resource "aws_s3_bucket_policy" "website" {
+  bucket = aws_s3_bucket.website.id
   policy = jsonencode({
     "Version": "2012-10-17",
     "Statement": [
@@ -25,9 +25,9 @@ resource "aws_s3_bucket_policy" "cabal_website_bucket_policy" {
   })
 }
 
-resource "aws_s3_bucket_object" "cabal_website_files" {
+resource "aws_s3_bucket_object" "website_files" {
   for_each     = fileset("${path.module}/objects", "**/*")
-  bucket       = aws_s3_bucket.cabal_website_bucket.bucket
+  bucket       = aws_s3_bucket.website.bucket
   key          = each.value
   content_type = length(regexall("\\.html$", each.value)) > 0 ? "text/html" : (
                    length(regexall("\\.css$", each.value)) > 0 ? "text/css" : (
@@ -42,23 +42,23 @@ resource "aws_s3_bucket_object" "cabal_website_files" {
   etag         = filemd5("${path.module}/objects/${each.value}")
 }
 
-resource "aws_s3_bucket_object" "cabal_website_templates" {
+resource "aws_s3_bucket_object" "website_templates" {
   for_each     = fileset("${path.module}/object_templates", "**/*")
-  bucket       = aws_s3_bucket.cabal_website_bucket.bucket
+  bucket       = aws_s3_bucket.website.bucket
   key          = each.value
   content_type = "text/javascript"
   content      = templatefile("${path.module}/object_templates/${each.value}", {
     pool_id        = var.user_pool_id,
     pool_client_id = var.user_pool_client_id,
     region         = var.region,
-    invoke_url     = aws_api_gateway_deployment.cabal_api_deployment.invoke_url
+    invoke_url     = aws_api_gateway_deployment.deployment.invoke_url
     domains        = {for domain in var.domains : domain.domain => domain.zone_id}
   })
   etag         = md5(templatefile("${path.module}/object_templates/${each.value}", {
       pool_id        = var.user_pool_id,
       pool_client_id = var.user_pool_client_id,
       region         = var.region,
-      invoke_url     = aws_api_gateway_deployment.cabal_api_deployment.invoke_url
+      invoke_url     = aws_api_gateway_deployment.fdeployment.invoke_url
       domains        = {for domain in var.domains : domain.domain => domain.zone_id}
     })
   )
