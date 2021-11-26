@@ -88,7 +88,7 @@ resource "aws_api_gateway_deployment" "deployment" {
 resource "aws_api_gateway_stage" "api_stage" {
   deployment_id = aws_api_gateway_deployment.deployment.id
   rest_api_id   = aws_api_gateway_rest_api.gateway.id
-  stage_name    = aws_api_gateway_method_settings.settings.stage_name
+  stage_name    = "prod"
 }
 
 resource "aws_iam_role" "cloudwatch" {
@@ -141,7 +141,7 @@ resource "aws_api_gateway_account" "apigw_account" {
 
 resource "aws_api_gateway_method_settings" "settings" {
   rest_api_id = aws_api_gateway_rest_api.gateway.id
-  stage_name  = "prod"
+  stage_name  = aws_api_gateway_stage.api_stage.stage_name
   method_path = "*/*"
   settings {
     metrics_enabled        = true
