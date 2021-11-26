@@ -1,4 +1,4 @@
-resource "aws_efs_file_system" "cabal_efs" {
+resource "aws_efs_file_system" "mailstore" {
   encrypted = true
   lifecycle_policy {
     transition_to_ia = "AFTER_30_DAYS"
@@ -8,7 +8,7 @@ resource "aws_efs_file_system" "cabal_efs" {
   }
 }
 
-resource "aws_security_group" "cabal_efs_sg" {
+resource "aws_security_group" "mailstore" {
    name   = "cabal-efs-sg"
    vpc_id = var.vpc.id
 
@@ -27,9 +27,9 @@ resource "aws_security_group" "cabal_efs_sg" {
    }
  }
 
-resource "aws_efs_mount_target" "cabal_efs_mount_target" {
+resource "aws_efs_mount_target" "mailstore" {
   count           = length(var.private_subnets)
-  file_system_id  = aws_efs_file_system.cabal_efs.id
+  file_system_id  = aws_efs_file_system.mailstore.id
   subnet_id       = var.private_subnets[count.index].id
-  security_groups = [aws_security_group.cabal_efs_sg.id]
+  security_groups = [aws_security_group.mailstore.id]
 }

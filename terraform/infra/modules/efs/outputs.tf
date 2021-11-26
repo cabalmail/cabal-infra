@@ -1,3 +1,3 @@
 output "efs_dns" {
-  value = aws_efs_file_system.cabal_efs.dns_name
+  value = aws_efs_file_system.mailstore.dns_name
 }
