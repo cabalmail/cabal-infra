@@ -1,4 +1,4 @@
-resource "aws_lb_target_group" "cabal_smtp_submission_tg" {
+resource "aws_lb_target_group" "submission" {
   name                 = "cabal-smtp-submission-tg"
   port                 = "465"
   protocol             = "TCP"
@@ -25,17 +25,17 @@ resource "aws_lb_target_group" "cabal_smtp_submission_tg" {
   }
 }
 
-resource "aws_lb_listener" "cabal_smtp_submission_listener" {
-  load_balancer_arn = aws_lb.cabal_nlb.arn
+resource "aws_lb_listener" "submission" {
+  load_balancer_arn = aws_lb.elb.arn
   protocol          = "TCP"
   port              = "465"
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.cabal_smtp_submission_tg.arn
+    target_group_arn = aws_lb_target_group.submission.arn
   }
 }
 
-resource "aws_lb_target_group" "cabal_smtp_starttls_tg" {
+resource "aws_lb_target_group" "starttls" {
   name                 = "cabal-smtp-starttls-tg"
   port                 = "587"
   protocol             = "TCP"
@@ -62,12 +62,12 @@ resource "aws_lb_target_group" "cabal_smtp_starttls_tg" {
   }
 }
 
-resource "aws_lb_listener" "cabal_smtp_starttls_listener" {
-  load_balancer_arn = aws_lb.cabal_nlb.arn
+resource "aws_lb_listener" "starttls" {
+  load_balancer_arn = aws_lb.elb.arn
   protocol          = "TCP"
   port              = "587"
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.cabal_smtp_starttls_tg.arn
+    target_group_arn = aws_lb_target_group.starttls.arn
   }
 }

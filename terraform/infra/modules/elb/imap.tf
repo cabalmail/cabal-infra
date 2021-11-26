@@ -1,4 +1,4 @@
-resource "aws_lb_target_group" "cabal_imap_tg" {
+resource "aws_lb_target_group" "imap" {
   name                 = "cabal-imap-tg"
   port                 = "143"
   protocol             = "TCP"
@@ -25,13 +25,13 @@ resource "aws_lb_target_group" "cabal_imap_tg" {
   }
 }
 
-resource "aws_lb_listener" "cabal_imaps_listener" {
-  load_balancer_arn = aws_lb.cabal_nlb.arn
+resource "aws_lb_listener" "imap" {
+  load_balancer_arn = aws_lb.elb.arn
   protocol          = "TLS"
   port              = "993"
   certificate_arn   = var.cert_arn
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.cabal_imap_tg.arn
+    target_group_arn = aws_lb_target_group.imap.arn
   }
 }

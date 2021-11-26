@@ -1,4 +1,4 @@
-resource "aws_lb" "cabal_nlb" {
+resource "aws_lb" "elb" {
   name                             = "cabal-nlb"
   internal                         = false
   load_balancer_type               = "network"

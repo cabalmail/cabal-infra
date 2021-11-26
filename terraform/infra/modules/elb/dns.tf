@@ -1,4 +1,4 @@
-resource "aws_route53_record" "cabal_cname" {
+resource "aws_route53_record" "cname" {
   for_each = toset( ["imap", "smtp-out", "smtp-in"] )
   zone_id  = var.zone_id
   name     = each.key

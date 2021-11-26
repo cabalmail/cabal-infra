@@ -1,4 +1,4 @@
-resource "aws_lb_target_group" "cabal_smtp_relay_tg" {
+resource "aws_lb_target_group" "relay" {
   name                 = "cabal-smtp-relay-tg"
   port                 = "25"
   protocol             = "TCP"
@@ -25,12 +25,12 @@ resource "aws_lb_target_group" "cabal_smtp_relay_tg" {
   }
 }
 
-resource "aws_lb_listener" "cabal_smtp_relay_listener" {
-  load_balancer_arn = aws_lb.cabal_nlb.arn
+resource "aws_lb_listener" "relay" {
+  load_balancer_arn = aws_lb.elb.arn
   protocol          = "TCP"
   port              = "25"
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.cabal_smtp_relay_tg.arn
+    target_group_arn = aws_lb_target_group.relay.arn
   }
 }
