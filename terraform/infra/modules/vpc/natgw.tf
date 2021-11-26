@@ -48,12 +48,12 @@ resource "null_resource" "create-endpoint" {
       "--domain-name smtp.${var.control_domain}"
     ])
   }
-  # provisioner "local-exec" {
-  #   when    = destroy
-  #   command = join(" ", [
-  #     "aws ec2 modify-address-attribute",
-  #     "--allocation-id ${self.triggers.allocations[count.index].allocation_id}",
-  #     "--domain-name ''"
-  #   ])
-  # }
+  provisioner "local-exec" {
+    when    = destroy
+    command = join(" ", [
+      "aws ec2 modify-address-attribute",
+      "--allocation-id ${self.triggers.allocations[count.index].allocation_id}",
+      "--domain-name ''"
+    ])
+  }
 }
