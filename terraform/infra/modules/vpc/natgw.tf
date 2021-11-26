@@ -12,17 +12,6 @@ resource "aws_nat_gateway" "nat" {
   tags          = {
     Name = "cabal-nat-${count.index}"
   }
-}
-
-resource "aws_eip" "nat_eip" {
-  count      = length(var.az_list)
-  vpc        = true
-  depends_on = [
-    aws_internet_gateway.ig
-  ]
-  tags       = {
-    Name = "cabal-nat-eip-${count.index}"
-  }
   provisioner "local-exec" {
     command = join(" ", [
       "aws ec2 modify-address-attribute",
@@ -37,6 +26,17 @@ resource "aws_eip" "nat_eip" {
       "--allocation-id ${self.allocation_id}",
       "--domain-name ''"
     ])
+  }
+}
+
+resource "aws_eip" "nat_eip" {
+  count      = length(var.az_list)
+  vpc        = true
+  depends_on = [
+    aws_internet_gateway.ig
+  ]
+  tags       = {
+    Name = "cabal-nat-eip-${count.index}"
   }
 }
 
