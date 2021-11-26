@@ -1,14 +1,14 @@
-resource "aws_cloudfront_origin_access_identity" "cabal_s3_origin" {
+resource "aws_cloudfront_origin_access_identity" "origin" {
   comment = "Static admin website"
 }
 
-resource "aws_cloudfront_distribution" "cabal_cdn" {
+resource "aws_cloudfront_distribution" "cdn" {
   origin {
     domain_name = aws_s3_bucket.cabal_website_bucket.bucket_regional_domain_name
     origin_id   = "cabal_admin_s3"
 
     s3_origin_config {
-      origin_access_identity = "origin-access-identity/cloudfront/${aws_cloudfront_origin_access_identity.cabal_s3_origin.id}"
+      origin_access_identity = "origin-access-identity/cloudfront/${aws_cloudfront_origin_access_identity.origin.id}"
     }
   }
   enabled             = true
@@ -54,5 +54,5 @@ resource "aws_route53_record" "cabal_admin_cname" {
   name    = "admin.${var.control_domain}"
   type    = "CNAME"
   ttl     = "300"
-  records = [aws_cloudfront_distribution.cabal_cdn.domain_name]
+  records = [aws_cloudfront_distribution.cdn.domain_name]
 }
