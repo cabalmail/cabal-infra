@@ -3,7 +3,7 @@ resource "aws_iam_role" "users" {
   assume_role_policy = data.aws_iam_policy_document.users.json
 }
 
-data "aws_iam_policy_document" "cabal_sns_publish_policy" {
+data "aws_iam_policy_document" "users" {
   statement {
     actions = [
       "sns:Publish",
