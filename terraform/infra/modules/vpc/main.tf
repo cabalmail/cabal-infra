@@ -1,4 +1,4 @@
-resource "aws_vpc" "cabal_vpc" {
+resource "aws_vpc" "network" {
   cidr_block           = var.cidr_block
   enable_dns_hostnames = true
   tags                 = {

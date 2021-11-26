@@ -1,19 +1,19 @@
 output "vpc" {
-  value = aws_vpc.cabal_vpc
+  value = aws_vpc.network
 }
 
 output "private_subnets" {
-  value = aws_subnet.cabal_private_subnet[*]
+  value = aws_subnet.private[*]
 }
 
 output "public_subnets" {
-  value = aws_subnet.cabal_public_subnet[*]
+  value = aws_subnet.public[*]
 }
 
 output "relay_ips" {
-  value = aws_eip.cabal_nat_eip[*].public_ip
+  value = aws_eip.nat_eip[*].public_ip
 }
 
 output "private_zone" {
-  value = aws_route53_zone.cabal_private_control_zone
+  value = aws_route53_zone.private_dns
 }
