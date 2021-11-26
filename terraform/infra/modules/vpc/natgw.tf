@@ -37,8 +37,9 @@ resource "aws_route53_record" "smtp" {
 resource "null_resource" "create-endpoint" {
   count = length(aws_eip.nat_eip)
   triggers = {
-    ip_addresses = join(",", aws_eip.nat_eip.*.public_ip)
+    ip_addresses = aws_eip.nat_eip[count.index].public_ip
     domain_name  = "smtp.${var.control_domain}"
+    allocations  = aws_eip.nat_eip[count.index].allocation_id
   }
   provisioner "local-exec" {
     command = join(" ", [
@@ -51,7 +52,7 @@ resource "null_resource" "create-endpoint" {
     when    = destroy
     command = join(" ", [
       "aws ec2 modify-address-attribute",
-      "--allocation-id ${aws_nat_gateway.nat[count.index].allocation_id}",
+      "--allocation-id ${self.triggers.allocations[count.index].allocation_id}",
       "--domain-name ''"
     ])
   }
