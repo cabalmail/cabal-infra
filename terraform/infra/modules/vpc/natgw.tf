@@ -23,6 +23,21 @@ resource "aws_eip" "nat_eip" {
   tags       = {
     Name = "cabal-nat-eip-${count.index}"
   }
+  provisioner "local-exec" {
+    command = join(" ", [
+      "aws ec2 modify-address-attribute",
+      "--allocation-id ${self[count.index].allocation_id}",
+      "--domain-name smtp.${var.control_domain}"
+    ])
+  }
+  provisioner "local-exec" {
+    when    = destroy
+    command = join(" ", [
+      "aws ec2 modify-address-attribute",
+      "--allocation-id ${self[count.index].allocation_id}",
+      "--domain-name ''"
+    ])
+  }
 }
 
 resource "aws_route53_record" "smtp" {
@@ -34,26 +49,26 @@ resource "aws_route53_record" "smtp" {
 }
 
 # No native way to do this in the aws terraform provider
-resource "null_resource" "create-endpoint" {
-  count = length(aws_eip.nat_eip)
-  triggers = {
-    ip_addresses = aws_eip.nat_eip[count.index].public_ip
-    domain_name  = "smtp.${var.control_domain}"
-    allocations  = aws_eip.nat_eip[count.index].allocation_id
-  }
-  provisioner "local-exec" {
-    command = join(" ", [
-      "aws ec2 modify-address-attribute",
-      "--allocation-id ${aws_nat_gateway.nat[count.index].allocation_id}",
-      "--domain-name smtp.${var.control_domain}"
-    ])
-  }
-  # provisioner "local-exec" {
-  #   when    = destroy
-  #   command = join(" ", [
-  #     "aws ec2 modify-address-attribute",
-  #     "--allocation-id ${self.triggers.allocations[count.index].allocation_id}",
-  #     "--domain-name ''"
-  #   ])
-  # }
-}
+# resource "null_resource" "create-endpoint" {
+#   count = length(aws_eip.nat_eip)
+#   triggers = {
+#     ip_addresses = aws_eip.nat_eip[count.index].public_ip
+#     domain_name  = "smtp.${var.control_domain}"
+#     allocations  = aws_eip.nat_eip[count.index].allocation_id
+#   }
+#   provisioner "local-exec" {
+#     command = join(" ", [
+#       "aws ec2 modify-address-attribute",
+#       "--allocation-id ${aws_nat_gateway.nat[count.index].allocation_id}",
+#       "--domain-name smtp.${var.control_domain}"
+#     ])
+#   }
+#   provisioner "local-exec" {
+#     when    = destroy
+#     command = join(" ", [
+#       "aws ec2 modify-address-attribute",
+#       "--allocation-id ${self.triggers.allocations[count.index].allocation_id}",
+#       "--domain-name ''"
+#     ])
+#   }
+# }
