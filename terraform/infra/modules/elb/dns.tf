@@ -5,8 +5,8 @@ resource "aws_route53_record" "cname" {
   type     = "A"
 
   alias {
-    name                   = aws_lb.cabal_nlb.dns_name
-    zone_id                = aws_lb.cabal_nlb.zone_id
+    name                   = aws_lb.elb.dns_name
+    zone_id                = aws_lb.elb.zone_id
     evaluate_target_health = false
   }
 }
