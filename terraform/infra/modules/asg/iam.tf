@@ -24,7 +24,7 @@ resource "aws_iam_policy" "node_permissions" {
         ]
         Effect   = "Allow"
         Resource = [
-          "arn:aws:secretsmanager:us-east-1:715401949493:secret:/cabal/*",
+          "arn:aws:ssm:us-east-1:${aws_caller_identity.current.account_id}:parameter//cabal/*",
         ]
       },
       {
