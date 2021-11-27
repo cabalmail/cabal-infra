@@ -41,9 +41,9 @@ cat > '/var/lib/chef/attributes/node.json' << EOF
 }
 EOF
 
-aws --region us-east-1 secretsmanager get-secret-value --secret-id "/cabal/control_domain_chain_cert" | jq -r '.SecretString' > /tmp/cabal.ca-bundle
-aws --region us-east-1 secretsmanager get-secret-value --secret-id "/cabal/control_domain_ssl_cert" | jq -r '.SecretString' > /tmp/cabal.crt
-aws --region us-east-1 secretsmanager get-secret-value --secret-id "/cabal/control_domain_ssl_key" | jq -r '.SecretString' > /tmp/cabal.key
+aws --region us-east-1 ssm get-parameter --name "/cabal/control_domain_chain_cert" | jq -r '.Parameter.Value' > /tmp/cabal.ca-bundle
+aws --region us-east-1 ssm get-parameter --name "/cabal/control_domain_ssl_cert" | jq -r '.Parameter.Value' > /tmp/cabal.crt
+aws --region us-east-1 ssm get-parameter --name "/cabal/control_domain_ssl_key" | jq -r '.Parameter.Value' > /tmp/cabal.key
 mv /tmp/cabal.ca-bundle /etc/pki/tls/certs/${control_domain}.ca-bundle
 mv /tmp/cabal.crt /etc/pki/tls/certs/${control_domain}.crt
 mv /tmp/cabal.key /etc/pki/tls/private/${control_domain}.key
