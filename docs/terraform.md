@@ -29,14 +29,3 @@ After signing up, perform the following steps:
     |- Paths                    |<ul><li>terraform/dns</li></ul>                              |
     |VCS branch                 |default                                                      |
     |Include submodules on clone|Unchecked                                                    |
-    
-5. Repeat steps 1 through 3, using these values:
-
-    |Field                      |Value                                                        |
-    |---------------------------|-------------------------------------------------------------|
-    |Description                |Create DNS Zone for Cabalmail control domain                 |
-    |Terraform Working Directory|terraform/cert                                               |
-    |Automatic Run Triggering   |Only trigger runs when the files in the spcified paths change|
-    |- Paths                    |<ul><li>terraform/cert</li></ul>                             |
-    |VCS branch                 |default                                                      |
-    |Include submodules on clone|Unchecked                                                    |

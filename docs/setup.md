@@ -1,4 +1,4 @@
-# Prerequisites
+# Prerequisites<a name="Prerequisites"></a>
 
 Before using this repo, you must set up an appropriate environment.
 
@@ -16,13 +16,15 @@ Although you could connect Terraform Cloud directly to the original repository, 
 
 ## Domain registration
 
-You must register your desired domains (control and mail) with your chosen registrar. Cabalmail requires exactly one control domain and at least one mail domain. Registration requires an email address. You can use a temporary account with any of the free providers for this address, and later, you can update the registration records with a self-hosted address once your hosting infrastructure is up and running.
+You must register your desired domains (control and mail) with your chosen registrar. Cabalmail requires exactly one control domain and at least one mail domain. Registration requires an email address. You can use a temporary email account with any of the free providers for this address, and later, you can update the registration records with a self-hosted address once your hosting infrastructure is up and running.
 
 The control domain is for infrastructure, not for email addresses. If you like to send mail from example.com, you might use example.net as your control domain. If so, then you would retrieve your mail from imap.example.net, send mail to smtp-out.example.net, and manage your addresses at admin.example.net.
 
 # Provisioning
 
-1. Set up the prerequisites above.
+The developers have striven to make provisioning as automated as possible. However, there are some unavoidably manual steps. Several of these steps are discussed above under [Prerequisites](#Prerequisites), and others are discussed below under [Post-Autonation Steps](#PostAutomation). However, one unavoidably must be attended to during the provsioning. This is why the terraform directoy has been subdivided into two subdirectories: The first attends to the initial steps, and the second all the rest. The order is dns first and infra second. The overwhelming majority of resources are created by infra.
+
+1. Set up the [prerequisites](#Prerequisites) above.
 
 2. Run the terraform/dns stack.
 
@@ -31,15 +33,12 @@ The control domain is for infrastructure, not for email addresses. If you like t
     3. The output will include name servers. [Update the domain registration](./registrar.md) for your control domain with these name servers. Before proceeding to the next step, make sure this change is complete.
     4. The output will also include a zone ID. Update the `zone_id` variable for the terraform/infra workspace with this ID.
 
-3. Run the terraform/cert workspace.
-
-    1. Queue a plan in your Terraform Cloud terraform/cert workspace.
-    2. When it finishes the plan phase, confirm and apply.
-
-4. Run the terraform/infra workspace.
+3. Run the terraform/infra workspace.
 
     1. Queue a plan in your Terraform Cloud terraform/infra workspace.
     2. When it finishes the plan phase, confirm and apply.
+
+4. Perform the [post-autonation tasks](#PostAutomation) below.
 
 # Reprovisioning
 
@@ -47,7 +46,7 @@ You can rerun the provisioning steps any time. If you have not changed anything 
 
 Theoretically, it should also be safe to change any of the variables except the AWS region. As long as the new values are sensible, Terraform should reestablish the infrastructure with the new parameters, and your mail should still be there. But we do not guarantee this, and we strongly recommend that you perform backups first.
 
-# Post-Automation Steps
+# Post-Automation Steps<a name="PostAutomation"></a>
 
 Look at the output from Terraform! If you are using Terraform Cloud, it is not shown by default; you have to expand it in the UI.
 
