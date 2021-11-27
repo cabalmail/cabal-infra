@@ -1,6 +1,6 @@
 # Registrar-specific Instructions
 
-The outputs of both [terraform/dns](../terraform/dns) and [terraform/infra](../terraform/infra) contain nameservers that you must add to your domain registration. To update the nameservers for a domain registration, follow the instructions at your registrar. The procedure will be different for each registrar. Here's a partial list:
+The outputs of both [terraform/dns](../terraform/dns) and [terraform/infra](../terraform/infra) contain nameservers that you must add to your domain registrations. To update the nameservers for a domain registration, follow the instructions at your registrar. The procedure will be different for each registrar. Here's a partial list:
 
 * [Arvixe](https://blog.arvixe.com/modifying-a-domains-name-servers/)
 * [AWS Route53 Registrar](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/domain-name-servers-glue-records.html#domain-name-servers-glue-records-adding-changing)
@@ -20,4 +20,4 @@ The outputs of both [terraform/dns](../terraform/dns) and [terraform/infra](../t
 * [Namecheap](https://www.namecheap.com/support/knowledgebase/article.aspx/767/10/how-to-change-dns-for-a-domain/)
 * [Network Solutions](https://customerservice.networksolutions.com/prweb/PRAuth/webkm/help/article/KC-454/networksolutions)
 
-It can take up to a day though experience suggests that it often only a few minutes. 
+It can take up to a day for your changes to become active, though experience suggests that it often is complete after only a few minutes. You can check whether your changes have been implemented by looking up your domain in [the whois database](https://lookup.icann.org/).

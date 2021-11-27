@@ -14,7 +14,7 @@ Cabalmail is a suite of infrastructure code ([Terraform](https://www.terraform.i
 * Administrative interface for managing addresses
 * DNS and other supporting infrastructure
 
-Cabalmail allows you to host your email and to create multiple unique addresses that all point to the same inbox. This allows you to give distinct email address to all the people, institutions, corporations, etc., from whom you wish to receive email, allowing fine-grained control of who is authorized to insert messages into your inbox.
+Cabalmail allows you to host your email and to create multiple unique addresses that all point to the same inbox (one inbox per user, many addresses per inbox). This allows you to give distinct email address to all the people, institutions, corporations, etc., from whom you wish to receive email, allowing fine-grained control of who is authorized to insert messages into your inbox.
 
 For the curious, here is [a brief history of Cabalmail](./docs/genesis.md).
 

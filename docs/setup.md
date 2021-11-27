@@ -30,7 +30,7 @@ The developers have striven to make provisioning as automated as possible. Howev
 
     1. Queue a plan in your Terraform Cloud terraform/dns workspace.
     2. When it finishes the plan phase, confirm and apply.
-    3. The output will include name servers. [Update the domain registration](./registrar.md) for your control domain with these name servers. Before proceeding to the next step, make sure this change is complete.
+    3. The output will include name servers. [Update the domain registration](./registrar.md) for your control domain with these name servers. *Before proceeding to the next step, make sure this change is complete*.
 
 3. Run the terraform/infra workspace.
 
@@ -87,9 +87,9 @@ It should look something like this:
 }
 ```
 
-## Name Servers (What to do with the `domains` output)
+## Nameservers (What to do with the `domains` output)
 
-The output contains the name servers that AWS assigned to your mail domains. To work at all, you must [update your domain registrations with these name servers](./registrar.md).
+The output contains the nameservers that AWS assigned to your mail domains. To work at all, you must [update your domain registrations with these nameservers](./registrar.md).
 
 ## Port 25 Block (What to do with the `relay_ips` output)
 

@@ -4,7 +4,7 @@ You must install Terraform or set up an account with [Terraform Cloud](https://a
 
 After signing up, perform the following steps:
 
-1. [Create a worspace](https://learn.hashicorp.com/tutorials/terraform/cloud-workspace-create?in=terraform/cloud-get-started) of type version control workflow. Connect it to your forked repository. While creating the workspace, expand the "Advanced options" area and fill out the fields with these values:
+1. [Create a workspace](https://learn.hashicorp.com/tutorials/terraform/cloud-workspace-create?in=terraform/cloud-get-started) of type version control workflow. Connect it to your forked repository. While creating the workspace, expand the "Advanced options" area and fill out the fields with these values:
 
     |Field                      |Value                                                        |
     |---------------------------|-------------------------------------------------------------|
