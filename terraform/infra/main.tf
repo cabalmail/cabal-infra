@@ -14,6 +14,7 @@ module "cert" {
   control_domain = var.control_domain
   zone_id        = var.zone_id
   prod           = var.prod
+  email          = var.email
 }
 
 # Sets up Route 53 hosted zones for mail domains

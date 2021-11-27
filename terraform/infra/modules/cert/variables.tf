@@ -9,3 +9,7 @@ variable "zone_id" {
 variable "prod" {
   description = "Whether to use the production certificate API."
 }
+
+variable "email" {
+  description = "Contact email for the certificate requester for the certificate API."
+}
