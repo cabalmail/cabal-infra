@@ -15,7 +15,7 @@ resource "aws_route53_zone" "cabal_control_zone" {
 
 resource "aws_ssm_parameter" "zone" {
   name        = "/cabal/control_domain_zone_id"
-  description = "Cabal SSL Certificate"
+  description = "Route 53 Zone ID"
   type        = "String"
   value       = aws_route53_zone.cabal_control_zone.zone_id
 
