@@ -14,6 +14,11 @@ variable "prod" {
   default     = false
 }
 
+variable "email" {
+  type        = string
+  description = "Email for the CSR."
+}
+
 variable "availability_zones" {
   type        = list(string)
   description = "List of availability zones to use for the primary region."
