@@ -8,6 +8,12 @@ variable "aws_region" {
   }
 }
 
+variable "prod" {
+  type        = bool
+  description = "Whether to use the production Let's Encrypt service. Default false."
+  default     = false
+}
+
 variable "availability_zones" {
   type        = list(string)
   description = "List of availability zones to use for the primary region."
