@@ -12,7 +12,7 @@ provider "aws" {
 module "cert" {
   source         = "./modules/cert"
   control_domain = var.control_domain
-  zone_id        = var.zone_id
+  zone_id        = data.aws_ssm_parameter.zone.value
   prod           = var.prod
   email          = var.email
 }
@@ -32,7 +32,7 @@ module "cookbook" {
 module "pool" {
   source         = "./modules/user_pool"
   control_domain = var.control_domain
-  zone_id        = var.zone_id
+  zone_id        = data.aws_ssm_parameter.zone.value
 }
 
 # Infrastructure and code for the administrative web site
@@ -43,7 +43,7 @@ module "admin" {
   user_pool_client_id = module.pool.user_pool_client_id
   region              = var.aws_region
   cert_arn            = module.cert.cert_arn
-  zone_id             = var.zone_id
+  zone_id             = data.aws_ssm_parameter.zone.value
   domains             = module.domains.domains
   relay_ips           = module.vpc.relay_ips
 }
@@ -59,7 +59,7 @@ module "vpc" {
   cidr_block     = var.cidr_block
   control_domain = var.control_domain
   az_list        = var.availability_zones
-  zone_id        = var.zone_id
+  zone_id        = data.aws_ssm_parameter.zone.value
 }
 
 # Creates a network load balancer shared by machines in the stack
@@ -68,7 +68,7 @@ module "load_balancer" {
   public_subnets = module.vpc.public_subnets
   vpc            = module.vpc.vpc
   control_domain = var.control_domain
-  zone_id        = var.zone_id
+  zone_id        = data.aws_ssm_parameter.zone.value
   cert_arn       = module.cert.cert_arn
 }
 

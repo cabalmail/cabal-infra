@@ -1,4 +1,6 @@
-To update the name servers for a domain registration, follow the instructions at your registrar. The procedure will be different for each registrar. Here's a partial list:
+# Registrar-specific Instructions
+
+The outputs of both [terraform/dns](../terraform/dns) and [terraform/infra](../terraform/infra) contain nameservers that you must add to your domain registration. To update the nameservers for a domain registration, follow the instructions at your registrar. The procedure will be different for each registrar. Here's a partial list:
 
 * [Arvixe](https://blog.arvixe.com/modifying-a-domains-name-servers/)
 * [AWS Route53 Registrar](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/domain-name-servers-glue-records.html#domain-name-servers-glue-records-adding-changing)

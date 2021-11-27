@@ -22,7 +22,7 @@ aws_region = "us-west-1"
 control_domain = "example.net"
 
 ###################################
-## for terraform/cert workspace  ##
+## for terraform/infra workspace ##
 ###################################
 
 # Pick the AWS region closest to your end user population. A
@@ -53,19 +53,9 @@ control_domain = "example.net"
 
 email = "your_email@example.com"
 
-###################################
-## for terraform/infra workspace ##
-###################################
-
-# Pick the AWS region closest to your end user population. A
-# single VPC will be created, and all infrastructure will be
-# inside of it.
-
-aws_region = "us-west-1"
-
 # List the availability zones you wish to use in the region.
 # For non-production, you can specify as few as one.
-# For production three is recommended.
+# For production, three is recommended.
 
 availability_zones = [
   "us-west-1a",
@@ -76,24 +66,6 @@ availability_zones = [
 # Specify a CIDR block for the VPC.
 
 cidr_block = "10.0.0.0/9"
-
-# This value is used to tag resources. If you have forked the
-# repository and wish to tag with your own repository, uncomment
-# this line and replace the value with your own.
-
-# repo = "https://github.com/example/cabal-infra/tree/main"
-
-# Specify the root domain to be used to name control nodes on the
-# CabalMail system. For example, if you want to host IMAP at
-# imap.example.net, and SMTP at smtprelay1.example.net, then this
-# should be set to "example.net"
-
-control_domain = "example.net"
-
-# Route 53 Zone ID for the control domain. This can be found in
-# the output from terraform/dns.
-
-zone_id = "Z04XXXXXXXXXXXXXXXX1U"
 
 # List the domains that you want to use for email addresses.
 

@@ -31,7 +31,6 @@ The developers have striven to make provisioning as automated as possible. Howev
     1. Queue a plan in your Terraform Cloud terraform/dns workspace.
     2. When it finishes the plan phase, confirm and apply.
     3. The output will include name servers. [Update the domain registration](./registrar.md) for your control domain with these name servers. Before proceeding to the next step, make sure this change is complete.
-    4. The output will also include a zone ID. Update the `zone_id` variable for the terraform/infra workspace with this ID.
 
 3. Run the terraform/infra workspace.
 

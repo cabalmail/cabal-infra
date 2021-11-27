@@ -1,3 +1,7 @@
+data "aws_ssm_parameter" "zone" {
+  name        = "/cabal/control_domain_zone_id"
+}
+
 variable "aws_region" {
   type        = string
   description = "AWS region in which to provision primary infrastructure. Default us-west-1."
@@ -55,11 +59,6 @@ variable "control_domain" {
     condition = can(regex("^(([[:alpha:]]|-|_|[[:digit:]])+\\.)+[[:alpha:]]+$", var.control_domain))
     error_message = "The control_domain does not appear to be a valid domain name."
   }
-}
-
-variable "zone_id" {
-  type        = string
-  description = "The AWS Zone ID for the control_domain"
 }
 
 variable "mail_domains" {

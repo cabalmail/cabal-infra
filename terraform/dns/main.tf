@@ -12,3 +12,16 @@ resource "aws_route53_zone" "cabal_control_zone" {
     terraform_repo       = var.repo
   }
 }
+
+resource "aws_ssm_parameter" "zone" {
+  name        = "/cabal/control_domain_zone_id"
+  description = "Cabal SSL Certificate"
+  type        = "String"
+  value       = aws_route53_zone.cabal_control_zone.zone_id
+
+  tags = {
+    environment          = "production"
+    managed_by_terraform = "y"
+    terraform_repo       = var.repo
+  }
+}
