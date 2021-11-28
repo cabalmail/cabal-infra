@@ -56,7 +56,7 @@ variable "control_domain" {
   type        = string
   description = "The domain used for naming your email infrastructure. E.g., if you want to host imap.example.com and smtp-out.example.com, then this would be 'example.com'. This domain is not used for email addresses."
   validation {
-    condition = can(regex("^(([[:alpha:]]|-|_|[[:digit:]])+\\.)+[[:alpha:]]+$", var.control_domain))
+    condition     = can(regex("^(([[:alpha:]]|-|_|[[:digit:]])+\\.)+[[:alpha:]]+$", var.control_domain))
     error_message = "The control_domain does not appear to be a valid domain name."
   }
 }
@@ -65,13 +65,13 @@ variable "mail_domains" {
   type        = list(string)
   description = "List of domains from which you want to send mail, and to which you want to allow mail to be sent. Must have at least one."
   validation {
-    condition = alltrue([
+    condition     = alltrue([
     for str in var.mail_domains : can(regex("^(([[:alpha:]]|-|_|[[:digit:]])+\\.)+[[:alpha:]]+$", str))
     ])
     error_message = "One or more of the mail_domains does not appear to be a valid domain name."
   }
   validation {
-    condition = length(var.mail_domains) > 0
+    condition     = length(var.mail_domains) > 0
     error_message = "You must have at least one mail_domain."
   }
 }

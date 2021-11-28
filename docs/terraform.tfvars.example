@@ -44,6 +44,13 @@ aws_region = "us-west-1"
 
 control_domain = "example.net"
 
+# List the domains that you want to use for email addresses.
+
+mail_domains = [
+  "example.com",
+  "example.org"
+]
+
 # Set this to true to use Lets Encrypt's production API. Defaults
 # to false.
 
@@ -66,13 +73,6 @@ availability_zones = [
 # Specify a CIDR block for the VPC.
 
 cidr_block = "10.0.0.0/9"
-
-# List the domains that you want to use for email addresses.
-
-mail_domains = [
-  "example.com",
-  "example.org"
-]
 
 # Specify minimum, maximum, and desired instance counts for
 # autoscaling.
