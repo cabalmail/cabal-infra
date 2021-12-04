@@ -46,7 +46,7 @@ resource "aws_backup_plan" "backup" {
   rule {
     rule_name         = "cabal-backup-plan-rule"
     target_vault_name = aws_backup_vault.backup.name
-    schedule          = "cron(0 0 * * * *)"
+    schedule          = "cron(0 0 * * ? *)"
   }
 }
 

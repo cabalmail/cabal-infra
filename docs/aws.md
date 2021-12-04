@@ -15,7 +15,7 @@ After signing up, perform the following steps:
         "Version": "2012-10-17",
         "Statement": [
             {
-                "Sid": "SidTheGreater",
+                "Sid": "Vicious",
                 "Effect": "Allow",
                 "Action": [
                     "acm:AddTagsToCertificate",
@@ -27,6 +27,8 @@ After signing up, perform the following steps:
                     "acm:RequestCertificate",
                     "apigateway:*",
                     "autoscaling:*",
+                    "backup:*",
+                    "backup-storage:*"
                     "cloudfront:*",
                     "cognito-identity:*",
                     "cognito-idp:*",
