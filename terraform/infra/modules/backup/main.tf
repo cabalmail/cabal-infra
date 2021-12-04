@@ -19,7 +19,7 @@ resource "aws_backup_vault" "backup" {
 # }
 
 resource "aws_iam_role" "backup" {
-  name               = "example"
+  name               = "cabal-backup-role"
   assume_role_policy = <<POLICY
 {
   "Version": "2012-10-17",
@@ -50,10 +50,10 @@ resource "aws_backup_plan" "backup" {
   }
 }
 
-resource "aws_backup_selection" "example" {
+resource "aws_backup_selection" "backup" {
   iam_role_arn = aws_iam_role.backup.arn
   name         = "cabal-backup"
-  plan_id      = aws_backup_plan.example.id
+  plan_id      = aws_backup_plan.backup.id
 
   resources = [
     var.table,
