@@ -180,6 +180,12 @@ variable "smtpout_scale" {
   }
 }
 
+variable "backup" {
+  type        = bool
+  description = "Whether to create backups of critical data. Defaults to the prod setting. Defaults to false."
+  default     = false
+}
+
 variable "chef_license" {
   type        = string
   description = "Must be the word 'accept' in order to indicate your acceptance of the Chef license. The license text can be viewed here: https://www.chef.io/end-user-license-agreement."

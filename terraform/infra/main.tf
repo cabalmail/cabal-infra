@@ -157,3 +157,10 @@ module "smtp_out" {
   chef_license    = var.chef_license
   depends_on      = [ module.cert ]
 }
+
+module "backup" {
+  source = "./modules/backup"
+  count  = var.backup ? 1 : 0
+  table  = module.table.table_arn
+  efs    = module.efs.efs_arn
+}

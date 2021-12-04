@@ -4,7 +4,7 @@ Before using this repo, you must set up an appropriate environment.
 
 ## Fork this repository
 
-Although you could connect Terraform Cloud directly to the original repository, it is safer to fork it. If you want to contribute to it, or extend it for your your own use, then forking is essential. Use the Github URL for your fork where called for in tfvars.
+Although you could connect Terraform Cloud directly to the original repository, it is safer to fork it. If you want to contribute to it, or to customize it for your own use, then forking is essential. Use the Github URL for your fork where called for in tfvars.
 
 ## AWS Account
 
