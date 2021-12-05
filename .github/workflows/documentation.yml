@@ -14,7 +14,7 @@ jobs:
       with:
         working-dir: ./terraform/infra
         output-file: README.md
-        output-method: inject
+        output-method: replace
         recursive: "true"
         git-push: "true"
 
