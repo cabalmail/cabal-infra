@@ -14,5 +14,6 @@ output "relay_ips" {
 }
 
 output "domains" {
-  value = module.domains.domains
+  value       = module.domains.domains
+  description = "Nameservers to be added to your domain registrations."
 }
