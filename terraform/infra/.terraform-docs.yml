@@ -17,11 +17,6 @@ sections:
   show-all: true  # deprecated in v0.13.0, removed in v0.15.0
 
 content: |-
-  # Cabalmail
-  <div style="width: 10em; float:left; height: 100%; padding-right: 1em;"><img src="../../docs/logo.png" width="100" />
-  <p><a href="../../README.md">Main documentation</a></p>
-  </div><div style="padding-left: 11em;">
-  
   {{ .Header }}
   {{ .Footer }}
   {{ .Inputs }}
@@ -30,14 +25,18 @@ content: |-
   {{ .Providers }}
   {{ .Requirements }}
   {{ .Resources }}
-  </div>
   
 output:
   file: ""
   mode: inject
   template: |-
     <!-- BEGIN_TF_DOCS -->
+    # Cabalmail
+    <div style="width: 10em; float:left; height: 100%; padding-right: 1em;"><img src="../../docs/logo.png" width="100" />
+    <p><a href="../../README.md">Main documentation</a></p>
+    </div><div style="padding-left: 11em;">
     {{ .Content }}
+    </div>
     <!-- END_TF_DOCS -->    
 
 output-values:
