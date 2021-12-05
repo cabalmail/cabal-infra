@@ -1,7 +1,7 @@
 <!-- BEGIN_TF_DOCS -->
 # Cabalmail
 <div style="width: 35px; float:left"><img src="../../docs/logo.png" width="35" />
-<p>[Main documentation](../../README.md)</p>
+<p><a href="../../README.md">Main documentation</a></p>
 </div>
 # Header Start
 # Cabalmail infra
