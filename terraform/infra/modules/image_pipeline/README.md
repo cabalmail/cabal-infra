@@ -1,9 +1,8 @@
 <!-- BEGIN_TF_DOCS -->
 # Cabalmail
-<div style="width: 35px; float:left"><img src="../../docs/logo.png" width="35" />
+<div style="width: 35px; float:left; height: 100%"><img src="../../docs/logo.png" width="35" />
 <p><a href="../../README.md">Main documentation</a></p>
 </div>
-# Header Start
 
 # Status
 
@@ -12,38 +11,24 @@ On hold pending resolution of [issue #16839](https://github.com/hashicorp/terraf
 Code to date adapted from [this sample](https://github.com/aws-samples/amazon-ec2-image-builder-samples/blob/master/CloudFormation/Docker/amazon-linux-2-with-helloworld/amazon-linux-2-container-image.yml).
 
 Based on https://github.com/aws-samples/amazon-ec2-image-builder-samples/blob/master/CloudFormation/Docker/amazon-linux-2-with-helloworld/amazon-linux-2-container-image.yml
-# Header End
-# Footer Start
 
-# Footer End
-# Inputs Start
 ## Inputs
 
 No inputs.
-# Inputs End
-# Modules Start
 ## Modules
 
 No modules.
-# Modules End
-# Outputs Start
 ## Outputs
 
 No outputs.
-# Outputs End
-# Providers Start
 ## Providers
 
 | Name | Version |
 |------|---------|
 | <a name="provider_aws"></a> [aws](#provider\_aws) | n/a |
-# Providers End
-# Requirements Start
 ## Requirements
 
 No requirements.
-# Requirements End
-# Resources Start
 ## Resources
 
 | Name | Type |
@@ -60,5 +45,4 @@ No requirements.
 | [aws_s3_bucket.cabal_image_builder_log_bucket](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket) | resource |
 | [aws_iam_policy.ecr_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy) | data source |
 | [aws_iam_policy.ssm_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy) | data source |
-# Resources End
 <!-- END_TF_DOCS -->

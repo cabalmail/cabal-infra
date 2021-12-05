@@ -1,15 +1,10 @@
 <!-- BEGIN_TF_DOCS -->
 # Cabalmail
-<div style="width: 35px; float:left"><img src="../../docs/logo.png" width="35" />
+<div style="width: 35px; float:left; height: 100%"><img src="../../docs/logo.png" width="35" />
 <p><a href="../../README.md">Main documentation</a></p>
 </div>
-# Header Start
 
-# Header End
-# Footer Start
 
-# Footer End
-# Inputs Start
 ## Inputs
 
 | Name | Description | Type | Default | Required |
@@ -22,8 +17,6 @@
 | <a name="input_user_pool_client_id"></a> [user\_pool\_client\_id](#input\_user\_pool\_client\_id) | n/a | `string` | n/a | yes |
 | <a name="input_user_pool_id"></a> [user\_pool\_id](#input\_user\_pool\_id) | n/a | `string` | n/a | yes |
 | <a name="input_zone_id"></a> [zone\_id](#input\_zone\_id) | n/a | `string` | n/a | yes |
-# Inputs End
-# Modules Start
 ## Modules
 
 | Name | Source | Version |
@@ -31,25 +24,17 @@
 | <a name="module_cabal_list_method"></a> [cabal\_list\_method](#module\_cabal\_list\_method) | ./modules/call | n/a |
 | <a name="module_cabal_new_method"></a> [cabal\_new\_method](#module\_cabal\_new\_method) | ./modules/call | n/a |
 | <a name="module_cabal_revoke_method"></a> [cabal\_revoke\_method](#module\_cabal\_revoke\_method) | ./modules/call | n/a |
-# Modules End
-# Outputs Start
 ## Outputs
 
 No outputs.
-# Outputs End
-# Providers Start
 ## Providers
 
 | Name | Version |
 |------|---------|
 | <a name="provider_aws"></a> [aws](#provider\_aws) | n/a |
-# Providers End
-# Requirements Start
 ## Requirements
 
 No requirements.
-# Requirements End
-# Resources Start
 ## Resources
 
 | Name | Type |
@@ -72,5 +57,4 @@ No requirements.
 | [aws_s3_bucket_policy.website](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_policy) | resource |
 | [aws_ssm_document.run_chef](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ssm_document) | resource |
 | [aws_caller_identity.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity) | data source |
-# Resources End
 <!-- END_TF_DOCS -->

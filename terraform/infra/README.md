@@ -1,17 +1,12 @@
 <!-- BEGIN_TF_DOCS -->
 # Cabalmail
-<div style="width: 35px; float:left"><img src="../../docs/logo.png" width="35" />
+<div style="width: 35px; float:left; height: 100%"><img src="../../docs/logo.png" width="35" />
 <p><a href="../../README.md">Main documentation</a></p>
 </div>
-# Header Start
 # Cabalmail infra
 
 This terraform stack stands up AWS infrastructure needed for a Cabalmail system. See [README.md](../../README.md) at the root of this repository for general information.
-# Header End
-# Footer Start
 
-# Footer End
-# Inputs Start
 ## Inputs
 
 | Name | Description | Type | Default | Required |
@@ -29,8 +24,6 @@ This terraform stack stands up AWS infrastructure needed for a Cabalmail system.
 | <a name="input_repo"></a> [repo](#input\_repo) | This repository. Used for resource tagging. | `string` | `"https://github.com/ccarr-cabal/cabal-infra/tree/main"` | no |
 | <a name="input_smtpin_scale"></a> [smtpin\_scale](#input\_smtpin\_scale) | Minimum, maximum, and desired number of incoming SMTP servers. All three should be at least 1, and must satisfy minimum <= desired <= maximum. Defaults to { min = 0, max = 0, des = 0 } in order to prevent unexpected AWS charges. | <pre>object({<br>    min = number<br>    max = number<br>    des = number<br>  })</pre> | <pre>{<br>  "des": 0,<br>  "max": 0,<br>  "min": 0<br>}</pre> | no |
 | <a name="input_smtpout_scale"></a> [smtpout\_scale](#input\_smtpout\_scale) | Minimum, maximum, and desired number of outgoing SMTP servers. All three should be at least 1, and must satisfy minimum <= desired <= maximum. Defaults to { min = 0, max = 0, des = 0 } in order to prevent unexpected AWS charges. | <pre>object({<br>    min = number<br>    max = number<br>    des = number<br>  })</pre> | <pre>{<br>  "des": 0,<br>  "max": 0,<br>  "min": 0<br>}</pre> | no |
-# Inputs End
-# Modules Start
 ## Modules
 
 | Name | Source | Version |
@@ -48,8 +41,6 @@ This terraform stack stands up AWS infrastructure needed for a Cabalmail system.
 | <a name="module_smtp_out"></a> [smtp\_out](#module\_smtp\_out) | ./modules/asg | n/a |
 | <a name="module_table"></a> [table](#module\_table) | ./modules/table | n/a |
 | <a name="module_vpc"></a> [vpc](#module\_vpc) | ./modules/vpc | n/a |
-# Modules End
-# Outputs Start
 ## Outputs
 
 | Name | Description |
@@ -57,15 +48,11 @@ This terraform stack stands up AWS infrastructure needed for a Cabalmail system.
 | <a name="output_IMPORTANT"></a> [IMPORTANT](#output\_IMPORTANT) | n/a |
 | <a name="output_domains"></a> [domains](#output\_domains) | n/a |
 | <a name="output_relay_ips"></a> [relay\_ips](#output\_relay\_ips) | IP addresses that will be used for outbound mail. See README.md section on PTR records for important instructions. |
-# Outputs End
-# Providers Start
 ## Providers
 
 | Name | Version |
 |------|---------|
 | <a name="provider_aws"></a> [aws](#provider\_aws) | ~> 3.67.0 |
-# Providers End
-# Requirements Start
 ## Requirements
 
 | Name | Version |
@@ -73,12 +60,9 @@ This terraform stack stands up AWS infrastructure needed for a Cabalmail system.
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.0.0 |
 | <a name="requirement_acme"></a> [acme](#requirement\_acme) | 2.2.0 |
 | <a name="requirement_aws"></a> [aws](#requirement\_aws) | ~> 3.67.0 |
-# Requirements End
-# Resources Start
 ## Resources
 
 | Name | Type |
 |------|------|
 | [aws_ssm_parameter.zone](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ssm_parameter) | data source |
-# Resources End
 <!-- END_TF_DOCS -->

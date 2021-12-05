@@ -1,15 +1,10 @@
 <!-- BEGIN_TF_DOCS -->
 # Cabalmail
-<div style="width: 35px; float:left"><img src="../../docs/logo.png" width="35" />
+<div style="width: 35px; float:left; height: 100%"><img src="../../docs/logo.png" width="35" />
 <p><a href="../../README.md">Main documentation</a></p>
 </div>
-# Header Start
 
-# Header End
-# Footer Start
 
-# Footer End
-# Inputs Start
 ## Inputs
 
 | Name | Description | Type | Default | Required |
@@ -33,30 +28,20 @@
 | <a name="input_user_pool_arn"></a> [user\_pool\_arn](#input\_user\_pool\_arn) | ARN of the Cognito User Pool | `any` | n/a | yes |
 | <a name="input_user_pool_id"></a> [user\_pool\_id](#input\_user\_pool\_id) | ID of the Cognito User Pool | `any` | n/a | yes |
 | <a name="input_vpc"></a> [vpc](#input\_vpc) | VPC for the load balancer. | `any` | n/a | yes |
-# Inputs End
-# Modules Start
 ## Modules
 
 No modules.
-# Modules End
-# Outputs Start
 ## Outputs
 
 No outputs.
-# Outputs End
-# Providers Start
 ## Providers
 
 | Name | Version |
 |------|---------|
 | <a name="provider_aws"></a> [aws](#provider\_aws) | n/a |
-# Providers End
-# Requirements Start
 ## Requirements
 
 No requirements.
-# Requirements End
-# Resources Start
 ## Resources
 
 | Name | Type |
@@ -76,5 +61,4 @@ No requirements.
 | [aws_caller_identity.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity) | data source |
 | [aws_default_tags.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/default_tags) | data source |
 | [aws_iam_policy.ssm](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy) | data source |
-# Resources End
 <!-- END_TF_DOCS -->

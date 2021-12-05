@@ -1,15 +1,10 @@
 <!-- BEGIN_TF_DOCS -->
 # Cabalmail
-<div style="width: 35px; float:left"><img src="../../docs/logo.png" width="35" />
+<div style="width: 35px; float:left; height: 100%"><img src="../../docs/logo.png" width="35" />
 <p><a href="../../README.md">Main documentation</a></p>
 </div>
-# Header Start
 
-# Header End
-# Footer Start
 
-# Footer End
-# Inputs Start
 ## Inputs
 
 | Name | Description | Type | Default | Required |
@@ -19,13 +14,9 @@
 | <a name="input_public_subnets"></a> [public\_subnets](#input\_public\_subnets) | Subnets for load balancer targets. | `any` | n/a | yes |
 | <a name="input_vpc"></a> [vpc](#input\_vpc) | VPC for the load balancer. | `any` | n/a | yes |
 | <a name="input_zone_id"></a> [zone\_id](#input\_zone\_id) | Route 53 Zone ID for control domain | `any` | n/a | yes |
-# Inputs End
-# Modules Start
 ## Modules
 
 No modules.
-# Modules End
-# Outputs Start
 ## Outputs
 
 | Name | Description |
@@ -34,20 +25,14 @@ No modules.
 | <a name="output_relay_tg"></a> [relay\_tg](#output\_relay\_tg) | n/a |
 | <a name="output_starttls_tg"></a> [starttls\_tg](#output\_starttls\_tg) | n/a |
 | <a name="output_submission_tg"></a> [submission\_tg](#output\_submission\_tg) | n/a |
-# Outputs End
-# Providers Start
 ## Providers
 
 | Name | Version |
 |------|---------|
 | <a name="provider_aws"></a> [aws](#provider\_aws) | n/a |
-# Providers End
-# Requirements Start
 ## Requirements
 
 No requirements.
-# Requirements End
-# Resources Start
 ## Resources
 
 | Name | Type |
@@ -62,5 +47,4 @@ No requirements.
 | [aws_lb_target_group.starttls](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lb_target_group) | resource |
 | [aws_lb_target_group.submission](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lb_target_group) | resource |
 | [aws_route53_record.cname](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route53_record) | resource |
-# Resources End
 <!-- END_TF_DOCS -->
