@@ -1,9 +1,4 @@
 <!-- BEGIN_TF_DOCS -->
-# Cabalmail
-<div style="width: 10em; float:left; height: 100%; padding-right: 1em;"><img src="../../docs/logo.png" width="100" />
-<p><a href="../../README.md">Main documentation</a></p>
-</div><div style="padding-left: 11em;">
-
 
 # Status
 
@@ -46,5 +41,4 @@ No requirements.
 | [aws_s3_bucket.cabal_image_builder_log_bucket](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket) | resource |
 | [aws_iam_policy.ecr_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy) | data source |
 | [aws_iam_policy.ssm_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy) | data source |
-</div>
 <!-- END_TF_DOCS -->

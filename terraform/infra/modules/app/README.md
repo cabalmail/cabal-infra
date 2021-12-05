@@ -1,9 +1,4 @@
 <!-- BEGIN_TF_DOCS -->
-# Cabalmail
-<div style="width: 10em; float:left; height: 100%; padding-right: 1em;"><img src="../../docs/logo.png" width="100" />
-<p><a href="../../README.md">Main documentation</a></p>
-</div><div style="padding-left: 11em;">
-
 
 
 ## Inputs
@@ -58,5 +53,4 @@ No requirements.
 | [aws_s3_bucket_policy.website](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_policy) | resource |
 | [aws_ssm_document.run_chef](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ssm_document) | resource |
 | [aws_caller_identity.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity) | data source |
-</div>
 <!-- END_TF_DOCS -->

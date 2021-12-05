@@ -1,9 +1,4 @@
 <!-- BEGIN_TF_DOCS -->
-# Cabalmail
-<div style="width: 10em; float:left; height: 100%; padding-right: 1em;"><img src="../../docs/logo.png" width="100" />
-<p><a href="../../README.md">Main documentation</a></p>
-</div><div style="padding-left: 11em;">
-
 
 
 ## Inputs
@@ -42,5 +37,4 @@ No requirements.
 | [aws_caller_identity.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity) | data source |
 | [aws_iam_policy_document.sns_users](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.users](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
-</div>
 <!-- END_TF_DOCS -->
