@@ -1,6 +1,6 @@
 <!-- BEGIN_TF_DOCS -->
 # Cabalmail
-<div style="width: 35px; float:left; height: 100%"><img src="../../docs/logo.png" width="35" />
+<div style="width: 100px; float:left; height: 100%; padding-right: 1em;"><img src="../../docs/logo.png" width="100" />
 <p><a href="../../README.md">Main documentation</a></p>
 </div>
 
