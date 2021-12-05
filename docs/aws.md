@@ -60,7 +60,7 @@ After signing up, perform the following steps:
         ]
     }
     ```
-
+    (If you don't intend to use this repo to configure AWS Backup, then you may omit the `backup:*` and `backup-storage:*` lines.)
 6. Create an IAM Group called "terraform" and assign the above policy.
 7. Create an IAM User called "terraform" and assign the above group. This user should be progamatic only -- *no console*. Save the API key ID and secret. Note: you should rotate this key regularly!
 8. Optional but recommended: delete the default VPC in all regions.

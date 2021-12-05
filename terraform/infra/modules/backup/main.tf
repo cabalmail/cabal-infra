@@ -5,19 +5,6 @@ resource "aws_backup_vault" "backup" {
   }
 }
 
-# resource "aws_backup_region_settings" "services" {
-#   resource_type_opt_in_preference = {
-#     "DynamoDB"        = true
-#     "Aurora"          = false
-#     "EBS"             = false
-#     "EC2"             = false
-#     "EFS"             = true
-#     "FSx"             = false
-#     "RDS"             = false
-#     "Storage Gateway" = false
-#   }
-# }
-
 resource "aws_iam_role" "backup" {
   name               = "cabal-backup-role"
   assume_role_policy = <<POLICY
