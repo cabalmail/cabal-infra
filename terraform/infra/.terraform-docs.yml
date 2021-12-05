@@ -18,34 +18,18 @@ sections:
 
 content: |-
   # Cabalmail
-  <div style="width: 35px; float:left"><img src="../../docs/logo.png" width="35" />
+  <div style="width: 35px; float:left; height: 100%"><img src="../../docs/logo.png" width="35" />
   <p><a href="../../README.md">Main documentation</a></p>
   </div>
-  # Header Start
   {{ .Header }}
-  # Header End
-  # Footer Start
   {{ .Footer }}
-  # Footer End
-  # Inputs Start
   {{ .Inputs }}
-  # Inputs End
-  # Modules Start
   {{ .Modules }}
-  # Modules End
-  # Outputs Start
   {{ .Outputs }}
-  # Outputs End
-  # Providers Start
   {{ .Providers }}
-  # Providers End
-  # Requirements Start
   {{ .Requirements }}
-  # Requirements End
-  # Resources Start
   {{ .Resources }}
-  # Resources End
-
+  
 output:
   file: ""
   mode: inject
