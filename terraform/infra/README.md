@@ -1,4 +1,8 @@
 <!-- BEGIN_TF_DOCS -->
+# Cabalmail
+<div style="width: 10em; float:left; height: 100%; padding-right: 1em;"><img src="../../docs/logo.png" width="100" />
+<p><a href="../../README.md">Main documentation</a></p>
+</div><div style="padding-left: 11em;">
 # Cabalmail infra
 
 This terraform stack stands up AWS infrastructure needed for a Cabalmail system. See [README.md](../../README.md) at the root of this repository for general information.
@@ -61,4 +65,5 @@ This terraform stack stands up AWS infrastructure needed for a Cabalmail system.
 | Name | Type |
 |------|------|
 | [aws_ssm_parameter.zone](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ssm_parameter) | data source |
+</div>
 <!-- END_TF_DOCS -->

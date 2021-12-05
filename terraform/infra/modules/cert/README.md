@@ -1,4 +1,8 @@
 <!-- BEGIN_TF_DOCS -->
+# Cabalmail
+<div style="width: 10em; float:left; height: 100%; padding-right: 1em;"><img src="../../docs/logo.png" width="100" />
+<p><a href="../../README.md">Main documentation</a></p>
+</div><div style="padding-left: 11em;">
 
 
 ## Inputs
@@ -46,4 +50,5 @@ No modules.
 | [tls_cert_request.csr](https://registry.terraform.io/providers/hashicorp/tls/latest/docs/resources/cert_request) | resource |
 | [tls_private_key.key](https://registry.terraform.io/providers/hashicorp/tls/latest/docs/resources/private_key) | resource |
 | [tls_private_key.pk](https://registry.terraform.io/providers/hashicorp/tls/latest/docs/resources/private_key) | resource |
+</div>
 <!-- END_TF_DOCS -->

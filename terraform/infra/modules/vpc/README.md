@@ -1,4 +1,8 @@
 <!-- BEGIN_TF_DOCS -->
+# Cabalmail
+<div style="width: 10em; float:left; height: 100%; padding-right: 1em;"><img src="../../docs/logo.png" width="100" />
+<p><a href="../../README.md">Main documentation</a></p>
+</div><div style="padding-left: 11em;">
 
 
 ## Inputs
@@ -47,4 +51,5 @@ No requirements.
 | [aws_subnet.private](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/subnet) | resource |
 | [aws_subnet.public](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/subnet) | resource |
 | [aws_vpc.network](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc) | resource |
+</div>
 <!-- END_TF_DOCS -->
