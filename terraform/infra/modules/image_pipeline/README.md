@@ -4,6 +4,11 @@ On hold pending resolution of [issue #16839](https://github.com/hashicorp/terraf
 
 Code to date adapted from [this sample](https://github.com/aws-samples/amazon-ec2-image-builder-samples/blob/master/CloudFormation/Docker/amazon-linux-2-with-helloworld/amazon-linux-2-container-image.yml).
 <!-- BEGIN_TF_DOCS -->
+# Cabalmail
+<table><tr><td><img src="../../docs/logo.png" width="35" />
+[Main documentation](../../README.md)
+</td><td>
+# Header Start
 
 # Status
 
@@ -12,21 +17,38 @@ On hold pending resolution of [issue #16839](https://github.com/hashicorp/terraf
 Code to date adapted from [this sample](https://github.com/aws-samples/amazon-ec2-image-builder-samples/blob/master/CloudFormation/Docker/amazon-linux-2-with-helloworld/amazon-linux-2-container-image.yml).
 
 Based on https://github.com/aws-samples/amazon-ec2-image-builder-samples/blob/master/CloudFormation/Docker/amazon-linux-2-with-helloworld/amazon-linux-2-container-image.yml
+# Header End
+# Footer Start
 
-## Requirements
+# Footer End
+# Inputs Start
+## Inputs
 
-No requirements.
+No inputs.
+# Inputs End
+# Modules Start
+## Modules
 
+No modules.
+# Modules End
+# Outputs Start
+## Outputs
+
+No outputs.
+# Outputs End
+# Providers Start
 ## Providers
 
 | Name | Version |
 |------|---------|
 | <a name="provider_aws"></a> [aws](#provider\_aws) | n/a |
+# Providers End
+# Requirements Start
+## Requirements
 
-## Modules
-
-No modules.
-
+No requirements.
+# Requirements End
+# Resources Start
 ## Resources
 
 | Name | Type |
@@ -43,12 +65,6 @@ No modules.
 | [aws_s3_bucket.cabal_image_builder_log_bucket](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket) | resource |
 | [aws_iam_policy.ecr_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy) | data source |
 | [aws_iam_policy.ssm_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy) | data source |
-
-## Inputs
-
-No inputs.
-
-## Outputs
-
-No outputs.
+# Resources End
+</td></tr></table>
 <!-- END_TF_DOCS -->

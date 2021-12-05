@@ -1,18 +1,45 @@
 <!-- BEGIN_TF_DOCS -->
-## Requirements
+# Cabalmail
+<table><tr><td><img src="../../docs/logo.png" width="35" />
+[Main documentation](../../README.md)
+</td><td>
+# Header Start
 
-No requirements.
+# Header End
+# Footer Start
 
+# Footer End
+# Inputs Start
+## Inputs
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|:--------:|
+| <a name="input_efs"></a> [efs](#input\_efs) | ARN of elastic filesystem to back up. | `any` | n/a | yes |
+| <a name="input_table"></a> [table](#input\_table) | ARN of DynamoDB table to back up. | `any` | n/a | yes |
+# Inputs End
+# Modules Start
+## Modules
+
+No modules.
+# Modules End
+# Outputs Start
+## Outputs
+
+No outputs.
+# Outputs End
+# Providers Start
 ## Providers
 
 | Name | Version |
 |------|---------|
 | <a name="provider_aws"></a> [aws](#provider\_aws) | n/a |
+# Providers End
+# Requirements Start
+## Requirements
 
-## Modules
-
-No modules.
-
+No requirements.
+# Requirements End
+# Resources Start
 ## Resources
 
 | Name | Type |
@@ -22,15 +49,6 @@ No modules.
 | [aws_backup_vault.backup](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/backup_vault) | resource |
 | [aws_iam_role.backup](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role) | resource |
 | [aws_iam_role_policy_attachment.backup](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy_attachment) | resource |
-
-## Inputs
-
-| Name | Description | Type | Default | Required |
-|------|-------------|------|---------|:--------:|
-| <a name="input_efs"></a> [efs](#input\_efs) | ARN of elastic filesystem to back up. | `any` | n/a | yes |
-| <a name="input_table"></a> [table](#input\_table) | ARN of DynamoDB table to back up. | `any` | n/a | yes |
-
-## Outputs
-
-No outputs.
+# Resources End
+</td></tr></table>
 <!-- END_TF_DOCS -->

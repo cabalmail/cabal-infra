@@ -63,48 +63,19 @@
 | <a name="output_relay_ips"></a> [relay\_ips](#output\_relay\_ips) | IP addresses that will be used for outbound mail. See README.md section on PTR records for important instructions. |
 
 <!-- BEGIN_TF_DOCS -->
+# Cabalmail
+<table><tr><td><img src="../../docs/logo.png" width="35" />
+[Main documentation](../../README.md)
+</td><td>
+# Header Start
 # Cabalmail infra
 
 This terraform stack stands up AWS infrastructure needed for a Cabalmail system. See [README.md](../../README.md) at the root of this repository for general information.
+# Header End
+# Footer Start
 
-## Requirements
-
-| Name | Version |
-|------|---------|
-| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.0.0 |
-| <a name="requirement_acme"></a> [acme](#requirement\_acme) | 2.2.0 |
-| <a name="requirement_aws"></a> [aws](#requirement\_aws) | ~> 3.67.0 |
-
-## Providers
-
-| Name | Version |
-|------|---------|
-| <a name="provider_aws"></a> [aws](#provider\_aws) | ~> 3.67.0 |
-
-## Modules
-
-| Name | Source | Version |
-|------|--------|---------|
-| <a name="module_admin"></a> [admin](#module\_admin) | ./modules/app | n/a |
-| <a name="module_backup"></a> [backup](#module\_backup) | ./modules/backup | n/a |
-| <a name="module_cert"></a> [cert](#module\_cert) | ./modules/cert | n/a |
-| <a name="module_cookbook"></a> [cookbook](#module\_cookbook) | ./modules/cookbook | n/a |
-| <a name="module_domains"></a> [domains](#module\_domains) | ./modules/domains | n/a |
-| <a name="module_efs"></a> [efs](#module\_efs) | ./modules/efs | n/a |
-| <a name="module_imap"></a> [imap](#module\_imap) | ./modules/asg | n/a |
-| <a name="module_load_balancer"></a> [load\_balancer](#module\_load\_balancer) | ./modules/elb | n/a |
-| <a name="module_pool"></a> [pool](#module\_pool) | ./modules/user_pool | n/a |
-| <a name="module_smtp_in"></a> [smtp\_in](#module\_smtp\_in) | ./modules/asg | n/a |
-| <a name="module_smtp_out"></a> [smtp\_out](#module\_smtp\_out) | ./modules/asg | n/a |
-| <a name="module_table"></a> [table](#module\_table) | ./modules/table | n/a |
-| <a name="module_vpc"></a> [vpc](#module\_vpc) | ./modules/vpc | n/a |
-
-## Resources
-
-| Name | Type |
-|------|------|
-| [aws_ssm_parameter.zone](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ssm_parameter) | data source |
-
+# Footer End
+# Inputs Start
 ## Inputs
 
 | Name | Description | Type | Default | Required |
@@ -122,7 +93,27 @@ This terraform stack stands up AWS infrastructure needed for a Cabalmail system.
 | <a name="input_repo"></a> [repo](#input\_repo) | This repository. Used for resource tagging. | `string` | `"https://github.com/ccarr-cabal/cabal-infra/tree/main"` | no |
 | <a name="input_smtpin_scale"></a> [smtpin\_scale](#input\_smtpin\_scale) | Minimum, maximum, and desired number of incoming SMTP servers. All three should be at least 1, and must satisfy minimum <= desired <= maximum. Defaults to { min = 0, max = 0, des = 0 } in order to prevent unexpected AWS charges. | <pre>object({<br>    min = number<br>    max = number<br>    des = number<br>  })</pre> | <pre>{<br>  "des": 0,<br>  "max": 0,<br>  "min": 0<br>}</pre> | no |
 | <a name="input_smtpout_scale"></a> [smtpout\_scale](#input\_smtpout\_scale) | Minimum, maximum, and desired number of outgoing SMTP servers. All three should be at least 1, and must satisfy minimum <= desired <= maximum. Defaults to { min = 0, max = 0, des = 0 } in order to prevent unexpected AWS charges. | <pre>object({<br>    min = number<br>    max = number<br>    des = number<br>  })</pre> | <pre>{<br>  "des": 0,<br>  "max": 0,<br>  "min": 0<br>}</pre> | no |
+# Inputs End
+# Modules Start
+## Modules
 
+| Name | Source | Version |
+|------|--------|---------|
+| <a name="module_admin"></a> [admin](#module\_admin) | ./modules/app | n/a |
+| <a name="module_backup"></a> [backup](#module\_backup) | ./modules/backup | n/a |
+| <a name="module_cert"></a> [cert](#module\_cert) | ./modules/cert | n/a |
+| <a name="module_cookbook"></a> [cookbook](#module\_cookbook) | ./modules/cookbook | n/a |
+| <a name="module_domains"></a> [domains](#module\_domains) | ./modules/domains | n/a |
+| <a name="module_efs"></a> [efs](#module\_efs) | ./modules/efs | n/a |
+| <a name="module_imap"></a> [imap](#module\_imap) | ./modules/asg | n/a |
+| <a name="module_load_balancer"></a> [load\_balancer](#module\_load\_balancer) | ./modules/elb | n/a |
+| <a name="module_pool"></a> [pool](#module\_pool) | ./modules/user_pool | n/a |
+| <a name="module_smtp_in"></a> [smtp\_in](#module\_smtp\_in) | ./modules/asg | n/a |
+| <a name="module_smtp_out"></a> [smtp\_out](#module\_smtp\_out) | ./modules/asg | n/a |
+| <a name="module_table"></a> [table](#module\_table) | ./modules/table | n/a |
+| <a name="module_vpc"></a> [vpc](#module\_vpc) | ./modules/vpc | n/a |
+# Modules End
+# Outputs Start
 ## Outputs
 
 | Name | Description |
@@ -130,4 +121,29 @@ This terraform stack stands up AWS infrastructure needed for a Cabalmail system.
 | <a name="output_IMPORTANT"></a> [IMPORTANT](#output\_IMPORTANT) | n/a |
 | <a name="output_domains"></a> [domains](#output\_domains) | n/a |
 | <a name="output_relay_ips"></a> [relay\_ips](#output\_relay\_ips) | IP addresses that will be used for outbound mail. See README.md section on PTR records for important instructions. |
+# Outputs End
+# Providers Start
+## Providers
+
+| Name | Version |
+|------|---------|
+| <a name="provider_aws"></a> [aws](#provider\_aws) | ~> 3.67.0 |
+# Providers End
+# Requirements Start
+## Requirements
+
+| Name | Version |
+|------|---------|
+| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.0.0 |
+| <a name="requirement_acme"></a> [acme](#requirement\_acme) | 2.2.0 |
+| <a name="requirement_aws"></a> [aws](#requirement\_aws) | ~> 3.67.0 |
+# Requirements End
+# Resources Start
+## Resources
+
+| Name | Type |
+|------|------|
+| [aws_ssm_parameter.zone](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ssm_parameter) | data source |
+# Resources End
+</td></tr></table>
 <!-- END_TF_DOCS -->

@@ -1,14 +1,29 @@
 <!-- BEGIN_TF_DOCS -->
-## Requirements
+# Cabalmail
+<table><tr><td><img src="../../docs/logo.png" width="35" />
+[Main documentation](../../README.md)
+</td><td>
+# Header Start
 
-No requirements.
+# Header End
+# Footer Start
 
-## Providers
+# Footer End
+# Inputs Start
+## Inputs
 
-| Name | Version |
-|------|---------|
-| <a name="provider_aws"></a> [aws](#provider\_aws) | n/a |
-
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|:--------:|
+| <a name="input_cert_arn"></a> [cert\_arn](#input\_cert\_arn) | n/a | `string` | n/a | yes |
+| <a name="input_control_domain"></a> [control\_domain](#input\_control\_domain) | n/a | `string` | n/a | yes |
+| <a name="input_domains"></a> [domains](#input\_domains) | n/a | `list` | n/a | yes |
+| <a name="input_region"></a> [region](#input\_region) | n/a | `string` | n/a | yes |
+| <a name="input_relay_ips"></a> [relay\_ips](#input\_relay\_ips) | n/a | `list(string)` | n/a | yes |
+| <a name="input_user_pool_client_id"></a> [user\_pool\_client\_id](#input\_user\_pool\_client\_id) | n/a | `string` | n/a | yes |
+| <a name="input_user_pool_id"></a> [user\_pool\_id](#input\_user\_pool\_id) | n/a | `string` | n/a | yes |
+| <a name="input_zone_id"></a> [zone\_id](#input\_zone\_id) | n/a | `string` | n/a | yes |
+# Inputs End
+# Modules Start
 ## Modules
 
 | Name | Source | Version |
@@ -16,7 +31,25 @@ No requirements.
 | <a name="module_cabal_list_method"></a> [cabal\_list\_method](#module\_cabal\_list\_method) | ./modules/call | n/a |
 | <a name="module_cabal_new_method"></a> [cabal\_new\_method](#module\_cabal\_new\_method) | ./modules/call | n/a |
 | <a name="module_cabal_revoke_method"></a> [cabal\_revoke\_method](#module\_cabal\_revoke\_method) | ./modules/call | n/a |
+# Modules End
+# Outputs Start
+## Outputs
 
+No outputs.
+# Outputs End
+# Providers Start
+## Providers
+
+| Name | Version |
+|------|---------|
+| <a name="provider_aws"></a> [aws](#provider\_aws) | n/a |
+# Providers End
+# Requirements Start
+## Requirements
+
+No requirements.
+# Requirements End
+# Resources Start
 ## Resources
 
 | Name | Type |
@@ -39,21 +72,6 @@ No requirements.
 | [aws_s3_bucket_policy.website](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_policy) | resource |
 | [aws_ssm_document.run_chef](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ssm_document) | resource |
 | [aws_caller_identity.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity) | data source |
-
-## Inputs
-
-| Name | Description | Type | Default | Required |
-|------|-------------|------|---------|:--------:|
-| <a name="input_cert_arn"></a> [cert\_arn](#input\_cert\_arn) | n/a | `string` | n/a | yes |
-| <a name="input_control_domain"></a> [control\_domain](#input\_control\_domain) | n/a | `string` | n/a | yes |
-| <a name="input_domains"></a> [domains](#input\_domains) | n/a | `list` | n/a | yes |
-| <a name="input_region"></a> [region](#input\_region) | n/a | `string` | n/a | yes |
-| <a name="input_relay_ips"></a> [relay\_ips](#input\_relay\_ips) | n/a | `list(string)` | n/a | yes |
-| <a name="input_user_pool_client_id"></a> [user\_pool\_client\_id](#input\_user\_pool\_client\_id) | n/a | `string` | n/a | yes |
-| <a name="input_user_pool_id"></a> [user\_pool\_id](#input\_user\_pool\_id) | n/a | `string` | n/a | yes |
-| <a name="input_zone_id"></a> [zone\_id](#input\_zone\_id) | n/a | `string` | n/a | yes |
-
-## Outputs
-
-No outputs.
+# Resources End
+</td></tr></table>
 <!-- END_TF_DOCS -->

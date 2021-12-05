@@ -1,18 +1,53 @@
 <!-- BEGIN_TF_DOCS -->
-## Requirements
+# Cabalmail
+<table><tr><td><img src="../../docs/logo.png" width="35" />
+[Main documentation](../../README.md)
+</td><td>
+# Header Start
 
-No requirements.
+# Header End
+# Footer Start
 
+# Footer End
+# Inputs Start
+## Inputs
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|:--------:|
+| <a name="input_az_list"></a> [az\_list](#input\_az\_list) | List of availability zones to use. | `list(string)` | n/a | yes |
+| <a name="input_cidr_block"></a> [cidr\_block](#input\_cidr\_block) | CIDR for the VPC. | `string` | n/a | yes |
+| <a name="input_control_domain"></a> [control\_domain](#input\_control\_domain) | Control domain. | `string` | n/a | yes |
+| <a name="input_zone_id"></a> [zone\_id](#input\_zone\_id) | Public zone for control domain. | `string` | n/a | yes |
+# Inputs End
+# Modules Start
+## Modules
+
+No modules.
+# Modules End
+# Outputs Start
+## Outputs
+
+| Name | Description |
+|------|-------------|
+| <a name="output_private_subnets"></a> [private\_subnets](#output\_private\_subnets) | n/a |
+| <a name="output_private_zone"></a> [private\_zone](#output\_private\_zone) | n/a |
+| <a name="output_public_subnets"></a> [public\_subnets](#output\_public\_subnets) | n/a |
+| <a name="output_relay_ips"></a> [relay\_ips](#output\_relay\_ips) | n/a |
+| <a name="output_vpc"></a> [vpc](#output\_vpc) | n/a |
+# Outputs End
+# Providers Start
 ## Providers
 
 | Name | Version |
 |------|---------|
 | <a name="provider_aws"></a> [aws](#provider\_aws) | n/a |
+# Providers End
+# Requirements Start
+## Requirements
 
-## Modules
-
-No modules.
-
+No requirements.
+# Requirements End
+# Resources Start
 ## Resources
 
 | Name | Type |
@@ -31,23 +66,6 @@ No modules.
 | [aws_subnet.private](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/subnet) | resource |
 | [aws_subnet.public](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/subnet) | resource |
 | [aws_vpc.network](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc) | resource |
-
-## Inputs
-
-| Name | Description | Type | Default | Required |
-|------|-------------|------|---------|:--------:|
-| <a name="input_az_list"></a> [az\_list](#input\_az\_list) | List of availability zones to use. | `list(string)` | n/a | yes |
-| <a name="input_cidr_block"></a> [cidr\_block](#input\_cidr\_block) | CIDR for the VPC. | `string` | n/a | yes |
-| <a name="input_control_domain"></a> [control\_domain](#input\_control\_domain) | Control domain. | `string` | n/a | yes |
-| <a name="input_zone_id"></a> [zone\_id](#input\_zone\_id) | Public zone for control domain. | `string` | n/a | yes |
-
-## Outputs
-
-| Name | Description |
-|------|-------------|
-| <a name="output_private_subnets"></a> [private\_subnets](#output\_private\_subnets) | n/a |
-| <a name="output_private_zone"></a> [private\_zone](#output\_private\_zone) | n/a |
-| <a name="output_public_subnets"></a> [public\_subnets](#output\_public\_subnets) | n/a |
-| <a name="output_relay_ips"></a> [relay\_ips](#output\_relay\_ips) | n/a |
-| <a name="output_vpc"></a> [vpc](#output\_vpc) | n/a |
+# Resources End
+</td></tr></table>
 <!-- END_TF_DOCS -->
