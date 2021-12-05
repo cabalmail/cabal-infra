@@ -63,6 +63,10 @@
 | <a name="output_relay_ips"></a> [relay\_ips](#output\_relay\_ips) | IP addresses that will be used for outbound mail. See README.md section on PTR records for important instructions. |
 
 <!-- BEGIN_TF_DOCS -->
+# Cabalmail infra
+
+This terraform stack stands up AWS infrastructure needed for a Cabalmail system. See [README.md](../../README.md) at the root of this repository for general information.
+
 ## Requirements
 
 | Name | Version |
