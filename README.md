@@ -56,3 +56,7 @@ See the linked docouments for information on:
 # Contributing
 
 This is my first open source project, so I don't yet have a reliable sense of how best to guide contributors or to vet/accept contributions. But if you would like to submit a pull request, I would be happy to consider it.
+
+# Documentation
+
+This document refers to more detailed documentation in the [docs](./docs) directory. Additionally, Automated code documentation is generated for the terraform code by [terraform-docs](https://github.com/terraform-docs/terraform-docs). See e.g. [terraform/infra/README.md](./terraform/infra/README.md).
