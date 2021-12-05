@@ -4,6 +4,7 @@
 <p><a href="../../README.md">Main documentation</a></p>
 </div><div style="padding-left: 11em;">
 
+
 # Status
 
 On hold pending resolution of [issue #16839](https://github.com/hashicorp/terraform-provider-aws/issues/16839) which will add Terraform support for building docker container images.
