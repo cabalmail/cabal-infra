@@ -1,8 +1,8 @@
 <!-- BEGIN_TF_DOCS -->
 # Cabalmail
-<table><tr><td><img src="../../docs/logo.png" width="35" />
-[Main documentation](../../README.md)
-</td><td>
+<div style="width: 35px; float:left"><img src="../../docs/logo.png" width="35" />
+<p>[Main documentation](../../README.md)</p>
+</div>
 # Header Start
 
 # Header End
@@ -48,5 +48,4 @@ No requirements.
 | [aws_s3_bucket_object.cookbook](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_object) | resource |
 | [archive_file.cookbook](https://registry.terraform.io/providers/hashicorp/archive/latest/docs/data-sources/file) | data source |
 # Resources End
-</td></tr></table>
 <!-- END_TF_DOCS -->

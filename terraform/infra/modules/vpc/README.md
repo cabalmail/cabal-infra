@@ -1,8 +1,8 @@
 <!-- BEGIN_TF_DOCS -->
 # Cabalmail
-<table><tr><td><img src="../../docs/logo.png" width="35" />
-[Main documentation](../../README.md)
-</td><td>
+<div style="width: 35px; float:left"><img src="../../docs/logo.png" width="35" />
+<p>[Main documentation](../../README.md)</p>
+</div>
 # Header Start
 
 # Header End
@@ -67,5 +67,4 @@ No requirements.
 | [aws_subnet.public](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/subnet) | resource |
 | [aws_vpc.network](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc) | resource |
 # Resources End
-</td></tr></table>
 <!-- END_TF_DOCS -->

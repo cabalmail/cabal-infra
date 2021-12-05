@@ -1,8 +1,8 @@
 <!-- BEGIN_TF_DOCS -->
 # Cabalmail
-<table><tr><td><img src="../../docs/logo.png" width="35" />
-[Main documentation](../../README.md)
-</td><td>
+<div style="width: 35px; float:left"><img src="../../docs/logo.png" width="35" />
+<p>[Main documentation](../../README.md)</p>
+</div>
 # Header Start
 
 # Header End
@@ -47,5 +47,4 @@ No requirements.
 |------|------|
 | [aws_route53_zone.mail_dns](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route53_zone) | resource |
 # Resources End
-</td></tr></table>
 <!-- END_TF_DOCS -->

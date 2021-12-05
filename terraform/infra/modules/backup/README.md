@@ -1,8 +1,8 @@
 <!-- BEGIN_TF_DOCS -->
 # Cabalmail
-<table><tr><td><img src="../../docs/logo.png" width="35" />
-[Main documentation](../../README.md)
-</td><td>
+<div style="width: 35px; float:left"><img src="../../docs/logo.png" width="35" />
+<p>[Main documentation](../../README.md)</p>
+</div>
 # Header Start
 
 # Header End
@@ -50,5 +50,4 @@ No requirements.
 | [aws_iam_role.backup](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role) | resource |
 | [aws_iam_role_policy_attachment.backup](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy_attachment) | resource |
 # Resources End
-</td></tr></table>
 <!-- END_TF_DOCS -->
