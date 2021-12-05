@@ -20,9 +20,11 @@ You must register your desired domains (control and mail) with your chosen regis
 
 The control domain is for infrastructure, not for email addresses. If you like to send mail from example.com, you might use example.net as your control domain. If so, then you would retrieve your mail from imap.example.net, send mail to smtp-out.example.net, and manage your addresses at admin.example.net.
 
+If you don't have a preference for registrars, you can use the [Route 53 Registrar service](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/domain-register.html) in the AWS account you created above.
+
 # Provisioning
 
-The developers have striven to make provisioning as automated as possible. However, there are some unavoidably manual steps. Several of these steps are discussed above under [Prerequisites](#Prerequisites), and others are discussed below under [Post-Autonation Steps](#PostAutomation). However, one unavoidably must be attended to during the provsioning. This is why the terraform directoy has been subdivided into two subdirectories: The first attends to the initial steps, and the second all the rest. The order is dns first and infra second. The overwhelming majority of resources are created by infra.
+The developers have striven to make provisioning as automated as possible. However, there are some manual steps. Several of these steps are discussed above under [Prerequisites](#Prerequisites), and others are discussed below under [Post-Autonation Steps](#PostAutomation). However, one unavoidably must be attended to during the provsioning. This is why the terraform directoy has been subdivided into two subdirectories: The first attends to the initial steps, and the second all the rest. The order is dns first and infra second. The overwhelming majority of resources are created by infra.
 
 1. Set up the [prerequisites](#Prerequisites) above.
 
@@ -43,7 +45,7 @@ The developers have striven to make provisioning as automated as possible. Howev
 
 You can rerun the provisioning steps any time. If you have not changed anything in the code or in the variables, the operation should be safe. At worst, it will update the AMI on which the machines run, resulting in new machines being launched, but no mail will be lost, with the rare exception of mail that had been queued for redelivery following a transitory error.
 
-Theoretically, it should also be safe to change any of the variables except the AWS region. As long as the new values are sensible, Terraform should reestablish the infrastructure with the new parameters, and your mail should still be there. But we do not guarantee this, and we strongly recommend that you perform backups first.
+Theoretically, it should also be safe to change any of the variables except the AWS region. As long as the new values are sensible, Terraform should reestablish the infrastructure with the new parameters, and your mail should still be there. But we do not guarantee this, and we strongly recommend that you [perform backups](./operations.md) first.
 
 # Post-Automation Steps<a name="PostAutomation"></a>
 
@@ -54,8 +56,8 @@ It should look something like this:
 ```json
 {
   "IMPORTANT": [
-    "You must get permission from AWS to relay mail through the below IP addresses. See the section on PTR records in README.md.",
-    "You must update your domain registrations with the name servers from the below domains. See the section on Name Servers in README.md"
+    "You must get permission from AWS to relay mail through the below IP addresses. See the section on Port 25 in docs/setup.md.",
+    "You must update your domain registrations with the name servers from the below domains. See the section on Nameservers in docs/setup.md"
   ],
   "domains": [
     {

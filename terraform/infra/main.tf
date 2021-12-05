@@ -158,6 +158,7 @@ module "smtp_out" {
   depends_on      = [ module.cert ]
 }
 
+# Establishes a daily backup schedule for mail and address data
 module "backup" {
   source = "./modules/backup"
   count  = var.backup ? 1 : 0

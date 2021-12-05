@@ -3,4 +3,6 @@ Cabalmail grew out of a bunch of scripts and configuration files that I original
 
 Later, when my son graduated from college, he and I made a project out of converting my scripts to Chef cookbooks. It was my son, with his unerring sense of whimsy, who chose the name "Cabal" for our project.
 
+Later still, I migrated the source of truth for addresses to DynamoDB, refactored the cookbooks to use DynamoDB for this information, and created the serverless app for creating and revoking addresses.
+
 More recently, I added Terraform code to manage the infrastructure in the hope that others could benefit from it.

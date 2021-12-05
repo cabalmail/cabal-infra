@@ -98,7 +98,7 @@ Cabalmail does not create a custom user interface for administering end user acc
 4. Click the "Manage User Pools" button.
 5. Click on the "cabal" user pool.
 6. In the left navigation, click on "Users and groups" under the heading "General settings".
-7. Click on the user name of the user who you want to delete.
+7. Click on the user name of the user who you want to disable.
 8. Examine the user's details to verify that you selected the right one.
 9. Click the "Disable user" button.
 

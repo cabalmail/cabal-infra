@@ -1,6 +1,6 @@
 # About Cabalmail
 
-Creates AWS infrastructure and machine configuration for a Cabalmail system -- a system for hosting and managing your personal email.
+Creates AWS infrastructure and machine configuration for a Cabalmail system -- a system for hosting and managing your personal email by creating new addresses for each interlocutor.
 
 ![Cabalmail logo](./docs/logo.png)
 
@@ -55,4 +55,4 @@ See the linked docouments for information on:
 
 # Contributing
 
-This is my first open source project, so I don't yet have reliable sense of how best to guide contributors or to vet/accept contributions. But if you would like to submit a pull request, I would be happy to consider it.
+This is my first open source project, so I don't yet have a reliable sense of how best to guide contributors or to vet/accept contributions. But if you would like to submit a pull request, I would be happy to consider it.
