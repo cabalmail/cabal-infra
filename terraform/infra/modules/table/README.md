@@ -2,7 +2,7 @@
 # Cabalmail
 <div style="width: 10em; float:left; height: 100%; padding-right: 1em;"><img src="../../docs/logo.png" width="100" />
 <p><a href="../../README.md">Main documentation</a></p>
-</div><div style="padding-left: 11em;"
+</div><div style="padding-left: 11em;">
 
 
 ## Inputs
@@ -29,4 +29,5 @@ No requirements.
 | Name | Type |
 |------|------|
 | [aws_dynamodb_table.addresses](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/dynamodb_table) | resource |
+</div>
 <!-- END_TF_DOCS -->
