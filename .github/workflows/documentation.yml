@@ -21,7 +21,7 @@ jobs:
     - name: Render terraform docs for dns and push changes back to PR
       uses: terraform-docs/gh-actions@main
       with:
-        working-dir: ./terraform/infra
+        working-dir: ./terraform/dns
         output-file: README.md
         output-method: inject
         git-push: "true"
