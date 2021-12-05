@@ -6,6 +6,7 @@ provider "aws" {
   region = var.aws_region
 }
 
+# Create the zone for the control domain.
 resource "aws_route53_zone" "cabal_control_zone" {
   name          = var.control_domain
   comment       = "Control domain for cabal-mail infrastructure"
@@ -17,6 +18,8 @@ resource "aws_route53_zone" "cabal_control_zone" {
   }
 }
 
+# Save the zone ID in AWS SSM Parameter Store so that
+# terraform/infra can read it.
 resource "aws_ssm_parameter" "zone" {
   name        = "/cabal/control_domain_zone_id"
   description = "Route 53 Zone ID"
