@@ -1,3 +1,4 @@
 variable "mail_domains" {
-  type = list(string)
+  type        = list(string)
+  description = "List of mail domains."
 }
