@@ -29,7 +29,7 @@
 | <a name="input_type"></a> [type](#input\_type) | Type of server, 'imap', 'smtp-in', or 'smtp-out. | `string` | n/a | yes |
 | <a name="input_user_pool_arn"></a> [user\_pool\_arn](#input\_user\_pool\_arn) | ARN of the Cognito User Pool | `string` | n/a | yes |
 | <a name="input_user_pool_id"></a> [user\_pool\_id](#input\_user\_pool\_id) | ID of the Cognito User Pool | `string` | n/a | yes |
-| <a name="input_vpc"></a> [vpc](#input\_vpc) | VPC for the load balancer. | `map` | n/a | yes |
+| <a name="input_vpc_id"></a> [vpc\_id](#input\_vpc\_id) | VPC ID for the load balancer. | `string` | n/a | yes |
 ## Modules
 
 No modules.
