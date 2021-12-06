@@ -22,7 +22,7 @@ variable "private_subnets" {
 }
 
 variable "vpc" {
-  type        = object
+  type        = map
   description = "VPC for the load balancer."
 }
 
@@ -92,7 +92,7 @@ variable "private_ports" {
 }
 
 variable "scale" {
-  type        = object
+  type        = map
   description = "Min, max, and desired settings for autoscale group"
 }
 
@@ -102,7 +102,7 @@ variable "chef_license" {
 }
 
 variable "private_zone" {
-  type        = object
+  type        = map
   description = "Zone for internal lookups"
 }
 
