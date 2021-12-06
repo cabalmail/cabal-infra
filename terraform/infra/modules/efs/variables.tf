@@ -4,6 +4,6 @@ variable "vpc" {
 }
 
 variable "private_subnets" {
-  type        = list(map)
+  type        = list(string)
   description = "Private subnets"
 }

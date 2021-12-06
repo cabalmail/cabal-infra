@@ -80,9 +80,9 @@ module "load_balancer" {
 
 // Creates an elastic file system for the mailstore
 module "efs" {
-  source          = "./modules/efs"
-  vpc             = module.vpc.vpc
-  private_subnets = module.vpc.private_subnets
+  source             = "./modules/efs"
+  vpc                = module.vpc.vpc
+  private_subnet_ids = module.vpc.private_subnets[*].id
 }
 
 // Creates an auto-scale group for IMAP servers
