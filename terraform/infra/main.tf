@@ -70,12 +70,12 @@ module "vpc" {
 
 // Creates a network load balancer shared by machines in the stack
 module "load_balancer" {
-  source         = "./modules/elb"
-  public_subnets = module.vpc.public_subnets
-  vpc            = module.vpc.vpc
-  control_domain = var.control_domain
-  zone_id        = data.aws_ssm_parameter.zone.value
-  cert_arn       = module.cert.cert_arn
+  source            = "./modules/elb"
+  public_subnet_ids = module.vpc.public_subnets[*].id
+  vpc_id            = module.vpc.vpc_id
+  control_domain    = var.control_domain
+  zone_id           = data.aws_ssm_parameter.zone.value
+  cert_arn          = module.cert.cert_arn
 }
 
 // Creates an elastic file system for the mailstore

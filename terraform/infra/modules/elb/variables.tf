@@ -2,13 +2,13 @@ variable "control_domain" {
   description = "Root domain for infrastructure."
 }
 
-variable "vpc" {
-  type        = map
+variable "vpc_id" {
+  type        = string
   description = "VPC for the load balancer."
 }
 
-variable "public_subnets" {
-  type        = list(map)
+variable "public_subnet_ids" {
+  type        = list(string)
   description = "Subnets for load balancer targets."
 }
 

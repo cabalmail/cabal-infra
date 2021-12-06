@@ -39,7 +39,7 @@ resource "aws_lb_target_group" "starttls" {
   name                 = "cabal-smtp-starttls-tg"
   port                 = "587"
   protocol             = "TCP"
-  vpc_id               = var.vpc.id
+  vpc_id               = var.vpc_id
   deregistration_delay = 30
   stickiness {
     type    = "source_ip"
