@@ -42,5 +42,6 @@ No modules.
 |------|------|
 | [aws_route53_zone.cabal_control_zone](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route53_zone) | resource |
 | [aws_ssm_parameter.zone](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ssm_parameter) | resource |
+
 </div>
 <!-- END_TF_DOCS -->
