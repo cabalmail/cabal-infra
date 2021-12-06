@@ -21,9 +21,9 @@ variable "private_subnets" {
   description = "Subnets for imap ec2 instances."
 }
 
-variable "vpc" {
-  type        = map
-  description = "VPC for the load balancer."
+variable "vpc_id" {
+  type        = string
+  description = "VPC ID for the load balancer."
 }
 
 variable "type" {

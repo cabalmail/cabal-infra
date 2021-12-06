@@ -1,7 +1,7 @@
 resource "aws_security_group" "sg" {
   name        = "cabal-${var.type}-sg"
   description = "Allow ${var.type} inbound traffic"
-  vpc_id      = var.vpc.id
+  vpc_id      = var.vpc_id
 }
 
 resource "aws_security_group_rule" "allow_out" {

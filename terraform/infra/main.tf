@@ -90,7 +90,7 @@ module "imap" {
   source           = "./modules/asg"
   type             = "imap"
   private_subnets  = module.vpc.private_subnets
-  vpc              = module.vpc.vpc
+  vpc_id           = module.vpc.vpc.id
   control_domain   = var.control_domain
   artifact_bucket  = module.cookbook.bucket.id
   target_groups    = [module.load_balancer.imap_tg]
@@ -116,7 +116,7 @@ module "smtp_in" {
   source           = "./modules/asg"
   type             = "smtp-in"
   private_subnets  = module.vpc.private_subnets
-  vpc              = module.vpc.vpc
+  vpc_id           = module.vpc.vpc.id
   control_domain   = var.control_domain
   artifact_bucket  = module.cookbook.bucket.id
   target_groups    = [module.load_balancer.relay_tg]
@@ -142,7 +142,7 @@ module "smtp_out" {
   source           = "./modules/asg"
   type             = "smtp-out"
   private_subnets  = module.vpc.private_subnets
-  vpc              = module.vpc.vpc
+  vpc_id           = module.vpc.vpc.id
   control_domain   = var.control_domain
   artifact_bucket  = module.cookbook.bucket.id
   target_groups    = [
