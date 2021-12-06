@@ -1,7 +1,7 @@
 <!-- BEGIN_TF_DOCS -->
 # Cabalmail
-<div style="width: 10em; float:left; height: 100%; padding-right: 1em;"><img src="../../docs/logo.png" width="100" />
-<p><a href="../../README.md">Main documentation</a></p>
+<div style="width: 10em; float:left; height: 100%; padding-right: 1em;"><img src="/docs/logo.png" width="100" />
+<p><a href="/README.md">Main documentation</a></p>
 </div><div style="padding-left: 11em;">
 
 Stands up the following resources to implement a web application that allows users to manage (create and revoke) their email addresses:
