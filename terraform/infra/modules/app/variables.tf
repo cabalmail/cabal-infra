@@ -2,32 +2,40 @@ data "aws_caller_identity" "current" {}
 
 variable "user_pool_id" {
   type = string
+  description = "ID of the Cognito user pool."
 }
 
 variable "user_pool_client_id" {
-  type = string
+  type        = string
+  description = "Client ID for authenticating with the Cognito user pool."
 }
 
 variable "region" {
-  type = string
+  type        = string
+  description = "The AWS region."
 }
 
 variable "control_domain" {
-  type = string
+  type        = string
+  description = "The control domain."
 }
 
 variable "relay_ips" {
-  type = list(string)
+  type        = list(string)
+  description = "Egress IP addresses."
 }
 
 variable "cert_arn" {
-  type = string
+  type        = string
+  description = "ARN for the AWS Certificate Manager certificate for the control domain."
 }
 
 variable "zone_id" {
-  type = string
+  type        = string
+  description = "Route 53 zone ID for the control domain."
 }
 
 variable "domains" {
-  type = list
+  type        = list
+  description = "List of email domains."
 }
