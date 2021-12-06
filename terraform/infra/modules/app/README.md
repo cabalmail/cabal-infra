@@ -4,7 +4,14 @@
 <p><a href="../../README.md">Main documentation</a></p>
 </div><div style="padding-left: 11em;">
 
-
+Stands up the following resources to implement a web application that allows users to manage (create and revoke) their email addresses:
+- S3 bucket for static assets
+- Static assets as objects stored in S3
+- Lambda functions for three calls: new address, list addresses, revoke address
+- API Gateway for mediating access to the Lambda functioins
+- CloudFront to cache and accelerate the application
+- DNS alias for the application
+- SSM documents for propagating changes to the IMAP and SMTP servers (still in development)
 
 ## Inputs
 
