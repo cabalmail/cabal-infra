@@ -10,14 +10,14 @@
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_cert_arn"></a> [cert\_arn](#input\_cert\_arn) | n/a | `string` | n/a | yes |
-| <a name="input_control_domain"></a> [control\_domain](#input\_control\_domain) | n/a | `string` | n/a | yes |
-| <a name="input_domains"></a> [domains](#input\_domains) | n/a | `list` | n/a | yes |
-| <a name="input_region"></a> [region](#input\_region) | n/a | `string` | n/a | yes |
-| <a name="input_relay_ips"></a> [relay\_ips](#input\_relay\_ips) | n/a | `list(string)` | n/a | yes |
-| <a name="input_user_pool_client_id"></a> [user\_pool\_client\_id](#input\_user\_pool\_client\_id) | n/a | `string` | n/a | yes |
-| <a name="input_user_pool_id"></a> [user\_pool\_id](#input\_user\_pool\_id) | n/a | `string` | n/a | yes |
-| <a name="input_zone_id"></a> [zone\_id](#input\_zone\_id) | n/a | `string` | n/a | yes |
+| <a name="input_cert_arn"></a> [cert\_arn](#input\_cert\_arn) | ARN for the AWS Certificate Manager certificate for the control domain. | `string` | n/a | yes |
+| <a name="input_control_domain"></a> [control\_domain](#input\_control\_domain) | The control domain. | `string` | n/a | yes |
+| <a name="input_domains"></a> [domains](#input\_domains) | List of email domains. | `list` | n/a | yes |
+| <a name="input_region"></a> [region](#input\_region) | The AWS region. | `string` | n/a | yes |
+| <a name="input_relay_ips"></a> [relay\_ips](#input\_relay\_ips) | Egress IP addresses. | `list(string)` | n/a | yes |
+| <a name="input_user_pool_client_id"></a> [user\_pool\_client\_id](#input\_user\_pool\_client\_id) | Client ID for authenticating with the Cognito user pool. | `string` | n/a | yes |
+| <a name="input_user_pool_id"></a> [user\_pool\_id](#input\_user\_pool\_id) | ID of the Cognito user pool. | `string` | n/a | yes |
+| <a name="input_zone_id"></a> [zone\_id](#input\_zone\_id) | Route 53 zone ID for the control domain. | `string` | n/a | yes |
 ## Modules
 
 | Name | Source | Version |

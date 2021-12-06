@@ -10,25 +10,25 @@
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_artifact_bucket"></a> [artifact\_bucket](#input\_artifact\_bucket) | S3 bucket where cookbooks are stored. | `any` | n/a | yes |
-| <a name="input_chef_license"></a> [chef\_license](#input\_chef\_license) | Must be the string 'accept' in order to install and use Chef Infra Client | `any` | n/a | yes |
-| <a name="input_cidr_block"></a> [cidr\_block](#input\_cidr\_block) | Local CIDR range | `any` | n/a | yes |
-| <a name="input_client_id"></a> [client\_id](#input\_client\_id) | App client ID for Cognito User Pool | `any` | n/a | yes |
-| <a name="input_control_domain"></a> [control\_domain](#input\_control\_domain) | Control domain | `any` | n/a | yes |
-| <a name="input_efs_dns"></a> [efs\_dns](#input\_efs\_dns) | DNS of Elastic File System | `any` | n/a | yes |
-| <a name="input_ports"></a> [ports](#input\_ports) | Ports to open in security group | `any` | n/a | yes |
-| <a name="input_private_ports"></a> [private\_ports](#input\_private\_ports) | Ports to open for local traffic in security group | `any` | n/a | yes |
-| <a name="input_private_subnets"></a> [private\_subnets](#input\_private\_subnets) | Subnets for imap ec2 instances. | `any` | n/a | yes |
-| <a name="input_private_zone"></a> [private\_zone](#input\_private\_zone) | Zone for internal lookups | `any` | n/a | yes |
-| <a name="input_region"></a> [region](#input\_region) | AWS region | `any` | n/a | yes |
-| <a name="input_s3_arn"></a> [s3\_arn](#input\_s3\_arn) | S3 bucket arn | `any` | n/a | yes |
-| <a name="input_scale"></a> [scale](#input\_scale) | Min, max, and desired settings for autoscale group | `any` | n/a | yes |
-| <a name="input_table_arn"></a> [table\_arn](#input\_table\_arn) | DynamoDB table arn | `any` | n/a | yes |
-| <a name="input_target_groups"></a> [target\_groups](#input\_target\_groups) | List of load balancer target groups in which to register IMAP instances. | `any` | n/a | yes |
-| <a name="input_type"></a> [type](#input\_type) | Type of server, 'imap', 'smtp-in', or 'smtp-out. | `any` | n/a | yes |
-| <a name="input_user_pool_arn"></a> [user\_pool\_arn](#input\_user\_pool\_arn) | ARN of the Cognito User Pool | `any` | n/a | yes |
-| <a name="input_user_pool_id"></a> [user\_pool\_id](#input\_user\_pool\_id) | ID of the Cognito User Pool | `any` | n/a | yes |
-| <a name="input_vpc"></a> [vpc](#input\_vpc) | VPC for the load balancer. | `any` | n/a | yes |
+| <a name="input_artifact_bucket"></a> [artifact\_bucket](#input\_artifact\_bucket) | S3 bucket where cookbooks are stored. | `string` | n/a | yes |
+| <a name="input_chef_license"></a> [chef\_license](#input\_chef\_license) | Must be the string 'accept' in order to install and use Chef Infra Client | `string` | n/a | yes |
+| <a name="input_cidr_block"></a> [cidr\_block](#input\_cidr\_block) | Local CIDR range | `string` | n/a | yes |
+| <a name="input_client_id"></a> [client\_id](#input\_client\_id) | App client ID for Cognito User Pool | `string` | n/a | yes |
+| <a name="input_control_domain"></a> [control\_domain](#input\_control\_domain) | Control domain | `string` | n/a | yes |
+| <a name="input_efs_dns"></a> [efs\_dns](#input\_efs\_dns) | DNS of Elastic File System | `string` | n/a | yes |
+| <a name="input_ports"></a> [ports](#input\_ports) | Ports to open in security group | `list(number)` | n/a | yes |
+| <a name="input_private_ports"></a> [private\_ports](#input\_private\_ports) | Ports to open for local traffic in security group | `list(number)` | n/a | yes |
+| <a name="input_private_subnets"></a> [private\_subnets](#input\_private\_subnets) | Subnets for imap ec2 instances. | `list` | n/a | yes |
+| <a name="input_private_zone"></a> [private\_zone](#input\_private\_zone) | Zone for internal lookups | `object` | n/a | yes |
+| <a name="input_region"></a> [region](#input\_region) | AWS region | `string` | n/a | yes |
+| <a name="input_s3_arn"></a> [s3\_arn](#input\_s3\_arn) | S3 bucket arn | `string` | n/a | yes |
+| <a name="input_scale"></a> [scale](#input\_scale) | Min, max, and desired settings for autoscale group | `object` | n/a | yes |
+| <a name="input_table_arn"></a> [table\_arn](#input\_table\_arn) | DynamoDB table arn | `string` | n/a | yes |
+| <a name="input_target_groups"></a> [target\_groups](#input\_target\_groups) | List of load balancer target groups in which to register IMAP instances. | `list` | n/a | yes |
+| <a name="input_type"></a> [type](#input\_type) | Type of server, 'imap', 'smtp-in', or 'smtp-out. | `string` | n/a | yes |
+| <a name="input_user_pool_arn"></a> [user\_pool\_arn](#input\_user\_pool\_arn) | ARN of the Cognito User Pool | `string` | n/a | yes |
+| <a name="input_user_pool_id"></a> [user\_pool\_id](#input\_user\_pool\_id) | ID of the Cognito User Pool | `string` | n/a | yes |
+| <a name="input_vpc"></a> [vpc](#input\_vpc) | VPC for the load balancer. | `object` | n/a | yes |
 ## Modules
 
 No modules.
