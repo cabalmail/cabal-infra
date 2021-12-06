@@ -18,7 +18,7 @@ No modules.
 
 | Name | Description |
 |------|-------------|
-| <a name="output_domains"></a> [domains](#output\_domains) | n/a |
+| <a name="output_domains"></a> [domains](#output\_domains) | List of maps with domains and their Route 53 zone IDs. |
 ## Providers
 
 | Name | Version |

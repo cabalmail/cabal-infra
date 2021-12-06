@@ -10,8 +10,8 @@
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_efs"></a> [efs](#input\_efs) | ARN of elastic filesystem to back up. | `any` | n/a | yes |
-| <a name="input_table"></a> [table](#input\_table) | ARN of DynamoDB table to back up. | `any` | n/a | yes |
+| <a name="input_efs"></a> [efs](#input\_efs) | ARN of elastic filesystem to back up. | `string` | n/a | yes |
+| <a name="input_table"></a> [table](#input\_table) | ARN of DynamoDB table to back up. | `string` | n/a | yes |
 ## Modules
 
 No modules.

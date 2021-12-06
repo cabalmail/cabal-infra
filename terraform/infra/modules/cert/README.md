@@ -10,10 +10,10 @@
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_control_domain"></a> [control\_domain](#input\_control\_domain) | Root domain for infrastructure. | `any` | n/a | yes |
-| <a name="input_email"></a> [email](#input\_email) | Contact email for the certificate requester for the certificate API. | `any` | n/a | yes |
-| <a name="input_prod"></a> [prod](#input\_prod) | Whether to use the production certificate API. | `any` | n/a | yes |
-| <a name="input_zone_id"></a> [zone\_id](#input\_zone\_id) | Route 53 Zone ID for control domain. | `any` | n/a | yes |
+| <a name="input_control_domain"></a> [control\_domain](#input\_control\_domain) | Root domain for infrastructure. | `string` | n/a | yes |
+| <a name="input_email"></a> [email](#input\_email) | Contact email for the certificate requester for the certificate API. | `string` | n/a | yes |
+| <a name="input_prod"></a> [prod](#input\_prod) | Whether to use the production certificate API. | `bool` | n/a | yes |
+| <a name="input_zone_id"></a> [zone\_id](#input\_zone\_id) | Route 53 Zone ID for control domain. | `string` | n/a | yes |
 ## Modules
 
 No modules.
@@ -21,7 +21,7 @@ No modules.
 
 | Name | Description |
 |------|-------------|
-| <a name="output_cert_arn"></a> [cert\_arn](#output\_cert\_arn) | n/a |
+| <a name="output_cert_arn"></a> [cert\_arn](#output\_cert\_arn) | ARN of the AWS Certificate Manager certificate. |
 ## Providers
 
 | Name | Version |
