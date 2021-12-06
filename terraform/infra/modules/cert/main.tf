@@ -1,3 +1,7 @@
+/**
+* Provisions a Let's Encrypt certificate and stores it in System Manager Parameter Store for use by mail servers.
+*/
+
 resource "aws_acm_certificate" "cert" {
   domain_name       = "*.${var.control_domain}"
   validation_method = "DNS"

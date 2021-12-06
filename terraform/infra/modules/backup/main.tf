@@ -1,3 +1,7 @@
+/**
+* Creates AWS Backup configuration for preserving DynamoDB (source of address data) and Elastic Filesystem (mailstore). This module is skipped unless the main module is called with `var.backup == true`. If invoked, it will make it impossible to cleanly execute a destroy plan, because it enforces `prevent_destroy` on the Backup vault.
+*/
+
 resource "aws_backup_vault" "backup" {
   name = "cabal-backup"
   lifecycle {

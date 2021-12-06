@@ -1,3 +1,7 @@
+/**
+* Zips the content of the /chef directory (the cabal cookbook) and stores it in an S3 bucket for retrieval by servers at boot time (by operation of the userdata script).
+*/
+
 resource "aws_s3_bucket" "cookbook" {
   acl           = "private"
   bucket_prefix = "cabal-artifacts-"

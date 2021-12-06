@@ -1,3 +1,7 @@
+/**
+* Creates target group (for shared ELB) and autoscaling group for a tier (IMAP, SMTP submission, or SMTP relay depending on how called). Installs userdata that kicks off Chef Zero for OS-level configuration.
+*/
+
 resource "aws_launch_configuration" "asg" {
   name_prefix           = "${var.type}-"
   image_id              = data.aws_ami.amazon_linux_2.id
