@@ -102,7 +102,7 @@ variable "chef_license" {
 }
 
 variable "private_zone" {
-  type        = map
+  type        = object
   description = "Zone for internal lookups"
 }
 
