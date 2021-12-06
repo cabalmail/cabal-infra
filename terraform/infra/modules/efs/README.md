@@ -4,7 +4,7 @@
 <p><a href="/README.md">Main documentation</a></p>
 </div><div style="padding-left: 11em;">
 
-
+Creates an Elastic Filesystem for the mailstore. This filesystem is mounted on IMAP machines on the /home directory.
 
 ## Inputs
 

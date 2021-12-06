@@ -4,7 +4,7 @@
 <p><a href="/README.md">Main documentation</a></p>
 </div><div style="padding-left: 11em;">
 
-
+Creates a network load balancer that is shared by all three tiers, target groups, listeners, and DNS.
 
 ## Inputs
 

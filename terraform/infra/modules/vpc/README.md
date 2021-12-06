@@ -4,7 +4,7 @@
 <p><a href="/README.md">Main documentation</a></p>
 </div><div style="padding-left: 11em;">
 
-
+Creates a VPC, subnets, NAT Gateways, and private Route 53 zone for the control domain.
 
 ## Inputs
 
