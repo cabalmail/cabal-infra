@@ -1,3 +1,7 @@
+/**
+* Creates a DynamoDB table as a source of truth for users' email addresses.
+*/
+
 resource "aws_dynamodb_table" "addresses" {
   name           = "cabal-addresses"
   billing_mode   = "PROVISIONED"

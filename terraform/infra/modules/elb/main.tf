@@ -1,3 +1,7 @@
+/**
+* Creates a network load balancer that is shared by all three tiers, target groups, listeners, and DNS.
+*/
+
 resource "aws_lb" "elb" {
   name                             = "cabal-nlb"
   internal                         = false

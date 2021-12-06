@@ -1,3 +1,7 @@
+/**
+* Creates an Elastic Filesystem for the mailstore. This filesystem is mounted on IMAP machines on the /home directory.
+*/
+
 resource "aws_efs_file_system" "mailstore" {
   encrypted = true
   lifecycle_policy {

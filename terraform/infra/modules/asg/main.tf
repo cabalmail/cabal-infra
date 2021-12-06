@@ -1,5 +1,5 @@
 /**
-* Creates target group (for shared ELB) and autoscaling group for a tier (IMAP, SMTP submission, or SMTP relay depending on how called). Installs userdata that kicks off Chef Zero for OS-level configuration.
+* Creates security group and autoscaling group for a tier (IMAP, SMTP submission, or SMTP relay depending on how called). Installs userdata that kicks off Chef Zero for OS-level configuration.
 */
 
 resource "aws_launch_configuration" "asg" {
