@@ -16,7 +16,7 @@ No modules.
 
 | Name | Description |
 |------|-------------|
-| <a name="output_table_arn"></a> [table\_arn](#output\_table\_arn) | n/a |
+| <a name="output_table_arn"></a> [table\_arn](#output\_table\_arn) | ARN of DynamoDB table. |
 ## Providers
 
 | Name | Version |

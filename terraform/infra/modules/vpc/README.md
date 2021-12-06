@@ -21,11 +21,11 @@ No modules.
 
 | Name | Description |
 |------|-------------|
-| <a name="output_private_subnets"></a> [private\_subnets](#output\_private\_subnets) | n/a |
-| <a name="output_private_zone"></a> [private\_zone](#output\_private\_zone) | n/a |
-| <a name="output_public_subnets"></a> [public\_subnets](#output\_public\_subnets) | n/a |
-| <a name="output_relay_ips"></a> [relay\_ips](#output\_relay\_ips) | n/a |
-| <a name="output_vpc"></a> [vpc](#output\_vpc) | n/a |
+| <a name="output_private_subnets"></a> [private\_subnets](#output\_private\_subnets) | List of private subnets |
+| <a name="output_private_zone"></a> [private\_zone](#output\_private\_zone) | Route 53 Zone ID for the private zone for the control domain |
+| <a name="output_public_subnets"></a> [public\_subnets](#output\_public\_subnets) | List of public subnets |
+| <a name="output_relay_ips"></a> [relay\_ips](#output\_relay\_ips) | List of egress IP addresses |
+| <a name="output_vpc"></a> [vpc](#output\_vpc) | VPC |
 ## Providers
 
 | Name | Version |
