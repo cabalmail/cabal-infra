@@ -5,6 +5,7 @@
 </div><div style="padding-left: 11em;">
 
 Stands up the following resources to implement a web application that allows users to manage (create and revoke) their email addresses:
+
 - S3 bucket for static assets
 - Static assets as objects stored in S3
 - Lambda functions for three calls: new address, list addresses, revoke address
