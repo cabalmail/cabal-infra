@@ -106,6 +106,11 @@ variable "private_zone_id" {
   description = "Zone ID for internal lookups"
 }
 
+variable "private_zone_arn" {
+  type        = string
+  description = "ARN for internal lookups"
+}
+
 variable "cidr_block" {
   type        = string
   description = "Local CIDR range"

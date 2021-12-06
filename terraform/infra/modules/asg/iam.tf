@@ -58,7 +58,7 @@ resource "aws_iam_policy" "node_permissions" {
           "route53:ChangeResourceRecordSets",
         ]
         Effect   = "Allow"
-        Resource = var.private_zone.arn
+        Resource = var.private_zone_arn
       },
     ]
   })
