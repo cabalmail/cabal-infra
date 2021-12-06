@@ -30,5 +30,6 @@ No requirements.
 | Name | Type |
 |------|------|
 | [aws_dynamodb_table.addresses](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/dynamodb_table) | resource |
+
 </div>
 <!-- END_TF_DOCS -->

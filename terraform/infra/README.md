@@ -66,5 +66,6 @@ This terraform stack stands up AWS infrastructure needed for a Cabalmail system.
 | Name | Type |
 |------|------|
 | [aws_ssm_parameter.zone](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ssm_parameter) | data source |
+
 </div>
 <!-- END_TF_DOCS -->

@@ -32,5 +32,6 @@ No requirements.
 | Name | Type |
 |------|------|
 | [aws_route53_zone.mail_dns](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route53_zone) | resource |
+
 </div>
 <!-- END_TF_DOCS -->
