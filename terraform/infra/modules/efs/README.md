@@ -10,8 +10,8 @@
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_private_subnets"></a> [private\_subnets](#input\_private\_subnets) | Private subnets | `any` | n/a | yes |
-| <a name="input_vpc"></a> [vpc](#input\_vpc) | VPC | `any` | n/a | yes |
+| <a name="input_private_subnets"></a> [private\_subnets](#input\_private\_subnets) | Private subnets | `list(map)` | n/a | yes |
+| <a name="input_vpc"></a> [vpc](#input\_vpc) | VPC | `map` | n/a | yes |
 ## Modules
 
 No modules.
@@ -19,8 +19,8 @@ No modules.
 
 | Name | Description |
 |------|-------------|
-| <a name="output_efs_arn"></a> [efs\_arn](#output\_efs\_arn) | n/a |
-| <a name="output_efs_dns"></a> [efs\_dns](#output\_efs\_dns) | n/a |
+| <a name="output_efs_arn"></a> [efs\_arn](#output\_efs\_arn) | ARN of elastic filesystem. |
+| <a name="output_efs_dns"></a> [efs\_dns](#output\_efs\_dns) | Domain name of elastic filesystem. |
 ## Providers
 
 | Name | Version |

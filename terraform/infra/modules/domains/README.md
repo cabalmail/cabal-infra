@@ -10,7 +10,7 @@
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_mail_domains"></a> [mail\_domains](#input\_mail\_domains) | n/a | `list(string)` | n/a | yes |
+| <a name="input_mail_domains"></a> [mail\_domains](#input\_mail\_domains) | List of mail domains. | `list(string)` | n/a | yes |
 ## Modules
 
 No modules.
