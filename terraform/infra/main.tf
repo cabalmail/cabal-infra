@@ -81,8 +81,8 @@ module "load_balancer" {
 // Creates an elastic file system for the mailstore
 module "efs" {
   source             = "./modules/efs"
-  vpc_id             = module.vpc.vpc_id
-  vpc_cidr_block     = module.vpc.cidr_block
+  vpc_id             = module.vpc.vpc.vpc_id
+  vpc_cidr_block     = module.vpc.vpc.cidr_block
   private_subnet_ids = module.vpc.private_subnets[*].id
 }
 
