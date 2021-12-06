@@ -72,7 +72,7 @@ module "vpc" {
 module "load_balancer" {
   source            = "./modules/elb"
   public_subnet_ids = module.vpc.public_subnets[*].id
-  vpc_id            = module.vpc.vpc_id
+  vpc_id            = module.vpc.vpc.id
   control_domain    = var.control_domain
   zone_id           = data.aws_ssm_parameter.zone.value
   cert_arn          = module.cert.cert_arn

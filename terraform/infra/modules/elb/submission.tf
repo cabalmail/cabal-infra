@@ -2,7 +2,7 @@ resource "aws_lb_target_group" "submission" {
   name                 = "cabal-smtp-submission-tg"
   port                 = "465"
   protocol             = "TCP"
-  vpc_id               = var.vpc.id
+  vpc_id               = var.vpc_id
   deregistration_delay = 30
   stickiness {
     type    = "source_ip"
