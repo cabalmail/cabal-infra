@@ -19,7 +19,7 @@
 | <a name="input_ports"></a> [ports](#input\_ports) | Ports to open in security group | `list(number)` | n/a | yes |
 | <a name="input_private_ports"></a> [private\_ports](#input\_private\_ports) | Ports to open for local traffic in security group | `list(number)` | n/a | yes |
 | <a name="input_private_subnets"></a> [private\_subnets](#input\_private\_subnets) | Subnets for imap ec2 instances. | `list` | n/a | yes |
-| <a name="input_private_zone"></a> [private\_zone](#input\_private\_zone) | Zone for internal lookups | `map` | n/a | yes |
+| <a name="input_private_zone"></a> [private\_zone](#input\_private\_zone) | Zone for internal lookups | `object` | n/a | yes |
 | <a name="input_region"></a> [region](#input\_region) | AWS region | `string` | n/a | yes |
 | <a name="input_s3_arn"></a> [s3\_arn](#input\_s3\_arn) | S3 bucket arn | `string` | n/a | yes |
 | <a name="input_scale"></a> [scale](#input\_scale) | Min, max, and desired settings for autoscale group | `map` | n/a | yes |
