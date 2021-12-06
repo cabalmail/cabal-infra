@@ -19,16 +19,16 @@
 | <a name="input_ports"></a> [ports](#input\_ports) | Ports to open in security group | `list(number)` | n/a | yes |
 | <a name="input_private_ports"></a> [private\_ports](#input\_private\_ports) | Ports to open for local traffic in security group | `list(number)` | n/a | yes |
 | <a name="input_private_subnets"></a> [private\_subnets](#input\_private\_subnets) | Subnets for imap ec2 instances. | `list` | n/a | yes |
-| <a name="input_private_zone"></a> [private\_zone](#input\_private\_zone) | Zone for internal lookups | `object` | n/a | yes |
+| <a name="input_private_zone"></a> [private\_zone](#input\_private\_zone) | Zone for internal lookups | `map` | n/a | yes |
 | <a name="input_region"></a> [region](#input\_region) | AWS region | `string` | n/a | yes |
 | <a name="input_s3_arn"></a> [s3\_arn](#input\_s3\_arn) | S3 bucket arn | `string` | n/a | yes |
-| <a name="input_scale"></a> [scale](#input\_scale) | Min, max, and desired settings for autoscale group | `object` | n/a | yes |
+| <a name="input_scale"></a> [scale](#input\_scale) | Min, max, and desired settings for autoscale group | `map` | n/a | yes |
 | <a name="input_table_arn"></a> [table\_arn](#input\_table\_arn) | DynamoDB table arn | `string` | n/a | yes |
 | <a name="input_target_groups"></a> [target\_groups](#input\_target\_groups) | List of load balancer target groups in which to register IMAP instances. | `list` | n/a | yes |
 | <a name="input_type"></a> [type](#input\_type) | Type of server, 'imap', 'smtp-in', or 'smtp-out. | `string` | n/a | yes |
 | <a name="input_user_pool_arn"></a> [user\_pool\_arn](#input\_user\_pool\_arn) | ARN of the Cognito User Pool | `string` | n/a | yes |
 | <a name="input_user_pool_id"></a> [user\_pool\_id](#input\_user\_pool\_id) | ID of the Cognito User Pool | `string` | n/a | yes |
-| <a name="input_vpc"></a> [vpc](#input\_vpc) | VPC for the load balancer. | `object` | n/a | yes |
+| <a name="input_vpc"></a> [vpc](#input\_vpc) | VPC for the load balancer. | `map` | n/a | yes |
 ## Modules
 
 No modules.
