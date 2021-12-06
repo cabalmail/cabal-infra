@@ -102,7 +102,7 @@ module "imap" {
   ports           = [143, 993]
   private_ports   = [25]
   cidr_block      = var.cidr_block
-  private_zone    = module.vpc.private_zone
+  private_zone_id = module.vpc.private_zone.zone_id
   client_id       = module.pool.user_pool_client_id
   user_pool_id    = module.pool.user_pool_id
   scale           = var.imap_scale
@@ -126,7 +126,7 @@ module "smtp_in" {
   ports           = [25, 465, 587]
   private_ports   = []
   cidr_block      = var.cidr_block
-  private_zone    = module.vpc.private_zone
+  private_zone_id = module.vpc.private_zone.zone_id
   client_id       = module.pool.user_pool_client_id
   user_pool_id    = module.pool.user_pool_id
   user_pool_arn   = module.pool.user_pool_arn
@@ -154,7 +154,7 @@ module "smtp_out" {
   ports           = [25, 465, 587]
   private_ports   = []
   cidr_block      = var.cidr_block
-  private_zone    = module.vpc.private_zone
+  private_zone_id = module.vpc.private_zone.zone_id
   client_id       = module.pool.user_pool_client_id
   user_pool_id    = module.pool.user_pool_id
   user_pool_arn   = module.pool.user_pool_arn

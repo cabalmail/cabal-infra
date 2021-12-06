@@ -16,7 +16,7 @@ resource "aws_launch_configuration" "asg" {
     pool_id         = var.user_pool_id,
     chef_license    = var.chef_license,
     type            = var.type,
-    private_zone_id = var.private_zone.zone_id,
+    private_zone_id = var.private_zone_id,
     cidr            = var.cidr_block
   })
 }

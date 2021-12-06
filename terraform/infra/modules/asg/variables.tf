@@ -101,9 +101,9 @@ variable "chef_license" {
   description = "Must be the string 'accept' in order to install and use Chef Infra Client"
 }
 
-variable "private_zone" {
-  type        = object
-  description = "Zone for internal lookups"
+variable "private_zone_id" {
+  type        = string
+  description = "Zone ID for internal lookups"
 }
 
 variable "cidr_block" {
