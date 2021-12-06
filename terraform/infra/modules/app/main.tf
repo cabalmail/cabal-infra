@@ -1,3 +1,14 @@
+/**
+* Stands up the following resources to implement a web application that allows users to manage (create and revoke) their email addresses:
+* - S3 bucket for static assets
+* - Static assets as objects stored in S3
+* - Lambda functions for three calls: new address, list addresses, revoke address
+* - API Gateway for mediating access to the Lambda functioins
+* - CloudFront to cache and accelerate the application
+* - DNS alias for the application
+* - SSM documents for propagating changes to the IMAP and SMTP servers (still in development)
+*/
+
 resource "aws_api_gateway_rest_api" "gateway" {
   name = "cabal_gateway"
 }
