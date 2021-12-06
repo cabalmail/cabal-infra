@@ -26,6 +26,7 @@ content: |-
   {{ .Providers }}
   {{ .Requirements }}
   {{ .Resources }}
+  
   </div>
 
 output:
