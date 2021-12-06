@@ -10,11 +10,11 @@
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_cert_arn"></a> [cert\_arn](#input\_cert\_arn) | n/a | `string` | n/a | yes |
+| <a name="input_cert_arn"></a> [cert\_arn](#input\_cert\_arn) | ARN of AWS Certificate Manager certificate. | `string` | n/a | yes |
 | <a name="input_control_domain"></a> [control\_domain](#input\_control\_domain) | Root domain for infrastructure. | `any` | n/a | yes |
-| <a name="input_public_subnets"></a> [public\_subnets](#input\_public\_subnets) | Subnets for load balancer targets. | `any` | n/a | yes |
-| <a name="input_vpc"></a> [vpc](#input\_vpc) | VPC for the load balancer. | `any` | n/a | yes |
-| <a name="input_zone_id"></a> [zone\_id](#input\_zone\_id) | Route 53 Zone ID for control domain | `any` | n/a | yes |
+| <a name="input_public_subnets"></a> [public\_subnets](#input\_public\_subnets) | Subnets for load balancer targets. | `list(map)` | n/a | yes |
+| <a name="input_vpc"></a> [vpc](#input\_vpc) | VPC for the load balancer. | `map` | n/a | yes |
+| <a name="input_zone_id"></a> [zone\_id](#input\_zone\_id) | Route 53 Zone ID for control domain | `string` | n/a | yes |
 ## Modules
 
 No modules.
@@ -22,10 +22,10 @@ No modules.
 
 | Name | Description |
 |------|-------------|
-| <a name="output_imap_tg"></a> [imap\_tg](#output\_imap\_tg) | n/a |
-| <a name="output_relay_tg"></a> [relay\_tg](#output\_relay\_tg) | n/a |
-| <a name="output_starttls_tg"></a> [starttls\_tg](#output\_starttls\_tg) | n/a |
-| <a name="output_submission_tg"></a> [submission\_tg](#output\_submission\_tg) | n/a |
+| <a name="output_imap_tg"></a> [imap\_tg](#output\_imap\_tg) | ARN of IMAP target group. |
+| <a name="output_relay_tg"></a> [relay\_tg](#output\_relay\_tg) | ARN of SMTP relay target group. |
+| <a name="output_starttls_tg"></a> [starttls\_tg](#output\_starttls\_tg) | ARN of SMTP StartTLS target group. |
+| <a name="output_submission_tg"></a> [submission\_tg](#output\_submission\_tg) | ARN of SMTP submission target group. |
 ## Providers
 
 | Name | Version |
