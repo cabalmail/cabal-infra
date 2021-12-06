@@ -4,7 +4,7 @@
 <p><a href="/README.md">Main documentation</a></p>
 </div><div style="padding-left: 11em;">
 
-
+Zips the content of the /chef directory (the cabal cookbook) and stores it in an S3 bucket for retrieval by servers at boot time (by operation of the userdata script).
 
 ## Inputs
 

@@ -4,7 +4,7 @@
 <p><a href="/README.md">Main documentation</a></p>
 </div><div style="padding-left: 11em;">
 
-
+Provisions a Let's Encrypt certificate and stores it in System Manager Parameter Store for use by mail servers.
 
 ## Inputs
 

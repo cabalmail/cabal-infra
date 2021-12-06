@@ -4,7 +4,7 @@
 <p><a href="/README.md">Main documentation</a></p>
 </div><div style="padding-left: 11em;">
 
-
+Creates AWS Backup configuration for preserving DynamoDB (source of address data) and Elastic Filesystem (mailstore). This module is skipped unless the main module is called with `var.backup == true`. If invoked, it will make it impossible to cleanly execute a destroy plan, because it enforces `prevent_destroy` on the Backup vault.
 
 ## Inputs
 

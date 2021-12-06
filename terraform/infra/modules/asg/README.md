@@ -4,7 +4,7 @@
 <p><a href="/README.md">Main documentation</a></p>
 </div><div style="padding-left: 11em;">
 
-
+Creates target group (for shared ELB) and autoscaling group for a tier (IMAP, SMTP submission, or SMTP relay depending on how called). Installs userdata that kicks off Chef Zero for OS-level configuration.
 
 ## Inputs
 

@@ -4,7 +4,7 @@
 <p><a href="/README.md">Main documentation</a></p>
 </div><div style="padding-left: 11em;">
 
-
+Creates Route 53 zones for all mail domains.
 
 ## Inputs
 
