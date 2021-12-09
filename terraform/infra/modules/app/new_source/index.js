@@ -1,6 +1,7 @@
 const AWS = require('aws-sdk');
 const ddb = new AWS.DynamoDB.DocumentClient();
 const r53 = new AWS.Route53();
+const ssm = new AWS.SSM();
 const control_domain = "${control_domain}";
 const chef_documents = {
   "imap": "${ssm_documents["imap"]}",
@@ -114,7 +115,40 @@ exports.handler = (event, context, callback) => {
         });
     }).catch((err) => {
         console.error(err);
-        errorResponse(err.message, context.awsRequestId, callback)
+        errorResponse(err.message, context.awsRequestId, callback);
+    });
+    SSM.sendCommand({
+        DocumentName: 'cabal_imap_document'
+        Targets: 'Key=tag:managed-by-terraform,Values=y'
+    }, function(err, data) {
+        if (err) {
+            console.log(err, err.stack);
+            errorResponse(err.message, context.awsRequestId, callback);
+        } else {
+            console.log(data);
+        }
+    });
+    SSM.sendCommand({
+        DocumentName: 'cabal_smtp-in_document'
+        Targets: 'Key=tag:managed-by-terraform,Values=y'
+    }, function(err, data) {
+        if (err) {
+            console.log(err, err.stack);
+            errorResponse(err.message, context.awsRequestId, callback);
+          } else {
+            console.log(data);
+        }
+    });
+    SSM.sendCommand({
+        DocumentName: 'cabal_smtp-out_document'
+        Targets: 'Key=tag:managed-by-terraform,Values=y'
+    }, function(err, data) {
+        if (err) {
+            console.log(err, err.stack);
+            errorResponse(err.message, context.awsRequestId, callback);
+          } else {
+            console.log(data);
+        }
     });
 };
 
