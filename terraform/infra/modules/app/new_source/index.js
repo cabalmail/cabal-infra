@@ -117,7 +117,7 @@ exports.handler = (event, context, callback) => {
         console.error(err);
         errorResponse(err.message, context.awsRequestId, callback);
     });
-    SSM.sendCommand({
+    ssm.sendCommand({
         DocumentName: 'cabal_imap_document',
         Targets: 'Key=tag:type,Values=imap'
     }, function(err, data) {
@@ -128,7 +128,7 @@ exports.handler = (event, context, callback) => {
             console.log(data);
         }
     });
-    SSM.sendCommand({
+    ssm.sendCommand({
         DocumentName: 'cabal_smtp-in_document',
         Targets: 'Key=tag:type,Values=smtp-in'
     }, function(err, data) {
@@ -139,7 +139,7 @@ exports.handler = (event, context, callback) => {
             console.log(data);
         }
     });
-    SSM.sendCommand({
+    ssm.sendCommand({
         DocumentName: 'cabal_smtp-out_document',
         Targets: 'Key=tag:type,Values=smtp-out'
     }, function(err, data) {
