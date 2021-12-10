@@ -121,7 +121,7 @@ exports.handler = (event, context, callback) => {
         DocumentName: 'cabal_imap_document',
         Targets: [
             { 
-               "Key": "type",
+               "Key": "tag:type",
                "Values": [ "imap" ]
             }
         ]
@@ -137,7 +137,7 @@ exports.handler = (event, context, callback) => {
         DocumentName: 'cabal_smtp-in_document',
         Targets: [
             { 
-               "Key": "type",
+               "Key": "tag:type",
                "Values": [ "smtp-in" ]
             }
         ]
@@ -153,7 +153,7 @@ exports.handler = (event, context, callback) => {
         DocumentName: 'cabal_smtp-out_document',
         Targets: [
             { 
-               "Key": "type",
+               "Key": "tag:type",
                "Values": [ "smtp-out" ]
             }
         ]
