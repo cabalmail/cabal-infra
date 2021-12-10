@@ -5,7 +5,7 @@ COGNITO_USER="${PAM_USER}"
 AUTH_TYPE="${PAM_TYPE}"
 
 aws cognito-idp initiate-auth \
-  --region <%=region%> \
+  --region <%=@region%> \
   --auth-flow USER_PASSWORD_AUTH \
-  --client-id <%=client_id%> \
+  --client-id <%=@client_id%> \
   --auth-parameters "USERNAME=${COGNITO_USER},PASSWORD=${COGNITO_PASSWORD}"
