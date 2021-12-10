@@ -1,8 +1,9 @@
 output "IMPORTANT" {
-  value = [
+  value       = [
     "You must get permission from AWS to relay mail through the below IP addresses. See the section on Port 25 in docs/setup.md.",
     "You must update your domain registrations with the name servers from the below domains. See the section on Nameservers in docs/setup.md"
   ]
+	description = "Instructions for post-automation steps."
 }
 
 output "relay_ips" {
