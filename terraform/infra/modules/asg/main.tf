@@ -47,6 +47,10 @@ resource "aws_autoscaling_group" "asg" {
     value               = "asg-${var.type}-${data.aws_ami.amazon_linux_2.id}"
     propagate_at_launch = true
   }
+  tag {
+    key                 = "type"
+    value               = var.type
+  }
   dynamic "tag" {
     for_each = data.aws_default_tags.current.tags
     content {
