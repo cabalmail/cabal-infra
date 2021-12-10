@@ -59,11 +59,6 @@ resource "aws_iam_role_policy" "lambda" {
     "Statement": [
         {
             "Effect": "Allow",
-            "Action": "iam:PassRole",
-            "Resource": "*"
-        },
-        {
-            "Effect": "Allow",
             "Action": "ssm:SendCommand",
             "Resource": "arn:aws:ssm:${var.region}:${var.account}:document/cabal_*"
         },
