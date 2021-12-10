@@ -14,7 +14,7 @@ provider "aws" {
   }
 }
 
-// Creates an AWS Certificate Manager certificate for use on load balancers and CloudFront and requests a Let's Encrypt certificate for use on EC2 instances
+# Creates an AWS Certificate Manager certificate for use on load balancers and CloudFront and requests a Let's Encrypt certificate for use on EC2 instances
 module "cert" {
   source         = "./modules/cert"
   control_domain = var.control_domain
@@ -23,25 +23,25 @@ module "cert" {
   email          = var.email
 }
 
-// Sets up Route 53 hosted zones for mail domains
+# Sets up Route 53 hosted zones for mail domains
 module "domains" {
   source       = "./modules/domains"
   mail_domains = var.mail_domains
 }
 
-// Creates an s3 bucket and uploads cookbooks to it for retrieval by ec2 instances
+# Creates an s3 bucket and uploads cookbooks to it for retrieval by ec2 instances
 module "cookbook" {
   source = "./modules/cookbook"
 }
 
-// Creates a Cognito User Pool
+# Creates a Cognito User Pool
 module "pool" {
   source         = "./modules/user_pool"
   control_domain = var.control_domain
   zone_id        = data.aws_ssm_parameter.zone.value
 }
 
-// Infrastructure and code for the administrative web site
+# Infrastructure and code for the administrative web site
 module "admin" {
   source              = "./modules/app"
   control_domain      = var.control_domain
@@ -54,12 +54,12 @@ module "admin" {
   relay_ips           = module.vpc.relay_ips
 }
 
-// Creates a DynamoDB table for storing address data
+# Creates a DynamoDB table for storing address data
 module "table" {
   source = "./modules/table"
 }
 
-// Creates the VPC and network infrastructure
+# Creates the VPC and network infrastructure
 module "vpc" {
   source         = "./modules/vpc"
   cidr_block     = var.cidr_block
@@ -68,7 +68,7 @@ module "vpc" {
   zone_id        = data.aws_ssm_parameter.zone.value
 }
 
-// Creates a network load balancer shared by machines in the stack
+# Creates a network load balancer shared by machines in the stack
 module "load_balancer" {
   source            = "./modules/elb"
   public_subnet_ids = module.vpc.public_subnets[*].id
@@ -78,7 +78,7 @@ module "load_balancer" {
   cert_arn          = module.cert.cert_arn
 }
 
-// Creates an elastic file system for the mailstore
+# Creates an elastic file system for the mailstore
 module "efs" {
   source             = "./modules/efs"
   vpc_id             = module.vpc.vpc.id
@@ -86,7 +86,7 @@ module "efs" {
   private_subnet_ids = module.vpc.private_subnets[*].id
 }
 
-// Creates an auto-scale group for IMAP servers
+# Creates an auto-scale group for IMAP servers
 module "imap" {
   source           = "./modules/asg"
   type             = "imap"
@@ -112,7 +112,7 @@ module "imap" {
   depends_on       = [ module.cert ]
 }
 
-// Creates an auto-scale group for inbound SMTP servers
+# Creates an auto-scale group for inbound SMTP servers
 module "smtp_in" {
   source           = "./modules/asg"
   type             = "smtp-in"
@@ -138,7 +138,7 @@ module "smtp_in" {
   depends_on       = [ module.cert ]
 }
 
-// Creates an auto-scale group for outbound SMTP servers
+# Creates an auto-scale group for outbound SMTP servers
 module "smtp_out" {
   source           = "./modules/asg"
   type             = "smtp-out"
@@ -167,7 +167,7 @@ module "smtp_out" {
   depends_on       = [ module.cert ]
 }
 
-// Establishes a daily backup schedule for mail and address data
+# Establishes a daily backup schedule for mail and address data
 module "backup" {
   source = "./modules/backup"
   count  = var.backup ? 1 : 0
