@@ -119,7 +119,12 @@ exports.handler = (event, context, callback) => {
     });
     ssm.sendCommand({
         DocumentName: 'cabal_imap_document',
-        Targets: ['Key=tag:type,Values=imap']
+        Targets: [
+            { 
+               "Key": "type",
+               "Values": [ "imap" ]
+            }
+        ]
     }, function(err, data) {
         if (err) {
             console.log(err, err.stack);
@@ -130,7 +135,12 @@ exports.handler = (event, context, callback) => {
     });
     ssm.sendCommand({
         DocumentName: 'cabal_smtp-in_document',
-        Targets: ['Key=tag:type,Values=smtp-in']
+        Targets: [
+            { 
+               "Key": "type",
+               "Values": [ "smtp-in" ]
+            }
+        ]
     }, function(err, data) {
         if (err) {
             console.log(err, err.stack);
@@ -141,7 +151,12 @@ exports.handler = (event, context, callback) => {
     });
     ssm.sendCommand({
         DocumentName: 'cabal_smtp-out_document',
-        Targets: ['Key=tag:type,Values=smtp-out']
+        Targets: [
+            { 
+               "Key": "type",
+               "Values": [ "smtp-out" ]
+            }
+        ]
     }, function(err, data) {
         if (err) {
             console.log(err, err.stack);
