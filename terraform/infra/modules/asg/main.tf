@@ -50,6 +50,7 @@ resource "aws_autoscaling_group" "asg" {
   tag {
     key                 = "type"
     value               = var.type
+    propagate_at_launch = true
   }
   dynamic "tag" {
     for_each = data.aws_default_tags.current.tags
