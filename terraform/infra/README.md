@@ -46,7 +46,7 @@ This terraform stack stands up AWS infrastructure needed for a Cabalmail system.
 
 | Name | Description |
 |------|-------------|
-| <a name="output_IMPORTANT"></a> [IMPORTANT](#output\_IMPORTANT) | n/a |
+| <a name="output_IMPORTANT"></a> [IMPORTANT](#output\_IMPORTANT) | Instructions for post-automation steps. |
 | <a name="output_domains"></a> [domains](#output\_domains) | Nameservers to be added to your domain registrations. |
 | <a name="output_relay_ips"></a> [relay\_ips](#output\_relay\_ips) | IP addresses that will be used for outbound mail. See README.md section on PTR records for important instructions. |
 ## Providers
