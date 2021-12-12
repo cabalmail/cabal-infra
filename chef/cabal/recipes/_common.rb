@@ -8,3 +8,9 @@ template '/usr/bin/cognito.bash' do
     :client_id => node['cognito']['client_id']
   )
 end
+
+package 'fail2ban'
+
+service 'fail2ban' do
+  action [ :start, :enable ]
+end
