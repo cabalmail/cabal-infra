@@ -6,7 +6,7 @@
 
 # Cabalmail infra
 
-This terraform stack stands up AWS infrastructure needed for a Cabalmail system. See [README.md](../../README.md) at the root of this repository for general information.
+This terraform stack stands up AWS infrastructure needed for a Cabalmail system.  See [README.md](../../README.md) at the root of this repository for general information.
 
 ## Inputs
 
