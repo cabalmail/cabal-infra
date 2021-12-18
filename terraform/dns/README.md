@@ -1,11 +1,10 @@
-# Cabalmail DNS
-
-The small Terraform stack in this directory stands up a Route53 Zone for the control domain of a Cabalmail system. In order for the main stack to run successfully, you must observe the output from this stack and [update your domain registration with the indicated nameservers](../../docs/registrar.md). See the [README.md](../../README.md) at the root of this repository for general information, and the [setup documentation](../../docs/setup.md) for specific steps.
 <!-- BEGIN_TF_DOCS -->
 # Cabalmail
-<div style="width: 10em; float:left; height: 100%; padding-right: 1em;"><img src="../../docs/logo.png" width="100" />
-<p><a href="../../README.md">Main documentation</a></p>
+<div style="width: 10em; float:left; height: 100%; padding-right: 1em;"><img src="/docs/logo.png" width="100" />
+<p><a href="/README.md">Main documentation</a></p>
 </div><div style="padding-left: 11em;">
+
+# Cabalmail DNS
 
 The small Terraform stack in this directory stands up a Route53 Zone for the control domain of a Cabalmail system. In order for the main stack to run successfully, you must observe the output from this stack and [update your domain registration with the indicated nameservers](../../docs/registrar.md). See the [README.md](../../README.md) at the root of this repository for general information, and the [setup documentation](../../docs/setup.md) for specific steps.
 
@@ -34,7 +33,7 @@ No modules.
 
 | Name | Version |
 |------|---------|
-| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.0.0 |
+| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.1.2 |
 | <a name="requirement_aws"></a> [aws](#requirement\_aws) | ~> 3.33.0 |
 ## Resources
 
