@@ -52,7 +52,7 @@ aws s3 cp s3://${artifact_bucket}/cabal.zip /var/lib/chef/cookbooks/cabal.zip
 cat > '/tmp/hashes' << EOH
 ${cookbook_etag}  /var/lib/chef/cookbooks/cabal.zip
 EOH
-md5sum -c /tmp/hashes
+md5sum -c /tmp/hashes || rm /var/lib/chef/cookbooks/cabal.zip
 cd /var/lib/chef/cookbooks
 unzip cabal.zip
 chef-solo -c /etc/chef/solo.rb -z -j /var/lib/chef/attributes/node.json
