@@ -7,7 +7,7 @@ resource "aws_launch_template" "asg" {
   image_id               = data.aws_ami.amazon_linux_2.id
   instance_type          = "t2.micro"
   vpc_security_group_ids = [aws_security_group.sg.id]
-  user_data             = templatefile("${path.module}/templates/userdata", {
+  user_data             = base64encode(templatefile("${path.module}/templates/userdata", {
     control_domain  = var.control_domain,
     artifact_bucket = var.artifact_bucket,
     efs_dns         = var.efs_dns,
@@ -18,7 +18,7 @@ resource "aws_launch_template" "asg" {
     type            = var.type,
     private_zone_id = var.private_zone_id,
     cidr            = var.cidr_block
-  })
+  }))
   iam_instance_profile {
     name = aws_iam_instance_profile.asg.name
   }
