@@ -15,6 +15,7 @@ Creates security group and autoscaling group for a tier (IMAP, SMTP submission, 
 | <a name="input_cidr_block"></a> [cidr\_block](#input\_cidr\_block) | Local CIDR range | `string` | n/a | yes |
 | <a name="input_client_id"></a> [client\_id](#input\_client\_id) | App client ID for Cognito User Pool | `string` | n/a | yes |
 | <a name="input_control_domain"></a> [control\_domain](#input\_control\_domain) | Control domain | `string` | n/a | yes |
+| <a name="input_cookbook_etag"></a> [cookbook\_etag](#input\_cookbook\_etag) | Hash value that changes when the cookbook changes. Used to trigger recreation of autoscale groups and thus replacement of instances. | `string` | n/a | yes |
 | <a name="input_efs_dns"></a> [efs\_dns](#input\_efs\_dns) | DNS of Elastic File System | `string` | n/a | yes |
 | <a name="input_ports"></a> [ports](#input\_ports) | Ports to open in security group | `list(number)` | n/a | yes |
 | <a name="input_private_ports"></a> [private\_ports](#input\_private\_ports) | Ports to open for local traffic in security group | `list(number)` | n/a | yes |
