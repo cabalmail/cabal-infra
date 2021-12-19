@@ -32,7 +32,6 @@ resource "aws_autoscaling_group" "asg" {
   desired_capacity     = var.scale.des
   max_size             = var.scale.max
   min_size             = var.scale.min
-  launch_configuration = aws_launch_configuration.asg.id
   target_group_arns    = var.target_groups
   instance_refresh {
     strategy = "Rolling"
