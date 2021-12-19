@@ -17,7 +17,8 @@ resource "aws_launch_template" "asg" {
     chef_license    = var.chef_license,
     type            = var.type,
     private_zone_id = var.private_zone_id,
-    cidr            = var.cidr_block
+    cidr            = var.cidr_block,
+    cookbook_etag   = var.cookbook_etag
   }))
   iam_instance_profile {
     name = aws_iam_instance_profile.asg.name
