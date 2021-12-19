@@ -17,6 +17,7 @@ No modules.
 | Name | Description |
 |------|-------------|
 | <a name="output_bucket"></a> [bucket](#output\_bucket) | S3 bucket for storing cookbook archive. |
+| <a name="output_etag"></a> [etag](#output\_etag) | Hash that changes when the cookbook changes |
 ## Providers
 
 | Name | Version |
