@@ -41,5 +41,3 @@ variable "relay_ips" {
 variable "domains" {
   type = list
 }
-
-variable "ssm_documents" {}

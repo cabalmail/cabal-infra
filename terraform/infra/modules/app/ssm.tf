@@ -1,6 +1,5 @@
-resource "aws_ssm_document" "run_chef" {
-  for_each      = toset( [ "imap", "smtp-in", "smtp-out" ] )
-  name          = "cabal_${each.key}_document"
+resource "aws_ssm_document" "run_chef_now" {
+  name          = "cabal_chef_document"
   document_type = "Command"
   content = <<DOC
   {
@@ -9,8 +8,8 @@ resource "aws_ssm_document" "run_chef" {
     "parameters": {
       "commands": {
         "type": "String",
-        "description": "Run chef-solo on ${each.key} machines",
-        "default": "chef-solo -c /etc/chef/solo.rb -z -o 'recipe[cabal::${each.key}]' -j /var/lib/chef/attributes/node.json"
+        "description": "Run chef-solo on all machines",
+        "default": "chef-solo -c /etc/chef/solo.rb -z -j /var/lib/chef/attributes/node.json"
       }
     },
     "mainSteps": [
