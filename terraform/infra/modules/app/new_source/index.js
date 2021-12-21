@@ -121,7 +121,7 @@ exports.handler = (event, context, callback) => {
                "Values": [ "y" ]
             },
             { 
-               "Key": "tag:repo",
+               "Key": "tag:terraform_repo",
                "Values": [ repo ]
             }
         ]
