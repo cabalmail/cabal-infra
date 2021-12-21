@@ -41,6 +41,7 @@ module "cabal_list_method" {
   authorizer       = aws_api_gateway_authorizer.api_auth.id
   control_domain   = var.control_domain
   relay_ips        = var.relay_ips
+  repo             = var.repo
   domains          = var.domains
 }
 
@@ -56,6 +57,7 @@ module "cabal_new_method" {
   authorizer       = aws_api_gateway_authorizer.api_auth.id
   control_domain   = var.control_domain
   relay_ips        = var.relay_ips
+  repo             = var.repo
   domains          = var.domains
 }
 
@@ -71,6 +73,7 @@ module "cabal_revoke_method" {
   authorizer       = aws_api_gateway_authorizer.api_auth.id
   control_domain   = var.control_domain
   relay_ips        = var.relay_ips
+  repo             = var.repo
   domains          = var.domains
 }
 
