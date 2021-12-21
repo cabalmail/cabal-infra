@@ -42,4 +42,7 @@ variable "domains" {
   type = list
 }
 
-variable "ssm_documents" {}
+variable "repo" {
+  type        = string
+  description = "Repo tag value for SSM run command target."
+}

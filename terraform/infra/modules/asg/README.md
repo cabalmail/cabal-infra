@@ -15,6 +15,7 @@ Creates security group and autoscaling group for a tier (IMAP, SMTP submission, 
 | <a name="input_cidr_block"></a> [cidr\_block](#input\_cidr\_block) | Local CIDR range | `string` | n/a | yes |
 | <a name="input_client_id"></a> [client\_id](#input\_client\_id) | App client ID for Cognito User Pool | `string` | n/a | yes |
 | <a name="input_control_domain"></a> [control\_domain](#input\_control\_domain) | Control domain | `string` | n/a | yes |
+| <a name="input_cookbook_etag"></a> [cookbook\_etag](#input\_cookbook\_etag) | Hash value that changes when the cookbook changes. Used to trigger recreation of autoscale groups and thus replacement of instances. | `string` | n/a | yes |
 | <a name="input_efs_dns"></a> [efs\_dns](#input\_efs\_dns) | DNS of Elastic File System | `string` | n/a | yes |
 | <a name="input_ports"></a> [ports](#input\_ports) | Ports to open in security group | `list(number)` | n/a | yes |
 | <a name="input_private_ports"></a> [private\_ports](#input\_private\_ports) | Ports to open for local traffic in security group | `list(number)` | n/a | yes |
@@ -54,7 +55,7 @@ No requirements.
 | [aws_iam_role.node_permissions](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role) | resource |
 | [aws_iam_role_policy_attachment.attachment_1](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy_attachment) | resource |
 | [aws_iam_role_policy_attachment.attachment_2](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy_attachment) | resource |
-| [aws_launch_configuration.asg](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/launch_configuration) | resource |
+| [aws_launch_template.asg](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/launch_template) | resource |
 | [aws_security_group.sg](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/security_group) | resource |
 | [aws_security_group_rule.allow_in_local](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/security_group_rule) | resource |
 | [aws_security_group_rule.allow_in_world](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/security_group_rule) | resource |

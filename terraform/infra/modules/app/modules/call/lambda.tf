@@ -5,9 +5,9 @@ data "archive_file" "code" {
   source {
     content  = templatefile("${path.module}/../../${var.name}_source/index.js", {
       control_domain = var.control_domain
+      repo           = var.repo
       domains        = {for domain in var.domains : domain.domain => domain.zone_id}
-      ssm_documents  = var.ssm_documents
-    })
+      })
     filename = "index.js"
   }
 }

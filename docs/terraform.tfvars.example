@@ -2,9 +2,8 @@
 ## for terraform/dns workspace   ##
 ###################################
 
-# Pick the AWS region closest to your end user population. A
-# single VPC will be created, and all infrastructure will be
-# inside of it.
+# Pick the AWS region closest to your end user population. Must
+# be the same as for infra.
 
 aws_region = "us-west-1"
 

@@ -41,10 +41,8 @@ module "cabal_list_method" {
   authorizer       = aws_api_gateway_authorizer.api_auth.id
   control_domain   = var.control_domain
   relay_ips        = var.relay_ips
+  repo             = var.repo
   domains          = var.domains
-  ssm_documents    = {
-    for k, v in aws_ssm_document.run_chef : k => v.arn
-  }
 }
 
 module "cabal_new_method" {
@@ -59,10 +57,8 @@ module "cabal_new_method" {
   authorizer       = aws_api_gateway_authorizer.api_auth.id
   control_domain   = var.control_domain
   relay_ips        = var.relay_ips
+  repo             = var.repo
   domains          = var.domains
-  ssm_documents    = {
-    for k, v in aws_ssm_document.run_chef : k => v.arn
-  }
 }
 
 module "cabal_revoke_method" {
@@ -77,10 +73,8 @@ module "cabal_revoke_method" {
   authorizer       = aws_api_gateway_authorizer.api_auth.id
   control_domain   = var.control_domain
   relay_ips        = var.relay_ips
+  repo             = var.repo
   domains          = var.domains
-  ssm_documents    = {
-    for k, v in aws_ssm_document.run_chef : k => v.arn
-  }
 }
 
 resource "aws_api_gateway_deployment" "deployment" {
