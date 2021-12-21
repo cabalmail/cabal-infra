@@ -39,3 +39,8 @@ variable "domains" {
   type        = list
   description = "List of email domains."
 }
+
+variable "repo" {
+  type        = string
+  description = "Repo tag value for SSM run command target."
+}

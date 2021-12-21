@@ -41,3 +41,8 @@ variable "relay_ips" {
 variable "domains" {
   type = list
 }
+
+variable "repo" {
+  type        = string
+  description = "Repo tag value for SSM run command target."
+}

@@ -3,6 +3,7 @@ const ddb = new AWS.DynamoDB.DocumentClient();
 const r53 = new AWS.Route53();
 const ssm = new AWS.SSM();
 const control_domain = "${control_domain}";
+const repo = "${repo}";
 const domains = ${jsonencode(domains)};
 
 exports.handler = (event, context, callback) => {
@@ -118,6 +119,10 @@ exports.handler = (event, context, callback) => {
             { 
                "Key": "tag:managed_by_terraform",
                "Values": [ "y" ]
+            },
+            { 
+               "Key": "tag:repo",
+               "Values": [ repo ]
             }
         ]
     }, function(err, data) {

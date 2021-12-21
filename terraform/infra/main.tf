@@ -52,6 +52,7 @@ module "admin" {
   zone_id             = data.aws_ssm_parameter.zone.value
   domains             = module.domains.domains
   relay_ips           = module.vpc.relay_ips
+  repo                = var.repo
 }
 
 # Creates a DynamoDB table for storing address data
