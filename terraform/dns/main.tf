@@ -45,9 +45,9 @@ resource "aws_s3_bucket" "react_app" {
 }
 
 # Save bucket information in AWS SSM Parameter Store so that terraform/infra can read it.
-resource "aws_ssm_parameter" "zone" {
-  name        = "/cabal/control_domain_zone_id"
-  description = "Route 53 Zone ID"
+resource "aws_ssm_parameter" "react_app" {
+  name        = "/cabal/admin/bucket"
+  description = "S3 bucket for React App"
   type        = "String"
   value       = jsonencode(aws_s3_bucket.react_app)
 
