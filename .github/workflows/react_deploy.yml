@@ -6,6 +6,7 @@ on:
     - main
     paths:
       - 'react/**'
+      - '.github/workflows/react_deploy.yml'
 
 jobs:
   deploy:
