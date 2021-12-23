@@ -4,6 +4,8 @@ on:
   push:
     branches:
     - main
+    paths:
+      - 'react/**'
 
 jobs:
   deploy:
@@ -21,4 +23,5 @@ jobs:
         EOF
         yarn install
         NODE_ENV=production yarn build
+        ls -R
         aws s3 sync public s3://${{ secrets.AWS_S3_BUCKET }}/ --profile deploy_react --no-progress
