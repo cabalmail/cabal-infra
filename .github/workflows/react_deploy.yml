@@ -13,12 +13,12 @@ jobs:
     - name: profile
       run: cd react/admin
     - run: |
-      aws configure --profile deploy_react <<-EOF > /dev/null 2>&1
-      ${{ secrets.AWS_S3_BUCKET }}
-      ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      us-east-1
-      json
-      EOF
+        aws configure --profile deploy_react <<-EOF > /dev/null 2>&1
+        ${{ secrets.AWS_S3_BUCKET }}
+        ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        us-east-1
+        json
+        EOF
     - name: deploy
       run: yarn install
     - run: NODE_ENV=production yarn build
