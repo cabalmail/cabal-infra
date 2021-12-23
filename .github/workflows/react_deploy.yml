@@ -10,17 +10,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@main
-    - name: profile
-      run: cd react/admin
-    - run: |
+    - name: deploy
+      run: |
+        cd react/admin
         aws configure --profile deploy_react <<-EOF > /dev/null 2>&1
         ${{ secrets.AWS_S3_BUCKET }}
         ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         us-east-1
         json
         EOF
-    - name: deploy
-      run: yarn install
-    - run: NODE_ENV=production yarn build
-    - run: aws s3 sync public s3://${{ secrets.AWS_S3_BUCKET }}/ --profile deploy_react --no-progress
-    
+        yarn install
+        NODE_ENV=production yarn build
+        aws s3 sync public s3://${{ secrets.AWS_S3_BUCKET }}/ --profile deploy_react --no-progress
