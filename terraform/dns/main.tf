@@ -8,7 +8,7 @@ provider "aws" {
   region = var.aws_region
 }
 
-// Create the zone for the control domain.
+# Create the zone for the control domain.
 resource "aws_route53_zone" "cabal_control_zone" {
   name          = var.control_domain
   comment       = "Control domain for cabal-mail infrastructure"
@@ -20,12 +20,36 @@ resource "aws_route53_zone" "cabal_control_zone" {
   }
 }
 
-// Save the zone ID in AWS SSM Parameter Store so that terraform/infra can read it.
+# Save the zone ID in AWS SSM Parameter Store so that terraform/infra can read it.
 resource "aws_ssm_parameter" "zone" {
   name        = "/cabal/control_domain_zone_id"
   description = "Route 53 Zone ID"
   type        = "String"
   value       = aws_route53_zone.cabal_control_zone.zone_id
+
+  tags = {
+    environment          = "production"
+    managed_by_terraform = "y"
+    terraform_repo       = var.repo
+  }
+}
+
+# S3 bucket for deploying React app
+resource "aws_s3_bucket" "react_app" {
+  acl    = "public-read"
+  bucket = "admin.${var.control_domain}"
+  website {
+    index_document = "index.html"
+    error_document = "error.html"
+  }
+}
+
+# Save bucket information in AWS SSM Parameter Store so that terraform/infra can read it.
+resource "aws_ssm_parameter" "zone" {
+  name        = "/cabal/control_domain_zone_id"
+  description = "Route 53 Zone ID"
+  type        = "String"
+  value       = jsonencode(aws_s3_bucket.react_app)
 
   tags = {
     environment          = "production"
