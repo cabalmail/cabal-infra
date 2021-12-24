@@ -183,10 +183,10 @@ CabalAdmin.address = CabalAdmin.address || {};
 
     function handleRequestClick(event) {
         var obj = {
-          address: $('#cabalusername').val() + '@' + $('#subdomain').val() + '.' + $('#zone_id option:selected').text(),
+          address: $('#cabalusername').val().trim() + '@' + $('#subdomain').val().trim() + '.' + $('#zone_id option:selected').text(),
           zone_id: $('#zone_id option:selected').val(),
-          username: $('#cabalusername').val(),
-          subdomain: $('#subdomain').val(),
+          username: $('#cabalusername').val().trim(),
+          subdomain: $('#subdomain').val().trim(),
           comment: $('#comment').val(),
           tld: $('#zone_id option:selected').text()
         };
