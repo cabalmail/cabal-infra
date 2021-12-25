@@ -4,7 +4,7 @@ resource "aws_cloudfront_origin_access_identity" "origin" {
 
 resource "aws_cloudfront_distribution" "cdn" {
   origin {
-    domain_name = aws_s3_bucket.website.bucket_regional_domain_name
+    domain_name = jsondecode(data.aws_ssm_parameter.s3.value).bucket_regional_domain_name
     origin_id   = "cabal_admin_s3"
 
     s3_origin_config {
@@ -27,6 +27,7 @@ resource "aws_cloudfront_distribution" "cdn" {
         forward = "none"
       }
     }
+    // TODO: put sensible values here
     min_ttl                = 0
     default_ttl            = 0
     max_ttl                = 0
