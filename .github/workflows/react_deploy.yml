@@ -24,6 +24,4 @@ jobs:
         EOF
         yarn install
         NODE_ENV=production yarn build
-        ls -R public
-        echo "Uploading to ${{ secrets.AWS_S3_BUCKET }}"
         aws s3 sync public s3://${{ secrets.AWS_S3_BUCKET }}/ --profile deploy_react --no-progress
