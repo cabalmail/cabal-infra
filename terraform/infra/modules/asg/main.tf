@@ -43,8 +43,8 @@ resource "aws_autoscaling_group" "asg" {
   }
   mixed_instances_policy {
     instances_distribution {
-      on_demand_base_capacity                  = 0
-      on_demand_percentage_above_base_capacity = 0
+      on_demand_base_capacity                  = 1
+      on_demand_percentage_above_base_capacity = 100
     }
     launch_template {
       launch_template_specification {
