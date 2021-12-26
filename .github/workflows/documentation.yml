@@ -1,5 +1,12 @@
 name: Generate terraform docs
-on: push
+
+on:
+  push:
+    branches:
+    - main
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/documentation.yml'
 
 jobs:
   docs:
