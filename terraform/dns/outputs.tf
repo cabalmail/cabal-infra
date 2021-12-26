@@ -9,3 +9,7 @@ output "name_servers" {
 output "bucket_name" {
   value = aws_s3_bucket.react_app.id
 }
+
+output "cognito" {
+  value       = module.user_pool
+}
