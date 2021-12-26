@@ -3,7 +3,7 @@ name: Upload React App
 on:
   push:
     branches:
-    - main
+      - main
     paths:
       - 'react/**'
       - '.github/workflows/react_deploy.yml'
