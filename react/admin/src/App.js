@@ -29,6 +29,15 @@ class App extends React.Component {
 
   doLogin(e) {
     e.preventDefault();
+  }
+
+  doUsernameChange(e) {
+    e.preventDefault();
+    console.log(e);
+  }
+
+  doPasswordChange(e) {
+    e.preventDefault();
     console.log(e);
   }
 
@@ -42,7 +51,13 @@ class App extends React.Component {
         return <List />;
       case "Login":
       default:
-        return <Login onSubmit={this.doLogin} />;
+        return (
+          <Login
+            onSubmit={this.doLogin}
+            onUsernameChange={this.doUsernameChange}
+            onPasswordChange={this.doPasswordChange}
+          />
+        );
     };
   }
 

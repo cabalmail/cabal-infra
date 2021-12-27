@@ -5,8 +5,8 @@ class Login extends React.Component {
     return (
       <div className="login">
         <form className="login" onSubmit={this.props.onSubmit}>
-          <input type="text" className="login username" id="username" name="username" />
-          <input type="password" className="login password" id="password" name="password" />
+          <input type="text" className="login username" id="username" name="username" onChange={this.props.onUsernameChange} />
+          <input type="password" className="login password" id="password" name="password" onChange={this.props.onPasswordChange} />
           <button type="submit">Login</button>
         </form>
       </div>
