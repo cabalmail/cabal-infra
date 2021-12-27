@@ -50,7 +50,7 @@ class App extends React.Component {
     };
     const attributeUsername = new CognitoUserAttribute(dataUsername);
     const attributePhone = new CognitoUserAttribute(dataPhone);
-    userPool.signUp(
+    UserPool.signUp(
       this.state.username,
       this.state.password,
       [attributeUsername, attributePhone],
