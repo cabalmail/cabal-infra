@@ -7,6 +7,7 @@ class Login extends React.Component {
         <form className="login" onSubmit={this.props.onSubmit}>
           <input type="text" className="login username" id="username" name="username" />
           <input type="password" className="login password" id="password" name="password" />
+          <button type="submit">Login</button>
         </form>
       </div>
     );
