@@ -113,6 +113,11 @@ class App extends React.Component {
     this.setState({phone: e.target.value});
   }
 
+  updateView = e => {
+    e.preventDefault();
+    console.log(e);
+  }
+
   renderContent() {
     switch (this.state.view) {
       case "Request":
