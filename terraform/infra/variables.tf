@@ -1,5 +1,15 @@
 data "aws_ssm_parameter" "zone" {
-  name        = "/cabal/control_domain_zone_id"
+  name = "/cabal/control_domain_zone_id"
+}
+
+data "aws_ssm_parameter" "user_pool" {
+  name = "/cabal/admin/cognito"
+}
+
+locals {
+  user_pool_id        = jsondecode(data.aws_ssm_parameter.user_pool).user_pool_id
+  user_pool_arn       = jsondecode(data.aws_ssm_parameter.user_pool).user_pool_arn
+  user_pool_client_id = jsondecode(data.aws_ssm_parameter.user_pool).user_pool_client_id
 }
 
 variable "aws_region" {
