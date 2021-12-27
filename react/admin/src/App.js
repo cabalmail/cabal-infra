@@ -2,6 +2,7 @@ import React from 'react';
 import {
   CognitoUser,
   CognitoUserPool,
+  CognitoUserAttribute,
   AuthenticationDetails
 } from 'amazon-cognito-identity-js';
 import Request from './Request.js';
@@ -21,6 +22,7 @@ class App extends React.Component {
       user: null,
       userName: null,
       password: null,
+      phone: null,
       message: null,
       view: "Login"
     };
@@ -35,7 +37,40 @@ class App extends React.Component {
     }
   }
 
-  doLogin = (e) => {
+  doRegister = e => {
+    e.preventDefault();
+    const dataUsername = {
+      Name: 'preferred_username',
+      Value: this.state.username
+    };
+    const dataPhone = {
+      Name: 'phone_number',
+      Value: this.state.phone
+    };
+    const attributeUsername = new CognitoUserAttribute(dataUsername);
+    const attributePhone = new CognitoUserAttribute(dataPhone);
+    userPool.signUp(
+      this.state.username,
+      this.state.password,
+      [attributeUsername, attributePhone],
+      null,
+      (err, _result) => {
+        if (!err) {
+          this.setState({
+            message: "Your registration has been submitted.",
+            view: "Login"
+          });
+        } else {
+          this.setState({
+            message: err,
+            view: "SignUp"
+          });
+        }
+      }
+    );
+  }
+
+  doLogin = e => {
     e.preventDefault();
     const user = new CognitoUser({
       Username: this.state.userName,
@@ -63,14 +98,19 @@ class App extends React.Component {
     });
   }
 
-  doUsernameChange = (e) => {
+  doUsernameChange = e => {
     e.preventDefault();
     this.setState({userName: e.target.value});
   }
 
-  doPasswordChange = (e) => {
+  doPasswordChange = e => {
     e.preventDefault();
     this.setState({password: e.target.value});
+  }
+
+  doPhoneChange = e => {
+    e.preventDefault();
+    this.setState({phone: e.target.value});
   }
 
   renderContent() {
@@ -78,7 +118,13 @@ class App extends React.Component {
       case "Request":
         return <Request />;
       case "SignUp":
-        return <SignUp />;
+        return (
+          <SignUp
+            onSubmit={this.doRegister}
+            onUsernameChange={this.doUsernameChange}
+            onPasswordChange={this.doPasswordChange}
+          />
+        );
       case "List":
         return <List />;
       case "Login":
@@ -98,6 +144,7 @@ class App extends React.Component {
   render() {
     return (
       <div className="App">
+        <Nav onClick={this.updateView} />
         <Message message={this.state.message} />
         {this.renderContent()}
       </div>
