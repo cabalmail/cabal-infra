@@ -5,10 +5,9 @@ import List from './List.js';
 import SignUp from './SignUp.js';
 import Login from './Login.js';
 import PoolData from './PoolData.js';
+const userPool = new AmazonCognitoIdentity.CognitoUserPool(PoolData);
 
 class App extends React.Component {
-
-  const userPool = new AmazonCognitoIdentity.CognitoUserPool(PoolData);
 
   constructor(props) {
     super(props);
