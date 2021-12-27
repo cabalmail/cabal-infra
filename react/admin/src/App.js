@@ -101,7 +101,7 @@ class App extends React.Component {
 
   doInputChange = e => {
     e.preventDefault();
-    this.setState({e.target.name: e.target.value});
+    this.setState({[e.target.name]: e.target.value});
   }
 
   updateView = e => {
