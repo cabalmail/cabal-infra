@@ -5,10 +5,10 @@ class Nav extends React.Component {
     return (
       <div className="nav">
         <ul className="nav">
-          <li><button name="list" onClick={this.props.onClick}>List Addresses</button></li>
-          <li><button name="request" onClick={this.props.onClick}>New Address</button></li>
-          <li><button name="logoug" onClick={this.props.onClick}>Log out</button></li>
-          <li><button name="signup" onClick={this.props.onClick}>Sign up</button></li>
+          <li><button name="List" onClick={this.props.onClick}>List Addresses</button></li>
+          <li><button name="Request" onClick={this.props.onClick}>New Address</button></li>
+          <li><button name="Login" onClick={this.props.onClick}>Log in</button></li>
+          <li><button name="Signup" onClick={this.props.onClick}>Sign up</button></li>
         </ul>
       </div>
     );

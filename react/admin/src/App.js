@@ -116,7 +116,7 @@ class App extends React.Component {
 
   updateView = e => {
     e.preventDefault();
-    console.log(e);
+    this.setState({view: e.target.name});
   }
 
   renderContent() {
