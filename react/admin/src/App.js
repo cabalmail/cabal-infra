@@ -1,5 +1,5 @@
 import React from 'react';
-// import AmazonCognitoIdentity from 'amazon-cognito-identity-js';
+import AmazonCognitoIdentity from 'amazon-cognito-identity-js';
 import Request from './Request.js';
 import List from './List.js';
 import SignUp from './SignUp.js';
@@ -8,6 +8,8 @@ import PoolData from './PoolData.js';
 
 class App extends React.Component {
 
+  const userPool = new AmazonCognitoIdentity.CognitoUserPool(PoolData);
+
   constructor(props) {
     super(props);
     this.state = {
@@ -15,6 +17,13 @@ class App extends React.Component {
       user: null,
       view: "Login"
     };
+  }
+
+  componentDidMount() {
+    const currentUser = this.userPool.getCurrentUser();
+    if (currentUser) {
+      this.setState({loggedIn: true, user: currentUser});
+    }
   }
 
   renderContent() {
