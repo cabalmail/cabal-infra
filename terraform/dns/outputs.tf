@@ -1,8 +1,8 @@
-output "Update the registration for your control domain with these name servers. See README.md for more information." {
+output "control_domain_name_servers" {
   value = aws_route53_zone.cabal_control_zone.name_servers
 }
 
-output "Create environment variables with your Github repo. See README.md for more information."{
+output "github_env_vars"{
   value = {
     COGNITO_USER_POOL_ID = module.pool.user_pool_id
     COGNITO_CLIENT_ID    = module.pool.user_pool_client_id
