@@ -35,7 +35,7 @@ class App extends React.Component {
     }
   }
 
-  function doLogin = (e) => {
+  doLogin = (e) => {
     e.preventDefault();
     const user = new CognitoUser({
       Username: this.state.userName,
@@ -63,12 +63,12 @@ class App extends React.Component {
     });
   }
 
-  function doUsernameChange = (e) => {
+  doUsernameChange = (e) => {
     e.preventDefault();
     this.setState({userName: e.target.value});
   }
 
-  function doPasswordChange = (e) => {
+  doPasswordChange = (e) => {
     e.preventDefault();
     this.setState({password: e.target.value});
   }
