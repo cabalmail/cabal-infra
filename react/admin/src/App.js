@@ -4,6 +4,7 @@ import Request from './Request.js';
 import List from './List.js';
 import SignUp from './SignUp.js';
 import Login from './Login.js';
+import PoolData from './PoolData.js';
 
 function App() {
   return (
@@ -11,7 +12,7 @@ function App() {
       <Request />
       <List />
       <SignUp />
-      <Login />
+      <Login client_id={PoolData.ClientId} pool_id={PoolData.UserPoolId} />
     </div>
   );
 }

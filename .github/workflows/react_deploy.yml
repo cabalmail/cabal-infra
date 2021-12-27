@@ -22,6 +22,13 @@ jobs:
         us-east-1
         json
         EOF
+        cat <<EOF >src/PoolData.js
+        const poolData = {
+          UserPoolId: "${{ secrets.COGNITO_USER_POOL_ID }}",
+          ClientId: "${{ secrets.COGNITO_CLIENT_ID }}"
+        };
+        export default poolData;
+        EOF
         yarn install
         NODE_ENV=production yarn build
         aws s3 sync build s3://${{ secrets.AWS_S3_BUCKET }}/ --profile deploy_react --no-progress
