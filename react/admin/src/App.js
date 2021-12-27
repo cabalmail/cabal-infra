@@ -5,7 +5,7 @@ import List from './List.js';
 import SignUp from './SignUp.js';
 import Login from './Login.js';
 import PoolData from './PoolData.js';
-const userPool = new CognitoUserPool.CognitoUserPool(PoolData);
+const UserPool = new CognitoUserPool(PoolData);
 
 class App extends React.Component {
 
@@ -19,7 +19,7 @@ class App extends React.Component {
   }
 
   componentDidMount() {
-    const currentUser = new userPool.getCurrentUser();
+    const currentUser = UserPool.getCurrentUser();
     if (currentUser) {
       this.setState({loggedIn: true, user: currentUser});
     }
