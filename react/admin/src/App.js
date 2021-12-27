@@ -1,9 +1,14 @@
 import React from 'react';
-import { CognitoUserPool } from 'amazon-cognito-identity-js';
+import {
+  CognitoUser,
+  CognitoUserPool,
+  AuthenticationDetails
+} from 'amazon-cognito-identity-js';
 import Request from './Request.js';
 import List from './List.js';
 import SignUp from './SignUp.js';
 import Login from './Login.js';
+import Message from './Message.js';
 import PoolData from './PoolData.js';
 const UserPool = new CognitoUserPool(PoolData);
 
@@ -16,6 +21,7 @@ class App extends React.Component {
       user: null,
       userName: null,
       password: null,
+      message: null,
       view: "Login"
     };
   }
@@ -31,6 +37,30 @@ class App extends React.Component {
 
   doLogin(e) {
     e.preventDefault();
+    const user = new CognitoUser({
+      Username: this.state.userName,
+      Pool: UserPool
+    });
+    const creds = new AuthenticationDetails({
+      Username: this.state.userName,
+      Password: this.state.password
+    });
+    user.authenticateUser(creds, {
+      onSuccess: data => {
+        this.setState({
+          message: null,
+          user: data,
+          view: "Request"
+        });
+      },
+      onFailure: data => {
+        this.setState({
+          message: "Login failed",
+          user: null,
+          view: "Login"
+        });
+      }
+    });
   }
 
   doUsernameChange(e) {
@@ -68,6 +98,7 @@ class App extends React.Component {
   render() {
     return (
       <div className="App">
+        <Message message={this.state.message} />
         {this.renderContent()}
       </div>
     );
