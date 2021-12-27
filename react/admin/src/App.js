@@ -27,6 +27,11 @@ class App extends React.Component {
     }
   }
 
+  doLogin(e) {
+    e.preventDefault();
+    console.log(e);
+  }
+
   renderContent() {
     switch (this.state.view) {
       case "Request":
@@ -37,7 +42,7 @@ class App extends React.Component {
         return <List />;
       case "Login":
       default:
-        return <Login />;
+        return <Login onSubmit={this.doLogin} />;
     };
   }
 
