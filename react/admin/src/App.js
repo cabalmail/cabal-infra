@@ -22,6 +22,8 @@ class App extends React.Component {
     const currentUser = UserPool.getCurrentUser();
     if (currentUser) {
       this.setState({loggedIn: true, user: currentUser});
+    } else {
+      this.setState({loggedIn: false, user: null, view: "Login"})
     }
   }
 
