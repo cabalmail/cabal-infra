@@ -16,7 +16,7 @@ module "pool" {
 }
 
 # Save Cognito user pool information in AWS SSM Parameter Store so that terraform/infra can read it.
-resource "aws_ssm_parameter" "react_app" {
+resource "aws_ssm_parameter" "cognito" {
   name        = "/cabal/admin/cognito"
   description = "Cognito User Pool"
   type        = "String"
