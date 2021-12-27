@@ -11,5 +11,5 @@ output "bucket_name" {
 }
 
 output "cognito" {
-  value       = module.user_pool
+  value       = module.pool
 }
