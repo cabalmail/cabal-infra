@@ -1,9 +1,11 @@
 import React from 'react';
 
-function Request() {
-  return (
-    <div className="request">Request</div>
-  );
+class Request extends React.Component {
+  render() {
+    return (
+      <div className="request">Request</div>
+    );
+  }
 }
 
 export default Request;

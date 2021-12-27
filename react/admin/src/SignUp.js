@@ -1,9 +1,11 @@
 import React from 'react';
 
-function SignUp() {
-  return (
-    <div className="sign-up">SignUp</div>
-  );
+class SignUp extends React.Component {
+  render() {
+    return (
+      <div className="sign-up">SignUp</div>
+    );
+  }
 }
 
 export default SignUp;
