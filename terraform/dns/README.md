@@ -24,8 +24,8 @@ The small Terraform stack in this directory stands up a Route53 Zone for the con
 
 | Name | Description |
 |------|-------------|
-| <a name="output_Create environment variables with your Github repo. See README.md for more information."></a> [Create environment variables with your Github repo. See README.md for more information.](#output\_Create environment variables with your Github repo. See README.md for more information.) | n/a |
-| <a name="output_Update the registration for your control domain with these name servers. See README.md for more information."></a> [Update the registration for your control domain with these name servers. See README.md for more information.](#output\_Update the registration for your control domain with these name servers. See README.md for more information.) | n/a |
+| <a name="output_control_domain_name_servers"></a> [control\_domain\_name\_servers](#output\_control\_domain\_name\_servers) | n/a |
+| <a name="output_github_env_vars"></a> [github\_env\_vars](#output\_github\_env\_vars) | n/a |
 ## Providers
 
 | Name | Version |
