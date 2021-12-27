@@ -17,12 +17,15 @@ The small Terraform stack in this directory stands up a Route53 Zone for the con
 | <a name="input_repo"></a> [repo](#input\_repo) | This repository. Used for resource tagging. | `string` | `"https://github.com/ccarr-cabal/cabal-infra/tree/main"` | no |
 ## Modules
 
-No modules.
+| Name | Source | Version |
+|------|--------|---------|
+| <a name="module_pool"></a> [pool](#module\_pool) | ./modules/user_pool | n/a |
 ## Outputs
 
 | Name | Description |
 |------|-------------|
 | <a name="output_bucket_name"></a> [bucket\_name](#output\_bucket\_name) | n/a |
+| <a name="output_cognito"></a> [cognito](#output\_cognito) | n/a |
 | <a name="output_name_servers"></a> [name\_servers](#output\_name\_servers) | n/a |
 | <a name="output_zone_id"></a> [zone\_id](#output\_zone\_id) | n/a |
 ## Providers
