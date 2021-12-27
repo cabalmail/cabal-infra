@@ -10,6 +10,7 @@ import List from './List.js';
 import SignUp from './SignUp.js';
 import Login from './Login.js';
 import Message from './Message.js';
+import Nav from './Nav.js';
 import PoolData from './PoolData.js';
 const UserPool = new CognitoUserPool(PoolData);
 
