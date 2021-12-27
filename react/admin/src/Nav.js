@@ -8,6 +8,7 @@ class Nav extends React.Component {
           <li><button name="list" onClick={this.props.onClick}>List Addresses</button></li>
           <li><button name="request" onClick={this.props.onClick}>New Address</button></li>
           <li><button name="logoug" onClick={this.props.onClick}>Log out</button></li>
+          <li><button name="signup" onClick={this.props.onClick}>Sign up</button></li>
         </ul>
       </div>
     );
