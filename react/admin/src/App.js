@@ -14,6 +14,8 @@ class App extends React.Component {
     this.state = {
       loggedIn: false,
       user: null,
+      userName: null,
+      password: null,
       view: "Login"
     };
   }
@@ -33,12 +35,12 @@ class App extends React.Component {
 
   doUsernameChange(e) {
     e.preventDefault();
-    console.log(e);
+    this.setState({userName: e.target.value});
   }
 
   doPasswordChange(e) {
     e.preventDefault();
-    console.log(e);
+    this.setState({password: e.target.value});
   }
 
   renderContent() {
@@ -56,6 +58,8 @@ class App extends React.Component {
             onSubmit={this.doLogin}
             onUsernameChange={this.doUsernameChange}
             onPasswordChange={this.doPasswordChange}
+            username={this.state.userName}
+            password={this.state.password}
           />
         );
     };
