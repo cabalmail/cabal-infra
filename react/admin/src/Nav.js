@@ -5,9 +5,9 @@ class Nav extends React.Component {
     return (
       <div className="nav">
         <ul className="nav">
-          <li><a name="list" onClick={this.props.onClick}>List Addresses</a></li>
-          <li><a name="request" onClick={this.props.onClick}>New Address</a></li>
-          <li><a name="logoug" onClick={this.props.onClick}>Log out</a></li>
+          <li><button name="list" onClick={this.props.onClick}>List Addresses</button></li>
+          <li><button name="request" onClick={this.props.onClick}>New Address</button></li>
+          <li><button name="logoug" onClick={this.props.onClick}>Log out</button></li>
         </ul>
       </div>
     );
