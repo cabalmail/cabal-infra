@@ -7,9 +7,9 @@ data "aws_ssm_parameter" "user_pool" {
 }
 
 locals {
-  user_pool_id        = jsondecode(data.aws_ssm_parameter.user_pool).user_pool_id
-  user_pool_arn       = jsondecode(data.aws_ssm_parameter.user_pool).user_pool_arn
-  user_pool_client_id = jsondecode(data.aws_ssm_parameter.user_pool).user_pool_client_id
+  user_pool_id        = jsondecode(data.aws_ssm_parameter.user_pool.value).user_pool_id
+  user_pool_arn       = jsondecode(data.aws_ssm_parameter.user_pool.value).user_pool_arn
+  user_pool_client_id = jsondecode(data.aws_ssm_parameter.user_pool.value).user_pool_client_id
 }
 
 variable "aws_region" {
