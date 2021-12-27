@@ -42,7 +42,7 @@ class App extends React.Component {
     e.preventDefault();
     const dataUsername = {
       Name: 'preferred_username',
-      Value: this.state.username
+      Value: this.state.userName
     };
     const dataPhone = {
       Name: 'phone_number',
@@ -51,7 +51,7 @@ class App extends React.Component {
     const attributeUsername = new CognitoUserAttribute(dataUsername);
     const attributePhone = new CognitoUserAttribute(dataPhone);
     UserPool.signUp(
-      this.state.username,
+      this.state.userName,
       this.state.password,
       [attributeUsername, attributePhone],
       null,
@@ -99,19 +99,9 @@ class App extends React.Component {
     });
   }
 
-  doUsernameChange = e => {
+  doInputChange = e => {
     e.preventDefault();
-    this.setState({userName: e.target.value});
-  }
-
-  doPasswordChange = e => {
-    e.preventDefault();
-    this.setState({password: e.target.value});
-  }
-
-  doPhoneChange = e => {
-    e.preventDefault();
-    this.setState({phone: e.target.value});
+    this.setState({e.target.name: e.target.value});
   }
 
   updateView = e => {
@@ -127,8 +117,9 @@ class App extends React.Component {
         return (
           <SignUp
             onSubmit={this.doRegister}
-            onUsernameChange={this.doUsernameChange}
-            onPasswordChange={this.doPasswordChange}
+            onUsernameChange={this.doInputChange}
+            onPasswordChange={this.doInputChange}
+            onPhoneChange={this.doInputChange}
           />
         );
       case "List":
@@ -138,8 +129,8 @@ class App extends React.Component {
         return (
           <Login
             onSubmit={this.doLogin}
-            onUsernameChange={this.doUsernameChange}
-            onPasswordChange={this.doPasswordChange}
+            onUsernameChange={this.doInputChange}
+            onPasswordChange={this.doInputChange}
             username={this.state.userName}
             password={this.state.password}
           />

@@ -8,8 +8,8 @@ class SignUp extends React.Component {
           <input
             type="text"
             className="login username"
-            id="username"
-            name="username"
+            id="userName"
+            name="userName"
             onChange={this.props.onUsernameChange}
             value={this.props.username}
           />
