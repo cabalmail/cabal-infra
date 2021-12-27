@@ -19,7 +19,7 @@ class App extends React.Component {
   }
 
   componentDidMount() {
-    const currentUser = userPool.getCurrentUser();
+    const currentUser = new userPool.getCurrentUser();
     if (currentUser) {
       this.setState({loggedIn: true, user: currentUser});
     }
