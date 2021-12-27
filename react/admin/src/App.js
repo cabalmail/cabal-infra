@@ -29,19 +29,14 @@ class App extends React.Component {
     switch (this.state.view) {
       case "Request":
         return <Request />;
-        break;
       case "SignUp":
         return <SignUp />;
-        break;
       case "List":
         return <List />;
-        break;
       case "Login":
       default:
         return <Login />;
-      };
-    alert("Spilled through");
-    return <Login />;
+    };
   }
 
   render() {
