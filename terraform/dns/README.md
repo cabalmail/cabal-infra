@@ -24,10 +24,8 @@ The small Terraform stack in this directory stands up a Route53 Zone for the con
 
 | Name | Description |
 |------|-------------|
-| <a name="output_bucket_name"></a> [bucket\_name](#output\_bucket\_name) | n/a |
-| <a name="output_cognito"></a> [cognito](#output\_cognito) | n/a |
-| <a name="output_name_servers"></a> [name\_servers](#output\_name\_servers) | n/a |
-| <a name="output_zone_id"></a> [zone\_id](#output\_zone\_id) | n/a |
+| <a name="output_Create environment variables with your Github repo. See README.md for more information."></a> [Create environment variables with your Github repo. See README.md for more information.](#output\_Create environment variables with your Github repo. See README.md for more information.) | n/a |
+| <a name="output_Update the registration for your control domain with these name servers. See README.md for more information."></a> [Update the registration for your control domain with these name servers. See README.md for more information.](#output\_Update the registration for your control domain with these name servers. See README.md for more information.) | n/a |
 ## Providers
 
 | Name | Version |
