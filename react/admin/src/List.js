@@ -23,7 +23,7 @@ class List extends React.Component {
 
   handleSubmit = (e) => {
     e.preventDefault();
-    getList();
+    this.getList();
   }
 
   updateFilter = (e) => {
