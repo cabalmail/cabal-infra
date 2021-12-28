@@ -115,7 +115,12 @@ class App extends React.Component {
   renderContent() {
     switch (this.state.view) {
       case "Request":
-        return <Request />;
+        return (
+          <Request
+            token={this.state.token}
+            userName={this.state.userName}
+          />
+        );
       case "SignUp":
         return (
           <SignUp
@@ -126,7 +131,12 @@ class App extends React.Component {
           />
         );
       case "List":
-        return <List />;
+        return (
+          <List
+            token={this.state.token}
+            userName={this.state.userName}
+          />
+        );
       case "Login":
       default:
         return (
