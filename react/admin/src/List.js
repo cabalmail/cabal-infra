@@ -12,14 +12,13 @@ class List extends React.Component {
     };
   }
 
-  getList() {
-    console.log("getList() invoked with " + invokeUrl + '/list')
-    axios.get(invokeUrl + '/list', {
+  async getList() {
+    response = await axios.get(invokeUrl + '/list', {
       headers: {
         Authorization: this.props.token
       }
     });
-    //console.log(response);
+    alert(response);
   }
 
   handleSubmit = (e) => {
