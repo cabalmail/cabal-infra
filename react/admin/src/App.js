@@ -20,7 +20,7 @@ class App extends React.Component {
     super(props);
     this.state = {
       loggedIn: false,
-      user: null,
+      token: null,
       userName: null,
       password: null,
       phone: null,
@@ -30,11 +30,11 @@ class App extends React.Component {
   }
 
   componentDidMount() {
-    const currentUser = UserPool.getCurrentUser();
-    if (currentUser) {
-      this.setState({loggedIn: true, user: currentUser});
+    const token = UserPool.getCurrentUser().getIdToken().getJwtToken();
+    if (token) {
+      this.setState({loggedIn: true, token: token});
     } else {
-      this.setState({loggedIn: false, user: null, view: "Login"})
+      this.setState({loggedIn: false, token: null, view: "Login"})
     }
   }
 
@@ -85,7 +85,8 @@ class App extends React.Component {
       onSuccess: data => {
         this.setState({
           message: null,
-          user: data,
+          loggedIn: true,
+          token: data.getIdToken().getJwtToken(),
           view: "Request"
         });
         console.log(data);
@@ -93,7 +94,8 @@ class App extends React.Component {
       onFailure: data => {
         this.setState({
           message: "Login failed",
-          user: null,
+          loggedIn: false,
+          token: null,
           view: "Login"
         });
       }
