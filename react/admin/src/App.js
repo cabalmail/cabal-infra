@@ -86,7 +86,7 @@ class App extends React.Component {
         this.setState({
           message: null,
           loggedIn: true,
-          token: data.getIdToken().getJwtToken(),
+          token: data.getAccessToken().getJwtToken(),
           view: "Request"
         });
         console.log(data);
