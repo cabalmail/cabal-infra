@@ -33,6 +33,15 @@ class App extends React.Component {
     const currentUser = UserPool.getCurrentUser();
     if (currentUser) {
       this.setState({loggedIn: true});
+      currentUser.getSession().then((err, session) => {
+        if (err) {
+          console.log(err);
+        } else if (! session.isValid()) {
+          console.log("Can't resolve session");
+        } else {
+          this.setState({ token: session.getIdToken().getJwtToken() });
+        }
+      });
     } else {
       this.setState({loggedIn: false, token: null, userName: null, view: "Login"})
     }
