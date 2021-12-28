@@ -88,6 +88,7 @@ class App extends React.Component {
           user: data,
           view: "Request"
         });
+        console.log(data);
       },
       onFailure: data => {
         this.setState({
