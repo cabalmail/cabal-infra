@@ -30,9 +30,9 @@ class App extends React.Component {
   }
 
   componentDidMount() {
-    const token = UserPool.getCurrentUser().getIdToken().getJwtToken();
-    if (token) {
-      this.setState({loggedIn: true, token: token});
+    const currentUser = UserPool.getCurrentUser();
+    if (currentUser) {
+      this.setState({loggedIn: true});
     } else {
       this.setState({loggedIn: false, token: null, view: "Login"})
     }
