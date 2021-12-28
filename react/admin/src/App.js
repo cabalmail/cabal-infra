@@ -34,7 +34,7 @@ class App extends React.Component {
     if (currentUser) {
       this.setState({loggedIn: true});
     } else {
-      this.setState({loggedIn: false, token: null, view: "Login"})
+      this.setState({loggedIn: false, token: null, userName: null, view: "Login"})
     }
   }
 
