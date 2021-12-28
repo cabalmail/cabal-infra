@@ -16,7 +16,7 @@ class List extends React.Component {
     console.log(this.props.token);
     const response = await axios.get(invokeUrl + '/list', {
       headers: {
-        Authorization: 'Bearer ' + this.props.token
+        Authorization: this.props.token
       }
     });
     alert(response);
