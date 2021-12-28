@@ -41,6 +41,7 @@ class List extends React.Component {
           id="filter"
           name="filter"
         />
+        <button type="submit">Submit</button>
         </form>
         <div id="list"></div>
       </div>
