@@ -13,6 +13,7 @@ class List extends React.Component {
   }
 
   getList() {
+    console.log("getList() invoked")
     axios.get(invokeUrl + '/list', {
       headers: {
         Authorization: this.props.token
