@@ -145,7 +145,7 @@ class App extends React.Component {
     return (
       <div className="App">
         <div className={this.state.view}>
-          <Nav onClick={this.updateView} />
+          <Nav onClick={this.updateView} user={this.state.userName} />
           <Message message={this.state.message} />
           {this.renderContent()}
         </div>
