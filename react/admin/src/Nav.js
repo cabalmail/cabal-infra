@@ -4,7 +4,6 @@ class Nav extends React.Component {
   render() {
     return (
       <div className="nav">
-        <div>Welcome, {this.props.user}</div>
         <ul className="nav">
           <li><button name="List" onClick={this.props.onClick}>List Addresses</button></li>
           <li><button name="Request" onClick={this.props.onClick}>New Address</button></li>

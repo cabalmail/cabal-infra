@@ -6,7 +6,6 @@ class Request extends React.Component {
       <div className="request">
         <h1>Request</h1>
         <div>{this.props.userName}</div>
-        <div>{this.props.token}</div>
       </div>
       );
   }
