@@ -11,6 +11,7 @@ class List extends React.Component {
       filter: "",
       addresses: []
     };
+    this.getList();
   }
 
   async getList() {
