@@ -14,7 +14,8 @@ class List extends React.Component {
     this.getList();
   }
 
-  async getList() {
+  getList = async (e) => {
+    e.preventDefault();
     const response = await axios.get(invokeUrl + '/list', {
       headers: {
         'Authorization': this.props.token
@@ -39,11 +40,6 @@ class List extends React.Component {
     }
   }
 
-  handleSubmit = (e) => {
-    e.preventDefault();
-    this.getList();
-  }
-
   updateFilter = (e) => {
     e.preventDefault();
     this.setState({filter: e.target.value});
@@ -53,7 +49,7 @@ class List extends React.Component {
     return (
       <div className="list">
         <h1>List</h1>
-        <form className="list-form" onSubmit={this.handleSubmit}>
+        <form className="list-form" onSubmit={this.getList}>
         <input
           type="text"
           value={this.state.filter}
