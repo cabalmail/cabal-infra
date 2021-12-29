@@ -39,7 +39,17 @@ class List extends React.Component {
       }
     });
     if (response) {
-      this.setState({ addresses: response.data.Items });
+      this.setState({ addresses: response.data.Items.filter(
+        (a) => {
+          if (a.address.includes(this.state.filter)) {
+            return true;
+          }
+          if (a.comment.includes(this.state.filter)) {
+            return true;
+          }
+          return false;
+        }
+      ) });
     } else {
       console.log("No response received");
     }
