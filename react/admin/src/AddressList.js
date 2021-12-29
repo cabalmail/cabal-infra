@@ -3,15 +3,12 @@ import Address from './Address';
 
 class AddressList extends React.Component {
 
-  renderAddresses(addresses) {
-    return addresses.map(a => <Address address={a.address} />);
-  }
-
   render() {
+    const addresses = this.props.addresses.map(a => <Address address={a.address} />);
     return (
-      <div>
-        {this.renderAddresses(this.props.addresses)}
-      </div>
+      <ul className="address-list">
+        {addresses}
+      </ul>
     );
   }
 
