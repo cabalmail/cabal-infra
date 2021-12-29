@@ -37,6 +37,8 @@ class List extends React.Component {
     const token = await user.getSession((err, session) => {
       return session.getIdToken().getJwtToken();
     });
+    console.log(token);
+    console.log(this.state.token);
     const response = await axios.get(invokeUrl + '/list', {
       headers: {
         Authorization: token
