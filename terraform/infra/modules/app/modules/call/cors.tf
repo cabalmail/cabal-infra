@@ -25,7 +25,7 @@ resource "aws_api_gateway_integration_response" "options" {
   response_parameters = {
     "method.response.header.Access-Control-Allow-Headers" = "'${local.allowed_headers}'",
     "method.response.header.Access-Control-Allow-Methods" = "'${local.allowed_methods}'",
-    "method.response.header.Access-Control-Allow-Origin"  = "'https://admin.${var.control_domain}'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
   }
   depends_on          = [
     aws_api_gateway_integration.options

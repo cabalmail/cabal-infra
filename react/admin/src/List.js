@@ -39,7 +39,6 @@ class List extends React.Component {
 
   handleSubmit = (e) => {
     e.preventDefault();
-    console.log({f: "handleSubmit", e: e});
     this.getList();
   }
 
