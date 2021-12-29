@@ -1,5 +1,6 @@
 import React from 'react';
 import axios from 'axios';
+import AddressList from './AddressList';
 // TODO: move this to a configuration file
 const invokeUrl = 'https://osg06j8v6e.execute-api.us-east-1.amazonaws.com/prod';
 
@@ -61,7 +62,11 @@ class List extends React.Component {
         <button type="submit">Submit</button>
         </form>
         <div id="count">Found: {this.state.addresses.length} addresses</div>
-        <div id="list"></div>
+        <div id="list">
+          <AddressList
+            addresses={this.state.addresses}
+          />
+        </div>
       </div>
     );
   }
