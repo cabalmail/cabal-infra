@@ -18,8 +18,8 @@ class List extends React.Component {
         'Authorization': this.props.token
       },
       timeout: 1000
-    }).catch( err => {
-      console.log(err;
+    }).catch( (err) => {
+      console.log(err);
     });
     alert(response);
   }
