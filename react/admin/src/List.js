@@ -16,7 +16,8 @@ class List extends React.Component {
 
   getList = async (e) => {
     e.preventDefault();
-    const response = await axios.get(invokeUrl + '/list', {
+    const response = await axios.get('/list', {
+      baseURL: invokeUrl,
       headers: {
         'Authorization': this.props.token
       },

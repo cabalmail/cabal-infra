@@ -5,13 +5,13 @@ import {
   CognitoUserAttribute,
   AuthenticationDetails
 } from 'amazon-cognito-identity-js';
-import Request from './Request.js';
-import List from './List.js';
-import SignUp from './SignUp.js';
-import Login from './Login.js';
-import Message from './Message.js';
-import Nav from './Nav.js';
-import PoolData from './PoolData.js';
+import Request from './Request';
+import List from './List';
+import SignUp from './SignUp';
+import Login from './Login';
+import Message from './Message';
+import Nav from './Nav';
+import PoolData from './PoolData';
 const UserPool = new CognitoUserPool(PoolData);
 
 class App extends React.Component {
