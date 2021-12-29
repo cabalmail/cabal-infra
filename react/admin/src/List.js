@@ -16,7 +16,10 @@ class List extends React.Component {
     const response = await axios.get(invokeUrl + '/list', {
       headers: {
         'Authorization': this.props.token
-      }
+      },
+      timeout: 1000
+    }).catch( err => {
+      console.log(err;
     });
     alert(response);
   }
