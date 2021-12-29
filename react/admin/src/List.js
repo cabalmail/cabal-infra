@@ -19,9 +19,22 @@ class List extends React.Component {
       },
       timeout: 1000
     }).catch( (err) => {
-      console.log(err);
+      if (err.response) {
+        console.log("Error in response");
+        console.log(err.response);
+      } else if (err.request) {
+        console.log("Error with request");
+        console.log(err.request);
+      } else {
+        console.log("Unknown error");
+        console.log(err);
+      }
     });
-    alert(response);
+    if (response) {
+      console.log(response);
+    } else {
+      console.log("No response received");
+    }
   }
 
   handleSubmit = (e) => {
