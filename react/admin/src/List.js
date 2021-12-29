@@ -12,6 +12,9 @@ class List extends React.Component {
       filter: "",
       addresses: []
     };
+  }
+
+  componentDidMount() {
     this.getList();
   }
 

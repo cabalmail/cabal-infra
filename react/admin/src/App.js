@@ -89,7 +89,6 @@ class App extends React.Component {
           token: data.getIdToken().getJwtToken(),
           view: "Request"
         });
-        console.log(data);
       },
       onFailure: data => {
         this.setState({
