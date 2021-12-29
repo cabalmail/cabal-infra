@@ -8,7 +8,8 @@ class List extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      filter: ""
+      filter: "",
+      addresses: []
     };
   }
 
@@ -31,7 +32,7 @@ class List extends React.Component {
       }
     });
     if (response) {
-      console.log(response);
+      this.setState({ addresses: response.data.Items });
     } else {
       console.log("No response received");
     }
@@ -61,6 +62,7 @@ class List extends React.Component {
         />
         <button type="submit">Submit</button>
         </form>
+        <div id="count">Found: {this.state.addresses.length} addresses</div>
         <div id="list"></div>
       </div>
     );
