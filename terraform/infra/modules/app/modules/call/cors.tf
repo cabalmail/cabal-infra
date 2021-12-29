@@ -23,6 +23,7 @@ resource "aws_api_gateway_integration_response" "options" {
   http_method         = aws_api_gateway_method.options.http_method
   status_code         = aws_api_gateway_method_response.options.status_code
   response_parameters = {
+    "method.response.header.X-Requested-With"             = "'*'",
     "method.response.header.Access-Control-Allow-Headers" = "'${local.allowed_headers}'",
     "method.response.header.Access-Control-Allow-Methods" = "'${local.allowed_methods}'",
     "method.response.header.Access-Control-Allow-Origin"  = "'*'"
