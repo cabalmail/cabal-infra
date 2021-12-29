@@ -5,7 +5,7 @@ class Nav extends React.Component {
   render() {
     const { loggedIn, onClick } = this.props;
     return (
-      <div className=`nav logged-${loggedIn ? 'in' : 'out'}`>
+      <div className={`nav logged-${loggedIn ? 'in' : 'out'}`}>
         <ul className="nav">
           <li id="list">
             <button name="List" onClick={onClick}>List Addresses</button>
