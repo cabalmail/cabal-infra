@@ -10,13 +10,13 @@ body {
   padding: 3em;
 }
 
-input, button {
+input, select, button {
   font-family: 'Gugi';
   font-size: 120%;
   padding: 0.5em;
 }
 
-input {
+input, select {
   border-radius: 0.2em;
   width: 30em;
   background-color: #000;

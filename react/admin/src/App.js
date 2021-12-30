@@ -94,6 +94,7 @@ class App extends React.Component {
 
   doLogin = e => {
     e.preventDefault();
+    console.log("Pool", this.state.userPool)
     const user = new CognitoUser({
       Username: this.state.userName,
       Pool: this.state.userPool
