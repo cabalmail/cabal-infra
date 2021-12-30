@@ -28,14 +28,11 @@ class List extends React.Component {
       timeout: 1000
     }).catch( (err) => {
       if (err.response) {
-        console.log("Error in response");
-        console.log(err.response);
+        console.log("Error in response while retrieving address list", err.response);
       } else if (err.request) {
-        console.log("Error with request");
-        console.log(err.request);
+        console.log("Error with request while retrieving address list", err.request);
       } else {
-        console.log("Unknown error");
-        console.log(err);
+        console.log("Unknown error while retrieving address list", err);
       }
     });
     if (response) {

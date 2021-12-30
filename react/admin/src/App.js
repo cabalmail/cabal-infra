@@ -1,4 +1,5 @@
 import React from 'react';
+import axios from 'axios';
 import {
   CognitoUser,
   CognitoUserPool,
@@ -11,8 +12,8 @@ import SignUp from './SignUp';
 import Login from './Login';
 import Message from './Message';
 import Nav from './Nav';
-import PoolData from './PoolData';
-const UserPool = new CognitoUserPool(PoolData);
+// import PoolData from './PoolData';
+// const UserPool = new CognitoUserPool(PoolData);
 
 class App extends React.Component {
 
@@ -25,8 +26,37 @@ class App extends React.Component {
       password: null,
       phone: null,
       message: null,
-      view: "Login"
+      view: "Login",
+      poolData: null,
+      userPool: null,
+      domains: {},
+      api_url: null
     };
+    getConfig();
+  }
+
+  async getConfig() {
+    const response = await axios.get('/config.js').catch( (err) => {
+      if (err.response) {
+        console.log("Error in response while retrieving configuration", err.response);
+      } else if (err.request) {
+        console.log("Error with request while retrieving configuration", err.request);
+      } else {
+        console.log("Unknown error retrieving configuration", err);
+      }
+    });
+    if (response) {
+      const { domains, cognitoConfig } = JSON.parse(response);
+      this.setState({
+        poolData: cognitoConfig.poolData,
+        domains: domains,
+        api_url: cognitoConfig.invokeUrl,
+        userPool: new CognitoUserPool(cognitoConfig.poolData)
+      });
+    } else {
+      console.log("Could not retrieve configuration.");
+    }
+    
   }
 
   doRegister = e => {
@@ -41,7 +71,7 @@ class App extends React.Component {
     };
     const attributeUsername = new CognitoUserAttribute(dataUsername);
     const attributePhone = new CognitoUserAttribute(dataPhone);
-    UserPool.signUp(
+    this.state.userPool.signUp(
       this.state.userName,
       this.state.password,
       [attributeUsername, attributePhone],
@@ -66,7 +96,7 @@ class App extends React.Component {
     e.preventDefault();
     const user = new CognitoUser({
       Username: this.state.userName,
-      Pool: UserPool
+      Pool: this.state.userPool
     });
     const creds = new AuthenticationDetails({
       Username: this.state.userName,
