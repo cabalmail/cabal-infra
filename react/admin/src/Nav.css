@@ -6,12 +6,22 @@
   display: none;
 }
 
-div.nav a.item {
-  background-color: #111 !important;
-  color: #aa9 !important;
+.nav {
+  border: 0;
+  border-bottom: 1px solid #000;
+  background-color: #111;
+  color: #aa9;
 }
 
-div.nav a.active {
-  background-color: #311 !important;
-  color: #dda !important;
+.nav .item {
+  display: inline-block;
+  padding: 1em;
+  border: 0;
+  border-bottom: 2px solid #111;
+}
+
+.nav a.active {
+  background-color: #311;
+  color: #dda;
+  border-bottom: 2px solid #000;
 }
