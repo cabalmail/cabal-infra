@@ -8,16 +8,16 @@ class Nav extends React.Component {
     return (
       <div className={`ui pointing menu nav logged-${loggedIn ? 'in' : 'out'}`}>
         <ul className="nav">
-          <li id="list" className={`item${this.props.view == "List" ? " selected" : ""}`}>
+          <li id="list" className={`item${this.props.view === "List" ? " selected" : ""}`}>
             <button name="List" onClick={onClick}>List Addresses</button>
           </li>
-          <li id="request" className={`item${this.props.view == "Request" ? " selected" : ""}`}>
+          <li id="request" className={`item${this.props.view === "Request" ? " selected" : ""}`}>
             <button name="Request" onClick={onClick}>New Address</button>
           </li>
-          <li id="login" className={`item${this.props.view == "Login" ? " selected" : ""}`}>
+          <li id="login" className={`item${this.props.view === "Login" ? " selected" : ""}`}>
             <button name="Login" onClick={onClick}>Log in</button>
           </li>
-          <li id="signup" className={`item${this.props.view == "SignUp" ? " selected" : ""}`}>
+          <li id="signup" className={`item${this.props.view === "SignUp" ? " selected" : ""}`}>
             <button name="SignUp" onClick={onClick}>Sign up</button>
           </li>
             <li id="logout" className="item">
