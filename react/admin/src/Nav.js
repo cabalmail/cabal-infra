@@ -12,26 +12,36 @@ class Nav extends React.Component {
           className={`item${view === "List" ? " selected" : ""}`}
           name="List"
           onClick={onClick}
+          href="#list"
         >List Addresses</a>
         <a
           id="request"
           className={`item${view === "Request" ? " selected" : ""}`}
           name="Request"
           onClick={onClick}
+          href="#request"
         >New Address</a>
         <a
           id="login"
           className={`item${view === "Login" ? " selected" : ""}`}
           name="Login"
           onClick={onClick}
+          href="#login"
         >Log in</a>
         <a
           id="signup"
           className={`item${view === "SignUp" ? " selected" : ""}`}
           name="SignUp"
           onClick={onClick}
+          href="#signup"
         >Sign up</a>
-        <a id="logout" className="item" name="LogOut" onClick={onClick}>Log out</a>
+        <a
+          id="logout"
+          className="item"
+          name="LogOut"
+          onClick={onClick}
+          href="#login"
+        >Log out</a>
       </div>
     );
   }
