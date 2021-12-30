@@ -19,7 +19,7 @@ resource "aws_s3_bucket_policy" "website" {
             "AWS": aws_cloudfront_origin_access_identity.origin.iam_arn
           },
           "Action": "s3:GetObject",
-          "Resource": "arn:aws:s3:::www.${var.control_domain}/*"
+          "Resource": "arn:aws:s3:::admin.${var.control_domain}/*"
         }
     ]
   })
