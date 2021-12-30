@@ -9,28 +9,28 @@ class Nav extends React.Component {
       <div className={`ui pointing menu nav logged-${loggedIn ? 'in' : 'out'}`}>
         <a
           id="list"
-          className={`item${view === "List" ? " selected" : ""}`}
+          className={`item${view === "List" ? " active" : ""}`}
           name="List"
           onClick={onClick}
           href="#list"
         >List Addresses</a>
         <a
           id="request"
-          className={`item${view === "Request" ? " selected" : ""}`}
+          className={`item${view === "Request" ? " active" : ""}`}
           name="Request"
           onClick={onClick}
           href="#request"
         >New Address</a>
         <a
           id="login"
-          className={`item${view === "Login" ? " selected" : ""}`}
+          className={`item${view === "Login" ? " active" : ""}`}
           name="Login"
           onClick={onClick}
           href="#login"
         >Log in</a>
         <a
           id="signup"
-          className={`item${view === "SignUp" ? " selected" : ""}`}
+          className={`item${view === "SignUp" ? " active" : ""}`}
           name="SignUp"
           onClick={onClick}
           href="#signup"
