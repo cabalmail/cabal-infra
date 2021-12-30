@@ -136,6 +136,8 @@ class App extends React.Component {
             userName={this.state.userName}
           />
         );
+      case "Logout":
+        this.setState({loggedIn: false, token: null});
       case "Login":
       default:
         return (
