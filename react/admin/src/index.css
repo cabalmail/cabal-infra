@@ -3,4 +3,20 @@ body {
   color: #fff;
   background-color: #200;
   font-family: 'Gugi';
+  font-size: 120%;
+}
+
+.content {
+  padding: 3em;
+}
+
+input {
+  border-radius: 0.2em;
+  padding: 0.3em;
+  background-color: #000;
+  color: #ccc;
+}
+
+label {
+  display: block;
 }

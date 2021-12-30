@@ -5,6 +5,7 @@ class SignUp extends React.Component {
     return (
       <div className="sign-up">
         <form className="login" onSubmit={this.props.onSubmit}>
+          <label for="userName">User Name</label>
           <input
             type="text"
             className="login username"
@@ -13,14 +14,17 @@ class SignUp extends React.Component {
             onChange={this.props.onUsernameChange}
             value={this.props.username}
           />
+          <label for="phone">Phone</label>
           <input
             type="text"
             className="login phone"
             id="phone"
             name="phone"
+            placeholder="+12125555555"
             onChange={this.props.onPhoneChange}
             value={this.props.phone}
           />
+          <label for="password">Password</label>
           <input
             type="password"
             className="login password"

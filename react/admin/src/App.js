@@ -161,7 +161,9 @@ class App extends React.Component {
           view={this.state.view}
         />
         <Message message={this.state.message} />
-        {this.renderContent()}
+        <div className="content">
+          {this.renderContent()}
+        </div>
       </div>
     );
   }
