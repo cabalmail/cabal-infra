@@ -6,12 +6,12 @@
   display: none;
 }
 
-.nav .item {
+div.nav a.item {
   background-color: #111;
   color: #aa9;
 }
 
-.nav a.selected {
+div.nav a.active {
   background-color: #311;
   color: #dda;
 }
