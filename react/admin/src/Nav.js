@@ -6,7 +6,7 @@ class Nav extends React.Component {
     const { loggedIn, onClick, view } = this.props;
     console.log(loggedIn);
     return (
-      <div className={`ui pointing menu nav logged-${loggedIn ? 'in' : 'out'}`}>
+      <div className={`ui secondary pointing menu nav logged-${loggedIn ? 'in' : 'out'}`}>
         <a
           id="list"
           className={`item${view === "List" ? " active" : ""}`}
