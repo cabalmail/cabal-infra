@@ -32,7 +32,7 @@ class App extends React.Component {
       domains: {},
       api_url: null
     };
-    getConfig();
+    this.getConfig();
   }
 
   async getConfig() {
