@@ -7,11 +7,11 @@
 }
 
 div.nav a.item {
-  background-color: #111;
-  color: #aa9;
+  background-color: #111 !important;
+  color: #aa9 !important;
 }
 
 div.nav a.active {
-  background-color: #311;
-  color: #dda;
+  background-color: #311 !important;
+  color: #dda !important;
 }

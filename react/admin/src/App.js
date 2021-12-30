@@ -154,16 +154,14 @@ class App extends React.Component {
 
   render() {
     return (
-      <div className="App">
-        <div className={this.state.view}>
-          <Nav
-            onClick={this.updateView}
-            loggedIn={this.state.loggedIn}
-            view={this.state.view}
-          />
-          <Message message={this.state.message} />
-          {this.renderContent()}
-        </div>
+      <div className={`App ${this.state.view}`}>
+        <Nav
+          onClick={this.updateView}
+          loggedIn={this.state.loggedIn}
+          view={this.state.view}
+        />
+        <Message message={this.state.message} />
+        {this.renderContent()}
       </div>
     );
   }
