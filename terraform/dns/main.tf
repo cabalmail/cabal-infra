@@ -58,7 +58,7 @@ resource "aws_ssm_parameter" "cognito" {
 # S3 bucket for deploying React app
 resource "aws_s3_bucket" "react_app" {
   acl    = "public-read"
-  bucket = "www.${var.control_domain}"
+  bucket = "admin.${var.control_domain}"
   website {
     index_document = "index.html"
     error_document = "error.html"
