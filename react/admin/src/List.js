@@ -72,7 +72,7 @@ class List extends React.Component {
           id="filter"
           name="filter"
         />
-        <button type="submit">Submit</button>
+        <button type="submit" className="default">Submit</button>
         </form>
         <div id="count">Found: {this.state.addresses.length} addresses</div>
         <div id="list">

@@ -33,7 +33,7 @@ class SignUp extends React.Component {
             onChange={this.props.onPasswordChange}
             value={this.props.password}
           />
-          <button type="submit">Signup</button>
+          <button type="submit" className="default">Signup</button>
         </form>
       </div>
     );
