@@ -23,6 +23,7 @@ class Request extends React.Component {
   }
 
   render() {
+    // TODO: Wire up select field for TLD
     return (
       <div className="request">
         <form className="request-form" onSubmit={this.submitRequest}>
@@ -42,7 +43,9 @@ class Request extends React.Component {
             id="subdomain"
             name="subdomain"
             placeholder="subdomain"
-          />
+          /><span id="dot">.</span><select>
+            <option>Choose TLD</option>
+          </select>
         </fieldset>
         <fieldset className="comment-field">
           <legend>Comment</legend>
