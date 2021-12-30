@@ -5,3 +5,13 @@
 .logged-in #login {
   display: none;
 }
+
+.nav .item {
+  background-color: #111;
+  color: #aa9;
+}
+
+.nav a.selected {
+  background-color: #311;
+  color: #dda;
+}
