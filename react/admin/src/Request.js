@@ -27,6 +27,7 @@ class Request extends React.Component {
       <div className="request">
         <form className="request-form" onSubmit={this.submitRequest}>
         <fieldset className="address-fields">
+          <legend>Address</legend>
           <input
             type="text"
             value={this.state.username}
@@ -44,6 +45,7 @@ class Request extends React.Component {
           />
         </fieldset>
         <fieldset className="comment-field">
+          <legend>Comment</legend>
           <input
             type="text"
             value={this.state.comment}

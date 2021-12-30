@@ -1,3 +1,7 @@
 #amphora {
   font-size: 160%;
 }
+
+.address-fields input {
+  width: 35%;
+}
