@@ -29,15 +29,6 @@ class App extends React.Component {
     };
   }
 
-  componentDidMount() {
-    const currentUser = UserPool.getCurrentUser();
-    if (currentUser) {
-      this.setState({loggedIn: true});
-    } else {
-      this.setState({loggedIn: false, token: null, userName: null, view: "Login"})
-    }
-  }
-
   doRegister = e => {
     e.preventDefault();
     const dataUsername = {
