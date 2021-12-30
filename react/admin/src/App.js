@@ -138,6 +138,15 @@ class App extends React.Component {
         );
       case "Logout":
         this.setState({loggedIn: false, token: null});
+        return (
+          <Login
+            onSubmit={this.doLogin}
+            onUsernameChange={this.doInputChange}
+            onPasswordChange={this.doInputChange}
+            username={this.state.userName}
+            password={this.state.password}
+          />
+        );
       case "Login":
       default:
         return (
