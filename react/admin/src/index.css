@@ -13,18 +13,19 @@ body {
 input, button {
   font-family: 'Gugi';
   font-size: 120%;
-  padding: 1em;
+  padding: 0.5em;
 }
 
 input {
   border-radius: 0.2em;
-  width: 100%;
+  width: 30em;
   background-color: #000;
   color: #ccc;
 }
 
 label {
   display: block;
+  margin-top: 1em;
 }
 
 button {
