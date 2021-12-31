@@ -31,19 +31,23 @@ class App extends React.Component {
       domains: {},
       api_url: null
     };
-    this.getConfig();
+  }
+
+  componentDidMount() {
+    const data = this.getConfig();
+    const { domains, cognitoConfig, invokeUrl } = JSON.parse(data);
+    this.setState({
+      poolData: cognitoConfig.poolData,
+      domains: domains,
+      api_url: invokeUrl
+    });
+    UserPool = new CognitoUserPool(cognitoConfig.poolData);
+    console.log("UserPool");
   }
 
   getConfig() {
     axios.get('/config.js').then(response => {
-      const { domains, cognitoConfig, invokeUrl } = JSON.parse(response.data);
-      this.setState({
-        poolData: cognitoConfig.poolData,
-        domains: domains,
-        api_url: invokeUrl
-      });
-      UserPool = new CognitoUserPool(cognitoConfig.poolData);
-      console.log("UserPool", UserPool);
+      return response.data;
     }).catch( (err) => {
       if (err.response) {
         console.log("Error in response while retrieving configuration", err.response);
