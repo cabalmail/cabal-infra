@@ -12,21 +12,32 @@ class List extends React.Component {
     };
   }
 
+  filter(data) {
+    this.setState({ addresses: data.Items.filter(
+      (a) => {
+        if (a.address.includes(this.state.filter)) {
+          return true;
+        }
+        if (a.comment.includes(this.state.filter)) {
+          return true;
+        }
+        return false;
+      }
+    )});
+  }
+
+  componentDidMount() {
+    const response = this.getList();
+    response.then(data => {
+      this.setState({ addresses: data.data.Items });
+    });
+  }
+
   componentDidUpdate(prevProps, prevState) {
     if (this.state.filter !== prevState.filter) {
       const response = this.getList();
       response.then(data => {
-        this.setState({ addresses: data.data.Items.filter(
-          (a) => {
-            if (a.address.includes(this.state.filter)) {
-              return true;
-            }
-            if (a.comment.includes(this.state.filter)) {
-              return true;
-            }
-            return false;
-          }
-        )});
+        filter(data.data);
       });
     }
   }
@@ -70,7 +81,6 @@ class List extends React.Component {
           id="filter"
           name="filter"
         />
-        <button type="submit" className="default">Submit</button>
         </form>
         <div id="count">Found: {this.state.addresses.length} addresses</div>
         <div id="list">
