@@ -39,7 +39,8 @@ class Request extends React.Component {
     return string;
   }
 
-  generateRandom() {
+  generateRandom = (e) => {
+    e.preventDefault();
     const domainLength = this.props.domains.length;
     this.setState({
       username: this.randomString(8),
