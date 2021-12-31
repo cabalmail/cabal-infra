@@ -9,13 +9,24 @@ class Request extends React.Component {
       username: '',
       subdomain: '',
       domain: '',
-      comment: ''
+      comment: '',
+      address: ''
     }
   }
 
   submitRequest = async (e) => {
     // TODO: wire up to API
     return false;
+  }
+
+  componentDidUpdate(prevProps, prevState) {
+    if (
+      prevState.username != this.state.username ||
+      prevState.subdomain != this.state.subdomain ||
+      prevState.domain != this.state.domain
+    ) {
+      this.setState({address:`${this.state.username}@${this.state.subdomain}.${this.state.domain}`);
+    }
   }
 
   doInputChange = e => {
@@ -60,6 +71,7 @@ class Request extends React.Component {
           /><span id="dot">.</span><select
             onChange={this.doDomainChange}
           >
+            <option>Select a domain</option>
             {this.getOptions()}
           </select>
         </fieldset>
@@ -74,7 +86,7 @@ class Request extends React.Component {
             placeholder="comment"
           />
         </fieldset>
-        <button type="submit" className="default">Request {this.state.username}@{this.state.subdomain}.{this.state.domain}</button>
+        <button type="submit" className="default">Request {this.state.address}</button>
         </form>
       </div>
     );
