@@ -34,13 +34,13 @@ class Nav extends React.Component {
           onClick={onClick}
           href="#signup"
         >Sign up</a>
-        <a
+        <button
           id="logout"
           className="item"
           name="LogOut"
           onClick={onClick}
           href="#login"
-        >Log out</a>
+        >Log out</button>
       </div>
     );
   }
