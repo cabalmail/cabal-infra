@@ -42,6 +42,14 @@ class List extends React.Component {
     }
   }
 
+  reload = (e) => {
+    e.preventDefault();
+    const response = this.getList();
+    response.then(data => {
+      this.filter(data.data);
+    });
+  }
+
   handleSubmit = (e) => {
     e.preventDefault();
   }
@@ -73,7 +81,7 @@ class List extends React.Component {
           id="filter"
           name="filter"
           placeholder="filter"
-        />
+        /><a href="#list" onClick={this.reload}>⟳</a>
         </form>
         <div id="count">Found: {this.state.addresses.length} addresses</div>
         <div id="list">

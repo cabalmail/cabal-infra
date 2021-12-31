@@ -71,7 +71,7 @@ class Request extends React.Component {
           /><span id="dot">.</span><select
             onChange={this.doDomainChange}
           >
-            <option>Select a domain</option>
+            <option>▼ Select a domain</option>
             {this.getOptions()}
           </select>
         </fieldset>

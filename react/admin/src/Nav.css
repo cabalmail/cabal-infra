@@ -6,19 +6,10 @@
   display: none;
 }
 
-.nav {
-  border-width: 0 0 0 0.1em;
-  border-bottom-style: solid;
-}
-
 .nav .item {
   display: inline-block;
   padding: 1em;
   border: 0;
-}
-
-.nav a {
-  border-bottom-width: 0.2em;
 }
 
 .nav button.item {
@@ -29,4 +20,5 @@
   position: absolute;
   top: 0.2em;
   right: 0.2em;
+  width: auto;
 }
