@@ -34,9 +34,9 @@ class Request extends React.Component {
     const pool = 'abcdefghijklmnopqrstuvwxyz1234567890-_';
     const poolSize = pool.length;
     for ( var i = 0; i < length; i++ ) {
-      result += pool.charAt(Math.floor(Math.random() *  poolSize));
+      string += pool.charAt(Math.floor(Math.random() *  poolSize));
     }
-    return result;
+    return string;
   }
 
   generateRandom() {
