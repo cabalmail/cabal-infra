@@ -15,7 +15,7 @@
 .nav button.item {
   margin: 0;
   padding: 0.4em;
-  border: 1px;
+  border-width: 1px;
   display: block;
   position: absolute;
   top: 0.2em;
