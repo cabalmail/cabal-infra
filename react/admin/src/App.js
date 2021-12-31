@@ -42,13 +42,11 @@ class App extends React.Component {
       api_url: invokeUrl
     });
     UserPool = new CognitoUserPool(cognitoConfig.poolData);
-    console.log("UserPool");
+    console.log("UserPool", UserPool);
   }
 
-  getConfig() {
-    axios.get('/config.js').then(response => {
-      return response.data;
-    }).catch( (err) => {
+  getConfig = async () => {
+    await response = axios.get('/config.js').catch( (err) => {
       if (err.response) {
         console.log("Error in response while retrieving configuration", err.response);
       } else if (err.request) {
@@ -57,6 +55,7 @@ class App extends React.Component {
         console.log("Unknown error retrieving configuration", err);
       }
     });
+    return response.data;
   }
 
   doRegister = e => {
