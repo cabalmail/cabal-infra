@@ -10,10 +10,6 @@ class List extends React.Component {
       filter: "",
       addresses: []
     };
-    const response = this.getList();
-    response.then(data => {
-      this.setState({ addresses: data.data.Items });
-    });
   }
 
   filter(data) {
@@ -57,14 +53,6 @@ class List extends React.Component {
         'Authorization': this.props.token
       },
       timeout: 1000
-    }).catch( (err) => {
-      if (err.response) {
-        console.log("Error in response while retrieving address list", err.response);
-      } else if (err.request) {
-        console.log("Error with request while retrieving address list", err.request);
-      } else {
-        console.log("Unknown error while retrieving address list", err);
-      }
     });
     return response;
   }
@@ -84,6 +72,7 @@ class List extends React.Component {
           onChange={this.updateFilter}
           id="filter"
           name="filter"
+          placeholder="filter"
         />
         </form>
         <div id="count">Found: {this.state.addresses.length} addresses</div>
