@@ -44,19 +44,14 @@ class App extends React.Component {
         console.log("Unknown error retrieving configuration", err);
       }
     });
-    if (response) {
-      const { domains, cognitoConfig, invokeUrl } = JSON.parse(response);
-      this.setState({
-        poolData: cognitoConfig.poolData,
-        domains: domains,
-        api_url: invokeUrl
-      });
-      UserPool = new CognitoUserPool(cognitoConfig.poolData);
-      console.log("UserPool", UserPool);
-    } else {
-      console.log("Could not retrieve configuration.");
-    }
-    
+    const { domains, cognitoConfig, invokeUrl } = JSON.parse(response);
+    this.setState({
+      poolData: cognitoConfig.poolData,
+      domains: domains,
+      api_url: invokeUrl
+    });
+    UserPool = new CognitoUserPool(cognitoConfig.poolData);
+    console.log("UserPool", UserPool);
   }
 
   doRegister = e => {
