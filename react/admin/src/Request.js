@@ -43,7 +43,7 @@ class Request extends React.Component {
           string += pool3.charAt(Math.floor(Math.random() *  pool3Size));
           break;
         default:
-          string += pool.charAt(Math.floor(Math.random() *  poolSize));
+          string += pool2.charAt(Math.floor(Math.random() *  pool2Size));
       }
     }
     return string;
