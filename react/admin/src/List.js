@@ -37,7 +37,7 @@ class List extends React.Component {
     if (this.state.filter !== prevState.filter) {
       const response = this.getList();
       response.then(data => {
-        filter(data.data);
+        this.filter(data.data);
       });
     }
   }
