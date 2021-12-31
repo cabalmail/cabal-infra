@@ -42,7 +42,7 @@
   .highlight, .active, .default {
     color: #dda;
     background-color: #300;
-    border-color: #800;
+    border-color: #d00;
   }
 }
 
