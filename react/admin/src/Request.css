@@ -6,6 +6,6 @@
   width: 25%;
 }
 
-.Request button {
+.Request button.default {
   width: 100%;
 }
