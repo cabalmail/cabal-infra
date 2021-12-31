@@ -35,7 +35,8 @@ class App extends React.Component {
 
   componentDidMount() {
     const data = this.getConfig();
-    const { domains, cognitoConfig, invokeUrl } = JSON.parse(data);
+    console.log(data);
+    const { domains, cognitoConfig, invokeUrl } = data;
     this.setState({
       poolData: cognitoConfig.poolData,
       domains: domains,
