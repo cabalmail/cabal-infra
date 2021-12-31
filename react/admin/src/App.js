@@ -34,8 +34,8 @@ class App extends React.Component {
     this.getConfig();
   }
 
-  getConfig = async () => {
-    const response = await axios.get('/config.js').catch( (err) => {
+  getConfig() {
+    axios.get('/config.js').catch( (err) => {
       if (err.response) {
         console.log("Error in response while retrieving configuration", err.response);
       } else if (err.request) {
@@ -43,15 +43,16 @@ class App extends React.Component {
       } else {
         console.log("Unknown error retrieving configuration", err);
       }
+    }).then(response => {
+      const { domains, cognitoConfig, invokeUrl } = JSON.parse(response.data);
+      this.setState({
+        poolData: cognitoConfig.poolData,
+        domains: domains,
+        api_url: invokeUrl
+      });
+      UserPool = new CognitoUserPool(cognitoConfig.poolData);
+      console.log("UserPool", UserPool);
     });
-    const { domains, cognitoConfig, invokeUrl } = JSON.parse(response.data);
-    this.setState({
-      poolData: cognitoConfig.poolData,
-      domains: domains,
-      api_url: invokeUrl
-    });
-    UserPool = new CognitoUserPool(cognitoConfig.poolData);
-    console.log("UserPool", UserPool);
   }
 
   doRegister = e => {
