@@ -2,7 +2,7 @@
   "control_domain": "${control_domain}",
   "domains": ${jsonencode(domains)},
   "invokeUrl": "${invoke_url}",
-    "cognitoConfig": {
+  "cognitoConfig": {
     "region": "${region}",
     "poolData": {
       "UserPoolId": "${pool_id}",

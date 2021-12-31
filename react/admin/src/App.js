@@ -13,7 +13,7 @@ import Login from './Login';
 import Message from './Message';
 import Nav from './Nav';
 // import PoolData from './PoolData';
-// const UserPool = new CognitoUserPool(PoolData);
+let UserPool = null;
 
 class App extends React.Component {
 
@@ -28,7 +28,6 @@ class App extends React.Component {
       message: null,
       view: "Login",
       poolData: null,
-      userPool: null,
       domains: {},
       api_url: null
     };
@@ -50,9 +49,9 @@ class App extends React.Component {
       this.setState({
         poolData: cognitoConfig.poolData,
         domains: domains,
-        api_url: cognitoConfig.invokeUrl,
-        userPool: new CognitoUserPool(cognitoConfig.poolData)
+        api_url: invokeUrl
       });
+      UserPool = new CognitoUserPool(cognitoConfig.poolData);
     } else {
       console.log("Could not retrieve configuration.");
     }
@@ -71,7 +70,7 @@ class App extends React.Component {
     };
     const attributeUsername = new CognitoUserAttribute(dataUsername);
     const attributePhone = new CognitoUserAttribute(dataPhone);
-    this.state.userPool.signUp(
+    UserPool.signUp(
       this.state.userName,
       this.state.password,
       [attributeUsername, attributePhone],
@@ -94,10 +93,10 @@ class App extends React.Component {
 
   doLogin = e => {
     e.preventDefault();
-    console.log("Pool", this.state.userPool)
+    console.log("Pool", UserPool)
     const user = new CognitoUser({
       Username: this.state.userName,
-      Pool: this.state.userPool
+      Pool: UserPool
     });
     const creds = new AuthenticationDetails({
       Username: this.state.userName,
