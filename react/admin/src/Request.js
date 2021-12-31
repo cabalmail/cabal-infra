@@ -25,7 +25,7 @@ class Request extends React.Component {
       prevState.subdomain != this.state.subdomain ||
       prevState.domain != this.state.domain
     ) {
-      this.setState({address:`${this.state.username}@${this.state.subdomain}.${this.state.domain}`);
+      this.setState({address:`${this.state.username}@${this.state.subdomain}.${this.state.domain}`});
     }
   }
 
