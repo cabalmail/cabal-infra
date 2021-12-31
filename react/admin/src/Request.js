@@ -25,7 +25,9 @@ class Request extends React.Component {
 
   doDomainChange = e => {
     e.preventDefault();
-    this.setState({domain: e.target.value});
+    const index = e.nativeEvent.target.selectedIndex;
+    const label = e.nativeEvent.target[index].text;
+    this.setState({domain: label});
   }
 
   getOptions() {
