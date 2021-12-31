@@ -42,8 +42,8 @@
   }
   body .highlight, body .active, body .default,
   body .nav .active  {
-    color: #dda;
-    background-color: #300;
+    color: #000;
+    background-color: #900;
     border-color: #d00;
   }
 }
