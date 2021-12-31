@@ -1,6 +1,7 @@
 import React from 'react';
 import axios from 'axios';
 import AddressList from './AddressList';
+import './List.css';
 
 class List extends React.Component {
 
@@ -81,7 +82,7 @@ class List extends React.Component {
           id="filter"
           name="filter"
           placeholder="filter"
-        /><a href="#list" onClick={this.reload}>⟳</a>
+        /><a href="#list" id="reload" onClick={this.reload}>⟳</a>
         </form>
         <div id="count">Found: {this.state.addresses.length} addresses</div>
         <div id="list">
