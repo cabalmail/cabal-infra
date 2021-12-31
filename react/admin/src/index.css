@@ -12,7 +12,7 @@
     color: #ccc;
     background-color: #111;
   }
-  .nav {
+  .nav, .nav .item {
     background-color: #111;
   }
   .highlight, .active, .default {
