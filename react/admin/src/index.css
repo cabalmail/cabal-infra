@@ -1,7 +1,53 @@
+@media (prefers-color-scheme: dark) {
+  * {
+    color: #aaa;
+    background-color: #200;
+    border-color: #333;
+  }
+  input, select, option {
+    color: #ccc;
+    background-color: #000;
+  }
+  button {
+    color: #ccc;
+    background-color: #111;
+  }
+  .nav {
+    background-color: #111;
+  }
+  .highlight, .active, .default {
+    color: #dda;
+    background-color: #311;
+    border-color: #800;
+  }
+}
+
+@media (prefers-color-scheme: light) {
+  * {
+    color: #222;
+    background-color: #fff;
+    border-color: #999;
+  }
+  input, select, option {
+    color: #000;
+    background-color: #ffd;
+  }
+  button {
+    color: #ccc;
+    background-color: #111;
+  }
+  .nav {
+    background-color: #bbb;
+  }
+  .highlight {
+    color: #dda;
+    background-color: #9aa;
+    border-color: #800;
+  }
+}
+
 body {
   margin: 0;
-  color: #fff;
-  background-color: #200;
   font-family: 'Gugi';
   font-size: 120%;
 }
@@ -24,8 +70,6 @@ input, select, button, option {
 input, select, option {
   border-radius: 0.2em;
   width: 30em;
-  background-color: #000;
-  color: #ccc;
 }
 
 select {
@@ -40,18 +84,11 @@ label {
 }
 
 button {
-  background-color: #111;
-  color: #ccc;
   display: block;
   width: 15em;
   margin-top: 1em;
   border-radius: 0.5em;
   box-shadow: 0 0.3em 0.5em #000;
-}
-
-button.default {
-  background-color: #311;
-  color: #dda;
 }
 
 fieldset {
