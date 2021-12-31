@@ -15,7 +15,8 @@
   .nav, .nav .item {
     background-color: #111;
   }
-  .highlight, .active, .default {
+  body .highlight, body .active, body .default,
+  body .nav .active {
     color: #dda;
     background-color: #300;
     border-color: #800;
@@ -23,7 +24,7 @@
 }
 
 @media (prefers-color-scheme: light) {
-  body {
+  body, a, button, select {
     color: #222;
     background-color: #fff;
     border-color: #999;
@@ -36,10 +37,11 @@
     color: #333;
     background-color: #ddd;
   }
-  .nav, .nav * {
+  .nav, .nav .item {
     background-color: #bbb;
   }
-  .highlight, .active, .default {
+  body .highlight, body .active, body .default,
+  body .nav .active  {
     color: #dda;
     background-color: #300;
     border-color: #d00;
