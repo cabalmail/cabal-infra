@@ -12,8 +12,8 @@ class List extends React.Component {
     };
   }
 
-  componentDidUpdate(prevProps) {
-    if (this.props.filter !== prevProps.filter) {
+  componentDidUpdate(prevProps, prefState) {
+    if (this.state.filter !== prevState.filter) {
       const response = this.getList();
       response.then(data => {
         this.setState({ addresses: data.data.Items.filter(
