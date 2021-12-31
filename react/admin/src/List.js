@@ -62,7 +62,7 @@ class List extends React.Component {
   render() {
     return (
       <div className="list">
-        <form className="list-form" onSubmit={this.getList}>
+        <form className="list-form" onSubmit={this.handleSubmit}>
         <input
           type="text"
           value={this.state.filter}
