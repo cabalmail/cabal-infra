@@ -34,7 +34,7 @@ class App extends React.Component {
     this.getConfig();
   }
 
-  getConfig = async () => {
+  getConfig = () => {
     const response = await axios.get('/config.js').catch( (err) => {
       if (err.response) {
         console.log("Error in response while retrieving configuration", err.response);
@@ -44,7 +44,7 @@ class App extends React.Component {
         console.log("Unknown error retrieving configuration", err);
       }
     });
-    const { domains, cognitoConfig, invokeUrl } = JSON.parse(response);
+    const { domains, cognitoConfig, invokeUrl } = JSON.parse(response.data);
     this.setState({
       poolData: cognitoConfig.poolData,
       domains: domains,
