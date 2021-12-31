@@ -10,6 +10,10 @@ class List extends React.Component {
       filter: "",
       addresses: []
     };
+    const response = this.getList();
+    response.then(data => {
+      this.setState({ addresses: data.data.Items });
+    });
   }
 
   filter(data) {
