@@ -39,7 +39,7 @@
   .nav {
     background-color: #bbb;
   }
-  .highlight {
+  .highlight, .active, .default {
     color: #dda;
     background-color: #9aa;
     border-color: #800;
