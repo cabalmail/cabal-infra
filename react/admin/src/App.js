@@ -34,16 +34,18 @@ class App extends React.Component {
   }
 
   componentDidMount() {
-    const data = this.getConfig();
-    console.log(data);
-    const { domains, cognitoConfig, invokeUrl } = data;
-    this.setState({
-      poolData: cognitoConfig.poolData,
-      domains: domains,
-      api_url: invokeUrl
+    const response = this.getConfig();
+    response.then(data => {
+      console.log(data);
+      const { domains, cognitoConfig, invokeUrl } = data;
+      this.setState({
+        poolData: cognitoConfig.poolData,
+        domains: domains,
+        api_url: invokeUrl
+      });
+      UserPool = new CognitoUserPool(cognitoConfig.poolData);
+      console.log("UserPool", UserPool);
     });
-    UserPool = new CognitoUserPool(cognitoConfig.poolData);
-    console.log("UserPool", UserPool);
   }
 
   getConfig = async () => {
@@ -56,7 +58,7 @@ class App extends React.Component {
         console.log("Unknown error retrieving configuration", err);
       }
     });
-    return response.data;
+    return response;
   }
 
   doRegister = e => {
