@@ -23,7 +23,10 @@
 }
 
 .nav button.item {
-  margin: 2em 0;
+  margin: 0;
   border: 1px;
-  display: inline-block;
+  display: block;
+  position: absolute;
+  top: 1em;
+  right: 1em;
 }
