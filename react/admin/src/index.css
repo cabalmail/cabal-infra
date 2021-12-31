@@ -12,12 +12,12 @@
     color: #ccc;
     background-color: #111;
   }
-  .nav {
+  .nav, .nav * {
     background-color: #111;
   }
   .highlight, .active, .default {
     color: #dda;
-    background-color: #311;
+    background-color: #300;
     border-color: #800;
   }
 }
@@ -36,12 +36,12 @@
     color: #ccc;
     background-color: #111;
   }
-  .nav {
+  .nav, .nav * {
     background-color: #bbb;
   }
   .highlight, .active, .default {
     color: #dda;
-    background-color: #9aa;
+    background-color: #300;
     border-color: #800;
   }
 }
