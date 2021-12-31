@@ -45,7 +45,7 @@ class App extends React.Component {
       }
     });
     if (response) {
-      const { domains, cognitoConfig } = JSON.parse(response);
+      const { domains, cognitoConfig, invokeUrl } = JSON.parse(response);
       this.setState({
         poolData: cognitoConfig.poolData,
         domains: domains,
