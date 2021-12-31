@@ -29,12 +29,22 @@ class Request extends React.Component {
     }
   }
 
-  randomString(length) {
+  randomString(length, pool1, pool2, pool3) {
     let string = '';
-    const pool = 'abcdefghijklmnopqrstuvwxyz1234567890-_';
-    const poolSize = pool.length;
+    const pool1Size = pool1.length;
+    const pool2Size = pool2.length;
+    const pool3Size = pool3.length;
     for ( var i = 0; i < length; i++ ) {
-      string += pool.charAt(Math.floor(Math.random() *  poolSize));
+      switch (i) {
+        case 0:
+          string += pool1.charAt(Math.floor(Math.random() *  pool1Size));
+          break;
+        case length:
+          string += pool3.charAt(Math.floor(Math.random() *  pool3Size));
+          break;
+        default:
+          string += pool.charAt(Math.floor(Math.random() *  poolSize));
+      }
     }
     return string;
   }
@@ -42,9 +52,10 @@ class Request extends React.Component {
   generateRandom = (e) => {
     e.preventDefault();
     const domainLength = this.props.domains.length;
+    const alphanum = 'abcdefghijklmnopqrstuvwxyz1234567890';
     this.setState({
-      username: this.randomString(8),
-      subdomain: this.randomString(8),
+      username: this.randomString(8, alphanum, alphanum+'_-', alphanum),
+      subdomain: this.randomString(8, alphanum, alphanum+'-', alphanum),
       domain: this.props.domains[Math.floor(Math.random() *  domainLength)].domain
     });
   }
