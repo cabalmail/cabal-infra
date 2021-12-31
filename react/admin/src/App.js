@@ -12,7 +12,6 @@ import SignUp from './SignUp';
 import Login from './Login';
 import Message from './Message';
 import Nav from './Nav';
-// import PoolData from './PoolData';
 let UserPool = null;
 
 class App extends React.Component {
@@ -94,7 +93,6 @@ class App extends React.Component {
 
   doLogin = e => {
     e.preventDefault();
-    console.log("Pool", UserPool)
     const user = new CognitoUser({
       Username: this.state.userName,
       Pool: UserPool

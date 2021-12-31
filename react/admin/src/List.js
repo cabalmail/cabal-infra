@@ -31,8 +31,11 @@ class List extends React.Component {
     }
   }
 
-  getList = async (e) => {
+  handleSubmit = (e) => {
     e.preventDefault();
+  }
+
+  getList = async (e) => {
     const response = await axios.get('/list', {
       baseURL: this.props.api_url,
       headers: {
