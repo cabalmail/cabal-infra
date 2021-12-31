@@ -14,14 +14,14 @@ a {
   padding: 3em;
 }
 
-input, select, button {
+input, select, button, option {
   font-family: 'Gugi';
   font-size: 120%;
   padding: 0.5em;
   border: 1px solid #333;
 }
 
-input, select {
+input, select, option {
   border-radius: 0.2em;
   width: 30em;
   background-color: #000;
