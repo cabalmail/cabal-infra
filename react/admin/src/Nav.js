@@ -4,7 +4,6 @@ import './Nav.css'
 class Nav extends React.Component {
   render() {
     const { loggedIn, onClick, view } = this.props;
-    console.log(loggedIn);
     return (
       <div className={`nav logged-${loggedIn ? 'in' : 'out'}`}>
         <a
