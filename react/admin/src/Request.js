@@ -87,6 +87,7 @@ class Request extends React.Component {
           />
         </fieldset>
         <button type="submit" className="default">Request {this.state.address}</button>
+        <button>Generate a random address</button>
         </form>
       </div>
     );
