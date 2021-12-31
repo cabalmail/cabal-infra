@@ -16,14 +16,14 @@
   padding: 1em;
   border: 0;
   border-bottom-color: rgba(0,0,0,0);
+}
+
+.nav a {
   border-bottom-width: 0.2em;
 }
 
-.nav a.active {
-  border-bottom-width: 0.2em;
-}
-
-.nav button {
+.nav button.item {
   margin: 2em 0;
+  border: 1px;
   display: inline-block;
 }
