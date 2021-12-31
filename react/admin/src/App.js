@@ -130,6 +130,7 @@ class App extends React.Component {
           <Request
             token={this.state.token}
             userName={this.state.userName}
+            domains={this.state.domains}
           />
         );
       case "SignUp":

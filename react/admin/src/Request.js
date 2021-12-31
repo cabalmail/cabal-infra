@@ -22,6 +22,12 @@ class Request extends React.Component {
     this.setState({[e.target.name]: e.target.value});
   }
 
+  getOptions() {
+    return this.props.domains.map(d => {
+      return <option value={d.zone_id}>{d.domain}</option>;
+    });
+  }
+
   render() {
     // TODO: Wire up select field for TLD
     return (
@@ -44,7 +50,7 @@ class Request extends React.Component {
             name="subdomain"
             placeholder="subdomain"
           /><span id="dot">.</span><select>
-            <option>Choose TLD</option>
+            {this.getOptions()}
           </select>
         </fieldset>
         <fieldset className="comment-field">
