@@ -21,9 +21,9 @@ class Request extends React.Component {
 
   componentDidUpdate(prevProps, prevState) {
     if (
-      prevState.username != this.state.username ||
-      prevState.subdomain != this.state.subdomain ||
-      prevState.domain != this.state.domain
+      prevState.username !== this.state.username ||
+      prevState.subdomain !== this.state.subdomain ||
+      prevState.domain !== this.state.domain
     ) {
       this.setState({address:`${this.state.username}@${this.state.subdomain}.${this.state.domain}`});
     }
