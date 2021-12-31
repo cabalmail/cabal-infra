@@ -18,7 +18,7 @@ class App extends React.Component {
 
   constructor(props) {
     super(props);
-    this.state = {
+    this.state = JSON.parse(window.localStorage.getItem('state')) || {
       loggedIn: false,
       token: null,
       userName: null,
@@ -32,11 +32,17 @@ class App extends React.Component {
     };
   }
 
+  setState(state) {
+    window.localStorage.setItem('state', JSON.stringify(state));
+    super.setState(state);
+  }
+
   componentDidMount() {
     const response = this.getConfig();
     response.then(data => {
       const { domains, cognitoConfig, invokeUrl } = data.data;
       this.setState({
+        ...this.state,
         poolData: cognitoConfig.poolData,
         domains: domains,
         api_url: invokeUrl
@@ -70,11 +76,13 @@ class App extends React.Component {
       (err, _result) => {
         if (!err) {
           this.setState({
+            ...this.state,
             message: "Your registration has been submitted.",
             view: "Login"
           });
         } else {
           this.setState({
+            ...this.state,
             message: err,
             view: "SignUp"
           });
@@ -96,6 +104,7 @@ class App extends React.Component {
     user.authenticateUser(creds, {
       onSuccess: data => {
         this.setState({
+          ...this.state,
           message: null,
           loggedIn: true,
           token: data.getIdToken().getJwtToken(),
@@ -104,6 +113,7 @@ class App extends React.Component {
       },
       onFailure: data => {
         this.setState({
+          ...this.state,
           message: "Login failed",
           loggedIn: false,
           token: null,
@@ -115,12 +125,12 @@ class App extends React.Component {
 
   doInputChange = e => {
     e.preventDefault();
-    this.setState({[e.target.name]: e.target.value});
+    this.setState({...this.state, [e.target.name]: e.target.value});
   }
 
   updateView = e => {
     e.preventDefault();
-    this.setState({view: e.target.name});
+    this.setState({...this.state, view: e.target.name});
   }
 
   renderContent() {
@@ -151,7 +161,7 @@ class App extends React.Component {
           />
         );
       case "Logout":
-        this.setState({loggedIn: false, token: null});
+        this.setState({...this.state, loggedIn: false, token: null});
         return (
           <Login
             onSubmit={this.doLogin}
