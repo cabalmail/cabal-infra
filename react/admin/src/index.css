@@ -64,7 +64,8 @@ input, select, button, option {
   font-family: 'Gugi';
   font-size: 120%;
   padding: 0.5em;
-  border: 1px solid #333;
+  border-width: 1px;
+  border-style: solid;
 }
 
 input, select, option {
