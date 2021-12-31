@@ -6,6 +6,9 @@ class Nav extends React.Component {
     const { loggedIn, onClick, view } = this.props;
     return (
       <div className={`nav logged-${loggedIn ? 'in' : 'out'}`}>
+        <div className="logo">
+          <img src="/mask.png" />
+        </div>
         <a
           id="list"
           className={`item${view === "List" ? " active" : ""}`}

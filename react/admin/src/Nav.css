@@ -23,3 +23,14 @@
   right: 0.5em;
   width: auto;
 }
+
+.nav .logo {
+  display: inline-block;
+}
+
+.nav .logo img {
+  display: block;
+  margin: 0;
+  padding: 0;
+  border-width: 0;
+}
