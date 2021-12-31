@@ -12,7 +12,7 @@ class List extends React.Component {
     };
   }
 
-  componentDidUpdate(prevProps, prefState) {
+  componentDidUpdate(prevProps, prevState) {
     if (this.state.filter !== prevState.filter) {
       const response = this.getList();
       response.then(data => {
