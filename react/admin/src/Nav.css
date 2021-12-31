@@ -25,7 +25,8 @@
 }
 
 .nav .logo {
-  display: inline-block;
+  display: block;
+  float: left;
 }
 
 .nav .logo img {
@@ -33,4 +34,6 @@
   margin: 0;
   padding: 0;
   border-width: 0;
+  height: 3em;
+  width: auto;
 }
