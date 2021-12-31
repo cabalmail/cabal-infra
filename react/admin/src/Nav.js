@@ -7,7 +7,7 @@ class Nav extends React.Component {
     return (
       <div className={`nav logged-${loggedIn ? 'in' : 'out'}`}>
         <div className="logo">
-          <img src="/mask.png" />
+          <img src="/mask.png" alt="Cabalmail logo" />
         </div>
         <a
           id="list"
