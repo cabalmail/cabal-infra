@@ -52,6 +52,7 @@ class App extends React.Component {
         api_url: invokeUrl
       });
       UserPool = new CognitoUserPool(cognitoConfig.poolData);
+      console.log("UserPool", UserPool);
     } else {
       console.log("Could not retrieve configuration.");
     }
