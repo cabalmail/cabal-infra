@@ -28,6 +28,12 @@ input, select, option {
   color: #ccc;
 }
 
+select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+
 label {
   display: block;
   margin-top: 1em;
