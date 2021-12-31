@@ -39,7 +39,7 @@ class Request extends React.Component {
         case 0:
           string += pool1.charAt(Math.floor(Math.random() *  pool1Size));
           break;
-        case length:
+        case (length-1):
           string += pool3.charAt(Math.floor(Math.random() *  pool3Size));
           break;
         default:
