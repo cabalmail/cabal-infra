@@ -1,8 +1,6 @@
 import React from 'react';
 import axios from 'axios';
 import AddressList from './AddressList';
-// TODO: move this to a configuration file
-const invokeUrl = 'https://osg06j8v6e.execute-api.us-east-1.amazonaws.com/prod';
 
 class List extends React.Component {
 
@@ -14,14 +12,29 @@ class List extends React.Component {
     };
   }
 
-  componentDidMount() {
-    this.getList();
+  componentDidUpdate(prevProps) {
+    if (this.props.filter !== prevProps.filter) {
+      const response = this.getList();
+      response.then(data => {
+        this.setState({ addresses: data.data.Items.filter(
+          (a) => {
+            if (a.address.includes(this.state.filter)) {
+              return true;
+            }
+            if (a.comment.includes(this.state.filter)) {
+              return true;
+            }
+            return false;
+          }
+        )});
+      });
+    }
   }
 
   getList = async (e) => {
     e.preventDefault();
     const response = await axios.get('/list', {
-      baseURL: invokeUrl,
+      baseURL: this.props.api_url,
       headers: {
         'Authorization': this.props.token
       },
@@ -35,21 +48,7 @@ class List extends React.Component {
         console.log("Unknown error while retrieving address list", err);
       }
     });
-    if (response) {
-      this.setState({ addresses: response.data.Items.filter(
-        (a) => {
-          if (a.address.includes(this.state.filter)) {
-            return true;
-          }
-          if (a.comment.includes(this.state.filter)) {
-            return true;
-          }
-          return false;
-        }
-      ) });
-    } else {
-      console.log("No response received");
-    }
+    return response;
   }
 
   updateFilter = (e) => {

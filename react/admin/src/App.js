@@ -36,7 +36,6 @@ class App extends React.Component {
   componentDidMount() {
     const response = this.getConfig();
     response.then(data => {
-      console.log(data);
       const { domains, cognitoConfig, invokeUrl } = data.data;
       this.setState({
         poolData: cognitoConfig.poolData,
@@ -44,7 +43,6 @@ class App extends React.Component {
         api_url: invokeUrl
       });
       UserPool = new CognitoUserPool(cognitoConfig.poolData);
-      console.log("UserPool", UserPool);
     });
   }
 
@@ -157,6 +155,7 @@ class App extends React.Component {
         return (
           <List
             token={this.state.token}
+            api_url={this.state.api_url}
             userName={this.state.userName}
           />
         );
