@@ -46,7 +46,7 @@ class App extends React.Component {
   }
 
   getConfig = async () => {
-    await response = axios.get('/config.js').catch( (err) => {
+    const response = await axios.get('/config.js').catch( (err) => {
       if (err.response) {
         console.log("Error in response while retrieving configuration", err.response);
       } else if (err.request) {
