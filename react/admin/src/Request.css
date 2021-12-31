@@ -5,3 +5,7 @@
 .address-fields input, .address-fields select {
   width: 25%;
 }
+
+button {
+  width: 100%;
+}

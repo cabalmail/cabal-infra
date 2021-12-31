@@ -8,6 +8,7 @@ class Request extends React.Component {
     this.state = {
       username: '',
       subdomain: '',
+      domain: '',
       comment: ''
     }
   }
@@ -20,6 +21,11 @@ class Request extends React.Component {
   doInputChange = e => {
     e.preventDefault();
     this.setState({[e.target.name]: e.target.value});
+  }
+
+  doDomainChange = e => {
+    e.preventDefault();
+    this.setState({domain: e.target.value});
   }
 
   getOptions() {
@@ -49,7 +55,9 @@ class Request extends React.Component {
             id="subdomain"
             name="subdomain"
             placeholder="subdomain"
-          /><span id="dot">.</span><select>
+          /><span id="dot">.</span><select
+            onChange={this.doDomainChange}
+          >
             {this.getOptions()}
           </select>
         </fieldset>
@@ -64,7 +72,7 @@ class Request extends React.Component {
             placeholder="comment"
           />
         </fieldset>
-        <button type="submit" className="default">Submit</button>
+        <button type="submit" className="default">Request {this.state.username}@{this.state.subdomain}.{this.state.domain}</button>
         </form>
       </div>
     );
