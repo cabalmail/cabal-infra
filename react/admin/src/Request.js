@@ -29,21 +29,33 @@ class Request extends React.Component {
     }
   }
 
+  randomString(length) {
+    let string = '';
+    const pool = 'abcdefghijklmnopqrstuvwxyz1234567890-_';
+    const poolSize = pool.length;
+    for ( var i = 0; i < length; i++ ) {
+      result += pool.charAt(Math.floor(Math.random() *  poolSize));
+    }
+    return result;
+  }
+
+  generateRandom() {
+    const domainLength = this.props.domains.length;
+    this.setState({
+      username: this.randomString(8),
+      subdomain: this.randomString(8),
+      domain: this.props.domains[Math.floor(Math.random() *  domainLength)].domain
+    });
+  }
+
   doInputChange = e => {
     e.preventDefault();
     this.setState({[e.target.name]: e.target.value});
   }
 
-  doDomainChange = e => {
-    e.preventDefault();
-    const index = e.nativeEvent.target.selectedIndex;
-    const label = e.nativeEvent.target[index].text;
-    this.setState({domain: label});
-  }
-
   getOptions() {
     return this.props.domains.map(d => {
-      return <option value={d.zone_id}>{d.domain}</option>;
+      return <option value={d.domain}>{d.domain}</option>;
     });
   }
 
@@ -69,7 +81,8 @@ class Request extends React.Component {
             name="subdomain"
             placeholder="subdomain"
           /><span id="dot">.</span><select
-            onChange={this.doDomainChange}
+            value={this.state.domain}
+            onChange={this.doInputChange}
           >
             <option>▼ Select a domain</option>
             {this.getOptions()}
