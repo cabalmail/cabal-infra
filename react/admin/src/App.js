@@ -52,8 +52,13 @@ class App extends React.Component {
     });
   }
 
-  componentDidUpdate() {
-    if (this.state.expires < Date.now()) {
+  componentDidUpdate(prevProps, prevState) {
+    if (
+      this.state.expires < Date.now() &&
+      this.state.view !== "Login" &&
+      this.state.userName !== null &&
+      this.state.password !== null
+    ) {
       this.setState({
         ...this.state,
         view: "Login",
