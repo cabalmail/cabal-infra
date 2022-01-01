@@ -14,11 +14,6 @@ class Request extends React.Component {
     }
   }
 
-  submitRequest = async (e) => {
-    // TODO: wire up to API
-    return false;
-  }
-
   componentDidUpdate(prevProps, prevState) {
     if (
       prevState.username !== this.state.username ||
@@ -71,11 +66,37 @@ class Request extends React.Component {
     });
   }
 
+  submitRequest = async (e) => {
+    return false;
+    // TODO: wire up to API
+    // const response = await axios.post('/new', {
+    //   baseURL: this.props.api_url,
+    //   params: {
+    //     username: this.state.username,
+    //     subdomain: this.state.subdomain,
+    //     tld: this.state.domain,
+    //     comment: this.state.comment
+    //   },
+    //   headers: {
+    //     'Authorization': this.props.token
+    //   },
+    //   timeout: 1000
+    // });
+    // return response;
+  }
+
+  handleSubmit = (e) => {
+    e.preventDefault();
+    this.submitRequest().then(data => {
+      
+    });
+  }
+
   render() {
     // TODO: Wire up select field for TLD
     return (
       <div className="request">
-        <form className="request-form" onSubmit={this.submitRequest}>
+        <form className="request-form" onSubmit={this.handleSubmit}>
         <fieldset className="address-fields">
           <legend>Address</legend>
           <input
