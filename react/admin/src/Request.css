@@ -9,7 +9,8 @@
 }
 
 .address-fields input, .address-fields select {
-  width: 25%;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .Request button.default, .comment-field #comment {
