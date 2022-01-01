@@ -1,7 +1,8 @@
 #amphora, #dot {
   font-size: 160%;
-  display: block;
+  display: inline-block;
   text-align: center;
+  padding: 0.5em;
 }
 
 .address-fields {
@@ -10,7 +11,7 @@
   grid-column-gap: 0;
 }
 
-.address-fields input, .address-fields select {
+.address-fields input, .address-fields select, #amphora, #dot {
   width: 100%;
   box-sizing: border-box;
 }
