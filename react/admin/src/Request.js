@@ -114,6 +114,7 @@ class Request extends React.Component {
             name="subdomain"
             placeholder="subdomain"
           /><span id="dot">.</span><select
+            name="domain"
             value={this.state.domain}
             onChange={this.doInputChange}
           >
