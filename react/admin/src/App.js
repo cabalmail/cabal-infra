@@ -50,6 +50,11 @@ class App extends React.Component {
       });
       UserPool = new CognitoUserPool(cognitoConfig.poolData);
     });
+    setInterval(() => {
+      console.log("this.state.expires: " + this.state.expires.toString());
+      console.log("Date.now() / 1000: " + (Date.now() / 1000).toString());
+      console.log("Countdown: " + (this.state.expires - (Date.now() / 1000)).toString());
+    }, 1000)
   }
 
   componentDidUpdate(prevProps, prevState) {
