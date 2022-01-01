@@ -59,7 +59,7 @@ class App extends React.Component {
 
   componentDidUpdate(prevProps, prevState) {
     if (
-      this.state.expires < (Date.now() / 1000) &&
+      this.state.expires < Math.floor(Date.now() / 1000) &&
       this.state.view !== "Login" &&
       this.state.userName !== null &&
       this.state.password !== null
@@ -130,7 +130,7 @@ class App extends React.Component {
           message: null,
           loggedIn: true,
           token: data.getIdToken().getJwtToken(),
-          expires: new Date(Math.floor(Date.now() / 1000) + data.expiresIn),
+          expires: Math.floor(Date.now() / 1000) + data.expiresIn,
           view: "Request"
         });
       },
