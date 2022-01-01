@@ -21,6 +21,7 @@ class App extends React.Component {
     this.state = JSON.parse(window.localStorage.getItem('state')) || {
       loggedIn: false,
       token: null,
+      expires: new Date(),
       userName: null,
       password: null,
       phone: null,
@@ -49,6 +50,17 @@ class App extends React.Component {
       });
       UserPool = new CognitoUserPool(cognitoConfig.poolData);
     });
+  }
+
+  componentDidUpdate() {
+    if (this.state.expires < Date.now()) {
+      this.setState({
+        ...this.state,
+        view: "Login",
+        userName: null,
+        password: null
+      });
+    }
   }
 
   getConfig = async () => {
@@ -108,6 +120,7 @@ class App extends React.Component {
           message: null,
           loggedIn: true,
           token: data.getIdToken().getJwtToken(),
+          expires: new Date(Math.floor(Date.now() / 1000) + data.expiresIn),
           view: "Request"
         });
       },
