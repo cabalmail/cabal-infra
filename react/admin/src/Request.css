@@ -8,4 +8,5 @@
 
 .Request button.default, .comment-field #comment {
   width: 100%;
+  box-sizing: border-box;
 }
