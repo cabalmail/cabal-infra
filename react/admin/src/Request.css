@@ -1,7 +1,8 @@
 #amphora, #dot {
   display: inline-block;
   text-align: center;
-  padding: 0.5em;
+  padding: 0.9em;
+  vertical-align: middle;
 }
 
 .address-fields {
