@@ -2,6 +2,12 @@
   font-size: 160%;
 }
 
+.address-fields {
+  display: grid;
+  grid-template-columns: 30% 5% 30% 5% 30%;
+  grid-column-gap: 0;
+}
+
 .address-fields input, .address-fields select {
   width: 25%;
 }
