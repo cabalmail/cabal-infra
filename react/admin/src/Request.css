@@ -1,14 +1,14 @@
 #amphora, #dot {
-  display: inline-block;
+  display: block;
   text-align: center;
-  padding: 0.9em 0;
-  vertical-align: middle;
+  vertical-align: bottom;
 }
 
 .address-fields {
   display: grid;
   grid-template-columns: 30% 5% 30% 5% 30%;
   grid-column-gap: 0;
+  align-items: baseline;
 }
 
 .address-fields input, .address-fields select, #amphora, #dot {
