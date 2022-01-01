@@ -49,7 +49,7 @@ class Request extends React.Component {
     const domainLength = this.props.domains.length;
     const alphanum = 'abcdefghijklmnopqrstuvwxyz1234567890';
     this.setState({
-      username: this.randomString(8, alphanum, alphanum+'_-', alphanum),
+      username: this.randomString(8, alphanum, alphanum+'._-', alphanum),
       subdomain: this.randomString(8, alphanum, alphanum+'-', alphanum),
       domain: this.props.domains[Math.floor(Math.random() *  domainLength)].domain
     });
