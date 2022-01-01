@@ -1,5 +1,7 @@
 #amphora, #dot {
   font-size: 160%;
+  display: block;
+  text-align: center;
 }
 
 .address-fields {
