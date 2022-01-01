@@ -6,6 +6,6 @@
   width: 25%;
 }
 
-.Request button.default {
+.Request button.default, .address-fields input.comment {
   width: 100%;
 }
