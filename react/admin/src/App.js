@@ -21,7 +21,7 @@ class App extends React.Component {
     this.state = JSON.parse(window.localStorage.getItem('state')) || {
       loggedIn: false,
       token: null,
-      expires: new Date(),
+      expires: Math.floor(new Date() / 1000),
       userName: null,
       password: null,
       phone: null,
@@ -52,8 +52,8 @@ class App extends React.Component {
     });
     setInterval(() => {
       console.log("this.state.expires: " + this.state.expires.toString());
-      console.log("Date.now() / 1000: " + (Date.now() / 1000).toString());
-      console.log("Countdown: " + (this.state.expires - (Date.now() / 1000)).toString());
+      console.log("Date.now() / 1000: " + Math.floor(Date.now() / 1000).toString());
+      console.log("Countdown: " + (this.state.expires - Math.floor(Date.now() / 1000)).toString());
     }, 1000)
   }
 
