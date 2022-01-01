@@ -54,7 +54,7 @@ class App extends React.Component {
 
   componentDidUpdate(prevProps, prevState) {
     if (
-      this.state.expires < Date.now() &&
+      this.state.expires < (Date.now() / 1000) &&
       this.state.view !== "Login" &&
       this.state.userName !== null &&
       this.state.password !== null
