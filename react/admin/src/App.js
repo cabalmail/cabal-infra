@@ -50,11 +50,11 @@ class App extends React.Component {
       });
       UserPool = new CognitoUserPool(cognitoConfig.poolData);
     });
-    // setInterval(() => {
-    //   console.log("this.state.expires: " + this.state.expires.toString());
-    //   console.log("Date.now() / 1000: " + Math.floor(Date.now() / 1000).toString());
-    //   console.log("Countdown: " + (this.state.expires - Math.floor(Date.now() / 1000)).toString());
-    // }, 1000);
+    setInterval(() => {
+      console.log("this.state.expires: " + this.state.expires.toString());
+      console.log("Date.now() / 1000: " + Math.floor(Date.now() / 1000).toString());
+      console.log("Countdown: " + (this.state.expires - Math.floor(Date.now() / 1000)).toString());
+    }, 1000);
   }
 
   componentDidUpdate(prevProps, prevState) {
@@ -130,10 +130,9 @@ class App extends React.Component {
           message: null,
           loggedIn: true,
           token: data.getIdToken().getJwtToken(),
-          expires: Math.floor(Date.now() / 1000) + data.expiresIn,
+          expires: data.getIdToken().getExpiration(),
           view: "Request"
         });
-        console.log(data);
       },
       onFailure: data => {
         this.setState({
