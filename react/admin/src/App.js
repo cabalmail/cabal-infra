@@ -133,6 +133,7 @@ class App extends React.Component {
           expires: Math.floor(Date.now() / 1000) + data.expiresIn,
           view: "Request"
         });
+        console.log(data);
       },
       onFailure: data => {
         this.setState({
