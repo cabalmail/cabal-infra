@@ -17,8 +17,3 @@
   width: 100%;
   box-sizing: border-box;
 }
-
-.address-fields select::before {
-  content: "▼";
-  text-align: right;
-}
