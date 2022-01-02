@@ -74,7 +74,8 @@ class Request extends React.Component {
         username: this.state.username,
         subdomain: this.state.subdomain,
         tld: this.state.domain,
-        comment: this.state.comment
+        comment: this.state.comment,
+        address: this.state.username + '@' + this.state.subdomain + '.' + this.state.domain
       },
       {
         baseURL: this.props.api_url,
