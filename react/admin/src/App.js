@@ -165,6 +165,7 @@ class App extends React.Component {
         return (
           <Request
             token={this.state.token}
+            api_url={this.state.api_url}
             userName={this.state.userName}
             domains={this.state.domains}
             setMessage={this.setMessage}
