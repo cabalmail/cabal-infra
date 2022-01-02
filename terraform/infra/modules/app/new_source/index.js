@@ -113,21 +113,21 @@ exports.handler = (event, context, callback) => {
             } else {
                   console.log(data);
                   callback(null, {
-                    statusCode: 201,
-                    body: JSON.stringify({
-                        address: requestBody.address,
-                        tld: requestBody.tld,
-                        user: requestBody.user,
-                        username: requestBody.username,
-                        "zone-id": domains[requestBody.tld],
-                        subdomain: requestBody.subdomain,
-                        comment: requestBody.comment,
-                        public_key: publicKey
-                    }),
-                    headers: {
-                        'Access-Control-Allow-Origin': '*',
-                    },
-                });
+                      statusCode: 201,
+                      body: JSON.stringify({
+                          address: requestBody.address,
+                          tld: requestBody.tld,
+                          user: requestBody.user,
+                          username: requestBody.username,
+                          "zone-id": domains[requestBody.tld],
+                          subdomain: requestBody.subdomain,
+                          comment: requestBody.comment,
+                          public_key: publicKey
+                      }),
+                      headers: {
+                          'Access-Control-Allow-Origin': '*',
+                      },
+                  });
               }
         });
     }).catch((err) => {
