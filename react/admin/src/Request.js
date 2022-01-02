@@ -121,7 +121,7 @@ class Request extends React.Component {
             value={this.state.domain}
             onChange={this.doInputChange}
           >
-            <option>▼ Select a domain</option>
+            <option>Select a domain</option>
             {this.getOptions()}
           </select>
         </fieldset>
