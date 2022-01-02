@@ -111,7 +111,8 @@ exports.handler = (event, context, callback) => {
                 console.log(err, err.stack);
                 errorResponse(err.message, context.awsRequestId, callback);
             } else {
-                callback(null, {
+                  console.log(data);
+                  callback(null, {
                     statusCode: 201,
                     body: JSON.stringify({
                         address: requestBody.address,
@@ -127,8 +128,7 @@ exports.handler = (event, context, callback) => {
                         'Access-Control-Allow-Origin': '*',
                     },
                 });
-                console.log(data);
-            }
+              }
         });
     }).catch((err) => {
         console.error(err);
