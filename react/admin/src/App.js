@@ -21,7 +21,7 @@ class App extends React.Component {
     this.state = JSON.parse(window.localStorage.getItem('state')) || {
       loggedIn: false,
       token: null,
-      expires: Math.floor(new Date() / 1000),
+      expires: Math.floor(new Date() / 1000) - 1,
       userName: null,
       password: null,
       phone: null,
@@ -50,11 +50,6 @@ class App extends React.Component {
       });
       UserPool = new CognitoUserPool(cognitoConfig.poolData);
     });
-    setInterval(() => {
-      console.log("this.state.expires: " + this.state.expires.toString());
-      console.log("Date.now() / 1000: " + Math.floor(Date.now() / 1000).toString());
-      console.log("Countdown: " + (this.state.expires - Math.floor(Date.now() / 1000)).toString());
-    }, 1000);
   }
 
   componentDidUpdate(prevProps, prevState) {
@@ -140,6 +135,7 @@ class App extends React.Component {
           message: "Login failed",
           loggedIn: false,
           token: null,
+          expires: Math.floor(new Date() / 1000) - 1,
           view: "Login"
         });
       }
