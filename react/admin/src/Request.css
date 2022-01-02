@@ -11,16 +11,14 @@
   align-items: baseline;
 }
 
-.address-fields input, .address-fields select, #amphora, #dot {
+.address-fields input, .address-fields select, #amphora,,
+#dot, .Request button.default, .comment-field #comment, 
+.address-fields select::before {
   width: 100%;
   box-sizing: border-box;
 }
 
-.Request button.default, .comment-field #comment {
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.address-fields select::after {
+.address-fields select::before {
   content: "▼";
+  text-align: right;
 }
