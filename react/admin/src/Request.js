@@ -67,28 +67,26 @@ class Request extends React.Component {
   }
 
   submitRequest = async (e) => {
-    return false;
-    // TODO: wire up to API
-    // const response = await axios.post('/new', {
-    //   baseURL: this.props.api_url,
-    //   params: {
-    //     username: this.state.username,
-    //     subdomain: this.state.subdomain,
-    //     tld: this.state.domain,
-    //     comment: this.state.comment
-    //   },
-    //   headers: {
-    //     'Authorization': this.props.token
-    //   },
-    //   timeout: 1000
-    // });
-    // return response;
+    const response = await axios.post('/new', {
+      baseURL: this.props.api_url,
+      params: {
+        username: this.state.username,
+        subdomain: this.state.subdomain,
+        tld: this.state.domain,
+        comment: this.state.comment
+      },
+      headers: {
+        'Authorization': this.props.token
+      },
+      timeout: 1000
+    });
+    return response;
   }
 
   handleSubmit = (e) => {
     e.preventDefault();
     this.submitRequest().then(data => {
-      
+      this.props.setMessage(JSON.stringify(data));
     });
   }
 

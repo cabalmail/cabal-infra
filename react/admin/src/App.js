@@ -68,6 +68,13 @@ class App extends React.Component {
     }
   }
 
+  setMessage = (message) => {
+    this.setState({...this.state, message: message});
+    setTimeout(() => {
+      this.setState({...this.state, message: ""});
+    }, 5000);
+  }
+
   getConfig = async () => {
     const response = await axios.get('/config.js');
     return response;
@@ -94,15 +101,15 @@ class App extends React.Component {
         if (!err) {
           this.setState({
             ...this.state,
-            message: "Your registration has been submitted.",
             view: "Login"
           });
+          this.setMessage("Your registration has been submitted.");
         } else {
           this.setState({
             ...this.state,
-            message: err,
             view: "SignUp"
           });
+          this.setMessage(err);
         }
       }
     );
@@ -122,7 +129,7 @@ class App extends React.Component {
       onSuccess: data => {
         this.setState({
           ...this.state,
-          message: null,
+          message: "",
           loggedIn: true,
           token: data.getIdToken().getJwtToken(),
           expires: data.getIdToken().getExpiration(),
@@ -132,12 +139,12 @@ class App extends React.Component {
       onFailure: data => {
         this.setState({
           ...this.state,
-          message: "Login failed",
           loggedIn: false,
           token: null,
           expires: Math.floor(new Date() / 1000) - 1,
           view: "Login"
         });
+        this.setMessage("Login failed");
       }
     });
   }
@@ -160,6 +167,7 @@ class App extends React.Component {
             token={this.state.token}
             userName={this.state.userName}
             domains={this.state.domains}
+            setMessage={this.setMessage}
           />
         );
       case "SignUp":
@@ -177,6 +185,7 @@ class App extends React.Component {
             token={this.state.token}
             api_url={this.state.api_url}
             userName={this.state.userName}
+            setMessage={this.setMessage}
           />
         );
       case "Logout":
