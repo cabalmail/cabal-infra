@@ -11,7 +11,7 @@
   align-items: baseline;
 }
 
-.address-fields input, .address-fields select, #amphora,,
+.address-fields input, .address-fields select, #amphora,
 #dot, .Request button.default, .comment-field #comment, 
 .address-fields select::before {
   width: 100%;
