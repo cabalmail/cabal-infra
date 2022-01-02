@@ -73,7 +73,7 @@ exports.handler = (event, context, callback) => {
           }
         ]
       },
-      HostedZoneId: requestBody.zone_id
+      HostedZoneId: domains[requestBody.tld]
     }
     r53.changeResourceRecordSets(params, function(err, data) {
       if (err) {
@@ -84,7 +84,7 @@ exports.handler = (event, context, callback) => {
       user: user,
       address: requestBody.address,
       username: requestBody.username,
-      zone_id: requestBody.zone_id,
+      zone_id: domains[requestBody.tld],
       subdomain: requestBody.subdomain,
       comment: requestBody.comment,
       tld: requestBody.tld,
@@ -100,7 +100,7 @@ exports.handler = (event, context, callback) => {
                 tld: requestBody.tld,
                 user: requestBody.user,
                 username: requestBody.username,
-                "zone-id": requestBody.zone_id,
+                "zone-id": domains[requestBody.tld],
                 subdomain: requestBody.subdomain,
                 comment: requestBody.comment,
                 public_key: publicKey
@@ -143,7 +143,7 @@ function recordAddress(obj) {
             tld: obj.tld,
             user: obj.user,
             username: obj.username,
-            "zone-id": obj.zone_id,
+            "zone-id": domains[obj.tld],
             subdomain: obj.subdomain,
             comment: obj.comment,
             public_key: obj.public_key,
