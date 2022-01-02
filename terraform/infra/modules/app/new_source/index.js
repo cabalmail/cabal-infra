@@ -92,48 +92,49 @@ exports.handler = (event, context, callback) => {
       private_key: privateKey
     };
 
+    
     recordAddress(payload).then(() => {
-        callback(null, {
-            statusCode: 201,
-            body: JSON.stringify({
-                address: requestBody.address,
-                tld: requestBody.tld,
-                user: requestBody.user,
-                username: requestBody.username,
-                "zone-id": domains[requestBody.tld],
-                subdomain: requestBody.subdomain,
-                comment: requestBody.comment,
-                public_key: publicKey
-            }),
-            headers: {
-                'Access-Control-Allow-Origin': '*',
-            },
+        ssm.sendCommand({
+            DocumentName: 'cabal_chef_document',
+            Targets: [
+                { 
+                   "Key": "tag:managed_by_terraform",
+                   "Values": [ "y" ]
+                },
+                { 
+                   "Key": "tag:terraform_repo",
+                   "Values": [ repo ]
+                }
+            ]
+        }, function(err, data) {
+            if (err) {
+                console.log(err, err.stack);
+                errorResponse(err.message, context.awsRequestId, callback);
+            } else {
+                callback(null, {
+                    statusCode: 201,
+                    body: JSON.stringify({
+                        address: requestBody.address,
+                        tld: requestBody.tld,
+                        user: requestBody.user,
+                        username: requestBody.username,
+                        "zone-id": domains[requestBody.tld],
+                        subdomain: requestBody.subdomain,
+                        comment: requestBody.comment,
+                        public_key: publicKey
+                    }),
+                    headers: {
+                        'Access-Control-Allow-Origin': '*',
+                    },
+                });
+                console.log(data);
+            }
         });
     }).catch((err) => {
         console.error(err);
         errorResponse(err.message, context.awsRequestId, callback);
     });
-    ssm.sendCommand({
-        DocumentName: 'cabal_chef_document',
-        Targets: [
-            { 
-               "Key": "tag:managed_by_terraform",
-               "Values": [ "y" ]
-            },
-            { 
-               "Key": "tag:terraform_repo",
-               "Values": [ repo ]
-            }
-        ]
-    }, function(err, data) {
-        if (err) {
-            console.log(err, err.stack);
-            errorResponse(err.message, context.awsRequestId, callback);
-          } else {
-            console.log(data);
-        }
-    });
-};
+  };
 
 function recordAddress(obj) {
     return ddb.put({
