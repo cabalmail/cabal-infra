@@ -138,7 +138,7 @@ class Request extends React.Component {
         </fieldset>
         <fieldset className="button-fields">
           <button id="request" type="submit" className="default">Request {this.state.address}</button>
-          <button onClick={this.generateRandom}>Generate a random address</button>
+          <button onClick={this.generateRandom}>Random</button>
           <button>Clear</button>
         </fieldset>
         </form>
