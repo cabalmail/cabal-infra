@@ -20,7 +20,7 @@
 
 .button-fields {
   display: grid;
-  grid-template-columns: 50% 50%;
+  grid-template-columns: 47.5% 47.5%;
   grid-column-gap: 5%;
   align-items: baseline;
 }
