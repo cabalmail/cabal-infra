@@ -190,7 +190,14 @@ class App extends React.Component {
           />
         );
       case "Logout":
-        this.setState({...this.state, loggedIn: false, token: null});
+        this.setState({
+          ...this.state,
+          loggedIn: false,
+          token: null,
+          expires: Math.floor(new Date() / 1000) - 1,
+          userName: null,
+          password: null
+        });
         return (
           <Login
             onSubmit={this.doLogin}
