@@ -41,7 +41,7 @@ class Nav extends React.Component {
           id="logout"
           className="item"
           name="LogOut"
-          onClick={onClick}
+          onClick={this.props.doLogout}
           href="#login"
         >Log out</button>
       </div>

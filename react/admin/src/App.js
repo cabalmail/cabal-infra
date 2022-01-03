@@ -149,6 +149,19 @@ class App extends React.Component {
     });
   }
 
+  doLogout = (e) => {
+    e.preventDefault();
+    this.setState({
+      ...this.state,
+      loggedIn: false,
+      token: null,
+      expires: Math.floor(new Date() / 1000) - 1,
+      userName: null,
+      password: null,
+      view: "Login"
+    });
+}
+
   doInputChange = e => {
     e.preventDefault();
     this.setState({...this.state, [e.target.name]: e.target.value});
@@ -190,14 +203,6 @@ class App extends React.Component {
           />
         );
       case "Logout":
-        this.setState({
-          ...this.state,
-          loggedIn: false,
-          token: null,
-          expires: Math.floor(new Date() / 1000) - 1,
-          userName: null,
-          password: null
-        });
         return (
           <Login
             onSubmit={this.doLogin}
@@ -228,6 +233,7 @@ class App extends React.Component {
           onClick={this.updateView}
           loggedIn={this.state.loggedIn}
           view={this.state.view}
+          doLogout={this.doLogout}
         />
         <Message message={this.state.message} />
         <div className="content">
