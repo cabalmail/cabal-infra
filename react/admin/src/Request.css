@@ -17,3 +17,14 @@
   width: 100%;
   box-sizing: border-box;
 }
+
+.button-fields {
+  display: grid;
+  grid-template-columns: 50% 50%;
+  grid-column-gap: 0;
+  align-items: baseline;
+}
+
+.button-fields {
+  grid-column: 1 / span 2;
+}

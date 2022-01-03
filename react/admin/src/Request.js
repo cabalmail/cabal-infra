@@ -136,8 +136,11 @@ class Request extends React.Component {
             placeholder="comment"
           />
         </fieldset>
-        <button type="submit" className="default">Request {this.state.address}</button>
-        <button onClick={this.generateRandom}>Generate a random address</button>
+        <fieldset className="button-fields">
+          <button id="request" type="submit" className="default">Request {this.state.address}</button>
+          <button onClick={this.generateRandom}>Generate a random address</button>
+          <button>Clear</button>
+        </fieldset>
         </form>
       </div>
     );
