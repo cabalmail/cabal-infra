@@ -95,6 +95,16 @@ class Request extends React.Component {
     });
   }
 
+  doClear = (e) => {
+    e.preventDefault();
+    this.setState({
+      username: "",
+      subdomain: "",
+      domain: "",
+      comment: ""
+    });
+  }
+
   render() {
     // TODO: Wire up select field for TLD
     return (
@@ -139,7 +149,7 @@ class Request extends React.Component {
         <fieldset className="button-fields">
           <button id="request" type="submit" className="default">Request {this.state.address}</button>
           <button onClick={this.generateRandom}>Random</button>
-          <button>Clear</button>
+          <button onClick={this.doClear}>Clear</button>
         </fieldset>
         </form>
       </div>
