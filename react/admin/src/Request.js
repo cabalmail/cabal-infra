@@ -101,7 +101,8 @@ class Request extends React.Component {
       username: "",
       subdomain: "",
       domain: "",
-      comment: ""
+      comment: "",
+      address: ""
     });
   }
 
