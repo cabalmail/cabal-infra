@@ -88,6 +88,7 @@ class List extends React.Component {
         <div id="list">
           <AddressList
             addresses={this.state.addresses}
+            setMessage={this.props.setMessage}
           />
         </div>
       </div>

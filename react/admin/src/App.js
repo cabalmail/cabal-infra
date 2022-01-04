@@ -10,7 +10,7 @@ import Request from './Request';
 import List from './List';
 import SignUp from './SignUp';
 import Login from './Login';
-import { Message, setMessageHook } from './Message';
+import Message from './Message';
 import Nav from './Nav';
 let UserPool = null;
 
@@ -76,11 +76,10 @@ class App extends React.Component {
   }
 
   setMessage = (message) => {
-    setMessageHook(message);
-    // this.setState({...this.state, message: message});
-    // setTimeout(() => {
-    //   this.setState({...this.state, message: ""});
-    // }, 5000);
+    this.setState({...this.state, message: message});
+    setTimeout(() => {
+      this.setState({...this.state, message: ""});
+    }, 5000);
   }
 
   getConfig = async () => {
