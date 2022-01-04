@@ -1,11 +1,7 @@
 import React from 'react';
 import './Message.css';
 
-class Message extends React.Component {
-
-  setMessage(message) {
-    console.log(message);
-  }
+export default class Message extends React.Component {
 
   render() {
     return (
@@ -15,4 +11,6 @@ class Message extends React.Component {
 
 }
 
-export default Message;
+export function setMessageHook(message) {
+  console.log(message);
+}
