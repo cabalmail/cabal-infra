@@ -57,7 +57,6 @@ class App extends React.Component {
       this.state.expires < Math.floor(Date.now() / 1000) &&
       (
         this.state.view !== "Login" ||
-        this.state.password !== null ||
         this.state.token !== null ||
         this.state.loggedIn !== false
       )
@@ -65,7 +64,6 @@ class App extends React.Component {
       this.setState({
         ...this.state,
         view: "Login",
-        password: null,
         token: null,
         loggedIn: false
       });
