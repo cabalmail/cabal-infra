@@ -53,20 +53,25 @@ class App extends React.Component {
   }
 
   componentDidUpdate(prevProps, prevState) {
-    if (
-      this.state.expires < Math.floor(Date.now() / 1000) &&
-      (
-        this.state.view !== "Login" ||
-        this.state.token !== null ||
-        this.state.loggedIn !== false
-      )
-    ) {
-      this.setState({
-        ...this.state,
-        view: "Login",
-        token: null,
-        loggedIn: false
-      });
+    if (this.state.expires < Math.floor(Date.now() / 1000)) {
+      if (this.state.view !== "Login" || this.state.view !== "SignUp") {
+        this.setState({
+          ...this.state,
+          view: "Login"
+        });
+      }
+      if (this.state.token !== null) {
+        this.setState({
+          ...this.state,
+          token: null
+        })
+      }
+      if (this.state.loggedIn !== false) {
+        this.setState({
+          ...this.state,
+          loggedIn: false
+        })
+      }
     }
   }
 
