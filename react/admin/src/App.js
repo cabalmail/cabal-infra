@@ -10,7 +10,7 @@ import Request from './Request';
 import List from './List';
 import SignUp from './SignUp';
 import Login from './Login';
-import Message, setMessageHook from './Message';
+import { Message, setMessageHook } from './Message';
 import Nav from './Nav';
 let UserPool = null;
 
