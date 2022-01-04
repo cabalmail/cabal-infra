@@ -54,7 +54,7 @@ class App extends React.Component {
 
   componentDidUpdate(prevProps, prevState) {
     if (this.state.expires < Math.floor(Date.now() / 1000)) {
-      if (this.state.view !== "Login" || this.state.view !== "SignUp") {
+      if (this.state.view !== "Login" && this.state.view !== "SignUp") {
         this.setState({
           ...this.state,
           view: "Login"
