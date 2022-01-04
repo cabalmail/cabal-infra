@@ -4,9 +4,9 @@ import Address from './Address';
 class AddressList extends React.Component {
 
   render() {
-    const addresses = this.props.addresses.map(a => <Address key={a.address} address={a.address} />);
+    const addresses = this.props.addresses.map(a => <Address key={a.address} address={a.address}  setMessage={this.props.setMessage} />);
     return (
-      <ul className="address-list" setMessage={this.props.setMessage}>
+      <ul className="address-list">
         {addresses}
       </ul>
     );

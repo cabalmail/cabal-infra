@@ -4,7 +4,7 @@ class Address extends React.Component {
 
   copy = () => {
     navigator.clipboard.writeText(this.props.address)};
-    this.props.setMessage(`The address ${this.props.address} has been copied to your clipboard.`)
+    this.props.setMessage(`The address ${this.props.address} has been copied to your clipboard.`);
   }
 
   render() {
