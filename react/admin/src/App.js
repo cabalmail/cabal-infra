@@ -140,6 +140,8 @@ class App extends React.Component {
           loggedIn: true,
           token: data.getIdToken().getJwtToken(),
           expires: data.getIdToken().getExpiration(),
+          userName: null,
+          password: null,
           view: "Request"
         });
       },
