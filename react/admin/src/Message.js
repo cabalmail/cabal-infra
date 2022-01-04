@@ -1,7 +1,7 @@
 import React from 'react';
 import './Message.css';
 
-export default class Message extends React.Component {
+class Message extends React.Component {
 
   render() {
     return (
@@ -11,6 +11,8 @@ export default class Message extends React.Component {
 
 }
 
-export function setMessageHook(message) {
+function setMessageHook(message) {
   console.log(message);
 }
+
+export { Message, setMessageHook };
