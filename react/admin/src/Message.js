@@ -11,8 +11,4 @@ class Message extends React.Component {
 
 }
 
-function setMessageHook(message) {
-  console.log(message);
-}
-
-export { Message, setMessageHook };
+export default Message;
