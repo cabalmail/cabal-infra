@@ -24,20 +24,31 @@ class List extends React.Component {
         }
         return false;
       }
-    ).sort((a,b) => {
-      if (a > b) {
-        return 1;
-      } else if (a < b) {
-        return -1;
+    ).sort(
+      (a,b) => {
+        if (a > b) {
+          return 1;
+        } else if (a < b) {
+          return -1;
+        }
+        return 0;
       }
-      return 0;
-    })});
+    )});
   }
 
   componentDidMount() {
     const response = this.getList();
     response.then(data => {
-      this.setState({ addresses: data.data.Items.sort() });
+      this.setState({ addresses: data.data.Items.sort(
+        (a,b) => {
+          if (a > b) {
+            return 1;
+          } else if (a < b) {
+            return -1;
+          }
+          return 0;
+        }
+      ) });
     });
   }
 
