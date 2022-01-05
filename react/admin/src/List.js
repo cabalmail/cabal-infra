@@ -14,11 +14,9 @@ class List extends React.Component {
   }
 
   filter(data) {
+    data.Items.sort();
     this.setState({ addresses: data.Items.filter(
       (a) => {
-        if (a.address.includes(this.state.filter)) {
-          return true;
-        }
         if (a.comment.includes(this.state.filter)) {
           return true;
         }
