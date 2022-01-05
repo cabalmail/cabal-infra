@@ -29,7 +29,7 @@ exports.handler = (event, context, callback) => {
     });
     const lines = publicKey.split(/\r?\n/);
     const key_record = lines[1] + lines[2] + lines[3];
-    var params = {
+    const params = {
       ChangeBatch: {
         Changes: [
           {
@@ -75,11 +75,7 @@ exports.handler = (event, context, callback) => {
       },
       HostedZoneId: domains[requestBody.tld]
     }
-    r53.changeResourceRecordSets(params, function(err, data) {
-      if (err) {
-        console.error(err);
-      }
-    });
+
     const payload = {
       user: user,
       address: requestBody.address,
@@ -92,49 +88,51 @@ exports.handler = (event, context, callback) => {
       private_key: privateKey
     };
 
-    
-    recordAddress(payload).then(() => {
-        ssm.sendCommand({
-            DocumentName: 'cabal_chef_document',
-            Targets: [
-                { 
-                   "Key": "tag:managed_by_terraform",
-                   "Values": [ "y" ]
-                },
-                { 
-                   "Key": "tag:terraform_repo",
-                   "Values": [ repo ]
-                }
-            ]
-        }, function(err, data) {
-            if (err) {
-                console.log(err, err.stack);
-                errorResponse(err.message, context.awsRequestId, callback);
-            } else {
-                  console.log(data);
-                  callback(null, {
-                      statusCode: 201,
-                      body: JSON.stringify({
-                          address: requestBody.address,
-                          tld: requestBody.tld,
-                          user: requestBody.user,
-                          username: requestBody.username,
-                          "zone-id": domains[requestBody.tld],
-                          subdomain: requestBody.subdomain,
-                          comment: requestBody.comment,
-                          public_key: publicKey
-                      }),
-                      headers: {
-                          'Access-Control-Allow-Origin': '*',
-                      },
-                  });
-              }
-        });
-    }).catch((err) => {
+    const r53_req = createDnsRecords(params).catch((err) => {
         console.error(err);
         errorResponse(err.message, context.awsRequestId, callback);
     });
-  };
+
+    const dyndb_req = recordAddress(payload).catch((err) => {
+        console.error(err);
+        errorResponse(err.message, context.awsRequestId, callback);
+    });
+
+    const ssm_req = kickOffChef(repo).catch((err) => {
+        console.error(err);
+        errorResponse(err.message, context.awsRequestId, callback);
+    });
+    
+    Promise.all(r53_req, dyndb_req, ssm_req).then(values => {
+        console.log(values);
+        callback(null, {
+            statusCode: 201,
+            body: JSON.stringify({
+                address: requestBody.address,
+                tld: requestBody.tld,
+                user: requestBody.user,
+                username: requestBody.username,
+                "zone-id": domains[requestBody.tld],
+                subdomain: requestBody.subdomain,
+                comment: requestBody.comment,
+                public_key: publicKey
+            }),
+            headers: {
+                'Access-Control-Allow-Origin': '*',
+            },
+        });
+    });
+};
+
+function createDnsRecords(params) {
+    return r53.changeResourceRecordSets(params, function(err, data) {
+        if (err) {
+            console.error(err);
+        } else {
+            console.log("route 53 success", data);
+        }
+      }).promise();
+}
 
 function recordAddress(obj) {
     return ddb.put({
@@ -151,6 +149,28 @@ function recordAddress(obj) {
             private_key: obj.private_key,
             RequestTime: new Date().toISOString(),
         },
+    }).promise();
+}
+
+function kickOffChef(repo) {
+    return ssm.sendCommand({
+        DocumentName: 'cabal_chef_document',
+        Targets: [
+            { 
+               "Key": "tag:managed_by_terraform",
+               "Values": [ "y" ]
+            },
+            { 
+               "Key": "tag:terraform_repo",
+               "Values": [ repo ]
+            }
+        ]
+    }, (err, data) => {
+        if (err) {
+            console.log(err, err.stack);
+          } else {
+              console.log("ssm success", data);
+        }
     }).promise();
 }
 
