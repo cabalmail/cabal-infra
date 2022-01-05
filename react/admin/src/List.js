@@ -24,7 +24,7 @@ class List extends React.Component {
         }
         return false;
       }
-    )}).sort();
+    ).sort()});
   }
 
   componentDidMount() {
