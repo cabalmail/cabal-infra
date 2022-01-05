@@ -30,7 +30,7 @@ class List extends React.Component {
   componentDidMount() {
     const response = this.getList();
     response.then(data => {
-      this.setState({ addresses: data.data.Items });
+      this.setState({ addresses: data.data.Items.sort() });
     });
   }
 
