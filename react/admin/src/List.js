@@ -14,15 +14,24 @@ class List extends React.Component {
   }
 
   filter(data) {
-    data.Items.sort();
     this.setState({ addresses: data.Items.filter(
       (a) => {
+        if (a.address.includes(this.state.filter)) {
+          return true;
+        }
         if (a.comment.includes(this.state.filter)) {
           return true;
         }
         return false;
       }
-    ).sort()});
+    ).sort((a,b) => {
+      if (a > b) {
+        return 1;
+      } else if (a < b) {
+        return -1;
+      }
+      return 0;
+    })});
   }
 
   componentDidMount() {
