@@ -103,7 +103,7 @@ exports.handler = (event, context, callback) => {
         errorResponse(err.message, context.awsRequestId, callback);
     });
     
-    Promise.all(r53_req, dyndb_req, ssm_req).then(values => {
+    Promise.all([r53_req, dyndb_req, ssm_req]).then(values => {
         console.log(values);
         callback(null, {
             statusCode: 201,
