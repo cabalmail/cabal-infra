@@ -26,9 +26,9 @@ class List extends React.Component {
       }
     ).sort(
       (a,b) => {
-        if (a > b) {
+        if (a.address > b.address) {
           return 1;
-        } else if (a < b) {
+        } else if (a.address < b.address) {
           return -1;
         }
         return 0;
@@ -41,9 +41,9 @@ class List extends React.Component {
     response.then(data => {
       this.setState({ addresses: data.data.Items.sort(
         (a,b) => {
-          if (a > b) {
+          if (a.address > b.address) {
             return 1;
-          } else if (a < b) {
+          } else if (a.address < b.address) {
             return -1;
           }
           return 0;
