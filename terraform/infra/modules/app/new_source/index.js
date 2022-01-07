@@ -104,7 +104,7 @@ exports.handler = async (event, context) => {
     });
     
     try {
-        const res await Promise.all([r53_req, dyndb_req, ssm_req]).then(values => {
+        const res = await Promise.all([r53_req, dyndb_req, ssm_req]).then(values => {
             console.log(values);
             return {
                 statusCode: 201,
