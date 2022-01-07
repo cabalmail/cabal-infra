@@ -108,7 +108,7 @@ exports.handler = (event, context, callback) => {
         },
         headers: {
           'Access-Control-Allow-Origin': '*',
-        })
+        }
       });
     };
   )
@@ -129,7 +129,7 @@ exports.handler = (event, context, callback) => {
         },
         headers: {
           'Access-Control-Allow-Origin': '*',
-        })
+        }
       });
     };
   );
