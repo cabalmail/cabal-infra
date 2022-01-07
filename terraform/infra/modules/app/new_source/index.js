@@ -90,7 +90,8 @@ exports.handler = (event, context, callback) => {
   const dyndb_req = recordAddress(payload);
   const ssm_req = kickOffChef(repo);
   
-  Promise.all([r53_req, dyndb_req, ssm_req]).then(
+  Promise.all([r53_req, dyndb_req, ssm_req])
+  .then(
     values => {
       callback(null, {
         statusCode: 201,
@@ -104,14 +105,14 @@ exports.handler = (event, context, callback) => {
           comment: requestBody.comment,
           public_key: publicKey,
           promises: values
-        }),
+        },
         headers: {
           'Access-Control-Allow-Origin': '*',
-        },
+        })
       });
     };
-  ).catch (
-    error => {
+  )
+  .catch(error => {
       console.error(error);
       callback({
         statusCode: 500,
@@ -123,11 +124,12 @@ exports.handler = (event, context, callback) => {
           "zone-id": domains[requestBody.tld],
           subdomain: requestBody.subdomain,
           comment: requestBody.comment,
-          public_key: publicKey
-        }),
+          public_key: publicKey,
+          error: error
+        },
         headers: {
           'Access-Control-Allow-Origin': '*',
-        },
+        })
       });
     };
   );
