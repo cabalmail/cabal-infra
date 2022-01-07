@@ -89,48 +89,39 @@ exports.handler = (event, context, callback) => {
   const r53_req = createDnsRecords(params);
   const dyndb_req = recordAddress(payload);
   const ssm_req = kickOffChef(repo);
-  
+  const body = JSON.stringify({
+    address: requestBody.address,
+    tld: requestBody.tld,
+    user: requestBody.user,
+    username: requestBody.username,
+    "zone-id": domains[requestBody.tld],
+    subdomain: requestBody.subdomain,
+    comment: requestBody.comment,
+    public_key: publicKey
+  });
+
   Promise.all([r53_req, dyndb_req, ssm_req])
   .then(
     values => {
       callback(null, {
         statusCode: 201,
-        body: JSON.stringify({
-          address: requestBody.address,
-          tld: requestBody.tld,
-          user: requestBody.user,
-          username: requestBody.username,
-          "zone-id": domains[requestBody.tld],
-          subdomain: requestBody.subdomain,
-          comment: requestBody.comment,
-          public_key: publicKey,
-          promises: values
-        },
+        body: body,
         headers: {
           'Access-Control-Allow-Origin': '*',
         }
       });
     };
   )
-  .catch(error => {
+  .catch(
+    error => {
       console.error(error);
       callback({
         statusCode: 500,
-        body: JSON.stringify({
-          address: requestBody.address,
-          tld: requestBody.tld,
-          user: requestBody.user,
-          username: requestBody.username,
-          "zone-id": domains[requestBody.tld],
-          subdomain: requestBody.subdomain,
-          comment: requestBody.comment,
-          public_key: publicKey,
-          error: error
-        },
+        body: body,
         headers: {
           'Access-Control-Allow-Origin': '*',
         }
-      });
+      }, null);
     };
   );
 };
