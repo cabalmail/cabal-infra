@@ -6,10 +6,10 @@ const control_domain = "${control_domain}";
 const repo = "${repo}";
 const domains = ${jsonencode(domains)};
 
-exports.handler = (event, context, callback) => {
+exports.handler = async (event, context) => {
     if (!event.requestContext.authorizer) {
       console.error('Authorization not configured');
-      errorResponse('Authorization not configured', context.awsRequestId, callback);
+      errorResponse('Authorization not configured', context.awsRequestId);
       return;
     }
     const requestBody = JSON.parse(event.body);
@@ -90,22 +90,43 @@ exports.handler = (event, context, callback) => {
 
     const r53_req = createDnsRecords(params).catch((err) => {
         console.error(err);
-        errorResponse(err.message, context.awsRequestId, callback);
+        errorResponse(err.message, context.awsRequestId);
     });
 
     const dyndb_req = recordAddress(payload).catch((err) => {
         console.error(err);
-        errorResponse(err.message, context.awsRequestId, callback);
+        errorResponse(err.message, context.awsRequestId);
     });
 
     const ssm_req = kickOffChef(repo).catch((err) => {
         console.error(err);
-        errorResponse(err.message, context.awsRequestId, callback);
+        errorResponse(err.message, context.awsRequestId);
     });
     
-    Promise.all([r53_req, dyndb_req, ssm_req]).then(values => {
-        console.log(values);
-        callback(null, {
+    try {
+        const res await Promise.all([r53_req, dyndb_req, ssm_req]).then(values => {
+            console.log(values);
+            return {
+                statusCode: 201,
+                body: JSON.stringify({
+                    address: requestBody.address,
+                    tld: requestBody.tld,
+                    user: requestBody.user,
+                    username: requestBody.username,
+                    "zone-id": domains[requestBody.tld],
+                    subdomain: requestBody.subdomain,
+                    comment: requestBody.comment,
+                    public_key: publicKey
+                }),
+                headers: {
+                    'Access-Control-Allow-Origin': '*',
+                },
+            };
+        });
+        return res;
+    } catch (err) {
+        console.error(err);
+        return {
             statusCode: 201,
             body: JSON.stringify({
                 address: requestBody.address,
@@ -120,8 +141,8 @@ exports.handler = (event, context, callback) => {
             headers: {
                 'Access-Control-Allow-Origin': '*',
             },
-        });
-    });
+        };
+    }
 };
 
 function createDnsRecords(params) {
@@ -181,8 +202,8 @@ function toUrlString(buffer) {
         .replace(/=/g, '');
 }
 
-function errorResponse(errorMessage, awsRequestId, callback) {
-  callback(null, {
+function errorResponse(errorMessage, awsRequestId) {
+  return {
     statusCode: 500,
     body: JSON.stringify({
       Error: errorMessage,
@@ -191,5 +212,5 @@ function errorResponse(errorMessage, awsRequestId, callback) {
     headers: {
       'Access-Control-Allow-Origin': '*',
     },
-  });
+  };
 }
