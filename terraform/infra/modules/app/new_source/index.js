@@ -104,7 +104,7 @@ exports.handler = async (event, context) => {
     });
     
     try {
-        const res = await Promise.all([r53_req, dyndb_req, ssm_req]).then(values => {
+        let res = await Promise.all([r53_req, dyndb_req, ssm_req]).then(values => {
             console.log(values);
             return {
                 statusCode: 201,
@@ -127,7 +127,7 @@ exports.handler = async (event, context) => {
     } catch (err) {
         console.error(err);
         return {
-            statusCode: 201,
+            statusCode: 500,
             body: JSON.stringify({
                 address: requestBody.address,
                 tld: requestBody.tld,
@@ -152,11 +152,11 @@ function createDnsRecords(params) {
         } else {
             console.log("route 53 success", data);
         }
-      }).promise();
+    }).promise();
 }
 
 function recordAddress(obj) {
-    return ddb.put({
+    return ddb.putItem({
         TableName: 'cabal-addresses',
         Item: {
             address: obj.address,
@@ -170,6 +170,12 @@ function recordAddress(obj) {
             private_key: obj.private_key,
             RequestTime: new Date().toISOString(),
         },
+    }, (err, data) => {
+        if (err) {
+            console.error(err);
+        } else {
+            console.log("dynamodb success", data);
+        }
     }).promise();
 }
 
@@ -200,17 +206,4 @@ function toUrlString(buffer) {
         .replace(/\+/g, '-')
         .replace(/\//g, '_')
         .replace(/=/g, '');
-}
-
-function errorResponse(errorMessage, awsRequestId) {
-  return {
-    statusCode: 500,
-    body: JSON.stringify({
-      Error: errorMessage,
-      Reference: awsRequestId,
-    }),
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-    },
-  };
 }
