@@ -156,7 +156,7 @@ function createDnsRecords(params) {
 }
 
 function recordAddress(obj) {
-    return ddb.putItem({
+    return ddb.put({
         TableName: 'cabal-addresses',
         Item: {
             address: obj.address,
