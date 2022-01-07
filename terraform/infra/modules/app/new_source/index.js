@@ -88,17 +88,17 @@ exports.handler = async (event, context) => {
       private_key: privateKey
     };
 
-    const r53_req = createDnsRecords(params).catch((err) => {
+    const r53_req = await createDnsRecords(params).catch((err) => {
         console.error(err);
         errorResponse(err.message, context.awsRequestId);
     });
 
-    const dyndb_req = recordAddress(payload).catch((err) => {
+    const dyndb_req = await recordAddress(payload).catch((err) => {
         console.error(err);
         errorResponse(err.message, context.awsRequestId);
     });
 
-    const ssm_req = kickOffChef(repo).catch((err) => {
+    const ssm_req = await kickOffChef(repo).catch((err) => {
         console.error(err);
         errorResponse(err.message, context.awsRequestId);
     });
