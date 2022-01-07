@@ -6,7 +6,7 @@ const control_domain = "${control_domain}";
 const repo = "${repo}";
 const domains = ${jsonencode(domains)};
 
-exports.handler = (event, context) => {
+exports.handler = (event, context, callback) => {
   if (!event.requestContext.authorizer) {
     console.error('Authorization not configured');
     return;
@@ -90,9 +90,9 @@ exports.handler = (event, context) => {
   const dyndb_req = recordAddress(payload);
   const ssm_req = kickOffChef(repo);
   
-  return Promise.all([r53_req, dyndb_req, ssm_req]).then(
+  Promise.all([r53_req, dyndb_req, ssm_req]).then(
     values => {
-      return {
+      callback(null, {
         statusCode: 201,
         body: JSON.stringify({
           address: requestBody.address,
@@ -109,11 +109,11 @@ exports.handler = (event, context) => {
           'Access-Control-Allow-Origin': '*',
         },
       };
-    }
+    });
   ).catch(
     error => {
       console.error(error);
-      return {
+      callback({
         statusCode: 500,
         body: JSON.stringify({
           address: requestBody.address,
@@ -129,12 +129,12 @@ exports.handler = (event, context) => {
           'Access-Control-Allow-Origin': '*',
         },
       };
-    }
+    });
   );
 };
 
 function createDnsRecords(params) {
-  return r53.changeResourceRecordSets(params, function(err, data) {
+  return r53.changeResourceRecordSets(params, (err, data) => {
     if (err) {
       console.error(err);
     }
