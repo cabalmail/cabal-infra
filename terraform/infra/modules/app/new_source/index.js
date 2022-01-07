@@ -103,7 +103,7 @@ exports.handler = (event, context) => {
           subdomain: requestBody.subdomain,
           comment: requestBody.comment,
           public_key: publicKey,
-          promises: JSON.stringify(values)
+          promises: values
         }),
         headers: {
           'Access-Control-Allow-Origin': '*',
@@ -123,8 +123,7 @@ exports.handler = (event, context) => {
           "zone-id": domains[requestBody.tld],
           subdomain: requestBody.subdomain,
           comment: requestBody.comment,
-          public_key: publicKey,
-          promises: JSON.stringify(values)
+          public_key: publicKey
         }),
         headers: {
           'Access-Control-Allow-Origin': '*',
@@ -183,10 +182,3 @@ function kickOffChef(repo) {
     }
   }).promise();
 }
-
-function toUrlString(buffer) {
-  return buffer.toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '');
-    }
