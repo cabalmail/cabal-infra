@@ -101,29 +101,25 @@ exports.handler = (event, context, callback) => {
   });
 
   Promise.all([r53_req, dyndb_req, ssm_req])
-  .then(
-    values => {
-      callback(null, {
-        statusCode: 201,
-        body: body,
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-        }
-      });
-    };
-  )
-  .catch(
-    error => {
-      console.error(error);
-      callback({
-        statusCode: 500,
-        body: body,
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-        }
-      }, null);
-    };
-  );
+  .then(values => {
+    callback(null, {
+      statusCode: 201,
+      body: body,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+      }
+    });
+  })
+  .catch(error => {
+    console.error(error);
+    callback({
+      statusCode: 500,
+      body: body,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+      }
+    }, null);
+  });
 };
 
 function createDnsRecords(params) {
