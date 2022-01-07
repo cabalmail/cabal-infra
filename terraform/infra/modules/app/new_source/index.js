@@ -108,9 +108,9 @@ exports.handler = (event, context, callback) => {
         headers: {
           'Access-Control-Allow-Origin': '*',
         },
-      };
-    });
-  ).catch(
+      });
+    };
+  ).catch (
     error => {
       console.error(error);
       callback({
@@ -128,8 +128,8 @@ exports.handler = (event, context, callback) => {
         headers: {
           'Access-Control-Allow-Origin': '*',
         },
-      };
-    });
+      });
+    };
   );
 };
 
