@@ -3,7 +3,7 @@ const control_domain = "${control_domain}";
 const repo = "${repo}";
 const domains = ${jsonencode(domains)};
 
-exports.handler = (event, context, callback) => {
+exports.handler = (event, context) => {
   if (!event.requestContext.authorizer) {
     console.error('Authorization not configured');
     return;
@@ -33,13 +33,15 @@ exports.handler = (event, context, callback) => {
   const r53_req = createDnsRecords(r53_params);
   const dyndb_req = recordAddress(dyndb_payload);
   const ssm_req = kickOffChef(repo);
-
   Promise.all([r53_req, dyndb_req, ssm_req])
   .then(values => {
     callback(null, generateResponse(201, values, requestBody.address));
+  }, reason => {
+    console.error("rejected", reason);
+    throw "Rejected";
   })
   .catch(error => {
-    console.error(error);
+    console.error("caught", error);
     callback(generateResponse(500, error, requestBody.address), null);
   });
 };
