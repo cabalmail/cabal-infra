@@ -99,7 +99,7 @@ class Request extends React.Component {
   handleSubmit = (e) => {
     e.preventDefault();
     this.submitRequest().then(data => {
-      this.props.setMessage(`Successfully requested ${data.data.address}`);
+      this.props.setMessage(`Successfully requested ${JSON.stringify(data)}`);
     });
   }
 
