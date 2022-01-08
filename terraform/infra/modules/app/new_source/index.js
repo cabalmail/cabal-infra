@@ -74,7 +74,7 @@ function recordAddress(obj) {
   return ddb.putItem(params, (err, data) => {
     if (err) {
       console.error("ddb", err);
-      consele.error("params", params);
+      console.error("params", params);
     }
   }).promise();
 }
