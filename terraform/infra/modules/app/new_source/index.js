@@ -48,7 +48,7 @@ function createDnsRecords(params) {
   const r53 = new AWS.Route53();
   return r53.changeResourceRecordSets(params, (err, data) => {
     if (err) {
-      console.error(err);
+      console.error("r53", err);
     }
   }).promise();
 }
@@ -71,7 +71,7 @@ function recordAddress(obj) {
     },
   }, (err, data) => {
     if (err) {
-      console.error(err);
+      console.error("ddb",err);
     }
   }).promise();
 }
@@ -92,7 +92,7 @@ function kickOffChef(repo) {
     ]
   }, (err, data) => {
     if (err) {
-      console.error(err);
+      console.error("ssm", err);
     }
   }).promise();
 }
