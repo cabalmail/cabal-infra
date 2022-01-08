@@ -24,7 +24,7 @@ exports.handler = (event, context, callback) => {
     username: requestBody.username,
     zone_id: domains[requestBody.tld],
     subdomain: requestBody.subdomain,
-    comment: requestBody.comment || '',
+    comment: requestBody.comment,
     tld: requestBody.tld,
     public_key: publicKey,
     private_key: privateKey
@@ -64,7 +64,7 @@ function recordAddress(obj) {
       username: { S: obj.username },
       "zone-id": { S: domains[obj.tld] },
       subdomain: { S: obj.subdomain },
-      comment: { S: obj.comment },
+      comment: { S: obj.comment || '' },
       public_key: { S: obj.public_key },
       private_key: { S: obj.private_key },
       RequestTime: { S: new Date().toISOString() },
