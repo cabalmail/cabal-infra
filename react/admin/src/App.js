@@ -79,7 +79,7 @@ class App extends React.Component {
     this.setState({...this.state, message: message});
     setTimeout(() => {
       this.setState({...this.state, message: ""});
-    }, 5000);
+    }, 15000);
   }
 
   getConfig = async () => {
