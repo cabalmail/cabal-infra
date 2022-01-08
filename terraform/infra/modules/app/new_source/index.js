@@ -49,13 +49,14 @@ function createDnsRecords(params) {
   return r53.changeResourceRecordSets(params, (err, data) => {
     if (err) {
       console.error("r53", err);
+      console.error("params", params)
     }
   }).promise();
 }
 
 function recordAddress(obj) {
   const ddb = new AWS.DynamoDB();
-  return ddb.putItem({
+  const params = {
     TableName: 'cabal-addresses',
     Item: {
       address: { S: obj.address },
@@ -69,16 +70,18 @@ function recordAddress(obj) {
       private_key: { S: obj.private_key },
       RequestTime: { S: new Date().toISOString() },
     },
-  }, (err, data) => {
+  };
+  return ddb.putItem(params, (err, data) => {
     if (err) {
-      console.error("ddb",err);
+      console.error("ddb", err);
+      consele.error("params", params);
     }
   }).promise();
 }
 
 function kickOffChef(repo) {
   const ssm = new AWS.SSM();
-  return ssm.sendCommand({
+  const command = {
     DocumentName: 'cabal_chef_document',
     Targets: [
       { 
@@ -90,9 +93,11 @@ function kickOffChef(repo) {
          "Values": [ repo ]
       }
     ]
-  }, (err, data) => {
+  };
+  return ssm.sendCommand(command, (err, data) => {
     if (err) {
       console.error("ssm", err);
+      console.error("command", command)
     }
   }).promise();
 }
