@@ -1,4 +1,5 @@
 import React from 'react';
+import './AddressList.css';
 
 class AddressList extends React.Component {
 
