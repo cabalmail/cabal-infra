@@ -10,7 +10,7 @@ exports.handler = (event, context, callback) => {
   }
   const requestBody = JSON.parse(event.body);
   const user = event.requestContext.authorizer.claims['cognito:username'];
-  const { publicKey, privateKey, pubKeyFlattened } = generateKeyPair;
+  const { publicKey, privateKey, publicKeyFlattened } = generateKeyPair;
   const r53_params = buildR53Params(
     domains[requestBody.tld],
     requestBody.subdomain,
@@ -170,8 +170,8 @@ function generateKeyPair() {
     }
   });
   const lines = publicKey.split(/\r?\n/);
-  const key_record = lines[1] + lines[2] + lines[3];
-  return { publicKey, privateKey, key_record };
+  const publicKeyFlattened = lines[1] + lines[2] + lines[3];
+  return { publicKey, privateKey, publicKeyFlattened };
 }
 
 function generateBody(data, address) {
