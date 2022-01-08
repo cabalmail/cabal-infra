@@ -10,6 +10,7 @@ class Address extends React.Component {
   render() {
     return (
       <li
+        key={this.props.address}
         className="address"
         onClick={this.copy}
       >{this.props.address}</li>
