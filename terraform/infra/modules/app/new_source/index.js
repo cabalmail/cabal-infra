@@ -1,7 +1,4 @@
 const AWS = require('aws-sdk');
-const ddb = new AWS.DynamoDB.DocumentClient();
-const r53 = new AWS.Route53();
-const ssm = new AWS.SSM();
 const control_domain = "${control_domain}";
 const repo = "${repo}";
 const domains = ${jsonencode(domains)};
@@ -13,68 +10,15 @@ exports.handler = (event, context, callback) => {
   }
   const requestBody = JSON.parse(event.body);
   const user = event.requestContext.authorizer.claims['cognito:username'];
-  const { generateKeyPairSync } = require('crypto');
-  const { publicKey, privateKey } = generateKeyPairSync('rsa', {
-    modulusLength: 1024,
-    publicKeyEncoding: {
-    type: 'pkcs1',
-    format: 'pem'
-    },
-    privateKeyEncoding: {
-    type: 'pkcs1',
-    format: 'pem'
-    }
-  });
-  const lines = publicKey.split(/\r?\n/);
-  const key_record = lines[1] + lines[2] + lines[3];
-  const params = {
-    ChangeBatch: {
-    Changes: [
-      {
-      Action: "UPSERT",
-      ResourceRecordSet: {
-        Name: requestBody.subdomain + '.' + requestBody.tld,
-        ResourceRecords: [
-        {
-          Value: '"v=spf1 include:' + control_domain + ' ~all"'
-        }
-        ],
-        TTL: 3600,
-        Type: 'TXT'
-      }
-      },
-      {
-      Action: "UPSERT",
-      ResourceRecordSet: {
-        Name: requestBody.subdomain + '.' + requestBody.tld,
-        ResourceRecords: [
-        {
-          Value: '10 smtp-in.' + control_domain
-        }
-        ],
-        TTL: 3600,
-        Type: 'MX'
-      }
-      },
-      {
-      Action: "UPSERT",
-      ResourceRecordSet: {
-        Name: 'cabal._domainkey.' + requestBody.subdomain + '.' + requestBody.tld,
-        ResourceRecords: [
-        {
-          Value: '"v=DKIM1; k=rsa; p=' + key_record + '"'
-        }
-        ],
-        TTL: 3600,
-        Type: 'TXT'
-      }
-      }
-    ]
-    },
-    HostedZoneId: domains[requestBody.tld]
-  }
-
-  const payload = {
+  const { publicKey, privateKey, pubKeyFlattened } = generateKeyPair;
+  const r53_params = buildR53Params(
+    domains[requestBody.tld],
+    requestBody.subdomain,
+    requestBody.tld,
+    control_domain,
+    publicKeyFlattened
+  );
+  const dyndb_payload = {
     user: user,
     address: requestBody.address,
     username: requestBody.username,
@@ -86,43 +30,22 @@ exports.handler = (event, context, callback) => {
     private_key: privateKey
   };
 
-  const r53_req = createDnsRecords(params);
-  const dyndb_req = recordAddress(payload);
+  const r53_req = createDnsRecords(r53_params);
+  const dyndb_req = recordAddress(dyndb_payload);
   const ssm_req = kickOffChef(repo);
-  const body = JSON.stringify({
-    address: requestBody.address,
-    tld: requestBody.tld,
-    user: requestBody.user,
-    username: requestBody.username,
-    "zone-id": domains[requestBody.tld],
-    subdomain: requestBody.subdomain,
-    comment: requestBody.comment,
-    public_key: publicKey
-  });
 
   Promise.all([r53_req, dyndb_req, ssm_req])
   .then(values => {
-    callback(null, {
-      statusCode: 201,
-      body: body,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-      }
-    });
+    callback(null, generateresponse(201, values, requestBody.address));
   })
   .catch(error => {
     console.error(error);
-    callback({
-      statusCode: 500,
-      body: body,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-      }
-    }, null);
+    callback(generateResponse(500, error, requestBody.address), null);
   });
 };
 
 function createDnsRecords(params) {
+  const r53 = new AWS.Route53();
   return r53.changeResourceRecordSets(params, (err, data) => {
     if (err) {
       console.error(err);
@@ -131,19 +54,20 @@ function createDnsRecords(params) {
 }
 
 function recordAddress(obj) {
-  return ddb.put({
+  const ddb = new AWS.DynamoDB();
+  return ddb.putItem({
     TableName: 'cabal-addresses',
     Item: {
-      address: obj.address,
-      tld: obj.tld,
-      user: obj.user,
-      username: obj.username,
-      "zone-id": domains[obj.tld],
-      subdomain: obj.subdomain,
-      comment: obj.comment,
-      public_key: obj.public_key,
-      private_key: obj.private_key,
-      RequestTime: new Date().toISOString(),
+      address: { S: obj.address },
+      tld: { S: obj.tld },
+      user: { S: obj.user },
+      username: { S: obj.username },
+      "zone-id": { S: domains[obj.tld] },
+      subdomain: { S: obj.subdomain },
+      comment: { S: obj.comment },
+      public_key: { S: obj.public_key },
+      private_key: { S: obj.private_key },
+      RequestTime: { S: new Date().toISOString() },
     },
   }, (err, data) => {
     if (err) {
@@ -153,6 +77,7 @@ function recordAddress(obj) {
 }
 
 function kickOffChef(repo) {
+  const ssm = new AWS.SSM();
   return ssm.sendCommand({
     DocumentName: 'cabal_chef_document',
     Targets: [
@@ -171,3 +96,96 @@ function kickOffChef(repo) {
     }
   }).promise();
 }
+
+function buildR53Params(zone_id, subdomain, tld, control_domain, key_record) {
+  {
+    ChangeBatch: {
+      Changes: []
+    },
+    HostedZoneId: zone_id
+  };
+
+  r53_params.ChangeBatch.Changes.push(
+    {
+      Action: "UPSERT",
+      ResourceRecordSet: {
+        Name: subdomain + '.' + tld,
+        ResourceRecords: [
+          {
+            Value: '"v=spf1 include:' + control_domain + ' ~all"'
+          }
+        ],
+        TTL: 3600,
+        Type: 'TXT'
+      }
+    }
+  );
+
+  r53_params.ChangeBatch.Changes.push(
+    {
+      Action: "UPSERT",
+      ResourceRecordSet: {
+        Name: subdomain + '.' + tld,
+        ResourceRecords: [
+          {
+            Value: '10 smtp-in.' + control_domain
+          }
+        ],
+        TTL: 3600,
+        Type: 'MX'
+      }
+    }
+  );
+
+  r53_params.ChangeBatch.Changes.push(
+    {
+      Action: "UPSERT",
+      ResourceRecordSet: {
+        Name: 'cabal._domainkey.' + subdomain + '.' + tld,
+        ResourceRecords: [
+          {
+            Value: '"v=DKIM1; k=rsa; p=' + key_record + '"'
+          }
+        ],
+        TTL: 3600,
+        Type: 'TXT'
+      }
+    }
+  );
+  
+  return r53_params;
+}
+
+function generateKeyPair() {
+  const { generateKeyPairSync } = require('crypto');
+  const { publicKey, privateKey } = generateKeyPairSync('rsa', {
+    modulusLength: 1024,
+    publicKeyEncoding: {
+    type: 'pkcs1',
+    format: 'pem'
+    },
+    privateKeyEncoding: {
+    type: 'pkcs1',
+    format: 'pem'
+    }
+  });
+  const lines = publicKey.split(/\r?\n/);
+  const key_record = lines[1] + lines[2] + lines[3];
+  return { publicKey, privateKey, key_record };
+}
+
+function generateBody(data, address) {
+  return JSON.stringify({
+    address: address,
+    data: data
+  });
+}
+
+function generateResponse(status, data, address) {
+  return {
+    statusCode: status,
+    body: generateBody(data, address),
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+    };
+} 
