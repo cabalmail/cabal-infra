@@ -187,5 +187,6 @@ function generateResponse(status, data, address) {
     body: generateBody(data, address),
     headers: {
       'Access-Control-Allow-Origin': '*',
-    };
+    }
+  };
 } 
