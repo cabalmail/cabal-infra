@@ -98,7 +98,7 @@ function kickOffChef(repo) {
 }
 
 function buildR53Params(zone_id, subdomain, tld, control_domain, key_record) {
-  {
+  let r53_params = {
     ChangeBatch: {
       Changes: []
     },
