@@ -30,11 +30,11 @@ exports.handler = (event, context, callback) => {
     private_key: key.privateKey
   };
 
-  //const r53_req = createDnsRecords(r53_params);
+  const r53_req = createDnsRecords(r53_params);
   //const dyndb_req = recordAddress(dyndb_payload);
-  const ssm_req = kickOffChef(repo);
+  //const ssm_req = kickOffChef(repo);
 
-  Promise.all([ssm_req])
+  Promise.all([r53_req])
   .then(values => {
     callback(null, generateResponse(201, values, requestBody.address));
   })
