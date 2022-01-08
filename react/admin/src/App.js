@@ -29,7 +29,8 @@ class App extends React.Component {
       view: "Login",
       poolData: null,
       domains: {},
-      api_url: null
+      api_url: null,
+      hideMessage: true
     };
   }
 
@@ -76,9 +77,9 @@ class App extends React.Component {
   }
 
   setMessage = (message) => {
-    this.setState({...this.state, message: message});
+    this.setState({...this.state, message: message, hideMessage: false});
     setTimeout(() => {
-      this.setState({...this.state, message: ""});
+      this.setState({...this.state, hideMessage: true});
     }, 15000);
   }
 
@@ -244,7 +245,7 @@ class App extends React.Component {
           view={this.state.view}
           doLogout={this.doLogout}
         />
-        <Message message={this.state.message} />
+        <Message message={this.state.message} hide={this.state.hideMessage} />
         <div className="content">
           {this.renderContent()}
         </div>
