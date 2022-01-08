@@ -103,9 +103,10 @@ class Request extends React.Component {
   handleSubmit = (e) => {
     e.preventDefault();
     this.submitRequest().then(data => {
-      this.props.setMessage(`Successfully requested ${data.data.address}`);
+      this.props.setMessage(`Successfully requested ${data.data.address}.`);
     }, reason => {
       console.error("Promise rejected", reason);
+      this.props.setMessage("The server failed to respond.");
     });
   }
 
