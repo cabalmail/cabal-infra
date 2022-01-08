@@ -1,4 +1,5 @@
 const AWS = require('aws-sdk');
+const { generateKeyPairSync } = require('crypto');
 const control_domain = "${control_domain}";
 const repo = "${repo}";
 const domains = ${jsonencode(domains)};
@@ -162,16 +163,15 @@ function buildR53Params(zone_id, subdomain, tld, control_domain, key_record) {
 }
 
 function generateKeyPair() {
-  const { generateKeyPairSync } = require('crypto');
   const { publicKey, privateKey } = generateKeyPairSync('rsa', {
     modulusLength: 1024,
     publicKeyEncoding: {
-    type: 'pkcs1',
-    format: 'pem'
+      type: 'pkcs1',
+      format: 'pem'
     },
     privateKeyEncoding: {
-    type: 'pkcs1',
-    format: 'pem'
+      type: 'pkcs1',
+      format: 'pem'
     }
   });
   const lines = publicKey.split(/\r?\n/);
