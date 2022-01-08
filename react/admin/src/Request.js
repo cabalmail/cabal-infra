@@ -71,7 +71,11 @@ class Request extends React.Component {
 
   getOptions() {
     return this.props.domains.map(d => {
-      return <option value={d.domain}>{d.domain}</option>;
+      return (
+        <option value={d.domain} key={d.domain}>
+          {d.domain}
+        </option>
+      );
     });
   }
 
@@ -90,7 +94,7 @@ class Request extends React.Component {
         headers: {
           'Authorization': this.props.token
         },
-        timeout: 1000
+        timeout: 10000
       }
     );
     return response;
@@ -99,8 +103,9 @@ class Request extends React.Component {
   handleSubmit = (e) => {
     e.preventDefault();
     this.submitRequest().then(data => {
-      console.log(data);
-      this.props.setMessage(`Successfully requested ${data.address}`);
+      this.props.setMessage(`Successfully requested ${data.data.address}`);
+    }, reason => {
+      console.log("rejected", reason);
     });
   }
 
