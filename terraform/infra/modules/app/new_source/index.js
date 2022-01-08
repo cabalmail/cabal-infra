@@ -24,7 +24,7 @@ exports.handler = (event, context, callback) => {
     username: requestBody.username,
     zone_id: domains[requestBody.tld],
     subdomain: requestBody.subdomain,
-    comment: requestBody.comment,
+    comment: requestBody.comment || '',
     tld: requestBody.tld,
     public_key: publicKey,
     private_key: privateKey
