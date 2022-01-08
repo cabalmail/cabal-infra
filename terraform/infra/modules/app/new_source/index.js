@@ -1,4 +1,5 @@
 const AWS = require('aws-sdk');
+// following three lines are expanded by Terraform templatefile function
 const control_domain = "${control_domain}";
 const repo = "${repo}";
 const domains = ${jsonencode(domains)};
