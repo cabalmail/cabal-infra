@@ -1,5 +1,4 @@
 const AWS = require('aws-sdk');
-const { generateKeyPairSync } = require('crypto');
 const control_domain = "${control_domain}";
 const repo = "${repo}";
 const domains = ${jsonencode(domains)};
@@ -11,7 +10,7 @@ exports.handler = (event, context, callback) => {
   }
   const requestBody = JSON.parse(event.body);
   const user = event.requestContext.authorizer.claims['cognito:username'];
-  const key = generateKeyPair;
+  const key = generateKeyPair();
   const r53_params = buildR53Params(
     domains[requestBody.tld],
     requestBody.subdomain,
@@ -163,6 +162,7 @@ function buildR53Params(zone_id, subdomain, tld, control_domain, key_record) {
 }
 
 function generateKeyPair() {
+  const { generateKeyPairSync } = require('crypto');
   const { publicKey, privateKey } = generateKeyPairSync('rsa', {
     modulusLength: 1024,
     publicKeyEncoding: {
