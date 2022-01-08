@@ -3,7 +3,7 @@ const control_domain = "${control_domain}";
 const repo = "${repo}";
 const domains = ${jsonencode(domains)};
 
-exports.handler = (event, context) => {
+exports.handler = (event, context, callback) => {
   if (!event.requestContext.authorizer) {
     console.error('Authorization not configured');
     return;
