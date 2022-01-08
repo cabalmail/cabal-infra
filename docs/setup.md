@@ -2,9 +2,9 @@
 
 Before using this repo, you must set up an appropriate environment.
 
-## Fork this repository
+## Github
 
-Although you could connect Terraform Cloud directly to the original repository, it is safer to fork it. If you want to contribute to it, or to customize it for your own use, then forking is essential. Use the Github URL for your fork where called for in tfvars.
+[Set up a Github repository](./github.md).
 
 ## AWS Account
 

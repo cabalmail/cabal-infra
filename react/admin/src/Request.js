@@ -100,7 +100,9 @@ class Request extends React.Component {
     e.preventDefault();
     this.submitRequest().then(data => {
       console.log(data);
-      this.props.setMessage(`Successfully requested ${data.address}`);
+      this.props.setMessage(`Successfully requested ${data.data.address}`);
+    }, reason => {
+      console.error("Promise rejected", reason);
     });
   }
 
