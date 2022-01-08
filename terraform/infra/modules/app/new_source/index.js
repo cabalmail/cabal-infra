@@ -35,6 +35,7 @@ exports.handler = (event, context, callback) => {
   const ssm_req = kickOffChef(repo);
   Promise.all([r53_req, dyndb_req, ssm_req])
   .then(values => {
+    console.log("Success. Invoking callback.");
     callback(null, generateResponse(201, values, requestBody.address));
   }, reason => {
     console.error("rejected", reason);
