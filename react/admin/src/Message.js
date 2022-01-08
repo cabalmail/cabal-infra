@@ -4,13 +4,9 @@ import './Message.css';
 class Message extends React.Component {
 
   render() {
-    if (this.props.hide) {
-      return (
-        <div className="message visible">{this.props.message}</div>
-      );
-    }
+    const hide = this.props.hide ? "hidden" : "visible"
     return (
-      <div className="message hidden">{this.props.message}</div>
+      <div className={`message ${hide}`}>{this.props.message}</div>
     );
   }
 
