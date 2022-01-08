@@ -10,13 +10,13 @@ exports.handler = (event, context, callback) => {
   }
   const requestBody = JSON.parse(event.body);
   const user = event.requestContext.authorizer.claims['cognito:username'];
-  const { publicKey, privateKey, publicKeyFlattened } = generateKeyPair;
+  const key = generateKeyPair;
   const r53_params = buildR53Params(
     domains[requestBody.tld],
     requestBody.subdomain,
     requestBody.tld,
     control_domain,
-    publicKeyFlattened
+    key.publicKeyFlattened
   );
   const dyndb_payload = {
     user: user,
@@ -26,8 +26,8 @@ exports.handler = (event, context, callback) => {
     subdomain: requestBody.subdomain,
     comment: requestBody.comment,
     tld: requestBody.tld,
-    public_key: publicKey,
-    private_key: privateKey
+    public_key: key.publicKey,
+    private_key: key.privateKey
   };
 
   const r53_req = createDnsRecords(r53_params);
@@ -176,7 +176,11 @@ function generateKeyPair() {
   });
   const lines = publicKey.split(/\r?\n/);
   const publicKeyFlattened = lines[1] + lines[2] + lines[3];
-  return { publicKey, privateKey, publicKeyFlattened };
+  return {
+    publicKey: publicKey,
+    privateKey: privateKey,
+    publicKeyFlattened: publicKeyFlattened
+  };
 }
 
 function generateBody(data, address) {
