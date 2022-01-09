@@ -6,3 +6,23 @@
   margin-top: 0;
   padding: 0.2em 0.5em;
 }
+
+ul.address-list {
+  list-style: none;
+  padding-left: 0;
+}
+
+ul.address-list li.address {
+  list-style: none;
+  border-bottom: 1px solid #888;
+  display: grid;
+  grid-template-columns: 50% 30% 7% 7%;
+  grid-column-gap: 2%;
+  align-items: baseline;
+}
+
+ul.address-list li.address span.address, ul.address-list button {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+}
