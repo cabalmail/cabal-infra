@@ -62,9 +62,10 @@ class List extends React.Component {
   }
 
   revokeAddress = async (a) => {
+    console.log(a);
     const response = await axios.delete('/revoke', {
       baseURL: this.props.api_url,
-      body: JSON.stringify({
+      data: JSON.stringify({
         address: a.address,
         subdomain: a.subdomain,
         tld: a.tld
@@ -135,7 +136,7 @@ class List extends React.Component {
           <span>{a.address}</span>
           <span>{a.comment}</span>
           <button onClick={this.copy} value={a.address}>📋</button>
-          <button onClick={this.props.revoke} value={a.address}>❌</button>
+          <button onClick={this.revoke} value={a.address}>❌</button>
         </li>
       )
     });
