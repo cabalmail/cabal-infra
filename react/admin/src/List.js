@@ -100,7 +100,7 @@ class List extends React.Component {
           id="filter"
           name="filter"
           placeholder="filter"
-        /><a href="#list" id="reload" onClick={this.reload}>⟳</a>
+        /><button id="reload" onClick={this.reload}>⟳</button>
         </form>
         <div id="count">Found: {this.state.addresses.length} addresses</div>
         <div id="list">
