@@ -107,6 +107,7 @@ class List extends React.Component {
           <AddressList
             addresses={this.state.addresses}
             setMessage={this.props.setMessage}
+            token={this.props.token}
           />
         </div>
       </div>
