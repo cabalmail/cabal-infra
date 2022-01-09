@@ -4,6 +4,7 @@ const dns = promisify(dnsCallback.resolve);
 const AWS = require('aws-sdk');
 const ddb = new AWS.DynamoDB.DocumentClient();
 const route53 = new AWS.Route53();
+// following two lines expanded by Terraform template
 const control_domain = "${control_domain}";
 const domains = ${jsonencode(domains)};
 

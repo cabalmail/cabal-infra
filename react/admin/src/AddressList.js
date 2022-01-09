@@ -10,11 +10,30 @@ class AddressList extends React.Component {
     this.props.setMessage(`The address ${address} has been copied to your clipboard.`);
   }
 
+  revokeAddress = async (e) => {
+    const response = await axios.delete('/revoke', {
+      baseURL: this.props.api_url,
+      body: JSON.stringify({
+        address: a.address,
+        subdomain: a.subdomain,
+        tld: a.tld
+      }),
+      headers: {
+        'Authorization': this.props.token
+      },
+      timeout: 1000
+    });
+    return response;
+  }
+
   revoke = (e) => {
     e.preventDefault();
-    const address = e.target.value;
-    navigator.clipboard.writeText(address);
-    this.props.setMessage(`The address ${address} has been revoked.`);
+    this.revokeAddress().then(data => {
+      this.props.setMessage("Successfully revoked address.");
+    }, reason => {
+      console.error("Promise rejected", reason);
+      this.props.setMessage("The server failed to respond.");
+    });
   }
 
   render() {
