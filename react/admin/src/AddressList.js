@@ -1,4 +1,5 @@
 import React from 'react';
+import axios from 'axios';
 import './AddressList.css';
 
 class AddressList extends React.Component {
@@ -10,7 +11,7 @@ class AddressList extends React.Component {
     this.props.setMessage(`The address ${address} has been copied to your clipboard.`);
   }
 
-  revokeAddress = async (e) => {
+  revokeAddress = async (a) => {
     const response = await axios.delete('/revoke', {
       baseURL: this.props.api_url,
       body: JSON.stringify({
@@ -21,14 +22,16 @@ class AddressList extends React.Component {
       headers: {
         'Authorization': this.props.token
       },
-      timeout: 1000
+      timeout: 10000
     });
     return response;
   }
 
   revoke = (e) => {
     e.preventDefault();
-    this.revokeAddress().then(data => {
+    this.revokeAddress(this.props.addresses.find(a => {
+      return a.address === e.target.value;
+    })).then(data => {
       this.props.setMessage("Successfully revoked address.");
     }, reason => {
       console.error("Promise rejected", reason);
