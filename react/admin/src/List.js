@@ -62,7 +62,6 @@ class List extends React.Component {
   }
 
   revokeAddress = async (a) => {
-    console.log(a);
     const response = await axios.delete('/revoke', {
       baseURL: this.props.api_url,
       data: JSON.stringify({
