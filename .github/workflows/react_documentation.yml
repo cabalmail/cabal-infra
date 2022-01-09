@@ -66,5 +66,9 @@ jobs:
         rm rdout.json
     - name: Push
       run: |
+        MYNAME=$(git show --format=email | grep "From:" | cut -d\  -f2)
+        MYEMAIL=$(git show --format=email | grep "From:" | cut -d\  -f3 | tr -d "<>")
+        git config --global user.name "${MYNAME}"
+        git config --global user.email "${MYEMAIL}"
         git add .
         git commit -m "Generated documentation for React"
