@@ -1,5 +1,8 @@
 #reload {
   font-size: 140%;
-  display: inline;
+  display: block;
   width: auto;
+  float: right;
+  margin-top: 0;
+  padding: 0.2em;
 }
