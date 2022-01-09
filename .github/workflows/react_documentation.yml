@@ -1,0 +1,69 @@
+name: Upload React App
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'react/**'
+      - '.github/workflows/react_documentation.yml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@main
+    - name: Document
+      run: |
+        cd react/admin
+        mkdir -p docs
+        ./node_modules/.bin/react-docgen . -o rdout.json
+        jq -r 'keys[]' rdout.json | while read KEY ; do
+            jq -r ".[\"${KEY}\"] | keys[]" rdout.json | while read PROP ; do
+                CONTENT=$(jq -r ".[\"${KEY}\"][\"${PROP}\"]" rdout.json)
+                case $PROP in
+                    "description")
+                        DESCRIPTION=$CONTENT
+                        ;;
+                    "displayName")
+                        NAME=$CONTENT
+                        ;;
+                    "methods")
+                        METHODS=$CONTENT
+                        ;;
+                    "props")
+                        PROPS=$CONTENT
+                        ;;
+                esac
+                FILE="docs/${NAME}.md"
+                echo "# ${NAME}" >$FILE
+                echo >>$FILE
+                echo "## Description" >>$FILE
+                echo $DESCRIPTION >>$FILE
+                echo >>$FILE
+                # echo "## Props" >>$FILE
+                # echo $PROPS | jq -c "keys" | while read PROP ; do
+                #     PBODY=$(echo $PROP | jq -r ".${PROP}")
+                #     echo $PROP
+                #     echo $PBODY
+                # done
+                # echo >>$FILE
+                echo "## Methods" >>$FILE
+                echo $METHODS | jq -c ".[]" | while read METHOD ; do
+                    MNAME=$(echo $METHOD | jq -r ".name")
+                    MMODIFIERS=$(echo $METHOD | jq -r ".modifiers[]")
+                    MPARAMS="$(echo $METHOD | jq -r ".params[].name") ($(echo $METHOD | jq -r ".params[].type"))"
+                    MRETURNS=$(echo $METHOD | jq -r ".returns")
+                    echo "### $MNAME" >>$FILE
+                    echo "Modifiers: ${MMODIFIERS:-none}" >>$FILE
+                    echo "Parameters: ${MPARAMS}" >>$FILE
+                    echo "Returns: ${MRETURNS}" >>$FILE
+                    echo >>$FILE
+                done
+            done
+        done
+        rm rdout.json
+    - name: Push
+      run: |
+        git add .
+        git commit -m "Generated documentation for React"
