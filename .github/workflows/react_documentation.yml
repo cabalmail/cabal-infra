@@ -1,4 +1,4 @@
-name: Upload React App
+name: Document React App
 
 on:
   push:
