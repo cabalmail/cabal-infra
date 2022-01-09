@@ -1,7 +1,7 @@
 import React from 'react';
 import axios from 'axios';
-import AddressList from './AddressList';
 import './List.css';
+import './AddressList.css';
 
 class List extends React.Component {
 
@@ -61,6 +61,45 @@ class List extends React.Component {
     }
   }
 
+  revokeAddress = async (a) => {
+    const response = await axios.delete('/revoke', {
+      baseURL: this.props.api_url,
+      body: JSON.stringify({
+        address: a.address,
+        subdomain: a.subdomain,
+        tld: a.tld
+      }),
+      headers: {
+        'Authorization': this.props.token
+      },
+      timeout: 10000
+    });
+    return response;
+  }
+
+  revoke = (e) => {
+    e.preventDefault();
+    const address = e.target.value;
+    this.revokeAddress(this.state.addresses.find(a => {
+      return a.address === address;
+    })).then(data => {
+      this.props.setMessage("Successfully revoked address.");
+      this.setState({addresses: this.state.addresses.filter(a => {
+        return a.address !== address;
+      })});
+    }, reason => {
+      console.error("Promise rejected", reason);
+      this.props.setMessage("The server failed to respond.");
+    });
+  }
+
+  copy = (e) => {
+    e.preventDefault();
+    const address = e.target.value;
+    navigator.clipboard.writeText(address);
+    this.props.setMessage(`The address ${address} has been copied to your clipboard.`);
+  }
+
   reload = (e) => {
     e.preventDefault();
     const response = this.getList();
@@ -90,6 +129,16 @@ class List extends React.Component {
   }
 
   render() {
+    const addressList = this.state.addresses.map(a => {
+      return (
+        <li key={a.address} className="address">
+          <span>{a.address}</span>
+          <span>{a.comment}</span>
+          <button onClick={this.copy} value={a.address}>📋</button>
+          <button onClick={this.props.revoke} value={a.address}>❌</button>
+        </li>
+      )
+    });
     return (
       <div className="list">
         <form className="list-form" onSubmit={this.handleSubmit}>
@@ -104,11 +153,9 @@ class List extends React.Component {
         </form>
         <div id="count">Found: {this.state.addresses.length} addresses</div>
         <div id="list">
-          <AddressList
-            addresses={this.state.addresses}
-            setMessage={this.props.setMessage}
-            token={this.props.token}
-          />
+          <ul className="address-list">
+            {addressList}
+          </ul>
         </div>
       </div>
     );

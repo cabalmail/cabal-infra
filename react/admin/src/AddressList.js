@@ -1,5 +1,4 @@
 import React from 'react';
-import axios from 'axios';
 import './AddressList.css';
 
 class AddressList extends React.Component {
@@ -11,34 +10,6 @@ class AddressList extends React.Component {
     this.props.setMessage(`The address ${address} has been copied to your clipboard.`);
   }
 
-  revokeAddress = async (a) => {
-    const response = await axios.delete('/revoke', {
-      baseURL: this.props.api_url,
-      body: JSON.stringify({
-        address: a.address,
-        subdomain: a.subdomain,
-        tld: a.tld
-      }),
-      headers: {
-        'Authorization': this.props.token
-      },
-      timeout: 10000
-    });
-    return response;
-  }
-
-  revoke = (e) => {
-    e.preventDefault();
-    this.revokeAddress(this.props.addresses.find(a => {
-      return a.address === e.target.value;
-    })).then(data => {
-      this.props.setMessage("Successfully revoked address.");
-    }, reason => {
-      console.error("Promise rejected", reason);
-      this.props.setMessage("The server failed to respond.");
-    });
-  }
-
   render() {
     const addresses = this.props.addresses.map(a => {
       return (
@@ -46,7 +17,7 @@ class AddressList extends React.Component {
           <span>{a.address}</span>
           <span>{a.comment}</span>
           <button onClick={this.copy} value={a.address}>📋</button>
-          <button onClick={this.revoke} value={a.address}>❌</button>
+          <button onClick={this.props.revoke} value={a.address}>❌</button>
         </li>
       )
     });
