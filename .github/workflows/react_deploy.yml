@@ -5,11 +5,11 @@ on:
     branches:
       - main
     paths:
-      - 'react/**'
+      - 'react/public'
+      - 'react/public/**'
+      - 'react/src'
+      - 'react/src/**'
       - '.github/workflows/react_deploy.yml'
-    paths-ignore:
-      - 'react/docs/**'
-      - 'react/docs'
 
 jobs:
   deploy:
