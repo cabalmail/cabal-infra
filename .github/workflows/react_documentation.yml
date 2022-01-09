@@ -16,6 +16,7 @@ jobs:
     - name: Document
       run: |
         cd react/admin
+        yarn install
         mkdir -p docs
         ./node_modules/.bin/react-docgen . -o rdout.json
         jq -r 'keys[]' rdout.json | while read KEY ; do
