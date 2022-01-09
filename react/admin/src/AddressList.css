@@ -7,7 +7,7 @@ ul.address-list li.address {
   list-style: none;
   border-bottom: 1px solid #888;
   display: grid;
-  grid-template-columns: 40% 24% 15% 15%;
+  grid-template-columns: 50% 34% 5% 5%;
   grid-column-gap: 2%;
   align-items: baseline;
 }

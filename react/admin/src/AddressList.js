@@ -23,8 +23,8 @@ class AddressList extends React.Component {
         <li key={a.address} className="address">
           <span>{a.address}</span>
           <span>{a.comment}</span>
-          <button onClick={this.copy} value={a.address}>copy</button>
-          <button onClick={this.revoke} value={a.address}>revoke</button>
+          <button onClick={this.copy} value={a.address}>⎘</button>
+          <button onClick={this.revoke} value={a.address}>✖</button>
         </li>
       )
     });
