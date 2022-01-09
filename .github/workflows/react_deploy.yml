@@ -8,7 +8,7 @@ on:
       - 'react/**'
       - '.github/workflows/react_deploy.yml'
     paths-ignore:
-      - 'react/docs/**;
+      - 'react/docs/**'
       - 'react/docs'
 
 jobs:
