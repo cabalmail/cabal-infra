@@ -1,6 +1,6 @@
-const { promisify } = require('util');
-const dnsCallback = require('dns');
-const dns = promisify(dnsCallback.resolve);
+// const { promisify } = require('util');
+// const dnsCallback = require('dns');
+// const dns = promisify(dnsCallback.resolve);
 const AWS = require('aws-sdk');
 const ddb = new AWS.DynamoDB.DocumentClient();
 const route53 = new AWS.Route53();
@@ -24,14 +24,17 @@ exports.handler = (event, context, callback) => {
     const subdomain = requestBody.subdomain;
     const tld = requestBody.tld;
     const zone_id = domains[tld];
+    const public_key = requestBody.public_key;
     console.log('Received event (', address, '): ', event);
 
+    const lines = public_key.split(/\r?\n/);
+    const publicKeyFlattened = lines[1] + lines[2] + lines[3];
     var promise1 = revokeAddress(address);
-    var promise2 = dns(subdomain + '.' + tld, 'MX');
-    var promise3 = dns('cabal._domainkey.' + subdomain + '.' + tld, 'TXT');
-    var promise4 = dns(subdomain + '.' + tld, 'TXT');
+//    var promise2 = dns(subdomain + '.' + tld, 'MX');
+//    var promise3 = dns('cabal._domainkey.' + subdomain + '.' + tld, 'TXT');
+//    var promise4 = dns(subdomain + '.' + tld, 'TXT');
 
-    Promise.all([promise1, promise2, promise3, promise4]).then(values => {
+    Promise.all([promise1]).then(values => {
       var params = {
         "HostedZoneId": zone_id,
         "ChangeBatch": {
@@ -42,9 +45,11 @@ exports.handler = (event, context, callback) => {
                 "Name": subdomain + '.' + tld,
                 "TTL": 3600,
                 "Type": "MX",
-                "ResourceRecords": values[1].map(v => {
-                  return { Value: v.priority + ' ' + v.exchange }
-                }),
+                "ResourceRecords": [
+                  {
+                    Value: '10 smtp-in.' + control_domain
+                  }
+                ]
               }
             },
             {
@@ -53,9 +58,11 @@ exports.handler = (event, context, callback) => {
                 "Name": 'cabal._domainkey.' + subdomain + '.' + tld,
                 "TTL": 3600,
                 "Type": "TXT",
-                "ResourceRecords":  values[2].map(v => {
-                  return { Value: '"' + v[0] + '"' };
-                }),
+                "ResourceRecords": [
+                  {
+                    Value: '"' + publicKeyFlattened + '"'
+                  }
+                ]
               }
             },
             {
@@ -64,9 +71,11 @@ exports.handler = (event, context, callback) => {
                 "Name": subdomain + '.' + tld,
                 "TTL": 3600,
                 "Type": "TXT",
-                "ResourceRecords":  values[3].map(v => {
-                  return { Value: '"' + v[0] + '"' };
-                }),
+                "ResourceRecords": [
+                  {
+                    Value: '"v=spf1 include:' + control_domain + ' ~all"'
+                  }
+                ]
               }
             }
           ]

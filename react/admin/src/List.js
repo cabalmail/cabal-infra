@@ -68,7 +68,8 @@ class List extends React.Component {
       data: JSON.stringify({
         address: a.address,
         subdomain: a.subdomain,
-        tld: a.tld
+        tld: a.tld,
+        public_key: a.public_key
       }),
       headers: {
         'Authorization': this.props.token
