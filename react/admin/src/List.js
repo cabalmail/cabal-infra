@@ -79,7 +79,7 @@ class List extends React.Component {
       headers: {
         'Authorization': this.props.token
       },
-      timeout: 1000
+      timeout: 10000
     });
     return response;
   }
