@@ -9,7 +9,7 @@ on:
       - '.github/workflows/react_documentation.yml'
 
 jobs:
-  deploy:
+  document:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@main
@@ -72,3 +72,4 @@ jobs:
         git config --global user.email "${MYEMAIL}"
         git add .
         git commit -m "Generated documentation for React"
+        git push
