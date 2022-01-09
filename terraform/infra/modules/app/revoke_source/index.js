@@ -1,6 +1,3 @@
-// const { promisify } = require('util');
-// const dnsCallback = require('dns');
-// const dns = promisify(dnsCallback.resolve);
 const AWS = require('aws-sdk');
 const ddb = new AWS.DynamoDB.DocumentClient();
 const route53 = new AWS.Route53();
@@ -29,12 +26,7 @@ exports.handler = (event, context, callback) => {
 
     const lines = public_key.split(/\r?\n/);
     const publicKeyFlattened = lines[1] + lines[2] + lines[3];
-    var promise1 = revokeAddress(address);
-//    var promise2 = dns(subdomain + '.' + tld, 'MX');
-//    var promise3 = dns('cabal._domainkey.' + subdomain + '.' + tld, 'TXT');
-//    var promise4 = dns(subdomain + '.' + tld, 'TXT');
-
-    Promise.all([promise1]).then(values => {
+    revokeAddress(address).then(v => {
       var params = {
         "HostedZoneId": zone_id,
         "ChangeBatch": {
@@ -85,13 +77,16 @@ exports.handler = (event, context, callback) => {
       route53.changeResourceRecordSets(params, function(err,data) {
         console.log(err,data);
       });
-        callback(null, {
-            statusCode: 201,
-            body: '{"status":"success"}',
-            headers: {
-                'Access-Control-Allow-Origin': '*',
-            },
-        });
+      callback(null, {
+          statusCode: 202,
+          body: JSON.stringify({
+            "status": "success",
+            "address": address
+          }),
+          headers: {
+              'Access-Control-Allow-Origin': '*',
+          },
+      });
     }).catch((err) => {
         console.error(err);
         errorResponse(err.message, context.awsRequestId, callback)
