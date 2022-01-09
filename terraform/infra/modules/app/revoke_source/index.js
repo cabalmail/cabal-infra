@@ -51,7 +51,7 @@ exports.handler = (event, context, callback) => {
               "Type": "TXT",
               "ResourceRecords": [
                 {
-                  Value: '"' + publicKeyFlattened + '"'
+                  Value: '"v=DKIM1; k=rsa; p=' + publicKeyFlattened + '"'
                 }
               ]
             }
@@ -72,7 +72,7 @@ exports.handler = (event, context, callback) => {
         ]
       }
     };
-console.log(params);
+
     const r53_req = route53.changeResourceRecordSets(params, function(err,data) {
       if (err) {
         console.error("r53 error", err);
