@@ -73,6 +73,7 @@ jobs:
         rm rdout.json
     - name: Push
       run: |
+        git show --format=email
         MYNAME=$(git show --format=email | grep "From:" | cut -d\  -f2)
         MYEMAIL=$(git show --format=email | grep "From:" | cut -d\  -f3 | tr -d "<>")
         git config --global user.name "${MYNAME}"
