@@ -61,4 +61,4 @@ This is my first open source project, so I don't yet have a reliable sense of ho
 
 # Documentation
 
-This document refers to more detailed documentation in the [docs](./docs) directory. Additionally, Automated code documentation is generated for the terraform code by [terraform-docs](https://github.com/terraform-docs/terraform-docs). See e.g. [terraform/infra/README.md](./terraform/infra/README.md).
+This document refers to more detailed documentation in the [docs](./docs) directory. Automated code documentation is generated for the Terraform code by [terraform-docs](https://github.com/terraform-docs/terraform-docs). See e.g. [terraform/infra/README.md](./terraform/infra/README.md). Automated code documentation is generated for the React code by [react-docgen](https://github.com/reactjs/react-docgen). These can be found in [react/admin/docs](./react/admin/docs).
