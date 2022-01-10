@@ -1,5 +1,9 @@
 import React from 'react';
 
+/**
+ * Renders a sign up form.
+ */
+
 class SignUp extends React.Component {
   render() {
     return (

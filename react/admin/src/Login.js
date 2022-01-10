@@ -1,5 +1,9 @@
 import React from 'react';
 
+/**
+ * Renders login form
+ */
+
 class Login extends React.Component {
   render() {
     return (

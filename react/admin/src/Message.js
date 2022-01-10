@@ -1,6 +1,10 @@
 import React from 'react';
 import './Message.css';
 
+/**
+ * Renders message box
+ */
+
 class Message extends React.Component {
 
   render() {

@@ -14,6 +14,10 @@ import Message from './Message';
 import Nav from './Nav';
 let UserPool = null;
 
+/**
+ * Application for managing Cabalmail addresses via web user interface
+ */
+
 class App extends React.Component {
 
   constructor(props) {

@@ -19,6 +19,7 @@ jobs:
         yarn install
         mkdir -p docs
         ./node_modules/.bin/react-docgen . -o rdout.json
+        jq rdout.json '.'
         jq -r 'keys[]' rdout.json | while read KEY ; do
             jq -r ".[\"${KEY}\"] | keys[]" rdout.json | while read PROP ; do
                 CONTENT=$(jq -r ".[\"${KEY}\"][\"${PROP}\"]" rdout.json)

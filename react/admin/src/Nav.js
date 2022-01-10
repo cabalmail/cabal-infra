@@ -1,6 +1,10 @@
 import React from 'react';
 import './Nav.css'
 
+/**
+ * Renders the navigation bar
+ */
+
 class Nav extends React.Component {
   render() {
     const { loggedIn, onClick, view } = this.props;
