@@ -72,7 +72,7 @@ jobs:
         rm rdout.json
     - name: Push
       run: |
-        MYNAME="${{github.event.pusher.name}}"
+        MYNAME="${{github.event.pusher.name}} (automated)"
         MYEMAIL="${{github.event.pusher.email}}"
         git config --global user.name "${MYNAME}"
         git config --global user.email "${MYEMAIL}"
