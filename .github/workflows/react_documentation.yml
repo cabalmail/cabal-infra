@@ -39,7 +39,6 @@ jobs:
                         ;;
                 esac
             done <<< "$(jq -r ".[\"${KEY}\"] | keys[]" rdout.json)"
-            echo "====== Writing ${FILE} ======"
             echo "# Cabalmail" >$FILE
             echo '<div style="width: 10em; float:left; height: 100%; padding-right: 1em;"><img src="/docs/logo.png" width="100" />' >>$FILE
             echo '<p><a href="/README.md">Main documentation</a></p>' >>$FILE
@@ -73,11 +72,10 @@ jobs:
         rm rdout.json
     - name: Push
       run: |
-        git add .
-        git status
-        MYNAME=$(git log --name-status HEAD^..HEAD --format="format:%an" | head -1)
-        MYEMAIL=$(git log --name-status HEAD^..HEAD --format="format:%ae" | head -1)
+        MYNAME="Github Action"
+        MYEMAIL=${{github.actor}}
         git config --global user.name "${MYNAME}"
         git config --global user.email "${MYEMAIL}"
+        git add .
         git commit -m "Generated documentation for React"
         git push
