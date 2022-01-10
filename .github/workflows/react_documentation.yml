@@ -76,7 +76,9 @@ jobs:
         MYEMAIL="${{github.event.pusher.email}}"
         git config --global user.name "${MYNAME}"
         git config --global user.email "${MYEMAIL}"
-        git add .
-        git commit -m "Generated documentation for React"
-        git push
+        {
+          git add .
+          git commit -m "Generated documentation for React"
+          git push
+        }
         exit 0
