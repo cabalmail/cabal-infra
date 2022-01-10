@@ -30,6 +30,7 @@ jobs:
                         ;;
                     "displayName")
                         NAME=$CONTENT
+                        FILE="docs/${NAME}.md"
                         ;;
                     "methods")
                         METHODS=$CONTENT
@@ -38,8 +39,7 @@ jobs:
                         PROPS=$CONTENT
                         ;;
                 esac
-            done
-            FILE="docs/${NAME}.md"
+                done
             echo "====== Writing ${FILE} ======"
             echo "# ${NAME}" >$FILE
             echo >>$FILE
