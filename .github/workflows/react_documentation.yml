@@ -62,7 +62,9 @@ jobs:
                 MRETURNS=$(echo $METHOD | jq -r ".returns")
                 echo "### $MNAME" >>$FILE
                 echo "Modifiers: ${MMODIFIERS:-none}" >>$FILE
+                echo >>$FILE
                 echo "Parameters: ${MPARAMS}" >>$FILE
+                echo >>$FILE
                 echo "Returns: ${MRETURNS}" >>$FILE
                 echo >>$FILE
             done
