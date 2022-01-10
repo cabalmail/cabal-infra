@@ -15,8 +15,6 @@ jobs:
     - uses: actions/checkout@main
     - name: Document
       run: |
-        MYNAME=$(git log --name-status HEAD^..HEAD --format="format:%an" | head -1)
-        MYEMAIL=$(git log --name-status HEAD^..HEAD --format="format:%ae" | head -1)
         cd react/admin
         yarn install
         mkdir -p docs
@@ -73,6 +71,11 @@ jobs:
             echo "</div>" >>$FILE
         done <<< "$(jq -r 'keys[]' rdout.json)"
         rm rdout.json
+    - name: Push
+      run: |
+        git status
+        MYNAME=$(git log --name-status HEAD^..HEAD --format="format:%an" | head -1)
+        MYEMAIL=$(git log --name-status HEAD^..HEAD --format="format:%ae" | head -1)
         git config --global user.name "${MYNAME}"
         git config --global user.email "${MYEMAIL}"
         git add .
