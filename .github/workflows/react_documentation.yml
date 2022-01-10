@@ -77,5 +77,4 @@ jobs:
         git config --global user.name "${MYNAME}"
         git config --global user.email "${MYEMAIL}"
         git add .
-        git commit -m "Generated documentation for React"
-        git push
+        git diff-index --quiet HEAD || git commit -m "Generated documentation for React" || git push
