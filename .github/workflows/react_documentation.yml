@@ -41,9 +41,13 @@ jobs:
                 esac
             done <<< "$(jq -r ".[\"${KEY}\"] | keys[]" rdout.json)"
             echo "====== Writing ${FILE} ======"
-            echo "# ${NAME}" >$FILE
-            echo >>$FILE
-            echo "## Description" >>$FILE
+            echo <<- EOF >$FILE
+              # Cabalmail
+              <div style="width: 10em; float:left; height: 100%; padding-right: 1em;"><img src="/docs/logo.png" width="100" />
+              <p><a href="/README.md">Main documentation</a></p>
+              </div><div style="padding-left: 11em;">
+            EOF
+            echo "# ${NAME}" >>$FILE
             echo $DESCRIPTION >>$FILE
             echo >>$FILE
             # echo "## Props" >>$FILE
@@ -65,6 +69,7 @@ jobs:
                 echo "Returns: ${MRETURNS}" >>$FILE
                 echo >>$FILE
             done
+            echo "</div>" >>$FILE
         done <<< "$(jq -r 'keys[]' rdout.json)"
         rm rdout.json
     - name: Push
