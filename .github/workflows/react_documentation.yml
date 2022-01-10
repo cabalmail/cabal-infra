@@ -20,9 +20,9 @@ jobs:
         mkdir -p docs
         ./node_modules/.bin/react-docgen . -o rdout.json
         jq '.' rdout.json
-        jq -r 'keys[]' rdout.json | while read KEY ; do
+        while read KEY ; do
             [ -z "${KEY}" ] && continue
-            jq -r ".[\"${KEY}\"] | keys[]" rdout.json | while read PROP ; do
+            while read PROP ; do
                 CONTENT=$(jq -r ".[\"${KEY}\"][\"${PROP}\"]" rdout.json)
                 case $PROP in
                     "description")
@@ -39,7 +39,7 @@ jobs:
                         PROPS=$CONTENT
                         ;;
                 esac
-                done
+            done <<< "$(jq -r ".[\"${KEY}\"] | keys[]" rdout.json)"
             echo "====== Writing ${FILE} ======"
             echo "# ${NAME}" >$FILE
             echo >>$FILE
@@ -65,7 +65,7 @@ jobs:
                 echo "Returns: ${MRETURNS}" >>$FILE
                 echo >>$FILE
             done
-        done
+        done <<< "$(jq -r 'keys[]' rdout.json)"
         rm rdout.json
     - name: Push
       run: |
