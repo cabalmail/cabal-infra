@@ -1,6 +1,6 @@
-# Login
 
-## Description
+# Login
 Renders login form
 
 ## Methods
+</div>

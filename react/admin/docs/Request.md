@@ -1,6 +1,5 @@
-# Request
 
-## Description
+# Request
 Renders a form for requesting a new address and handles calling the request API
 
 ## Methods
@@ -45,3 +44,4 @@ Modifiers: none
 Parameters: e (null)
 Returns: null
 
+</div>

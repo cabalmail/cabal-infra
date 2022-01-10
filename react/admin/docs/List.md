@@ -1,6 +1,5 @@
-# List
 
-## Description
+# List
 Fetches addresses for current user and displays them
 
 ## Methods
@@ -44,3 +43,4 @@ Modifiers: none
 Parameters: e (null)
 Returns: null
 
+</div>

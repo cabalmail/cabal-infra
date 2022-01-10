@@ -1,6 +1,5 @@
-# App
 
-## Description
+# App
 Application for managing Cabalmail addresses via web user interface
 
 ## Methods
@@ -49,3 +48,4 @@ Modifiers: none
 Parameters:  ()
 Returns: null
 
+</div>

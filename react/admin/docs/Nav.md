@@ -1,6 +1,6 @@
-# Nav
 
-## Description
+# Nav
 Renders the navigation bar
 
 ## Methods
+</div>

@@ -1,6 +1,6 @@
-# Message
 
-## Description
+# Message
 Renders message box
 
 ## Methods
+</div>
