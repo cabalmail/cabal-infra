@@ -73,11 +73,11 @@ jobs:
         rm rdout.json
     - name: Push
       run: |
+        git add .
         git status
         MYNAME=$(git log --name-status HEAD^..HEAD --format="format:%an" | head -1)
         MYEMAIL=$(git log --name-status HEAD^..HEAD --format="format:%ae" | head -1)
         git config --global user.name "${MYNAME}"
         git config --global user.email "${MYEMAIL}"
-        git add .
         git commit -m "Generated documentation for React"
         git push
