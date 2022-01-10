@@ -72,9 +72,8 @@ jobs:
         rm rdout.json
     - name: Push
       run: |
-        echo '${{ toJson(github) }}'
-        MYNAME="Github Action"
-        MYEMAIL=${{github.actor}}
+        MYNAME="${{github.event.pusher.name}}"
+        MYEMAIL="${{github.event.pusher.email}}"
         git config --global user.name "${MYNAME}"
         git config --global user.email "${MYEMAIL}"
         git add .
