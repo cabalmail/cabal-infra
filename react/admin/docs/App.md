@@ -1,7 +1,7 @@
 # App
 
 ## Description
-
+Application for managing Cabalmail addresses via web user interface
 
 ## Methods
 ### setState

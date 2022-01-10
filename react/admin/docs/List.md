@@ -1,7 +1,7 @@
 # List
 
 ## Description
-
+Fetches addresses for current user and displays them
 
 ## Methods
 ### filter
