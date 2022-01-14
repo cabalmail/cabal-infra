@@ -19,6 +19,7 @@ ul.address-list li.address {
   grid-template-columns: 50% 30% 7% 7%;
   grid-column-gap: 2%;
   align-items: baseline;
+  clear: both;
 }
 
 ul.address-list li.address span.address, ul.address-list button {
