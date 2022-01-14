@@ -6,9 +6,11 @@ on:
       - main
     paths:
       - 'react/public'
-      - 'react/public/**'
+      - 'react/public/*'
+      - 'react/public/*/**'
       - 'react/src'
-      - 'react/src/**'
+      - 'react/src/*'
+      - 'react/src/*/**'
       - '.github/workflows/react_deploy.yml'
 
 jobs:
