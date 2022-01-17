@@ -23,20 +23,7 @@
 
         <p>{{ site.description | default: site.github.project_tagline }}</p>
         
-        <ul>
-          <li><a href="/">Home</a></li>
-          <li><a href="/genesis.html">Origin</a></li>
-          <li><a href="/setup.html">Setup</a>
-          <ul>
-            <li><a href="./github.html">Github</a></li>
-            <li><a href="./aws.html">AWS</a></li>
-            <li><a href="./terraform.html">Terraform</a></li>
-            <li><a href="./registrar.html">Registrars</a></li>
-          </ul></li>
-          <li><a href="./user_manual.html">User Manual</a></li>
-          <li><a href="./operations.html"></a>Operations</li>
-          <li><a href="./mua_setup.html">Client Setup</a></li>
-        </ul>
+        {% include nav.html %}
 
         {% if site.github.is_project_page %}
         <p class="view"><a href="{{ site.github.repository_url }}">View the Project on GitHub <small>{{ site.github.repository_nwo }}</small></a></p>
