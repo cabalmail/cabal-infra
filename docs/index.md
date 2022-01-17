@@ -37,26 +37,3 @@ You _could_ use a Cabalmail system along with client-side spam filters, but I re
 You also _could_ create a single address on a Cabalmail system and just give that out to everyone like a normal address. But if you do, get ready to take a fresh look at those client-side spam filters.
 
 Admitedly, Cabalmail serves a specialized use case, which is definitely not for everyone. To get the benefits of a Cabalmail system, you must get used to creating a new email address *each and every time you provide your contact information to a third party.* The administrative interface makes this easy, but it _is_ an additional step.
-
-# Set Up
-
-Follow [these instuctions](./setup.md) to set up a Cabalmail system from this repository.
-
-# Operations
-
-See [these suggestions](./operations.md) for assuring the continued smooth operation of your Cabalmail system
-
-# End User Set Up and Day-to-day Use
-
-See the linked docouments for information on:
-
-* Setting up [Mail User Agents](./mua_setup.md) such as Outlook, Thunderbird, iOS Mail, etc.
-* Working with [the Cabalmail App](./user_manual.md) and managing user accounts.
-
-# Contributing
-
-This is my first open source project, so I don't yet have a reliable sense of how best to guide contributors or to vet/accept contributions. But if you would like to submit a pull request, I would be happy to consider it.
-
-# Documentation
-
-This document refers to more detailed documentation in the [docs](./) directory. Automated code documentation is generated for the Terraform code by [terraform-docs](https://github.com/terraform-docs/terraform-docs). See e.g. [terraform/infra/README.md](./terraform/infra/README.md). Automated code documentation is generated for the React code by [react-docgen](https://github.com/reactjs/react-docgen). These can be found in [react/admin/docs](./react/admin/docs).
