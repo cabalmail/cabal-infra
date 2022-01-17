@@ -1,5 +1,4 @@
 theme: jekyll-theme-minimal
 title: Cabalmail
 description: Host your own email and enhance your privacy
-site:
-  logo: /logo.png
+logo: /logo.png
