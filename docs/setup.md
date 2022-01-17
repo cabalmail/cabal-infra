@@ -33,6 +33,20 @@ The developers have striven to make provisioning as automated as possible. Howev
     1. Queue a plan in your Terraform Cloud terraform/dns workspace.
     2. When it finishes the plan phase, confirm and apply.
     3. The output will include name servers. [Update the domain registration](./registrar.md) for your control domain with these name servers. *Before proceeding to the next step, make sure this change is complete*.
+    4. The output will also include the keys and values of several environment varialbes that you must store in the Actions settings of your Github repository:
+
+        ```json
+        "github_env_vars": {
+          "AWS_S3_BUCKET": "admin.example.net",
+          "COGNITO_CLIENT_ID":"xxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "COGNITO_USER_POOL_ID":"us-east-1_xxxxxxxxx"
+        }
+
+        ```
+        1. Log in to your Github account.
+        2. Navigate to the newly forked repository and copy the URL. You will need this when you set up Terraform later.
+        3. From the repository, navigate to Settings, and then Secrets. This should show any Actions secrets by default. If you see any other secrets settings, navigiate to Actions secrets.
+        4. For each environment variable, click "New repository secret", and enter the key and value.
 
 3. Run the terraform/infra workspace.
 
