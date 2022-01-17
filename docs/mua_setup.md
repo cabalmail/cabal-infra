@@ -2,6 +2,7 @@
 Email clients differ, but the basic settings are these (substituting your control domain for `example.net`):
 
 ## Incoming Settings
+
 |Setting |Value                   |
 |--------|------------------------|
 |Type    |IMAP                    |
@@ -13,6 +14,7 @@ Email clients differ, but the basic settings are these (substituting your contro
 |Password|As entered during signup|
 
 ## Outgoing Settings
+
 |Setting  |Value                  |
 |---------|-----------------------|
 |Type     |SMTP or SMTPS          |
