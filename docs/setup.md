@@ -44,7 +44,7 @@ The developers have striven to make provisioning as automated as possible. Howev
 
         ```
         1. Log in to your Github account.
-        2. Navigate to the newly forked repository and copy the URL. You will need this when you set up Terraform later.
+        2. Navigate to the newly forked repository.
         3. From the repository, navigate to Settings, and then Secrets. This should show any Actions secrets by default. If you see any other secrets settings, navigiate to Actions secrets.
         4. For each environment variable, click "New repository secret", and enter the key and value.
 
