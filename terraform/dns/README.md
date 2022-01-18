@@ -24,8 +24,8 @@ The small Terraform stack in this directory stands up a Route53 Zone for the con
 
 | Name | Description |
 |------|-------------|
+| <a name="output_aws_s3_bucket"></a> [aws\_s3\_bucket](#output\_aws\_s3\_bucket) | n/a |
 | <a name="output_control_domain_name_servers"></a> [control\_domain\_name\_servers](#output\_control\_domain\_name\_servers) | n/a |
-| <a name="output_github_env_vars"></a> [github\_env\_vars](#output\_github\_env\_vars) | n/a |
 ## Providers
 
 | Name | Version |
