@@ -23,4 +23,4 @@ jobs:
         json
         EOF
         tar -czf cabal.zip cabal/
-        aws s3 cp cabal.zip s3://${{ secrets.AWS_S3_BUCKET }}/cabal.zip --profile deploy_cookbook --no-progress --acl authenticated-read
+        aws s3 cp cabal.zip s3://${{ secrets.AWS_S3_BUCKET }}/cabal.zip --profile deploy_cookbook --no-progress --acl private
