@@ -11,7 +11,7 @@ After signing up, perform the following steps:
     |Description                |Create Infrastructure and Application for Cabalmail          |
     |Terraform Working Directory|terraform/infra                                              |
     |Automatic Run Triggering   |Only trigger runs when the files in the spcified paths change|
-    |- Paths                    |<ul><li>terraform/infra</li><li>chef</li></ul>               |
+    |- Paths                    |terraform/infra, chef                                        |
     |VCS branch                 |default                                                      |
     |Include submodules on clone|Unchecked                                                    |
 
@@ -26,6 +26,6 @@ After signing up, perform the following steps:
     |Description                |Create DNS Zone for Cabalmail control domain                 |
     |Terraform Working Directory|terraform/dns                                                |
     |Automatic Run Triggering   |Only trigger runs when the files in the spcified paths change|
-    |- Paths                    |<ul><li>terraform/dns</li></ul>                              |
+    |- Paths                    |terraform/dns                                                |
     |VCS branch                 |default                                                      |
     |Include submodules on clone|Unchecked                                                    |
