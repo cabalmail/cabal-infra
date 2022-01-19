@@ -10,7 +10,6 @@ Creates security group and autoscaling group for a tier (IMAP, SMTP submission, 
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_artifact_bucket"></a> [artifact\_bucket](#input\_artifact\_bucket) | S3 bucket where cookbooks are stored. | `string` | n/a | yes |
 | <a name="input_chef_license"></a> [chef\_license](#input\_chef\_license) | Must be the string 'accept' in order to install and use Chef Infra Client | `string` | n/a | yes |
 | <a name="input_cidr_block"></a> [cidr\_block](#input\_cidr\_block) | Local CIDR range | `string` | n/a | yes |
 | <a name="input_client_id"></a> [client\_id](#input\_client\_id) | App client ID for Cognito User Pool | `string` | n/a | yes |
@@ -23,7 +22,6 @@ Creates security group and autoscaling group for a tier (IMAP, SMTP submission, 
 | <a name="input_private_zone_arn"></a> [private\_zone\_arn](#input\_private\_zone\_arn) | ARN for internal lookups | `string` | n/a | yes |
 | <a name="input_private_zone_id"></a> [private\_zone\_id](#input\_private\_zone\_id) | Zone ID for internal lookups | `string` | n/a | yes |
 | <a name="input_region"></a> [region](#input\_region) | AWS region | `string` | n/a | yes |
-| <a name="input_s3_arn"></a> [s3\_arn](#input\_s3\_arn) | S3 bucket arn | `string` | n/a | yes |
 | <a name="input_scale"></a> [scale](#input\_scale) | Min, max, and desired settings for autoscale group | `map` | n/a | yes |
 | <a name="input_table_arn"></a> [table\_arn](#input\_table\_arn) | DynamoDB table arn | `string` | n/a | yes |
 | <a name="input_target_groups"></a> [target\_groups](#input\_target\_groups) | List of load balancer target groups in which to register IMAP instances. | `list` | n/a | yes |
@@ -64,6 +62,7 @@ No requirements.
 | [aws_caller_identity.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity) | data source |
 | [aws_default_tags.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/default_tags) | data source |
 | [aws_iam_policy.ssm](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy) | data source |
+| [aws_ssm_parameter.s3](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ssm_parameter) | data source |
 
 </div>
 <!-- END_TF_DOCS -->
