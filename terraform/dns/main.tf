@@ -59,6 +59,31 @@ resource "aws_ssm_parameter" "cognito" {
 resource "aws_s3_bucket" "react_app" {
   acl    = "public-read"
   bucket = "admin.${var.control_domain}"
+  policy = <<EOP
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "Caesar",
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E1MCK388YJB8RY"
+            },
+            "Action": "s3:GetObject",
+            "Resource": "arn:aws:s3:::admin.cabal-mail.net/*"
+        },
+        {
+            "Sid": "AndNancy",
+            "Effect": "Deny",
+            "Principal": {
+                "AWS": "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E1MCK388YJB8RY"
+            },
+            "Action": "s3:GetObject",
+            "Resource": "arn:aws:s3:::admin.cabal-mail.net/cabal.zip"
+          }
+    ]
+}
+EOP
   website {
     index_document = "index.html"
     error_document = "error.html"
