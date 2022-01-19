@@ -82,10 +82,8 @@ module "imap" {
   private_subnets  = module.vpc.private_subnets
   vpc_id           = module.vpc.vpc.id
   control_domain   = var.control_domain
-  artifact_bucket  = module.cookbook.bucket.id
   target_groups    = [module.load_balancer.imap_tg]
   table_arn        = module.table.table_arn
-  s3_arn           = module.cookbook.bucket.arn
   efs_dns          = module.efs.efs_dns
   user_pool_arn    = local.user_pool_arn
   region           = var.aws_region
@@ -109,10 +107,8 @@ module "smtp_in" {
   private_subnets  = module.vpc.private_subnets
   vpc_id           = module.vpc.vpc.id
   control_domain   = var.control_domain
-  artifact_bucket  = module.cookbook.bucket.id
   target_groups    = [module.load_balancer.relay_tg]
   table_arn        = module.table.table_arn
-  s3_arn           = module.cookbook.bucket.arn
   efs_dns          = module.efs.efs_dns
   region           = var.aws_region
   ports            = [25, 465, 587]
@@ -136,13 +132,11 @@ module "smtp_out" {
   private_subnets  = module.vpc.private_subnets
   vpc_id           = module.vpc.vpc.id
   control_domain   = var.control_domain
-  artifact_bucket  = module.cookbook.bucket.id
   target_groups    = [
     module.load_balancer.submission_tg,
     module.load_balancer.starttls_tg
   ]
   table_arn        = module.table.table_arn
-  s3_arn           = module.cookbook.bucket.arn
   efs_dns          = module.efs.efs_dns
   region           = var.aws_region
   ports            = [25, 465, 587]
