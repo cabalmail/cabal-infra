@@ -80,7 +80,7 @@ resource "aws_s3_bucket" "react_app" {
             },
             "Action": "s3:GetObject",
             "Resource": "arn:aws:s3:::admin.cabal-mail.net/cabal.tar.gz"
-          }
+        }
     ]
 }
 EOP
@@ -96,6 +96,25 @@ resource "aws_ssm_parameter" "react_app" {
   description = "S3 bucket for React App"
   type        = "String"
   value       = jsonencode(aws_s3_bucket.react_app)
+
+  tags = {
+    environment          = "production"
+    managed_by_terraform = "y"
+    terraform_repo       = var.repo
+  }
+}
+
+# Create Elastic Container Registry Repository
+resource "aws_ecr_repository" "container_repo" {
+  name = "cabal-registry"
+}
+
+# Save ECR information in AWS SSM Parameter Store so that terraform/infra can read it.
+resource "aws_ssm_parameter" "container_repo" {
+  name        = "/cabal/container/registry"
+  description = "ECR repo"
+  type        = "String"
+  value       = jsonencode(aws_ecr_repository.container_repo)
 
   tags = {
     environment          = "production"
