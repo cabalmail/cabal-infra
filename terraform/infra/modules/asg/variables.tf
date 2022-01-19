@@ -16,6 +16,10 @@ data "aws_iam_policy" "ssm" {
   arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+data "aws_ssm_parameter" "s3" {
+  name = "/cabal/admin/bucket"
+}
+
 variable "private_subnets" {
   type        = list
   description = "Subnets for imap ec2 instances."
@@ -41,19 +45,9 @@ variable "target_groups" {
   description = "List of load balancer target groups in which to register IMAP instances."
 }
 
-variable "artifact_bucket" {
-  type        = string
-  description = "S3 bucket where cookbooks are stored."
-}
-
 variable "table_arn" {
   type        = string
   description = "DynamoDB table arn"
-}
-
-variable "s3_arn" {
-  type        = string
-  description = "S3 bucket arn"
 }
 
 variable "efs_dns" {

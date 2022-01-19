@@ -29,11 +29,6 @@ module "domains" {
   mail_domains = var.mail_domains
 }
 
-# Creates an s3 bucket and uploads cookbooks to it for retrieval by ec2 instances
-module "cookbook" {
-  source = "./modules/cookbook"
-}
-
 # Infrastructure and code for the administrative web site
 module "admin" {
   source              = "./modules/app"
