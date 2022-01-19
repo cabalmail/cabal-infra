@@ -96,7 +96,6 @@ module "imap" {
   user_pool_id     = local.user_pool_id
   scale            = var.imap_scale
   chef_license     = var.chef_license
-  cookbook_etag    = module.cookbook.etag
   depends_on       = [ module.cert ]
 }
 
@@ -121,7 +120,6 @@ module "smtp_in" {
   user_pool_arn    = local.user_pool_arn
   scale            = var.smtpin_scale
   chef_license     = var.chef_license
-  cookbook_etag    = module.cookbook.etag
   depends_on       = [ module.cert ]
 }
 
@@ -149,7 +147,6 @@ module "smtp_out" {
   user_pool_arn    = local.user_pool_arn
   scale            = var.smtpout_scale
   chef_license     = var.chef_license
-  cookbook_etag    = module.cookbook.etag
   depends_on       = [ module.cert ]
 }
 

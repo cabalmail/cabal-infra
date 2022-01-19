@@ -109,8 +109,3 @@ variable "cidr_block" {
   type        = string
   description = "Local CIDR range"
 }
-
-variable "cookbook_etag" {
-  type        = string
-  description = "Hash value that changes when the cookbook changes. Used to trigger recreation of autoscale groups and thus replacement of instances."
-}
