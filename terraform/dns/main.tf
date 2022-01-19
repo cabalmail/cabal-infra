@@ -79,7 +79,7 @@ resource "aws_s3_bucket" "react_app" {
                 "AWS": "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E1MCK388YJB8RY"
             },
             "Action": "s3:GetObject",
-            "Resource": "arn:aws:s3:::admin.cabal-mail.net/cabal.zip"
+            "Resource": "arn:aws:s3:::admin.cabal-mail.net/cabal.tar.gz"
           }
     ]
 }
