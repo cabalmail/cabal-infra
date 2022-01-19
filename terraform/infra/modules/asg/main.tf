@@ -9,7 +9,7 @@ resource "aws_launch_template" "asg" {
   vpc_security_group_ids = [aws_security_group.sg.id]
   user_data             = base64encode(templatefile("${path.module}/templates/userdata", {
     control_domain  = var.control_domain,
-    artifact_bucket = data.s3.name,
+    artifact_bucket = data.aws_ssm_parameter.s3.name,
     efs_dns         = var.efs_dns,
     region          = var.region,
     client_id       = var.client_id,
