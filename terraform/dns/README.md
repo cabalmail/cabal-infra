@@ -24,6 +24,7 @@ The small Terraform stack in this directory stands up a Route53 Zone for the con
 
 | Name | Description |
 |------|-------------|
+| <a name="output_aws_ecr_repository"></a> [aws\_ecr\_repository](#output\_aws\_ecr\_repository) | n/a |
 | <a name="output_aws_s3_bucket"></a> [aws\_s3\_bucket](#output\_aws\_s3\_bucket) | n/a |
 | <a name="output_control_domain_name_servers"></a> [control\_domain\_name\_servers](#output\_control\_domain\_name\_servers) | n/a |
 ## Providers
@@ -41,9 +42,11 @@ The small Terraform stack in this directory stands up a Route53 Zone for the con
 
 | Name | Type |
 |------|------|
+| [aws_ecr_repository.container_repo](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ecr_repository) | resource |
 | [aws_route53_zone.cabal_control_zone](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route53_zone) | resource |
 | [aws_s3_bucket.react_app](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket) | resource |
 | [aws_ssm_parameter.cognito](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ssm_parameter) | resource |
+| [aws_ssm_parameter.container_repo](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ssm_parameter) | resource |
 | [aws_ssm_parameter.react_app](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ssm_parameter) | resource |
 | [aws_ssm_parameter.zone](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ssm_parameter) | resource |
 
