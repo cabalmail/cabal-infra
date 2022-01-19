@@ -6,6 +6,10 @@ output "aws_s3_bucket" {
   value = aws_s3_bucket.react_app.id
 }
 
-output "aws_ecr_repository" {
-  value = aws_ssm_parameter.container_repo.name
+output "aws_ecr_repository_registry_id" {
+  value = aws_ecr_repository.container_repo.registry_id
+}
+
+output "aws_ecr_repository_repository_url" {
+  value = aws_ecr_repository.container_repo.repository_url
 }

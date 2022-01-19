@@ -34,6 +34,7 @@ After signing up, perform the following steps:
                     "cognito-idp:*",
                     "dynamodb:*",
                     "ec2:*",
+                    "ecr:*",
                     "elasticfilesystem:*",
                     "elasticloadbalancing:*",
                     "iam:*",
