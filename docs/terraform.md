@@ -4,7 +4,7 @@ You must install Terraform or set up an account with [Terraform Cloud](https://a
 
 After signing up, perform the following steps:
 
-1. [Create a workspace](https://learn.hashicorp.com/tutorials/terraform/cloud-workspace-create?in=terraform/cloud-get-started) of type version control workflow. Connect it to your forked repository. While creating the workspace, expand the "Advanced options" area and fill out the fields with these values:
+1. [Create a workspace](https://learn.hashicorp.com/tutorials/terraform/cloud-workspace-create?in=terraform/cloud-get-started) of type version control workflow called "infra". Connect it to your forked repository. While creating the workspace, expand the "Advanced options" area and fill out the fields with these values:
 
     |Field                      |Value                                                        |
     |---------------------------|-------------------------------------------------------------|
@@ -19,7 +19,7 @@ After signing up, perform the following steps:
 
 3. [Create environment variables](https://learn.hashicorp.com/tutorials/terraform/cloud-workspace-configure?in=terraform/cloud-get-started) for `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` using the values you saved from [the AWS section step 7](./aws.md). The secret access key should be designated "sensitive". (Don't forget to rotate this key regularly!) Finally, create a third environment variable for `AWS_DEFAULT_REGION`. Set it to the same region you use for your infrastructure.
 
-4. Repeat steps 1 through 3, using these values:
+4. Repeat steps 1 through 3, for another workspace called "dns" using these values:
 
     |Field                      |Value                                                        |
     |---------------------------|-------------------------------------------------------------|
