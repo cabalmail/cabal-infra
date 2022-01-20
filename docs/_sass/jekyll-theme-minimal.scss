@@ -231,21 +231,11 @@ footer {
   header a small {
     display:inline;
   }
-
-  header ul {
-    position:absolute;
-    right:50px;
-    top:52px;
-  }
 }
 
 @media print, screen and (max-width: 720px) {
   body {
     word-wrap:break-word;
-  }
-
-  header {
-    padding:0;
   }
 
   header ul, header p.view {
