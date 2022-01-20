@@ -56,6 +56,7 @@ resource "aws_ssm_parameter" "cognito" {
 }
 
 # S3 bucket for deploying React app
+# TODO: update ARN od principle origin access identity  
 resource "aws_s3_bucket" "react_app" {
   acl    = "public-read"
   bucket = "admin.${var.control_domain}"
