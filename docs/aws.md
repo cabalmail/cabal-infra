@@ -74,15 +74,25 @@ After signing up, perform the following steps:
                 "Sid": "TheSloth",
                 "Effect": "Allow",
                 "Action": [
-                  "s3:DeleteObject",
-                  "s3:GetObject",
-                  "s3:GetObjectAcl",
-                  "s3:ListAllMyBuckets",
-                  "s3:ListBucket",
-                  "s3:PutObject",
-                  "s3:PutObjectAcl"
-                  ],
+                    "s3:DeleteObject",
+                    "s3:GetObject",
+                    "s3:GetObjectAcl",
+                    "s3:ListAllMyBuckets",
+                    "s3:ListBucket",
+                    "s3:PutObject",
+                    "s3:PutObjectAcl"
+                ],
                 "Resource": "*"
+            },
+            {
+                "Sid": "NeyOperaHouse",
+                "Effect": "Allow",
+                "Action": [
+                    "ssm:GetParameter",
+                    "ssm:GetParameters",
+                    "ssm:GetParametersByPath"
+                ],
+                "Resource": "arn:aws:ssm:*:*:parameter//cabal/*"
             }
         ]
     }
