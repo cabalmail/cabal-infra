@@ -1,5 +1,9 @@
 name: Upload React App
 
+# TODO:
+# Update Terraform to allow caching
+# Update react deploy to invalidate cache
+
 on:
   push:
     branches:
