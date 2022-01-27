@@ -9,3 +9,7 @@ Cabalmail sets `prevent_destroy` on the backup vault, so enabling Cabalmail back
 # Everyday Use
 
 See the [User Manual](./user_manual.md) for instructions on using the included application for creating and revoking email addresses, and for managing user access.
+
+You _could_ use a Cabalmail system along with client-side spam filters, but I recommend against it. Client-side spam filters process mail only after your servers have received and processed it. This hides the spam from you at the cost of gradually (or not-so-gradually) increasing the load on your infrastructure. By making your spam visible, you can easily intercede to reduce load on your infrastructure and keep humming along with small machines. Also, you eliminate false positives; never again will important mail be misidentified as junk.
+
+You also _could_ create a single address on a Cabalmail system and just give that out to everyone like a normal address. But if you do, get ready to take a fresh look at those client-side spam filters.
