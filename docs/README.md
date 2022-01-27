@@ -2,7 +2,7 @@
 
 Creates AWS infrastructure and machine configuration for a Cabalmail system -- a system for hosting and managing your personal email by creating new addresses for each interlocutor.
 
-![Cabalmail logo](./docs/logo.png)
+![Cabalmail logo](./logo.png)
 
 WARNING: This should not be regarded as an enterprise or ISP-grade email solution. It has been tested on a small pool of users for their personal email. Use at your own risk!
 
@@ -36,18 +36,18 @@ You also _could_ create a single address on a Cabalmail system and just give tha
 
 # Set Up
 
-Follow [these instuctions](./docs/setup.md) to set up a Cabalmail system from this repository.
+Follow [these instuctions](./setup.md) to set up a Cabalmail system from this repository.
 
 # Operations
 
-See [these suggestions](./docs/operations.md) for assuring the continued smooth operation of your Cabalmail system
+See [these suggestions](./operations.md) for assuring the continued smooth operation of your Cabalmail system
 
 # End User Set Up and Day-to-day Use
 
 See the linked docouments for information on:
 
-* Setting up [Mail User Agents](./docs/mua_setup.md) such as Outlook, Thunderbird, iOS Mail, etc.
-* Working with [the Cabalmail App](./docs/user_manual.md) and managing user accounts.
+* Setting up [Mail User Agents](./mua_setup.md) such as Outlook, Thunderbird, iOS Mail, etc.
+* Working with [the Cabalmail App](./user_manual.md) and managing user accounts.
 
 # Contributing
 
@@ -55,4 +55,4 @@ This is my first open source project, so I don't yet have a reliable sense of ho
 
 # Documentation
 
-This document refers to more detailed documentation in the [docs](./docs) directory. Automated code documentation is generated for the Terraform code by [terraform-docs](https://github.com/terraform-docs/terraform-docs). See e.g. [terraform/infra/README.md](./terraform/infra/README.md). Automated code documentation is generated for the React code by [react-docgen](https://github.com/reactjs/react-docgen). These can be found in [react/admin/docs](./react/admin/docs).
+This document refers to more detailed documentation in the [docs](.) directory. Automated code documentation is generated for the Terraform code by [terraform-docs](https://github.com/terraform-docs/terraform-docs). See e.g. [terraform/infra/README.md](./terraform/infra/README.md). Automated code documentation is generated for the React code by [react-docgen](https://github.com/reactjs/react-docgen). These can be found in [react/admin/docs](./react/admin/docs).
