@@ -34,7 +34,7 @@ The developers have striven to make provisioning as automated as possible. Howev
 
     1. Queue a plan in your Terraform Cloud terraform/dns workspace.
     2. When it finishes the plan phase, confirm and apply.
-    3. The output will include name servers. [Update the domain registration](./registrar.md) for your control domain with these name servers. *Before proceeding to the next step, make sure this change is complete*.
+    3. The output will include name servers. [Update the domain registration](./registrar.md) for your control domain with these name servers. *Before proceeding to the terraform/infa workspace, make sure this change is complete*.
     4. The output will also include the name of an S3 bucket that you must store in the [Secrets settings](https://docs.github.com/en/actions/security-guides/encrypted-secrets) of your Github repository:
 
         1. Log in to your Github account.
