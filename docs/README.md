@@ -2,9 +2,11 @@
 
 The Cabalmail developement team is hard at work preparing our first release. Stay tuned.
 
-The Cabalmail repository creates AWS infrastructure and machine configuration for a Cabalmail system -- a system for hosting and managing your personal email by creating new addresses for each interlocutor.
+The Cabalmail repository creates AWS infrastructure and machine configuration for a Cabalmail system — a system for hosting and managing your personal email by creating new addresses for each interlocutor.
 
 WARNING: This should not be regarded as an enterprise or ISP-grade email solution. It has been tested on a small pool of users for their personal email. Use at your own risk!
+
+## What it Does
 
 Cabalmail is a suite of infrastructure code ([Terraform](https://www.terraform.io/)), configuration management code ([Chef Infra](https://www.chef.io/)), and application code ([React](https://reactjs.org/)) that together create the following system components:
 
@@ -16,7 +18,7 @@ Cabalmail is a suite of infrastructure code ([Terraform](https://www.terraform.i
 * DNS
 * Other supporting infrastructure
 
-Cabalmail allows you to host your email and to create multiple unique addresses that all point to the same inbox (one inbox per user, many addresses per inbox). This allows you to give distinct email address to all the people, institutions, corporations, etc., from whom you wish to receive email, allowing fine-grained control of who is authorized to insert messages into your inbox.
+Cabalmail allows you to host your email and to create multiple unique addresses that all point to the same inbox (one inbox per user, many addresses per inbox). This allows you and your users to give distinct email addresses to all the people, institutions, corporations, etc., from whom you wish to receive email, allowing fine-grained control of who is authorized to insert messages into your inbox.
 
 ## Subdomains
 
