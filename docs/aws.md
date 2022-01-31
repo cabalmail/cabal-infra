@@ -1,6 +1,6 @@
-# Recommended Steps for Setting Up an AWS Account
+# Recommended Steps for Setting Up an Amazon Web Services Account
 
-You must [sign up for an AWS account](https://portal.aws.amazon.com/billing/signup#/start). You may use an existing account, but I recommend creating a dedicated account for this workload.
+You must [sign up for an Amazon Web Services account](https://portal.aws.amazon.com/billing/signup#/start). You may use an existing account, but I recommend creating a dedicated account for this workload.
 
 After signing up, perform the following steps:
 

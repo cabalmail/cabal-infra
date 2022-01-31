@@ -6,6 +6,8 @@ The Cabalmail repository creates AWS infrastructure and machine configuration fo
 
 WARNING: This should not be regarded as an enterprise or ISP-grade email solution. It has been tested on a small pool of users for their personal email. Use at your own risk!
 
+WARNING: Running this code as instructed will result in charges on your credit card from Amazon Web Services.
+
 ## What it Does
 
 Cabalmail is a suite of infrastructure code ([Terraform](https://www.terraform.io/)), configuration management code ([Chef Infra](https://www.chef.io/)), and application code ([React](https://reactjs.org/)) that together create the following system components:

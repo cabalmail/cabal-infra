@@ -2,9 +2,9 @@
 
 Before using this repo, you must set up an appropriate environment.
 
-## AWS Account
+## Amazon Web Services Account
 
-[Set up an AWS Account](./aws.md).
+[Set up an Amazon Web Services Account](./aws.md).
 
 ## Github
 
@@ -15,6 +15,8 @@ Before using this repo, you must set up an appropriate environment.
 [Set up Terraform](./terraform.md).
 
 ## Domain registration
+
+NOTE: Domain registration is not free. You will need to provide a form of payment.
 
 You must register your desired domains (control and mail) with your chosen registrar. Cabalmail requires exactly one control domain and at least one mail domain. Registration requires an email address. You can use a temporary email account with any of the free providers for this address, and later, you can update the registration records with a self-hosted address once your hosting infrastructure is up and running.
 
@@ -28,7 +30,7 @@ The developers have striven to make provisioning as automated as possible. Howev
 
 1. Set up the [prerequisites](#Prerequisites) above.
 
-2. Run the terraform/dns workspace.
+2. Run the terraform/dns workspace. WARNING: Performing this step will result in charges on your credit card from Amazon Web Services.
 
     1. Queue a plan in your Terraform Cloud terraform/dns workspace.
     2. When it finishes the plan phase, confirm and apply.
@@ -40,7 +42,7 @@ The developers have striven to make provisioning as automated as possible. Howev
         3. From the repository, navigate to Settings, and then Secrets. This should show any Actions secrets by default. If you see any other secrets settings, navigiate to Actions secrets.
         4. Click "New repository secret", and enter "AWS_S3_BUCKET" for the key and the value specifed in the Terraform output for the value.
 
-3. Run the terraform/infra workspace.
+3. Run the terraform/infra workspace. WARNING: Performing this step will result in charges on your credit card from Amazon Web Services.
 
     1. Queue a plan in your Terraform Cloud terraform/infra workspace.
     2. When it finishes the plan phase, confirm and apply.
