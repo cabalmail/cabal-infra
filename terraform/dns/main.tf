@@ -58,8 +58,20 @@ resource "aws_ssm_parameter" "cognito" {
 # S3 bucket for deploying React app
 # TODO: update ARN od principle origin access identity  
 resource "aws_s3_bucket" "react_app" {
-  acl    = "public-read"
   bucket = "admin.${var.control_domain}"
+  website {
+    index_document = "index.html"
+    error_document = "error.html"
+  }
+}
+
+resource "aws_s3_bucket_acl" "react_app_acl" {
+  bucket = aws_s3_bucket.react_app.id
+  acl    = "public-read"
+}
+
+resource "aws_s3_bucket_policy" "react_app_policy" {
+  bucket = aws_s3_bucket.react_app.id
   policy = <<EOP
 {
     "Version": "2012-10-17",
@@ -85,10 +97,6 @@ resource "aws_s3_bucket" "react_app" {
     ]
 }
 EOP
-  website {
-    index_document = "index.html"
-    error_document = "error.html"
-  }
 }
 
 # Save bucket information in AWS SSM Parameter Store so that terraform/infra can read it.
