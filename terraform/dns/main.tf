@@ -59,10 +59,12 @@ resource "aws_ssm_parameter" "cognito" {
 # TODO: update ARN od principle origin access identity  
 resource "aws_s3_bucket" "react_app" {
   bucket = "admin.${var.control_domain}"
-  website {
-    index_document = "index.html"
-    error_document = "error.html"
-  }
+}
+
+resource "aws_s3_bucket_website_configuration" "react_app_website" {
+  bucket = aws_s3_bucket.react_app.id
+  index_document = "index.html"
+  error_document = "error.html"
 }
 
 resource "aws_s3_bucket_acl" "react_app_acl" {
