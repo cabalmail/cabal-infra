@@ -6,16 +6,12 @@ data "aws_ami" "amazon_linux_2" {
     values = ["amzn2-ami-hvm-2.0.20*"]
   }
   filter {
-    name   = "owner-alias"
-    values = ["amazon"]
-  }
-  filter {
     name   = "architecture"
     values = ["x86_64"]
   }
   filter {
     name   = "virtualization-type"
-    values = ["hmv"]
+    values = ["hvm"]
   }
   filter {
     name   = "root-device-type"
