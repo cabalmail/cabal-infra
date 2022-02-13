@@ -1,7 +1,25 @@
 data "aws_ami" "amazon_linux_2" {
   most_recent = true
-  owners      = ["amazon"]
-  name_regex  = "^amzn2-ami-hvm-2.0.20\\d{6}.\\d-x86_64-gp2$"
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-2.0.20*"]
+  }
+  filter {
+    name   = "owner-alias"
+    values = ["amazon"]
+  }
+  filter {
+    name   = "architecture"
+    values = ["x86_64"]
+  }
+  filter {
+    name   = "virtualization"
+    values = ["hmv"]
+  }
+  filter {
+    name   = "root-device-type"
+    values = ["ebs"]
+  }
 }
 
 data "aws_default_tags" "current" {}
