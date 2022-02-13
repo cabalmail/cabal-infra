@@ -2,10 +2,6 @@ data "aws_ami" "amazon_linux_2" {
   most_recent = true
   owners      = ["amazon"]
   name_regex  = "^amzn2-ami-hvm-2.0.20\\d{6}.\\d-x86_64-gp2$"
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
 }
 
 data "aws_default_tags" "current" {}
