@@ -63,8 +63,12 @@ resource "aws_s3_bucket" "react_app" {
 
 resource "aws_s3_bucket_website_configuration" "react_app_website" {
   bucket = aws_s3_bucket.react_app.id
-  index_document = "index.html"
-  error_document = "error.html"
+  index_document {
+    suffix = "index.html"
+  }
+  error_document {
+    key = "error.html"
+  }
 }
 
 resource "aws_s3_bucket_acl" "react_app_acl" {
