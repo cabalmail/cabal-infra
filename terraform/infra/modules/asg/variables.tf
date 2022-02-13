@@ -14,7 +14,7 @@ data "aws_ami" "amazon_linux_2" {
     values = ["x86_64"]
   }
   filter {
-    name   = "virtualization"
+    name   = "virtualization-type"
     values = ["hmv"]
   }
   filter {
