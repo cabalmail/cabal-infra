@@ -1,4 +1,4 @@
-resource "aws_s3_bucket_object" "website_config" {
+resource "aws_s3_object" "website_config" {
   bucket       = jsondecode(data.aws_ssm_parameter.s3.value).bucket
   key          = "/config.js"
   content_type = "text/javascript"
