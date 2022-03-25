@@ -13,7 +13,7 @@ resource "aws_route" "private" {
   nat_gateway_id         = aws_nat_gateway.nat[count.index].id
 }
 
-resource "aws_route_table_association" "privatea" {
+resource "aws_route_table_association" "private" {
   count          = length(var.az_list)
   subnet_id      = aws_subnet.private[count.index].id
   route_table_id = aws_route_table.private[count.index].id
