@@ -72,7 +72,7 @@ resource "aws_iam_role_policy" "lambda" {
         {
             "Effect": "Allow",
             "Action": "ssm:SendCommand",
-            "Resource": "arn:aws:ssm:${var.region}:${var.account}:document/cabal_*"
+            "Resource": "arn:aws:ssm:${var.region}:${var.account}:document/cabal_chef_document"
         },
         {
             "Effect": "Allow",
