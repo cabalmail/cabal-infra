@@ -26,7 +26,8 @@ resource "aws_launch_template" "asg" {
     create_before_destroy = true
   }
   metadata_options {
-    http_tokens = "required"
+    http_tokens   = "required"
+    http_endpoint = "enabled"
   } 
 }
 
