@@ -13,5 +13,7 @@ resource "aws_dynamodb_table" "addresses" {
     name = "address"
     type = "S"
   }
-
+  server_side_encryption {
+    enabled = true
+  }
 }

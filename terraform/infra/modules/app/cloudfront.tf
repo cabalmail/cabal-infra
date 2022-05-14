@@ -2,7 +2,7 @@ resource "aws_cloudfront_origin_access_identity" "origin" {
   comment = "Static admin website"
 }
 
-resource "aws_cloudfront_distribution" "cdn" {
+resource "aws_cloudfront_distribution" "cdn" { #tfsec:ignore:aws-cloudfront-enable-waf
   origin {
     domain_name = jsondecode(data.aws_ssm_parameter.s3.value).bucket_regional_domain_name
     origin_id   = "cabal_admin_s3"
@@ -31,7 +31,7 @@ resource "aws_cloudfront_distribution" "cdn" {
     min_ttl                = 0
     default_ttl            = 0
     max_ttl                = 0
-    viewer_protocol_policy = "allow-all"
+    viewer_protocol_policy = "redirect-to-https"
   }
 
   price_class = "PriceClass_100"
@@ -47,6 +47,7 @@ resource "aws_cloudfront_distribution" "cdn" {
     cloudfront_default_certificate = false
     acm_certificate_arn            = var.cert_arn
     ssl_support_method             = "sni-only"
+    minimum_protocol_version       = "TLSv1.2_2021"
   }
 }
 

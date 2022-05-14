@@ -25,6 +25,9 @@ resource "aws_launch_template" "asg" {
   lifecycle {
     create_before_destroy = true
   }
+  metadata_options {
+    http_tokens = "required"
+  } 
 }
 
 resource "aws_autoscaling_group" "asg" {

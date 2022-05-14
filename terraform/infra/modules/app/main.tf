@@ -136,7 +136,7 @@ resource "aws_iam_role_policy" "cloudwatch" {
         "logs:GetLogEvents",
         "logs:PutLogEvents"
       ],
-      "Resource": "*"
+      "Resource": "arn:aws:logs:*:*:*"
     }
   ]
 }
