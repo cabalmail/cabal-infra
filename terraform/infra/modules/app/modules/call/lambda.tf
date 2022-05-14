@@ -12,6 +12,10 @@ data "archive_file" "code" {
   }
 }
 
+locals {
+  hosted_zone_arns = join(",",[for domain in var.domains : "\"arn:aws:route53::${var.account}:hostedzone/${domain.zone_id}\""])
+}
+
 resource "aws_lambda_permission" "api_exec" {
   statement_id  = "AllowExecutionFromAPIGateway"
   action        = "lambda:InvokeFunction"
@@ -73,7 +77,9 @@ resource "aws_iam_role_policy" "lambda" {
         {
             "Effect": "Allow",
             "Action": "route53:ChangeResourceRecordSets",
-            "Resource": "arn:aws:route53::${var.account}:hostedzone/*"
+            "Resource": [
+              ${local.hosted_zone_arns}
+            ]
         },
         {
             "Effect": "Allow",
