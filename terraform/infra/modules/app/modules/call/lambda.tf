@@ -73,12 +73,12 @@ resource "aws_iam_role_policy" "lambda" {
         {
             "Effect": "Allow",
             "Action": "route53:ChangeResourceRecordSets",
-            "Resource": "arn:aws:route53:::hostedzone/*"
+            "Resource": "arn:aws:route53:*:${var.account}:hostedzone/*"
         },
         {
             "Effect": "Allow",
             "Action": "logs:CreateLogGroup",
-            "Resource": "arn:aws:logs:${var.region}:*:*"
+            "Resource": "arn:aws:logs:${var.region}:${var.account}:*"
         },
         {
             "Effect": "Allow",
@@ -87,7 +87,7 @@ resource "aws_iam_role_policy" "lambda" {
                 "logs:PutLogEvents"
             ],
             "Resource": [
-                "arn:aws:logs:${var.region}:*:log-group:/aws/lambda/${aws_lambda_function.api_call.function_name}:*"
+                "arn:aws:logs:${var.region}:${var.account}:log-group:/aws/lambda/${aws_lambda_function.api_call.function_name}:*"
             ]
         },
         {
@@ -106,7 +106,7 @@ resource "aws_iam_role_policy" "lambda" {
                 "dynamodb:DescribeGlobalTable"
             ],
             "Resource": [
-                "arn:aws:dynamodb:${var.region}:*:table/cabal-addresses"
+                "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-addresses"
             ]
         }
     ]
