@@ -13,7 +13,7 @@ data "archive_file" "code" {
 }
 
 locals {
-  hosted_zone_arns = join(",",[for domain in var.domains : domain.arn])
+  hosted_zone_arns = join(",",[for domain in var.domains : "\"${domain.arn}\""])
 }
 
 resource "aws_lambda_permission" "api_exec" {
