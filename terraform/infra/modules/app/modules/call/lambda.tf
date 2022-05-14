@@ -14,6 +14,7 @@ data "archive_file" "code" {
 
 locals {
   hosted_zone_arns = join(",",[for domain in var.domains : "\"${domain.arn}\""])
+  wildcard         = "*"
 }
 
 resource "aws_lambda_permission" "api_exec" {
@@ -67,7 +68,7 @@ resource "aws_iam_role_policy" "lambda" {
                 "ssm:StartSession",
                 "ssm:SendCommand"
             ],
-            "Resource": "arn:aws:ec2:${var.region}:${var.account}:instance/*"
+            "Resource": "arn:aws:ec2:${var.region}:${var.account}:instance/${wildcard}"
         },
         {
             "Effect": "Allow",
@@ -84,7 +85,7 @@ resource "aws_iam_role_policy" "lambda" {
         {
             "Effect": "Allow",
             "Action": "logs:CreateLogGroup",
-            "Resource": "arn:aws:logs:${var.region}:${var.account}:*"
+            "Resource": "arn:aws:logs:${var.region}:${var.account}:${wildcard}"
         },
         {
             "Effect": "Allow",
@@ -93,7 +94,7 @@ resource "aws_iam_role_policy" "lambda" {
                 "logs:PutLogEvents"
             ],
             "Resource": [
-                "arn:aws:logs:${var.region}:${var.account}:log-group:/aws/lambda/${aws_lambda_function.api_call.function_name}:*"
+                "arn:aws:logs:${var.region}:${var.account}:log-group:/aws/lambda/${aws_lambda_function.api_call.function_name}:${wildcard}"
             ]
         },
         {
