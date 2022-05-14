@@ -10,8 +10,8 @@ resource "aws_security_group_rule" "allow_out" {
   to_port           = 0
   from_port         = 0
   description       = "Allow all outgoing"
-  cidr_blocks       = ["0.0.0.0/0"] #tfsec:ignore:aws-vpc-no-public-ingress-sgr
-  ipv6_cidr_blocks  = ["::/0"] #tfsec:ignore:aws-vpc-no-public-ingress-sgr
+  cidr_blocks       = ["0.0.0.0/0"] #tfsec:ignore:aws-vpc-no-public-egress-sgr
+  ipv6_cidr_blocks  = ["::/0"] #tfsec:ignore:aws-vpc-no-public-egress-sgr
   security_group_id = aws_security_group.sg.id
 }
 
