@@ -1,4 +1,4 @@
-name: Generate terraform docs
+name: Run tfsec
 
 on:
   push:
@@ -20,9 +20,9 @@ jobs:
         uses: aquasecurity/tfsec-action@v1.0.0
         with:
           soft_fail: true
-          custom_check_dir: ./terraform/infra
+          working_directory: ./terraform/infra
       - name: tfsec dns
         uses: aquasecurity/tfsec-action@v1.0.0
         with:
           soft_fail: true
-          custom_check_dir: ./terraform/dns
+          working_directory: ./terraform/dns
