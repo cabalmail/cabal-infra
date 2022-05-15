@@ -1,5 +1,7 @@
 data "aws_caller_identity" "current" {}
 
+data "aws_region" "current" {}
+
 data "aws_iam_policy_document" "users" {
   statement {
     actions = ["sts:AssumeRole"]
@@ -18,7 +20,7 @@ data "aws_iam_policy_document" "sns_users" {
     ]
 
     resources = [
-      "*",
+      "arn:aws:sns:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:*", #tfsec:ignore:aws-iam-no-policy-wildcards
     ]
   }
 }

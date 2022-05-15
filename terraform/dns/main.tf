@@ -56,7 +56,18 @@ resource "aws_ssm_parameter" "cognito" {
 }
 
 # S3 bucket for deploying React app
-# TODO: update ARN od principle origin access identity  
+# TODO: update ARN of principle origin access identity
+# Note: this bucket is intentionally public
+#tfsec:ignore:aws-s3-block-public-acls
+#tfsec:ignore:aws-s3-block-public-policy
+#tfsec:ignore:aws-s3-enable-bucket-encryption
+#tfsec:ignore:aws-s3-ignore-public-acls
+#tfsec:ignore:ws-s3-no-public-buckets
+#tfsec:ignore:aws-s3-encryption-customer-key
+#tfsec:ignore:aws-s3-no-public-access-with-acl
+#tfsec:ignore:aws-s3-enable-bucket-logging
+#tfsec:ignore:aws-s3-enable-versioning
+#tfsec:ignore:aws-s3-specify-public-access-block
 resource "aws_s3_bucket" "react_app" {
   bucket = "admin.${var.control_domain}"
 }
@@ -120,8 +131,13 @@ resource "aws_ssm_parameter" "react_app" {
 }
 
 # Create Elastic Container Registry Repository
+#tfsec:ignore:aws-ecr-repository-customer-key
 resource "aws_ecr_repository" "container_repo" {
-  name = "cabal-registry"
+  name                 = "cabal-registry"
+  image_tag_mutability = "IMMUTABLE"
+  image_scanning_configuration {
+    scan_on_push = true
+  }
 }
 
 # Save ECR information in AWS SSM Parameter Store so that terraform/infra can read it.
