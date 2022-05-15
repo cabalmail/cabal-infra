@@ -13,21 +13,24 @@ resource "aws_efs_file_system" "mailstore" {
 }
 
 resource "aws_security_group" "mailstore" {
-   name   = "cabal-efs-sg"
-   vpc_id = var.vpc_id
+   name        = "cabal-efs-sg"
+   vpc_id      = var.vpc_id
+   description = "Allow EC2 instances to access the mailstore filesystem"
 
    ingress {
      cidr_blocks = [var.vpc_cidr_block]
      from_port   = 2049
      to_port     = 2049
      protocol    = "tcp"
-   }
+     description = "Allow EC2 instances to access the mailstore filesystem on port 2049"
+  }
 
    egress {
      cidr_blocks = [var.vpc_cidr_block]
      from_port   = 0
      to_port     = 0
      protocol    = -1
+     description = "Allow all outgoing"
    }
  }
 

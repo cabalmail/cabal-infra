@@ -2,7 +2,9 @@ resource "aws_cloudfront_origin_access_identity" "origin" {
   comment = "Static admin website"
 }
 
-resource "aws_cloudfront_distribution" "cdn" { #tfsec:ignore:aws-cloudfront-enable-waf
+#tfsec:ignore:aws-cloudfront-enable-logging
+#tfsec:ignore:aws-cloudfront-enable-waf
+resource "aws_cloudfront_distribution" "cdn" {
   origin {
     domain_name = jsondecode(data.aws_ssm_parameter.s3.value).bucket_regional_domain_name
     origin_id   = "cabal_admin_s3"

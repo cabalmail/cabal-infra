@@ -92,6 +92,8 @@ resource "aws_api_gateway_deployment" "deployment" {
   }
 }
 
+#tfsec:ignore:aws-api-gateway-enable-access-logging
+#tfsec:ignore:aws-api-gateway-enable-tracing
 resource "aws_api_gateway_stage" "api_stage" {
   deployment_id      = aws_api_gateway_deployment.deployment.id
   rest_api_id        = aws_api_gateway_rest_api.gateway.id

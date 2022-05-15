@@ -121,6 +121,7 @@ resource "aws_iam_role_policy" "lambda" {
 RUNPOLICY
 }
 
+#tfsec:ignore:aws-lambda-enable-tracing
 resource "aws_lambda_function" "api_call" {
   filename = "${var.name}_lambda.zip"
   source_code_hash = data.archive_file.code.output_base64sha256
