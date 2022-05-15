@@ -18,9 +18,9 @@ data "aws_iam_policy_document" "sns_users" {
     actions = [
       "sns:Publish",
     ]
-
+    #tfsec:ignore:aws-iam-no-policy-wildcards
     resources = [
-      "arn:aws:sns:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:*", #tfsec:ignore:aws-iam-no-policy-wildcards
+      "arn:aws:sns:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:*",
     ]
   }
 }

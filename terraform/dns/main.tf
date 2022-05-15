@@ -62,9 +62,8 @@ resource "aws_ssm_parameter" "cognito" {
 #tfsec:ignore:aws-s3-block-public-policy
 #tfsec:ignore:aws-s3-enable-bucket-encryption
 #tfsec:ignore:aws-s3-ignore-public-acls
-#tfsec:ignore:ws-s3-no-public-buckets
+#tfsec:ignore:aws-s3-no-public-buckets
 #tfsec:ignore:aws-s3-encryption-customer-key
-#tfsec:ignore:aws-s3-no-public-access-with-acl
 #tfsec:ignore:aws-s3-enable-bucket-logging
 #tfsec:ignore:aws-s3-enable-versioning
 #tfsec:ignore:aws-s3-specify-public-access-block
@@ -84,7 +83,7 @@ resource "aws_s3_bucket_website_configuration" "react_app_website" {
 
 resource "aws_s3_bucket_acl" "react_app_acl" {
   bucket = aws_s3_bucket.react_app.id
-  acl    = "public-read"
+  acl    = "public-read" #tfsec:ignore:aws-s3-no-public-access-with-acl
 }
 
 resource "aws_s3_bucket_policy" "react_app_policy" {
