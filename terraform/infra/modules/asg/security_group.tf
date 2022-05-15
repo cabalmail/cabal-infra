@@ -10,8 +10,8 @@ resource "aws_security_group_rule" "allow_out" {
   to_port           = 0
   from_port         = 0
   description       = "Allow all outgoing"
-  cidr_blocks       = ["0.0.0.0/0"]
-  ipv6_cidr_blocks  = ["::/0"]
+  cidr_blocks       = ["0.0.0.0/0"] #tfsec:ignore:aws-vpc-no-public-egress-sgr
+  ipv6_cidr_blocks  = ["::/0"] #tfsec:ignore:aws-vpc-no-public-egress-sgr
   security_group_id = aws_security_group.sg.id
 }
 
@@ -22,8 +22,8 @@ resource "aws_security_group_rule" "allow_in_world" {
   to_port           = var.ports[count.index]
   from_port         = var.ports[count.index]
   description       = "Allow incoming port ${var.ports[count.index]} ${var.type} from anywhere"
-  cidr_blocks       = ["0.0.0.0/0"]
-  ipv6_cidr_blocks  = ["::/0"]
+  cidr_blocks       = ["0.0.0.0/0"] #tfsec:ignore:aws-vpc-no-public-ingress-sgr
+  ipv6_cidr_blocks  = ["::/0"] #tfsec:ignore:aws-vpc-no-public-ingress-sgr
   security_group_id = aws_security_group.sg.id
 }
 
