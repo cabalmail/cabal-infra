@@ -68,7 +68,7 @@ resource "aws_iam_role_policy" "lambda" {
                 "ssm:StartSession",
                 "ssm:SendCommand"
             ],
-            "Resource": "arn:aws:ec2:${var.region}:${var.account}:instance/${wildcard}"
+            "Resource": "arn:aws:ec2:${var.region}:${var.account}:instance/${local.wildcard}"
         },
         {
             "Effect": "Allow",
@@ -85,7 +85,7 @@ resource "aws_iam_role_policy" "lambda" {
         {
             "Effect": "Allow",
             "Action": "logs:CreateLogGroup",
-            "Resource": "arn:aws:logs:${var.region}:${var.account}:${wildcard}"
+            "Resource": "arn:aws:logs:${var.region}:${var.account}:${local.wildcard}"
         },
         {
             "Effect": "Allow",
@@ -94,7 +94,7 @@ resource "aws_iam_role_policy" "lambda" {
                 "logs:PutLogEvents"
             ],
             "Resource": [
-                "arn:aws:logs:${var.region}:${var.account}:log-group:/aws/lambda/${aws_lambda_function.api_call.function_name}:${wildcard}"
+                "arn:aws:logs:${var.region}:${var.account}:log-group:/aws/lambda/${aws_lambda_function.api_call.function_name}:${local.wildcard}"
             ]
         },
         {
