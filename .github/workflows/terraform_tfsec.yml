@@ -25,5 +25,5 @@ jobs:
       - name: tfsec dns
         uses: aquasecurity/tfsec-action@v1.0.0
         with:
-          soft_fail: true
+          soft_fail: false
           working_directory: ./terraform/dns
