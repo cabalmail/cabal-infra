@@ -53,6 +53,35 @@ resource "aws_cloudfront_distribution" "cdn" {
   }
 }
 
+resource "aws_s3_bucket_policy" "react_app_policy" {
+  bucket = jsondecode(data.aws_ssm_parameter.s3.value).id
+  policy = <<EOP
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "Caesar",
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${aws_cloudfront_origin_access_identity.origin.id}"
+            },
+            "Action": "s3:GetObject",
+            "Resource": "arn:aws:s3:::admin.cabal-mail.net/*"
+        },
+        {
+            "Sid": "AndNancy",
+            "Effect": "Deny",
+            "Principal": {
+                "AWS": "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${aws_cloudfront_origin_access_identity.origin.id}"
+            },
+            "Action": "s3:GetObject",
+            "Resource": "arn:aws:s3:::admin.cabal-mail.net/cabal.tar.gz"
+        }
+    ]
+}
+EOP
+}
+
 resource "aws_route53_record" "admin_cname" {
   zone_id = var.zone_id
   name    = "admin.${var.control_domain}"
