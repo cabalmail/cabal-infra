@@ -56,7 +56,6 @@ resource "aws_ssm_parameter" "cognito" {
 }
 
 # S3 bucket for deploying React app
-# TODO: update ARN of principle origin access identity
 # Note: this bucket is intentionally public
 #tfsec:ignore:aws-s3-block-public-acls
 #tfsec:ignore:aws-s3-block-public-policy
@@ -84,35 +83,6 @@ resource "aws_s3_bucket_website_configuration" "react_app_website" {
 resource "aws_s3_bucket_acl" "react_app_acl" {
   bucket = aws_s3_bucket.react_app.id
   acl    = "public-read" #tfsec:ignore:aws-s3-no-public-access-with-acl
-}
-
-resource "aws_s3_bucket_policy" "react_app_policy" {
-  bucket = aws_s3_bucket.react_app.id
-  policy = <<EOP
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Sid": "Caesar",
-            "Effect": "Allow",
-            "Principal": {
-                "AWS": "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E1MCK388YJB8RY"
-            },
-            "Action": "s3:GetObject",
-            "Resource": "arn:aws:s3:::admin.cabal-mail.net/*"
-        },
-        {
-            "Sid": "AndNancy",
-            "Effect": "Deny",
-            "Principal": {
-                "AWS": "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity E1MCK388YJB8RY"
-            },
-            "Action": "s3:GetObject",
-            "Resource": "arn:aws:s3:::admin.cabal-mail.net/cabal.tar.gz"
-        }
-    ]
-}
-EOP
 }
 
 # Save bucket information in AWS SSM Parameter Store so that terraform/infra can read it.
