@@ -41,6 +41,7 @@ module "admin" {
   domains             = module.domains.domains
   relay_ips           = module.vpc.relay_ips
   repo                = var.repo
+  dev_mode            = var.prod ? false : true
 }
 
 # Creates a DynamoDB table for storing address data

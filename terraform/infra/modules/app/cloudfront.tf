@@ -29,10 +29,9 @@ resource "aws_cloudfront_distribution" "cdn" {
         forward = "none"
       }
     }
-    // TODO: put sensible values here
     min_ttl                = 0
-    default_ttl            = 0
-    max_ttl                = 0
+    default_ttl            = var.dev_mode ? 0 : 600
+    max_ttl                = var.dev_mode ? 0 : 86400
     viewer_protocol_policy = "redirect-to-https"
   }
 
