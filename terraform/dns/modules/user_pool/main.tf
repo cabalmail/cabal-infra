@@ -4,12 +4,6 @@
 
 resource "aws_cognito_user_pool" "users" {
   name                     = "cabal"
-  account_recovery_setting {
-    recovery_mechanism {
-      name     = "verified_phone_number"
-      priority = 1
-    }
-  }
 }
 
 resource "aws_cognito_user_pool_client" "users" {
