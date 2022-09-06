@@ -22,3 +22,8 @@ variable "control_domain" {
     error_message = "The control_domain does not appear to be a valid domain name."
   }
 }
+
+variable "prod" {
+  type        = bool
+  default     = false
+}
