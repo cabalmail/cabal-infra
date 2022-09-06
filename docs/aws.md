@@ -88,11 +88,24 @@ After signing up, perform the following steps:
                 "Sid": "NeyOperaHouse",
                 "Effect": "Allow",
                 "Action": [
-                    "ssm:GetParameter",
-                    "ssm:GetParameters",
-                    "ssm:GetParametersByPath"
+                    "ssm:GetParameter*"
                 ],
-                "Resource": "arn:aws:ssm:*:*:parameter//cabal/react-config/*"
+                "Resource": "arn:aws:ssm:*:*:parameter/cabal/react-config/*"
+            },
+            {
+                "Sid": "Hartha",
+                "Effect": "Allow",
+                "Action": [
+                    "cloudfront:GetDistribution",
+                    "cloudfront:GetStreamingDistribution",
+                    "cloudfront:GetDistributionConfig",
+                    "cloudfront:ListDistributions",
+                    "cloudfront:ListCloudFrontOriginAccessIdentities",
+                    "cloudfront:CreateInvalidation",
+                    "cloudfront:GetInvalidation",
+                    "cloudfront:ListInvalidations"
+                ],
+                "Resource": "*"
             }
         ]
     }
