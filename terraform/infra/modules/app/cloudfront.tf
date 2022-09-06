@@ -88,3 +88,10 @@ resource "aws_route53_record" "admin_cname" {
   ttl     = "300"
   records = [aws_cloudfront_distribution.cdn.domain_name]
 }
+
+resource "aws_ssm_parameter" "cf_distribution" {
+  name        = "/cabal/react-config/cf-distribution"
+  description = "CloudFront Distribution ID for React deployment invalidation"
+  type        = "String"
+  value       = aws_cloudfront_distribution.cdn.id
+}

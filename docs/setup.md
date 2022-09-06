@@ -35,12 +35,6 @@ The developers have striven to make provisioning as automated as possible. Howev
     1. Queue a plan in your Terraform Cloud terraform/dns workspace.
     2. When it finishes the plan phase, confirm and apply.
     3. The output will include name servers. [Update the domain registration](./registrar.md) for your control domain with these name servers. *Before proceeding to the terraform/infa workspace, make sure this change is complete*.
-    4. The output will also include the name of an S3 bucket that you must store in the [Secrets settings](https://docs.github.com/en/actions/security-guides/encrypted-secrets) of your Github repository:
-
-        1. Log in to your Github account.
-        2. Navigate to the newly forked repository.
-        3. From the repository, navigate to Settings, and then Secrets. This should show any Actions secrets by default. If you see any other secrets settings, navigiate to Actions secrets.
-        4. Click "New repository secret", and enter "AWS_S3_BUCKET" for the key and the value specifed in the Terraform output for the value.
 
 3. Run the terraform/infra workspace. WARNING: Performing this step will result in charges on your credit card from Amazon Web Services.
 

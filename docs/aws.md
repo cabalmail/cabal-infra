@@ -92,7 +92,7 @@ After signing up, perform the following steps:
                     "ssm:GetParameters",
                     "ssm:GetParametersByPath"
                 ],
-                "Resource": "arn:aws:ssm:*:*:parameter//cabal/*"
+                "Resource": "arn:aws:ssm:*:*:parameter//cabal/react-config/*"
             }
         ]
     }
