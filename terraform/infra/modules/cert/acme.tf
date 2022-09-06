@@ -52,7 +52,7 @@ resource "aws_ssm_parameter" "cert" {
   name        = "/cabal/control_domain_ssl_cert"
   description = "Cabal SSL Certificate"
   type        = "SecureString"
-  value       = acme_certificate.cert.certificate_pem\
+  value       = acme_certificate.cert.certificate_pem
 }
 
 resource "aws_ssm_parameter" "chain" {
