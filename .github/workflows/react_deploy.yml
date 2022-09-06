@@ -30,7 +30,7 @@ jobs:
         EOF
         yarn install
         NODE_ENV=development yarn build
-        AWS_S3_BUCKET=$(aws get-parameter --name "/cabal/react-config/s3-bucket" | jq -r '.Parameter.Value' --profile deploy_react)
-        AWS_CF_DISTRIBUTION=$(aws get-parameter --name "/cabal/react-config/cf-distribution" | jq -r '.Parameter.Value' --profile deploy_react)
+        AWS_S3_BUCKET=$(aws ssm get-parameter --name "/cabal/react-config/s3-bucket" | jq -r '.Parameter.Value' --profile deploy_react)
+        AWS_CF_DISTRIBUTION=$(aws ssm get-parameter --name "/cabal/react-config/cf-distribution" | jq -r '.Parameter.Value' --profile deploy_react)
         aws s3 sync build "s3://${AWS_S3_BUCKET}/" --profile deploy_react --no-progress
         aws cloudfront create-invalidation --distribution-id "${AWS_CF_DISTRIBUTION}" --paths "*" --profile deploy_react
