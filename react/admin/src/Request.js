@@ -85,7 +85,7 @@ class Request extends React.Component {
   }
 
   submitRequest = (e) => {
-    const response = axios.post(
+    return axios.post(
       '/new',
       {
         username: this.state.username,
@@ -102,7 +102,6 @@ class Request extends React.Component {
         timeout: 10000
       }
     );
-    return response;
   }
 
   handleSubmit = (e) => {
@@ -110,8 +109,8 @@ class Request extends React.Component {
     this.submitRequest().then(data => {
       this.props.setMessage(`Successfully requested ${data.data.address}.`);
     }, reason => {
+      this.props.setMessage("Request failed.");
       console.error("Promise rejected", reason);
-      this.props.setMessage("The server failed to respond.");
     });
   }
 
