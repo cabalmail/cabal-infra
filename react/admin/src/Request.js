@@ -87,7 +87,7 @@ class Request extends React.Component {
   submitRequest = (e) => {
     return axios(
       {
-        method: post,
+        method: 'post',
         url: '/new',
         baseURL: this.props.api_url,
         headers: {
