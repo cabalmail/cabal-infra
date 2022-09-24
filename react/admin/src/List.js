@@ -92,8 +92,8 @@ class List extends React.Component {
         return a.address !== address;
       })});
     }, reason => {
+      this.props.setMessage("Request failed.");
       console.error("Promise rejected", reason);
-      this.props.setMessage("The server failed to respond.");
     });
   }
 
