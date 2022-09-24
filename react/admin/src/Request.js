@@ -84,8 +84,8 @@ class Request extends React.Component {
     });
   }
 
-  submitRequest = async (e) => {
-    const response = await axios.post(
+  submitRequest = (e) => {
+    const response = axios.post(
       '/new',
       {
         username: this.state.username,
