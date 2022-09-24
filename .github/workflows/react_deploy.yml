@@ -6,12 +6,12 @@ on:
     branches:
       - main
     paths:
-      - 'react/public'
-      - 'react/public/*'
-      - 'react/public/*/**'
-      - 'react/src'
-      - 'react/src/*'
-      - 'react/src/*/**'
+      - 'react/admin/public'
+      - 'react/admin/public/*'
+      - 'react/admin/public/*/**'
+      - 'react/admin/src'
+      - 'react/admin/src/*'
+      - 'react/admin/src/*/**'
       - '.github/workflows/react_deploy.yml'
 
 jobs:
