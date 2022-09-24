@@ -85,21 +85,22 @@ class Request extends React.Component {
   }
 
   submitRequest = (e) => {
-    return axios.post(
-      '/new',
+    return axios(
       {
-        username: this.state.username,
-        subdomain: this.state.subdomain,
-        tld: this.state.domain,
-        comment: this.state.comment,
-        address: this.state.username + '@' + this.state.subdomain + '.' + this.state.domain
-      },
-      {
+        method: post,
+        url: '/new',
         baseURL: this.props.api_url,
         headers: {
           'Authorization': this.props.token
         },
-        timeout: 10000
+        timeout: 10000,
+        data: {
+          username: this.state.username,
+          subdomain: this.state.subdomain,
+          tld: this.state.domain,
+          comment: this.state.comment,
+          address: this.state.username + '@' + this.state.subdomain + '.' + this.state.domain
+        }
       }
     );
   }
