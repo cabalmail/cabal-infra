@@ -4,6 +4,7 @@ name: Upload React App
 on:
   push:
     branches:
+      - 0.2.0
       - main
     paths:
       - 'react/admin/public'
