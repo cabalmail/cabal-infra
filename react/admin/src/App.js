@@ -219,7 +219,7 @@ class App extends React.Component {
         );
       case "Email":
         return (
-          <List
+          <Email
             password={this.state.password}
             userName={this.state.userName}
             setMessage={this.setMessage}
