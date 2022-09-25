@@ -60,9 +60,6 @@ resource "aws_ssm_parameter" "cognito" {
 #tfsec:ignore:aws-s3-specify-public-access-block
 resource "aws_s3_bucket" "react_app" {
   bucket = "admin.${var.control_domain}"
-  versioning {
-    enabled = false
-  }
 }
 
 resource "aws_s3_bucket_website_configuration" "react_app_website" {
