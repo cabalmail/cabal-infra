@@ -33,6 +33,7 @@ class App extends React.Component {
       message: null,
       view: "Login",
       poolData: null,
+      control_domain: null,
       domains: {},
       api_url: null,
       hideMessage: true
@@ -47,10 +48,11 @@ class App extends React.Component {
   componentDidMount() {
     const response = this.getConfig();
     response.then(data => {
-      const { domains, cognitoConfig, invokeUrl } = data.data;
+      const { control_domain, domains, cognitoConfig, invokeUrl } = data.data;
       this.setState({
         ...this.state,
         poolData: cognitoConfig.poolData,
+        control_domain: control_domain,
         domains: domains,
         api_url: invokeUrl
       });
@@ -146,8 +148,6 @@ class App extends React.Component {
           loggedIn: true,
           token: data.getIdToken().getJwtToken(),
           expires: data.getIdToken().getExpiration(),
-          userName: null,
-          password: null,
           view: "Request"
         });
       },
@@ -222,6 +222,7 @@ class App extends React.Component {
           <Email
             password={this.state.password}
             userName={this.state.userName}
+            control_domain={this.state.control_domain}
             setMessage={this.setMessage}
           />
         );
