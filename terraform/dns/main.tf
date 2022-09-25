@@ -49,7 +49,6 @@ resource "aws_ssm_parameter" "cognito" {
 }
 
 # S3 bucket for deploying React app
-# Note: this bucket is intentionally public
 #tfsec:ignore:aws-s3-block-public-acls
 #tfsec:ignore:aws-s3-block-public-policy
 #tfsec:ignore:aws-s3-enable-bucket-encryption
@@ -61,6 +60,9 @@ resource "aws_ssm_parameter" "cognito" {
 #tfsec:ignore:aws-s3-specify-public-access-block
 resource "aws_s3_bucket" "react_app" {
   bucket = "admin.${var.control_domain}"
+  versioning {
+    enabled = false
+  }
 }
 
 resource "aws_s3_bucket_website_configuration" "react_app_website" {
@@ -75,7 +77,37 @@ resource "aws_s3_bucket_website_configuration" "react_app_website" {
 
 resource "aws_s3_bucket_acl" "react_app_acl" {
   bucket = aws_s3_bucket.react_app.id
-  acl    = "public-read" #tfsec:ignore:aws-s3-no-public-access-with-acl
+  acl    = "private"
+}
+
+resource "aws_cloudfront_origin_access_identity" "origin" {
+  comment = "Static admin website"
+}
+
+data "aws_iam_policy_document" "s3_policy" {
+  statement {
+    actions   = ["s3:GetObject"]
+    resources = ["${aws_s3_bucket.react_app.arn}/*"]
+
+    principals {
+      type        = "AWS"
+      identifiers = [aws_cloudfront_origin_access_identity.origin.iam_arn]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "react_policy" {
+  bucket = aws_s3_bucket.react_app.id
+  policy = data.aws_iam_policy_document.s3_policy.json
+}
+
+resource "aws_s3_bucket_public_access_block" "react_access" {
+  bucket = aws_s3_bucket.react_app.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
 }
 
 # Save bucket information in AWS SSM Parameter Store so that terraform/infra can read it.
@@ -90,6 +122,12 @@ resource "aws_ssm_parameter" "bucket_name" {
   description = "S3 bucket for React App deployment"
   type        = "String"
   value       = aws_s3_bucket.react_app.id
+}
+resource "aws_ssm_parameter" "origin_id" {
+  name        = "/cabal/react-config/origin-id"
+  description = "S3 bucket for React App deployment"
+  type        = "String"
+  value       = aws_cloudfront_origin_access_identity.origin.id
 }
 
 # Create Elastic Container Registry Repository
