@@ -49,15 +49,6 @@ resource "aws_ssm_parameter" "cognito" {
 }
 
 # S3 bucket for deploying React app
-#disabled-tfsec:ignore:aws-s3-block-public-acls
-#disabled-tfsec:ignore:aws-s3-block-public-policy
-#disabled-tfsec:ignore:aws-s3-enable-bucket-encryption
-#disabled-tfsec:ignore:aws-s3-ignore-public-acls
-#disabled-tfsec:ignore:aws-s3-no-public-buckets
-#disabled-tfsec:ignore:aws-s3-encryption-customer-key
-#disabled-tfsec:ignore:aws-s3-enable-bucket-logging
-#disabled-tfsec:ignore:aws-s3-enable-versioning
-#disabled-tfsec:ignore:aws-s3-specify-public-access-block
 resource "aws_s3_bucket" "react_app" {
   bucket = "admin.${var.control_domain}"
 }
