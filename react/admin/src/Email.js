@@ -1,5 +1,4 @@
 import React from 'react';
-import ImapClient from 'emailjs-imap-client'
 import './Email.css';
 
 class Email extends React.Component {
