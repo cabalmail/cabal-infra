@@ -111,7 +111,7 @@ resource "aws_iam_role" "cloudwatch" {
       "Sid": "TheSloth",
       "Effect": "Allow",
       "Principal": {
-        "Service": ["apigateway.amazonaws.com","lambda.amazonaws.com"]
+        "Service": "apigateway.amazonaws.com"
       },
       "Action": "sts:AssumeRole"
     }
