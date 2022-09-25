@@ -12,6 +12,7 @@ import SignUp from './SignUp';
 import Login from './Login';
 import Message from './Message';
 import Nav from './Nav';
+import Email from './Email';
 let UserPool = null;
 
 /**
@@ -212,6 +213,14 @@ class App extends React.Component {
           <List
             token={this.state.token}
             api_url={this.state.api_url}
+            userName={this.state.userName}
+            setMessage={this.setMessage}
+          />
+        );
+      case "Email":
+        return (
+          <List
+            password={this.state.password}
             userName={this.state.userName}
             setMessage={this.setMessage}
           />
