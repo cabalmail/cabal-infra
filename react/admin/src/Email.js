@@ -6,8 +6,7 @@ class Email extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      filter: "",
-      addresses: []
+      label: "INBOX"
     };
   }
 
