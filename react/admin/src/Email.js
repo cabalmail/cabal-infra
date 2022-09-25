@@ -7,43 +7,11 @@ class Email extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      label: "INBOX",
-      mailboxes: {}
+      label: "INBOX"
     };
-    this.imap = new ImapClient(
-      "imap." + this.props.control_domain,
-      993,
-      {
-        auth: {
-          user: this.props.userName,
-          pass: this.props.password
-        },
-        useSecureTransport: true
-      }
-    );
-  }
-
-  getMailboxes() {
-    this.imap.listMailboxes
-    .then((mailboxes) => {
-      this.setState({ mailboxes: mailboxes });
-      console.log(mailboxes);
-    })
-    .catch((e) => {
-      console.log("Couldn't get mailboxes.");
-      console.log(e);
-    });
   }
 
   componentDidMount() {
-    this.imap.connect()
-    .then(() => {
-      getMailboxes();
-    })
-    .catch((e) => {
-      console.log("Couldn't connect or authorize.");
-      console.log(e);
-    });
     // const response = this.getList();
     // response.then(data => {
     //   this.setState({ addresses: data.data.Items.sort(
