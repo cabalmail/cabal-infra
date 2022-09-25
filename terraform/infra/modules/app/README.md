@@ -25,6 +25,7 @@ Stands up the following resources to implement a web application that allows use
 | <a name="input_region"></a> [region](#input\_region) | The AWS region. | `string` | n/a | yes |
 | <a name="input_relay_ips"></a> [relay\_ips](#input\_relay\_ips) | Egress IP addresses. | `list(string)` | n/a | yes |
 | <a name="input_repo"></a> [repo](#input\_repo) | Repo tag value for SSM run command target. | `string` | n/a | yes |
+| <a name="input_stage_name"></a> [stage\_name](#input\_stage\_name) | Name for the API Gateway stage. Default: prod. | `string` | `"prod"` | no |
 | <a name="input_user_pool_client_id"></a> [user\_pool\_client\_id](#input\_user\_pool\_client\_id) | Client ID for authenticating with the Cognito user pool. | `string` | n/a | yes |
 | <a name="input_user_pool_id"></a> [user\_pool\_id](#input\_user\_pool\_id) | ID of the Cognito user pool. | `string` | n/a | yes |
 | <a name="input_zone_id"></a> [zone\_id](#input\_zone\_id) | Route 53 zone ID for the control domain. | `string` | n/a | yes |
