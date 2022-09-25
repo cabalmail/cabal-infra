@@ -97,7 +97,7 @@ resource "aws_api_gateway_deployment" "deployment" {
 resource "aws_api_gateway_stage" "api_stage" {
   deployment_id      = aws_api_gateway_deployment.deployment.id
   rest_api_id        = aws_api_gateway_rest_api.gateway.id
-  stage_name         = "prod"
+  stage_name         = var.stage_name
   cache_cluster_size = "0.5"
 }
 
@@ -138,7 +138,7 @@ resource "aws_iam_role_policy" "cloudwatch" {
         "logs:GetLogEvents",
         "logs:PutLogEvents"
       ],
-      "Resource": "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:API-Gateway-Execution-Logs_*/prod:*"
+      "Resource": "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:API-Gateway-Execution-Logs_*/${var.stage_name}:*"
     }
   ]
 }

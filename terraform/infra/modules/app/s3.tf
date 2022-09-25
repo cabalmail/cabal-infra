@@ -6,7 +6,7 @@ resource "aws_s3_object" "website_config" {
     pool_id        = var.user_pool_id,
     pool_client_id = var.user_pool_client_id,
     region         = var.region,
-    invoke_url     = "${aws_api_gateway_deployment.deployment.invoke_url}prod",
+    invoke_url     = "${aws_api_gateway_deployment.deployment.invoke_url}",
     domains        = var.domains,
     control_domain = var.control_domain
   })
@@ -14,7 +14,7 @@ resource "aws_s3_object" "website_config" {
       pool_id        = var.user_pool_id,
       pool_client_id = var.user_pool_client_id,
       region         = var.region,
-      invoke_url     = "${aws_api_gateway_deployment.deployment.invoke_url}prod",
+      invoke_url     = "${aws_api_gateway_deployment.deployment.invoke_url}",
       domains        = var.domains,
       control_domain = var.control_domain
     })

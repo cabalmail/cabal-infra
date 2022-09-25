@@ -55,3 +55,9 @@ variable "dev_mode" {
   type        = bool
   description = "If true, forces Cloudfront to non-caching configuration."
 }
+
+variable "stage_name" {
+  type        = string
+  default     = "prod"
+  description = "Name for the API Gateway stage. Default: prod."
+}
