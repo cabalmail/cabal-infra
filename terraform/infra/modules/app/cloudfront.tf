@@ -1,5 +1,5 @@
-resource "aws_cloudfront_origin_access_identity" "origin" {
-  comment = "Static admin website"
+data "aws_ssm_parameter" "origin_id" {
+  name = "/cabal/react-config/origin-id"
 }
 
 #tfsec:ignore:aws-cloudfront-enable-logging
@@ -10,7 +10,7 @@ resource "aws_cloudfront_distribution" "cdn" {
     origin_id   = "cabal_admin_s3"
 
     s3_origin_config {
-      origin_access_identity = "origin-access-identity/cloudfront/${aws_cloudfront_origin_access_identity.origin.id}"
+      origin_access_identity = "origin-access-identity/cloudfront/${data.aws_ssm_parameter.origin_id.value}"
     }
   }
   enabled             = true
