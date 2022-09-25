@@ -62,7 +62,7 @@ resource "aws_s3_bucket_policy" "react_app_policy" {
             "Sid": "Caesar",
             "Effect": "Allow",
             "Principal": {
-                "AWS": "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${aws_cloudfront_origin_access_identity.origin.id}"
+                "AWS": "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${data.aws_ssm_parameter.origin_id.value}"
             },
             "Action": "s3:GetObject",
             "Resource": "arn:aws:s3:::admin.cabal-mail.net/*"
@@ -71,7 +71,7 @@ resource "aws_s3_bucket_policy" "react_app_policy" {
             "Sid": "AndNancy",
             "Effect": "Deny",
             "Principal": {
-                "AWS": "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${aws_cloudfront_origin_access_identity.origin.id}"
+                "AWS": "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${data.aws_ssm_parameter.origin_id.value}"
             },
             "Action": "s3:GetObject",
             "Resource": "arn:aws:s3:::admin.cabal-mail.net/cabal.tar.gz"
