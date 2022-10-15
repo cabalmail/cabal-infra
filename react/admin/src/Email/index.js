@@ -1,6 +1,6 @@
 import React from 'react';
 import './Email.css';
-import Mailboses from './Mailboxes';
+import Mailboxes from './Mailboxes';
 import Messages from './Messages';
 
 class Email extends React.Component {
