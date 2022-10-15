@@ -16,8 +16,16 @@ class Email extends React.Component {
     return (
       <>
         <div>Email</div>
-        <Mailboxes></Mailboxes>
-        <Messages></Messages>
+        <Mailboxes 
+          password={this.props.password}
+          userName={this.props.userName}
+          control_domain={this.props.control_domain}
+        />
+        <Messages 
+          password={this.props.password}
+          userName={this.props.userName}
+          control_domain={this.props.control_domain}
+        />
       </>
     );
   }
