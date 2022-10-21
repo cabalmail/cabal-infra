@@ -1,7 +1,7 @@
 locals {
   hosted_zone_arns = join(",",[for domain in var.domains : "\"${domain.arn}\""])
   wildcard         = "*"
-  filename         = "python" ? "function.py" : "index.js"
+  filename         = var.type == "python" ? "function.py" : "index.js"
   path             = "${path.module}/../../../../../../lambda/${var.type}/${var.name}/"
   zip_file         = "${var.name}_lambda.zip"
 }
