@@ -20,6 +20,18 @@ ${templatefile("${local.path}/${local.filename}", {
   domains        = {for domain in var.domains : domain.domain => domain.zone_id}
 })}
 # file ends
+from imapclient import IMAPClient
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+client = IMAPClient(host="imap.${control_domain}", use_uid=True)
+
+def handler(event, context):
+  client.login(event['user'], event['password'])
+  response = client.list_folders()
+  client.logout()
+  return response
 EOF
 cp ${local.path}/requirements.txt ${local.build_path}/
 pip install -r ${local.path}/requirements.txt -t ${local.build_path}
