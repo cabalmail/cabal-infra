@@ -3,7 +3,7 @@ data "archive_file" "code" {
   output_path = "${var.name}_lambda.zip"
 
   source {
-    content  = templatefile("${path.module}/../../${var.name}_source/index.js", {
+    content  = templatefile("${path.module}/../../../../../../lambda/node/${var.name}/index.js", {
       control_domain = var.control_domain
       repo           = var.repo
       domains        = {for domain in var.domains : domain.domain => domain.zone_id}
