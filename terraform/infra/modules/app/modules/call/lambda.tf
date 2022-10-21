@@ -39,7 +39,7 @@ data "archive_file" "python_code" {
     "venv",
   ]
 
-  source_dir  = random_string.build_path.id
+  source_dir  = "${path.module}/${random_string.build_path.id}"
 }
 
 data "archive_file" "node_code" {
