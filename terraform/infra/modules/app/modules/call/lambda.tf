@@ -14,7 +14,7 @@ resource "null_resource" "python_build" {
 mkdir ${local.build_path}
 cp ${local.path}/requirements.txt ${local.build_path}/
 pip install -r ${local.path}/requirements.txt -t ${local.build_path}
-echo <<EOF > ${local.build_path}/${local.filename}
+cat <<EOF > ${local.build_path}/${local.filename}
 ${templatefile("${local.path}/${local.filename}", {
   control_domain = var.control_domain
   repo           = var.repo
