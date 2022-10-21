@@ -83,7 +83,7 @@ resource "aws_iam_role" "lambda" {
         "Service": "lambda.amazonaws.com"
       },
       "Effect": "Allow",
-      "Sid": "${var.name}Sid"
+      "Sid": "${replace(var.name, "_", ""}Sid"
     }
   ]
 }
