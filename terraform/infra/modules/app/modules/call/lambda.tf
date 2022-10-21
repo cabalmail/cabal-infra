@@ -4,20 +4,16 @@ locals {
   filename         = var.type == "python" ? "function.py" : "index.js"
   path             = "${path.module}/../../../../../../lambda/${var.type}/${var.name}/"
   zip_file         = "${var.name}_lambda.zip"
+  build_path       = "${path.module}/${uuid}"
 }
 
-resource "random_string" "build_path" {
-  length  = 32
-  special = false
-}
-
-resource "null_resource" "install_dependencies" {
+resource "null_resource" "python_dependencies" {
   count = var.type == "python" ? 1 : 0
   provisioner "local-exec" {
     command = <<-EOT
-      mkdir ${path.module}/${random_string.build_path.id}
-      cp ${local.path}/${local.filename} ${path.module}/${random_string.build_path.id}/
-      pip install -r ${local.path}/requirements.txt -t ${path.module}/${random_string.build_path.id}
+      mkdir ${local.build_path}
+      cp ${local.path}/${local.filename} ${local.build_path}/
+      pip install -r ${local.path}/requirements.txt -t ${local.build_path}
     EOT
   }
 
@@ -32,13 +28,13 @@ data "archive_file" "python_code" {
   type        = "zip"
   output_path = local.zip_file
 
-  depends_on  = [null_resource.install_dependencies]
+  depends_on  = [null_resource.python_dependencies]
   excludes    = [
     "__pycache__",
     "venv",
   ]
 
-  source_dir  = "${path.module}/${random_string.build_path.id}"
+  source_dir  = "${local.build_path}"
 }
 
 data "archive_file" "node_code" {
@@ -173,7 +169,7 @@ resource "aws_lambda_function" "api_call" {
 resource "null_resource" "cleanup" {
   count = var.type == "python" ? 1 : 0
   provisioner "local-exec" {
-    command = "rmdir -Rf ${path.module}/${random_string.build_path.id}"
+    command = "rmdir -Rf ${local.build_path}"
   }
 
   depends_on = [
