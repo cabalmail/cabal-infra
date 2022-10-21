@@ -12,7 +12,7 @@ resource "null_resource" "python_build" {
   provisioner "local-exec" {
     command = <<-EOT
       mkdir ${local.build_path}
-      echo <<EOF > ${local.build_path}/${local.filename}
+      echo <<EOF > ${local.build_path}/${local.filename}.py
       """ file begins """
       ${templatefile("${local.path}/${local.filename}", {
         control_domain = var.control_domain
