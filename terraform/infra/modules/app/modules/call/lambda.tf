@@ -18,7 +18,7 @@ resource "null_resource" "install_dependencies" {
       mkdir ${path.module}/${random_string.build_path.id}
       cp ${local.path}/${local.filename} ${path.module}/${random_string.build_path.id}/
       cd build
-      pip install -r ${var.lambda_root}/requirements.txt -t ./
+      pip install -r ${local.path}/requirements.txt -t ./
     EOT
   }
 
@@ -29,7 +29,7 @@ resource "null_resource" "install_dependencies" {
 }
 
 data "archive_file" "python_code" {
-  count       = type == "python" ? 1 : 0
+  count       = var.type == "python" ? 1 : 0
   type        = "zip"
   output_path = local.zip_file
 
@@ -43,7 +43,7 @@ data "archive_file" "python_code" {
 }
 
 data "archive_file" "node_code" {
-  count       = type == "node" ? 1 : 0
+  count       = var.type == "node" ? 1 : 0
   type        = "zip"
   output_path = "${var.name}_lambda.zip"
 
@@ -163,7 +163,7 @@ RUNPOLICY
 
 #tfsec:ignore:aws-lambda-enable-tracing
 resource "aws_lambda_function" "api_call" {
-  filename         = type == "python" ? data.archive_file.python_code[0].output_path : data.archive_file.node_code[0].output_path
+  filename         = var.type == "python" ? data.archive_file.python_code[0].output_path : data.archive_file.node_code[0].output_path
   source_code_hash = data.archive_file.code.output_base64sha256
   function_name    = var.name
   role             = aws_iam_role.lambda.arn
