@@ -13,7 +13,6 @@ resource "null_resource" "python_build" {
     command = <<EOT
 mkdir ${local.build_path}
 cp ${local.path}/requirements.txt ${local.build_path}/
-pip install -r ${local.path}/requirements.txt -t ${local.build_path}
 cat <<EOF > ${local.build_path}/${local.filename}
 ${templatefile("${local.path}/${local.filename}", {
   control_domain = var.control_domain
@@ -21,11 +20,11 @@ ${templatefile("${local.path}/${local.filename}", {
   domains        = {for domain in var.domains : domain.domain => domain.zone_id}
 })}
 EOF
+pip install -r ${local.path}/requirements.txt -t ${local.build_path}
 EOT
   }
 
   triggers = {
-    tmp                   = local.build_path
     dependencies_versions = filemd5("${local.path}/requirements.txt")
     source_versions       = filemd5("${local.path}/${local.filename}")
   }
