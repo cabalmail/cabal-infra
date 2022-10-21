@@ -1,20 +1,60 @@
-data "archive_file" "code" {
+locals {
+  hosted_zone_arns = join(",",[for domain in var.domains : "\"${domain.arn}\""])
+  wildcard         = "*"
+  filename         = "python" ? "function.py" : "index.js"
+  path             = "${path.module}/../../../../../../lambda/${var.type}/${var.name}/"
+  zip_file         = "${var.name}_lambda.zip"
+}
+
+resource "random_string" "build_path" {
+  length  = 32
+  special = false
+}
+
+resource "null_resource" "install_dependencies" {
+  count = var.type == "python" ? 1 : 0
+  provisioner "local-exec" {
+    command = <<-EOT
+      mkdir ${path.module}/${random_string.build_path.id}
+      cp ${local.path}/${local.filename} ${path.module}/${random_string.build_path.id}/
+      cd build
+      pip install -r ${var.lambda_root}/requirements.txt -t ./
+    EOT
+  }
+
+  triggers = {
+    dependencies_versions = filemd5("${local.path}/requirements.txt")
+    source_versions       = filemd5("${local.path}/function.py")
+  }
+}
+
+data "archive_file" "python_code" {
+  count       = type == "python" ? 1 : 0
+  type        = "zip"
+  output_path = local.zip_file
+
+  depends_on  = [null_resource.install_dependencies]
+  excludes    = [
+    "__pycache__",
+    "venv",
+  ]
+
+  source_dir  = random_string.build_path.id
+}
+
+data "archive_file" "node_code" {
+  count       = type == "node" ? 1 : 0
   type        = "zip"
   output_path = "${var.name}_lambda.zip"
 
   source {
-    content  = templatefile("${path.module}/../../../../../../lambda/node/${var.name}/index.js", {
+    content  = templatefile("${local.path}/${local.filename}", {
       control_domain = var.control_domain
       repo           = var.repo
       domains        = {for domain in var.domains : domain.domain => domain.zone_id}
       })
-    filename = "index.js"
+    filename = local.filename
   }
-}
-
-locals {
-  hosted_zone_arns = join(",",[for domain in var.domains : "\"${domain.arn}\""])
-  wildcard         = "*"
 }
 
 resource "aws_lambda_permission" "api_exec" {
@@ -123,10 +163,21 @@ RUNPOLICY
 
 #tfsec:ignore:aws-lambda-enable-tracing
 resource "aws_lambda_function" "api_call" {
-  filename = "${var.name}_lambda.zip"
+  filename         = type == "python" ? data.archive_file.python_code[0].output_path : data.archive_file.node_code[0].output_path
   source_code_hash = data.archive_file.code.output_base64sha256
-  function_name = var.name
-  role = aws_iam_role.lambda.arn
-  handler = "index.handler"
-  runtime = var.runtime
+  function_name    = var.name
+  role             = aws_iam_role.lambda.arn
+  handler          = "index.handler"
+  runtime          = var.runtime
+}
+
+resource "null_resource" "cleanup" {
+  count = var.type == "python" ? 1 : 0
+  provisioner "local-exec" {
+    command = "rmdir -Rf ${path.module}/${random_string.build_path.id}"
+  }
+
+  depends_on = [
+    aws_lambda_function.api_call
+  ]
 }

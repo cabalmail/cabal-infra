@@ -29,10 +29,28 @@ resource "aws_api_gateway_authorizer" "api_auth" {
   ]) ]
 }
 
+module "cabal_imapapi_list_mailboxes" {
+  source           = "./modules/call"
+  name             = "list_mailboxes"
+  runtime          = "python3.9"
+  type             = "python"
+  method           = "GET"
+  region           = var.region
+  account          = data.aws_caller_identity.current.account_id
+  gateway_id       = aws_api_gateway_rest_api.gateway.id
+  root_resource_id = aws_api_gateway_rest_api.gateway.root_resource_id
+  authorizer       = aws_api_gateway_authorizer.api_auth.id
+  control_domain   = var.control_domain
+  relay_ips        = var.relay_ips
+  repo             = var.repo
+  domains          = var.domains
+}
+
 module "cabal_list_method" {
   source           = "./modules/call"
   name             = "list"
   runtime          = "nodejs14.x"
+  type             = "node"
   method           = "GET"
   region           = var.region
   account          = data.aws_caller_identity.current.account_id
@@ -49,6 +67,7 @@ module "cabal_new_method" {
   source           = "./modules/call"
   name             = "new"
   runtime          = "nodejs14.x"
+  type             = "node"
   method           = "POST"
   region           = var.region
   account          = data.aws_caller_identity.current.account_id
@@ -65,7 +84,8 @@ module "cabal_revoke_method" {
   source           = "./modules/call"
   name             = "revoke"
   runtime          = "nodejs14.x"
-  method           = "DELETE"
+  type             = "node"
+    method           = "DELETE"
   region           = var.region
   account          = data.aws_caller_identity.current.account_id
   gateway_id       = aws_api_gateway_rest_api.gateway.id

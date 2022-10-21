@@ -6,6 +6,10 @@ variable "runtime" {
   type = string
 }
 
+variable "type" {
+  type = string
+}
+
 variable "gateway_id" {
   type = string
 }
