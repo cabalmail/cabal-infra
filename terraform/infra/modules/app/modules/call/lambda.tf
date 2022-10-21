@@ -4,7 +4,7 @@ locals {
   filename         = var.type == "python" ? "function.py" : "index.js"
   path             = "${path.module}/../../../../../../lambda/${var.type}/${var.name}/"
   zip_file         = "${var.name}_lambda.zip"
-  build_path       = "${path.module}/${uuid}"
+  build_path       = "${path.module}/${uuid()}"
 }
 
 resource "null_resource" "python_dependencies" {
