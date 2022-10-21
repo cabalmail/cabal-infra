@@ -13,18 +13,11 @@ resource "null_resource" "python_build" {
     command = <<EOT
 mkdir ${local.build_path}
 echo <<EOF > ${local.build_path}/${local.filename}
-from imapclient import IMAPClient
-
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-
-client = IMAPClient(host="imap.randomsound.org", use_uid=True)
-
-def handler(event, context):
-  client.login(event['user'], event['password'])
-  response = client.list_folders()
-  client.logout()
-  return response
+${templatefile("${local.path}/${local.filename}", {
+  control_domain = var.control_domain
+  repo           = var.repo
+  domains        = {for domain in var.domains : domain.domain => domain.zone_id}
+})}
 EOF
 cp ${local.path}/requirements.txt ${local.build_path}/
 pip install -r ${local.path}/requirements.txt -t ${local.build_path}
