@@ -43,7 +43,7 @@ data "archive_file" "python_code" {
   count       = var.type == "python" ? 1 : 0
   type        = "zip"
   output_path = local.zip_file
-  source_dir  = data.null_data_source.wait_for_build.outputs["source_dir"]
+  source_dir  = data.null_data_source.wait_for_build[0].outputs["source_dir"]
   excludes    = [
     "__pycache__",
     "venv",
