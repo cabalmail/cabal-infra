@@ -162,6 +162,7 @@ resource "null_resource" "cleanup" {
   }
 
   depends_on = [
-    aws_lambda_function.api_call
+    aws_lambda_function.api_call,
+    null_resource.python_build
   ]
 }
