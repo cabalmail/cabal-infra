@@ -4,14 +4,14 @@ locals {
   filename         = var.type == "python" ? "function.py" : "index.js"
   path             = "${path.module}/../../../../../../lambda/${var.type}/${var.name}/"
   zip_file         = "${var.name}_lambda.zip"
-  build_path       = "${path.module}/${uuid()}"
+  build_path       = "${path.module}/${var.name}"
 }
 
 resource "null_resource" "python_build" {
   count = var.type == "python" ? 1 : 0
   provisioner "local-exec" {
     command = <<EOT
-mkdir ${local.build_path}
+mkdir -p ${local.build_path}
 cp ${local.path}/requirements.txt ${local.build_path}/
 cat <<EOF > ${local.build_path}/${local.filename}
 ${templatefile("${local.path}/${local.filename}", {
