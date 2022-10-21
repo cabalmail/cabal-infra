@@ -25,7 +25,7 @@ from imapclient import IMAPClient
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-client = IMAPClient(host="imap.${control_domain}", use_uid=True)
+client = IMAPClient(host="imap.randomsound.org", use_uid=True)
 
 def handler(event, context):
   client.login(event['user'], event['password'])
