@@ -54,7 +54,7 @@ resource "null_resource" "python_build" {
 data "archive_file" "node_code" {
   count       = var.type == "node" ? 1 : 0
   type        = "zip"
-  output_path = "${var.name}_lambda.zip"
+  output_path = local.zip_file
 
   source {
     content  = templatefile("${local.path}/${local.filename}", {
@@ -173,7 +173,7 @@ RUNPOLICY
 #tfsec:ignore:aws-lambda-enable-tracing
 resource "aws_lambda_function" "api_call" {
   filename         = var.type == "python" ? data.archive_file.python_code[0].output_path : data.archive_file.node_code[0].output_path
-  source_code_hash = var.type == "python" ? data.archive_file.python_code[0].output_base64sha256 : data.archive_file.node_code[0].output_base64sha256
+  source_code_hash = filemd5(local.zip_file)
   function_name    = var.name
   role             = aws_iam_role.lambda.arn
   handler          = var.type == "python" ? "function.handler" : "index.handler"
