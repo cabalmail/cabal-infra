@@ -7,7 +7,7 @@ locals {
   build_path       = "${path.module}/${uuid()}"
 }
 
-resource "null_resource" "python_dependencies" {
+resource "null_resource" "dependencies" {
   count = var.type == "python" ? 1 : 0
   provisioner "local-exec" {
     command = <<-EOT
@@ -27,14 +27,15 @@ data "archive_file" "python_code" {
   count       = var.type == "python" ? 1 : 0
   type        = "zip"
   output_path = local.zip_file
-
-  depends_on  = [null_resource.python_dependencies]
+  source_dir  = local.build_path
   excludes    = [
     "__pycache__",
     "venv",
   ]
 
-  source_dir  = "${local.build_path}"
+  depends_on  = [
+    null_resource.dependencies
+  ]
 }
 
 data "archive_file" "node_code" {
