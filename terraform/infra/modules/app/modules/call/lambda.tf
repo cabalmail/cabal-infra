@@ -17,8 +17,7 @@ resource "null_resource" "install_dependencies" {
     command = <<-EOT
       mkdir ${path.module}/${random_string.build_path.id}
       cp ${local.path}/${local.filename} ${path.module}/${random_string.build_path.id}/
-      cd build
-      pip install -r ${local.path}/requirements.txt -t ./
+      pip install -r ${local.path}/requirements.txt -t ${path.module}/${random_string.build_path.id}
     EOT
   }
 
