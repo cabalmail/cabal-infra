@@ -7,7 +7,7 @@ locals {
   build_path       = "${path.module}/${uuid()}"
 }
 
-resource "null_resource" "dependencies" {
+resource "null_resource" "python_dependencies" {
   count = var.type == "python" ? 1 : 0
   provisioner "local-exec" {
     command = <<-EOT
@@ -34,7 +34,7 @@ data "archive_file" "python_code" {
   ]
 
   depends_on  = [
-    null_resource.dependencies
+    null_resource.python_dependencies
   ]
 }
 
@@ -170,7 +170,7 @@ resource "aws_lambda_function" "api_call" {
 resource "null_resource" "cleanup" {
   count = var.type == "python" ? 1 : 0
   provisioner "local-exec" {
-    command = "rmdir -Rf ${local.build_path}"
+    command = "rm -Rf ${local.build_path}"
   }
 
   depends_on = [
