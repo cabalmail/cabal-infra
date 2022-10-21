@@ -30,18 +30,23 @@ resource "null_resource" "python_build" {
   }
 }
 
+# h/t https://stackoverflow.com/questions/40744575/how-to-run-command-before-data-archive-file-zips-folder-in-terraform/58585612#58585612
+data "null_data_source" "wait_for_build" {
+  count  = var.type == "python" ? 1 : 0
+  inputs = {
+    lambda_exporter_id = "${null_resource.python_build.id}"
+    source_dir         = locals.build_path
+  }
+}
+
 data "archive_file" "python_code" {
   count       = var.type == "python" ? 1 : 0
   type        = "zip"
   output_path = local.zip_file
-  source_dir  = local.build_path
+  source_dir  = data.null_data_source.wait_for_build.outputs["source_dir"]
   excludes    = [
     "__pycache__",
     "venv",
-  ]
-
-  depends_on  = [
-    null_resource.python_build
   ]
 }
 
