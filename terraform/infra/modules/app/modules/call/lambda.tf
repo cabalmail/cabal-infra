@@ -34,7 +34,7 @@ resource "null_resource" "python_build" {
 data "null_data_source" "wait_for_build" {
   count  = var.type == "python" ? 1 : 0
   inputs = {
-    lambda_exporter_id = "${null_resource.python_build.id}"
+    lambda_exporter_id = "${null_resource.python_build[0].id}"
     source_dir         = locals.build_path
   }
 }
