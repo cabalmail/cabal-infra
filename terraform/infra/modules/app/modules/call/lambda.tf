@@ -173,7 +173,7 @@ resource "aws_lambda_function" "api_call" {
   source_code_hash = var.type == "python" ? data.archive_file.python_code[0].output_base64sha256 : data.archive_file.node_code[0].output_base64sha256
   function_name    = var.name
   role             = aws_iam_role.lambda.arn
-  handler          = "index.handler"
+  handler          = var.type == "python" ? "function.handler" : "index.handler"
   runtime          = var.runtime
 }
 
