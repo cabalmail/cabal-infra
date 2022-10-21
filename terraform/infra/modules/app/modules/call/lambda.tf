@@ -21,6 +21,7 @@ resource "null_resource" "python_build" {
       })}
       EOF
       pip install -r ${local.path}/requirements.txt -t ${local.build_path}
+      zip -j ${local.zip_file} ${local.build_path}
     EOT
   }
 
@@ -30,25 +31,25 @@ resource "null_resource" "python_build" {
   }
 }
 
-# h/t https://stackoverflow.com/questions/40744575/how-to-run-command-before-data-archive-file-zips-folder-in-terraform/58585612#58585612
-data "null_data_source" "wait_for_build" {
-  count  = var.type == "python" ? 1 : 0
-  inputs = {
-    lambda_exporter_id = "${null_resource.python_build[0].id}"
-    source_dir         = local.build_path
-  }
-}
+# # h/t https://stackoverflow.com/questions/40744575/how-to-run-command-before-data-archive-file-zips-folder-in-terraform/58585612#58585612
+# data "null_data_source" "wait_for_build" {
+#   count  = var.type == "python" ? 1 : 0
+#   inputs = {
+#     lambda_exporter_id = "${null_resource.python_build[0].id}"
+#     source_dir         = local.build_path
+#   }
+# }
 
-data "archive_file" "python_code" {
-  count       = var.type == "python" ? 1 : 0
-  type        = "zip"
-  output_path = local.zip_file
-  source_dir  = data.null_data_source.wait_for_build[0].outputs["source_dir"]
-  excludes    = [
-    "__pycache__",
-    "venv",
-  ]
-}
+# data "archive_file" "python_code" {
+#   count       = var.type == "python" ? 1 : 0
+#   type        = "zip"
+#   output_path = local.zip_file
+#   source_dir  = data.null_data_source.wait_for_build[0].outputs["source_dir"]
+#   excludes    = [
+#     "__pycache__",
+#     "venv",
+#   ]
+# }
 
 data "archive_file" "node_code" {
   count       = var.type == "node" ? 1 : 0
