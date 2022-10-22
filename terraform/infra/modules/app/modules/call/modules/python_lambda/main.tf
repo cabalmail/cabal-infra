@@ -19,7 +19,6 @@ resource "null_resource" "python_build" {
       EOF
       pip install -r ${local.path}/requirements.txt -t ${local.build_path}
       find ${local.build_path}/ -exec touch -t 201301250000 \{\} \;
-      shopt -s globstar dotglob nullglob
       SAVED=`pwd`
       pushd ${local.build_path}
       find ./ -type f -print | sort | zip $SAVED/${local.zip_file} -@
