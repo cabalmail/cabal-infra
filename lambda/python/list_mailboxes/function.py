@@ -13,5 +13,5 @@ def handler(event, context):
   client.login(event['user'], event['password'])
   response = client.list_folders()
   client.logout()
-  logger.info(json.dumps(response))
+  logger.info(response)
   return response

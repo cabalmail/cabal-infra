@@ -34,7 +34,7 @@ module "cabal_imapapi_list_mailboxes" {
   name             = "list_mailboxes"
   runtime          = "python3.9"
   type             = "python"
-  method           = "GET"
+  method           = "POST"
   region           = var.region
   account          = data.aws_caller_identity.current.account_id
   gateway_id       = aws_api_gateway_rest_api.gateway.id
