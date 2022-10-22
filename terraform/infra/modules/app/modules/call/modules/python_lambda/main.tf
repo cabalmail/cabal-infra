@@ -3,6 +3,7 @@ locals {
   wildcard         = "*"
   filename         = "function.py"
   path             = "${path.module}/../../../../../../../../lambda/python/${var.name}"
+  zip_file         = "${var.name}_lambda.zip"
   build_path       = "${path.module}/build_path"
 }
 
@@ -24,19 +25,9 @@ resource "null_resource" "python_build" {
   }
 }
 
-resource "random_uuid" "lambda_src_hash" {
-  keepers = {
-    for filename in [
-      "${local.path}/${local.filename}",
-      "${local.path}/requirements.txt"
-    ]:
-      filename => filemd5(filename)
-  }
-}
-
 data "archive_file" "python_code" {
   type        = "zip"
-  output_path = "${random_uuid.lambda_src_hash.result}.zip"
+  output_path = local.zip_file
   source_dir  = local.build_path
   excludes    = [
     "__pycache__",
