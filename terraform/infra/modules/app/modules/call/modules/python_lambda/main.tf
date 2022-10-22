@@ -9,7 +9,7 @@ locals {
 
 resource "null_resource" "python_build" {
   provisioner "local-exec" {
-    interpreter = ["bash"]
+    interpreter = ["/usr/bin/env", "bash"]
     command     = <<-EOT
       set -e
       cp ${local.path}/requirements.txt ${local.build_path}/
