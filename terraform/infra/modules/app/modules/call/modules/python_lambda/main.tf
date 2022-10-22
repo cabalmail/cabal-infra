@@ -152,6 +152,7 @@ resource "aws_lambda_function" "api_call" {
   role             = aws_iam_role.lambda.arn
   handler          = "function.handler"
   runtime          = var.runtime
+  timeout          = 30
 }
 
 resource "null_resource" "cleanup" {

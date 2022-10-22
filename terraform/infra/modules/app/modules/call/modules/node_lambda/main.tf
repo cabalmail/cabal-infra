@@ -133,5 +133,6 @@ resource "aws_lambda_function" "api_call" {
   role             = aws_iam_role.lambda.arn
   handler          = "index.handler"
   runtime          = var.runtime
+  timeout          = 30
 }
 
