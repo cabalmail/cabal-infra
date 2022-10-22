@@ -21,8 +21,7 @@ resource "null_resource" "python_build" {
       find ${local.build_path}/ -exec touch -t 201301250000 \{\} \;
       shopt -s globstar dotglob nullglob
       cd ${local.build_path}
-      find / -name zip 2>/dev/null
-      zip ${local.zip_file} **/*
+      /usr/bin/zip ${local.zip_file} **/*
       cd ../
     EOT
   }
