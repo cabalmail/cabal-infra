@@ -17,17 +17,17 @@ class Email extends React.Component {
       <>
         <div>Email</div>
         <Mailboxes 
-          token={this.state.token}
+          token={this.props.token}
           password={this.props.password}
           userName={this.props.userName}
-          api_url={this.state.api_url}
+          api_url={this.props.api_url}
           control_domain={this.props.control_domain}
         />
         <Messages 
-          token={this.state.token}
+          token={this.props.token}
           password={this.props.password}
           userName={this.props.userName}
-          api_url={this.state.api_url}
+          api_url={this.props.api_url}
           control_domain={this.props.control_domain}
         />
       </>
