@@ -21,14 +21,12 @@ class Email extends React.Component {
           password={this.props.password}
           userName={this.props.userName}
           api_url={this.props.api_url}
-          control_domain={this.props.control_domain}
         />
         <Messages 
           token={this.props.token}
           password={this.props.password}
           userName={this.props.userName}
           api_url={this.props.api_url}
-          control_domain={this.props.control_domain}
         />
       </>
     );
