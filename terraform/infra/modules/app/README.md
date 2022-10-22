@@ -33,6 +33,7 @@ Stands up the following resources to implement a web application that allows use
 
 | Name | Source | Version |
 |------|--------|---------|
+| <a name="module_cabal_imapapi_list_mailboxes"></a> [cabal\_imapapi\_list\_mailboxes](#module\_cabal\_imapapi\_list\_mailboxes) | ./modules/call | n/a |
 | <a name="module_cabal_list_method"></a> [cabal\_list\_method](#module\_cabal\_list\_method) | ./modules/call | n/a |
 | <a name="module_cabal_new_method"></a> [cabal\_new\_method](#module\_cabal\_new\_method) | ./modules/call | n/a |
 | <a name="module_cabal_revoke_method"></a> [cabal\_revoke\_method](#module\_cabal\_revoke\_method) | ./modules/call | n/a |
