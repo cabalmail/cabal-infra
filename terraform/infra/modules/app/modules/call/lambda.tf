@@ -10,6 +10,7 @@ module "cabal_python_lambda" {
   domains        = var.domains
   method         = aws_api_gateway_method.api_call.http_method
   call_path      = aws_api_gateway_resource.api_call.path
+  gateway_id     = var.gateway_id
   repo           = var.repo
 }
 
@@ -25,5 +26,6 @@ module "cabal_node_lambda" {
   domains        = var.domains
   method         = aws_api_gateway_method.api_call.http_method
   call_path      = aws_api_gateway_resource.api_call.path
+  gateway_id     = var.gateway_id
   repo           = var.repo
 }

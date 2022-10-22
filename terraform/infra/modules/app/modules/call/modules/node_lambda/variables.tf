@@ -37,3 +37,7 @@ variable "call_path" {
 variable "repo" {
   type = string
 }
+
+variable "gateway_id" {
+  type = string
+}
