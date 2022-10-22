@@ -220,6 +220,8 @@ class App extends React.Component {
       case "Email":
         return (
           <Email
+            token={this.state.token}
+            api_url={this.state.api_url}
             password={this.state.password}
             userName={this.state.userName}
             control_domain={this.state.control_domain}
