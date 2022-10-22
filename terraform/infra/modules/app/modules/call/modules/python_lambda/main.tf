@@ -20,10 +20,10 @@ resource "null_resource" "python_build" {
       pip install -r ${local.path}/requirements.txt -t ${local.build_path}
       find ${local.build_path}/ -exec touch -t 201301250000 \{\} \;
       SAVED=`pwd`
-      pushd ${local.build_path}
+      cd ${local.build_path}
       find ./ -type f -print | sort | zip $SAVED/${local.zip_file} -@
-      popd
-    EOT
+      cd $SAVED
+      EOT
   }
   triggers = {
     always_run = "${timestamp()}"
