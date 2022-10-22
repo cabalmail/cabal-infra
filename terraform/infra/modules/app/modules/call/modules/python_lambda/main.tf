@@ -2,7 +2,7 @@ locals {
   hosted_zone_arns = join(",",[for domain in var.domains : "\"${domain.arn}\""])
   wildcard         = "*"
   filename         = "function.py"
-  path             = "${path.module}/../../../../../../../../lambda/python/${var.name}/"
+  path             = "${path.module}/../../../../../../../../lambda/python/${var.name}"
   build_path       = "${path.module}/${var.name}"
 }
 
