@@ -20,7 +20,6 @@ resource "null_resource" "python_build" {
       })}
       EOF
       pip install -r ${local.path}/requirements.txt -t ${local.build_path}
-      zip -j ${local.zip_file} ${local.build_path}
     EOT
   }
 }
