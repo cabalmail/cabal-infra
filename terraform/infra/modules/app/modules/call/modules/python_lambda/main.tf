@@ -33,7 +33,7 @@ resource "random_uuid" "lambda_src_hash" {
       "${local.path}/${local.filename}",
       "${local.path}/requirements.txt"
     ]:
-      filename => filemd5("${local.path}/${filename}")
+      filename => filemd5(filename)
   }
 }
 
