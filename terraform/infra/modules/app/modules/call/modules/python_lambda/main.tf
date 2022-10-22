@@ -13,11 +13,11 @@ resource "null_resource" "python_build" {
     command     = <<-EOT
       set -e
       #cp ${local.path}/requirements.txt ${local.build_path}/
-      cat <<EOF > ${local.build_path}/${local.filename}
-      ${templatefile("${local.path}/${local.filename}", {
-        control_domain = var.control_domain
-      })}
-      EOF
+      #cat <<EOF > ${local.build_path}/${local.filename}
+      #${templatefile("${local.path}/${local.filename}", {
+      #  control_domain = var.control_domain
+      #})}
+      #EOF
       #pip install -r ${local.path}/requirements.txt -t ${local.build_path}
       #find ${local.build_path}/ -exec touch -t 201301250000 \{\} \;
       #shopt -s globstar dotglob nullglob
