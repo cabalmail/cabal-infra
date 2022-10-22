@@ -18,6 +18,9 @@ resource "null_resource" "python_build" {
       EOF
       pip install -r ${local.path}/requirements.txt -t ${local.build_path}
       find ${local.build_path}/ -exec touch -t 201301250000 {} +
+      shopt -s globstar dotglob nullglob
+      cd ${local.build_path}
+      zip ${local.zip_file} **/*
     EOT
   }
   triggers = {
@@ -25,18 +28,18 @@ resource "null_resource" "python_build" {
   }
 }
 
-data "archive_file" "python_code" {
-  type        = "zip"
-  output_path = local.zip_file
-  source_dir  = local.build_path
-  excludes    = [
-    "__pycache__",
-    "venv",
-  ]
-  depends_on   = [
-    null_resource.python_build
-  ]
-}
+# data "archive_file" "python_code" {
+#   type        = "zip"
+#   output_path = local.zip_file
+#   source_dir  = local.build_path
+#   excludes    = [
+#     "__pycache__",
+#     "venv",
+#   ]
+#   depends_on   = [
+#     null_resource.python_build
+#   ]
+# }
 
 resource "aws_lambda_permission" "api_exec" {
   statement_id  = "AllowExecutionFromAPIGateway"
@@ -50,7 +53,7 @@ resource "aws_lambda_permission" "api_exec" {
       var.account,
       var.gateway_id
     ]),
-    "/*/",
+    "/",
     var.method,
     var.call_path
   ])
@@ -144,8 +147,8 @@ RUNPOLICY
 
 #tfsec:ignore:aws-lambda-enable-tracing
 resource "aws_lambda_function" "api_call" {
-  filename         = data.archive_file.python_code.output_path
-  source_code_hash = data.archive_file.python_code.output_base64sha256
+  filename         = local.zip_file
+  source_code_hash = filebase64sha256(local.zip_file)
   function_name    = var.name
   role             = aws_iam_role.lambda.arn
   handler          = "function.handler"
