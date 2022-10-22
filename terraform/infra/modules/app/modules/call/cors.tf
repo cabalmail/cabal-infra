@@ -4,4 +4,5 @@ module "cors" {
 
   api_id          = var.gateway_id
   api_resource_id = aws_api_gateway_resource.api_call.id
+  allow_headers   = ["*"]
 }
