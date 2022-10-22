@@ -21,6 +21,7 @@ resource "null_resource" "python_build" {
       shopt -s globstar dotglob nullglob
       cd ${local.build_path}
       zip ../${local.zip_file} **/*
+      cd ../
     EOT
   }
   triggers = {
