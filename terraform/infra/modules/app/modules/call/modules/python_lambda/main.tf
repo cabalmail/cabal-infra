@@ -52,7 +52,7 @@ resource "aws_lambda_permission" "api_exec" {
       var.account,
       var.gateway_id
     ]),
-    "/",
+    "/*/",
     var.method,
     var.call_path
   ])
