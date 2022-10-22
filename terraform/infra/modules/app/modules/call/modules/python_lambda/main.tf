@@ -22,9 +22,9 @@ resource "null_resource" "python_build" {
       find ${local.build_path}/ -exec touch -t 201301250000 \{\} \;
       shopt -s globstar dotglob nullglob
       SAVED=`pwd`
-      cd ${local.build_path}
+      pushd ${local.build_path}
       zip $SAVED/${local.zip_file} **/*
-      cd ../
+      popd
     EOT
   }
   triggers = {
