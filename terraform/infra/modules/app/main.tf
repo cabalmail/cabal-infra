@@ -29,7 +29,7 @@ resource "aws_api_gateway_authorizer" "api_auth" {
   ]) ]
 }
 
-module "cabal_imapapi_list_mailboxes_method" {
+module "cabal_list_mailboxes_method" {
   source           = "./modules/call"
   name             = "list_mailboxes"
   runtime          = "python3.9"
