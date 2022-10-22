@@ -151,7 +151,7 @@ resource "aws_lambda_function" "api_call" {
   handler          = "function.handler"
   runtime          = var.runtime
   depends_on = [
-    null_resource.python_build
+    data.archive_file.python_code
   ]
 }
 
