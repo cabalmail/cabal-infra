@@ -28,7 +28,7 @@ resource "null_resource" "python_build" {
 data "archive_file" "python_code" {
   type        = "zip"
   output_path = local.zip_file
-  source_dir  = var.lambda_root
+  source_dir  = local.build_path
   excludes    = [
     "__pycache__",
     "venv",
