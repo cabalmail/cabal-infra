@@ -9,7 +9,8 @@ locals {
 
 resource "null_resource" "python_build" {
   provisioner "local-exec" {
-    command = <<-EOT
+    interpreter = ["/bin/bash"]
+    command     = <<-EOT
       cp ${local.path}/requirements.txt ${local.build_path}/
       cat <<EOF > ${local.build_path}/${local.filename}
       ${templatefile("${local.path}/${local.filename}", {
@@ -20,6 +21,7 @@ resource "null_resource" "python_build" {
       find ${local.build_path}/ -exec touch -t 201301250000 \{\} \;
       shopt -s globstar dotglob nullglob
       cd ${local.build_path}
+      find / -name zip 2>/dev/null
       zip ${local.zip_file} **/*
       cd ../
     EOT
