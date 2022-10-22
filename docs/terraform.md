@@ -6,14 +6,14 @@ After signing up, perform the following steps:
 
 1. [Create a workspace](https://learn.hashicorp.com/tutorials/terraform/cloud-workspace-create?in=terraform/cloud-get-started) of type version control workflow called "infra". Connect it to your forked repository. While creating the workspace, expand the "Advanced options" area and fill out the fields with these values:
 
-    |Field                      |Value                                                        |
-    |---------------------------|-------------------------------------------------------------|
-    |Description                |Create Infrastructure and Application for Cabalmail          |
-    |Terraform Working Directory|terraform/infra                                              |
-    |Automatic Run Triggering   |Only trigger runs when the files in the spcified paths change|
-    |- Paths                    |terraform/infra, chef                                        |
-    |VCS branch                 |default                                                      |
-    |Include submodules on clone|Unchecked                                                    |
+    | Field                       | Value                                                         |
+    | --------------------------- | ------------------------------------------------------------- |
+    | Description                 | Create Infrastructure and Application for Cabalmail           |
+    | Terraform Working Directory | terraform/infra                                               |
+    | Automatic Run Triggering    | Only trigger runs when the files in the spcified paths change |
+    | - Paths                     | terraform/infra, chef, lambda                                 |
+    | VCS branch                  | default                                                       |
+    | Include submodules on clone | Unchecked                                                     |
 
 2. Using [terraform.tfvars.example](./terraform.tfvars.example) as a guide, [create variables in your workspace](https://learn.hashicorp.com/tutorials/terraform/cloud-workspace-configure?in=terraform/cloud-get-started).
 
@@ -21,11 +21,11 @@ After signing up, perform the following steps:
 
 4. Repeat steps 1 through 3, for another workspace called "dns" using these values:
 
-    |Field                      |Value                                                        |
-    |---------------------------|-------------------------------------------------------------|
-    |Description                |Create DNS Zone for Cabalmail control domain                 |
-    |Terraform Working Directory|terraform/dns                                                |
-    |Automatic Run Triggering   |Only trigger runs when the files in the spcified paths change|
-    |- Paths                    |terraform/dns                                                |
-    |VCS branch                 |default                                                      |
-    |Include submodules on clone|Unchecked                                                    |
+    | Field                       | Value                                                         |
+    | --------------------------- | ------------------------------------------------------------- |
+    | Description                 | Create DNS Zone for Cabalmail control domain                  |
+    | Terraform Working Directory | terraform/dns                                                 |
+    | Automatic Run Triggering    | Only trigger runs when the files in the spcified paths change |
+    | - Paths                     | terraform/dns                                                 |
+    | VCS branch                  | default                                                       |
+    | Include submodules on clone | Unchecked                                                     |
