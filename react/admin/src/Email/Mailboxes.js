@@ -18,7 +18,7 @@ class Mailboxes extends React.Component {
   }
 
   getList = async (e) => {
-    console.log("Sending response");
+    console.log("Sending request");
     const response = await axios.post('/list_mailboxes',
       JSON.stringify({
         user: this.props.userName,
