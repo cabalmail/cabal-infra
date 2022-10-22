@@ -36,6 +36,7 @@ class Mailboxes extends React.Component {
     return (
       <>
         <div>Mailboxes</div>
+        <div>Base URL: {this.props.api_url}</div>
         <div>{this.state.mailboxes}</div>
       </>
     );
