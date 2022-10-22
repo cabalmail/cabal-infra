@@ -18,17 +18,19 @@ class Mailboxes extends React.Component {
   }
 
   getList = async (e) => {
-    const response = await axios.post('/list_mailboxes', {
-      baseURL: this.props.api_url,
-      data: JSON.stringify({
+    const response = await axios.post('/list_mailboxes',
+      JSON.stringify({
         user: this.props.userName,
         password: this.props.password
       }),
-      headers: {
-        'Authorization': this.props.token
-      },
-      timeout: 10000
-    });
+      {
+        baseURL: this.props.api_url,
+        headers: {
+          'Authorization': this.props.token
+        },
+        timeout: 10000
+      }
+    );
     return response;
   }
 
