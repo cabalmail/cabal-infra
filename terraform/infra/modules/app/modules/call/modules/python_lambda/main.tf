@@ -17,7 +17,7 @@ resource "null_resource" "python_build" {
       })}
       EOF
       pip install -r ${local.path}/requirements.txt -t ${local.build_path}
-      find ${local.build_path}/ -exec touch -t 201301250000 {} +
+      find ${local.build_path}/ -exec touch -t 201301250000 \{\} \;
       shopt -s globstar dotglob nullglob
       cd ${local.build_path}
       zip ${local.zip_file} **/*
@@ -26,6 +26,7 @@ resource "null_resource" "python_build" {
   }
   triggers = {
     always_run = "${timestamp()}"
+    zip_file   = local.zip_file
   }
 }
 
@@ -148,20 +149,17 @@ RUNPOLICY
 
 #tfsec:ignore:aws-lambda-enable-tracing
 resource "aws_lambda_function" "api_call" {
-  filename         = local.zip_file
+  filename         = null_resource.python_build.triggers.zip_file
   source_code_hash = filebase64sha256(local.zip_file)
   function_name    = var.name
   role             = aws_iam_role.lambda.arn
   handler          = "function.handler"
   runtime          = var.runtime
-  depends_on = [
-    null_resource.python_build
-  ]
 }
 
 resource "null_resource" "cleanup" {
   provisioner "local-exec" {
-    command = "rm -Rf ${local.build_path}"
+    command = "rm -Rf ${local.build_path} ${local.zip_file}"
   }
 
   depends_on = [
