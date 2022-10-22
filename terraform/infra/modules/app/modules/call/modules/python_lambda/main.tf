@@ -9,8 +9,8 @@ locals {
 
 resource "null_resource" "python_build" {
   provisioner "local-exec" {
-    interpreter = ["/bin/bash"]
     command     = <<-EOT
+      set -e
       cp ${local.path}/requirements.txt ${local.build_path}/
       cat <<EOF > ${local.build_path}/${local.filename}
       ${templatefile("${local.path}/${local.filename}", {
