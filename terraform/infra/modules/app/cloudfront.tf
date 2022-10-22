@@ -19,7 +19,7 @@ resource "aws_cloudfront_distribution" "cdn" {
   default_root_object = "index.html"
   aliases             = ["admin.${var.control_domain}"]
   default_cache_behavior {
-    allowed_methods  = ["GET", "HEAD"]
+    allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
     cached_methods   = ["GET", "HEAD"]
     target_origin_id = "cabal_admin_s3"
     forwarded_values {
