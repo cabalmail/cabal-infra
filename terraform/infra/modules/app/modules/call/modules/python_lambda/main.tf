@@ -20,7 +20,7 @@ resource "null_resource" "python_build" {
       find ${local.build_path}/ -exec touch -t 201301250000 {} +
       shopt -s globstar dotglob nullglob
       cd ${local.build_path}
-      zip ${local.zip_file} **/*
+      zip ../${local.zip_file} **/*
     EOT
   }
   triggers = {
