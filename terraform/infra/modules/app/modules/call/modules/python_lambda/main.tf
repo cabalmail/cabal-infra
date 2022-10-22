@@ -23,7 +23,7 @@ resource "null_resource" "python_build" {
       shopt -s globstar dotglob nullglob
       SAVED=`pwd`
       cd ${local.build_path}
-      zip $$SAVED/${local.zip_file} **/*
+      zip $SAVED/${local.zip_file} **/*
       cd ../
     EOT
   }
