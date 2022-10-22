@@ -29,11 +29,11 @@ resource "null_resource" "python_build" {
 
 resource "random_uuid" "lambda_src_hash" {
   keepers = {
-    for filename in setunion(
+    for filename in [
       "${local.path}/${local.filename}",
       "${local.path}/requirements.txt"
-    ):
-        filename => filemd5("${local.path}/${filename}")
+    ]:
+      filename => filemd5("${local.path}/${filename}")
   }
 }
 
