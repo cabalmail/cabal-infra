@@ -3,7 +3,7 @@ locals {
   wildcard         = "*"
   filename         = "function.py"
   path             = "${path.module}/../../../../../../../../lambda/python/${var.name}"
-  zip_file         = "${var.name}_lambda.zip"
+  zip_file         = "/tmp/${var.name}_lambda.zip"
   build_path       = "${path.module}/build_path"
 }
 
@@ -20,7 +20,7 @@ resource "null_resource" "python_build" {
       find ${local.build_path}/ -exec touch -t 201301250000 {} +
       shopt -s globstar dotglob nullglob
       cd ${local.build_path}
-      zip ../${local.zip_file} **/*
+      zip ${local.zip_file} **/*
       cd ../
     EOT
   }
