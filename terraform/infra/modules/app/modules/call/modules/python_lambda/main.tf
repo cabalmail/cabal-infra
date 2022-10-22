@@ -38,8 +38,8 @@ resource "aws_lambda_permission" "api_exec" {
       var.gateway_id
     ]),
     "/*/",
-    aws_api_gateway_method.api_call.http_method,
-    aws_api_gateway_resource.api_call.path
+    var.method,
+    var.call_path
   ])
 }
 

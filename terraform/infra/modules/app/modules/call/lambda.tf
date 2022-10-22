@@ -8,6 +8,9 @@ module "cabal_python_lambda" {
   control_domain = var.control_domain
   relay_ips      = var.relay_ips
   domains        = var.domains
+  method         = aws_api_gateway_method.api_call.http_method
+  call_path      = aws_api_gateway_resource.api_call.path
+  repo           = var.repo
 }
 
 module "cabal_node_lambda" {
@@ -20,4 +23,7 @@ module "cabal_node_lambda" {
   control_domain = var.control_domain
   relay_ips      = var.relay_ips
   domains        = var.domains
+  method         = aws_api_gateway_method.api_call.http_method
+  call_path      = aws_api_gateway_resource.api_call.path
+  repo           = var.repo
 }

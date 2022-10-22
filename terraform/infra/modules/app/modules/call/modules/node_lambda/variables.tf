@@ -25,3 +25,15 @@ variable "relay_ips" {
 variable "domains" {
   type = list
 }
+
+variable "method" {
+  type = string
+}
+
+variable "call_path" {
+  type = string
+}
+
+variable "repo" {
+  type = string
+}
