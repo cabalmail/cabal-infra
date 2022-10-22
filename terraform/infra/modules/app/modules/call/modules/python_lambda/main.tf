@@ -153,7 +153,7 @@ RUNPOLICY
 #tfsec:ignore:aws-lambda-enable-tracing
 resource "aws_lambda_function" "api_call" {
   filename         = data.archive_file.python_code.output_path
-  source_code_hash = data.archive_file.python_code.output_base64sha256
+  source_code_hash = md5("${file("${local.path}/${local.filename}")}${file("${local.path}/requirements.txt")}")
   function_name    = var.name
   role             = aws_iam_role.lambda.arn
   handler          = "function.handler"
