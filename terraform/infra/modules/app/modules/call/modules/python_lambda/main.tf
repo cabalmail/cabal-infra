@@ -25,6 +25,19 @@ resource "null_resource" "python_build" {
   }
 }
 
+data "archive_file" "python_code" {
+  type        = "zip"
+  output_path = local.zip_file
+  source_dir  = var.lambda_root
+  excludes    = [
+    "__pycache__",
+    "venv",
+  ]
+  depends_on   = [
+    null_resource.python_build
+  ]
+}
+
 resource "aws_lambda_permission" "api_exec" {
   statement_id  = "AllowExecutionFromAPIGateway"
   action        = "lambda:InvokeFunction"
