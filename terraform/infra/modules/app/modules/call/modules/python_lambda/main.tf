@@ -3,7 +3,7 @@ locals {
   wildcard         = "*"
   filename         = "function.py"
   path             = "${path.module}/../../../../../../../../lambda/python/${var.name}"
-  zip_file         = "/tmp/${var.name}_lambda.zip"
+  zip_file         = "./${var.name}_lambda.zip"
   build_path       = "${path.module}/build_path"
 }
 
@@ -20,8 +20,9 @@ resource "null_resource" "python_build" {
       pip install -r ${local.path}/requirements.txt -t ${local.build_path}
       find ${local.build_path}/ -exec touch -t 201301250000 \{\} \;
       shopt -s globstar dotglob nullglob
+      SAVED=`pwd`
       cd ${local.build_path}
-      /usr/bin/zip ${local.zip_file} **/*
+      zip $$SAVED/${local.zip_file} **/*
       cd ../
     EOT
   }
