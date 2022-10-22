@@ -19,8 +19,7 @@ resource "null_resource" "python_build" {
     EOT
   }
   triggers = {
-    dependencies_versions = filemd5("${local.path}/requirements.txt")
-    source_versions = filemd5("${local.path}/${local.filename}")
+    always_run = "${timestamp()}"
   }
 }
 
