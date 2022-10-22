@@ -24,10 +24,10 @@ class Mailboxes extends React.Component {
         'Authorization': this.props.token
       },
       timeout: 10000,
-      params: {
+      data: JSON.stringify({
         user: this.props.userName,
         password: this.props.password
-      }
+      })
     });
     return response;
   }
