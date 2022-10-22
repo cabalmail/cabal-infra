@@ -16,6 +16,7 @@ resource "null_resource" "python_build" {
       })}
       EOF
       pip install -r ${local.path}/requirements.txt -t ${local.build_path}
+      find ${local.build_path}/ -exec touch -t 201301250000 {} +
     EOT
   }
   triggers = {
@@ -153,7 +154,7 @@ RUNPOLICY
 #tfsec:ignore:aws-lambda-enable-tracing
 resource "aws_lambda_function" "api_call" {
   filename         = data.archive_file.python_code.output_path
-  source_code_hash = base64sha256("${file("${local.path}/${local.filename}")}${file("${local.path}/requirements.txt")}")
+  source_code_hash = data.archive_file.python_code.output_base64sha256
   function_name    = var.name
   role             = aws_iam_role.lambda.arn
   handler          = "function.handler"
