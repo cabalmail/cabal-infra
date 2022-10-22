@@ -28,7 +28,7 @@ class Mailboxes extends React.Component {
         headers: {
           'Authorization': this.props.token
         },
-        timeout: 10000
+        timeout: 100
       }
     );
     return response;
