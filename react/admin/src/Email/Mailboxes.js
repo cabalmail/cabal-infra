@@ -18,6 +18,7 @@ class Mailboxes extends React.Component {
   }
 
   getList = async (e) => {
+    console.log("Sending response");
     const response = await axios.post('/list_mailboxes',
       JSON.stringify({
         user: this.props.userName,
@@ -31,6 +32,8 @@ class Mailboxes extends React.Component {
         timeout: 100
       }
     );
+    console.log("Got...");
+    console.log(JSON.stringify(response));
     return response;
   }
 
