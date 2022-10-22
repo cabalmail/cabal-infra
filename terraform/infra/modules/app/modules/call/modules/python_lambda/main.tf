@@ -3,7 +3,6 @@ locals {
   wildcard         = "*"
   filename         = "function.py"
   path             = "${path.cwd}/../../lambda/python/${var.name}/"
-  zip_file         = "${var.name}_lambda.zip"
   build_path       = "${path.module}/${var.name}"
 }
 
@@ -22,11 +21,25 @@ resource "null_resource" "python_build" {
       pip install -r ${local.path}/requirements.txt -t ${local.build_path}
     EOT
   }
+  triggers = {
+    dependencies_versions = filemd5("${local.path}/requirements.txt")
+    source_versions = filemd5("${local.path}/${local.filename}")
+  }
+}
+
+resource "random_uuid" "lambda_src_hash" {
+  keepers = {
+    for filename in setunion(
+      "${local.path}/${local.filename}",
+      "${local.path}/requirements.txt"
+    ):
+        filename => filemd5("${local.path}/${filename}")
+  }
 }
 
 data "archive_file" "python_code" {
   type        = "zip"
-  output_path = local.zip_file
+  output_path = "${random_uuid.lambda_src_hash.result}.zip"
   source_dir  = local.build_path
   excludes    = [
     "__pycache__",
