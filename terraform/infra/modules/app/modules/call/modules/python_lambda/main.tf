@@ -3,19 +3,16 @@ locals {
   wildcard         = "*"
   filename         = "function.py"
   path             = "${path.module}/../../../../../../../../lambda/python/${var.name}"
-  build_path       = "${path.module}/${var.name}"
+  build_path       = "${path.module}/build_path"
 }
 
 resource "null_resource" "python_build" {
   provisioner "local-exec" {
     command = <<-EOT
-      mkdir -p ${local.build_path}
       cp ${local.path}/requirements.txt ${local.build_path}/
       cat <<EOF > ${local.build_path}/${local.filename}
       ${templatefile("${local.path}/${local.filename}", {
         control_domain = var.control_domain
-        repo           = var.repo
-        domains        = {for domain in var.domains : domain.domain => domain.zone_id}
       })}
       EOF
       pip install -r ${local.path}/requirements.txt -t ${local.build_path}
