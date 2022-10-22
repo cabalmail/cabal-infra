@@ -3,8 +3,6 @@ name: Document React App
 
 on:
   push:
-    branches:
-      - main
     paths:
       - 'react/**'
       - '.github/workflows/react_documentation.yml'
