@@ -12,6 +12,7 @@ resource "null_resource" "python_build" {
     interpreter = ["/bin/bash"]
     command     = <<-EOT
       set -e
+      echo "Here I am"
       #cp ${local.path}/requirements.txt ${local.build_path}/
       #cat <<EOF > ${local.build_path}/${local.filename}
       #${templatefile("${local.path}/${local.filename}", {
