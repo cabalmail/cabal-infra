@@ -1,4 +1,5 @@
 from imapclient import IMAPClient
+import json
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -6,6 +7,8 @@ logger.setLevel(logging.INFO)
 client = IMAPClient(host="imap.${control_domain}", use_uid=True, ssl=True)
 
 def handler(event, context):
+  logger.log(json.dumps(event))
+  logger.log(json.dumps(context))
   client.login(event['user'], event['password'])
   response = client.list_folders()
   client.logout()
