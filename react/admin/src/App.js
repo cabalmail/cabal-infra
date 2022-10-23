@@ -54,7 +54,7 @@ class App extends React.Component {
         poolData: cognitoConfig.poolData,
         control_domain: control_domain,
         domains: domains,
-        api_url: "https://" + control_domain + "/api"
+        api_url: "https://admin." + control_domain + "/api"
       });
       UserPool = new CognitoUserPool(cognitoConfig.poolData);
     });
