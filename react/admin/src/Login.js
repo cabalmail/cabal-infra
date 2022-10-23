@@ -15,7 +15,6 @@ class Login extends React.Component {
             className="login username"
             id="userName"
             name="userName"
-            onChange={this.props.onUsernameChange}
             value=""
           />
           <label htmlFor="password">Password</label>
@@ -24,7 +23,6 @@ class Login extends React.Component {
             className="login password"
             id="password"
             name="password"
-            onChange={this.props.onPasswordChange}
             value=""
           />
           <button type="submit" className="default">Login</button>
