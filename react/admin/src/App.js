@@ -48,13 +48,13 @@ class App extends React.Component {
   componentDidMount() {
     const response = this.getConfig();
     response.then(data => {
-      const { control_domain, domains, cognitoConfig, invokeUrl } = data.data;
+      const { control_domain, domains, cognitoConfig } = data.data;
       this.setState({
         ...this.state,
         poolData: cognitoConfig.poolData,
         control_domain: control_domain,
         domains: domains,
-        api_url: invokeUrl
+        api_url: "https://" + control_domain + "/api"
       });
       UserPool = new CognitoUserPool(cognitoConfig.poolData);
     });
