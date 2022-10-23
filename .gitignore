@@ -1,11 +1,5 @@
-terraform/**/.terraform/*
-terraform/*/*.tfstate
-terraform/*/*.tfstate.*
-terraform/*/*.tfvars
-.terraform/**/.terraform/*
-.terraform/*/*.tfstate
-.terraform/*/*.tfstate.*
-.terraform/*/*.tfvars
+terraform/**
+.terraform/**
 react/admin/public/config.js
 backend.hcl
 .terraform.lock.hcl
