@@ -47,20 +47,14 @@ resource "aws_cloudfront_distribution" "cdn" {
   }
   ordered_cache_behavior {
     path_pattern     = "/api/*"
+    origin_path      = "/${var.stage_name}"
     allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
     cached_methods   = ["GET", "HEAD", "OPTIONS"]
     target_origin_id = "cabal_api"
 
     forwarded_values {
       query_string = true
-      headers      = [
-        "Origin",
-        "Authorization",
-        "Content-Type",
-        "X-Amz-Date",
-        "X-Amz-Security-Token",
-        "X-Api-Key"
-      ]
+      headers      = "*"
       cookies {
         forward = "none"
       }
