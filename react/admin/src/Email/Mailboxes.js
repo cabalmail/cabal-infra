@@ -14,6 +14,7 @@ class Mailboxes extends React.Component {
     const response = this.getList();
     response.then(data => {
       this.setState({ mailboxes: data });
+      console.log(data);
     });
   }
 
