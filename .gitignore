@@ -3,11 +3,7 @@ terraform/*/*.tfstate
 terraform/*/*.tfstate.*
 terraform/*/*.tfvars
 react/admin/public/config.js
-.x.swp
-.gitignore
 backend.hcl
-.gitignore
-.gitignore
 .terraform/terraform.tfstate
 .terraform.lock.hcl
 .terraform/modules/modules.json
