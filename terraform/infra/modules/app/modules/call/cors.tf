@@ -15,9 +15,15 @@ module "cors" {
     "User-Agent",
     "X-Requested-With",
     "Accept-Encoding",
-    "Content-Length"
+    "Content-Length",
+    "DNT",
+    "If-Modified-Since",
+    "Cache-Control",
+    "Range"
   ]
 }
+#,,Authorization, Content-Language, Accept, Accept-Language
+
 # CORS Safe: Accept Accept-Language Content-Language Content-Type
 # Sent according to Chrome:
 
