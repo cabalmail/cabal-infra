@@ -13,6 +13,17 @@ resource "aws_cloudfront_distribution" "cdn" {
       origin_access_identity = "origin-access-identity/cloudfront/${data.aws_ssm_parameter.origin_id.value}"
     }
   }
+  origin {
+    domain_name = split("/", aws_api_gateway_stage.api_stage.invoke_url)[2]
+    origin_id   = "cabal_api"
+    origin_path = "/${var.stage_name}"
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "https-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
   enabled             = true
   is_ipv6_enabled     = true
   comment             = "Cabal admin website"
@@ -32,6 +43,26 @@ resource "aws_cloudfront_distribution" "cdn" {
     min_ttl                = 0
     default_ttl            = var.dev_mode ? 0 : 600
     max_ttl                = var.dev_mode ? 0 : 86400
+    viewer_protocol_policy = "redirect-to-https"
+  }
+  ordered_cache_behavior {
+    path_pattern     = "/${var.stage_name}/*"
+    allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods   = ["GET", "HEAD", "OPTIONS"]
+    target_origin_id = "cabal_api"
+
+    forwarded_values {
+      query_string = true
+      headers      = ["*"]
+      cookies {
+        forward = "none"
+      }
+    }
+
+    min_ttl                = 0
+    default_ttl            = 0
+    max_ttl                = 0
+    compress               = true
     viewer_protocol_policy = "redirect-to-https"
   }
 
