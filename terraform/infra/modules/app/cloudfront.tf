@@ -17,6 +17,12 @@ resource "aws_cloudfront_distribution" "cdn" {
     domain_name = split("/", aws_api_gateway_stage.api_stage.invoke_url)[2]
     origin_id   = "cabal_api"
     origin_path = var.stage_name
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "https-only"
+      origin_ssl_protocols   = "TLSv1.2"
+    }
   }
   enabled             = true
   is_ipv6_enabled     = true
