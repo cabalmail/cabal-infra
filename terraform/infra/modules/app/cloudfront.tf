@@ -16,6 +16,7 @@ resource "aws_cloudfront_distribution" "cdn" {
   origin {
     domain_name = split("/", aws_api_gateway_stage.api_stage.invoke_url)[2]
     origin_id   = "cabal_api"
+    origin_path = "/${var.stage_name}"
     custom_origin_config {
       http_port              = 80
       https_port             = 443
