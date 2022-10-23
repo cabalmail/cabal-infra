@@ -1,6 +1,10 @@
 import React from 'react';
 import axios from 'axios';
 
+/**
+ * Fetches mailboxes for current users and displays them
+ */
+
 class Mailboxes extends React.Component {
 
   constructor(props) {
@@ -13,13 +17,12 @@ class Mailboxes extends React.Component {
   componentDidMount() {
     const response = this.getList();
     response.then(data => {
-      this.setState({ mailboxes: data });
+      this.setState({ mailboxes: JSON.stringify(data) });
       console.log(data);
     });
   }
 
   getList = async (e) => {
-    console.log("Sending request");
     const response = await axios.post('/list_mailboxes',
       JSON.stringify({
         user: this.props.userName,
@@ -33,8 +36,6 @@ class Mailboxes extends React.Component {
         timeout: 10000
       }
     );
-    console.log("Got...");
-    console.log(JSON.stringify(response));
     return response;
   }
 

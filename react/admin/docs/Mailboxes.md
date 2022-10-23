@@ -3,7 +3,7 @@
 <p><a href="/README.md">Main documentation</a></p>
 </div><div style="padding-left: 11em;">
 # Mailboxes
-
+Fetches mailboxes for current users and displays them
 
 ## Methods
 ### getList
