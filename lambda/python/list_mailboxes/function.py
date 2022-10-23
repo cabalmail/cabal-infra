@@ -22,12 +22,12 @@ def handler(event, _context):
         })
     }
 
-def decode(l):
+def decode(data):
     '''Converts the byte strings in a complex object to utf-8 strings'''
-    if isinstance(l, list):
-        return [decode(x) for x in l]
-    if isinstance(l, tuple):
-        return [decode(x) for x in l]
-    if isinstance(l, str):
-        return l
-    return l.decode('utf-8')
+    if isinstance(data, list):
+        return [decode(x) for x in data]
+    if isinstance(data, tuple):
+        return [decode(x) for x in data]
+    if isinstance(data, str):
+        return data
+    return data.decode('utf-8')
