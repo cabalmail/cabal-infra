@@ -16,6 +16,7 @@ resource "aws_cloudfront_distribution" "cdn" {
   origin {
     domain_name = split("/", aws_api_gateway_stage.api_stage.invoke_url)[2]
     origin_id   = "cabal_api"
+    origin_path = "/prod"
     custom_origin_config {
       http_port              = 80
       https_port             = 443
@@ -45,7 +46,7 @@ resource "aws_cloudfront_distribution" "cdn" {
     viewer_protocol_policy = "redirect-to-https"
   }
   ordered_cache_behavior {
-    path_pattern     = "/${var.stage_name}/*"
+    path_pattern     = "/api/*"
     allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
     cached_methods   = ["GET", "HEAD", "OPTIONS"]
     target_origin_id = "cabal_api"
