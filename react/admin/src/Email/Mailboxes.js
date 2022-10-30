@@ -45,6 +45,7 @@ class Mailboxes extends React.Component {
       if (typeof item === 'string') {
         return <li>{item}</li>;
       }
+      return null;
     });
     return (
       <>
