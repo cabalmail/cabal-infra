@@ -34,7 +34,6 @@ resource "aws_cloudfront_distribution" "cdn" {
     target_origin_id = "cabal_admin_s3"
     forwarded_values {
       query_string = true
-
       cookies {
         forward = "none"
       }
@@ -52,7 +51,7 @@ resource "aws_cloudfront_distribution" "cdn" {
 
     forwarded_values {
       query_string = true
-      headers      = ["*"]
+      headers      = ["Authorization"]
       cookies {
         forward = "none"
       }
@@ -62,7 +61,7 @@ resource "aws_cloudfront_distribution" "cdn" {
     default_ttl            = 0
     max_ttl                = 0
     compress               = true
-    viewer_protocol_policy = "redirect-to-https"
+    viewer_protocol_policy = "https-only"
   }
 
   price_class = "PriceClass_100"
