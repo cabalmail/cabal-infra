@@ -41,14 +41,16 @@ class Mailboxes extends React.Component {
 
   render() {
     // TODO: handle nexted arrays
-    const mailbox_list = this.state.mailboxes.filter(item => {
-      if (typeof item === 'string') {
-        return true;
-      }
-      return false;
-    }).map(item => {
-      return <li>{item}</li>;
-    });
+    // const mailbox_list = this.state.mailboxes.filter(item => {
+    //   if (typeof item === 'string') {
+    //     return true;
+    //   }
+    //   return false;
+    // }).map(item => {
+    //   return <li>{item}</li>;
+    // });
+    const mailbox_list = <li>{JSON.Stringify(this.state.mailboxes)}</li>;
+    console.log(mailbox_list);
     return (
       <>
         <div>Mailboxes</div>
