@@ -49,7 +49,7 @@ class Mailboxes extends React.Component {
     // }).map(item => {
     //   return <li>{item}</li>;
     // });
-    const mailbox_list = <li>{JSON.Stringify(this.state.mailboxes)}</li>;
+    const mailbox_list = <li>{JSON.stringify(this.state.mailboxes)}</li>;
     console.log(mailbox_list);
     return (
       <>
