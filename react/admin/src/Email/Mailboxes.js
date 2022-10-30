@@ -10,14 +10,14 @@ class Mailboxes extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      mailboxes: ""
+      mailboxes: []
     };
   }
 
   componentDidMount() {
     const response = this.getList();
     response.then(data => {
-      this.setState({ mailboxes: JSON.stringify(data) });
+      this.setState({ mailboxes: data.data });
       console.log(data);
     });
   }
@@ -40,10 +40,16 @@ class Mailboxes extends React.Component {
   }
 
   render() {
+    const mailbox_list = this.state.mailboxes.map(item => {
+      # TODO: handle nexted arrays
+      if (typeof item === 'string') {
+        return <li>{item}</li>;
+      }
+    });
     return (
       <>
         <div>Mailboxes</div>
-        <div>{this.state.mailboxes}</div>
+        <ul>{mailbox_list}</ul>
       </>
     );
   }
