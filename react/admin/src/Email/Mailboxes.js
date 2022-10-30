@@ -40,8 +40,8 @@ class Mailboxes extends React.Component {
   }
 
   render() {
+    // TODO: handle nexted arrays
     const mailbox_list = this.state.mailboxes.map(item => {
-      # TODO: handle nexted arrays
       if (typeof item === 'string') {
         return <li>{item}</li>;
       }
