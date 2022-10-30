@@ -17,7 +17,7 @@ class Mailboxes extends React.Component {
   componentDidMount() {
     const response = this.getList();
     response.then(data => {
-      this.setState({ mailboxes: data.data });
+      this.setState({ mailboxes: data.data.data });
       console.log(data);
     });
   }
