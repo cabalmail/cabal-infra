@@ -13,4 +13,11 @@ Parameters: e (null)
 
 Returns: null
 
+### setMailbox
+Modifiers: none
+
+Parameters: e (null)
+
+Returns: null
+
 </div>
