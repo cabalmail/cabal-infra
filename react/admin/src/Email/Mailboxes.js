@@ -39,6 +39,11 @@ class Mailboxes extends React.Component {
     return response;
   }
 
+  setMailbox = (e) => {
+    e.preventDefault();
+    this.props.setMailbox(e.target.value);
+  }
+
   render() {
     // TODO: handle nexted arrays
     const mailbox_list = this.state.mailboxes.filter(item => {
@@ -47,7 +52,9 @@ class Mailboxes extends React.Component {
       }
       return false;
     }).map(item => {
-      return <li>{item}</li>;
+      return (
+        <li><button onClick={this.setMailbox} value={item}>{item}</button></li>
+      );
     });
     console.log(mailbox_list);
     return (

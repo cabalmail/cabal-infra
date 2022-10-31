@@ -8,25 +8,31 @@ class Email extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      label: "INBOX"
+      mailbox: "INBOX"
     };
+  }
+
+  selectMailbox(mailbox) {
+    console.log(mailbox);
+    this.setState(mailbox);
   }
 
   render() {
     return (
       <>
-        <div>Email</div>
         <Mailboxes 
           token={this.props.token}
           password={this.props.password}
           userName={this.props.userName}
           api_url={this.props.api_url}
+          setMailbox={this.selectMailbox}
         />
         <Messages 
           token={this.props.token}
           password={this.props.password}
           userName={this.props.userName}
           api_url={this.props.api_url}
+          mailbox={this.state.mailbox}
         />
       </>
     );
