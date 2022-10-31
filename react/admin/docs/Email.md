@@ -6,4 +6,11 @@
 
 
 ## Methods
+### selectMailbox
+Modifiers: none
+
+Parameters: mailbox (null)
+
+Returns: null
+
 </div>
