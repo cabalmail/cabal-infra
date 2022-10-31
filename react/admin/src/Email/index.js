@@ -12,7 +12,7 @@ class Email extends React.Component {
     };
   }
 
-  selectMailbox(mailbox) {
+  selectMailbox = (mailbox) => {
     console.log(mailbox);
     this.setState(mailbox);
   }
