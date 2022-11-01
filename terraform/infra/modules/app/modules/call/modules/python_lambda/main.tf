@@ -14,7 +14,7 @@ resource "null_resource" "python_build" {
   provisioner "local-exec" {
     command     = <<-EOT
       set -e
-      cp ${local.path}/requirements.txt ${local.build_path}/
+      cp -f ${local.path}/requirements.txt ${local.build_path}/
       cat <<EOF > ${local.build_path}/${local.filename}
       ${templatefile("${local.path}/${local.filename}", {
         control_domain = var.control_domain
