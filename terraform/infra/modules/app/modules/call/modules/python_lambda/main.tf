@@ -14,7 +14,7 @@ resource "null_resource" "python_build" {
   provisioner "local-exec" {
     command     = <<-EOT
       set -e
-      rm -Rf ${local.path}/requirements.txt ${local.build_path}/*
+      rm -Rf ${local.build_path}/*
       cp ${local.path}/requirements.txt ${local.build_path}/
       cat <<EOF > ${local.build_path}/${local.filename}
       ${templatefile("${local.path}/${local.filename}", {
