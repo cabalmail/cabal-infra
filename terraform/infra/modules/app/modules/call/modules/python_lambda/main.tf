@@ -1,3 +1,6 @@
+# TODO: build separately, upload to s3,
+# trigger terraform
+
 locals {
   hosted_zone_arns = join(",",[for domain in var.domains : "\"${domain.arn}\""])
   wildcard         = "*"
