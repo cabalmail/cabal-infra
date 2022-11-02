@@ -6,4 +6,11 @@
 
 
 ## Methods
+### getList
+Modifiers: async
+
+Parameters: e (null)
+
+Returns: null
+
 </div>
