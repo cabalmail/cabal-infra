@@ -19,7 +19,7 @@ def handler(event, _context):
         "statusCode": 200,
         "body": json.dumps({
             "data": {
-                "message_data": decode(response[0]),
+                "message_data": decode(response),
                 "folder_data": decode(select_info)
             }
         })
@@ -30,6 +30,8 @@ def decode(data):
     if isinstance(data, list):
         return [decode(x) for x in data]
     if isinstance(data, tuple):
+        return [decode(x) for x in data]
+    if isinstance(data, dict):
         return [decode(x) for x in data]
     if isinstance(data, str):
         return data
