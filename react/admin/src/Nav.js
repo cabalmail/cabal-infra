@@ -26,7 +26,7 @@ class Nav extends React.Component {
           name="List"
           onClick={onClick}
           href="#list"
-        >List Addresses</a>
+        >Addresses</a>
         <a
           id="email"
           className={`item${view === "Email" ? " active" : ""}`}
