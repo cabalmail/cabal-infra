@@ -42,7 +42,7 @@ class Messages extends React.Component {
   }
 
   render() {
-    const mailbox_list = JSON.stringify(this.state.mailboxes)
+    const message_list = JSON.stringify(this.state.messages)
     return (
       <>
         <div>Messages in {this.props.mailbox}</div>
