@@ -1,5 +1,11 @@
 import React from 'react';
+import axios from 'axios';
 
+/**
+ * Fetches message for current users/mailbox and displays them
+ */
+
+ 
 class Messages extends React.Component {
 
   constructor(props) {
