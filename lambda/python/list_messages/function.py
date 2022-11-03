@@ -39,4 +39,4 @@ def decode(data):
         return data
     if isinstance(data, int):
         return data
-    return f"Unsupported data type: %s" % type(data).__class__.__name__
+    return f"Unsupported data type: %s" % data.__class__.__name__
