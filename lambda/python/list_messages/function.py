@@ -40,7 +40,7 @@ def decode_from(data):
     '''Converts a tuple of Address objects to a simple list of strings'''
     r = []
     for f in data:
-        r.append(f"%s@%s" % f.mailbox.decode(), f.host.decode())
+        r.append(f"{f.mailbox.decode()}@{f.host.decode()}")
     return r
 
 def decode(data):
