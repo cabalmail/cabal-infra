@@ -21,7 +21,7 @@ def handler(event, _context):
         messages.append({
             "id": msgid,
             "date": envelope.date.__str__(),
-            "subject": envelope.subject.decode()
+            "subject": envelope.subject.decode(),
             "from": decode_from(envelope.from_)
         })
     logger.info(messages)
