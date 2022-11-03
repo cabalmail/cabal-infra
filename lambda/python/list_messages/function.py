@@ -13,28 +13,30 @@ def handler(event, _context):
     client.login(body['user'], body['password'])
     select_info = client.select_folder(body['mailbox'])
     response = client.search([b'NOT', b'DELETED'])
-    client.logout()
     logger.info(response)
+    messages = client.fetch(response, ['INTERNALDATE', 'RFC822'])
+
+    client.logout()
     return {
         "statusCode": 200,
         "body": json.dumps({
             "data": {
-                "message_data": decode(response),
+                "message_data": decode(messages),
                 "folder_data": decode(select_info)
             }
         })
     }
 
-def decode(data):
-    '''Converts the byte strings in a complex object to utf-8 strings'''
-    if isinstance(data, list):
-        return [decode(x) for x in data]
-    if isinstance(data, tuple):
-        return [decode(x) for x in data]
-    if isinstance(data, dict):
-        return [decode(x) for x in data]
-    if isinstance(data, str):
-        return data
-    if isinstance(data, int):
-        return data
-    return f"Unsupported data type: %s" % type(data).__class__.__name__
+    def decode(data):
+        '''Converts the byte strings in a complex object to utf-8 strings'''
+        if isinstance(data, list):
+            return [decode(x) for x in data]
+        if isinstance(data, tuple):
+            return [decode(x) for x in data]
+        if isinstance(data, dict):
+            return [decode(x) for x in data]
+        if isinstance(data, str):
+            return data
+        if isinstance(data, int):
+            return data
+        return f"Unsupported data type: %s" % type(data).__class__.__name__
