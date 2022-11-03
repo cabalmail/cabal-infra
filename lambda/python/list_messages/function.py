@@ -14,7 +14,12 @@ def handler(event, _context):
     select_info = client.select_folder(body['mailbox'])
     response = client.search([b'NOT', b'DELETED'])
     logger.info(response)
-    messages = client.fetch(response, ['ENVELOPE'])
+    messages = []
+    for msgid, data in server.fetch(messages, ['ENVELOPE']).items():
+        messages.append({
+            "id": msgid,
+            "data": data[b'ENVELOPE']
+        })
     logger.info(messages)
     client.logout()
     return {
