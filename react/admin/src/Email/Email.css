@@ -1,15 +1,17 @@
 ul.message-list {
   list-style: none;
-  padding-left: 0;
-  clear: both;
 }
 
 ul.message-list li.message-row {
   list-style: none;
   border-bottom: 1px solid #888;
   display: grid;
-  grid-template-columns: 25% 25% 50%;
+  grid-template-columns: 24% 24% 50%;
   grid-column-gap: 2%;
   align-items: baseline;
 }
 
+ul.message-list li.message-row span {
+  display: block;
+  padding: .25em;
+}
