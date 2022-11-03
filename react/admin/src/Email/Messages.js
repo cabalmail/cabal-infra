@@ -58,7 +58,7 @@ class Messages extends React.Component {
     return (
       <div className="message-list">
         <div>Messages in {this.props.mailbox}</div>
-        <ul>{message_list}</ul>
+        <ul className="message-list">{message_list}</ul>
       </div>
     );
   }
