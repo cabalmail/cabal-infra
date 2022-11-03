@@ -17,9 +17,12 @@ def handler(event, _context):
     logger.info(response)
     messages = []
     for msgid, data in client.fetch(response, ['ENVELOPE']).items():
+        envelope = data[b'ENVELOPE']
         messages.append({
             "id": msgid,
-            "data": decode(data[b'ENVELOPE'])
+            "date": envelope.date.__str__(),
+            "subject": envelope.subject.decode()
+            "from": decode_from(envelope.from_)
         })
     logger.info(messages)
     client.logout()
@@ -32,6 +35,13 @@ def handler(event, _context):
             }
         })
     }
+
+def decode_from(data):
+    '''Converts a tuple of Address objects to a simple list of strings'''
+    r = []
+    for f in data:
+        r.append(f"%s@%s" % f.mailbox.decode(), f.host.decode())
+    return r
 
 def decode(data):
     '''Converts the byte strings in a complex object to utf-8 strings'''
