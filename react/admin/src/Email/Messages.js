@@ -48,7 +48,7 @@ class Messages extends React.Component {
   render() {
     const message_list = this.state.messages.map(item => {
       return (
-        <li>
+        <li key={item.id} className="message-row">
           <span>{item.from[0]}</span>
           <span>{item.date}</span>
           <span>{item.subject}</span>
@@ -56,10 +56,10 @@ class Messages extends React.Component {
       )
     })
     return (
-      <>
+      <div className="message-list">
         <div>Messages in {this.props.mailbox}</div>
         <ul>{message_list}</ul>
-      </>
+      </div>
     );
   }
 }
