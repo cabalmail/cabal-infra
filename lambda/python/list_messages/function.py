@@ -39,4 +39,6 @@ def decode(data):
         return data
     if isinstance(data, int):
         return data
+    if isinstance(data, bytes):
+        return data.decode('utf-8')
     return f"Unsupported data type: %s" % data.__class__.__name__
