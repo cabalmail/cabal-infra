@@ -14,8 +14,8 @@ def handler(event, _context):
     select_info = client.select_folder(body['mailbox'])
     response = client.search([b'NOT', b'DELETED'])
     logger.info(response)
-    messages = client.fetch(response, ['INTERNALDATE', 'RFC822'])
-
+    messages = client.fetch(response, ['ENVELOPE'])
+    logger.info(messages)
     client.logout()
     return {
         "statusCode": 200,
