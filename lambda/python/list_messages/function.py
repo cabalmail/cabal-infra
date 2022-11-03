@@ -1,6 +1,7 @@
 '''Retrieves IMAP messages for a user given a mailbox'''
 import json
 import logging
+from datetime import datetime
 from imapclient import IMAPClient
 
 logger = logging.getLogger()
