@@ -11,14 +11,18 @@ class Messages extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      messages: null
+      messages: [],
+      folder_data: []
     };
   }
 
   componentDidMount() {
     const response = this.getList();
     response.then(data => {
-      this.setState({ messages: data });
+      this.setState({
+        messages: data.data.data.message_data,
+        folder_data: data.data.data.folder_data
+      });
       console.log(data);
     });
   }
