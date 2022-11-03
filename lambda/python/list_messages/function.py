@@ -15,7 +15,7 @@ def handler(event, _context):
     response = client.search([b'NOT', b'DELETED'])
     logger.info(response)
     messages = []
-    for msgid, data in client.fetch(messages, ['ENVELOPE']).items():
+    for msgid, data in client.fetch(response, ['ENVELOPE']).items():
         messages.append({
             "id": msgid,
             "data": decode(data[b'ENVELOPE'])
