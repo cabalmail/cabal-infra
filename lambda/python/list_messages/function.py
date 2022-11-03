@@ -27,16 +27,16 @@ def handler(event, _context):
         })
     }
 
-    def decode(data):
-        '''Converts the byte strings in a complex object to utf-8 strings'''
-        if isinstance(data, list):
-            return [decode(x) for x in data]
-        if isinstance(data, tuple):
-            return [decode(x) for x in data]
-        if isinstance(data, dict):
-            return [decode(x) for x in data]
-        if isinstance(data, str):
-            return data
-        if isinstance(data, int):
-            return data
-        return f"Unsupported data type: %s" % type(data).__class__.__name__
+def decode(data):
+    '''Converts the byte strings in a complex object to utf-8 strings'''
+    if isinstance(data, list):
+        return [decode(x) for x in data]
+    if isinstance(data, tuple):
+        return [decode(x) for x in data]
+    if isinstance(data, dict):
+        return [decode(x) for x in data]
+    if isinstance(data, str):
+        return data
+    if isinstance(data, int):
+        return data
+    return f"Unsupported data type: %s" % type(data).__class__.__name__
