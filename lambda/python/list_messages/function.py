@@ -48,5 +48,5 @@ def decode(data):
     if isinstance(data, bytes):
         return data.decode('utf-8')
     if isinstance(data, datetime):
-        return data
+        return data.__str__
     return f"Unsupported data type: %s" % data.__class__.__name__
