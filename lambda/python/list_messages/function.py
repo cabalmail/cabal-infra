@@ -18,7 +18,7 @@ def handler(event, _context):
     for msgid, data in client.fetch(messages, ['ENVELOPE']).items():
         messages.append({
             "id": msgid,
-            "data": data[b'ENVELOPE']
+            "data": decode(data[b'ENVELOPE'])
         })
     logger.info(messages)
     client.logout()
@@ -26,7 +26,7 @@ def handler(event, _context):
         "statusCode": 200,
         "body": json.dumps({
             "data": {
-                "message_data": decode(messages),
+                "message_data": messages,
                 "folder_data": decode(select_info)
             }
         })
