@@ -35,6 +35,6 @@ def decode(data):
         return [decode(x) for x in data]
     if isinstance(data, str):
         return data
-    id isinstance(data, int):
+    if isinstance(data, int):
         return data
     return f"Unsupported data type: %s" % type(data).__class__.__name__
