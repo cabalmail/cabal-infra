@@ -7,7 +7,7 @@ ul.message-list li.message-row {
   border-bottom: 1px solid #888;
   display: grid;
   /* grid-template-columns: minmax(30em, 24%) minmax(30em, 24%) minmax(60em, 50%); */
-  grid-template-colums: repeat(auto-fit, minmax(75px, 1fr));
+  grid-template-colums: repeat(auto-fit, minmax(75px, 50%));
   grid-column-gap: 2%;
   align-items: baseline;
 }
