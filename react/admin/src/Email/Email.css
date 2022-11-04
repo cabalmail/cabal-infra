@@ -22,24 +22,21 @@ ul.message-list span {
 @media screen and (max-device-width: 1024px) {
 
   ul.message-list {
-    grid-template-columns: repeat(auto-fill, minmax(30em, 1fr));
+    display: block;
   }
 
   ul.message-list li.message-row {
-    display: grid;
+    display: block;
     list-style: none;
     border-bottom: 1px solid #888;
-    grid-template-columns: subgrid;
-    grid-column: 1 / 4;
-    align-items: baseline;
   }
 
   ul.message-list span.message-subject {
-    grid-column: 1 / span 2
+    display: block
   }
 
-  ul.message-list span {
-    display: block;
+  ul.message-list span.message-date, ul.message-list span.message-from {
+    display: inline-block;
     padding: .25em;
   }
 
