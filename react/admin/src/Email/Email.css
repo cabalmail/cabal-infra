@@ -19,7 +19,7 @@ ul.message-list span {
   padding: .25em;
 }
 
-@media screen and (max-device-width: 1024px) {
+@media screen and (max-width: 1024px) {
 
   ul.message-list, ul.message-list li.message-row, ul.message-list span.message-subject {
     display: block;
