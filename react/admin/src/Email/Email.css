@@ -34,6 +34,10 @@ ul.message-list span {
     align-items: baseline;
   }
 
+  ul.message-list span.message-subject {
+    grid-column: 1 / span 2
+  }
+
   ul.message-list span {
     display: block;
     padding: .25em;
