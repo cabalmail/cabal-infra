@@ -49,9 +49,9 @@ class Messages extends React.Component {
     const message_list = this.state.messages.map(item => {
       return (
         <li key={item.id} className="message-row">
-          <span>{item.from[0]}</span>
-          <span>{item.date}</span>
-          <span>{item.subject}</span>
+          <span className="message-from">{item.from[0]}</span>
+          <span className="message-date">{item.date}</span>
+          <span className="message-subject">{item.subject}</span>
         </li>
       )
     })
