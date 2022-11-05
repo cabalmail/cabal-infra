@@ -23,8 +23,19 @@ class Messages extends React.Component {
         messages: data.data.data.message_data,
         folder_data: data.data.data.folder_data
       });
-      console.log(data);
     });
+  }
+
+  componentDidUpdate(prevProps, prevState) {
+    if (this.props.mailbox !== provProps.mailbox) {
+      const response = this.getList();
+      response.then(data => {
+        this.setState({
+          messages: data.data.data.message_data,
+          folder_data: data.data.data.folder_data
+        });
+      });
+    }
   }
 
   getList = async (e) => {
