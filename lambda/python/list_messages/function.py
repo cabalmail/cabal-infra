@@ -46,9 +46,7 @@ def decode_subject(data):
         if isinstance(p[0], bytes):
             subject_strings.append(str(p[0], p[1] or 'utf-8'))
         if isinstance(p[0], str):
-            subject_strings.append(p[0])
-        else:
-            subject_strings.append("[¿?]")
+          subject_strings.append(p[0])
 
     return ''.join(subject_strings)
 
