@@ -18,16 +18,13 @@ def handler(event, _context):
     return {
         "statusCode": 200,
         "body": json.dumps({
-            "data": decode(response[0])
+            "data": decode_mailbox_list(response)
         })
     }
 
-def decode(data):
-    '''Converts the byte strings in a complex object to utf-8 strings'''
-    if isinstance(data, list):
-        return [decode(x) for x in data]
-    if isinstance(data, tuple):
-        return [decode(x) for x in data]
-    if isinstance(data, str):
-        return data
-    return data.decode('utf-8')
+def decode_mailbox_list(data):
+    '''Converts mailbox list to simple list'''
+    mailboxes = []
+    for m in data:
+        mailboxes.append(m[2])
+    return mailboxes
