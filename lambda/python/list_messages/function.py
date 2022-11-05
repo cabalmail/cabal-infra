@@ -40,7 +40,10 @@ def handler(event, _context):
 
 def decode_subject(data):
     '''Converts an email subject into a utf-8 string'''
-    return decode_header(data.decode())[0][0].decode('utf-8')
+    subject = decode_header(data)[0][0]
+    if isinstance(subject, str):
+        return subject
+    return subject.decode('utf-8')
 
 def decode_from(data):
     '''Converts a tuple of Address objects to a simple list of strings'''
