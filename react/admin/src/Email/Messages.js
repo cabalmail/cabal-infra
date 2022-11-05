@@ -27,7 +27,7 @@ class Messages extends React.Component {
   }
 
   componentDidUpdate(prevProps, prevState) {
-    if (this.props.mailbox !== provProps.mailbox) {
+    if (this.props.mailbox !== prevProps.mailbox) {
       const response = this.getList();
       response.then(data => {
         this.setState({
