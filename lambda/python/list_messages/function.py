@@ -23,7 +23,7 @@ def handler(event, _context):
         messages.append({
             "id": msgid,
             "date": envelope.date.__str__(),
-            "subject": decode(decode_header(envelope.subject.decode())[0][0]),
+            "subject": decode_subject(envelope.subject),
             "from": decode_from(envelope.from_)
         })
     logger.info(messages)
@@ -37,6 +37,10 @@ def handler(event, _context):
             }
         })
     }
+
+def decode_subject(data):
+    '''Converts an email subject into a utf-8 string'''
+    return decode_header(data.decode())[0][0].decode('utf-8')
 
 def decode_from(data):
     '''Converts a tuple of Address objects to a simple list of strings'''
