@@ -3,6 +3,9 @@ ul.message-list {
   display: grid;
   grid-column-gap: 1em;
   grid-template-columns: minmax(1fr, 5fr) minmax(1fr, 5fr) 10fr;
+
+div.message-list ul {
+  padding: 0;
 }
 
 ul.message-list li.message-row {
