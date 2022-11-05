@@ -40,7 +40,7 @@ def handler(event, _context):
 
 def decode_subject(data):
     '''Converts an email subject into a utf-8 string'''
-    subject = decode_header(data)[0][0]
+    subject = decode_header(data.decode())[0][0]
     if isinstance(subject, str):
         return subject
     return subject.decode('utf-8')
