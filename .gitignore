@@ -1,4 +1,3 @@
-terraform/**
 .terraform/**
 react/admin/public/config.js
 backend.hcl
