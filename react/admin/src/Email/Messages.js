@@ -16,27 +16,27 @@ class Messages extends React.Component {
   const ASC = {
     imap: "",
     description: "Ascending order (smallest/first to largest/last)"
-  }
+  };
   const DESC = {
     imap: "REVERSE ",
     description: "Descending order (largest/last to smallest/first)"
-  }
+  };
   const DATE_RECEIVED = {
     imap: "ARRIVAL",
     description: "Date Received"
-  }
+  };
   const FROM = {
     imap: "FROM",
     description: "From address"
-  }
+  };
   const SUBJECT = {
     imap: "SUBJECT"
     description: "Subject"
-  }
+  };
   const TO = {
     imap: "TO"
     description: "Recipient"
-  }
+  };
 
   constructor(props) {
     super(props);
