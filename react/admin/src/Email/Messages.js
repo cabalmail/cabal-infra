@@ -18,7 +18,7 @@ const DESC = {
   imap: "REVERSE ",
   description: "Descending order (largest/last to smallest/first)"
 };
-const DATE_RECEIVED = {
+const ARRIVAL = {
   imap: "ARRIVAL",
   description: "Date Received"
 };
@@ -44,7 +44,7 @@ class Messages extends React.Component {
       folder_data: [],
       page: 0,
       sort_order: DESC,
-      sort_field: DATE_RECEIVED
+      sort_field: ARRIVAL
     };
   }
 
