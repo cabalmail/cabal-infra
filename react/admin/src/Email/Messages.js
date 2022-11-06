@@ -44,9 +44,6 @@ class Messages extends React.Component {
     super(props);
     this.state = {
       message_ids: [],
-      envelopes: {},
-      folder_data: [],
-      page: 0,
       sort_order: DESC,
       sort_field: ARRIVAL
     };
@@ -56,9 +53,7 @@ class Messages extends React.Component {
     const response = this.getList();
     response.then(data => {
       this.setState({
-        envelopes: data.data.data.envelopes,
-        message_ids: data.data.data.message_ids,
-        folder_data: data.data.data.folder_data
+        message_ids: data.data.data.message_ids
       });
     });
   }
@@ -68,9 +63,7 @@ class Messages extends React.Component {
       const response = this.getList();
       response.then(data => {
         this.setState({
-          envelopes: data.data.data.envelopes,
-          message_ids: data.data.data.message_ids,
-        folder_data: data.data.data.folder_data
+          message_ids: data.data.data.message_ids
         });
       });
     }
