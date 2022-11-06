@@ -115,7 +115,7 @@ class Messages extends React.Component {
   }
 
   loadList() {
-    const num_ids = this.state.message_ids.length();
+    const num_ids = this.state.message_ids.length;
     var pages = [];
     for (var i = 0; i < num_ids; i+=PAGE_SIZE) {
       pages.push(
