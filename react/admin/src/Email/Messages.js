@@ -52,7 +52,6 @@ class Messages extends React.Component {
   componentDidMount() {
     const response = this.getList();
     response.then(data => {
-      console.log(data.data.data.envelopes);
       this.setState({
         envelopes: data.data.data.envelopes,
         message_ids: data.data.data.message_ids,
@@ -65,7 +64,6 @@ class Messages extends React.Component {
     if (this.props.mailbox !== prevProps.mailbox) {
       const response = this.getList();
       response.then(data => {
-        console.log(data.data.data.envelopes);
         this.setState({
           envelopes: data.data.data.envelopes,
           message_ids: data.data.data.message_ids,
@@ -121,11 +119,11 @@ class Messages extends React.Component {
   }
 
   render() {
-    const message_list = this.state.message_ids.map(item => {
-      if (item.id in this.state.envelopes) {
-        const message = this.state.envelopes[item.id];
+    const message_list = this.state.message_ids.map(id => {
+      if (id.toString() in this.state.envelopes) {
+        const message = this.state.envelopes[id];
         return (
-          <li key={item.id} className="message-row">
+          <li key={id} className="message-row">
             <span className="message-from">{message.from[0]}</span>
             <span className="message-date">{message.date}</span>
             <span className="message-subject">{message.subject}</span>
