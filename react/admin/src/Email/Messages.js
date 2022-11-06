@@ -27,11 +27,11 @@ const FROM = {
   description: "From address"
 };
 const SUBJECT = {
-  imap: "SUBJECT"
+  imap: "SUBJECT",
   description: "Subject"
 };
 const TO = {
-  imap: "TO"
+  imap: "TO",
   description: "Recipient"
 };
 
