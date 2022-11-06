@@ -43,7 +43,7 @@ class Messages extends React.Component {
       messages: [],
       folder_data: [],
       page: 0,
-      sort_order: DESC
+      sort_order: DESC,
       sort_field: DATE_RECEIVED
     };
   }
