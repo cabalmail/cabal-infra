@@ -121,7 +121,7 @@ class Messages extends React.Component {
   render() {
     const message_list = this.state.message_ids.map(item => {
       if (item.id in this.state.envelopes) {
-        message = this.state.envelopes[item.id];
+        const message = this.state.envelopes[item.id];
         return (
           <li key={item.id} className="message-row">
             <span className="message-from">{message.from[0]}</span>
