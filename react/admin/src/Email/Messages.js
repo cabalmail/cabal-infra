@@ -1,9 +1,11 @@
 /**
- * Fetches message for current users/mailbox and displays them
+ * Fetches message ids for current users/mailbox and displays them
  */
 
 import React from 'react';
 import axios from 'axios';
+import LazyLoad from 'react-lazyload';
+import Envelope from './Envelope.js';
 
 // see https://www.rfc-editor.org/rfc/rfc5256.html
 // Not implemented:
@@ -34,6 +36,7 @@ const TO = {
   imap: "TO",
   description: "Recipient"
 };
+const PAGE_SIZE = 50;
 
 class Messages extends React.Component {
 
@@ -118,30 +121,29 @@ class Messages extends React.Component {
     }
   }
 
-  render() {
-    const message_list = this.state.message_ids.map(id => {
-      if (id.toString() in this.state.envelopes) {
-        const message = this.state.envelopes[id];
-        return (
-          <li key={id} className="message-row">
-            <span className="message-from">{message.from[0]}</span>
-            <span className="message-date">{message.date}</span>
-            <span className="message-subject">{message.subject}</span>
-          </li>
-        );
-      }
-      return (
-        <li key={id} className="message-row loading">
-          <span className="message-from"></span>
-          <span className="message-date"></span>
-          <span className="message-subject"></span>
-        </li>
+  loadList() {
+    const num_ids = this.state.message_ids.length();
+    var pages = [];
+    for (var i = 0; i < num_ids; i+=PAGE_SIZE) {
+      pages.push(
+        <LazyLoad>
+          <Envelope
+            message_ids={this.state.message_ids.slice(i, i+PAGE_SIZE)}
+            userName={this.props.userName}
+            password={this.props.password}
+            mailbox={this.props.mailbox}
+          />
+        </LazyLoad>
       );
-    })
+    }
+    return pages;
+  }
+
+  render() {
     return (
       <div className="message-list">
         <div>Messages in {this.props.mailbox}</div>
-        <ul className="message-list">{message_list}</ul>
+        <ul className="message-list">{loadList()}</ul>
       </div>
     );
   }
