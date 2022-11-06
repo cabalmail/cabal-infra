@@ -52,6 +52,7 @@ class Messages extends React.Component {
   componentDidMount() {
     const response = this.getList();
     response.then(data => {
+      console.log data.data.data.envelopes;
       this.setState({
         envelopes: data.data.data.envelopes,
         message_ids: data.data.data.message_ids,
@@ -64,6 +65,7 @@ class Messages extends React.Component {
     if (this.props.mailbox !== prevProps.mailbox) {
       const response = this.getList();
       response.then(data => {
+        console.log data.data.data.envelopes;
         this.setState({
           envelopes: data.data.data.envelopes,
           message_ids: data.data.data.message_ids,
