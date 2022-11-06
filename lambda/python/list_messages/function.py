@@ -42,7 +42,10 @@ def decode_subject(data):
     '''Converts an email subject into a utf-8 string'''
     if data is None:
         return ''
-    subject_parts = decode_header(data.decode())
+    try:
+        subject_parts = decode_header(data.decode())
+    except UnicodeDecodeError:
+        return "[[¿?]]"
     subject_strings = []
     for p in subject_parts:
         try:
