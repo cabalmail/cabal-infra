@@ -90,6 +90,31 @@ class Messages extends React.Component {
     return response;
   }
 
+  toggleOrder {
+    this.setState({
+      sort_order: this.state.sort_order.imap == ASC.imap ? DESC : ASC
+    })
+  }
+
+  setSortField(field) {
+    switch(field) {
+      case SUBJECT.imap:
+        this.setState({sort_order: SUBJECT});
+        break;
+      case ARRIVAL.imap:
+        this.setState({sort_order: ARRIVAL});
+        break;
+      case TO.imap:
+        this.setState({sort_order: TO});
+        break;
+      case FROM.imap:
+        this.setState({sort_order: FROM});
+        break;
+      default:
+        this.setState({sort_order: ARRIVAL});
+    }
+  }
+
   render() {
     const message_list = this.state.messages.map(item => {
       return (
