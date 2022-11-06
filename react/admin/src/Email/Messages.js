@@ -143,7 +143,7 @@ class Messages extends React.Component {
     return (
       <div className="message-list">
         <div>Messages in {this.props.mailbox}</div>
-        <ul className="message-list">{loadList()}</ul>
+        <ul className="message-list">{this.loadList()}</ul>
       </div>
     );
   }
