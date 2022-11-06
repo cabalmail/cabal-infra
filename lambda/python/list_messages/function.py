@@ -15,10 +15,10 @@ def handler(event, _context):
     body = json.loads(event['body'])
     client.login(body['user'], body['password'])
     select_info = client.select_folder(body['mailbox'])
-    response = client.search([b'NOT', b'DELETED'])
+    response = client.sort(f"{body['sort_order']}{body['sort_field']}", [b'NOT', b'DELETED'])
     logger.info(response)
     messages = []
-    for msgid, data in client.fetch(response, ['ENVELOPE']).items():
+    for msgid, data in client.fetch(response[0:9], ['ENVELOPE']).items():
         envelope = data[b'ENVELOPE']
         messages.append({
             "id": msgid,

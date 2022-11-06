@@ -8,11 +8,44 @@ import axios from 'axios';
  
 class Messages extends React.Component {
 
+  // see https://www.rfc-editor.org/rfc/rfc5256.html
+  // Not implemented:
+  //  - CC
+  //  - SIZE
+  //  - multiple simultaneous criteria such as combined subject and date
+  const ASC = {
+    imap: "",
+    description: "Ascending order (smallest/first to largest/last)"
+  }
+  const DESC = {
+    imap: "REVERSE ",
+    description: "Descending order (largest/last to smallest/first)"
+  }
+  const DATE_RECEIVED = {
+    imap: "ARRIVAL",
+    description: "Date Received"
+  }
+  const FROM = {
+    imap: "FROM",
+    description: "From address"
+  }
+  const SUBJECT = {
+    imap: "SUBJECT"
+    description: "Subject"
+  }
+  const TO = {
+    imap: "TO"
+    description: "Recipient"
+  }
+
   constructor(props) {
     super(props);
     this.state = {
       messages: [],
-      folder_data: []
+      folder_data: [],
+      page: 0,
+      sort_order: DESC
+      sort_field: DATE_RECEIVED
     };
   }
 
@@ -43,7 +76,9 @@ class Messages extends React.Component {
       JSON.stringify({
         user: this.props.userName,
         password: this.props.password,
-        mailbox: this.props.mailbox
+        mailbox: this.props.mailbox,
+        sort_order: this.state.sort_order.imap,
+        sort_field: this.state.sort_field.imap
       }),
       {
         baseURL: this.props.api_url,
