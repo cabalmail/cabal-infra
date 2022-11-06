@@ -17,15 +17,15 @@ def handler(event, _context):
     select_info = client.select_folder(body['mailbox'])
     response = client.sort(f"{body['sort_order']}{body['sort_field']}", [b'NOT', b'DELETED'])
     logger.info(response)
-    messages = []
+    messages = {}
     for msgid, data in client.fetch(response[0:9], ['ENVELOPE']).items():
         envelope = data[b'ENVELOPE']
-        messages.append({
+        messages[msgid] = {
             "id": msgid,
             "date": envelope.date.__str__(),
             "subject": decode_subject(envelope.subject),
             "from": decode_from(envelope.from_)
-        })
+        }
     logger.info(messages)
     client.logout()
     return {

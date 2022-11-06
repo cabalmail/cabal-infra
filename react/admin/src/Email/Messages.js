@@ -41,7 +41,7 @@ class Messages extends React.Component {
     super(props);
     this.state = {
       message_ids: [],
-      envelops: [],
+      envelopes: {},
       folder_data: [],
       page: 0,
       sort_order: DESC,
@@ -120,7 +120,7 @@ class Messages extends React.Component {
 
   render() {
     const message_list = this.state.message_ids.map(item => {
-      if (this.state.envelopes.includes(item.id)) {
+      if (item.id in this.state.envelopes) {
         message = this.state.envelopes[item.id];
         return (
           <li key={item.id} className="message-row">
