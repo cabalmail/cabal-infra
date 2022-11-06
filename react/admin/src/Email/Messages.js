@@ -1,42 +1,41 @@
-import React from 'react';
-import axios from 'axios';
-
 /**
  * Fetches message for current users/mailbox and displays them
  */
 
- 
-class Messages extends React.Component {
+import React from 'react';
+import axios from 'axios';
 
-  // see https://www.rfc-editor.org/rfc/rfc5256.html
-  // Not implemented:
-  //  - CC
-  //  - SIZE
-  //  - multiple simultaneous criteria such as combined subject and date
-  const ASC = {
-    imap: "",
-    description: "Ascending order (smallest/first to largest/last)"
-  };
-  const DESC = {
-    imap: "REVERSE ",
-    description: "Descending order (largest/last to smallest/first)"
-  };
-  const DATE_RECEIVED = {
-    imap: "ARRIVAL",
-    description: "Date Received"
-  };
-  const FROM = {
-    imap: "FROM",
-    description: "From address"
-  };
-  const SUBJECT = {
-    imap: "SUBJECT"
-    description: "Subject"
-  };
-  const TO = {
-    imap: "TO"
-    description: "Recipient"
-  };
+// see https://www.rfc-editor.org/rfc/rfc5256.html
+// Not implemented:
+//  - CC
+//  - SIZE
+//  - multiple simultaneous criteria such as combined subject and date
+const ASC = {
+  imap: "",
+  description: "Ascending order (smallest/first to largest/last)"
+};
+const DESC = {
+  imap: "REVERSE ",
+  description: "Descending order (largest/last to smallest/first)"
+};
+const DATE_RECEIVED = {
+  imap: "ARRIVAL",
+  description: "Date Received"
+};
+const FROM = {
+  imap: "FROM",
+  description: "From address"
+};
+const SUBJECT = {
+  imap: "SUBJECT"
+  description: "Subject"
+};
+const TO = {
+  imap: "TO"
+  description: "Recipient"
+};
+
+class Messages extends React.Component {
 
   constructor(props) {
     super(props);
