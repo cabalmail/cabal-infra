@@ -13,4 +13,18 @@ Parameters: e (null)
 
 Returns: null
 
+### toggleOrder
+Modifiers: none
+
+Parameters:  ()
+
+Returns: null
+
+### setSortField
+Modifiers: none
+
+Parameters: field (null)
+
+Returns: null
+
 </div>
