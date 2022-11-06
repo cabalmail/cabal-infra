@@ -32,7 +32,8 @@ def handler(event, _context):
         "statusCode": 200,
         "body": json.dumps({
             "data": {
-                "message_data": messages,
+                "message_ids": response,
+                "envelopes": messages,
                 "folder_data": decode(select_info)
             }
         })

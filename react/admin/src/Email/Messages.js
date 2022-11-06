@@ -40,7 +40,8 @@ class Messages extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      messages: [],
+      message_ids: [],
+      envelops: [],
       folder_data: [],
       page: 0,
       sort_order: DESC,
@@ -52,7 +53,8 @@ class Messages extends React.Component {
     const response = this.getList();
     response.then(data => {
       this.setState({
-        messages: data.data.data.message_data,
+        envelopes: data.data.data.envelopes,
+        message_ids: data.data.data.message_ids,
         folder_data: data.data.data.folder_data
       });
     });
@@ -63,8 +65,9 @@ class Messages extends React.Component {
       const response = this.getList();
       response.then(data => {
         this.setState({
-          messages: data.data.data.message_data,
-          folder_data: data.data.data.folder_data
+          envelopes: data.data.data.envelopes,
+          message_ids: data.data.data.message_ids,
+        folder_data: data.data.data.folder_data
         });
       });
     }
@@ -116,14 +119,24 @@ class Messages extends React.Component {
   }
 
   render() {
-    const message_list = this.state.messages.map(item => {
+    const message_list = this.state.message_ids.map(item => {
+      if (this.state.envelopes.includes(item.id)) {
+        message = this.state.envelopes[item.id];
+        return (
+          <li key={item.id} className="message-row">
+            <span className="message-from">{message.from[0]}</span>
+            <span className="message-date">{message.date}</span>
+            <span className="message-subject">{message.subject}</span>
+          </li>
+        );
+      }
       return (
-        <li key={item.id} className="message-row">
-          <span className="message-from">{item.from[0]}</span>
-          <span className="message-date">{item.date}</span>
-          <span className="message-subject">{item.subject}</span>
+        <li key={item.id} className="message-row loading">
+          <span className="message-from"></span>
+          <span className="message-date"></span>
+          <span className="message-subject"></span>
         </li>
-      )
+      );
     })
     return (
       <div className="message-list">
