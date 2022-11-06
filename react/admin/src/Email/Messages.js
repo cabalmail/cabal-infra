@@ -5,7 +5,7 @@
 import React from 'react';
 import axios from 'axios';
 import LazyLoad from 'react-lazyload';
-import Envelope from './Envelope.js';
+import Envelopes from './Envelopes.js';
 
 // see https://www.rfc-editor.org/rfc/rfc5256.html
 // Not implemented:
@@ -127,7 +127,7 @@ class Messages extends React.Component {
     for (var i = 0; i < num_ids; i+=PAGE_SIZE) {
       pages.push(
         <LazyLoad>
-          <Envelope
+          <Envelopes
             message_ids={this.state.message_ids.slice(i, i+PAGE_SIZE)}
             userName={this.props.userName}
             password={this.props.password}
