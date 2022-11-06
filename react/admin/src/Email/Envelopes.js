@@ -3,10 +3,6 @@ import axios from 'axios';
 
 class Envelopes extends React.Component {
 
-  constructor(props) {
-    super(props);
-  }
-
   componentDidMount() {
     const response = this.getList();
     response.then(data => {
