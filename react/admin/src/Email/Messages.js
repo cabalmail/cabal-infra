@@ -131,7 +131,7 @@ class Messages extends React.Component {
         );
       }
       return (
-        <li key={item.id} className="message-row loading">
+        <li key={id} className="message-row loading">
           <span className="message-from"></span>
           <span className="message-date"></span>
           <span className="message-subject"></span>
