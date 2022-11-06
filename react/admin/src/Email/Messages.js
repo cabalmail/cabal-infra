@@ -92,7 +92,7 @@ class Messages extends React.Component {
 
   toggleOrder() {
     this.setState({
-      sort_order: this.state.sort_order.imap == ASC.imap ? DESC : ASC
+      sort_order: this.state.sort_order.imap === ASC.imap ? DESC : ASC
     })
   }
 
