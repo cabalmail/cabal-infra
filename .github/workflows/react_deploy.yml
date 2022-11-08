@@ -30,7 +30,7 @@ jobs:
         json
         EOF
         yarn install
-        NODE_ENV=development yarn build
+        NODE_ENV=development yarn build --profile
         AWS_S3_BUCKET=$(aws ssm get-parameter --name "/cabal/react-config/s3-bucket" --profile deploy_react | jq -r '.Parameter.Value')
         AWS_CF_DISTRIBUTION=$(aws ssm get-parameter --name "/cabal/react-config/cf-distribution" --profile deploy_react | jq -r '.Parameter.Value')
         aws s3 sync build "s3://${AWS_S3_BUCKET}/" --profile deploy_react --no-progress
