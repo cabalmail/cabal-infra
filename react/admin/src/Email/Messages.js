@@ -133,10 +133,11 @@ class Messages extends React.Component {
   }
 
   render() {
+    const list = this.loadList();
     return (
       <div className="message-list">
         <div>Messages in {this.props.mailbox}</div>
-        <ul className="message-list">{this.loadList()}</ul>
+        <ul className="message-list">{list}</ul>
       </div>
     );
   }
