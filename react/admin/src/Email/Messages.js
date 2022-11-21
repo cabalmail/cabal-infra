@@ -5,7 +5,7 @@
 import React from 'react';
 import axios from 'axios';
 //import LazyLoad from 'react-lazyload';
-//import Envelopes from './Envelopes.js';
+import Envelopes from './Envelopes.js';
 
 // see https://www.rfc-editor.org/rfc/rfc5256.html
 // Not implemented:
@@ -129,7 +129,12 @@ class Messages extends React.Component {
       //   </LazyLoad>
       // );
       pages.push(
-      <li>x</li>
+        <Envelopes
+          message_ids={this.state.message_ids.slice(i, i+PAGE_SIZE)}
+          userName={this.props.userName}
+          password={this.props.password}
+          mailbox={this.props.mailbox}
+        />
       );
     }
     return pages[0];
