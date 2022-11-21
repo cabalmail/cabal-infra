@@ -131,7 +131,7 @@ class Messages extends React.Component {
         </LazyLoad>
       );
     }
-    return pages[0];
+    return pages;
   }
 
   render() {
