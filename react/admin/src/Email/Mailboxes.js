@@ -18,7 +18,6 @@ class Mailboxes extends React.Component {
     const response = this.getList();
     response.then(data => {
       this.setState({ mailboxes: data.data.data });
-      console.log(data);
     });
   }
 
@@ -51,7 +50,6 @@ class Mailboxes extends React.Component {
         <li><button onClick={this.setMailbox} value={item}>{item}</button></li>
       );
     });
-    console.log(mailbox_list);
     return (
       <>
         <div>Mailboxes</div>
