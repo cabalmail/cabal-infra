@@ -118,27 +118,17 @@ class Messages extends React.Component {
     const num_ids = this.state.message_ids.length;
     var pages = [];
     for (var i = 0; i < num_ids; i+=PAGE_SIZE) {
-      // pages.push(
-      //   <LazyLoad offset={50}>
-      //     <Envelopes
-      //       message_ids={this.state.message_ids.slice(i, i+PAGE_SIZE)}
-      //       userName={this.props.userName}
-      //       password={this.props.password}
-      //       mailbox={this.props.mailbox}
-      //       token={this.props.token}
-      //       api_url={this.props.api_url}
-      //     />
-      //   </LazyLoad>
-      // );
       pages.push(
-        <Envelopes
-          message_ids={this.state.message_ids.slice(i, i+PAGE_SIZE)}
-          userName={this.props.userName}
-          password={this.props.password}
-          mailbox={this.props.mailbox}
-          token={this.props.token}
-          api_url={this.props.api_url}
-        />
+        <LazyLoad offset={50}>
+          <Envelopes
+            message_ids={this.state.message_ids.slice(i, i+PAGE_SIZE)}
+            userName={this.props.userName}
+            password={this.props.password}
+            mailbox={this.props.mailbox}
+            token={this.props.token}
+            api_url={this.props.api_url}
+          />
+        </LazyLoad>
       );
     }
     return pages[0];
