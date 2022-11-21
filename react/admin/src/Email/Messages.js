@@ -4,7 +4,7 @@
 
 import React from 'react';
 import axios from 'axios';
-//import LazyLoad from 'react-lazyload';
+import LazyLoad from 'react-lazyload';
 import Envelopes from './Envelopes.js';
 
 // see https://www.rfc-editor.org/rfc/rfc5256.html
