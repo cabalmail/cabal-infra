@@ -129,11 +129,11 @@ class Messages extends React.Component {
         </LazyLoad>
       );
     }
-    return pages;
+    return pages[0];
   }
 
   render() {
-    const list = this.loadList()[0];
+    const list = this.loadList();
     return (
       <div className="message-list">
         <div>Messages in {this.props.mailbox}</div>
