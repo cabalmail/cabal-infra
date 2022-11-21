@@ -13,6 +13,7 @@ class Envelopes extends React.Component {
   componentDidMount() {
     const response = this.getList();
     response.then(data => {
+      console.log(data);
       this.setState({
         envelopes: data.data.data.envelopes
       });
