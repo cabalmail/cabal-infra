@@ -3,12 +3,20 @@ import axios from 'axios';
 
 class Envelopes extends React.Component {
 
+  constructor(props) {
+    super(props);
+    this.state = {
+      envelopes: [],
+    };
+  }
+
   componentDidMount() {
     const response = this.getList();
     response.then(data => {
       this.setState({
         envelopes: data.data.data.envelopes
       });
+      console.log(this.state.envelopes);
     });
   }
 
