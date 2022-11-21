@@ -18,7 +18,7 @@ class Envelopes extends React.Component {
         user: this.props.userName,
         password: this.props.password,
         mailbox: this.props.mailbox,
-        ids: this.props.ids
+        ids: this.props.message_ids
       }),
       {
         baseURL: this.props.api_url,
