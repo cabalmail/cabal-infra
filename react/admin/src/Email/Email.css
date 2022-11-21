@@ -9,12 +9,15 @@ div.message-list ul {
   padding: 0;
 }
 
-ul.message-list li.message-row {
+ul.message-list li.message-row, ul.message-list div.lazyload-wrapper {
   display: grid;
-  list-style: none;
-  border-bottom: 1px solid #888;
   grid-template-columns: subgrid;
   grid-column: 1 / 4;
+}
+
+ul.message-list li.message-row {
+  list-style: none;
+  border-bottom: 1px solid #888;
   align-items: baseline;
 }
 
