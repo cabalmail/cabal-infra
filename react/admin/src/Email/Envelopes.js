@@ -32,7 +32,7 @@ class Envelopes extends React.Component {
   // }
 
   render() {
-    const message_list = this.props.ids.map(id => {
+    const message_list = this.props.message_ids.map(id => {
       // if (id.toString() in this.state.envelopes) {
       //   var message = this.state.envelopes[id];
       //   return (
