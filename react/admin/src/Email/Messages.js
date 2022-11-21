@@ -125,6 +125,8 @@ class Messages extends React.Component {
       //       userName={this.props.userName}
       //       password={this.props.password}
       //       mailbox={this.props.mailbox}
+      //       token={this.props.token}
+      //       api_url={this.props.api_url}
       //     />
       //   </LazyLoad>
       // );
@@ -134,6 +136,8 @@ class Messages extends React.Component {
           userName={this.props.userName}
           password={this.props.password}
           mailbox={this.props.mailbox}
+          token={this.props.token}
+          api_url={this.props.api_url}
         />
       );
     }
