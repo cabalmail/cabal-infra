@@ -20,6 +20,17 @@ class Envelopes extends React.Component {
     });
   }
 
+  componentDidUpdate(prevProps, prevState) {
+    if (this.props.message_ids !== prevProps.message_ids) {
+      const response = this.getList();
+      response.then(data => {
+        this.setState({
+          envelopes: data.data.data.envelopes
+        });
+      });
+    }
+  }
+
   getList = async (e) => {
     const response = await axios.post('/list_envelopes',
       JSON.stringify({
