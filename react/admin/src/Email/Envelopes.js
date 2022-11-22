@@ -56,16 +56,16 @@ class Envelopes extends React.Component {
         var message = this.state.envelopes[id];
         return (
           <li key={id} className="message-row">
-            <span className="message-from">{message.from[0]}</span>
             <span className="message-date">{message.date}</span>
+            <span className="message-from">{message.from[0]}</span>
             <span className="message-subject">{message.subject}</span>
           </li>
         );
       }
       return (
         <li key={id} className="message-row loading">
-          <span className="message-from"></span>
           <span className="message-date"></span>
+          <span className="message-from"></span>
           <span className="message-subject"></span>
         </li>
       );

@@ -22,6 +22,7 @@ ul.message-list span.message-subject {
 
 ul.message-list span.message-date {
   font-style: italic;
+  float: right;
 }
 
 ul.message-list li.loading span {
