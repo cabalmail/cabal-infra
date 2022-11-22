@@ -16,13 +16,14 @@ def handler(event, _context):
     client.login(body['user'], body['password'])
     client.select_folder(body['mailbox'])
     envelopes = {}
-    for msgid, data in client.fetch(body['ids'], ['ENVELOPE']).items():
+    for msgid, data in client.fetch(body['ids'], ['ENVELOPE', 'FLAGS']).items():
         envelope = data[b'ENVELOPE']
         envelopes[msgid] = {
             "id": msgid,
             "date": envelope.date.__str__(),
             "subject": decode_subject(envelope.subject),
-            "from": decode_from(envelope.from_)
+            "from": decode_from(envelope.from_),
+            "flags": data[b'FLAGS']
         }
     client.logout()
     return {
