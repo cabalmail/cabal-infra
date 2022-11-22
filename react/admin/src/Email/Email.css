@@ -23,6 +23,8 @@ ul.message-list span.message-subject {
 
 ul.message-list span.message-subject::before {
   content: '🔵';
+  display: inline-block;
+  padding-right: .2em;
 }
 
 ul.message-list li.Seen span.message-subject {
@@ -32,6 +34,8 @@ ul.message-list li.Seen span.message-subject {
 
 ul.message-list li.Seen span.message-subject::before {
   content: '✉️';
+  display: inline-block;
+  padding-right: .2em;
 }
 
 ul.message-list span.message-date {
