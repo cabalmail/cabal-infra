@@ -47,5 +47,7 @@ ul.message-list span.message-date {
 }
 
 ul.message-list li.loading span {
-  background-color: #666;
+  animation-name: ripple;
+  animation-duration: 2s;
+  animation-iteration-count: infinite;
 }
