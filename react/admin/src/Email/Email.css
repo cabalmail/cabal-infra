@@ -54,11 +54,12 @@ ul.message-list li.loading {
   border-left: auto;
   border-right: auto;
   animation-name: ripple;
-  animation-duration: 2s;
+  animation-duration: 0.5s;
   animation-iteration-count: infinite;
 }
 
 ul.message-list li.loading span.message-subject::before {
   content: '';
   display: none;
+  border-bottom: 0;
 }
