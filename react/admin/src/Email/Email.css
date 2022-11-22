@@ -19,6 +19,9 @@ ul.message-list span {
 ul.message-list span.message-subject {
   font-size: 115%;
   font-weight: bold;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 ul.message-list span.message-subject::before {
