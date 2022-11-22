@@ -48,10 +48,17 @@ ul.message-list span.message-date {
 
 ul.message-list li.loading {
   background: #000;
-  max-width: 2em;
+  width: 2em;
+  height: 2em;
+  border-radius: 1em;
   border-left: auto;
   border-right: auto;
   animation-name: ripple;
   animation-duration: 2s;
   animation-iteration-count: infinite;
+}
+
+ul.message-list li.loading span.message-subject::before {
+  content: '';
+  display: none;
 }
