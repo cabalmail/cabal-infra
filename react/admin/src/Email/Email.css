@@ -21,9 +21,17 @@ ul.message-list span.message-subject {
   font-weight: bold;
 }
 
+ul.message-list span.message-subject::before {
+  content: '🔵';
+}
+
 ul.message-list li.Seen span.message-subject {
   font-size: 115%;
   font-weight: normal;
+}
+
+ul.message-list li.Seen span.message-subject::before {
+  content: '✉️';
 }
 
 ul.message-list span.message-date {
