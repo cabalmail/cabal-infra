@@ -66,5 +66,5 @@ def decode_flags(data):
     '''Converts array of bytes to array of strings'''
     s = []
     for b in data:
-        s.append(s.decode())
+        s.append(b.decode())
     return s
