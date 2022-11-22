@@ -1,8 +1,5 @@
-ul.message-list {
+ul.message-list, ul.message-list li.message-row {
   list-style: none;
-  display: grid;
-  grid-column-gap: 1em;
-  grid-template-columns: minmax(1fr, 5fr) minmax(1fr, 5fr) 10fr;
 }
 
 div.message-list ul {
@@ -10,10 +7,6 @@ div.message-list ul {
 }
 
 ul.message-list li.message-row {
-  display: grid;
-  grid-template-columns: subgrid;
-  grid-column: 1 / 4;
-  list-style: none;
   border-bottom: 1px solid #888;
   align-items: baseline;
 }
@@ -23,19 +16,14 @@ ul.message-list span {
   padding: .25em;
 }
 
-ul.message-list li.loading span {
-  background-color: #666;
+ul.message-list span.message-subject {
+  font-size: 115%;
 }
 
-@media screen and (max-width: 1024px) {
+ul.message-list span.message-date {
+  font-style: italic;
+}
 
-  ul.message-list, ul.message-list li.message-row, ul.message-list span.message-subject {
-    display: block;
-  }
-
-  ul.message-list span.message-date, ul.message-list span.message-from {
-    display: inline-block;
-    width: 45%;
-  }
-
+ul.message-list li.loading span {
+  background-color: #666;
 }
