@@ -23,7 +23,7 @@ def handler(event, _context):
             "date": envelope.date.__str__(),
             "subject": decode_subject(envelope.subject),
             "from": decode_from(envelope.from_),
-            "flags": data[b'FLAGS']
+            "flags": decode_flags(data[b'FLAGS'])
         }
     client.logout()
     return {
@@ -61,3 +61,10 @@ def decode_from(data):
     for f in data:
         r.append(f"{f.mailbox.decode()}@{f.host.decode()}")
     return r
+
+def decode_flags(data):
+    '''Converts array of bytes to array of strings'''
+    s = []
+    for b in data:
+        s.append(s.decode())
+    return s
