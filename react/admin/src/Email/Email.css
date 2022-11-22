@@ -56,10 +56,10 @@ ul.message-list li.loading {
   animation-name: ripple;
   animation-duration: 0.5s;
   animation-iteration-count: infinite;
+  border-bottom: 0;
 }
 
 ul.message-list li.loading span.message-subject::before {
   content: '';
   display: none;
-  border-bottom: 0;
 }
