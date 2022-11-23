@@ -36,3 +36,7 @@
 button.toggleRequest {
   width: 4em;
 }
+
+hr {
+  margin: 1.5em;
+}
