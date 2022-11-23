@@ -12,7 +12,6 @@ class Addresses extends React.Component {
           password={this.props.password}
           userName={this.props.userName}
           api_url={this.props.api_url}
-          setMailbox={this.selectMailbox}
           setMessage={this.props.setMessage}
         />
         <List 
@@ -20,7 +19,6 @@ class Addresses extends React.Component {
           password={this.props.password}
           userName={this.props.userName}
           api_url={this.props.api_url}
-          mailbox={this.state.mailbox}
           setMessage={this.props.setMessage}
         />
       </>
