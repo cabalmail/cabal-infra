@@ -11,7 +11,7 @@ class Addresses extends React.Component {
     };
   }
 
-  toggleRequest() {
+  toggleRequest = () => {
     this.setState({showRequest: !this.state.showRequest})
   }
 
