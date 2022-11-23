@@ -16,14 +16,16 @@ def handler(event, _context):
     client.login(body['user'], body['password'])
     client.select_folder(body['mailbox'])
     envelopes = {}
-    for msgid, data in client.fetch(body['ids'], ['ENVELOPE', 'FLAGS']).items():
+    for msgid, data in client.fetch(body['ids'], ['ENVELOPE', 'FLAGS', 'BODYSTRUCTURE']).items():
         envelope = data[b'ENVELOPE']
+        logger.info(data[b'BODYSTRUCTURE'])
         envelopes[msgid] = {
             "id": msgid,
             "date": envelope.date.__str__(),
             "subject": decode_subject(envelope.subject),
             "from": decode_from(envelope.from_),
-            "flags": decode_flags(data[b'FLAGS'])
+            "flags": decode_flags(data[b'FLAGS']),
+            "struct": decode_body_structure(data[b'BODYSTRUCTURE'])
         }
     client.logout()
     return {
@@ -67,4 +69,19 @@ def decode_flags(data):
     s = []
     for b in data:
         s.append(b.decode())
+    return s
+
+def decode_body_structure(data):
+    '''Converts bytes to strings in body structure'''
+    s = []
+    for i in data:
+        if isinstance(i, list):
+            s.append(decode_body_structure(i))
+        elif isinstance(i, tuple):
+            s.append(decode_body_structure(i))
+        elif isinstance(i, bytes):
+            s.append(i.decode())
+        else:
+            logger.info(type(i))
+            s.append(i)
     return s

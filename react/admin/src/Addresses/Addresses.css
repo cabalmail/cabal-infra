@@ -31,8 +31,18 @@
   grid-column: 1 / span 2;
 }
 
+.hidden, .visible {
+  display: block;
+  overflow: hidden;
+  transition: height 1s;
+}
+
 .hidden {
-  display: none;
+  height: 0;
+}
+
+.visible {
+  height: auto;
 }
 
 hr {
