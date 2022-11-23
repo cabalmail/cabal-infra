@@ -138,7 +138,6 @@ class Messages extends React.Component {
     const list = this.loadList();
     return (
       <div className="message-list">
-        <div>Messages in {this.props.mailbox}</div>
         <ul className="message-list">{list}</ul>
       </div>
     );

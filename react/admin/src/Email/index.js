@@ -25,6 +25,7 @@ class Email extends React.Component {
           userName={this.props.userName}
           api_url={this.props.api_url}
           setMailbox={this.selectMailbox}
+          mailbox={this.state.mailbox}
         />
         <Messages 
           token={this.props.token}

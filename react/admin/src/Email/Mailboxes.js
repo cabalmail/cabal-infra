@@ -47,13 +47,18 @@ class Mailboxes extends React.Component {
     // TODO: handle nexted arrays
     const mailbox_list = this.state.mailboxes.map(item => {
       return (
-        <li><button onClick={this.setMailbox} value={item}>{item}</button></li>
+        <option value={item}>{item}</option>
       );
     });
     return (
       <>
         <div>Mailboxes</div>
-        <ul>{mailbox_list}</ul>
+        <select
+          onClick={this.setMailbox}
+          value={this.props.mailbox}
+        >
+        {mailbox_list}
+        </select>
       </>
     );
   }
