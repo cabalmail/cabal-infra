@@ -48,9 +48,9 @@ ul.message-list span.message-date {
 
 ul.message-list li.loading {
   background: #000;
-  width: 2em;
-  height: 2em;
-  border-radius: 1em;
+  width: 3em;
+  height: 3em;
+  border-radius: 1.5em;
   border-left: auto;
   border-right: auto;
   animation-name: ripple;
