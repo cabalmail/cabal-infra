@@ -6,7 +6,7 @@ import {
   CognitoUserAttribute,
   AuthenticationDetails
 } from 'amazon-cognito-identity-js';
-import Request from './Addresses';
+import Addresses from './Addresses';
 import SignUp from './SignUp';
 import Login from './Login';
 import Message from './Message';
