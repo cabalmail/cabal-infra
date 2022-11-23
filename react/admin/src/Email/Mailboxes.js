@@ -54,7 +54,7 @@ class Mailboxes extends React.Component {
       <>
         <div>Mailboxes</div>
         <select
-          onClick={this.setMailbox}
+          onChange={this.setMailbox}
           value={this.props.mailbox}
         >
         {mailbox_list}
