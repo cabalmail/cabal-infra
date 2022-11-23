@@ -18,7 +18,7 @@ class Addresses extends React.Component {
   render() {
     return (
       <>
-        <button onClick={this.toggleRequest}>+</button>
+        <button onClick={this.toggleRequest}>+ {this.state.showRequest ? ">" : "∨"}</button>
         <Request
           token={this.props.token}
           password={this.props.password}
