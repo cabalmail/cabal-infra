@@ -27,6 +27,7 @@ class Addresses extends React.Component {
           domains={this.props.domains}
           api_url={this.props.api_url}
           setMessage={this.props.setMessage}
+          showRequest={this.state.showRequest}
         />
         <hr />
         <List 
