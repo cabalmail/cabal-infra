@@ -14,6 +14,13 @@ class Nav extends React.Component {
           <img src="/mask.png" alt="Cabalmail logo" />
         </div>
         <a
+          id="email"
+          className={`item${view === "Email" ? " active" : ""}`}
+          name = "Email"
+          onClick={onClick}
+          href="#email"
+          >Email</a>
+        <a
           id="request"
           className={`item${view === "Request" ? " active" : ""}`}
           name="Request"
@@ -27,13 +34,6 @@ class Nav extends React.Component {
           onClick={onClick}
           href="#list"
         >Addresses</a>
-        <a
-          id="email"
-          className={`item${view === "Email" ? " active" : ""}`}
-          name = "Email"
-          onClick={onClick}
-          href="#email"
-        >Email</a>
         <a
           id="login"
           className={`item${view === "Login" ? " active" : ""}`}

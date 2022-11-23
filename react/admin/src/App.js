@@ -148,7 +148,7 @@ class App extends React.Component {
           loggedIn: true,
           token: data.getIdToken().getJwtToken(),
           expires: data.getIdToken().getExpiration(),
-          view: "Request"
+          view: "Email"
         });
       },
       onFailure: data => {
