@@ -21,18 +21,11 @@ class Nav extends React.Component {
           href="#email"
           >Email</a>
         <a
-          id="request"
-          className={`item${view === "Request" ? " active" : ""}`}
-          name="Request"
+          id="addresses"
+          className={`item${view === "Addresses" ? " active" : ""}`}
+          name="Addresses"
           onClick={onClick}
-          href="#request"
-        >New Address</a>
-        <a
-          id="list"
-          className={`item${view === "List" ? " active" : ""}`}
-          name="List"
-          onClick={onClick}
-          href="#list"
+          href="#addresses"
         >Addresses</a>
         <a
           id="login"

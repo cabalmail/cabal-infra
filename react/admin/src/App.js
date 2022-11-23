@@ -6,8 +6,7 @@ import {
   CognitoUserAttribute,
   AuthenticationDetails
 } from 'amazon-cognito-identity-js';
-import Request from './Request';
-import List from './List';
+import Request from './Addresses';
 import SignUp from './SignUp';
 import Login from './Login';
 import Message from './Message';
@@ -189,9 +188,9 @@ class App extends React.Component {
 
   renderContent() {
     switch (this.state.view) {
-      case "Request":
+      case "Addresses":
         return (
-          <Request
+          <Addresses
             token={this.state.token}
             api_url={this.state.api_url}
             userName={this.state.userName}
@@ -206,15 +205,6 @@ class App extends React.Component {
             onUsernameChange={this.doInputChange}
             onPasswordChange={this.doInputChange}
             onPhoneChange={this.doInputChange}
-          />
-        );
-      case "List":
-        return (
-          <List
-            token={this.state.token}
-            api_url={this.state.api_url}
-            userName={this.state.userName}
-            setMessage={this.setMessage}
           />
         );
       case "Email":
