@@ -6,4 +6,11 @@
 
 
 ## Methods
+### toggleRequest
+Modifiers: none
+
+Parameters:  ()
+
+Returns: null
+
 </div>
