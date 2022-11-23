@@ -19,8 +19,7 @@ class Addresses extends React.Component {
     return (
       <>
         <button onClick={this.toggleRequest}>+</button>
-        <Request 
-          className={`request ${this.state.showRequest ? "visible" : "hidden"}`}
+        <Request
           token={this.props.token}
           password={this.props.password}
           userName={this.props.userName}
@@ -30,7 +29,7 @@ class Addresses extends React.Component {
           showRequest={this.state.showRequest}
         />
         <hr />
-        <List 
+        <List
           token={this.props.token}
           password={this.props.password}
           userName={this.props.userName}
