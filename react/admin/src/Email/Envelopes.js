@@ -28,6 +28,7 @@ class Envelopes extends React.Component {
           envelopes: data.data.data.envelopes
         });
       });
+      console.log(this.state.envelopes);
     }
   }
 
