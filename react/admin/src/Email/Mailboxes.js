@@ -52,10 +52,10 @@ class Mailboxes extends React.Component {
     });
     return (
       <>
-        <div>Mailboxes</div>
         <select
           onChange={this.setMailbox}
           value={this.props.mailbox}
+          className="selectMailbox"
         >
         {mailbox_list}
         </select>
