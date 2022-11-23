@@ -1,6 +1,7 @@
 import React from 'react';
 import List from './List';
 import Request from './Request';
+import './Addresses.css'
 
 class Addresses extends React.Component {
 
@@ -21,7 +22,7 @@ class Addresses extends React.Component {
         <button
           onClick={this.toggleRequest}
           className="toggleRequest"
-        >+ {this.state.showRequest ? "∨" : ">"}</button>
+        >New Address {this.state.showRequest ? "∨" : ">"}</button>
         <Request
           token={this.props.token}
           password={this.props.password}

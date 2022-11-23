@@ -1,6 +1,5 @@
 import React from 'react';
 import axios from 'axios';
-import './Request.css';
 
 /**
  * Renders a form for requesting a new address and handles
