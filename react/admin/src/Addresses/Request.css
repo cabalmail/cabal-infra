@@ -32,3 +32,7 @@
 .hidden {
   display: none;
 }
+
+button.toggleRequest {
+  width: 4em;
+}
