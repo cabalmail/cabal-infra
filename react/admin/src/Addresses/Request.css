@@ -29,6 +29,6 @@
   grid-column: 1 / span 2;
 }
 
- {
-
+.hidden {
+  display: none;
 }
