@@ -54,7 +54,7 @@ class Envelopes extends React.Component {
   handleClick = (e) => {
     e.preventDefault();
     console.log(this.state.envelopes[e.target.value]);
-    this.props.showOverlay(this.state.envelopes[e.target.value]);
+    this.props.showOverlay(this.state.envelopes[e.target.id]);
   }
 
   render() {
@@ -66,9 +66,9 @@ class Envelopes extends React.Component {
             <span className="message-date">{message.date}</span>
             <span className="message-from">{message.from[0]}</span>
             <span
+              id={id}
               className="message-subject"
               onClick={this.handleClick}
-              value={id}
             >{message.subject}</span>
           </li>
         );
