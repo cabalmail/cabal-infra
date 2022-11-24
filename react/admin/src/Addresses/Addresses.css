@@ -37,13 +37,14 @@
 }
 
 .requestHidden {
-  height: 0;
-  transition: height 1s ease-out;
+  max-height: 0;
+  transition: max-height 1s ease-out;
 }
 
 .requestVisible {
   height: auto;
-  transition: height 1s ease-in;
+  max-height: 999px;
+  transition: max-height 1s ease-in;
 }
 
 hr {
