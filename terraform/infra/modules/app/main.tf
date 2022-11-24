@@ -161,7 +161,7 @@ resource "aws_api_gateway_deployment" "deployment" {
       module.cabal_revoke_method.hash_key,
       module.cabal_list_mailboxes_method.hash_key,
       module.cabal_list_messages_method.hash_key,
-      module.cabal_list_envelopes_method.hash_key
+      module.cabal_list_envelopes_method.hash_key,
       module.cabal_fetch_message_method.hash_key
     ]))
   }
