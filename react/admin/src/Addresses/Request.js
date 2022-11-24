@@ -128,7 +128,7 @@ class Request extends React.Component {
   render() {
     // TODO: Wire up select field for TLD
     return (
-      <div className={`request ${this.props.showRequest ? "visible" : "hidden"}`}>
+      <div className={`request ${this.props.showRequest ? "requestVisible" : "requestHidden"}`}>
         <form className="request-form" onSubmit={this.handleSubmit}>
         <fieldset className="address-fields">
           <legend>Address</legend>

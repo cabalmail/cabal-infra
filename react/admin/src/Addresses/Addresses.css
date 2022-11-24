@@ -31,17 +31,17 @@
   grid-column: 1 / span 2;
 }
 
-.hidden, .visible {
+.requestHidden, .requestVisible {
   display: block;
   overflow: hidden;
 }
 
-.hidden {
+.requestHidden {
   height: 0;
   transition: height 1s ease-out;
 }
 
-.visible {
+.requestVisible {
   height: auto;
   transition: height 1s ease-in;
 }
