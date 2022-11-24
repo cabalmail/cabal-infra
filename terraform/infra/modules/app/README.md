@@ -33,6 +33,7 @@ Stands up the following resources to implement a web application that allows use
 
 | Name | Source | Version |
 |------|--------|---------|
+| <a name="module_cabal_fetch_message_method"></a> [cabal\_fetch\_message\_method](#module\_cabal\_fetch\_message\_method) | ./modules/call | n/a |
 | <a name="module_cabal_list_envelopes_method"></a> [cabal\_list\_envelopes\_method](#module\_cabal\_list\_envelopes\_method) | ./modules/call | n/a |
 | <a name="module_cabal_list_mailboxes_method"></a> [cabal\_list\_mailboxes\_method](#module\_cabal\_list\_mailboxes\_method) | ./modules/call | n/a |
 | <a name="module_cabal_list_messages_method"></a> [cabal\_list\_messages\_method](#module\_cabal\_list\_messages\_method) | ./modules/call | n/a |
