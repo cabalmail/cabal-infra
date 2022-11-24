@@ -59,7 +59,11 @@ class Envelopes extends React.Component {
           <li key={id} className={`message-row ${message.flags.map(d => {return d.replace("\\","")}).join(" ")}`} >
             <span className="message-date">{message.date}</span>
             <span className="message-from">{message.from[0]}</span>
-            <a className="message-subject" onClick={this.props.showOverlay(message)}>{message.subject}</a>
+            <a
+              className="message-subject"
+              onClick={this.props.showOverlay(message)}
+              href={`#message-${id}`}
+            >{message.subject}</a>
           </li>
         );
       }
