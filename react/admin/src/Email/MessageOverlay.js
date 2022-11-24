@@ -9,7 +9,7 @@ class MessageOverlay extends React.Component {
   }
 
   render() {
-    console.log({JSON.stringify(this.props.envelope)});
+    console.log(JSON.stringify(this.props.envelope));
     if (this.props.visible) {
       return (
         <div className="message_overlay">
