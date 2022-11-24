@@ -6,6 +6,13 @@
 
 
 ## Methods
+### getMessage
+Modifiers: async
+
+Parameters: e (null)
+
+Returns: null
+
 ### hide
 Modifiers: none
 
