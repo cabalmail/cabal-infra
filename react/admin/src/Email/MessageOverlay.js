@@ -3,6 +3,45 @@ import React from 'react';
 
 class MessageOverlay extends React.Component {
 
+  constructor(props) {
+    super(props);
+    this.state = {
+      message_raw: "",
+      message_body: ""
+    }
+  }
+
+  componentDidUpdate(prevProps, prevState) {
+    if (this.props.id !== prevProps.id) {
+      const response = this.getMessage();
+      response.then(data => {
+        this.setState({
+          message_raw: data.data.data.message_raw,
+          message_body: data.data.data.message_body
+        });
+      });
+    }
+  }
+
+  getMessage = async (e) => {
+    const response = await axios.post('/fetch_message',
+      JSON.stringify({
+        user: this.props.userName,
+        password: this.props.password,
+        mailbox: this.props.mailbox,
+        ids: this.props.message_ids
+      }),
+      {
+        baseURL: this.props.api_url,
+        headers: {
+          'Authorization': this.props.token
+        },
+        timeout: 10000
+      }
+    );
+    return response;
+  }
+
   hide = (e) => {
     e.preventDefault();
     this.props.hide();
@@ -25,7 +64,9 @@ class MessageOverlay extends React.Component {
             <dd>{this.props.envelope.subject}</dd>
           </dl>
           <hr />
-          <div className="body">Not implamented</div>
+          <div className="message_raw">{this.state.message_raw}</div>
+          <hr />
+          <div className="message_body">{this.state.message_body}</div>
         </div>
       );
     }

@@ -3,6 +3,7 @@ import json
 import logging
 from datetime import datetime
 import email
+from email.policy import default as default_policy
 
 from imapclient import IMAPClient
 
@@ -16,14 +17,14 @@ def handler(event, _context):
     client.login(body['user'], body['password'])
     client.select_folder(body['mailbox'])
     email_body_raw = client.fetch([body['id']],[b"RFC822"])
-    message = email.message_from_bytes(email_body_raw[body['id']][b"RFC822"])
+    message = email.message_from_bytes(email_body_raw[body['id']][b"RFC822"], policy=default_policy)
     client.logout()
     return {
         "statusCode": 200,
         "body": json.dumps({
             "data": {
               "message_raw": message.__str__(),
-              "message_body": message.get_body()
+              "message_body": message.get_body().__str__()
             }
         })
     }
