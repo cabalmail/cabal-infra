@@ -38,12 +38,12 @@
 
 .hidden {
   height: 0;
-  transition: height 1s;
+  transition: height 1s ease-out;
 }
 
 .visible {
   height: auto;
-  transition: height 1s;
+  transition: height 1s ease-in;
 }
 
 hr {
