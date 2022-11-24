@@ -20,10 +20,10 @@ class Email extends React.Component {
   }
 
   showOverlay = (envelope) => {
-    this.setState(
+    this.setState({
       overlayVisible: true,
       envelope: envelope
-    );
+    });
   }
 
   hideOverlay = () => {
