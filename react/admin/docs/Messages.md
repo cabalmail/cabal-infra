@@ -27,13 +27,6 @@ Parameters: field (null)
 
 Returns: null
 
-### showOverlay
-Modifiers: none
-
-Parameters: message (null)
-
-Returns: null
-
 ### loadList
 Modifiers: none
 

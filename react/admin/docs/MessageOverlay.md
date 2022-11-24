@@ -6,4 +6,11 @@
 
 
 ## Methods
+### hide
+Modifiers: none
+
+Parameters: e (null)
+
+Returns: null
+
 </div>
