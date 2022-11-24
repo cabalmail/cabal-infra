@@ -48,6 +48,10 @@ ul.message-list span.message-subject {
   text-overflow: ellipsis;
 }
 
+ul.message-list span.message-subject::hover {
+  text-decoration: underline;
+}
+
 ul.message-list span.message-subject::before {
   content: '🔵';
   display: inline-block;
