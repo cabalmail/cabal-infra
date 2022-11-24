@@ -45,7 +45,8 @@ class Messages extends React.Component {
     this.state = {
       message_ids: [],
       sort_order: DESC,
-      sort_field: ARRIVAL
+      sort_field: ARRIVAL,
+      loading: true
     };
   }
 
@@ -54,23 +55,25 @@ class Messages extends React.Component {
     response.then(data => {
       this.setState({
         message_ids: data.data.data.message_ids
+        loading: false
       });
     });
   }
 
   componentDidUpdate(prevProps, prevState) {
     if (this.props.mailbox !== prevProps.mailbox) {
-      this.setState({message_ids: []})
       const response = this.getList();
       response.then(data => {
         this.setState({
-          message_ids: data.data.data.message_ids
+          message_ids: data.data.data.message_ids,
+          loading: false
         });
       });
     }
   }
 
   getList = async (e) => {
+    this.setState({loading: true})
     const response = await axios.post('/list_messages',
       JSON.stringify({
         user: this.props.userName,
@@ -139,7 +142,7 @@ class Messages extends React.Component {
     const list = this.loadList();
     return (
       <div className="message-list">
-        <ul className="message-list">{list}</ul>
+        <ul className={`message-list ${this.state.loading ? "loading"}`}>{list}</ul>
       </div>
     );
   }

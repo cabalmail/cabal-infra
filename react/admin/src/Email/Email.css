@@ -67,3 +67,7 @@ ul.message-list li.loading span.message-subject::before {
   content: '';
   display: none;
 }
+
+div.message-list ul.loading {
+  display: none;
+}
