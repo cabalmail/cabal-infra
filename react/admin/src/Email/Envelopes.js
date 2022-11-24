@@ -53,7 +53,7 @@ class Envelopes extends React.Component {
 
   handleClick = (e) => {
     e.preventDefault();
-    this.props.showOverlay(e.target.value);
+    this.props.showOverlay(this.state.envelops[e.target.value]);
   }
 
   render() {
@@ -67,7 +67,7 @@ class Envelopes extends React.Component {
             <button
               className="message-subject"
               onClick={this.handleClick}
-              value={message}
+              value={id}
             >{message.subject}</button>
           </li>
         );
