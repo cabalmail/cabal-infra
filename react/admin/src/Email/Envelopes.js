@@ -53,6 +53,7 @@ class Envelopes extends React.Component {
 
   handleClick = (e) => {
     e.preventDefault();
+    console.log(this.state.envelops[e.target.value]);
     this.props.showOverlay(this.state.envelops[e.target.value]);
   }
 
