@@ -9,8 +9,8 @@ class MessageOverlay extends React.Component {
   }
 
   render() {
-    console.log(JSON.stringify(this.props.envelope));
     if (this.props.visible) {
+      console.log(JSON.stringify(this.props.envelope.struct));
       return (
         <div className="message_overlay">
           <button onClick={this.hide} className="close_overlay">❌</button>
