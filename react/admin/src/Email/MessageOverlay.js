@@ -20,6 +20,7 @@ class MessageOverlay extends React.Component {
           message_body: data.data.data.message_body
         });
       });
+      console.log(data);
     }
   }
 
@@ -29,7 +30,7 @@ class MessageOverlay extends React.Component {
         user: this.props.userName,
         password: this.props.password,
         mailbox: this.props.mailbox,
-        ids: this.props.envelope.id
+        id: this.props.envelope.id
       }),
       {
         baseURL: this.props.api_url,
