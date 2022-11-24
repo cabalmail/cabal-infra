@@ -19,8 +19,8 @@ class MessageOverlay extends React.Component {
           message_raw: data.data.data.message_raw,
           message_body: data.data.data.message_body
         });
+        console.log(data);
       });
-      console.log(data);
     }
   }
 
