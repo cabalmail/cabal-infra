@@ -61,7 +61,7 @@ class Envelopes extends React.Component {
             <span className="message-from">{message.from[0]}</span>
             <button
               className="message-subject"
-              onClick="this.props.showOverlay(message)"
+              onClick={this.props.showOverlay(message)}
             >{message.subject}</button>
           </li>
         );
