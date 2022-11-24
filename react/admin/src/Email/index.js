@@ -40,6 +40,7 @@ class Email extends React.Component {
           api_url={this.props.api_url}
           envelope={this.state.envelope}
           visible={this.state.overlayVisible}
+          mailbox={this.state.mailbox}
           hide={this.hideOverlay}
         />
         <Mailboxes 
