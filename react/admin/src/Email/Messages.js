@@ -54,7 +54,7 @@ class Messages extends React.Component {
     const response = this.getList();
     response.then(data => {
       this.setState({
-        message_ids: data.data.data.message_ids
+        message_ids: data.data.data.message_ids,
         loading: false
       });
     });
