@@ -60,6 +60,7 @@ class Messages extends React.Component {
 
   componentDidUpdate(prevProps, prevState) {
     if (this.props.mailbox !== prevProps.mailbox) {
+      this.setState({message_ids: []})
       const response = this.getList();
       response.then(data => {
         this.setState({
@@ -70,7 +71,6 @@ class Messages extends React.Component {
   }
 
   getList = async (e) => {
-    this.setState({message_ids: []})
     const response = await axios.post('/list_messages',
       JSON.stringify({
         user: this.props.userName,
