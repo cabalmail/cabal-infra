@@ -5,7 +5,7 @@ class MessageOverlay extends React.Component {
 
   hide = (e) => {
     e.preventDefault();
-    this.props.hideOverlay();
+    this.props.hide();
   }
 
   render() {
