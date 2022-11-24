@@ -12,10 +12,11 @@ select.selectMailbox {
 
 .message_overlay {
   position: absolute;
-  top: 1em;
+  top: 40em;
   left: 1em;
   right: 1em;
   bottom: 1em;
+  background: #000;
 }
 
 /* message list */
