@@ -142,7 +142,7 @@ class Messages extends React.Component {
     const list = this.loadList();
     return (
       <div className="message-list">
-        <ul className={`message-list ${this.state.loading ? "loading"}`}>{list}</ul>
+        <ul className={`message-list ${this.state.loading ? "loading" : ""}`}>{list}</ul>
       </div>
     );
   }
