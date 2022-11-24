@@ -65,11 +65,11 @@ class Envelopes extends React.Component {
           <li key={id} className={`message-row ${message.flags.map(d => {return d.replace("\\","")}).join(" ")}`} >
             <span className="message-date">{message.date}</span>
             <span className="message-from">{message.from[0]}</span>
-            <button
+            <span
               className="message-subject"
               onClick={this.handleClick}
               value={id}
-            >{message.subject}</button>
+            >{message.subject}</span>
           </li>
         );
       }
