@@ -12,7 +12,7 @@ class MessageOverlay extends React.Component {
   }
 
   componentDidUpdate(prevProps, prevState) {
-    if (this.props.id !== prevProps.id) {
+    if (this.props.envelope.id !== prevProps.envelope.id) {
       const response = this.getMessage();
       response.then(data => {
         this.setState({
@@ -29,7 +29,7 @@ class MessageOverlay extends React.Component {
         user: this.props.userName,
         password: this.props.password,
         mailbox: this.props.mailbox,
-        ids: this.props.message_ids
+        ids: this.props.envelope.id
       }),
       {
         baseURL: this.props.api_url,
