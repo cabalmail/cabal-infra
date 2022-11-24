@@ -3,13 +3,18 @@ import React from 'react';
 
 class MessageOverlay extends React.Component {
 
+  hide = (e) => {
+    e.preventDefault();
+    this.props.hideOverlay();
+  }
+
   render() {
     if (!this.props.visible) {
       return <div className="message_overlay overlay_hidden"></div>;
     }
     return (
       <div className="message_overlay">
-        <button onClick={this.props.hideOverlay()}>❌</button>
+        <button onClick={this.hide}>❌</button>
         <dl>
           <dt>To</dt>
           <dd>{this.props.envelope.to}</dd>

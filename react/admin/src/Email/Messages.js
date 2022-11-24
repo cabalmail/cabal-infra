@@ -118,10 +118,6 @@ class Messages extends React.Component {
     }
   }
 
-  showOverlay = (message) => {
-    this.props.showOverlay(message);
-  }
-
   loadList() {
     const num_ids = this.state.message_ids.length;
     var pages = [];
@@ -135,7 +131,7 @@ class Messages extends React.Component {
             mailbox={this.props.mailbox}
             token={this.props.token}
             api_url={this.props.api_url}
-            showOverlay={this.showOverlay}
+            showOverlay={this.props.showOverlay}
           />
         </LazyLoad>
       );
