@@ -131,6 +131,7 @@ class Messages extends React.Component {
             mailbox={this.props.mailbox}
             token={this.props.token}
             api_url={this.props.api_url}
+            showOverlay={this.props.showOverlay}
           />
         </LazyLoad>
       );

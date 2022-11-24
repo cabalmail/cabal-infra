@@ -1,6 +1,24 @@
+/* mailbox selector */
+
 select.selectMailbox {
   margin: 1em;
 }
+
+/* message overlay */
+
+.overlay_hidden {
+  display: none;
+}
+
+.message_overlay {
+  position: absolute;
+  top: 1em;
+  left: 1em;
+  right: 1em;
+  bottom: 1em;
+}
+
+/* message list */
 
 ul.message-list, ul.message-list li.message-row {
   list-style: none;
