@@ -13,7 +13,7 @@ class MessageOverlay extends React.Component {
     if (this.props.visible) {
       return (
         <div className="message_overlay">
-          <button onClick={this.hide}>❌</button>
+          <button onClick={this.hide} className="close_overlay">❌</button>
           <dl>
             <dt>To</dt>
             <dd>{this.props.envelope.to}</dd>

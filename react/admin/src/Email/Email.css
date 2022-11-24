@@ -20,6 +20,13 @@ select.selectMailbox {
   background: #000;
 }
 
+.message_overlay button.close_overlay {
+  width: 3em;
+  position: absolute;
+  top: 1em;
+  right: 1em;
+}
+
 /* message list */
 
 ul.message-list, ul.message-list li.message-row {
