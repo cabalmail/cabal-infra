@@ -70,6 +70,7 @@ class Messages extends React.Component {
   }
 
   getList = async (e) => {
+    this.setState({message_ids: []})
     const response = await axios.post('/list_messages',
       JSON.stringify({
         user: this.props.userName,
