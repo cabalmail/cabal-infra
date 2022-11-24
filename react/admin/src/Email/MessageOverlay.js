@@ -24,6 +24,7 @@ class MessageOverlay extends React.Component {
             <dt>Subject</dt>
             <dd>{this.props.envelope.subject}</dd>
           </dl>
+          <hr />
           <div className="body">Not implamented</div>
         </div>
       );
