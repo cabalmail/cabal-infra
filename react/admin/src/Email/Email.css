@@ -48,7 +48,7 @@ ul.message-list span.message-subject {
   text-overflow: ellipsis;
 }
 
-ul.message-list span.message-subject::hover {
+ul.message-list span.message-subject:hover {
   text-decoration: underline;
 }
 
