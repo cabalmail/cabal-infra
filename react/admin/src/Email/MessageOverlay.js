@@ -27,7 +27,7 @@ class MessageOverlay extends React.Component {
     //     </div>
     //   );
     // }
-    return <div className="message_overlay overlay_hidden">{JSON.stringify(this.props)}</div>;
+    return <div className="message_overlay">{JSON.stringify(this.props.envelope)}</div>;
   }
 }
 
