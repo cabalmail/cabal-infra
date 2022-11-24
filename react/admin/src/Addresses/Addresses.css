@@ -34,16 +34,16 @@
 .hidden, .visible {
   display: block;
   overflow: hidden;
-  transition: max-height 1s;
 }
 
 .hidden {
-  max-height: 0;
+  height: 0;
+  transition: height 1s;
 }
 
 .visible {
-  max-height: 9999px;
   height: auto;
+  transition: height 1s;
 }
 
 hr {
