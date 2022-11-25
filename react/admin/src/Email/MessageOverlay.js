@@ -91,7 +91,7 @@ class MessageOverlay extends React.Component {
             <dt>Subject</dt>
             <dd>{this.props.envelope.subject}</dd>
           </dl>
-          <div className={`tabBar ${this.state.view}`>
+          <div className={`tabBar ${this.state.view}`}>
             <button
               className={`tab ${this.state.view == "rich" ? "active" : ""}`}
               onClick={this.handleNav}
