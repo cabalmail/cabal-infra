@@ -23,7 +23,8 @@ def handler(event, _context):
             "id": msgid,
             "date": envelope.date.__str__(),
             "subject": decode_subject(envelope.subject),
-            "from": decode_from(envelope.from_),
+            "from": decode_address(envelope.from_),
+            "to": decode_address(envelope.to),
             "flags": decode_flags(data[b'FLAGS']),
             "struct": decode_body_structure(data[b'BODYSTRUCTURE'])
         }
@@ -57,7 +58,7 @@ def decode_subject(data):
 
     return ''.join(subject_strings)
 
-def decode_from(data):
+def decode_address(data):
     '''Converts a tuple of Address objects to a simple list of strings'''
     r = []
     for f in data:
