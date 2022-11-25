@@ -20,4 +20,18 @@ Parameters: e (null)
 
 Returns: null
 
+### renderView
+Modifiers: none
+
+Parameters:  ()
+
+Returns: null
+
+### handleNav
+Modifiers: none
+
+Parameters: e (null)
+
+Returns: null
+
 </div>
