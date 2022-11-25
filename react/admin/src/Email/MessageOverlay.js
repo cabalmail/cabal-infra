@@ -70,7 +70,7 @@ class MessageOverlay extends React.Component {
           <hr />
           <pre className="message_plain">{this.state.message_body_plain}</pre>
           <hr />
-          <div className="message_html" dangerouslySetInnerHTML={{this.state.message_body_html}} />
+          <div className="message_html" dangerouslySetInnerHTML={{__html: this.state.message_body_html}} />
         </div>
       );
     }
