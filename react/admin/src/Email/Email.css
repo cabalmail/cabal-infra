@@ -32,6 +32,7 @@ select.selectMailbox {
   display: grid;
   grid-template-columns: 33% 34% 33%;
   width: 50%;
+  margin: auto;
   min-width: 25em;
 }
 
