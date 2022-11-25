@@ -30,7 +30,7 @@ select.selectMailbox {
 
 .message_overlay .tabBar {
   display: grid;
-  grid-content-columns: 33% 34% 33%;
+  grid-template-columns: 33% 34% 33%;
 }
 
 /* message list */
