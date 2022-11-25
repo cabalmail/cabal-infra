@@ -1,6 +1,5 @@
 import React from 'react';
 import axios from 'axios';
-import './Request.css';
 
 /**
  * Renders a form for requesting a new address and handles
@@ -129,7 +128,7 @@ class Request extends React.Component {
   render() {
     // TODO: Wire up select field for TLD
     return (
-      <div className="request">
+      <div className={`request ${this.props.showRequest ? "requestVisible" : "requestHidden"}`}>
         <form className="request-form" onSubmit={this.handleSubmit}>
         <fieldset className="address-fields">
           <legend>Address</legend>

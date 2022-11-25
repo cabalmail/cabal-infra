@@ -13,4 +13,18 @@ Parameters: mailbox (null)
 
 Returns: null
 
+### showOverlay
+Modifiers: none
+
+Parameters: envelope (null)
+
+Returns: null
+
+### hideOverlay
+Modifiers: none
+
+Parameters:  ()
+
+Returns: null
+
 </div>

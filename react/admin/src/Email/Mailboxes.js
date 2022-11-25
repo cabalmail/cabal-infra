@@ -18,7 +18,6 @@ class Mailboxes extends React.Component {
     const response = this.getList();
     response.then(data => {
       this.setState({ mailboxes: data.data.data });
-      console.log(data);
     });
   }
 
@@ -48,14 +47,18 @@ class Mailboxes extends React.Component {
     // TODO: handle nexted arrays
     const mailbox_list = this.state.mailboxes.map(item => {
       return (
-        <li><button onClick={this.setMailbox} value={item}>{item}</button></li>
+        <option value={item}>{item}</option>
       );
     });
-    console.log(mailbox_list);
     return (
       <>
-        <div>Mailboxes</div>
-        <ul>{mailbox_list}</ul>
+        <select
+          onChange={this.setMailbox}
+          value={this.props.mailbox}
+          className="selectMailbox"
+        >
+        {mailbox_list}
+        </select>
       </>
     );
   }

@@ -1,9 +1,11 @@
 /**
- * Fetches message for current users/mailbox and displays them
+ * Fetches message ids for current users/mailbox and displays them
  */
 
 import React from 'react';
 import axios from 'axios';
+import LazyLoad from 'react-lazyload';
+import Envelopes from './Envelopes.js';
 
 // see https://www.rfc-editor.org/rfc/rfc5256.html
 // Not implemented:
@@ -34,6 +36,7 @@ const TO = {
   imap: "TO",
   description: "Recipient"
 };
+const PAGE_SIZE = 50;
 
 class Messages extends React.Component {
 
@@ -41,11 +44,9 @@ class Messages extends React.Component {
     super(props);
     this.state = {
       message_ids: [],
-      envelopes: {},
-      folder_data: [],
-      page: 0,
       sort_order: DESC,
-      sort_field: ARRIVAL
+      sort_field: ARRIVAL,
+      loading: true
     };
   }
 
@@ -53,9 +54,8 @@ class Messages extends React.Component {
     const response = this.getList();
     response.then(data => {
       this.setState({
-        envelopes: data.data.data.envelopes,
         message_ids: data.data.data.message_ids,
-        folder_data: data.data.data.folder_data
+        loading: false
       });
     });
   }
@@ -65,15 +65,15 @@ class Messages extends React.Component {
       const response = this.getList();
       response.then(data => {
         this.setState({
-          envelopes: data.data.data.envelopes,
           message_ids: data.data.data.message_ids,
-        folder_data: data.data.data.folder_data
+          loading: false
         });
       });
     }
   }
 
   getList = async (e) => {
+    this.setState({loading: true})
     const response = await axios.post('/list_messages',
       JSON.stringify({
         user: this.props.userName,
@@ -118,30 +118,32 @@ class Messages extends React.Component {
     }
   }
 
-  render() {
-    const message_list = this.state.message_ids.map(id => {
-      if (id.toString() in this.state.envelopes) {
-        const message = this.state.envelopes[id];
-        return (
-          <li key={id} className="message-row">
-            <span className="message-from">{message.from[0]}</span>
-            <span className="message-date">{message.date}</span>
-            <span className="message-subject">{message.subject}</span>
-          </li>
-        );
-      }
-      return (
-        <li key={id} className="message-row loading">
-          <span className="message-from"></span>
-          <span className="message-date"></span>
-          <span className="message-subject"></span>
-        </li>
+  loadList() {
+    const num_ids = this.state.message_ids.length;
+    var pages = [];
+    for (var i = 0; i < num_ids; i+=PAGE_SIZE) {
+      pages.push(
+        <LazyLoad offset={50}>
+          <Envelopes
+            message_ids={this.state.message_ids.slice(i, i+PAGE_SIZE)}
+            userName={this.props.userName}
+            password={this.props.password}
+            mailbox={this.props.mailbox}
+            token={this.props.token}
+            api_url={this.props.api_url}
+            showOverlay={this.props.showOverlay}
+          />
+        </LazyLoad>
       );
-    })
+    }
+    return pages;
+  }
+
+  render() {
+    const list = this.loadList();
     return (
       <div className="message-list">
-        <div>Messages in {this.props.mailbox}</div>
-        <ul className="message-list">{message_list}</ul>
+        <ul className={`message-list ${this.state.loading ? "loading" : ""}`}>{list}</ul>
       </div>
     );
   }

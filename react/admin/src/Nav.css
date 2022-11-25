@@ -1,5 +1,4 @@
-.logged-out #list,
-.logged-out #request,
+.logged-out #addresses,
 .logged-out #logout,
 .logged-in #signup,
 .logged-in #login,
@@ -9,6 +8,9 @@
 
 .nav {
   text-align: center;
+  position: fixed;
+  width: 100%;
+  top: 0;
 }
 
 .nav .item {

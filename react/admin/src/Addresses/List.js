@@ -1,6 +1,5 @@
 import React from 'react';
 import axios from 'axios';
-import './List.css';
 
 /**
  * Fetches addresses for current user and displays them

@@ -1,0 +1,89 @@
+/* Request Address Form */
+
+#amphora, #dot {
+  display: block;
+  text-align: center;
+  vertical-align: bottom;
+}
+
+.address-fields {
+  display: grid;
+  grid-template-columns: 30% 5% 30% 5% 30%;
+  grid-column-gap: 0;
+  align-items: baseline;
+}
+
+.address-fields input, .address-fields select, #amphora,
+#dot, .Request button.default, .comment-field #comment, 
+.address-fields select::before, .button-fields button {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.button-fields {
+  display: grid;
+  grid-template-columns: 47.5% 47.5%;
+  grid-column-gap: 5%;
+  align-items: baseline;
+}
+
+.button-fields #request {
+  grid-column: 1 / span 2;
+}
+
+.requestHidden, .requestVisible {
+  display: block;
+  overflow: hidden;
+}
+
+.requestHidden {
+  max-height: 0;
+  transition: max-height 1s ease-out;
+}
+
+.requestVisible {
+  height: auto;
+  max-height: 999px;
+  transition: max-height 1s ease-in;
+}
+
+hr {
+  margin: 1.5em;
+}
+
+/* List Addresses */
+
+#filter {
+  max-width: 30em;
+  width: auto;
+}
+
+#reload {
+  font-size: 140%;
+  display: block;
+  width: auto;
+  float: right;
+  padding: 0.2em 0.5em;
+  margin: 0;
+}
+
+ul.address-list {
+  list-style: none;
+  padding-left: 0;
+  clear: both;
+}
+
+ul.address-list li.address {
+  list-style: none;
+  border-bottom: 1px solid #888;
+  display: grid;
+  grid-template-columns: 50% 30% 7% 7%;
+  grid-column-gap: 2%;
+  align-items: baseline;
+}
+
+ul.address-list li.address span.address, ul.address-list button {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+}

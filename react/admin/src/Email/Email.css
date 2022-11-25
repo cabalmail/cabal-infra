@@ -1,8 +1,37 @@
-ul.message-list {
+/* mailbox selector */
+
+select.selectMailbox {
+  margin: 1em;
+}
+
+/* message overlay */
+
+.overlay_hidden {
+  display: none;
+}
+
+.message_overlay {
+  position: absolute;
+  top: 1em;
+  left: 1em;
+  right: 1em;
+  bottom: 1em;
+  padding: 1em;
+  background: #000;
+  overflow: scroll;
+}
+
+.message_overlay button.close_overlay {
+  width: 3em;
+  position: absolute;
+  top: 1em;
+  right: 1em;
+}
+
+/* message list */
+
+ul.message-list, ul.message-list li.message-row {
   list-style: none;
-  display: grid;
-  grid-column-gap: 1em;
-  grid-template-columns: minmax(1fr, 5fr) minmax(1fr, 5fr) 10fr;
 }
 
 div.message-list ul {
@@ -10,11 +39,7 @@ div.message-list ul {
 }
 
 ul.message-list li.message-row {
-  display: grid;
-  list-style: none;
   border-bottom: 1px solid #888;
-  grid-template-columns: subgrid;
-  grid-column: 1 / 4;
   align-items: baseline;
 }
 
@@ -23,19 +48,58 @@ ul.message-list span {
   padding: .25em;
 }
 
-ul.message-list li.loading span {
-  background-color: #666;
+ul.message-list span.message-subject {
+  font-size: 115%;
+  font-weight: bold;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-@media screen and (max-width: 1024px) {
+ul.message-list span.message-subject:hover {
+  text-decoration: underline;
+}
 
-  ul.message-list, ul.message-list li.message-row, ul.message-list span.message-subject {
-    display: block;
-  }
+ul.message-list span.message-subject::before {
+  content: '🔵';
+  display: inline-block;
+  padding-right: .2em;
+}
 
-  ul.message-list span.message-date, ul.message-list span.message-from {
-    display: inline-block;
-    width: 45%;
-  }
+ul.message-list li.Seen span.message-subject {
+  font-size: 115%;
+  font-weight: normal;
+}
 
+ul.message-list li.Seen span.message-subject::before {
+  content: '✉️';
+  display: inline-block;
+  padding-right: .2em;
+}
+
+ul.message-list span.message-date {
+  font-style: italic;
+  float: right;
+}
+
+ul.message-list li.loading {
+  background: #000;
+  width: 3em;
+  height: 3em;
+  border-radius: 1.5em;
+  border-left: auto;
+  border-right: auto;
+  animation-name: ripple;
+  animation-duration: 0.5s;
+  animation-iteration-count: infinite;
+  border-bottom: 0;
+}
+
+ul.message-list li.loading span.message-subject::before {
+  content: '';
+  display: none;
+}
+
+div.message-list ul.loading {
+  display: none;
 }
