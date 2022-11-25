@@ -16,7 +16,6 @@ class Envelopes extends React.Component {
       this.setState({
         envelopes: data.data.data.envelopes
       });
-      console.log(this.state.envelopes);
     });
   }
 
@@ -28,7 +27,6 @@ class Envelopes extends React.Component {
           envelopes: data.data.data.envelopes
         });
       });
-      console.log(this.state.envelopes);
     }
   }
 
@@ -53,7 +51,6 @@ class Envelopes extends React.Component {
 
   handleClick = (e) => {
     e.preventDefault();
-    console.log(this.state.envelopes[e.target.value]);
     this.props.showOverlay(this.state.envelopes[e.target.id]);
   }
 

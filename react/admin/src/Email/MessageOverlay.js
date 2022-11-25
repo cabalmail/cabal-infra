@@ -21,7 +21,6 @@ class MessageOverlay extends React.Component {
           message_body_plain: data.data.data.message_body_plain,
           message_body_html: DOMPurify.sanitize(data.data.data.message_body_html)
         });
-        console.log(this.state.message_body_html);
       });
     }
   }
@@ -52,7 +51,6 @@ class MessageOverlay extends React.Component {
 
   render() {
     if (this.props.visible) {
-      console.log(this.props.envelope.struct);
       return (
         <div className="message_overlay">
           <button onClick={this.hide} className="close_overlay">❌</button>
