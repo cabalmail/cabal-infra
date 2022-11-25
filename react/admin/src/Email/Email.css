@@ -31,6 +31,13 @@ select.selectMailbox {
 .message_overlay .tabBar {
   display: grid;
   grid-template-columns: 33% 34% 33%;
+  width: 50%;
+  min-width: 25em;
+}
+
+.message_overlay .tabBar button {
+  width: 100%;
+  border-radius: 4px 4px 0 0;
 }
 
 /* message list */
