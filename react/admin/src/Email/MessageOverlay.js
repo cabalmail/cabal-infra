@@ -21,7 +21,7 @@ class MessageOverlay extends React.Component {
           message_body_plain: data.data.data.message_body_plain,
           message_body_html: DOMPurify.sanitize(data.data.data.message_body_html)
         });
-        console.log(data);
+        console.log(this.state.message_body_html);
       });
     }
   }
