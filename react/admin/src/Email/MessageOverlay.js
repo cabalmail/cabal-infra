@@ -64,6 +64,10 @@ class MessageOverlay extends React.Component {
         return (
           <pre className="message_raw">{this.state.message_raw}</pre>
         );
+      default:
+        return (
+          <div className="message_html" dangerouslySetInnerHTML={{__html: this.state.message_body_html}} />
+        );
     }
   }
 
