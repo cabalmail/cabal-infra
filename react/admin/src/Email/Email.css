@@ -28,6 +28,11 @@ select.selectMailbox {
   right: 1em;
 }
 
+.message_overlay .tabBar {
+  display: grid;
+  grid-content-columns: 33% 34% 33%;
+}
+
 /* message list */
 
 ul.message-list, ul.message-list li.message-row {

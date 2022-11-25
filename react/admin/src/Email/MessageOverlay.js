@@ -2,13 +2,38 @@ import React from 'react';
 import axios from 'axios';
 import DOMPurify from 'dompurify';
 
+class MessageRaw extends React.Component {
+  render() {
+    return (
+      <pre className="message_raw">{this.props.message_raw}</pre>
+    );
+  }
+}
+
+class MessagePlain extends React.Component {
+  render() {
+    return (
+      <pre className="message_plain">{this.props.message_plain}</pre>
+    );
+  }
+}
+
+class MessageRich extends React.Component {
+  render() {
+    return (
+      <div className="message_html" dangerouslySetInnerHTML={{__html: this.props.message_body_html}} />
+    );
+  }
+}
+
 class MessageOverlay extends React.Component {
 
   constructor(props) {
     super(props);
     this.state = {
       message_raw: "",
-      message_body: ""
+      message_body: "",
+      view: "rich"
     }
   }
 
@@ -49,6 +74,28 @@ class MessageOverlay extends React.Component {
     this.props.hide();
   }
 
+  renderView() {
+    switch (this.state.view) {
+      case "rich":
+        return (
+          <MessageRich message_html={this.state.message_body_html} />
+        );
+      case "plain":
+        return (
+          <MessagePlain message_plain={this.state.message_plain} />
+        );
+      case "raw":
+        return (
+          <MessageRaw message_raw={this.state.message_raw} />
+        );
+    }
+  }
+
+  handleNav = (e) => {
+    e.preventDefault();
+    this.setState({view: e.target.value});
+  }
+
   render() {
     if (this.props.visible) {
       return (
@@ -64,12 +111,12 @@ class MessageOverlay extends React.Component {
             <dt>Subject</dt>
             <dd>{this.props.envelope.subject}</dd>
           </dl>
-          <hr />
-          <pre className="message_raw">{this.state.message_raw}</pre>
-          <hr />
-          <pre className="message_plain">{this.state.message_body_plain}</pre>
-          <hr />
-          <div className="message_html" dangerouslySetInnerHTML={{__html: this.state.message_body_html}} />
+          <div className="tabBar">
+            <button onClick={this.handleNav} value="rich">Rich Text</button>
+            <button onClick={this.handleNav} value="plain">Plain Text</button>
+            <button onClick={this.handleNav} value="raw">Raw Message</button>
+          </div>
+          {this.renderView()}
         </div>
       );
     }
