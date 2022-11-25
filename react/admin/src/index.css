@@ -1,5 +1,5 @@
 @media (prefers-color-scheme: dark) {
-  body, a, button, select {
+  body, a, button, select, div, * {
     color: #aaa;
     background-color: #200;
     border-color: #333;
@@ -16,7 +16,7 @@
     background-color: #000;
   }
   body .highlight, body .active, body .default,
-  body .nav .active {
+  body .nav .active, body .message_overlay {
     color: #dda;
     background-color: #300;
     border-color: #800;
@@ -24,7 +24,7 @@
 }
 
 @media (prefers-color-scheme: light) {
-  body, a, button, select {
+  body, a, button, select, div, * {
     color: #222;
     background-color: #ffe;
     border-color: #999;
@@ -42,7 +42,7 @@
     background-color: #000;
   }
   body .highlight, body .active, body .default,
-  body .nav .active {
+  body .nav .active, body .message_overlay {
     color: #000;
     background-color: #a33;
     border-color: #d00;

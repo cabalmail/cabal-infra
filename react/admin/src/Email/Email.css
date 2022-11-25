@@ -17,8 +17,9 @@ select.selectMailbox {
   right: 1em;
   bottom: 1em;
   padding: 1em;
-  background: #000;
   overflow: scroll;
+  border-width: 1px;
+  border-radius: 0.5em;
 }
 
 .message_overlay button.close_overlay {
