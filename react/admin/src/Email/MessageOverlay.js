@@ -17,7 +17,8 @@ class MessageOverlay extends React.Component {
       response.then(data => {
         this.setState({
           message_raw: data.data.data.message_raw,
-          message_body: data.data.data.message_body
+          message_body_plain: data.data.data.message_body_plain,
+          message_body_html: data.data.data.message_body_html
         });
         console.log(data);
       });
@@ -65,9 +66,11 @@ class MessageOverlay extends React.Component {
             <dd>{this.props.envelope.subject}</dd>
           </dl>
           <hr />
-          <div className="message_raw">{this.state.message_raw}</div>
+          <pre className="message_raw">{this.state.message_raw}</pre>
           <hr />
-          <div className="message_body">{this.state.message_body}</div>
+          <pre className="message_plain">{this.state.message_body_plain}</pre>
+          <hr />
+          <pre className="message_html">{this.state.message_body_html}</pre>
         </div>
       );
     }
