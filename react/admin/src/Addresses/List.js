@@ -138,7 +138,7 @@ class List extends React.Component {
           <span>{a.address}</span>
           <span>{a.comment}</span>
           <button onClick={this.copy} value={a.address}>📋</button>
-          <button onClick={this.revoke} value={a.address}>❌</button>
+          <button onClick={this.revoke} value={a.address}>🗑️</button>
         </li>
       )
     });
