@@ -91,10 +91,22 @@ class MessageOverlay extends React.Component {
             <dt>Subject</dt>
             <dd>{this.props.envelope.subject}</dd>
           </dl>
-          <div className="tabBar">
-            <button onClick={this.handleNav} value="rich">Rich Text</button>
-            <button onClick={this.handleNav} value="plain">Plain Text</button>
-            <button onClick={this.handleNav} value="raw">Raw Message</button>
+          <div className={`tabBar ${this.state.view}`>
+            <button
+              className={`tab ${this.state.view == "rich" ? "active" : ""}`}
+              onClick={this.handleNav}
+              value="rich"
+            >Rich Text</button>
+            <button
+              className={`tab ${this.state.view == "plain" ? "active" : ""}`}
+              onClick={this.handleNav}
+              value="plain"
+            >Plain Text</button>
+            <button
+              className={`tab ${this.state.view == "raw" ? "active" : ""}`}
+              onClick={this.handleNav}
+              value="raw"
+            >Raw Message</button>
           </div>
           {this.renderView()}
         </div>
