@@ -121,7 +121,7 @@ data "aws_s3_object" "lambda_function_hash" {
 resource "aws_lambda_function" "api_call" {
   s3_bucket        = var.bucket
   s3_key           = "/lambda/${var.name}.zip"
-  source_code_hash = data.aws_s3_bucket_object.lambda_function_hash.body
+  source_code_hash = data.aws_s3_object.lambda_function_hash.body
   function_name    = var.name
   role             = aws_iam_role.lambda.arn
   handler          = "function.handler"
