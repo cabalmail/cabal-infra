@@ -16,7 +16,7 @@ class MessageOverlay extends React.Component {
 
   componentDidUpdate(prevProps, prevState) {
     if (this.props.envelope.id !== prevProps.envelope.id) {
-      this.setState({loading: true});
+      this.setState({loading: true, view: "rich"});
       const response = this.getMessage();
       response.then(data => {
         this.setState({
