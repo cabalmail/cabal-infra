@@ -112,7 +112,7 @@ resource "aws_iam_role_policy" "lambda" {
 RUNPOLICY
 }
 
-data "aws_s3_bucket_object" "lambda_function_hash" {
+data "aws_s3_object" "lambda_function_hash" {
   bucket = var.bucket
   key    = "/lambda/${var.name}.zip.base64hash"
 }
