@@ -11,7 +11,7 @@ select.selectMailbox {
 }
 
 .message_overlay {
-  position: absolute;
+  position: fixed;
   top: 1em;
   left: 1em;
   right: 1em;
