@@ -25,6 +25,7 @@ body div.content div.overlay_hidden {
 
 .message_overlay .message {
   overflow: scroll;
+  text-align: left;
   padding: 1em;
 }  
 
