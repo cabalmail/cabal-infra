@@ -16,26 +16,28 @@ select.selectMailbox {
   left: 0;
   right: 0;
   bottom: 0;
-  padding: 1em;
   overflow: scroll;
   border-width: 1px;
   border-radius: 0.5em;
-}
-
-.message_overlay .message_top {
-  position: fixed;
+  display: grid;
+  grid-template-rows: auto auto;
 }
 
 .message_overlay .message {
   overflow: scroll;
+  padding: 1em;
 }  
 
 .message_overlay button.close_overlay {
   width: 3em;
   position: fixed;
-  tttop: 1em;
+  top: 1em;
   right: 1em;
 }
+
+.message_overlay .message_top {
+  padding: 1em;
+} 
 
 .message_overlay .tabBar {
   display: grid;
