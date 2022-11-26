@@ -37,7 +37,7 @@ body div.content div.overlay_hidden {
 }
 
 .message_overlay .message_top {
-  padding: 1em 1em 1em 0;
+  padding: 1em 1em 0 1em;
 } 
 
 .message_overlay .tabBar {
