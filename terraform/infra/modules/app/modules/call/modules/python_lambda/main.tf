@@ -4,44 +4,8 @@
 locals {
   hosted_zone_arns = join(",",[for domain in var.domains : "\"${domain.arn}\""])
   wildcard         = "*"
-  filename         = "function.py"
-  path             = "../../lambda/python/${var.name}"
-  zip_file         = "./${var.name}_lambda.zip"
+  zip_file         = "s3://${var.bucket}/lambda/${var.name}_lambda.zip"
   build_path       = "${path.module}/build_path"
-}
-
-resource "null_resource" "python_build" {
-  provisioner "local-exec" {
-    command     = <<-EOT
-      set -e
-      rm -Rf ${local.build_path}/*
-      cp ${local.path}/requirements.txt ${local.build_path}/
-      cat <<EOF > ${local.build_path}/${local.filename}
-      ${templatefile("${local.path}/${local.filename}", {
-        control_domain = var.control_domain
-      })}
-      EOF
-      pip install -r ${local.path}/requirements.txt -t ${local.build_path}
-      find ${local.build_path}/ -exec touch -t 201301250000 \{\} \;
-      EOT
-  }
-  triggers = {
-    always_run = "${timestamp()}"
-    zip_file   = local.zip_file
-  }
-}
-
-data "archive_file" "python_code" {
-  type        = "zip"
-  output_path = local.zip_file
-  source_dir  = local.build_path
-  excludes    = [
-    "__pycache__",
-    "venv",
-  ]
-  depends_on   = [
-    null_resource.python_build
-  ]
 }
 
 resource "aws_lambda_permission" "api_exec" {
@@ -148,10 +112,16 @@ resource "aws_iam_role_policy" "lambda" {
 RUNPOLICY
 }
 
+data "aws_s3_bucket_object" "test_lambda_function_hash" {
+  bucket = var.bucket
+  key    = "/lambda/${var.name}.zip.base64hash"
+}
+
 #tfsec:ignore:aws-lambda-enable-tracing
 resource "aws_lambda_function" "api_call" {
-  filename         = data.archive_file.python_code.output_path
-  source_code_hash = data.archive_file.python_code.output_base64sha256
+  s3_bucket        = var.bucket
+  s3_key           = "/lambda/${var.name}.zip"
+  source_code_hash = data.aws_s3_bucket_object.test_lambda_hash.body
   function_name    = var.name
   role             = aws_iam_role.lambda.arn
   handler          = "function.handler"

@@ -41,3 +41,7 @@ variable "repo" {
 variable "gateway_id" {
   type = string
 }
+
+variable "bucket" {
+  type = string
+}

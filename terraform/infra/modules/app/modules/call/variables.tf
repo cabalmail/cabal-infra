@@ -50,3 +50,7 @@ variable "repo" {
   type        = string
   description = "Repo tag value for SSM run command target."
 }
+
+variable "bucket" {
+  type = string
+}

@@ -1,0 +1,46 @@
+---
+name: Build Lambda (Python Runtime)
+
+on:
+  push:
+    branches:
+      - '0.2.0'
+      - 'main'
+    paths:
+      - 'lambda/python/**'
+      - '.github/workflows/lambda_python_build.yml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@main
+    - name: deploy
+      run: |
+        cd lambda/python
+        aws configure --profile deploy_lambda <<-EOF > /dev/null 2>&1
+        ${{ secrets.AWS_ACCESS_KEY_ID }}
+        ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        us-east-1
+        json
+        EOF
+        for FUNC in * ; do
+          pushd "${FUNC}"
+          pip install -r requirements.txt
+          find . -exec touch -d "2004-02-29 16:21:42" \{\} \; -print | zip ../$FUNC.zip
+          openssl dgst -sha256 -binary "../$FUNC.zip" | openssl enc -base64 | tr -d "\n" > "../$FUNC.zip.base64sha256"
+          aws s3 cp --content-type text/plain "../$FUNC.zip.base64sha256" "s3://${{ secrets.AWS_S3_BUCKET }}/lambda/$FUNC.zip.base64sha256"
+          aws s3 cp "${FUNC}.zip" "s3://${{ secrets.AWS_S3_BUCKET }}/lambda/${FUNC}.zip" --profile deploy_lambda --no-progress --acl private
+          popd
+        done
+        cd ../../terraform/infra
+        touch README.md
+    - name: trigger terraform
+      run: |
+        MYNAME="${{github.event.pusher.name}} (automated)"
+        MYEMAIL="${{github.event.pusher.email}}"
+        git config --global user.name "${MYNAME}"
+        git config --global user.email "${MYEMAIL}"
+        git add . || true
+        git commit -m "Trigger Terraform following lambda build" || true
+        git push || true

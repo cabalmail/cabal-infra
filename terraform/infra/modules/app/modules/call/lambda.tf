@@ -12,6 +12,7 @@ module "cabal_python_lambda" {
   call_path      = aws_api_gateway_resource.api_call.path
   gateway_id     = var.gateway_id
   repo           = var.repo
+  bucket         = var.bucket
 }
 
 module "cabal_node_lambda" {

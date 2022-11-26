@@ -44,6 +44,7 @@ module "cabal_list_mailboxes_method" {
   relay_ips        = var.relay_ips
   repo             = var.repo
   domains          = var.domains
+  bucket           = jsondecode(data.aws_ssm_parameter.s3.value).bucket
 }
 
 module "cabal_list_messages_method" {
@@ -61,7 +62,7 @@ module "cabal_list_messages_method" {
   relay_ips        = var.relay_ips
   repo             = var.repo
   domains          = var.domains
-  depends_on       = [module.cabal_list_mailboxes_method]
+  bucket           = jsondecode(data.aws_ssm_parameter.s3.value).bucket
 }
 
 module "cabal_list_envelopes_method" {
@@ -79,7 +80,7 @@ module "cabal_list_envelopes_method" {
   relay_ips        = var.relay_ips
   repo             = var.repo
   domains          = var.domains
-  depends_on       = [module.cabal_list_messages_method]
+  bucket           = jsondecode(data.aws_ssm_parameter.s3.value).bucket
 }
 
 module "cabal_fetch_message_method" {
@@ -97,7 +98,7 @@ module "cabal_fetch_message_method" {
   relay_ips        = var.relay_ips
   repo             = var.repo
   domains          = var.domains
-  depends_on       = [module.cabal_list_envelopes_method]
+  bucket           = jsondecode(data.aws_ssm_parameter.s3.value).bucket
 }
 
 module "cabal_list_method" {
@@ -115,6 +116,7 @@ module "cabal_list_method" {
   relay_ips        = var.relay_ips
   repo             = var.repo
   domains          = var.domains
+  bucket           = jsondecode(data.aws_ssm_parameter.s3.value).bucket
 }
 
 module "cabal_new_method" {
@@ -132,6 +134,7 @@ module "cabal_new_method" {
   relay_ips        = var.relay_ips
   repo             = var.repo
   domains          = var.domains
+  bucket           = jsondecode(data.aws_ssm_parameter.s3.value).bucket
 }
 
 module "cabal_revoke_method" {
@@ -149,6 +152,7 @@ module "cabal_revoke_method" {
   relay_ips        = var.relay_ips
   repo             = var.repo
   domains          = var.domains
+  bucket           = jsondecode(data.aws_ssm_parameter.s3.value).bucket
 }
 
 resource "aws_api_gateway_deployment" "deployment" {
