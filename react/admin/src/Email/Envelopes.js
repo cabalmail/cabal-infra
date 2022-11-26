@@ -35,6 +35,7 @@ class Envelopes extends React.Component {
       JSON.stringify({
         user: this.props.userName,
         password: this.props.password,
+        host: this.props.host
         mailbox: this.props.mailbox,
         ids: this.props.message_ids
       }),

@@ -79,6 +79,7 @@ class Messages extends React.Component {
         user: this.props.userName,
         password: this.props.password,
         mailbox: this.props.mailbox,
+        host: this.props.host,
         sort_order: this.state.sort_order.imap,
         sort_field: this.state.sort_field.imap
       }),
@@ -129,6 +130,7 @@ class Messages extends React.Component {
             userName={this.props.userName}
             password={this.props.password}
             mailbox={this.props.mailbox}
+            host={this.props.host}
             token={this.props.token}
             api_url={this.props.api_url}
             showOverlay={this.props.showOverlay}

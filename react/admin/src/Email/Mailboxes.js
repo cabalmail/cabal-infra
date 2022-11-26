@@ -25,7 +25,8 @@ class Mailboxes extends React.Component {
     const response = await axios.post('/list_mailboxes',
       JSON.stringify({
         user: this.props.userName,
-        password: this.props.password
+        password: this.props.password,
+        host: this.props.host
       }),
       {
         baseURL: this.props.api_url,

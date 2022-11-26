@@ -214,6 +214,7 @@ class App extends React.Component {
             api_url={this.state.api_url}
             password={this.state.password}
             userName={this.state.userName}
+            host={`imap.${this.state.control_domain}`}
             setMessage={this.setMessage}
           />
         );

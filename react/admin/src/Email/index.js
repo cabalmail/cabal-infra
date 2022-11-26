@@ -41,6 +41,7 @@ class Email extends React.Component {
           envelope={this.state.envelope}
           visible={this.state.overlayVisible}
           mailbox={this.state.mailbox}
+          host={this.props.host}
           hide={this.hideOverlay}
         />
         <Mailboxes 
@@ -49,6 +50,7 @@ class Email extends React.Component {
           userName={this.props.userName}
           api_url={this.props.api_url}
           setMailbox={this.selectMailbox}
+          host={this.props.host}
           mailbox={this.state.mailbox}
         />
         <Messages 
@@ -57,6 +59,7 @@ class Email extends React.Component {
           userName={this.props.userName}
           api_url={this.props.api_url}
           mailbox={this.state.mailbox}
+          host={this.props.host}
           showOverlay={this.showOverlay}
         />
       </>

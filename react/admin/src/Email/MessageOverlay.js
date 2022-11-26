@@ -40,6 +40,7 @@ class MessageOverlay extends React.Component {
         user: this.props.userName,
         password: this.props.password,
         mailbox: this.props.mailbox,
+        host: this.props.host,
         id: this.props.envelope.id
       }),
       {

@@ -1,24 +1,23 @@
 '''Retrieves IMAP envelopes for a user given a mailbox and list of message ids'''
 import json
-import logging
+# import logging
 from datetime import datetime
 from email.header import decode_header
 
 from imapclient import IMAPClient
 
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+# logger = logging.getLogger()
+# logger.setLevel(logging.INFO)
 
 def handler(event, _context):
     '''Retrieves IMAP messages for a user given a mailbox'''
-    client = IMAPClient(host="imap.${control_domain}", use_uid=True, ssl=True)
     body = json.loads(event['body'])
+    client = IMAPClient(host=body['host'], use_uid=True, ssl=True)
     client.login(body['user'], body['password'])
     client.select_folder(body['mailbox'])
     envelopes = {}
     for msgid, data in client.fetch(body['ids'], ['ENVELOPE', 'FLAGS', 'BODYSTRUCTURE']).items():
         envelope = data[b'ENVELOPE']
-        logger.info(data[b'BODYSTRUCTURE'])
         envelopes[msgid] = {
             "id": msgid,
             "date": envelope.date.__str__(),

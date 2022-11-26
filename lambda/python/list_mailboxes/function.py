@@ -1,20 +1,18 @@
 '''Retrieves IMAP mailboxes for a user'''
 import json
-import logging
+# import logging
 from imapclient import IMAPClient
 
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+# logger = logging.getLogger()
+# logger.setLevel(logging.INFO)
 
 def handler(event, _context):
     '''Retrieves IMAP mailboxes for a user'''
-    client = IMAPClient(host="imap.${control_domain}", use_uid=True, ssl=True)
-    logger.info(event['body'])
     body = json.loads(event['body'])
+    client = IMAPClient(host=body['host'], use_uid=True, ssl=True)
     client.login(body['user'], body['password'])
     response = client.list_folders()
     client.logout()
-    logger.info(response)
     return {
         "statusCode": 200,
         "body": json.dumps({
