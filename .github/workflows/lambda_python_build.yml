@@ -30,7 +30,8 @@ jobs:
           find . -exec touch -d "2004-02-29 16:21:42" \{\} \; -print | zip ../$FUNC.zip -@
           popd
           openssl dgst -sha256 -binary "$FUNC.zip" | openssl enc -base64 | tr -d "\n" > "$FUNC.zip.base64sha256"
-          aws s3 cp --content-type text/plain "$FUNC.zip.base64sha256" "s3://${{ secrets.AWS_S3_BUCKET }}/lambda/$FUNC.zip.base64sha256"
+          cat "$FUNC.zip.base64sha256"
+          aws s3 cp "$FUNC.zip.base64sha256" "s3://${{ secrets.AWS_S3_BUCKET }}/lambda/$FUNC.zip.base64sha256" --content-type text/plain
           aws s3 cp "${FUNC}.zip" "s3://${{ secrets.AWS_S3_BUCKET }}/lambda/${FUNC}.zip" --profile deploy_lambda --no-progress --acl private
           popd
         done
