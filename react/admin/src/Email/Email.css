@@ -24,8 +24,8 @@ select.selectMailbox {
 
 .message_overlay button.close_overlay {
   width: 3em;
-  position: absolute;
-  top: 1em;
+  position: fixed;
+  ttop: 1em;
   right: 1em;
 }
 
