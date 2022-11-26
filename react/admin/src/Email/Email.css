@@ -22,10 +22,18 @@ select.selectMailbox {
   border-radius: 0.5em;
 }
 
+.message_overlay .message_top {
+  position: fixed;
+}
+
+.message_overlay .message {
+  overflow: scroll;
+}  
+
 .message_overlay button.close_overlay {
   width: 3em;
   position: fixed;
-  ttop: 1em;
+  tttop: 1em;
   right: 1em;
 }
 
