@@ -42,6 +42,13 @@ select.selectMailbox {
   border-radius: 4px 4px 0 0;
 }
 
+.message_overlay .message_loading {
+  animation-name: ripple;
+  animation-duration: 0.5s;
+  animation-iteration-count: infinite;
+  min-height: 30em;
+}
+
 /* message list */
 
 ul.message-list, ul.message-list li.message-row {

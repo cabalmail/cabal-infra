@@ -9,18 +9,21 @@ class MessageOverlay extends React.Component {
     this.state = {
       message_raw: "",
       message_body: "",
-      view: "rich"
+      view: "rich",
+      loading: true
     }
   }
 
   componentDidUpdate(prevProps, prevState) {
     if (this.props.envelope.id !== prevProps.envelope.id) {
+      this.setState.loading = true;
       const response = this.getMessage();
       response.then(data => {
         this.setState({
           message_raw: data.data.data.message_raw,
           message_body_plain: data.data.data.message_body_plain,
-          message_body_html: DOMPurify.sanitize(data.data.data.message_body_html)
+          message_body_html: DOMPurify.sanitize(data.data.data.message_body_html),
+          loading: false
         });
       });
     }
@@ -51,6 +54,11 @@ class MessageOverlay extends React.Component {
   }
 
   renderView() {
+    if (this.state.loading) {
+      return (
+        <div className="message_loading" />
+      );
+    }
     switch (this.state.view) {
       case "rich":
         return (
