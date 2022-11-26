@@ -82,6 +82,5 @@ def decode_body_structure(data):
         elif isinstance(i, bytes):
             s.append(i.decode())
         else:
-            logger.info(type(i))
-            s.append(i)
+          s.append(i)
     return s
