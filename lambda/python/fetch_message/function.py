@@ -22,25 +22,34 @@ def handler(event, _context):
     body_html = ""
     if message.is_multipart():
         for part in message.walk():
-            ctype = part.get_content_type()
-            cdispo = str(part.get('Content-Disposition'))
-
-            # skip any text/plain (txt) attachments
-            if ctype == 'text/plain' and 'attachment' not in cdispo:
-                body_plain = part.get_payload(decode=True)  # decode
-            if ctype == 'text/html' and 'attachment' not in cdispo:
-                body_html = part.get_payload(decode=True)  # decode
+            ct = part.get_content_type()
+            cd = str(part.get('Content-Disposition'))
+            if ct == 'text/plain' and 'attachment' not in cd:
+                body_plain = part.get_payload(decode=True)
+            if ct == 'text/html' and 'attachment' not in cd:
+                body_html = part.get_payload(decode=True)
     else:
-        body_plain = message.get_payload(decode=True)
-    client.logout()
+        ct = message.get_content_type()
+        if ct == 'text/plain':
+            body_plain = message.get_payload(decode=True)
+        if ct == 'text/html':
+            body_html = message.get_payload(decode=True)
+
+    try:
+        body_html_decoded = body_html.decode()
+    except AttributeError:
+        body_html_decoded = body_html.__str__()
+    try:
+        body_plain_decoded = body_plain.decode()
+    except AttributeError:
+        body_plain_decoded = body_plain.__str__()
     return {
         "statusCode": 200,
         "body": json.dumps({
             "data": {
               "message_raw": message.__str__(),
-              "message_body_plain": body_plain.decode(),
-              "message_body_html": body_html.decode()
+              "message_body_plain": body_plain_decoded,
+              "message_body_html": body_html_decoded
             }
         })
     }
-    
