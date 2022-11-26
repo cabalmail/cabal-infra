@@ -6,7 +6,7 @@ select.selectMailbox {
 
 /* message overlay */
 
-.overlay_hidden {
+body div.content div.overlay_hidden {
   display: none;
 }
 
