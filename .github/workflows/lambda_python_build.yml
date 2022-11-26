@@ -33,14 +33,13 @@ jobs:
           aws s3 cp "$FUNC.zip.base64sha256" "s3://${{ secrets.AWS_S3_BUCKET }}/lambda/$FUNC.zip.base64sha256" --profile deploy_lambda --no-progress --acl private --content-type text/plain
           aws s3 cp "${FUNC}.zip" "s3://${{ secrets.AWS_S3_BUCKET }}/lambda/${FUNC}.zip" --profile deploy_lambda --no-progress --acl private
         done
-        cd ../../terraform/infra
-        touch README.md
+        ls -l >../../terraform/infra/lambda_manifest.txt
     - name: trigger terraform
       run: |
         MYNAME="${{github.event.pusher.name}} (automated)"
         MYEMAIL="${{github.event.pusher.email}}"
         git config --global user.name "${MYNAME}"
         git config --global user.email "${MYEMAIL}"
-        git add terraform/infra/README.md || true
+        git add terraform/infra/lambda_manifest.txt || true
         git commit -m "Trigger Terraform following lambda build" || true
         git push || true
