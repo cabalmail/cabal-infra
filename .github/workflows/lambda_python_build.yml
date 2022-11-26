@@ -26,7 +26,6 @@ jobs:
         EOF
         for FUNC in * ; do
           pushd "${FUNC}"
-          sed -i '' "s/\$\{control_domain\}/bonjour/" function.py
           pip install -r requirements.txt -t ./
           find . -exec touch -d "2004-02-29 16:21:42" \{\} \; -print | zip ../$FUNC.zip -@
           popd
