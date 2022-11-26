@@ -20,6 +20,7 @@ body div.content div.overlay_hidden {
   border-width: 1px;
   border-radius: 0.5em;
   display: grid;
+  row-gap: 0;
   grid-template-rows: auto auto;
 }
 
