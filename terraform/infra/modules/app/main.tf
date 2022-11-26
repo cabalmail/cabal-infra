@@ -101,6 +101,24 @@ module "cabal_fetch_message_method" {
   bucket           = jsondecode(data.aws_ssm_parameter.s3.value).bucket
 }
 
+module "cabal_list_attachments_method" {
+  source           = "./modules/call"
+  name             = "list_attachments"
+  runtime          = "python3.9"
+  type             = "python"
+  method           = "POST"
+  region           = var.region
+  account          = data.aws_caller_identity.current.account_id
+  gateway_id       = aws_api_gateway_rest_api.gateway.id
+  root_resource_id = aws_api_gateway_rest_api.gateway.root_resource_id
+  authorizer       = aws_api_gateway_authorizer.api_auth.id
+  control_domain   = var.control_domain
+  relay_ips        = var.relay_ips
+  repo             = var.repo
+  domains          = var.domains
+  bucket           = jsondecode(data.aws_ssm_parameter.s3.value).bucket
+}
+
 module "cabal_list_method" {
   source           = "./modules/call"
   name             = "list"
