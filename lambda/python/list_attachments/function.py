@@ -25,8 +25,8 @@ def handler(event, _context):
             cd = str(part.get('Content-Disposition'))
             if 'attachment' in cd:
                 attachments.append({
-                    name: part.get_filename().decode(),
-                    type: part.get_content_type().decode(),
+                    "name": part.get_filename(),
+                    "type": part.get_content_type(),
                 })
     return {
         "statusCode": 200,
