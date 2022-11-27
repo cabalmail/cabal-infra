@@ -87,7 +87,8 @@ class MessageOverlay extends React.Component {
     // TODO: implement download
     const id = e.target.value;
     console.log(`Download attachment ${id} button clicked`);
-
+  }
+ 
   renderView() {
     if (this.state.loading) {
       return (
