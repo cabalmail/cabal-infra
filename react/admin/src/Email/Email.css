@@ -71,6 +71,8 @@ body div.content div.overlay_hidden {
   list-style: none;
   display: grid;
   grid-template-columns: subgrid;
+  grid-column-start: 1;
+  grid-column-end: 3;
 }
 
 /* message list */
