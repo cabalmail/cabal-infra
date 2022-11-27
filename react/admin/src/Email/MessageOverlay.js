@@ -118,6 +118,7 @@ class MessageOverlay extends React.Component {
               onClick={this.downloadAttachment}
             >
               <span className="attachment_name">{a.name}</span>
+              <span className="attachment_size">{a.size} bytes</span>
               <span className="attachment_type">{a.type}</span>
             </button>
           );

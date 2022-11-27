@@ -28,6 +28,7 @@ def handler(event, _context):
                 attachments.append({
                     "name": part.get_filename(),
                     "type": part.get_content_type(),
+                    "size": len(part.get_payload(decode=True)),
                     "id": i
                 })
     return {

@@ -73,10 +73,14 @@ body div.content div.overlay_hidden {
   display: grid;
   grid-template-columns: subgrid;
   grid-column-start: 1;
-  grid-column-end: 3;
+  grid-column-end: 4;
   margin: 1em 2em;
   padding: 0.5em;
 }
+
+.message_overlay .message_attachments button.attachment::hover span.attachment_name {
+  text-decoration: underline;
+} 
 
 .message_overlay .message_attachments button.attachment span.attachment_type {
   font-style: italic;
