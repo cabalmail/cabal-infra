@@ -64,7 +64,9 @@ body div.content div.overlay_hidden {
 .message_overlay .message_attachments {
   list-style: none;
   display: grid;
-  grid-template-columns: auto auto;
+  grid-gap: 0.5em;
+  grid-template-columns: max-content auto;
+  grid-template-rows: repeat(auto-fill, max-content);
 }
 
 .message_overlay .message_attachments li.attachment {
