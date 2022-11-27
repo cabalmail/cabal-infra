@@ -43,6 +43,8 @@ def handler(event, _context):
         body_plain_decoded = body_plain.decode()
     except AttributeError:
         body_plain_decoded = body_plain.__str__()
+    if len(message.__str__()) > 1000000:
+        message = "Raw message too large to display"
     return {
         "statusCode": 200,
         "body": json.dumps({
