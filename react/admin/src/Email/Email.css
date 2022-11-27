@@ -63,25 +63,22 @@ body div.content div.overlay_hidden {
 }
 
 .message_overlay .message_attachments {
-  list-style: none;
   display: grid;
   grid-gap: 0.5em;
   grid-template-columns: max-content auto;
   grid-template-rows: repeat(auto-fill, max-content);
 }
 
-.message_overlay .message_attachments li.attachment {
-  list-style: none;
+.message_overlay .message_attachments button.attachment {
   display: grid;
   grid-template-columns: subgrid;
   grid-column-start: 1;
   grid-column-end: 3;
-  margin: 1em 2em 1em 2em;
-  border: 1px solid #800;
+  margin: 1em 2em;
   padding: 0.5em;
 }
 
-.message_overlay .message_attachments li.attachment span.attachment_type {
+.message_overlay .message_attachments button.attachment span.attachment_type {
   font-style: italic;
 } 
 

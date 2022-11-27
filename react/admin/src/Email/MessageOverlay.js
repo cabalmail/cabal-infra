@@ -82,6 +82,12 @@ class MessageOverlay extends React.Component {
     this.props.hide();
   }
 
+  downloadAttachment = (e) => {
+    e.preventDefault();
+    // TODO: implement download
+    const id = e.target.value;
+    console.log(`Download attachment ${id} button clicked`);
+
   renderView() {
     if (this.state.loading) {
       return (
@@ -104,25 +110,25 @@ class MessageOverlay extends React.Component {
       case "attachments":
         const attachments = this.state.attachments.map(a => {
           return (
-            <li id={`attachment-${a.id}`} className="attachment">
+            <button
+              id={`attachment-${a.id}`}
+              className="attachment"
+              value={a.id}
+              onClick={this.downloadAttachment}
+            >
               <span className="attachment_name">{a.name}</span>
               <span className="attachment_type">{a.type}</span>
-            </li>
+            </button>
           );
         });
         return (
-          <ul className="message message_attachments">{attachments}</ul>
+          <div className="message message_attachments">{attachments}</div>
         );
       default:
         return (
           <pre className="message message_raw">{this.state.message_raw}</pre>
         );
     }
-  }
-
-  handleNav = (e) => {
-    e.preventDefault();
-    this.setState({view: e.target.value});
   }
 
   renderHeader() {
@@ -166,6 +172,11 @@ class MessageOverlay extends React.Component {
       </div>
     );
   }  
+
+  handleNav = (e) => {
+    e.preventDefault();
+    this.setState({view: e.target.value});
+  }
 
   render() {
     if (this.props.visible) {
