@@ -125,44 +125,56 @@ class MessageOverlay extends React.Component {
     this.setState({view: e.target.value});
   }
 
+  renderHeader() {
+    return (
+      <dl>
+        <dt>To</dt>
+        <dd>{this.props.envelope.to}</dd>
+        <dt>From</dt>
+        <dd>{this.props.envelope.from.join("; ")}</dd>
+        <dt>Received</dt>
+        <dd>{this.props.envelope.date}</dd>
+        <dt>Subject</dt>
+        <dd>{this.props.envelope.subject}</dd>
+      </dl>
+    );
+  }
+
+  renderButtonBar() {
+    return (
+      <div className={`tabBar ${this.state.view}`}>
+        <button
+          className={`tab ${this.state.view === "rich" ? "active" : ""}`}
+          onClick={this.handleNav}
+          value="rich"
+        >Rich Text</button>
+        <button
+          className={`tab ${this.state.view === "plain" ? "active" : ""}`}
+          onClick={this.handleNav}
+          value="plain"
+        >Plain Text</button>
+        <button
+          className={`tab ${this.state.view === "attachments" ? "active" : ""}`}
+          onClick={this.handleNav}
+          value="attachments"
+        >Attachments</button>
+        <button
+          className={`tab ${this.state.view === "raw" ? "active" : ""}`}
+          onClick={this.handleNav}
+          value="raw"
+        >Raw Message</button>
+      </div>
+    );
+  }  
+
   render() {
     if (this.props.visible) {
       return (
         <div className="message_overlay">
           <div className="message_top">
             <button onClick={this.hide} className="close_overlay">❌</button>
-            <dl>
-              <dt>To</dt>
-              <dd>{this.props.envelope.to}</dd>
-              <dt>From</dt>
-              <dd>{this.props.envelope.from.join("; ")}</dd>
-              <dt>Received</dt>
-              <dd>{this.props.envelope.date}</dd>
-              <dt>Subject</dt>
-              <dd>{this.props.envelope.subject}</dd>
-            </dl>
-            <div className={`tabBar ${this.state.view}`}>
-              <button
-                className={`tab ${this.state.view === "rich" ? "active" : ""}`}
-                onClick={this.handleNav}
-                value="rich"
-              >Rich Text</button>
-              <button
-                className={`tab ${this.state.view === "plain" ? "active" : ""}`}
-                onClick={this.handleNav}
-                value="plain"
-              >Plain Text</button>
-              <button
-                className={`tab ${this.state.view === "attachments" ? "active" : ""}`}
-                onClick={this.handleNav}
-                value="attachments"
-              >Attachments</button>
-              <button
-                className={`tab ${this.state.view === "raw" ? "active" : ""}`}
-                onClick={this.handleNav}
-                value="raw"
-              >Raw Message</button>
-            </div>
+            {this.renderHeader()}
+            {this.renderButtonBar()}
           </div>
           {this.renderView()}
         </div>
