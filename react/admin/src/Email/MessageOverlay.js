@@ -10,6 +10,7 @@ class MessageOverlay extends React.Component {
       message_raw: "",
       message_body: "",
       view: "rich",
+      attachments: [],
       loading: true
     }
   }
@@ -17,16 +18,18 @@ class MessageOverlay extends React.Component {
   componentDidUpdate(prevProps, prevState) {
     if (this.props.envelope.id !== prevProps.envelope.id) {
       this.setState({loading: true});
-      const response = this.getMessage();
-      response.then(data => {
+      const messageResponse = this.getMessage();
+      const attachmentResponse = this.getAttachments();
+      Promise.all([messageResponse, attachmentResponse]).then(data => {
         const view =
-          data.data.data.message_body_plain.length > data.data.data.message_body_html
+          data[0].data.data.message_body_plain.length > data[0].data.data.message_body_html
           ? "plain"
           : "rich";
         this.setState({
-          message_raw: data.data.data.message_raw,
-          message_body_plain: data.data.data.message_body_plain,
-          message_body_html: DOMPurify.sanitize(data.data.data.message_body_html),
+          message_raw: data[0].data.data.message_raw,
+          message_body_plain: data[0].data.data.message_body_plain,
+          message_body_html: DOMPurify.sanitize(data[0].data.data.message_body_html),
+          attachments: data[1].data.data.attachments,
           loading: false,
           view: view
         });
@@ -36,6 +39,26 @@ class MessageOverlay extends React.Component {
 
   getMessage = async (e) => {
     const response = await axios.post('/fetch_message',
+      JSON.stringify({
+        user: this.props.userName,
+        password: this.props.password,
+        mailbox: this.props.mailbox,
+        host: this.props.host,
+        id: this.props.envelope.id
+      }),
+      {
+        baseURL: this.props.api_url,
+        headers: {
+          'Authorization': this.props.token
+        },
+        timeout: 10000
+      }
+    );
+    return response;
+  }
+
+  getAttachments = async (e) => {
+    const response = await axios.post('/fetch_attachments',
       JSON.stringify({
         user: this.props.userName,
         password: this.props.password,
@@ -77,6 +100,18 @@ class MessageOverlay extends React.Component {
       case "raw":
         return (
           <pre className="message message_raw">{this.state.message_raw}</pre>
+        );
+      case "attachments":
+        const attachments = this.state.attachments.map(a => {
+          return (
+            <li id={`attachment-${a.id}`}>
+              <span className="attachment_name">{a.name}</span>
+              <span className="attachment_type">{a.type}</span>
+            </li>
+          );
+        });
+        return (
+          <ul className="message message_attachments">{attachments}</ul>
         );
       default:
         return (
