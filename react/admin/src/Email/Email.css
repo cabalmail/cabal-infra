@@ -43,7 +43,7 @@ body div.content div.overlay_hidden {
 
 .message_overlay .tabBar {
   display: grid;
-  grid-template-columns: 33% 34% 33%;
+  grid-template-columns: 25% 25% 25% 25%;
   width: 50%;
   margin: auto;
   min-width: 25em;
@@ -59,6 +59,18 @@ body div.content div.overlay_hidden {
   animation-duration: 0.5s;
   animation-iteration-count: infinite;
   min-height: 30em;
+}
+
+.message_overlay .message_attachments {
+  list-style: none;
+  display: grid;
+  grid-template-columns: 50% 50%;
+}
+
+.message_overlay .message_attachments li.attachment {
+  list-style: none;
+  display: grid;
+  grid-template-rows: subgrid;
 }
 
 /* message list */

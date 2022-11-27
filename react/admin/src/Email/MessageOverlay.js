@@ -104,7 +104,7 @@ class MessageOverlay extends React.Component {
       case "attachments":
         const attachments = this.state.attachments.map(a => {
           return (
-            <li id={`attachment-${a.id}`}>
+            <li id={`attachment-${a.id}`} className="attachment">
               <span className="attachment_name">{a.name}</span>
               <span className="attachment_type">{a.type}</span>
             </li>
@@ -156,7 +156,7 @@ class MessageOverlay extends React.Component {
                 className={`tab ${this.state.view === "attachments" ? "active" : ""}`}
                 onClick={this.handleNav}
                 value="attachments"
-              >Raw Message</button>
+              >Attachments</button>
               <button
                 className={`tab ${this.state.view === "raw" ? "active" : ""}`}
                 onClick={this.handleNav}
