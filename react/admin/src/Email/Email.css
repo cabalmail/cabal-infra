@@ -70,7 +70,7 @@ body div.content div.overlay_hidden {
 .message_overlay .message_attachments li.attachment {
   list-style: none;
   display: grid;
-  grid-template-rows: subgrid;
+  grid-template-columns: subgrid;
 }
 
 /* message list */
