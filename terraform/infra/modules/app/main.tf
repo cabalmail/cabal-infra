@@ -89,7 +89,7 @@ module "cabal_fetch_message_method" {
   runtime          = "python3.9"
   type             = "python"
   method           = "POST"
-  memory           = 512
+  memory           = 2048
   region           = var.region
   account          = data.aws_caller_identity.current.account_id
   gateway_id       = aws_api_gateway_rest_api.gateway.id
@@ -108,7 +108,7 @@ module "cabal_list_attachments_method" {
   runtime          = "python3.9"
   type             = "python"
   method           = "POST"
-  memory           = 512
+  memory           = 2048
   region           = var.region
   account          = data.aws_caller_identity.current.account_id
   gateway_id       = aws_api_gateway_rest_api.gateway.id

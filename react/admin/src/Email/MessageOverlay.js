@@ -51,7 +51,7 @@ class MessageOverlay extends React.Component {
         headers: {
           'Authorization': this.props.token
         },
-        timeout: 10000
+        timeout: 20000
       }
     );
     return response;
@@ -71,7 +71,7 @@ class MessageOverlay extends React.Component {
         headers: {
           'Authorization': this.props.token
         },
-        timeout: 10000
+        timeout: 20000
       }
     );
     return response;
