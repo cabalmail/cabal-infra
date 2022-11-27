@@ -27,17 +27,17 @@ Parameters: e (null)
 
 Returns: null
 
+### downloadAttachment
+Modifiers: none
+
+Parameters: e (null)
+
+Returns: null
+
 ### renderView
 Modifiers: none
 
 Parameters:  ()
-
-Returns: null
-
-### handleNav
-Modifiers: none
-
-Parameters: e (null)
 
 Returns: null
 
@@ -52,6 +52,13 @@ Returns: null
 Modifiers: none
 
 Parameters:  ()
+
+Returns: null
+
+### handleNav
+Modifiers: none
+
+Parameters: e (null)
 
 Returns: null
 
