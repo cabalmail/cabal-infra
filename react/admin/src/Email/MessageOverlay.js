@@ -58,7 +58,7 @@ class MessageOverlay extends React.Component {
   }
 
   getAttachments = async (e) => {
-    const response = await axios.post('/fetch_attachments',
+    const response = await axios.post('/list_attachments',
       JSON.stringify({
         user: this.props.userName,
         password: this.props.password,
