@@ -76,7 +76,14 @@ body div.content div.overlay_hidden {
   grid-template-columns: subgrid;
   grid-column-start: 1;
   grid-column-end: 3;
+  margin: 1em 2em 1em 2em;
+  border: 1px solid #800;
+  padding: 0.5em;
 }
+
+.message_overlay .message_attachments li.attachment span.attachment_type {
+  font-style: italic;
+} 
 
 /* message list */
 
