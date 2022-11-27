@@ -19,6 +19,7 @@ def handler(event, _context):
     email_body_raw = client.fetch([body['id']],[b"RFC822"])
     message = email.message_from_bytes(email_body_raw[body['id']][b"RFC822"], policy=default_policy)
     attachments = []
+    i = 0;
     if message.is_multipart():
         for part in message.walk():
             ct = part.get_content_type()
@@ -27,6 +28,7 @@ def handler(event, _context):
                 attachments.append({
                     "name": part.get_filename(),
                     "type": part.get_content_type(),
+                    "id": i
                 })
     return {
         "statusCode": 200,
