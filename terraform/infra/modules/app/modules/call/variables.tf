@@ -54,3 +54,8 @@ variable "repo" {
 variable "bucket" {
   type = string
 }
+
+variable "memory" {
+  type    = number
+  default = 128
+}

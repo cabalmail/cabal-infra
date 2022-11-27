@@ -127,6 +127,7 @@ resource "aws_lambda_function" "api_call" {
   handler          = "function.handler"
   runtime          = var.runtime
   timeout          = 30
+  memory_size      = var.memory
 }
 
 resource "null_resource" "cleanup" {

@@ -45,3 +45,8 @@ variable "gateway_id" {
 variable "bucket" {
   type = string
 }
+
+variable "memory" {
+  type    = number
+  default = 128
+}

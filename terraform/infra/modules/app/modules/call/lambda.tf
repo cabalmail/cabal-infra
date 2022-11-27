@@ -13,6 +13,7 @@ module "cabal_python_lambda" {
   gateway_id     = var.gateway_id
   repo           = var.repo
   bucket         = var.bucket
+  memory         = var.memory
 }
 
 module "cabal_node_lambda" {
