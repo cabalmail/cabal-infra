@@ -76,9 +76,11 @@ body div.content div.overlay_hidden {
   grid-column-end: 4;
   margin: 1em 2em;
   padding: 0.5em;
+  vertical-align: middle;
+  max-height: 5em;
 }
 
-.message_overlay .message_attachments button.attachment::hover span.attachment_name {
+.message_overlay .message_attachments button.attachment:hover span.attachment_name {
   text-decoration: underline;
 } 
 
