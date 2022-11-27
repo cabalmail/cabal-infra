@@ -153,6 +153,11 @@ class MessageOverlay extends React.Component {
                 value="plain"
               >Plain Text</button>
               <button
+                className={`tab ${this.state.view === "attachments" ? "active" : ""}`}
+                onClick={this.handleNav}
+                value="attachments"
+              >Raw Message</button>
+              <button
                 className={`tab ${this.state.view === "raw" ? "active" : ""}`}
                 onClick={this.handleNav}
                 value="raw"
