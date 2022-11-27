@@ -13,6 +13,13 @@ Parameters: e (null)
 
 Returns: null
 
+### getAttachments
+Modifiers: async
+
+Parameters: e (null)
+
+Returns: null
+
 ### hide
 Modifiers: none
 
