@@ -41,4 +41,18 @@ Parameters: e (null)
 
 Returns: null
 
+### renderHeader
+Modifiers: none
+
+Parameters:  ()
+
+Returns: null
+
+### renderButtonBar
+Modifiers: none
+
+Parameters:  ()
+
+Returns: null
+
 </div>
