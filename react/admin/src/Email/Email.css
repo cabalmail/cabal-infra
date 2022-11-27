@@ -66,7 +66,7 @@ body div.content div.overlay_hidden {
   display: grid;
   grid-gap: 0.5em;
   grid-template-columns: max-content auto auto;
-  grid-template-rows: repeat(auto-fill, max-content);
+  grid-template-rows: repeat(auto-fill, 5em);
 }
 
 .message_overlay .message_attachments button.attachment {
@@ -76,7 +76,7 @@ body div.content div.overlay_hidden {
   grid-column-end: 4;
   margin: 1em 2em;
   padding: 0.75em;
-  height: 3em;
+  height: auto;
 }
 
 .message_overlay .message_attachments button.attachment:hover span.attachment_name {
