@@ -26,8 +26,6 @@ The small Terraform stack in this directory stands up a Route53 Zone for the con
 
 | Name | Description |
 |------|-------------|
-| <a name="output_aws_ecr_repository_registry_id"></a> [aws\_ecr\_repository\_registry\_id](#output\_aws\_ecr\_repository\_registry\_id) | n/a |
-| <a name="output_aws_ecr_repository_repository_url"></a> [aws\_ecr\_repository\_repository\_url](#output\_aws\_ecr\_repository\_repository\_url) | n/a |
 | <a name="output_aws_s3_bucket"></a> [aws\_s3\_bucket](#output\_aws\_s3\_bucket) | n/a |
 | <a name="output_control_domain_name_servers"></a> [control\_domain\_name\_servers](#output\_control\_domain\_name\_servers) | n/a |
 ## Providers
