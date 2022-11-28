@@ -30,7 +30,11 @@ body div.content div.overlay_hidden {
   padding: 0 1em 1em 1em;
   margin: 0;
   position: relative;
-}  
+}
+
+.message_overlay .message_plain, pre {
+  font-family: 'Share Tech Mono', monospace, courier;
+}
 
 .message_overlay button.close_overlay,
 .message_overlay button.invert {
