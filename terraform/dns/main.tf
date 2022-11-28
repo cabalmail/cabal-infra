@@ -50,5 +50,6 @@ resource "aws_ssm_parameter" "cognito" {
 
 # Create S3 bucket for React App
 module "bucket" {
-  source = "./modules/s3"
+  source         = "./modules/s3"
+  control_domain = var.control_domain
 }
