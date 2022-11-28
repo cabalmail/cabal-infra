@@ -105,7 +105,7 @@ class MessageOverlay extends React.Component {
       case "rich":
       return (
           <div className={`message message_html ${this.state.invert ? "inverted" : ""}`}>
-            <button className="invert" onClick={toggleBackground}>◐</button>
+            <button className="invert" onClick={this.toggleBackground}>◐</button>
             <div dangerouslySetInnerHTML={{__html: this.state.message_body_html}} />
           </div>
         );
