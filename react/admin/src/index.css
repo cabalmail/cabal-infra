@@ -22,18 +22,30 @@
     border-color: #800;
   }
   /* inverted */
-  body.inverted, a.inverted, button.inverted, select.inverted, div.inverted {
+  body.inverted, a.inverted, button.inverted, select.inverted, div.inverted,
+  .inverted a, .inverted button, .inverted select, .inverted div {
     color: #222;
     background-color: #ffe;
     border-color: #999;
   }
-  input.inverted, select.inverted, option.inverted {
+  input.inverted, select.inverted, option.inverted,
+  .inverted input, .inverted select, .inverted option {
     color: #000;
     background-color: #ffd;
   }
-  button.inverted {
+  button.inverted, .inverted button {
     color: #333;
     background-color: #ddd;
+  }
+  .inverted .nav, .inverted .nav .item {
+    color: #aaa;
+    background-color: #000;
+  }
+  body .inverted .highlight, body .inverted .active, body .inverted .default,
+  body .inverted .nav .active {
+    color: #000;
+    background-color: #a33;
+    border-color: #d00;
   }
 }
 
@@ -62,18 +74,29 @@
     border-color: #d00;
   }
   /* inverted */
-  body.inverted, a.inverted, button.inverted, select.inverted, div.inverted {
+  body.inverted, a.inverted, button.inverted, select.inverted, div.inverted,
+  .inverted a, .inverted button, .inverted select, .inverted div {
     color: #aaa;
     background-color: #200;
     border-color: #333;
   }
-  input.inverted, select.inverted, option.inverted {
+  input.inverted, select.inverted, option.inverted,
+  .inverted input, .inverted select, .inverted option {
     color: #ccc;
     background-color: #000;
   }
-  button.inverted {
+  button.inverted, .inverted button {
     color: #ccc;
     background-color: #111;
+  }
+  .inverted .nav, .inverted .nav .item {
+    background-color: #000;
+  }
+  body .inverted .highlight, body .inverted .active, body .inverted .default,
+  body .inverted .nav .active {
+    color: #dda;
+    background-color: #300;
+    border-color: #800;
   }
 }
 
