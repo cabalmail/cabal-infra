@@ -29,6 +29,7 @@ body div.content div.overlay_hidden {
   text-align: left;
   padding: 0 1em 1em 1em;
   margin: 0;
+  position: relative;
 }  
 
 .message_overlay button.close_overlay,
