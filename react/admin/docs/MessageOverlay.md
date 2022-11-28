@@ -34,6 +34,13 @@ Parameters: e (null)
 
 Returns: null
 
+### toggleBackground
+Modifiers: none
+
+Parameters: e (null)
+
+Returns: null
+
 ### renderView
 Modifiers: none
 
