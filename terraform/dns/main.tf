@@ -47,3 +47,8 @@ resource "aws_ssm_parameter" "cognito" {
   type        = "String"
   value       = jsonencode(module.pool)
 }
+
+# Create S3 bucket for React App
+module "bucket" {
+  source = "./modules/s3"
+}
