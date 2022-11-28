@@ -117,21 +117,3 @@ resource "aws_ssm_parameter" "origin_id" {
   type        = "String"
   value       = aws_cloudfront_origin_access_identity.origin.id
 }
-
-# Create Elastic Container Registry Repository
-#tfsec:ignore:aws-ecr-repository-customer-key
-resource "aws_ecr_repository" "container_repo" {
-  name                 = "cabal-registry"
-  image_tag_mutability = "IMMUTABLE"
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-}
-
-# Save ECR information in AWS SSM Parameter Store so that terraform/infra can read it.
-resource "aws_ssm_parameter" "container_repo" {
-  name        = "/cabal/container/registry"
-  description = "ECR repo"
-  type        = "String"
-  value       = jsonencode(aws_ecr_repository.container_repo)
-}
