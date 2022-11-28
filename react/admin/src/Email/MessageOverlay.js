@@ -18,7 +18,7 @@ class MessageOverlay extends React.Component {
 
   componentDidUpdate(prevProps, prevState) {
     if (this.props.envelope.id !== prevProps.envelope.id) {
-      this.setState({loading: true});
+      this.setState({loading: true, invert: false});
       const messageResponse = this.getMessage();
       const attachmentResponse = this.getAttachments();
       Promise.all([messageResponse, attachmentResponse]).then(data => {
