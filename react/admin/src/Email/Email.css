@@ -36,6 +36,14 @@ body div.content div.overlay_hidden {
   font-family: 'Share Tech Mono', monospace, courier;
 }
 
+.message_overlay pre.message_plain {
+  white-space: pre-wrap;
+  white-space: -moz-pre-wrap;
+  white-space: -pre-wrap;
+  white-space: -o-pre-wrap;
+  word-wrap: break-word;
+}
+
 .message_overlay button.close_overlay,
 .message_overlay button.invert {
   width: 3em;

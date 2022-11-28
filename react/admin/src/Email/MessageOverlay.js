@@ -111,7 +111,7 @@ class MessageOverlay extends React.Component {
         );
       case "plain":
         return (
-          <div className="message message_plain">{this.state.message_body_plain}</div>
+          <pre className="message message_plain">{this.state.message_body_plain}</pre>
         );
       case "raw":
         return (
