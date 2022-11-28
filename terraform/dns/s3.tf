@@ -3,7 +3,7 @@ resource "aws_s3_bucket" "react_app" {
   bucket = "admin.${var.control_domain}"
 }
 
-resource "aws_s3_bucket_lifecycle_configuration" "delete_attachments" {
+resource "aws_s3_bucket_lifecycle_configuration" "expire_attachments" {
   bucket = aws_s3_bucket.react_app.bucket
   rule {
     id = "expire_attachments"
