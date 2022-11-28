@@ -31,6 +31,7 @@ def handler(event, _context):
                     "size": len(part.get_payload(decode=True)),
                     "id": i
                 })
+                i += 1
     return {
         "statusCode": 200,
         "body": json.dumps({
