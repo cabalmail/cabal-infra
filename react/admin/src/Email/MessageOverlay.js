@@ -88,6 +88,7 @@ class MessageOverlay extends React.Component {
     // TODO: implement download
     const id = e.target.value;
     console.log(`Download attachment ${id} button clicked`);
+    console.log(e.target.value);
   }
 
   toggleBackground = (e) => {
