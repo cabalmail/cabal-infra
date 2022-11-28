@@ -31,9 +31,10 @@ body div.content div.overlay_hidden {
   margin: 0;
 }  
 
-.message_overlay button.close_overlay {
+.message_overlay button.close_overlay,
+.message_overlay button.invert {
   width: 3em;
-  position: fixed;
+  position: absolute;
   top: 1em;
   right: 1em;
 }
@@ -66,7 +67,8 @@ body div.content div.overlay_hidden {
   display: grid;
   grid-gap: 0.5em;
   grid-template-columns: max-content auto auto;
-  grid-template-rows: repeat(auto-fill, 5em);
+  grid-template-rows: none;
+  grid-auto-rows: max-content;
 }
 
 .message_overlay .message_attachments button.attachment {

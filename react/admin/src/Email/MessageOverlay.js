@@ -11,7 +11,8 @@ class MessageOverlay extends React.Component {
       message_body: "",
       view: "rich",
       attachments: [],
-      loading: true
+      loading: true,
+      invert: false
     }
   }
 
@@ -88,7 +89,12 @@ class MessageOverlay extends React.Component {
     const id = e.target.value;
     console.log(`Download attachment ${id} button clicked`);
   }
- 
+
+  toggleBackground = (e) => {
+    e.preventDefault();
+    this.setState({invert: !this.state.invert})
+  }
+
   renderView() {
     if (this.state.loading) {
       return (
@@ -97,8 +103,11 @@ class MessageOverlay extends React.Component {
     }
     switch (this.state.view) {
       case "rich":
-        return (
-          <div className="message message_html" dangerouslySetInnerHTML={{__html: this.state.message_body_html}} />
+      return (
+          <div className={`message message_html ${this.state.invert ? "inverted" : ""}`}>
+            <button className="invert" onClick={toggleBackground}>◐</button>
+            <div dangerouslySetInnerHTML={{__html: this.state.message_body_html}} />
+          </div>
         );
       case "plain":
         return (

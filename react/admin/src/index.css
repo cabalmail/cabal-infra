@@ -21,6 +21,20 @@
     background-color: #300;
     border-color: #800;
   }
+  /* inverted */
+  body.inverted, a.inverted, button.inverted, select.inverted, div.inverted {
+    color: #222;
+    background-color: #ffe;
+    border-color: #999;
+  }
+  input.inverted, select.inverted, option.inverted {
+    color: #000;
+    background-color: #ffd;
+  }
+  button.inverted {
+    color: #333;
+    background-color: #ddd;
+  }
 }
 
 @media (prefers-color-scheme: light) {
@@ -46,6 +60,20 @@
     color: #000;
     background-color: #a33;
     border-color: #d00;
+  }
+  /* inverted */
+  body.inverted, a.inverted, button.inverted, select.inverted, div.inverted {
+    color: #aaa;
+    background-color: #200;
+    border-color: #333;
+  }
+  input.inverted, select.inverted, option.inverted {
+    color: #ccc;
+    background-color: #000;
+  }
+  button.inverted {
+    color: #ccc;
+    background-color: #111;
   }
 }
 
