@@ -109,8 +109,15 @@ body div.content div.overlay_hidden {
 .overlay_expand_collapse {
   width: 3em;
   position: absolute;
-  bottom: 1em;
   left: 1em;
+}
+
+.expand_overlay_top {
+  top: 1em;
+}
+
+.collapse_overlay_top {
+  bottom: 1em;
 }
 
 .expanded .expand_overlay_top, .collapsed .collapse_overlay_top {
