@@ -32,6 +32,6 @@ resource "aws_iam_role_policy_attachment" "sns" {
 }
 
 resource "aws_iam_role_policy_attachment" "users" {
-  role       = aws_iam_role.users.name
-  policy_arn = aws_iam_policy_document.cognito_to_s3.arn
+  role   = aws_iam_role.users.name
+  policy = aws_iam_policy_document.cognito_to_s3.json
 }
