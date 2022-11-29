@@ -52,21 +52,15 @@ data "aws_iam_policy_document" "s3_policy" {
     condition {
       test     = "StringLike"
       variable = "s3:prefix"
-      values   = ["message-cache/\${cognito-identity.amazonaws.com:sub}/*"]
+      values   = ["message-cache/${"$"}{cognito-identity.amazonaws.com:sub}/*"]
       }
     }
   }
   statement {
     actions   = ["s3:GetObject"]
     resources = [
-      "arn:aws:s3:::${aws_s3_bucket.react_app.id}/message-cache/\${cognito-identity.amazonaws.com:sub}/*"
+      "arn:aws:s3:::${aws_s3_bucket.react_app.id}/message-cache/${"$"}{cognito-identity.amazonaws.com:sub}/*"
     ]
-    condition {
-      test     = "StringLike"
-      variable = "s3:prefix"
-      values   = ["message-cache/\${cognito-identity.amazonaws.com:sub}/*"]
-      }
-    }
   }
 }
 
