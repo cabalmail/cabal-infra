@@ -147,7 +147,7 @@ class MessageOverlay extends React.Component {
     return (
       <dl>
         <dt>To</dt>
-        <dd>{this.props.envelope.to}</dd>
+        <dd>{this.props.envelope.to.join("; ")}</dd>
         <dt>From</dt>
         <dd>{this.props.envelope.from.join("; ")}</dd>
         <dt>Received</dt>
