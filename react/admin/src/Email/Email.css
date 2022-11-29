@@ -102,6 +102,21 @@ body div.content div.overlay_hidden {
   font-style: italic;
 } 
 
+.overlay_expand_collapse {
+  width: 3em;
+  position: absolute;
+  bottom: 1em;
+  left: 1em;
+}
+
+.expanded .expand_overlay_top, .collapsed .collapse_overlay_top {
+  display: none;
+}
+
+.collapsed .toolBar, .collapse .collapsable {
+  display: none;
+}
+
 /* message list */
 
 ul.message-list, ul.message-list li.message-row {

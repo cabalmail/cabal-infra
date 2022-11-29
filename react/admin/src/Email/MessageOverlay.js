@@ -12,7 +12,8 @@ class MessageOverlay extends React.Component {
       view: "rich",
       attachments: [],
       loading: true,
-      invert: false
+      invert: false,
+      top_state: "expanded"
     }
   }
 
@@ -146,13 +147,13 @@ class MessageOverlay extends React.Component {
   renderHeader() {
     return (
       <dl>
-        <dt>To</dt>
-        <dd>{this.props.envelope.to.join("; ")}</dd>
-        <dt>From</dt>
-        <dd>{this.props.envelope.from.join("; ")}</dd>
-        <dt>Received</dt>
-        <dd>{this.props.envelope.date}</dd>
-        <dt>Subject</dt>
+        <dt className="collapsable">To</dt>
+        <dd className="collapsable">{this.props.envelope.to.join("; ")}</dd>
+        <dt className="collapsable">From</dt>
+        <dd className="collapsable">{this.props.envelope.from.join("; ")}</dd>
+        <dt className="collapsable">Received</dt>
+        <dd className="collapsable">{this.props.envelope.date}</dd>
+        <dt className="collapsable">Subject</dt>
         <dd>{this.props.envelope.subject}</dd>
       </dl>
     );
@@ -185,6 +186,16 @@ class MessageOverlay extends React.Component {
     );
   }  
 
+  collapse = (e) => {
+    e.preventDefault();
+    this.setState({top_state: "collapsed"});
+  }
+
+  expand = (e) => {
+    e.preventDefault();
+    this.setState({top_state: "expanded"});
+  }
+
   handleNav = (e) => {
     e.preventDefault();
     this.setState({view: e.target.value});
@@ -194,8 +205,10 @@ class MessageOverlay extends React.Component {
     if (this.props.visible) {
       return (
         <div className="message_overlay">
-          <div className="message_top">
+          <div className={`message_top ${top_state}`}>
             <button onClick={this.hide} className="close_overlay">❌</button>
+            <button onClick={this.collapse} className="overlay_expand_collapse collapse_overlay_top">∧</button>
+            <button onClick={this.expand} className="overlay_expand_collapse expand_overlay_top">∨</button>
             {this.renderHeader()}
             {this.renderButtonBar()}
           </div>
