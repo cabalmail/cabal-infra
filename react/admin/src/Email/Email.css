@@ -117,7 +117,7 @@ body div.content div.overlay_hidden {
   display: none;
 }
 
-.collapsed .toolBar, .collapse .collapsable {
+.collapsed .toolBar, .collapsed .collapsable {
   display: none;
 }
 
