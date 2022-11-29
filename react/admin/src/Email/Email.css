@@ -32,6 +32,10 @@ body div.content div.overlay_hidden {
   position: relative;
 }
 
+.message_overlay .message_top {
+  position: relative;
+}
+
 .message_overlay .message_plain, pre {
   font-family: 'Share Tech Mono', monospace, courier;
 }
