@@ -1,6 +1,6 @@
 import React from 'react';
 import axios from 'axios';
-import DOMPurify from 'dompurify';
+// import DOMPurify from 'dompurify';
 
 class MessageOverlay extends React.Component {
 
