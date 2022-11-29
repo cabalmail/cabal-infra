@@ -205,7 +205,7 @@ class MessageOverlay extends React.Component {
     if (this.props.visible) {
       return (
         <div className="message_overlay">
-          <div className={`message_top ${top_state}`}>
+          <div className={`message_top ${this.state.top_state}`}>
             <button onClick={this.hide} className="close_overlay">❌</button>
             <button onClick={this.collapse} className="overlay_expand_collapse collapse_overlay_top">∧</button>
             <button onClick={this.expand} className="overlay_expand_collapse expand_overlay_top">∨</button>
