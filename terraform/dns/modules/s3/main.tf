@@ -53,7 +53,6 @@ data "aws_iam_policy_document" "s3_policy" {
       test     = "StringLike"
       variable = "s3:prefix"
       values   = ["message-cache/${"$"}{cognito-identity.amazonaws.com:sub}/*"]
-      }
     }
   }
   statement {
