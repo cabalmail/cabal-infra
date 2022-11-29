@@ -1,6 +1,6 @@
 import React from 'react';
 import axios from 'axios';
-// import DOMPurify from 'dompurify';
+import DOMPurify from 'dompurify';
 
 class MessageOverlay extends React.Component {
 
@@ -29,8 +29,7 @@ class MessageOverlay extends React.Component {
         this.setState({
           message_raw: data[0].data.data.message_raw,
           message_body_plain: data[0].data.data.message_body_plain,
-          // message_body_html: DOMPurify.sanitize(data[0].data.data.message_body_html),
-          message_body_html: data[0].data.data.message_body_html,
+          message_body_html: DOMPurify.sanitize(data[0].data.data.message_body_html),
           attachments: data[1].data.data.attachments,
           loading: false,
           view: view
