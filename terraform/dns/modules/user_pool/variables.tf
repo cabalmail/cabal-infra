@@ -25,6 +25,24 @@ data "aws_iam_policy_document" "sns_users" {
   }
 }
 
+data "aws_iam_policy_document" "cognito_to_s3" {
+  statement {
+    actions   = ["s3:ListBucket"]
+    resources = [aws_s3_bucket.react_app.arn]
+    condition {
+      test     = "StringLike"
+      variable = "s3:prefix"
+      values   = ["message-cache/${"$"}{cognito-identity.amazonaws.com:sub}/*"]
+    }
+  }
+  statement {
+    actions   = ["s3:GetObject"]
+    resources = [
+      "arn:aws:s3:::${aws_s3_bucket.react_app.id}/message-cache/${"$"}{cognito-identity.amazonaws.com:sub}/*"
+    ]
+  }
+}
+
 variable "control_domain" {
   type        = string
   description = "Base for auth domain. E.g., if control_domain is example.com, then the autho domain will be auth.example.com."
