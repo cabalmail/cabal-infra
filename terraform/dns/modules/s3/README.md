@@ -18,7 +18,7 @@ No modules.
 
 | Name | Description |
 |------|-------------|
-| <a name="output_id"></a> [id](#output\_id) | n/a |
+| <a name="output_bucket"></a> [bucket](#output\_bucket) | n/a |
 ## Providers
 
 | Name | Version |
