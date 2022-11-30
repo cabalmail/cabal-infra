@@ -44,7 +44,8 @@ module "pool" {
   source         = "./modules/user_pool"
   control_domain = var.control_domain
   zone_id        = aws_route53_zone.cabal_control_zone.zone_id
-  bucket         = module.bucket.bucket
+  bucket_id      = module.bucket.bucket_id
+  bucket_arn     = module.bucket.bucket_arn
 }
 
 # Save Cognito user pool information in AWS SSM Parameter Store so that terraform/infra can read it.

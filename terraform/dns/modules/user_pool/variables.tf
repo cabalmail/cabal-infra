@@ -28,7 +28,7 @@ data "aws_iam_policy_document" "sns_users" {
 data "aws_iam_policy_document" "cognito_to_s3" {
   statement {
     actions   = ["s3:ListBucket"]
-    resources = [var.bucket.arn]
+    resources = [var.bucket_arn]
     condition {
       test     = "StringLike"
       variable = "s3:prefix"
@@ -38,15 +38,21 @@ data "aws_iam_policy_document" "cognito_to_s3" {
   statement {
     actions   = ["s3:GetObject"]
     resources = [
-      "arn:aws:s3:::${var.bucket.id}/message-cache/${"$"}{cognito-identity.amazonaws.com:sub}/*"
+      "arn:aws:s3:::${var.bucket_id}/message-cache/${"$"}{cognito-identity.amazonaws.com:sub}/*"
     ]
   }
 }
 
-variable "bucket" {
-  type        = map
-  description = "S3 bucket for React app"
+variable "bucket_id" {
+  type        = string
+  description = "ID of S3 bucket for React app"
 }
+
+variable "bucket_arn" {
+  type        = string
+  description = "ARN of S3 bucket for React app"
+}
+
 variable "control_domain" {
   type        = string
   description = "Base for auth domain. E.g., if control_domain is example.com, then the autho domain will be auth.example.com."
