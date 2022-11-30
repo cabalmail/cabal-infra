@@ -3,5 +3,5 @@ output "control_domain_name_servers" {
 }
 
 output "aws_s3_bucket" {
-  value = module.bucket.id
+  value = "admin.${var.control_domain}"
 }
