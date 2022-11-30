@@ -38,14 +38,9 @@ data "aws_iam_policy_document" "cognito_to_s3" {
   statement {
     actions   = ["s3:GetObject"]
     resources = [
-      "arn:aws:s3:::${var.bucket_id}/message-cache/${"$"}{cognito-identity.amazonaws.com:sub}/*"
+      "arn:aws:s3:::admin.${var.control_domain}/message-cache/${"$"}{cognito-identity.amazonaws.com:sub}/*"
     ]
   }
-}
-
-variable "bucket_id" {
-  type        = string
-  description = "ID of S3 bucket for React app"
 }
 
 variable "bucket_arn" {
