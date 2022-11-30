@@ -10,7 +10,8 @@ Creates a Cognito User Pool for authentication against the management applicatio
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_bucket"></a> [bucket](#input\_bucket) | S3 bucket for React app | `map` | n/a | yes |
+| <a name="input_bucket_arn"></a> [bucket\_arn](#input\_bucket\_arn) | ARN of S3 bucket for React app | `string` | n/a | yes |
+| <a name="input_bucket_id"></a> [bucket\_id](#input\_bucket\_id) | ID of S3 bucket for React app | `string` | n/a | yes |
 | <a name="input_control_domain"></a> [control\_domain](#input\_control\_domain) | Base for auth domain. E.g., if control\_domain is example.com, then the autho domain will be auth.example.com. | `string` | n/a | yes |
 | <a name="input_zone_id"></a> [zone\_id](#input\_zone\_id) | Zone ID for creating DNS records for auth domain. | `string` | n/a | yes |
 ## Modules
