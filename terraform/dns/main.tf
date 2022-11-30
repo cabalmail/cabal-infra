@@ -33,11 +33,18 @@ resource "aws_ssm_parameter" "zone" {
   value       = aws_route53_zone.cabal_control_zone.zone_id
 }
 
+# Create S3 bucket for React App
+module "bucket" {
+  source         = "./modules/s3"
+  control_domain = var.control_domain
+}
+
 # Creates a Cognito User Pool
 module "pool" {
   source         = "./modules/user_pool"
   control_domain = var.control_domain
   zone_id        = aws_route53_zone.cabal_control_zone.zone_id
+  bucket         = module.bucket.bucket
 }
 
 # Save Cognito user pool information in AWS SSM Parameter Store so that terraform/infra can read it.
@@ -46,10 +53,4 @@ resource "aws_ssm_parameter" "cognito" {
   description = "Cognito User Pool"
   type        = "String"
   value       = jsonencode(module.pool)
-}
-
-# Create S3 bucket for React App
-module "bucket" {
-  source         = "./modules/s3"
-  control_domain = var.control_domain
 }
