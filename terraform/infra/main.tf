@@ -47,8 +47,8 @@ module "domains" {
 module "admin" {
   source              = "./modules/app"
   control_domain      = var.control_domain
-  user_pool_id        = local.user_pool_id
-  user_pool_client_id = local.user_pool_client_id
+  user_pool_id        = module.pool.user_pool_id
+  user_pool_client_id = module.pool.user_pool_client_id
   region              = var.aws_region
   cert_arn            = module.cert.cert_arn
   zone_id             = data.aws_ssm_parameter.zone.value
@@ -101,15 +101,15 @@ module "imap" {
   target_groups    = [module.load_balancer.imap_tg]
   table_arn        = module.table.table_arn
   efs_dns          = module.efs.efs_dns
-  user_pool_arn    = local.user_pool_arn
+  user_pool_arn    = module.pool.user_pool_arn
   region           = var.aws_region
   ports            = [143, 993]
   private_ports    = [25]
   cidr_block       = var.cidr_block
   private_zone_id  = module.vpc.private_zone.zone_id
   private_zone_arn = module.vpc.private_zone.arn
-  client_id        = local.user_pool_client_id
-  user_pool_id     = local.user_pool_id
+  client_id        = module.pool.user_pool_client_id
+  user_pool_id     = module.pool.user_pool_id
   scale            = var.imap_scale
   chef_license     = var.chef_license
   bucket           = module.bucket.bucket
@@ -133,9 +133,9 @@ module "smtp_in" {
   cidr_block       = var.cidr_block
   private_zone_id  = module.vpc.private_zone.zone_id
   private_zone_arn = module.vpc.private_zone.arn
-  client_id        = local.user_pool_client_id
-  user_pool_id     = local.user_pool_id
-  user_pool_arn    = local.user_pool_arn
+  client_id        = module.pool.user_pool_client_id
+  user_pool_id     = module.pool.user_pool_id
+  user_pool_arn    = module.pool.user_pool_arn
   scale            = var.smtpin_scale
   chef_license     = var.chef_license
   bucket           = module.bucket.bucket
@@ -162,9 +162,9 @@ module "smtp_out" {
   cidr_block       = var.cidr_block
   private_zone_id  = module.vpc.private_zone.zone_id
   private_zone_arn = module.vpc.private_zone.arn
-  client_id        = local.user_pool_client_id
-  user_pool_id     = local.user_pool_id
-  user_pool_arn    = local.user_pool_arn
+  client_id        = module.pool.user_pool_client_id
+  user_pool_id     = module.pool.user_pool_id
+  user_pool_arn    = module.pool.user_pool_arn
   scale            = var.smtpout_scale
   chef_license     = var.chef_license
   bucket           = module.bucket.bucket
