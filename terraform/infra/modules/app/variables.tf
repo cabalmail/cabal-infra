@@ -62,3 +62,8 @@ variable "bucket" {
   type        = string
   description = "Name of s3 bucket"
 }
+
+variable "origin" {
+  type        = string
+  description = "S3 Origin ID for CloudFront"
+}

@@ -1,7 +1,3 @@
-data "aws_ssm_parameter" "origin_id" {
-  name = "/cabal/react-config/origin-id"
-}
-
 #tfsec:ignore:aws-cloudfront-enable-logging
 #tfsec:ignore:aws-cloudfront-enable-waf
 resource "aws_cloudfront_distribution" "cdn" {
@@ -10,7 +6,7 @@ resource "aws_cloudfront_distribution" "cdn" {
     origin_id   = "cabal_admin_s3"
 
     s3_origin_config {
-      origin_access_identity = "origin-access-identity/cloudfront/${data.aws_ssm_parameter.origin_id.value}"
+      origin_access_identity = "origin-access-identity/cloudfront/${var.origin}"
     }
   }
   origin {

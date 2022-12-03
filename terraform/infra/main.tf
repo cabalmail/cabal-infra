@@ -55,6 +55,7 @@ module "admin" {
   domains             = module.domains.domains
   bucket              = module.bucket.bucket
   relay_ips           = module.vpc.relay_ips
+  origin              = module.bucket.origin
   repo                = var.repo
   dev_mode            = var.prod ? false : true
 }
