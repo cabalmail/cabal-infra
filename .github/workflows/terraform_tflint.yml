@@ -20,13 +20,9 @@ jobs:
         path: ~/.tflint.d/plugins
         key: ubuntu-tflint-${{ hashFiles('.tflint.hcl') }}
 
-    - uses: terraform-linters/setup-tflint@v2
-      name: Setup TFLint
-      with:
-        tflint_version: v0.43.0
-
     - name: Lint
       run: |
+        curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
         cd terraform/infra/
         tflint --version
         tflint --init
