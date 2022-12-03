@@ -15,6 +15,19 @@ provider "aws" {
   }
 }
 
+# Create S3 bucket for React App
+module "bucket" {
+  source         = "./modules/s3"
+  control_domain = var.control_domain
+}
+
+# Creates a Cognito User Pool
+module "pool" {
+  source         = "./modules/user_pool"
+  control_domain = var.control_domain
+  bucket_arn     = module.bucket.bucket_arn
+}
+
 # Creates an AWS Certificate Manager certificate for use on load balancers and CloudFront and requests a Let's Encrypt certificate for use on EC2 instances
 module "cert" {
   source         = "./modules/cert"
@@ -43,12 +56,6 @@ module "admin" {
   relay_ips           = module.vpc.relay_ips
   repo                = var.repo
   dev_mode            = var.prod ? false : true
-}
-
-# Create S3 bucket for React App
-module "bucket" {
-  source         = "./modules/s3"
-  control_domain = var.control_domain
 }
 
 # Creates a DynamoDB table for storing address data

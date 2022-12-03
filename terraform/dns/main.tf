@@ -32,18 +32,3 @@ resource "aws_ssm_parameter" "zone" {
   type        = "String"
   value       = aws_route53_zone.cabal_control_zone.zone_id
 }
-
-# Creates a Cognito User Pool
-module "pool" {
-  source         = "./modules/user_pool"
-  control_domain = var.control_domain
-  bucket_arn     = module.bucket.bucket_arn
-}
-
-# Save Cognito user pool information in AWS SSM Parameter Store so that terraform/infra can read it.
-resource "aws_ssm_parameter" "cognito" {
-  name        = "/cabal/admin/cognito"
-  description = "Cognito User Pool"
-  type        = "String"
-  value       = jsonencode(module.pool)
-}
