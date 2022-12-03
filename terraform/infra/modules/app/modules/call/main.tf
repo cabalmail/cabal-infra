@@ -1,16 +1,3 @@
-locals {
-  allowed_headers = "*"
-  allowed_methods = join(",", [
-    "DELETE",
-    "GET",
-    "HEAD",
-    "OPTIONS",
-    "PATCH",
-    "POST",
-    "PUT"
-  ])
-}
-
 resource "aws_api_gateway_resource" "api_call" {
   rest_api_id = var.gateway_id
   parent_id   = var.root_resource_id

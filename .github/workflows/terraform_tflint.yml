@@ -26,6 +26,6 @@ jobs:
           echo
           echo "Linting $i..."
           echo "======================================"
-          tflint $i
+          echo "$(tflint $i; exit 0)"
           echo "======================================"
         done
