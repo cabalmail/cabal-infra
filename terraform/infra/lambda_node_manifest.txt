@@ -1,0 +1,10 @@
+total 36
+drwxr-xr-x 2 runner docker 4096 Feb 29  2004 list
+-rw-r--r-- 1 runner docker  770 Dec  3 21:24 list.zip
+-rw-r--r-- 1 runner docker   44 Dec  3 21:24 list.zip.base64sha256
+drwxr-xr-x 2 runner docker 4096 Feb 29  2004 new
+-rw-r--r-- 1 runner docker 1783 Dec  3 21:24 new.zip
+-rw-r--r-- 1 runner docker   44 Dec  3 21:24 new.zip.base64sha256
+drwxr-xr-x 2 runner docker 4096 Feb 29  2004 revoke
+-rw-r--r-- 1 runner docker 1301 Dec  3 21:24 revoke.zip
+-rw-r--r-- 1 runner docker   44 Dec  3 21:24 revoke.zip.base64sha256
