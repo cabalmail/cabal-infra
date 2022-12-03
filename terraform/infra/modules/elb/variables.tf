@@ -1,8 +1,3 @@
-variable "control_domain" {
-  type        = string
-  description = "Root domain for infrastructure."
-}
-
 variable "vpc_id" {
   type        = string
   description = "VPC for the load balancer."
