@@ -90,7 +90,7 @@ After signing up, perform the following steps:
                 "Action": [
                     "ssm:GetParameter*"
                 ],
-                "Resource": "arn:aws:ssm:*:*:parameter/cabal/react-config/*"
+                "Resource": "arn:aws:ssm:*:*:parameter/cabal/*"
             },
             {
                 "Sid": "Hartha",

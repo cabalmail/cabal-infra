@@ -1,10 +1,10 @@
-# S3 bucket for deploying React app
-resource "aws_s3_bucket" "this" {
-  bucket = "admin.${var.control_domain}"
+locals {
+  bucket     = "admin.${control_domain}"
+  bucket_arn = "arn:aws:s3:::admin.${control_domain}"
 }
 
 resource "aws_s3_bucket_lifecycle_configuration" "expire_attachments" {
-  bucket = aws_s3_bucket.this.bucket
+  bucket = local.bucket
   rule {
     id = "expire_attachments"
     expiration {
@@ -18,7 +18,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "expire_attachments" {
 }
 
 resource "aws_s3_bucket_website_configuration" "react_app_website" {
-  bucket = aws_s3_bucket.this.id
+  bucket = local.bucket
   index_document {
     suffix = "index.html"
   }
@@ -28,7 +28,7 @@ resource "aws_s3_bucket_website_configuration" "react_app_website" {
 }
 
 resource "aws_s3_bucket_acl" "react_app_acl" {
-  bucket = aws_s3_bucket.this.id
+  bucket = local.bucket
   acl    = "private"
 }
 
@@ -49,35 +49,15 @@ data "aws_iam_policy_document" "s3_policy" {
 }
 
 resource "aws_s3_bucket_policy" "react_policy" {
-  bucket = aws_s3_bucket.this.id
+  bucket = local.bucket
   policy = data.aws_iam_policy_document.s3_policy.json
 }
 
 resource "aws_s3_bucket_public_access_block" "react_access" {
-  bucket = aws_s3_bucket.this.id
+  bucket = local.bucket
 
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
-}
-
-# Save bucket information in AWS SSM Parameter Store so that terraform/infra can read it.
-resource "aws_ssm_parameter" "react_app" {
-  name        = "/cabal/admin/bucket"
-  description = "S3 bucket for React App"
-  type        = "String"
-  value       = jsonencode(aws_s3_bucket.this)
-}
-resource "aws_ssm_parameter" "bucket_name" {
-  name        = "/cabal/react-config/s3-bucket"
-  description = "S3 bucket for React App deployment"
-  type        = "String"
-  value       = aws_s3_bucket.this.id
-}
-resource "aws_ssm_parameter" "origin_id" {
-  name        = "/cabal/react-config/origin-id"
-  description = "S3 bucket for React App deployment"
-  type        = "String"
-  value       = aws_cloudfront_origin_access_identity.origin.id
 }

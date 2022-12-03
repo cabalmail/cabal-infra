@@ -1,7 +1,7 @@
 output "bucket_arn" {
-  value = aws_s3_bucket.this.arn
+  value = local.bucket_arn
 }
 
 output "bucket" {
-  value = aws_s3_bucket.this.bucket
+  value = local.bucket
 }
