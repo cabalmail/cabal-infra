@@ -18,6 +18,7 @@ No modules.
 
 | Name | Description |
 |------|-------------|
+| <a name="output_bucket"></a> [bucket](#output\_bucket) | n/a |
 | <a name="output_bucket_arn"></a> [bucket\_arn](#output\_bucket\_arn) | n/a |
 ## Providers
 

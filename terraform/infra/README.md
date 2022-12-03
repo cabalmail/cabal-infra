@@ -31,6 +31,7 @@ This terraform stack stands up AWS infrastructure needed for a Cabalmail system.
 |------|--------|---------|
 | <a name="module_admin"></a> [admin](#module\_admin) | ./modules/app | n/a |
 | <a name="module_backup"></a> [backup](#module\_backup) | ./modules/backup | n/a |
+| <a name="module_bucket"></a> [bucket](#module\_bucket) | ./modules/s3 | n/a |
 | <a name="module_cert"></a> [cert](#module\_cert) | ./modules/cert | n/a |
 | <a name="module_domains"></a> [domains](#module\_domains) | ./modules/domains | n/a |
 | <a name="module_efs"></a> [efs](#module\_efs) | ./modules/efs | n/a |

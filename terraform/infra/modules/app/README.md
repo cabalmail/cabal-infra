@@ -18,6 +18,7 @@ Stands up the following resources to implement a web application that allows use
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
+| <a name="input_bucket"></a> [bucket](#input\_bucket) | Name of s3 bucket | `string` | n/a | yes |
 | <a name="input_cert_arn"></a> [cert\_arn](#input\_cert\_arn) | ARN for the AWS Certificate Manager certificate for the control domain. | `string` | n/a | yes |
 | <a name="input_control_domain"></a> [control\_domain](#input\_control\_domain) | The control domain. | `string` | n/a | yes |
 | <a name="input_dev_mode"></a> [dev\_mode](#input\_dev\_mode) | If true, forces Cloudfront to non-caching configuration. | `bool` | n/a | yes |
@@ -77,7 +78,6 @@ No outputs.
 | [aws_caller_identity.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity) | data source |
 | [aws_region.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/region) | data source |
 | [aws_ssm_parameter.origin_id](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ssm_parameter) | data source |
-| [aws_ssm_parameter.s3](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ssm_parameter) | data source |
 
 </div>
 <!-- END_TF_DOCS -->
