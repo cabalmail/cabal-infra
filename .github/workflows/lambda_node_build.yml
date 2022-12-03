@@ -7,7 +7,7 @@ on:
       - '0.2.0'
       - 'main'
     paths:
-      - 'lambda/python/**'
+      - 'lambda/node/**'
       - '.github/workflows/lambda_node_build.yml'
 
 jobs:
