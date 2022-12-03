@@ -43,7 +43,6 @@ module "bucket" {
 module "pool" {
   source         = "./modules/user_pool"
   control_domain = var.control_domain
-  zone_id        = aws_route53_zone.cabal_control_zone.zone_id
   bucket_arn     = module.bucket.bucket_arn
 }
 
