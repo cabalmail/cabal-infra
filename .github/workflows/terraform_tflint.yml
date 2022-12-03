@@ -23,11 +23,7 @@ jobs:
     - name: Lint
       run: |
         curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
-        cd terraform/infra/
+        cd terraform
         tflint --version
         tflint --init
-        tflint -f compact
-        cd ../dns
-        tflint --version
-        tflint --init
-        tflint -f compact
+        for i in dns infra modules/* modules/*/modules/* ; do tflint $i ; done
