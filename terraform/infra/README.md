@@ -37,6 +37,7 @@ This terraform stack stands up AWS infrastructure needed for a Cabalmail system.
 | <a name="module_efs"></a> [efs](#module\_efs) | ./modules/efs | n/a |
 | <a name="module_imap"></a> [imap](#module\_imap) | ./modules/asg | n/a |
 | <a name="module_load_balancer"></a> [load\_balancer](#module\_load\_balancer) | ./modules/elb | n/a |
+| <a name="module_pool"></a> [pool](#module\_pool) | ./modules/user_pool | n/a |
 | <a name="module_smtp_in"></a> [smtp\_in](#module\_smtp\_in) | ./modules/asg | n/a |
 | <a name="module_smtp_out"></a> [smtp\_out](#module\_smtp\_out) | ./modules/asg | n/a |
 | <a name="module_table"></a> [table](#module\_table) | ./modules/table | n/a |
