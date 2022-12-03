@@ -44,7 +44,7 @@ module "cabal_list_mailboxes_method" {
   relay_ips        = var.relay_ips
   repo             = var.repo
   domains          = var.domains
-  bucket           = jsondecode(data.aws_ssm_parameter.s3.value).bucket
+  bucket           = var.bucket
 }
 
 module "cabal_list_messages_method" {
@@ -62,7 +62,7 @@ module "cabal_list_messages_method" {
   relay_ips        = var.relay_ips
   repo             = var.repo
   domains          = var.domains
-  bucket           = jsondecode(data.aws_ssm_parameter.s3.value).bucket
+  bucket           = var.bucket
 }
 
 module "cabal_list_envelopes_method" {
@@ -80,7 +80,7 @@ module "cabal_list_envelopes_method" {
   relay_ips        = var.relay_ips
   repo             = var.repo
   domains          = var.domains
-  bucket           = jsondecode(data.aws_ssm_parameter.s3.value).bucket
+  bucket           = var.bucket
 }
 
 module "cabal_fetch_message_method" {
@@ -99,7 +99,7 @@ module "cabal_fetch_message_method" {
   relay_ips        = var.relay_ips
   repo             = var.repo
   domains          = var.domains
-  bucket           = jsondecode(data.aws_ssm_parameter.s3.value).bucket
+  bucket           = var.bucket
 }
 
 module "cabal_list_attachments_method" {
@@ -118,7 +118,7 @@ module "cabal_list_attachments_method" {
   relay_ips        = var.relay_ips
   repo             = var.repo
   domains          = var.domains
-  bucket           = jsondecode(data.aws_ssm_parameter.s3.value).bucket
+  bucket           = var.bucket
 }
 
 module "cabal_list_method" {
@@ -136,7 +136,7 @@ module "cabal_list_method" {
   relay_ips        = var.relay_ips
   repo             = var.repo
   domains          = var.domains
-  bucket           = jsondecode(data.aws_ssm_parameter.s3.value).bucket
+  bucket           = var.bucket
 }
 
 module "cabal_new_method" {
@@ -154,7 +154,7 @@ module "cabal_new_method" {
   relay_ips        = var.relay_ips
   repo             = var.repo
   domains          = var.domains
-  bucket           = jsondecode(data.aws_ssm_parameter.s3.value).bucket
+  bucket           = var.bucket
 }
 
 module "cabal_revoke_method" {
@@ -172,7 +172,7 @@ module "cabal_revoke_method" {
   relay_ips        = var.relay_ips
   repo             = var.repo
   domains          = var.domains
-  bucket           = jsondecode(data.aws_ssm_parameter.s3.value).bucket
+  bucket           = var.bucket
 }
 
 resource "aws_api_gateway_deployment" "deployment" {

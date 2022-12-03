@@ -45,6 +45,12 @@ module "admin" {
   dev_mode            = var.prod ? false : true
 }
 
+# Create S3 bucket for React App
+module "bucket" {
+  source         = "./modules/s3"
+  control_domain = var.control_domain
+}
+
 # Creates a DynamoDB table for storing address data
 module "table" {
   source = "./modules/table"

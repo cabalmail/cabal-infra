@@ -6,7 +6,7 @@ data "aws_ssm_parameter" "origin_id" {
 #tfsec:ignore:aws-cloudfront-enable-waf
 resource "aws_cloudfront_distribution" "cdn" {
   origin {
-    domain_name = jsondecode(data.aws_ssm_parameter.s3.value).bucket_regional_domain_name
+    domain_name = var.bucket
     origin_id   = "cabal_admin_s3"
 
     s3_origin_config {
@@ -82,7 +82,7 @@ resource "aws_cloudfront_distribution" "cdn" {
 }
 
 resource "aws_s3_bucket_policy" "react_app_policy" {
-  bucket = jsondecode(data.aws_ssm_parameter.s3.value).id
+  bucket = var.bucket
   policy = <<EOP
 {
     "Version": "2012-10-17",

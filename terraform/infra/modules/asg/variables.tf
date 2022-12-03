@@ -27,10 +27,6 @@ data "aws_iam_policy" "ssm" {
   arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
-data "aws_ssm_parameter" "s3" {
-  name = "/cabal/admin/bucket"
-}
-
 variable "private_subnets" {
   type        = list
   description = "Subnets for imap ec2 instances."
@@ -119,4 +115,9 @@ variable "private_zone_arn" {
 variable "cidr_block" {
   type        = string
   description = "Local CIDR range"
+}
+
+variable "bucket" {
+  type        = string
+  description = "Name of s3 bucket"
 }

@@ -33,12 +33,6 @@ resource "aws_ssm_parameter" "zone" {
   value       = aws_route53_zone.cabal_control_zone.zone_id
 }
 
-# Create S3 bucket for React App
-module "bucket" {
-  source         = "./modules/s3"
-  control_domain = var.control_domain
-}
-
 # Creates a Cognito User Pool
 module "pool" {
   source         = "./modules/user_pool"
