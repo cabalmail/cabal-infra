@@ -121,3 +121,8 @@ variable "bucket" {
   type        = string
   description = "Name of s3 bucket"
 }
+
+variable "bucket_arn" {
+  type        = string
+  description = "ARN of s3 bucket"
+}

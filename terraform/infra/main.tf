@@ -112,6 +112,7 @@ module "imap" {
   scale            = var.imap_scale
   chef_license     = var.chef_license
   bucket           = var.bucket.bucket
+  bucket_arn       = var.bucket.bucket_arn
   depends_on       = [ module.cert ]
 }
 
@@ -137,6 +138,7 @@ module "smtp_in" {
   scale            = var.smtpin_scale
   chef_license     = var.chef_license
   bucket           = var.bucket.bucket
+  bucket_arn       = var.bucket.bucket_arn
   depends_on       = [ module.cert ]
 }
 
@@ -165,6 +167,7 @@ module "smtp_out" {
   scale            = var.smtpout_scale
   chef_license     = var.chef_license
   bucket           = var.bucket.bucket
+  bucket_arn       = var.bucket.bucket_arn
   depends_on       = [ module.cert ]
 }
 
