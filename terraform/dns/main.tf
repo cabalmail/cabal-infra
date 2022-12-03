@@ -32,3 +32,7 @@ resource "aws_ssm_parameter" "zone" {
   type        = "String"
   value       = aws_route53_zone.cabal_control_zone.zone_id
 }
+# S3 bucket for hosting React app
+resource "aws_s3_bucket" "this" {
+  bucket = "admin.${var.control_domain}"
+}
