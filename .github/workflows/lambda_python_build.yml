@@ -41,6 +41,6 @@ jobs:
         MYEMAIL="${{github.event.pusher.email}}"
         git config --global user.name "${MYNAME}"
         git config --global user.email "${MYEMAIL}"
-        git add terraform/infra/lambda_manifest.txt || true
+        git add terraform/infra/lambda_python_manifest.txt || true
         git commit -m "Trigger Terraform following lambda build" || true
         git push || true
