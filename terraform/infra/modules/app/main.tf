@@ -30,7 +30,7 @@ resource "aws_api_gateway_authorizer" "api_auth" {
 }
 
 module "cabal_method" {
-  for_each = locals.lambdas
+  for_each = local.lambdas
   source           = "./modules/call"
   name             = each.key
   runtime          = each.value.runtime
