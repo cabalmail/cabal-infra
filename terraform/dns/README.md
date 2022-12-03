@@ -20,13 +20,11 @@ The small Terraform stack in this directory stands up a Route53 Zone for the con
 
 | Name | Source | Version |
 |------|--------|---------|
-| <a name="module_bucket"></a> [bucket](#module\_bucket) | ./modules/s3 | n/a |
 | <a name="module_pool"></a> [pool](#module\_pool) | ./modules/user_pool | n/a |
 ## Outputs
 
 | Name | Description |
 |------|-------------|
-| <a name="output_aws_s3_bucket"></a> [aws\_s3\_bucket](#output\_aws\_s3\_bucket) | n/a |
 | <a name="output_control_domain_name_servers"></a> [control\_domain\_name\_servers](#output\_control\_domain\_name\_servers) | n/a |
 ## Providers
 
