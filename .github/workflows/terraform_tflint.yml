@@ -26,4 +26,4 @@ jobs:
         cd terraform
         tflint --version
         tflint --init
-        for i in dns infra */modules/* */modules/*/modules/* ; do tflint $i ; done
+        for i in dns infra {dns,infra}/modules/* infra/modules/*/modules/* ; do tflint $i ; done
