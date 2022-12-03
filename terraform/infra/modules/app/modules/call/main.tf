@@ -21,7 +21,7 @@ resource "aws_api_gateway_integration" "api_call" {
   http_method             = aws_api_gateway_method.api_call.http_method
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
-  uri                     = var.type == "python" ? module.cabal_python_lambda[0].invoke_arn : module.cabal_node_lambda[0].invoke_arn
+  uri                     = aws_lambda_function.api_call.invoke_arn
 }
 
 resource "aws_api_gateway_method_response" "api_call" {
