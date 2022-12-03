@@ -32,6 +32,15 @@ resource "aws_ssm_parameter" "zone" {
   type        = "String"
   value       = aws_route53_zone.cabal_control_zone.zone_id
 }
+
+# Save the zone name in AWS SSM Parameter Store so that terraform/infra can read it.
+resource "aws_ssm_parameter" "zone" {
+  name        = "/cabal/control_domain_zone_name"
+  description = "Route 53 Zone Name"
+  type        = "String"
+  value       = var.control_domain
+}
+
 # S3 bucket for hosting React app
 resource "aws_s3_bucket" "this" {
   bucket = "admin.${var.control_domain}"
