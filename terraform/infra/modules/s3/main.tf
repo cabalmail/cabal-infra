@@ -1,6 +1,6 @@
 locals {
-  bucket     = "admin.${control_domain}"
-  bucket_arn = "arn:aws:s3:::admin.${control_domain}"
+  bucket     = "admin.${var.control_domain}"
+  bucket_arn = "arn:aws:s3:::admin.${var.control_domain}"
 }
 
 resource "aws_s3_bucket_lifecycle_configuration" "expire_attachments" {
