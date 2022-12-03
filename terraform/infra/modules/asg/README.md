@@ -11,6 +11,7 @@ Creates security group and autoscaling group for a tier (IMAP, SMTP submission, 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
 | <a name="input_bucket"></a> [bucket](#input\_bucket) | Name of s3 bucket | `string` | n/a | yes |
+| <a name="input_bucket_arn"></a> [bucket\_arn](#input\_bucket\_arn) | ARN of s3 bucket | `string` | n/a | yes |
 | <a name="input_chef_license"></a> [chef\_license](#input\_chef\_license) | Must be the string 'accept' in order to install and use Chef Infra Client | `string` | n/a | yes |
 | <a name="input_cidr_block"></a> [cidr\_block](#input\_cidr\_block) | Local CIDR range | `string` | n/a | yes |
 | <a name="input_client_id"></a> [client\_id](#input\_client\_id) | App client ID for Cognito User Pool | `string` | n/a | yes |
