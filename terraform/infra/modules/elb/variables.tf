@@ -1,4 +1,5 @@
 variable "control_domain" {
+  type        = string
   description = "Root domain for infrastructure."
 }
 

@@ -13,8 +13,11 @@ jobs:
     steps:
     - uses: actions/checkout@v2
       name: Checkout source code
+      with:
+        ref: ${{ github.event.pull_request.head.ref }}
 
     - name: Lint
+      continue-on-error: true
       run: |
         curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
         cd terraform
