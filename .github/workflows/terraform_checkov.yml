@@ -21,7 +21,6 @@ jobs:
           soft_fail: true
           framework: terraform
           download_external_modules: false
-          config_file: path/this_file
 
       - name: Run Checkov on dns
         id: checkov_dns
@@ -32,4 +31,3 @@ jobs:
           soft_fail: true
           framework: terraform
           download_external_modules: false
-          config_file: path/this_file
