@@ -1,10 +1,10 @@
 # S3 bucket for deploying React app
-resource "aws_s3_bucket" "react_app" {
+resource "aws_s3_bucket" "this" {
   bucket = "admin.${var.control_domain}"
 }
 
 resource "aws_s3_bucket_lifecycle_configuration" "expire_attachments" {
-  bucket = aws_s3_bucket.react_app.bucket
+  bucket = aws_s3_bucket.this.bucket
   rule {
     id = "expire_attachments"
     expiration {
@@ -18,7 +18,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "expire_attachments" {
 }
 
 resource "aws_s3_bucket_website_configuration" "react_app_website" {
-  bucket = aws_s3_bucket.react_app.id
+  bucket = aws_s3_bucket.this.id
   index_document {
     suffix = "index.html"
   }
@@ -28,7 +28,7 @@ resource "aws_s3_bucket_website_configuration" "react_app_website" {
 }
 
 resource "aws_s3_bucket_acl" "react_app_acl" {
-  bucket = aws_s3_bucket.react_app.id
+  bucket = aws_s3_bucket.this.id
   acl    = "private"
 }
 
@@ -39,7 +39,7 @@ resource "aws_cloudfront_origin_access_identity" "origin" {
 data "aws_iam_policy_document" "s3_policy" {
   statement {
     actions   = ["s3:GetObject"]
-    resources = ["${aws_s3_bucket.react_app.arn}/*"]
+    resources = ["${aws_s3_bucket.this.arn}/*"]
 
     principals {
       type        = "AWS"
@@ -49,12 +49,12 @@ data "aws_iam_policy_document" "s3_policy" {
 }
 
 resource "aws_s3_bucket_policy" "react_policy" {
-  bucket = aws_s3_bucket.react_app.id
+  bucket = aws_s3_bucket.this.id
   policy = data.aws_iam_policy_document.s3_policy.json
 }
 
 resource "aws_s3_bucket_public_access_block" "react_access" {
-  bucket = aws_s3_bucket.react_app.id
+  bucket = aws_s3_bucket.this.id
 
   block_public_acls       = true
   block_public_policy     = true
@@ -67,13 +67,13 @@ resource "aws_ssm_parameter" "react_app" {
   name        = "/cabal/admin/bucket"
   description = "S3 bucket for React App"
   type        = "String"
-  value       = jsonencode(aws_s3_bucket.react_app)
+  value       = jsonencode(aws_s3_bucket.this)
 }
 resource "aws_ssm_parameter" "bucket_name" {
   name        = "/cabal/react-config/s3-bucket"
   description = "S3 bucket for React App deployment"
   type        = "String"
-  value       = aws_s3_bucket.react_app.id
+  value       = aws_s3_bucket.this.id
 }
 resource "aws_ssm_parameter" "origin_id" {
   name        = "/cabal/react-config/origin-id"
