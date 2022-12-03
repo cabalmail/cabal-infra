@@ -120,7 +120,7 @@ resource "aws_lambda_function" "api_call" {
   source_code_hash = data.aws_s3_object.lambda_function_hash.body
   function_name    = var.name
   role             = aws_iam_role.lambda.arn
-  handler          = var.runtime == "python" ? "function.handler" : "index.handler"
+  handler          = var.type == "python" ? "function.handler" : "index.handler"
   runtime          = var.runtime
   timeout          = 30
   memory_size      = var.memory
