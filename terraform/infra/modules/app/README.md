@@ -23,6 +23,7 @@ Stands up the following resources to implement a web application that allows use
 | <a name="input_control_domain"></a> [control\_domain](#input\_control\_domain) | The control domain. | `string` | n/a | yes |
 | <a name="input_dev_mode"></a> [dev\_mode](#input\_dev\_mode) | If true, forces Cloudfront to non-caching configuration. | `bool` | n/a | yes |
 | <a name="input_domains"></a> [domains](#input\_domains) | List of email domains. | `list` | n/a | yes |
+| <a name="input_origin"></a> [origin](#input\_origin) | S3 Origin ID for CloudFront | `string` | n/a | yes |
 | <a name="input_region"></a> [region](#input\_region) | The AWS region. | `string` | n/a | yes |
 | <a name="input_relay_ips"></a> [relay\_ips](#input\_relay\_ips) | Egress IP addresses. | `list(string)` | n/a | yes |
 | <a name="input_repo"></a> [repo](#input\_repo) | Repo tag value for SSM run command target. | `string` | n/a | yes |
@@ -77,7 +78,6 @@ No outputs.
 | [aws_ssm_parameter.cf_distribution](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ssm_parameter) | resource |
 | [aws_caller_identity.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity) | data source |
 | [aws_region.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/region) | data source |
-| [aws_ssm_parameter.origin_id](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ssm_parameter) | data source |
 
 </div>
 <!-- END_TF_DOCS -->

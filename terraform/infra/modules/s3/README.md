@@ -20,6 +20,7 @@ No modules.
 |------|-------------|
 | <a name="output_bucket"></a> [bucket](#output\_bucket) | n/a |
 | <a name="output_bucket_arn"></a> [bucket\_arn](#output\_bucket\_arn) | n/a |
+| <a name="output_origin"></a> [origin](#output\_origin) | n/a |
 ## Providers
 
 | Name | Version |
