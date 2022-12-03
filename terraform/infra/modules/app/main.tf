@@ -30,7 +30,7 @@ resource "aws_api_gateway_authorizer" "api_auth" {
 }
 
 module "cabal_method" {
-  for_each = local.lambdas
+  for_each         = local.lambdas
   source           = "./modules/call"
   name             = each.key
   runtime          = each.value.runtime
@@ -53,7 +53,7 @@ resource "aws_api_gateway_deployment" "deployment" {
   triggers = {
     redeployment = sha1(jsonencode([
       aws_api_gateway_rest_api.gateway,
-      module.cabal_method[*].hash_key
+      [for k, v in local.lambdas : module.cabal_methoc[k].hash_key]
     ]))
   }
   lifecycle {
