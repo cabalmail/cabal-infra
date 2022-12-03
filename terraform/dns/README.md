@@ -16,11 +16,6 @@ The small Terraform stack in this directory stands up a Route53 Zone for the con
 | <a name="input_control_domain"></a> [control\_domain](#input\_control\_domain) | The domain used for naming your email infrastructure. E.g., if you want to host imap.example.com and smtp-out.example.com, then this would be 'example.com'. This domain is not used for email addresses. | `string` | n/a | yes |
 | <a name="input_prod"></a> [prod](#input\_prod) | n/a | `bool` | `false` | no |
 | <a name="input_repo"></a> [repo](#input\_repo) | This repository. Used for resource tagging. | `string` | `"https://github.com/ccarr-cabal/cabal-infra/tree/main"` | no |
-## Modules
-
-| Name | Source | Version |
-|------|--------|---------|
-| <a name="module_pool"></a> [pool](#module\_pool) | ./modules/user_pool | n/a |
 ## Outputs
 
 | Name | Description |
@@ -42,7 +37,8 @@ The small Terraform stack in this directory stands up a Route53 Zone for the con
 | Name | Type |
 |------|------|
 | [aws_route53_zone.cabal_control_zone](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route53_zone) | resource |
-| [aws_ssm_parameter.cognito](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ssm_parameter) | resource |
+| [aws_s3_bucket.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket) | resource |
+| [aws_ssm_parameter.name](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ssm_parameter) | resource |
 | [aws_ssm_parameter.zone](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ssm_parameter) | resource |
 
 </div>
