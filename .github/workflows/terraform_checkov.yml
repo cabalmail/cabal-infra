@@ -2,7 +2,7 @@ on:
   push:
     paths:
       - 'terraform/**'
-      - '.github/workflows/terraform_tflint.yml'
+      - '.github/workflows/terraform_checkov.yml'
 
 jobs:
   checkov-job:
