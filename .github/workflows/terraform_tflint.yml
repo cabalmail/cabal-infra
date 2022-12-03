@@ -25,7 +25,7 @@ jobs:
       with:
         tflint_version: v0.43.0
 
-    - name: Show version
+    - name: Lint
       run: |
         cd terraform/infra/
         tflint --version
