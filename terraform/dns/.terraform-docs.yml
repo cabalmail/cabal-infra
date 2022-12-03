@@ -21,7 +21,6 @@ content: |-
   {{ .Header }}
   {{ .Footer }}
   {{ .Inputs }}
-  {{ .Modules }}
   {{ .Outputs }}
   {{ .Providers }}
   {{ .Requirements }}
