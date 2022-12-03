@@ -34,7 +34,7 @@ resource "aws_ssm_parameter" "zone" {
 }
 
 # Save the zone name in AWS SSM Parameter Store so that terraform/infra can read it.
-resource "aws_ssm_parameter" "zone" {
+resource "aws_ssm_parameter" "name" {
   name        = "/cabal/control_domain_zone_name"
   description = "Route 53 Zone Name"
   type        = "String"
