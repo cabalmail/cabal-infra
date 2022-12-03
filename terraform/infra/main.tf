@@ -53,6 +53,7 @@ module "admin" {
   cert_arn            = module.cert.cert_arn
   zone_id             = data.aws_ssm_parameter.zone.value
   domains             = module.domains.domains
+  bucket              = var.bucket.bucket
   relay_ips           = module.vpc.relay_ips
   repo                = var.repo
   dev_mode            = var.prod ? false : true
