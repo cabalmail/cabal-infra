@@ -53,7 +53,7 @@ resource "aws_api_gateway_deployment" "deployment" {
   triggers = {
     redeployment = sha1(jsonencode([
       aws_api_gateway_rest_api.gateway,
-      [for k, v in local.lambdas : module.cabal_methoc[k].hash_key]
+      [for k, v in local.lambdas : module.cabal_method[k].hash_key]
     ]))
   }
   lifecycle {
