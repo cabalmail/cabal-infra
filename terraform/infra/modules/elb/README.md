@@ -11,6 +11,7 @@ Creates a network load balancer that is shared by all three tiers, target groups
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
 | <a name="input_cert_arn"></a> [cert\_arn](#input\_cert\_arn) | ARN of AWS Certificate Manager certificate. | `string` | n/a | yes |
+| <a name="input_control_domain"></a> [control\_domain](#input\_control\_domain) | The control domain | `string` | n/a | yes |
 | <a name="input_public_subnet_ids"></a> [public\_subnet\_ids](#input\_public\_subnet\_ids) | Subnets for load balancer targets. | `list(string)` | n/a | yes |
 | <a name="input_vpc_id"></a> [vpc\_id](#input\_vpc\_id) | VPC for the load balancer. | `string` | n/a | yes |
 | <a name="input_zone_id"></a> [zone\_id](#input\_zone\_id) | Route 53 Zone ID for control domain | `string` | n/a | yes |
@@ -50,6 +51,7 @@ No modules.
 | [aws_lb_target_group.starttls](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lb_target_group) | resource |
 | [aws_lb_target_group.submission](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lb_target_group) | resource |
 | [aws_route53_record.cname](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route53_record) | resource |
+| [aws_route53_record.srv](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route53_record) | resource |
 
 </div>
 <!-- END_TF_DOCS -->
