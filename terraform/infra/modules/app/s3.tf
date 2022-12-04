@@ -1,3 +1,4 @@
+# Runtime configuration for React app
 resource "aws_s3_object" "website_config" {
   bucket       = var.bucket
   key          = "/config.js"
@@ -19,4 +20,40 @@ resource "aws_s3_object" "website_config" {
       control_domain = var.control_domain
     })
   )
+}
+
+# Bucket for app cache
+resource "aws_s3_bucket" "cache" {
+  bucket = "cache.${var.control_domain}"
+}
+
+# Expire objects after two days
+resource "aws_s3_bucket_lifecycle_configuration" "expire_attachments" {
+  bucket = aws_s3_bucket.cache.bucket
+  rule {
+    id = "expire_attachments"
+    expiration {
+      days = 2
+    }
+    filter {
+      prefix = "/"
+    }
+    status = "Enabled"
+  }
+}
+
+# Make the bucket private
+resource "aws_s3_bucket_acl" "this" {
+  bucket = aws_s3_bucket.cache.bucket
+  acl    = "private"
+}
+
+# Make the bucvket stay private
+resource "aws_s3_bucket_public_access_block" "this" {
+  bucket = aws_s3_bucket.cache.bucket
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
 }
