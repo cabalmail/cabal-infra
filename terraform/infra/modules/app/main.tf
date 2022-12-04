@@ -36,6 +36,7 @@ module "cabal_method" {
   runtime          = each.value.runtime
   type             = each.value.type
   method           = each.value.method
+  memory           = each.value.memory
   region           = var.region
   account          = data.aws_caller_identity.current.account_id
   gateway_id       = aws_api_gateway_rest_api.gateway.id
