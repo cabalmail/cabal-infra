@@ -28,7 +28,7 @@ locals {
       runtime = "python3.9"
       type    = "python"
       method  = "POST"
-      memory  = 128
+      memory  = 1024
     },
     list_attachments = {
       runtime = "python3.9"
