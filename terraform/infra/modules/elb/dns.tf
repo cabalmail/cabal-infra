@@ -37,6 +37,7 @@ resource "aws_route53_record" "srv" {
   zone_id  = var.zone_id
   name     = each.key
   type     = "SRV"
+  ttl      = 3600
   records  = [
     "0 1 ${each.value.port} ${each.value.host}"
   ]
