@@ -3,20 +3,6 @@ locals {
   bucket_arn = "arn:aws:s3:::admin.${var.control_domain}"
 }
 
-resource "aws_s3_bucket_lifecycle_configuration" "expire_attachments" {
-  bucket = local.bucket
-  rule {
-    id = "expire_attachments"
-    expiration {
-      days = 2
-    }
-    filter {
-      prefix = "attachment/"
-    }
-    status = "Enabled"
-  }
-}
-
 resource "aws_s3_bucket_website_configuration" "react_app_website" {
   bucket = local.bucket
   index_document {
