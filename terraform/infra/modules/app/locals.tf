@@ -30,6 +30,12 @@ locals {
       method  = "POST"
       memory  = 1024
     },
+    fetch_attachment = {
+      runtime = "python3.9"
+      type    = "python"
+      method  = "POST"
+      memory  = 1024
+      },
     list             = {
       runtime = "nodejs14.x"
       type    = "node"
