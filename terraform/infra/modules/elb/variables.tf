@@ -13,6 +13,11 @@ variable "zone_id" {
   description = "Route 53 Zone ID for control domain"
 }
 
+variable "control_domain" {
+  type        = string
+  description = "The control domain"
+}
+
 variable "cert_arn" {
   type        = string
   description = "ARN of AWS Certificate Manager certificate."
