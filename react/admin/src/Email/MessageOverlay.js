@@ -111,13 +111,19 @@ class MessageOverlay extends React.Component {
     e.preventDefault();
     var id = parseInt(e.target.dataset.id);
     var a = this.state.attachments.find(e => e.id === id);
-    this.getAttachment(a).then((response) => {
+    this.getAttachment(a)
+    .then((r) => {
+      console.log("entered then block")
       var url = window.URL.createObjectURL(
-        new Blob([response.data])
+        new Blob([r.data])
       );
+      console.log(url);
       var link = document.createElement("a");
+      console.log(link);
       link.href = url;
+      console.log(link.href);
       link.setAttribute("download", a.name);
+      console.log(link.getAttribute("download"));
       document.body.appendChild(link);
       link.click();
     })
