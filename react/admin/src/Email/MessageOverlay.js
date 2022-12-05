@@ -95,7 +95,7 @@ class MessageOverlay extends React.Component {
       }
       return false;
     });
-    document.getElementById('download_form');
+    f = document.getElementById('download_form');
     f.index.value = id;
     f.filename.value = a.name;
     window.open('', 'ANewWindow');
