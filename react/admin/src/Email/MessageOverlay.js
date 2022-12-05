@@ -39,7 +39,7 @@ class MessageOverlay extends React.Component {
     }
   }
 
-  getMessage = async (e) => {
+  getMessage = async () => {
     const response = await axios.post('/fetch_message',
       JSON.stringify({
         user: this.props.userName,
@@ -59,7 +59,28 @@ class MessageOverlay extends React.Component {
     return response;
   }
 
-  getAttachments = async (e) => {
+  getAttachment = async (a) => {
+    const response = await axios.post('/fetch_attachment',
+      JSON.stringify({
+        user: this.props.userName,
+        password: this.props.password,
+        mailbox: this.props.mailbox,
+        host: this.props.host,
+        id: this.props.envelope.id,
+        index: a.id,
+        filename: a.name
+      }),
+      {
+        baseURL: this.props.api_url,
+        responseType: "blob",
+        headers: {
+          'Authorization': this.props.token
+        }
+      }
+    );
+  }
+
+  getAttachments = async () => {
     const response = await axios.post('/list_attachments',
       JSON.stringify({
         user: this.props.userName,
@@ -88,14 +109,20 @@ class MessageOverlay extends React.Component {
     e.preventDefault();
     var id = parseInt(e.target.dataset.id);
     var a = this.state.attachments.find(e => e.id === id);
-    console.log(id);
-    console.log(a);
-    console.log(this.state.attachments);
-    var f = document.getElementById('download_form');
-    f.index.value = a.id;
-    f.filename.value = a.name;
-    window.open('', 'ANewWindow');
-    f.submit();
+    this.getAttachment(a).then((response) => {
+      var url = window.URL.createObjectURL(
+        new Blob([response.data])
+      );
+      var link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", a.name);
+      document.body.appendChild(link);
+      link.click();
+    })
+    .catch((e) => {
+      console.log("Download failed");
+      console.error(e);
+    });
   }
 
   toggleBackground = (e) => {
@@ -212,15 +239,6 @@ class MessageOverlay extends React.Component {
     if (this.props.visible) {
       return (
         <div className="message_overlay">
-          <form method="POST" action="/prod/fetch_attachment" target="ANewWindow" id="download_form">
-            <input type="hidden" name="host" id="host" value={this.props.host} />
-            <input type="hidden" name="user" id="user" value={this.props.userName} />
-            <input type="hidden" name="password" id="password" value={this.props.password} />
-            <input type="hidden" name="mailbox" id="mailbox" value={this.props.mailbox} />
-            <input type="hidden" name="host" id="id" value={this.props.id} />
-            <input type="hidden" name="host" id="index" />
-            <input type="hidden" name="filename" id="filename" />
-          </form>
           <div className={`message_top ${this.state.top_state}`}>
             <button onClick={this.hide} className="close_overlay">❌</button>
             <button onClick={this.collapse} className="overlay_expand_collapse collapse_overlay_top">∧</button>
