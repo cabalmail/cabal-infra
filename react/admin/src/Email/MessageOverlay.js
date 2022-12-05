@@ -212,7 +212,7 @@ class MessageOverlay extends React.Component {
         <div className="message_overlay">
           <form method="POST" action="/prod/fetch_attachment" target="ANewWindow" id="download_form">
             <input type="hidden" name="host" id="host" value={this.props.host} />
-            <input type="hidden" name="user" id="user" value={this.props.user} />
+            <input type="hidden" name="user" id="user" value={this.props.userName} />
             <input type="hidden" name="password" id="password" value={this.props.password} />
             <input type="hidden" name="mailbox" id="mailbox" value={this.props.mailbox} />
             <input type="hidden" name="host" id="id" value={this.props.id} />
