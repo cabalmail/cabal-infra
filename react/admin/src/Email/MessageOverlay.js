@@ -75,9 +75,11 @@ class MessageOverlay extends React.Component {
         responseType: "blob",
         headers: {
           'Authorization': this.props.token
-        }
+        },
+        timeout: 30000
       }
     );
+    return response;
   }
 
   getAttachments = async () => {
