@@ -36,9 +36,11 @@ def handler(event, _context):
             i += 1
     return {
         "statusCode": 200,
-        "body": {
-            "Location": sign_url(bucket, key)
-        }
+        "body": json.dumps({
+            "data": {
+                "url": sign_url(bucket, key)
+            }
+        })
     }
 
 def sign_url(bucket, key, expiration=86400):
