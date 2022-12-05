@@ -87,9 +87,13 @@ class MessageOverlay extends React.Component {
   downloadAttachment = (e) => {
     e.preventDefault();
     // TODO: implement download
-    const id = e.target.value;
-    console.log(`Download attachment ${id} button clicked`);
-    console.log(e.target.value);
+    var id = e.target.value;
+    var a = this.state.attachments[id];
+    var f = document.getElementById('download_form');
+    f.index.value = id;
+    f.filename.value = a[id].name;
+    window.open('', 'ANewWindow');
+    f.submit();
   }
 
   toggleBackground = (e) => {
@@ -205,6 +209,15 @@ class MessageOverlay extends React.Component {
     if (this.props.visible) {
       return (
         <div className="message_overlay">
+          <form method="POST" action="/prod/fetch_attachment" target="ANewWindow" id="download_form">
+            <input type="hidden" name="host" id="host" value={this.props.host} />
+            <input type="hidden" name="user" id="user" value={this.props.user} />
+            <input type="hidden" name="password" id="password" value={this.props.password} />
+            <input type="hidden" name="mailbox" id="mailbox" value={this.props.mailbox} />
+            <input type="hidden" name="host" id="id" value={this.props.id} />
+            <input type="hidden" name="host" id="index" />
+            <input type="hidden" name="filename" id="filename" />
+          </form>
           <div className={`message_top ${this.state.top_state}`}>
             <button onClick={this.hide} className="close_overlay">❌</button>
             <button onClick={this.collapse} className="overlay_expand_collapse collapse_overlay_top">∧</button>
