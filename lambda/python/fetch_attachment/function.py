@@ -21,7 +21,7 @@ def handler(event, _context):
     '''Preps an attachment for download from S3 given a mailbox, message ID, and attachment serial number'''
     body = json.loads(event['body'])
     bucket = body['host'].replace("imap", "cache")
-    key = f"{body['user']}/{body['mailbox']}/{body['id']}/{body['index']}"
+    key = f"{body['user']}/{body['mailbox']}/{body['id']}/{body['filename']}"
     client = IMAPClient(host=body['host'], use_uid=True, ssl=True)
     client.login(body['user'], body['password'])
     client.select_folder(body['mailbox'])
@@ -31,9 +31,9 @@ def handler(event, _context):
     if message.is_multipart():
         for part in message.walk():
             ct = part.get_content_type()
-            i += 1
             if i == body['index']:
-                upload_object(bucket, key, ct, part.get_payload())
+                upload_object(bucket, key, ct, part.get_payload(decode=True))
+            i += 1
     return {
         "statusCode": 303,
         "headers": {
@@ -57,7 +57,7 @@ def sign_url(bucket, key, expiration=86400):
 
 def upload_object(bucket, key, content_type, obj):
     with io.BytesIO() as f:
-        f.write(bytes(obj, 'utf-8'))
+        f.write(obj)
         f.seek(0)
         try:
             s3.upload_fileobj(f, bucket, key, ExtraArgs={'ContentType': content_type})
