@@ -54,14 +54,14 @@ resource "aws_iam_role_policy" "lambda" {
             "Action": [
               "s3:ListBucket"
             ],
-            "Resource": "arn:aws:s3:::cach.${var.control_domain}"
+            "Resource": "arn:aws:s3:::cache.${var.control_domain}"
         },
         {
             "Effect": "Allow",
             "Action": [
               "s3:PutObject"
             ],
-            "Resource": "arn:aws:s3:::cach.${var.control_domain}/${local.wildcard}"
+            "Resource": "arn:aws:s3:::cache.${var.control_domain}/${local.wildcard}"
         },
         {
             "Effect": "Allow",
