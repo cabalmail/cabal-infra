@@ -87,7 +87,8 @@ class MessageOverlay extends React.Component {
   downloadAttachment = (e) => {
     e.preventDefault();
     console.log(e);
-    var id = e.currentTarget.value;
+    var id = e.target.dataset.id;
+    console.log(id);
     var a = this.state.attachments[id];
     var f = document.getElementById('download_form');
     f.index.value = id;
@@ -131,10 +132,11 @@ class MessageOverlay extends React.Component {
               className="attachment"
               value={a.id}
               onClick={this.downloadAttachment}
+              data-id={a.id}
             >
-              <span className="attachment_name">{a.name}</span>
-              <span className="attachment_size">{a.size} bytes</span>
-              <span className="attachment_type">{a.type}</span>
+              <span className="attachment_name" data-id={a.id}>{a.name}</span>
+              <span className="attachment_size" data-id={a.id}>{a.size} bytes</span>
+              <span className="attachment_type" data-id={a.id}>{a.type}</span>
             </button>
           );
         });
