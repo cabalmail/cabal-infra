@@ -76,7 +76,7 @@ class MessageOverlay extends React.Component {
         headers: {
           'Authorization': this.props.token
         },
-        timeout: 30000
+        timeout: 90000
       }
     );
     return response;
@@ -113,17 +113,12 @@ class MessageOverlay extends React.Component {
     var a = this.state.attachments.find(e => e.id === id);
     this.getAttachment(a)
     .then((r) => {
-      console.log("entered then block")
       var url = window.URL.createObjectURL(
         new Blob([r.data])
       );
-      console.log(url);
       var link = document.createElement("a");
-      console.log(link);
       link.href = url;
-      console.log(link.href);
       link.setAttribute("download", a.name);
-      console.log(link.getAttribute("download"));
       document.body.appendChild(link);
       link.click();
     })
