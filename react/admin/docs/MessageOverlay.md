@@ -9,14 +9,21 @@
 ### getMessage
 Modifiers: async
 
-Parameters: e (null)
+Parameters:  ()
+
+Returns: null
+
+### getAttachment
+Modifiers: async
+
+Parameters: a (null)
 
 Returns: null
 
 ### getAttachments
 Modifiers: async
 
-Parameters: e (null)
+Parameters:  ()
 
 Returns: null
 
