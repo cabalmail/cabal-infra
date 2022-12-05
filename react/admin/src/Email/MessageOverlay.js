@@ -72,7 +72,6 @@ class MessageOverlay extends React.Component {
       }),
       {
         baseURL: this.props.api_url,
-        responseType: "blob",
         headers: {
           'Authorization': this.props.token
         },
