@@ -35,8 +35,8 @@ def handler(event, _context):
                 upload_object(bucket, key, ct, part.get_payload(decode=True))
             i += 1
     return {
-        "statusCode": 303,
-        "headers": {
+        "statusCode": 200,
+        "body": {
             "Location": sign_url(bucket, key)
         }
     }

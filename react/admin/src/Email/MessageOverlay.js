@@ -112,15 +112,11 @@ class MessageOverlay extends React.Component {
     var id = parseInt(e.target.dataset.id);
     var a = this.state.attachments.find(e => e.id === id);
     this.getAttachment(a)
-    .then((r) => {
-      var url = window.URL.createObjectURL(
-        new Blob([r.data])
-      );
-      var link = document.createElement("a");
-      link.href = url;
-      link.setAttribute("download", a.name);
-      document.body.appendChild(link);
-      link.click();
+    .then((data) => {
+      console.log(data);
+      var url = data.data.data.url;
+      console.log(url);
+      window.open(url);
     })
     .catch((e) => {
       console.log("Download failed");
