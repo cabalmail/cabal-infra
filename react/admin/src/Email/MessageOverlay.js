@@ -87,8 +87,9 @@ class MessageOverlay extends React.Component {
   downloadAttachment = (e) => {
     e.preventDefault();
     var id = e.target.dataset.id;
-    var a = this.state.attachments[id];
+    var a = this.state.attachments.find(e => e.id === id);
     console.log(id);
+    console.log(a);
     console.log(this.state.attachments);
     var f = document.getElementById('download_form');
     f.index.value = a.id;
