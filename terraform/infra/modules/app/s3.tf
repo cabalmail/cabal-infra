@@ -35,9 +35,6 @@ resource "aws_s3_bucket_lifecycle_configuration" "expire_attachments" {
     expiration {
       days = 2
     }
-    filter {
-      prefix = "/"
-    }
     status = "Enabled"
   }
 }
