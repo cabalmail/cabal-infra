@@ -59,7 +59,8 @@ resource "aws_iam_role_policy" "lambda" {
         {
             "Effect": "Allow",
             "Action": [
-              "s3:PutObject"
+              "s3:PutObject",
+              "s3:GetObject"
             ],
             "Resource": "arn:aws:s3:::cache.${var.control_domain}/${local.wildcard}"
         },
