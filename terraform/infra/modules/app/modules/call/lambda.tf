@@ -52,6 +52,20 @@ resource "aws_iam_role_policy" "lambda" {
         {
             "Effect": "Allow",
             "Action": [
+              "s3:ListBucket"
+            ],
+            "Resource": "arn:aws:s3:::cach.${var.control_domain}"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+              "s3:PutObject"
+            ],
+            "Resource": "arn:aws:s3:::cach.${var.control_domain}/${local.wildcard}"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
                 "ssm:StartSession",
                 "ssm:SendCommand"
             ],
