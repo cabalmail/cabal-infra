@@ -22,6 +22,7 @@ def handler(event, _context):
     body = json.loads(event['body'])
     bucket = body['host'].replace("imap", "cache")
     key = f"{body['user']}/{body['mailbox']}/{body['id']}/{body['filename']}"
+    # TODO: Check if file is already on s3
     client = IMAPClient(host=body['host'], use_uid=True, ssl=True)
     client.login(body['user'], body['password'])
     client.select_folder(body['mailbox'])
