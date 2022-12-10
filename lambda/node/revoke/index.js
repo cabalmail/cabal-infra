@@ -1,9 +1,12 @@
 const AWS = require('aws-sdk');
 const ddb = new AWS.DynamoDB.DocumentClient();
 const route53 = new AWS.Route53();
-// following two lines expanded by Terraform template
-const control_domain = "${control_domain}";
-const domains = ${jsonencode(domains)};
+
+const config = require('./config.js').config;
+const control_domain = config.control_domain;
+const domains = config.domains.reduce((obj, item) => Object.assign(obj, {
+  [item.domain]: item.zone_id
+}), {});
 
 exports.handler = (event, context, callback) => {
     if (!event.requestContext.authorizer) {
