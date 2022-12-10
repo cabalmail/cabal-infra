@@ -17,7 +17,7 @@ class MessageOverlay extends React.Component {
     }
   }
 
-  formatHtml(html) {
+  formatHtml(data) {
     var html = DOMPurify.sanitize(data);
     const regex = /src="cid:([^"]*)/ig;
     html.replaceAll(regex, 'onerror="console.log($1)"');
