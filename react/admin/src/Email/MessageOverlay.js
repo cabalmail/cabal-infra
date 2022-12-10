@@ -46,6 +46,15 @@ class MessageOverlay extends React.Component {
     }
   }
 
+  componentDidMount() {
+    const imgs = document.getElementById("message_html").getElementsByTagName("img");
+    for (var i = 0; i < imgs.length; $i++) {
+      if (imgs[i].src.match(/^cid:/)) {
+        console.log(imgs[i].src);
+      }
+    }
+  }
+
   getMessage = async () => {
     const response = await axios.post('/fetch_message',
       JSON.stringify({
@@ -146,7 +155,11 @@ class MessageOverlay extends React.Component {
       return (
           <div className={`message message_html ${this.state.invert ? "inverted" : ""}`}>
             <button className="invert" onClick={this.toggleBackground}>◐</button>
-            <div className={this.state.invert ? "inverted" : ""} dangerouslySetInnerHTML={{__html: this.state.message_body_html}} />
+            <div
+              id="message_html"
+              className={this.state.invert ? "inverted" : ""}
+              dangerouslySetInnerHTML={{__html: this.state.message_body_html}}
+            />
           </div>
         );
       case "plain":
