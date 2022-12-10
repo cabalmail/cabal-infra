@@ -17,6 +17,13 @@ class MessageOverlay extends React.Component {
     }
   }
 
+  formatHtml(html) {
+    var html = DOMPurify.sanitize(data);
+    const regex = /src="cid:([^"]*)/ig;
+    html.replaceAll(regex, 'onerror="console.log($1)"');
+    return html;
+  }
+
   componentDidUpdate(prevProps, prevState) {
     if (this.props.envelope.id !== prevProps.envelope.id) {
       this.setState({loading: true, invert: false});
@@ -30,7 +37,7 @@ class MessageOverlay extends React.Component {
         this.setState({
           message_raw: data[0].data.data.message_raw,
           message_body_plain: data[0].data.data.message_body_plain,
-          message_body_html: DOMPurify.sanitize(data[0].data.data.message_body_html),
+          message_body_html: this.formatHtml(data[0].data.data.message_body_html),
           attachments: data[1].data.data.attachments,
           loading: false,
           view: view
