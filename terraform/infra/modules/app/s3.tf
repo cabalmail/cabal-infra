@@ -38,7 +38,7 @@ resource "aws_s3_object" "node_config" {
       control_domain = var.control_domain
     }),
     ";"
-  )
+  ])
   etag         = md5(templatefile("${path.module}/templates/config.js", {
       pool_id        = var.user_pool_id,
       pool_client_id = var.user_pool_client_id,
