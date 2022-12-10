@@ -62,7 +62,7 @@ body div.content div.overlay_hidden {
 
 .message_overlay .tabBar {
   display: grid;
-  grid-template-columns: 25% 25% 25% 25%;
+  grid-template-columns: auto auto 3em 3em;
   width: 50%;
   margin: auto;
   min-width: 25em;
