@@ -6,13 +6,6 @@
 
 
 ## Methods
-### formatHtml
-Modifiers: none
-
-Parameters: data (null)
-
-Returns: null
-
 ### getMessage
 Modifiers: async
 
@@ -42,13 +35,6 @@ Parameters: e (null)
 Returns: null
 
 ### downloadAttachment
-Modifiers: none
-
-Parameters: e (null)
-
-Returns: null
-
-### toggleBackground
 Modifiers: none
 
 Parameters: e (null)
