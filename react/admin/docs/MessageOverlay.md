@@ -9,7 +9,7 @@
 ### formatHtml
 Modifiers: none
 
-Parameters: html (null)
+Parameters: data (null)
 
 Returns: null
 
