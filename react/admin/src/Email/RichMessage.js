@@ -40,7 +40,7 @@ class RichMessage extends React.Component {
         <div
           id="message_html"
           className={this.state.invert ? "inverted" : ""}
-          dangerouslySetInnerHTML={{__html: this.props.message_body_html}}
+          dangerouslySetInnerHTML={{__html: this.props.body}}
         />
       </div>
     );
