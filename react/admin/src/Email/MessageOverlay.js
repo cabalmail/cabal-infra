@@ -1,6 +1,6 @@
 import React from 'react';
 import axios from 'axios';
-import DOMPurify from 'dompurify';
+import RichMessage from './RichMessage';
 
 class MessageOverlay extends React.Component {
 
@@ -12,16 +12,8 @@ class MessageOverlay extends React.Component {
       view: "rich",
       attachments: [],
       loading: true,
-      invert: false,
       top_state: "expanded"
     }
-  }
-
-  formatHtml(data) {
-    var html = DOMPurify.sanitize(data);
-    const regex = /src="cid:([^"]*)/ig;
-    html.replaceAll(regex, 'onerror="console.log($1)"');
-    return html;
   }
 
   componentDidUpdate(prevProps, prevState) {
@@ -37,22 +29,12 @@ class MessageOverlay extends React.Component {
         this.setState({
           message_raw: data[0].data.data.message_raw,
           message_body_plain: data[0].data.data.message_body_plain,
-          message_body_html: this.formatHtml(data[0].data.data.message_body_html),
+          message_body_html: data[0].data.data.message_body_html,
           attachments: data[1].data.data.attachments,
           loading: false,
           view: view
         });
       });
-    }
-  }
-
-  componentDidMount() {
-    const imgs = document.getElementById("message_html").getElementsByTagName("img");
-    console.log(imgs);
-    for (var i = 0; i < imgs.length; i++) {
-      if (imgs[i].src.match(/^cid:/)) {
-        console.log(imgs[i].src);
-      }
     }
   }
 
@@ -140,11 +122,6 @@ class MessageOverlay extends React.Component {
     });
   }
 
-  toggleBackground = (e) => {
-    e.preventDefault();
-    this.setState({invert: !this.state.invert})
-  }
-
   renderView() {
     if (this.state.loading) {
       return (
@@ -153,15 +130,10 @@ class MessageOverlay extends React.Component {
     }
     switch (this.state.view) {
       case "rich":
-      return (
-          <div className={`message message_html ${this.state.invert ? "inverted" : ""}`}>
-            <button className="invert" onClick={this.toggleBackground}>◐</button>
-            <div
-              id="message_html"
-              className={this.state.invert ? "inverted" : ""}
-              dangerouslySetInnerHTML={{__html: this.state.message_body_html}}
-            />
-          </div>
+        return (
+          <RichMessage
+            body={this.state.message_body_html}
+          />
         );
       case "plain":
         return (
