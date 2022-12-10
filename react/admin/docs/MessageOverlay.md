@@ -6,6 +6,13 @@
 
 
 ## Methods
+### formatHtml
+Modifiers: none
+
+Parameters: html (null)
+
+Returns: null
+
 ### getMessage
 Modifiers: async
 
