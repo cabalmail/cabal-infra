@@ -36,7 +36,7 @@ locals {
       method  = "POST"
       memory  = 1024
     },
-    fetch_inline_attachment = {
+    fetch_inline_image = {
       runtime = "python3.9"
       type    = "python"
       method  = "POST"
