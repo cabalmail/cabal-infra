@@ -48,6 +48,7 @@ class MessageOverlay extends React.Component {
 
   componentDidMount() {
     const imgs = document.getElementById("message_html").getElementsByTagName("img");
+    console.log(imgs);
     for (var i = 0; i < imgs.length; $i++) {
       if (imgs[i].src.match(/^cid:/)) {
         console.log(imgs[i].src);
