@@ -25,8 +25,10 @@ jobs:
         json
         EOF
         AWS_S3_BUCKET="admin.$(aws ssm get-parameter --name '/cabal/control_domain_zone_name' --profile deploy_lambda | jq -r '.Parameter.Value')"
+        aws s3 cp "s3://${AWS_S3_BUCKEt}/node_config.js" ./config.js
         for FUNC in * ; do
           pushd "${FUNC}"
+          cp ../config.js ./config.js
           find . -exec touch -d "2004-02-29 16:21:42" \{\} \; -print | sort | zip ../$FUNC.zip -@
           popd
           openssl dgst -sha256 -binary "$FUNC.zip" | openssl enc -base64 | tr -d "\n" > "$FUNC.zip.base64sha256"

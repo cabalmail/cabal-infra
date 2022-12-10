@@ -1,8 +1,10 @@
 const AWS = require('aws-sdk');
-// following three lines are expanded by Terraform templatefile function
-const control_domain = "${control_domain}";
-const repo = "${repo}";
-const domains = ${jsonencode(domains)};
+
+const config = require('./config.js').config;
+const control_domain = config.control_domain;
+const domains = config.domains.reduce((obj, item) => Object.assign(obj, {
+  [item.domain]: item.zone_id
+}), {});
 
 exports.handler = (event, context, callback) => {
   if (!event.requestContext.authorizer) {
@@ -33,7 +35,7 @@ exports.handler = (event, context, callback) => {
 
   const r53_req = createDnsRecords(r53_params);
   const dyndb_req = recordAddress(dyndb_payload);
-  const ssm_req = kickOffChef(repo);
+  const ssm_req = kickOffChef();
   Promise.all([r53_req, dyndb_req, ssm_req])
   .then(values => {
     console.log("Success. Invoking callback.");
@@ -83,7 +85,7 @@ function recordAddress(obj) {
   }).promise();
 }
 
-function kickOffChef(repo) {
+function kickOffChef() {
   const ssm = new AWS.SSM();
   const command = {
     DocumentName: 'cabal_chef_document',
@@ -93,8 +95,8 @@ function kickOffChef(repo) {
          "Values": [ "y" ]
       },
       { 
-         "Key": "tag:terraform_repo",
-         "Values": [ repo ]
+         "Key": "tag:environment",
+         "Values": [ "production" ]
       }
     ]
   };
@@ -202,4 +204,4 @@ function generateResponse(status, data, address) {
       'Access-Control-Allow-Origin': '*',
     }
   };
-} 
+}
