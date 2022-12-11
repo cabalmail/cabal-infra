@@ -59,7 +59,7 @@ class RichMessage extends React.Component {
     });
   }
 
-  loadRemoteImages() {
+  loadRemoteImages = () => {
     console.log(this.props.body);
     this.setState({
       body: this.props.body,
