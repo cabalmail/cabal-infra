@@ -133,7 +133,7 @@ class MessageOverlay extends React.Component {
         return (
           <RichMessage
             body={this.state.message_body_html}
-            id={this.state.envelope.id}
+            id={this.props.envelope.id}
             userName={this.props.userName}
             password={this.props.password}
             mailbox={this.props.mailbox}
