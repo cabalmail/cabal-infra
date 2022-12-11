@@ -75,7 +75,7 @@ class RichMessage extends React.Component {
       <div className={`message message_html ${this.state.invert ? "inverted" : ""}`}>
         <button className="invert" onClick={this.toggleBackground}>◐</button>
         <button
-          className=`load ${this.state.hasRemoteImages && !this.state.imagesLoaded ? "" : "hidden"}`
+          className={`load ${this.state.hasRemoteImages && !this.state.imagesLoaded ? "" : "hidden"}`}
           onClick={this.loadRemoteImages}
         >⇩</button>
         <div
