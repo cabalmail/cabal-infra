@@ -7,11 +7,17 @@ class RichMessage extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      invert: false
+      invert: false,
+      body: this.props.body.replace(/src="http/g, 'src="disabled-http'),
+      imagesLoaded: false,
+      hasRemoteImages: false
     }
   }
 
   componentDidMount() {
+    if (this.state.body != this.props.body) {
+      this.setState({hasRemoteImages: true});
+    }
     const imgs = document.getElementById("message_html").getElementsByTagName("img");
     for (var i = 0; i < imgs.length; i++) {
       var results = imgs[i].src.match(/^cid:([^"]*)/);
@@ -52,20 +58,30 @@ class RichMessage extends React.Component {
     });
   }
 
+  loadRemoteImages() {
+    this.setState({
+      body: this.state.body.replace(/src="disabled-/, 'src="'),
+      imagesLoaded: true
+    });
+  }
+
   toggleBackground = (e) => {
     e.preventDefault();
     this.setState({invert: !this.state.invert})
   }
 
   render() {
-    const body = this.props.body.replace(/src="http/g, 'src="disabled-http');
     return (
       <div className={`message message_html ${this.state.invert ? "inverted" : ""}`}>
         <button className="invert" onClick={this.toggleBackground}>◐</button>
+        <button
+          className=`load ${this.state.hasRemoteImages && !this.state.imagesLoaded ? "" : "hidden"}`
+          onClick={this.loadRemoteImages}
+        >⇩</button>
         <div
           id="message_html"
           className={this.state.invert ? "inverted" : ""}
-          dangerouslySetInnerHTML={{__html: DOMPurify.sanitize(body)}}
+          dangerouslySetInnerHTML={{__html: DOMPurify.sanitize(this.props.body)}}
         />
       </div>
     );
