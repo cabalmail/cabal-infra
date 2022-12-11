@@ -6,13 +6,6 @@
 
 
 ## Methods
-### formatHtml
-Modifiers: none
-
-Parameters: data (null)
-
-Returns: null
-
 ### fetchImage
 Modifiers: async
 
