@@ -38,7 +38,7 @@ class RichMessage extends React.Component {
   }
 
   loadImage(cid, img) {
-    response = fetchImage(cid);
+    var response = fetchImage(cid);
     response.then(data => {
       console.log(data);
       img.src = data.data.data.url;
