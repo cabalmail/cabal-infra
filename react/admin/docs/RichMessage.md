@@ -13,6 +13,22 @@ Parameters: data (null)
 
 Returns: null
 
+### fetchImage
+Modifiers: async
+
+Parameters: cid (null)
+
+Returns: null
+
+### loadImage
+Modifiers: none
+
+Parameters: cid
+img (null
+null)
+
+Returns: null
+
 ### toggleBackground
 Modifiers: none
 
