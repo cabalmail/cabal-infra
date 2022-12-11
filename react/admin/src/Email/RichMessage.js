@@ -6,7 +6,6 @@ class RichMessage extends React.Component {
 
   constructor(props) {
     super(props);
-    console.log(props);
     this.state = {
       invert: false
     }
@@ -14,10 +13,8 @@ class RichMessage extends React.Component {
 
   componentDidMount() {
     const imgs = document.getElementById("message_html").getElementsByTagName("img");
-    console.log(imgs);
     for (var i = 0; i < imgs.length; i++) {
       var cid = imgs[i].src.match(/^cid:([^"]*)/)[1];
-      console.log(cid);
       if (cid) {
         this.loadImage(cid, imgs[i]);
       }
@@ -48,7 +45,6 @@ class RichMessage extends React.Component {
   loadImage(cid, img) {
     var response = this.fetchImage(cid);
     response.then(data => {
-      console.log(data);
       img.src = data.data.data.url;
     });
   }
