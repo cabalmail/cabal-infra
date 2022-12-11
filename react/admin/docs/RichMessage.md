@@ -22,6 +22,13 @@ null)
 
 Returns: null
 
+### loadRemoteImages
+Modifiers: none
+
+Parameters:  ()
+
+Returns: null
+
 ### toggleBackground
 Modifiers: none
 
