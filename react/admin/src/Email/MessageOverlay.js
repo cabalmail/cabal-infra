@@ -102,6 +102,7 @@ class MessageOverlay extends React.Component {
 
   hide = (e) => {
     e.preventDefault();
+    this.setState({top_state: "expanded"});
     this.props.hide();
   }
 
