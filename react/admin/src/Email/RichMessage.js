@@ -60,7 +60,7 @@ class RichMessage extends React.Component {
 
   loadRemoteImages() {
     this.setState({
-      body: this.state.body.replace(/src="disabled-/, 'src="'),
+      body: this.props.body,
       imagesLoaded: true
     });
   }
