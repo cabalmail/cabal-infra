@@ -11,9 +11,16 @@ class RichMessage extends React.Component {
     }
   }
 
-  formatHtml(data) {
-    var html = DOMPurify.sanitize(data);
-    return html;
+  componentDidMount() {
+    const imgs = document.getElementById("message_html").getElementsByTagName("img");
+    console.log(imgs);
+    for (var i = 0; i < imgs.length; i++) {
+      var cid = imgs[i].src.match(/^cid:([^"]*)/)[1];
+      if (cid) {
+        console.log(cid);
+        this.loadImage(cid, imgs[i]);
+      }
+    }
   }
 
   fetchImage = async (cid) => {
@@ -45,18 +52,6 @@ class RichMessage extends React.Component {
     });
   }
 
-  componentDidMount() {
-    const imgs = document.getElementById("message_html").getElementsByTagName("img");
-    console.log(imgs);
-    for (var i = 0; i < imgs.length; i++) {
-      var cid = imgs[i].src.match(/^cid:([^"]*)/)[1];
-      if (cid) {
-        console.log(cid);
-        this.loadImage(cid, imgs[i]);
-      }
-    }
-  }
-
   toggleBackground = (e) => {
     e.preventDefault();
     this.setState({invert: !this.state.invert})
@@ -69,7 +64,7 @@ class RichMessage extends React.Component {
         <div
           id="message_html"
           className={this.state.invert ? "inverted" : ""}
-          dangerouslySetInnerHTML={{__html: this.props.body}}
+          dangerouslySetInnerHTML={{__html: DOMPurify.sanitize(this.props.body)}}
         />
       </div>
     );
