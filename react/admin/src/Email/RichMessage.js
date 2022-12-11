@@ -23,7 +23,7 @@ class RichMessage extends React.Component {
         password: this.props.password,
         mailbox: this.props.mailbox,
         host: this.props.host,
-        id: this.props.envelope.id,
+        id: this.props.id,
         index: "<" + cid + ">"
       }),
       {
