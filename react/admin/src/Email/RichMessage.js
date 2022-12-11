@@ -81,7 +81,7 @@ class RichMessage extends React.Component {
         <div
           id="message_html"
           className={this.state.invert ? "inverted" : ""}
-          dangerouslySetInnerHTML={{__html: DOMPurify.sanitize(this.body.body)}}
+          dangerouslySetInnerHTML={{__html: DOMPurify.sanitize(this.state.body)}}
         />
       </div>
     );
