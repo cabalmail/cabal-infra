@@ -15,6 +15,7 @@ class RichMessage extends React.Component {
     const imgs = document.getElementById("message_html").getElementsByTagName("img");
     for (var i = 0; i < imgs.length; i++) {
       var cid = imgs[i].src.match(/^cid:([^"]*)/)[1];
+      console.log(cid);
       if (cid) {
         this.loadImage(cid, imgs[i]);
       }
