@@ -126,7 +126,7 @@ class MessageOverlay extends React.Component {
     })
     .catch((e) => {
       this.props.setMessage("Unable to download attachment.");
-      console.error(e);
+      console.log(e);
     });
   }
 
