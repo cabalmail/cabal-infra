@@ -58,13 +58,14 @@ class RichMessage extends React.Component {
   }
 
   render() {
+    const body = this.props.body.replace(/src="http/g, 'src="disabled-http');
     return (
       <div className={`message message_html ${this.state.invert ? "inverted" : ""}`}>
         <button className="invert" onClick={this.toggleBackground}>◐</button>
         <div
           id="message_html"
           className={this.state.invert ? "inverted" : ""}
-          dangerouslySetInnerHTML={{__html: DOMPurify.sanitize(this.props.body)}}
+          dangerouslySetInnerHTML={{__html: DOMPurify.sanitize(body)}}
         />
       </div>
     );
