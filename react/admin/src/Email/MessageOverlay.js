@@ -21,7 +21,16 @@ class MessageOverlay extends React.Component {
       this.setState({loading: true, invert: false});
       const messageResponse = this.getMessage();
       const attachmentResponse = this.getAttachments();
-      Promise.all([messageResponse, attachmentResponse]).then(data => {
+      Promise.all([
+        messageResponse.catch(e => {
+          this.props.setMessage("Unable to get message.");
+          console.log(e);
+        }),
+        attachmentResponse.catch(e => {
+          this.props.setMessage("Unable to get list of attachments.");
+          console.log(e);
+        })
+      ]).then(data => {
         const view =
           data[0].data.data.message_body_plain.length > data[0].data.data.message_body_html
           ? "plain"
@@ -34,7 +43,7 @@ class MessageOverlay extends React.Component {
           loading: false,
           view: view
         });
-      });
+      }).catch();
     }
   }
 
@@ -116,6 +125,7 @@ class MessageOverlay extends React.Component {
       window.open(url);
     })
     .catch((e) => {
+      this.props.setMessage("Unable to download attachment.");
       console.error(e);
     });
   }
@@ -138,6 +148,7 @@ class MessageOverlay extends React.Component {
             host={this.props.host}
             token={this.props.token}
             api_url={this.props.api_url}
+            setMessage={this.props.setMessage}
           />
         );
       case "plain":

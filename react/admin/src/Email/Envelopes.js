@@ -16,6 +16,9 @@ class Envelopes extends React.Component {
       this.setState({
         envelopes: data.data.data.envelopes
       });
+    }).catch( e => {
+      this.props.setMessage("Unable to fetch envelopes.");
+      console.log(e);
     });
   }
 
@@ -26,6 +29,9 @@ class Envelopes extends React.Component {
         this.setState({
           envelopes: data.data.data.envelopes
         });
+      }).catch( e => {
+        this.props.setMessage("Unable to fetch envelopes.");
+        console.log(e);
       });
     }
   }

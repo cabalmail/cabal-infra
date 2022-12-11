@@ -56,6 +56,9 @@ class Messages extends React.Component {
       this.setState({
         message_ids: data.data.data.message_ids,
         loading: false
+      }).catch(e => {
+        this.props.setMessage("Unable to get list of messages.");
+        console.log(e);
       });
     });
   }
@@ -68,6 +71,9 @@ class Messages extends React.Component {
           message_ids: data.data.data.message_ids,
           loading: false
         });
+      }).catch(e => {
+        this.props.setMessage("Unable to get list of messages.");
+        console.log(e);
       });
     }
   }
@@ -134,6 +140,7 @@ class Messages extends React.Component {
             token={this.props.token}
             api_url={this.props.api_url}
             showOverlay={this.props.showOverlay}
+            setMessage={this.props.setMessage}
           />
         </LazyLoad>
       );
