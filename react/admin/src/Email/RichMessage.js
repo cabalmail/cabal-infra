@@ -6,9 +6,10 @@ class RichMessage extends React.Component {
 
   constructor(props) {
     super(props);
+    const body = this.props.body.replace(/src="http/g, 'src="disabled-http');
     this.state = {
       invert: false,
-      body: this.props.body.replace(/src="http/g, 'src="disabled-http'),
+      body: body,
       imagesLoaded: false,
       hasRemoteImages: false
     }
