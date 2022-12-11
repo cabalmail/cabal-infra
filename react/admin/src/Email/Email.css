@@ -51,15 +51,24 @@ body div.content div.overlay_hidden {
 .message_overlay button.close_overlay,
 .message_overlay button.invert {
   width: 3em;
-  position: sticky;
+  position: absolute;
   top: 1em;
   right: 1em;
 }
 
-.message_overlay button.load {
-  width: 3em;
+.message_overlay .message_html {
+  position: relative;
+}
+
+.message_overlay .buttons {
   position: sticky;
   top: 1em;
+}
+
+.message_overlay button.load {
+  width: 3em;
+  position: absolute;
+  top: 0;
   left: 1em;
 }
 
