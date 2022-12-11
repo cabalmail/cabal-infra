@@ -15,7 +15,7 @@ class RichMessage extends React.Component {
   }
 
   componentDidMount() {
-    if (this.state.body != this.props.body) {
+    if (this.state.body !== this.props.body) {
       this.setState({hasRemoteImages: true});
     }
     const imgs = document.getElementById("message_html").getElementsByTagName("img");
