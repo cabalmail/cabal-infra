@@ -1,5 +1,5 @@
 import React from 'react';
-// import axios from 'axios';
+import axios from 'axios';
 import DOMPurify from 'dompurify';
 
 class RichMessage extends React.Component {
@@ -13,17 +13,46 @@ class RichMessage extends React.Component {
 
   formatHtml(data) {
     var html = DOMPurify.sanitize(data);
-    const regex = /src="cid:([^"]*)/ig;
-    html.replaceAll(regex, 'onerror="console.log($1)"');
     return html;
+  }
+
+  fetchImage = async (cid) => {
+    const response = await axios.post('/fetch_inline_image',
+      JSON.stringify({
+        user: this.props.userName,
+        password: this.props.password,
+        mailbox: this.props.mailbox,
+        host: this.props.host,
+        id: this.props.envelope.id,
+        index: "<" + cid + ">"
+      }),
+      {
+        baseURL: this.props.api_url,
+        headers: {
+          'Authorization': this.props.token
+        },
+        timeout: 90000
+      }
+    );
+    return response;
+  }
+
+  loadImage(cid, img) {
+    return = fetchImage(cid);
+    return.then(data => {
+      console.log(data);
+      img.src = data.data.data.url;
+    });
   }
 
   componentDidMount() {
     const imgs = document.getElementById("message_html").getElementsByTagName("img");
     console.log(imgs);
     for (var i = 0; i < imgs.length; i++) {
-      if (imgs[i].src.match(/^cid:/)) {
-        console.log(imgs[i].src);
+      return arr[1]; 
+      if (var cid = imgs[i].src.match(/^cid:([^"]*)/)[1]) {
+        console.log(cid);
+        this.loadImage(cid, imgs[i]);
       }
     }
   }
