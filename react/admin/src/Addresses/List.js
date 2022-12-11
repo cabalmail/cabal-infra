@@ -137,8 +137,16 @@ class List extends React.Component {
         <li key={a.address} className="address">
           <span>{a.address}</span>
           <span>{a.comment}</span>
-          <button onClick={this.copy} value={a.address}>📋</button>
-          <button onClick={this.revoke} value={a.address}>🗑️</button>
+          <button
+            onClick={this.copy}
+            value={a.address}
+            title="Copy this address"
+          >📋</button>
+          <button
+            onClick={this.revoke}
+            value={a.address}
+            title="Revoke this address"
+          >🗑️</button>
         </li>
       )
     });
@@ -152,7 +160,7 @@ class List extends React.Component {
           id="filter"
           name="filter"
           placeholder="filter"
-        /><button id="reload" onClick={this.reload}>⟳</button>
+        /><button id="reload" onClick={this.reload} title="Reload addresses">⟳</button>
         </form>
         <div id="count">Found: {this.state.addresses.length} addresses</div>
         <div id="list">

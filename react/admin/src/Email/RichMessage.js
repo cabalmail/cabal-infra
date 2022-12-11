@@ -75,10 +75,15 @@ class RichMessage extends React.Component {
   render() {
     return (
       <div className={`message message_html ${this.state.invert ? "inverted" : ""}`}>
-        <button className="invert" onClick={this.toggleBackground}>◐</button>
+        <button
+          className="invert"
+          onClick={this.toggleBackground}
+          title="Invert background (useful when the text color is too close to the default background color)"
+        >◐</button>
         <button
           className={`load ${this.state.hasRemoteImages && !this.state.imagesLoaded ? "" : "hidden"}`}
           onClick={this.loadRemoteImages}
+          title="Download remote images (could allow third parties to track your interactions with this message)"
         >⇩</button>
         <div
           id="message_html"
