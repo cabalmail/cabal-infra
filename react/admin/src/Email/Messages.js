@@ -166,9 +166,11 @@ class Messages extends React.Component {
         <div className="filter">
           <button id="asc" className="sort-order" title="Sort ascending">⩓</button>
           <button id="desc" className="sort-order" title="Sort descending">⩔</button>
-          <label htmlFor="sort-field">Sort by:</label>
-          <span id="sort-by" name="sort-by">
-            {options}
+          <span>
+            <label htmlFor="sort-field">Sort by:</label>
+            <select id="sort-by" name="sort-by">
+              {options}
+            </select>
           </span>
         </div>
         <ul className={`message-list ${this.state.loading ? "loading" : ""}`}>{list}</ul>
