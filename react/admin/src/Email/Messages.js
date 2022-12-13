@@ -177,29 +177,31 @@ class Messages extends React.Component {
       return <option id={i.css} value={i.imap}>{i.description}</option>;
     });
     return (
-      <div className={`filter ${this.state.sort_order.css}`}>
-        <button
-          id="asc"
-          className="sort-order"
-          title="Sort ascending"
-          onClick={this.sortAscending}
-        >⩓</button>
-        <button
-          id="desc"
-          className="sort-order"
-          title="Sort descending"
-          onClick={this.sortDescending}
-        >⩔</button>
-        <span>
-          <label htmlFor="sort-field">Sort by:</label>
-          <select id="sort-by" name="sort-by" onChange={this.setSortField}>
-            {options}
-          </select>
-        </span>
-      </div>
-      <ul className={`message-list ${this.state.loading ? "loading" : ""}`}>
-        {list}
-      </ul>
+      <>
+        <div className={`filter ${this.state.sort_order.css}`}>
+          <button
+            id="asc"
+            className="sort-order"
+            title="Sort ascending"
+            onClick={this.sortAscending}
+          >⩓</button>
+          <button
+            id="desc"
+            className="sort-order"
+            title="Sort descending"
+            onClick={this.sortDescending}
+          >⩔</button>
+          <span>
+            <label htmlFor="sort-field">Sort by:</label>
+            <select id="sort-by" name="sort-by" onChange={this.setSortField}>
+              {options}
+            </select>
+          </span>
+        </div>
+        <ul className={`message-list ${this.state.loading ? "loading" : ""}`}>
+          {list}
+        </ul>
+      </>
     );
   }
 }
