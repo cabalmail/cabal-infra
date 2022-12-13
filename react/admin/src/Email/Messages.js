@@ -143,31 +143,31 @@ class Messages extends React.Component {
 
   sortAscending = (e) => {
     e.preventDefault();
-    this.setState({...this.state, sort_order: ASC});
+    this.setState({...this.state, sort_order: ASC, loading: true});
   }
 
   sortDescending = (e) => {
     e.preventDefault();
-    this.setState({...this.state, sort_order: DESC});
+    this.setState({...this.state, sort_order: DESC, loading: true});
   }
 
   setSortField = (e) => {
     e.preventDefault();
     switch(e.target.value) {
       case SUBJECT.imap:
-        this.setState({...this.state, sort_field: SUBJECT});
+        this.setState({...this.state, sort_field: SUBJECT, loading: true});
         break;
       case ARRIVAL.imap:
-        this.setState({...this.state, sort_field: ARRIVAL});
+        this.setState({...this.state, sort_field: ARRIVAL, loading: true});
         break;
       case TO.imap:
-        this.setState({...this.state, sort_field: TO});
+        this.setState({...this.state, sort_field: TO, loading: true});
         break;
       case FROM.imap:
-        this.setState({...this.state, sort_field: FROM});
+        this.setState({...this.state, sort_field: FROM, loading: true});
         break;
       default:
-        this.setState({...this.state, sort_field: ARRIVAL});
+        this.setState({...this.state, sort_field: ARRIVAL, loading: true});
     }
   }
 
