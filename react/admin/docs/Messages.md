@@ -27,6 +27,13 @@ Parameters: field (null)
 
 Returns: null
 
+### handleSubmit
+Modifiers: none
+
+Parameters: e (null)
+
+Returns: null
+
 ### loadList
 Modifiers: none
 
