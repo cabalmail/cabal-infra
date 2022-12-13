@@ -71,9 +71,9 @@ class Messages extends React.Component {
   }
 
   componentDidUpdate(prevProps, prevState) {
-    if (this.props.mailbox !== prevProps.mailbox) ||
+    if ((this.props.mailbox !== prevProps.mailbox) ||
       (this.state.sort_order !== prevState.sort_order) ||
-      (this.state.sort_field !== prevState.sort_field) {
+      (this.state.sort_field !== prevState.sort_field)) {
       const response = this.getList();
       this.setState({...this.state, loading: true});
       response.then(data => {
