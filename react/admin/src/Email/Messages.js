@@ -173,7 +173,7 @@ class Messages extends React.Component {
 
   render() {
     const list = this.loadList();
-    const options = [ARRIVAL, SUBJECT, TO, FROM].map(i => {
+    const options = [ARRIVAL, SUBJECT, FROM].map(i => {
       return <option id={i.css} value={i.imap}>{i.description}</option>;
     });
     return (
