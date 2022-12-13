@@ -16,7 +16,7 @@ class List extends React.Component {
   }
 
   filter(data) {
-    this.setState({ addresses: data.Items.filter(
+    this.setState({ ...this.state, addresses: data.Items.filter(
       (a) => {
         if (a.address.includes(this.state.filter)) {
           return true;
@@ -41,7 +41,7 @@ class List extends React.Component {
   componentDidMount() {
     const response = this.getList();
     response.then(data => {
-      this.setState({ addresses: data.data.Items.sort(
+      this.setState({ ...this.state, addresses: data.data.Items.sort(
         (a,b) => {
           if (a.address > b.address) {
             return 1;
@@ -87,7 +87,7 @@ class List extends React.Component {
       return a.address === address;
     })).then(data => {
       this.props.setMessage("Successfully revoked address.");
-      this.setState({addresses: this.state.addresses.filter(a => {
+      this.setState({...this.state, addresses: this.state.addresses.filter(a => {
         return a.address !== address;
       })});
     }, reason => {
@@ -128,7 +128,7 @@ class List extends React.Component {
 
   updateFilter = (e) => {
     e.preventDefault();
-    this.setState({filter: e.target.value});
+    this.setState({...this.state, filter: e.target.value});
   }
 
   render() {

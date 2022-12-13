@@ -30,9 +30,9 @@ class Request extends React.Component {
         this.state.subdomain === "" ||
         this.state.domain === ""
       ) {
-        this.setState({address: ""});
+        this.setState({...this.state, address: ""});
       } else {
-        this.setState({address:`${this.state.username}@${this.state.subdomain}.${this.state.domain}`});
+        this.setState({...this.state, address:`${this.state.username}@${this.state.subdomain}.${this.state.domain}`});
       }
     }
   }
@@ -62,6 +62,7 @@ class Request extends React.Component {
     const domainLength = this.props.domains.length;
     const alphanum = 'abcdefghijklmnopqrstuvwxyz1234567890';
     this.setState({
+      ...this.state,
       username: this.randomString(8, alphanum, alphanum+'._-', alphanum),
       subdomain: this.randomString(8, alphanum, alphanum+'-', alphanum),
       domain: this.props.domains[Math.floor(Math.random() *  domainLength)].domain
@@ -70,7 +71,7 @@ class Request extends React.Component {
 
   doInputChange = e => {
     e.preventDefault();
-    this.setState({[e.target.name]: e.target.value});
+    this.setState({...this.state, [e.target.name]: e.target.value});
   }
 
   getOptions() {
@@ -117,6 +118,7 @@ class Request extends React.Component {
   doClear = (e) => {
     e.preventDefault();
     this.setState({
+      ...this.state,
       username: "",
       subdomain: "",
       domain: "",

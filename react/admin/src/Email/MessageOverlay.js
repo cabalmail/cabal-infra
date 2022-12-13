@@ -18,7 +18,7 @@ class MessageOverlay extends React.Component {
 
   componentDidUpdate(prevProps, prevState) {
     if (this.props.envelope.id !== prevProps.envelope.id) {
-      this.setState({loading: true, invert: false});
+      this.setState({...this.state, loading: true, invert: false});
       const messageResponse = this.getMessage();
       const attachmentResponse = this.getAttachments();
       Promise.all([
@@ -36,6 +36,7 @@ class MessageOverlay extends React.Component {
           ? "plain"
           : "rich";
         this.setState({
+          ...this.state,
           message_raw: data[0].data.data.message_raw,
           message_body_plain: data[0].data.data.message_body_plain,
           message_body_html: data[0].data.data.message_body_html,
@@ -111,7 +112,7 @@ class MessageOverlay extends React.Component {
 
   hide = (e) => {
     e.preventDefault();
-    this.setState({top_state: "expanded"});
+    this.setState({...this.state, top_state: "expanded"});
     this.props.hide();
   }
 
@@ -233,17 +234,17 @@ class MessageOverlay extends React.Component {
 
   collapse = (e) => {
     e.preventDefault();
-    this.setState({top_state: "collapsed"});
+    this.setState({...this.state, top_state: "collapsed"});
   }
 
   expand = (e) => {
     e.preventDefault();
-    this.setState({top_state: "expanded"});
+    this.setState({...this.state, top_state: "expanded"});
   }
 
   handleNav = (e) => {
     e.preventDefault();
-    this.setState({view: e.target.value});
+    this.setState({...this.state, view: e.target.value});
   }
 
   render() {

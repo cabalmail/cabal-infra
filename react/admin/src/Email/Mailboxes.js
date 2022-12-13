@@ -17,7 +17,7 @@ class Mailboxes extends React.Component {
   componentDidMount() {
     const response = this.getList();
     response.then(data => {
-      this.setState({ mailboxes: data.data.data });
+      this.setState({ ...this.state, mailboxes: data.data.data });
     }).catch(e => {
       this.props.setMessage("Unable to fetch mailboxes.");
       console.log(e);

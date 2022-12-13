@@ -17,7 +17,7 @@ class RichMessage extends React.Component {
 
   componentDidMount() {
     if (this.state.body !== this.props.body) {
-      this.setState({hasRemoteImages: true});
+      this.setState({...this.state, hasRemoteImages: true});
     }
     const imgs = document.getElementById("message_html").getElementsByTagName("img");
     for (var i = 0; i < imgs.length; i++) {
@@ -62,6 +62,7 @@ class RichMessage extends React.Component {
   loadRemoteImages = () => {
     console.log(this.props.body);
     this.setState({
+      ...this.state,
       body: this.props.body,
       imagesLoaded: true
     });
@@ -69,7 +70,7 @@ class RichMessage extends React.Component {
 
   toggleBackground = (e) => {
     e.preventDefault();
-    this.setState({invert: !this.state.invert})
+    this.setState({...this.state, invert: !this.state.invert})
   }
 
   render() {

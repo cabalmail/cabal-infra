@@ -54,6 +54,7 @@ class Messages extends React.Component {
     const response = this.getList();
     response.then(data => {
       this.setState({
+        ...this.state,
         message_ids: data.data.data.message_ids,
         loading: false
       }).catch(e => {
@@ -68,6 +69,7 @@ class Messages extends React.Component {
       const response = this.getList();
       response.then(data => {
         this.setState({
+          ...this.state,
           message_ids: data.data.data.message_ids,
           loading: false
         });
@@ -79,7 +81,7 @@ class Messages extends React.Component {
   }
 
   getList = async (e) => {
-    this.setState({loading: true})
+    this.setState({...this.state, loading: true})
     const response = await axios.post('/list_messages',
       JSON.stringify({
         user: this.props.userName,
@@ -102,6 +104,7 @@ class Messages extends React.Component {
 
   toggleOrder() {
     this.setState({
+      ...this.state,
       sort_order: this.state.sort_order.imap === ASC.imap ? DESC : ASC
     })
   }
@@ -109,19 +112,19 @@ class Messages extends React.Component {
   setSortField(field) {
     switch(field) {
       case SUBJECT.imap:
-        this.setState({sort_order: SUBJECT});
+        this.setState({...this.state, sort_order: SUBJECT});
         break;
       case ARRIVAL.imap:
-        this.setState({sort_order: ARRIVAL});
+        this.setState({...this.state, sort_order: ARRIVAL});
         break;
       case TO.imap:
-        this.setState({sort_order: TO});
+        this.setState({...this.state, sort_order: TO});
         break;
       case FROM.imap:
-        this.setState({sort_order: FROM});
+        this.setState({...this.state, sort_order: FROM});
         break;
       default:
-        this.setState({sort_order: ARRIVAL});
+        this.setState({...this.state, sort_order: ARRIVAL});
     }
   }
 

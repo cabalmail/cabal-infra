@@ -16,18 +16,19 @@ class Email extends React.Component {
   }
 
   selectMailbox = (mailbox) => {
-    this.setState({mailbox: mailbox});
+    this.setState({...this.state, mailbox: mailbox});
   }
 
   showOverlay = (envelope) => {
     this.setState({
+      ...this.state,
       overlayVisible: true,
       envelope: envelope
     });
   }
 
   hideOverlay = () => {
-    this.setState({overlayVisible: false});
+    this.setState({...this.state, overlayVisible: false});
   }
 
   render() {

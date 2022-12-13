@@ -14,6 +14,7 @@ class Envelopes extends React.Component {
     const response = this.getList();
     response.then(data => {
       this.setState({
+        ...this.state,
         envelopes: data.data.data.envelopes
       });
     }).catch( e => {
@@ -27,6 +28,7 @@ class Envelopes extends React.Component {
       const response = this.getList();
       response.then(data => {
         this.setState({
+          ...this.state,
           envelopes: data.data.data.envelopes
         });
       }).catch( e => {
