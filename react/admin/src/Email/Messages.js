@@ -14,26 +14,32 @@ import Envelopes from './Envelopes.js';
 //  - multiple simultaneous criteria such as combined subject and date
 const ASC = {
   imap: "",
+  css: "ascending",
   description: "Ascending order (smallest/first to largest/last)"
 };
 const DESC = {
   imap: "REVERSE ",
+  css: "descending",
   description: "Descending order (largest/last to smallest/first)"
 };
 const ARRIVAL = {
   imap: "ARRIVAL",
+  css: "arrival",
   description: "Date Received"
 };
 const FROM = {
   imap: "FROM",
+  css: "from",
   description: "From address"
 };
 const SUBJECT = {
   imap: "SUBJECT",
+  css: "subject",
   description: "Subject"
 };
 const TO = {
   imap: "TO",
+  css: "to",
   description: "Recipient"
 };
 const PAGE_SIZE = 50;
@@ -65,8 +71,11 @@ class Messages extends React.Component {
   }
 
   componentDidUpdate(prevProps, prevState) {
-    if (this.props.mailbox !== prevProps.mailbox) {
+    if (this.props.mailbox !== prevProps.mailbox) ||
+      (this.state.sort_order !== prevState.sort_order) ||
+      (this.state.sort_field !== prevState.sort_field) {
       const response = this.getList();
+      this.setState({...this.state, loading: true});
       response.then(data => {
         this.setState({
           ...this.state,
@@ -109,30 +118,6 @@ class Messages extends React.Component {
     })
   }
 
-  setSortField(field) {
-    switch(field) {
-      case SUBJECT.imap:
-        this.setState({...this.state, sort_order: SUBJECT});
-        break;
-      case ARRIVAL.imap:
-        this.setState({...this.state, sort_order: ARRIVAL});
-        break;
-      case TO.imap:
-        this.setState({...this.state, sort_order: TO});
-        break;
-      case FROM.imap:
-        this.setState({...this.state, sort_order: FROM});
-        break;
-      default:
-        this.setState({...this.state, sort_order: ARRIVAL});
-    }
-  }
-
-  handleSubmit = (e) => {
-    e.preventDefault();
-    console.log("not implemented");
-  }
-
   loadList() {
     const num_ids = this.state.message_ids.length;
     var pages = [];
@@ -156,25 +141,65 @@ class Messages extends React.Component {
     return pages;
   }
 
+  sortAscending = (e) => {
+    e.preventDefault();
+    this.setState({...this.state, sort_order: ASC});
+  }
+
+  sortDescending = (e) => {
+    e.preventDefault();
+    this.setState({...this.state, sort_order: DESC});
+  }
+
+  setSortField = (e) => {
+    e.preventDefault();
+    switch(e.target.value) {
+      case SUBJECT.imap:
+        this.setState({...this.state, sort_field: SUBJECT});
+        break;
+      case ARRIVAL.imap:
+        this.setState({...this.state, sort_field: ARRIVAL});
+        break;
+      case TO.imap:
+        this.setState({...this.state, sort_field: TO});
+        break;
+      case FROM.imap:
+        this.setState({...this.state, sort_field: FROM});
+        break;
+      default:
+        this.setState({...this.state, sort_field: ARRIVAL});
+    }
+  }
+
   render() {
     const list = this.loadList();
     const options = [ARRIVAL, SUBJECT, TO, FROM].map(i => {
-      return <option id={i.imap} value={i.imap}>{i.description}</option>;
+      return <option id={i.css} value={i.imap}>{i.description}</option>;
     });
     return (
-      <form className="message-list" onSubmit={this.handleSubmit}>
-        <div className="filter">
-          <button id="asc" className="sort-order" title="Sort ascending">⩓</button>
-          <button id="desc" className="sort-order" title="Sort descending">⩔</button>
-          <span>
-            <label htmlFor="sort-field">Sort by:</label>
-            <select id="sort-by" name="sort-by">
-              {options}
-            </select>
-          </span>
-        </div>
-        <ul className={`message-list ${this.state.loading ? "loading" : ""}`}>{list}</ul>
-      </form>
+      <div className={`filter ${this.state.sort_order.css}`}>
+        <button
+          id="asc"
+          className="sort-order"
+          title="Sort ascending"
+          onClick={this.sortAscending}
+        >⩓</button>
+        <button
+          id="desc"
+          className="sort-order"
+          title="Sort descending"
+          onClick={this.sortDescending}
+        >⩔</button>
+        <span>
+          <label htmlFor="sort-field">Sort by:</label>
+          <select id="sort-by" name="sort-by" onChange={this.setSortField}>
+            {options}
+          </select>
+        </span>
+      </div>
+      <ul className={`message-list ${this.state.loading ? "loading" : ""}`}>
+        {list}
+      </ul>
     );
   }
 }
