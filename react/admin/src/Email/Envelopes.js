@@ -75,7 +75,7 @@ class Envelopes extends React.Component {
               id={id}
               className="message-subject"
               onClick={this.handleClick}
-            >{message.subject}</span>
+            ><checkbox id={id} /> {message.subject}</span>
           </li>
         );
       }

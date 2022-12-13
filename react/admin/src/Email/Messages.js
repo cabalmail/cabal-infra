@@ -128,6 +128,11 @@ class Messages extends React.Component {
     }
   }
 
+  handleSubmit = (e) => {
+    e.preventDefault();
+    console.log("not implemented");
+  }
+
   loadList() {
     const num_ids = this.state.message_ids.length;
     var pages = [];
@@ -153,10 +158,21 @@ class Messages extends React.Component {
 
   render() {
     const list = this.loadList();
+    const options = [ARRIVAL, SUBJECT, TO, FROM].map(i => {
+      return <option id={i.imap} value={i.imap}>{i.description}</option>;
+    });
     return (
-      <div className="message-list">
+      <form className="message-list" onSubmit={this.handleSubmit}>
+        <div className="filter">
+          <button id="asc" className="sort-order" title="Sort ascending">⩓</button>
+          <button id="desc" className="sort-order" title="Sort descending">⩔</button>
+          <label htmlFor="sort-field">Sort by:</label>
+          <span id="sort-by" name="sort-by">
+            {options}
+          </span>
+        </div>
         <ul className={`message-list ${this.state.loading ? "loading" : ""}`}>{list}</ul>
-      </div>
+      </form>
     );
   }
 }
