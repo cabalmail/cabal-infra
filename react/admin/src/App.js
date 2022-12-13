@@ -82,9 +82,11 @@ class App extends React.Component {
     }
   }
 
-  setMessage = (message) => {
-    if (this.state.expires < Math.floor(new Date() / 1000)) {
-      this.setState({...this.state, view: "Login", loggedIn: false})
+  setMessage = (m) => {
+    var message = m;
+    if (this.state.expires < Math.floor(new Date() / 1000) && this.state.loggedIn) {
+      this.setState({...this.state, view: "Login", loggedIn: false});
+      message = "Session expired";
       return;
     }
     this.setState({...this.state, message: message, hideMessage: false});
