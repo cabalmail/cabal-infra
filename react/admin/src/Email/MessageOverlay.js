@@ -261,13 +261,13 @@ class MessageOverlay extends React.Component {
               onClick={this.collapse}
               className="overlay_expand_collapse collapse_overlay_top"
               title="Hide message header"
-            >∧</button>
+            >⋀</button>
             <button
               onClick={this.expand}
               className="overlay_expand_collapse
               expand_overlay_top"
               title="Show message header"
-            >∨</button>
+            >⋁</button>
             {this.renderHeader()}
             {this.renderButtonBar()}
           </div>
