@@ -20,24 +20,31 @@ Parameters:  ()
 
 Returns: null
 
-### setSortField
+### loadList
 Modifiers: none
 
-Parameters: field (null)
+Parameters:  ()
 
 Returns: null
 
-### handleSubmit
+### sortAscending
 Modifiers: none
 
 Parameters: e (null)
 
 Returns: null
 
-### loadList
+### sortDescending
 Modifiers: none
 
-Parameters:  ()
+Parameters: e (null)
+
+Returns: null
+
+### setSortField
+Modifiers: none
+
+Parameters: e (null)
 
 Returns: null
 
