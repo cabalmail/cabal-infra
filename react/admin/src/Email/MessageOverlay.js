@@ -32,15 +32,15 @@ class MessageOverlay extends React.Component {
         })
       ]).then(data => {
         const view =
-          data[0].data.data.message_body_plain.length > data[0].data.data.message_body_html
+          data[0].data.message_body_plain.length > data[0].data.message_body_html
           ? "plain"
           : "rich";
         this.setState({
           ...this.state,
-          message_raw: data[0].data.data.message_raw,
-          message_body_plain: data[0].data.data.message_body_plain,
-          message_body_html: data[0].data.data.message_body_html,
-          attachments: data[1].data.data.attachments,
+          message_raw: data[0].data.message_raw,
+          message_body_plain: data[0].data.message_body_plain,
+          message_body_html: data[0].data.message_body_html,
+          attachments: data[1].data.attachments,
           loading: false,
           view: view
         });
