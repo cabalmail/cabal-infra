@@ -6,12 +6,6 @@ import React from 'react';
 import axios from 'axios';
 import LazyLoad from 'react-lazyload';
 import Envelopes from './Envelopes';
-
-// see https://www.rfc-editor.org/rfc/rfc5256.html
-// Not implemented:
-//  - CC
-//  - SIZE
-//  - multiple simultaneous criteria such as combined subject and date
 import { ASC, DESC, ARRIVAL, FROM, SUBJECT, TO, PAGE_SIZE} from '../constants'
 
 class Messages extends React.Component {
@@ -93,7 +87,7 @@ class Messages extends React.Component {
     var pages = [];
     for (var i = 0; i < num_ids; i+=PAGE_SIZE) {
       pages.push(
-        <LazyLoad offset={50}>
+        <LazyLoad offset={PAGE_SIZE}>
           <Envelopes
             message_ids={this.state.message_ids.slice(i, i+PAGE_SIZE)}
             userName={this.props.userName}
