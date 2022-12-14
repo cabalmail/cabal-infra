@@ -5,44 +5,14 @@
 import React from 'react';
 import axios from 'axios';
 import LazyLoad from 'react-lazyload';
-import Envelopes from './Envelopes.js';
+import Envelopes from './Envelopes';
 
 // see https://www.rfc-editor.org/rfc/rfc5256.html
 // Not implemented:
 //  - CC
 //  - SIZE
 //  - multiple simultaneous criteria such as combined subject and date
-const ASC = {
-  imap: "",
-  css: "ascending",
-  description: "Ascending order (smallest/first to largest/last)"
-};
-const DESC = {
-  imap: "REVERSE ",
-  css: "descending",
-  description: "Descending order (largest/last to smallest/first)"
-};
-const ARRIVAL = {
-  imap: "ARRIVAL",
-  css: "arrival",
-  description: "Date Received"
-};
-const FROM = {
-  imap: "FROM",
-  css: "from",
-  description: "From address"
-};
-const SUBJECT = {
-  imap: "SUBJECT",
-  css: "subject",
-  description: "Subject"
-};
-const TO = {
-  imap: "TO",
-  css: "to",
-  description: "Recipient"
-};
-const PAGE_SIZE = 50;
+import { ASC, DESC, ARRIVAL, FROM, SUBJECT, TO, PAGE_SIZE} from '../constants'
 
 class Messages extends React.Component {
 
