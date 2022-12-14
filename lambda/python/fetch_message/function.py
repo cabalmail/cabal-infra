@@ -48,10 +48,8 @@ def handler(event, _context):
     return {
         "statusCode": 200,
         "body": json.dumps({
-            "data": {
-              "message_raw": message.__str__(),
-              "message_body_plain": body_plain_decoded,
-              "message_body_html": body_html_decoded
-            }
+            "message_raw": message.__str__(),
+            "message_body_plain": body_plain_decoded,
+            "message_body_html": body_html_decoded
         })
     }

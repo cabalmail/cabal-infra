@@ -31,7 +31,7 @@ class Messages extends React.Component {
     response.then(data => {
       this.setState({
         ...this.state,
-        message_ids: data.data.data.message_ids,
+        message_ids: data.data.message_ids,
         loading: false
       }).catch(e => {
         this.props.setMessage("Unable to get list of messages.");
@@ -49,7 +49,7 @@ class Messages extends React.Component {
       response.then(data => {
         this.setState({
           ...this.state,
-          message_ids: data.data.data.message_ids,
+          message_ids: data.data.message_ids,
           loading: false
         });
       }).catch(e => {

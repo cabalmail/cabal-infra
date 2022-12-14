@@ -122,7 +122,7 @@ class MessageOverlay extends React.Component {
     var a = this.state.attachments.find(e => e.id === id);
     this.getAttachment(a)
     .then((data) => {
-      var url = data.data.data.url;
+      var url = data.data.url;
       window.open(url);
     })
     .catch((e) => {

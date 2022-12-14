@@ -15,9 +15,7 @@ def handler(event, _context):
     client.logout()
     return {
         "statusCode": 200,
-        "body": json.dumps({
-            "data": decode_mailbox_list(response)
-        })
+        "body": json.dumps(decode_mailbox_list(response))
     }
 
 def decode_mailbox_list(data):

@@ -38,9 +38,7 @@ def handler(event, _context):
     return {
         "statusCode": 200,
         "body": json.dumps({
-            "data": {
-                "url": sign_url(bucket, key)
-            }
+            "url": sign_url(bucket, key)
         })
     }
 

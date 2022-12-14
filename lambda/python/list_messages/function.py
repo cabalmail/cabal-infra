@@ -18,9 +18,7 @@ def handler(event, _context):
     return {
         "statusCode": 200,
         "body": json.dumps({
-            "data": {
-                "message_ids": response
-            }
+            "message_ids": response
         })
     }
 

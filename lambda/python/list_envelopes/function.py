@@ -31,9 +31,7 @@ def handler(event, _context):
     return {
         "statusCode": 200,
         "body": json.dumps({
-            "data": {
-              "envelopes": envelopes
-            }
+            "envelopes": envelopes
         })
     }
 
