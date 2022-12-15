@@ -154,13 +154,13 @@ class Messages extends React.Component {
           />
           <div>
             <button
-              id="asc"
+              id={ASC.css}
               className="sort-order"
               title="Sort ascending"
               onClick={this.sortAscending}
             >⩓</button>
             <button
-              id="desc"
+              id={DESC.css}
               className="sort-order"
               title="Sort descending"
               onClick={this.sortDescending}

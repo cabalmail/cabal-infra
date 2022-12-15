@@ -6,7 +6,7 @@ select.selectMailbox {
 
 /* sort options */
 
-div.asc button#asc, div.desc button#desc {
+div.ascending button#ascending, div.descending button#descending {
   display: none;
 }
 
@@ -15,6 +15,7 @@ div.filter button.sort-order {
 }
 
 div.filter {
+  display: grid;
   grid-template-columns: auto auto auto;
 }
 
