@@ -17,6 +17,10 @@ div.filter select {
   width: auto;
 }
 
+div.filter select, div.filter label {
+  display: inline-block;
+}
+
 /* message overlay */
 
 body div.content div.overlay_hidden {

@@ -56,7 +56,9 @@ class Mailboxes extends React.Component {
     });
     return (
       <>
+        <label htmlFor="mailbox">Folder:</label>
         <select
+          name="mailbox"
           onChange={this.setMailbox}
           value={this.props.mailbox}
           className="selectMailbox"
