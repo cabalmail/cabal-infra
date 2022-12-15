@@ -1,9 +1,3 @@
-/* mailbox selector */
-
-select.selectMailbox {
-  margin: 1em;
-}
-
 /* sort options */
 
 div.ascending button#ascending, div.descending button#descending {
@@ -17,6 +11,10 @@ div.filter button.sort-order {
 div.filter {
   display: grid;
   grid-template-columns: auto auto auto;
+}
+
+div.filter select {
+  width: auto;
 }
 
 /* message overlay */

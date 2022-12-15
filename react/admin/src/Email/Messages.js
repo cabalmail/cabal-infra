@@ -153,6 +153,12 @@ class Messages extends React.Component {
             setMessage={this.props.setMessage}
           />
           <div>
+            <label htmlFor="sort-field">Sort by:</label>
+            <select id="sort-by" name="sort-by" onChange={this.setSortField}>
+              {options}
+            </select>
+          </div>
+          <div>
             <button
               id={ASC.css}
               className="sort-order"
@@ -165,12 +171,6 @@ class Messages extends React.Component {
               title="Sort descending"
               onClick={this.sortDescending}
             >⩔</button>
-          </div>
-          <div>
-            <label htmlFor="sort-field">Sort by:</label>
-            <select id="sort-by" name="sort-by" onChange={this.setSortField}>
-              {options}
-            </select>
           </div>
         </div>
         <ul className={`message-list ${this.state.loading ? "loading" : ""}`}>
