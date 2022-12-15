@@ -10,7 +10,7 @@ div.filter button.sort-order {
 
 div.filter {
   display: grid;
-  grid-template-columns: auto auto auto;
+  grid-template-columns: auto auto;
 }
 
 div.filter select {

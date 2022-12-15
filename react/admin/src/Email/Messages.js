@@ -157,8 +157,6 @@ class Messages extends React.Component {
             <select id="sort-by" name="sort-by" onChange={this.setSortField}>
               {options}
             </select>
-          </div>
-          <div>
             <button
               id={ASC.css}
               className="sort-order"
