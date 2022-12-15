@@ -6,6 +6,7 @@ import React from 'react';
 import axios from 'axios';
 import LazyLoad from 'react-lazyload';
 import Envelopes from './Envelopes';
+import Mailboxes from './Mailboxes';
 import { ASC, DESC, ARRIVAL, FROM, SUBJECT, TO, PAGE_SIZE} from '../constants'
 
 class Messages extends React.Component {
@@ -124,9 +125,6 @@ class Messages extends React.Component {
       case ARRIVAL.imap:
         this.setState({...this.state, sort_field: ARRIVAL, loading: true});
         break;
-      case TO.imap:
-        this.setState({...this.state, sort_field: TO, loading: true});
-        break;
       case FROM.imap:
         this.setState({...this.state, sort_field: FROM, loading: true});
         break;
@@ -144,18 +142,30 @@ class Messages extends React.Component {
     return (
       <>
         <div className={`filter ${this.state.sort_order.css}`}>
-          <button
-            id="asc"
-            className="sort-order"
-            title="Sort ascending"
-            onClick={this.sortAscending}
-          >⩓</button>
-          <button
-            id="desc"
-            className="sort-order"
-            title="Sort descending"
-            onClick={this.sortDescending}
-          >⩔</button>
+          <Mailboxes 
+            token={this.props.token}
+            password={this.props.password}
+            userName={this.props.userName}
+            api_url={this.props.api_url}
+            setMailbox={this.props.setMailbox}
+            host={this.props.host}
+            mailbox={this.state.mailbox}
+            setMessage={this.props.setMessage}
+          />
+          <span>
+            <button
+              id="asc"
+              className="sort-order"
+              title="Sort ascending"
+              onClick={this.sortAscending}
+            >⩓</button>
+            <button
+              id="desc"
+              className="sort-order"
+              title="Sort descending"
+              onClick={this.sortDescending}
+            >⩔</button>
+          </span>
           <span>
             <label htmlFor="sort-field">Sort by:</label>
             <select id="sort-by" name="sort-by" onChange={this.setSortField}>

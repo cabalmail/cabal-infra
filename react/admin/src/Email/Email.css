@@ -4,6 +4,20 @@ select.selectMailbox {
   margin: 1em;
 }
 
+/* sort options */
+
+div.asc button#asc, div.desc button#desc {
+  display: none;
+}
+
+div.filter button.sort-order {
+  width: 3em;
+}
+
+div.filter {
+  grid-template-columns: auto auto auto;
+}
+
 /* message overlay */
 
 body div.content div.overlay_hidden {
