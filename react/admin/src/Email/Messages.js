@@ -152,7 +152,7 @@ class Messages extends React.Component {
             mailbox={this.props.mailbox}
             setMessage={this.props.setMessage}
           />
-          <span>
+          <div>
             <button
               id="asc"
               className="sort-order"
@@ -165,13 +165,13 @@ class Messages extends React.Component {
               title="Sort descending"
               onClick={this.sortDescending}
             >⩔</button>
-          </span>
-          <span>
+          </div>
+          <div>
             <label htmlFor="sort-field">Sort by:</label>
             <select id="sort-by" name="sort-by" onChange={this.setSortField}>
               {options}
             </select>
-          </span>
+          </div>
         </div>
         <ul className={`message-list ${this.state.loading ? "loading" : ""}`}>
           {list}
