@@ -7,7 +7,7 @@ import axios from 'axios';
 import LazyLoad from 'react-lazyload';
 import Envelopes from './Envelopes';
 import Mailboxes from './Mailboxes';
-import { ASC, DESC, ARRIVAL, FROM, SUBJECT, TO, PAGE_SIZE} from '../constants'
+import { ASC, DESC, ARRIVAL, FROM, SUBJECT, PAGE_SIZE} from '../constants'
 
 class Messages extends React.Component {
 
