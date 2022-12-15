@@ -149,7 +149,7 @@ class Messages extends React.Component {
             api_url={this.props.api_url}
             setMailbox={this.props.setMailbox}
             host={this.props.host}
-            mailbox={this.state.mailbox}
+            mailbox={this.props.mailbox}
             setMessage={this.props.setMessage}
           />
           <span>
