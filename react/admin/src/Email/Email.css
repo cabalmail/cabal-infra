@@ -166,9 +166,6 @@ body div.content div.overlay_hidden {
 
 ul.message-list, ul.message-list li.message-row {
   list-style: none;
-}
-
-div.message-list ul, ul.message-list li.message-row {
   padding: 0;
 }
 
