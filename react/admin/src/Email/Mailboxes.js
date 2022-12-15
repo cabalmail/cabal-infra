@@ -55,7 +55,7 @@ class Mailboxes extends React.Component {
       );
     });
     return (
-      <>
+      <div>
         <label htmlFor="mailbox">Folder:</label>
         <select
           name="mailbox"
@@ -65,7 +65,7 @@ class Mailboxes extends React.Component {
         >
         {mailbox_list}
         </select>
-      </>
+      </div>
     );
   }
 }
