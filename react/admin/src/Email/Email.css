@@ -17,7 +17,7 @@ div.filter select {
   width: auto;
 }
 
-div.filter select, div.filter label {
+div.filter select, div.filter label, div.filter button {
   display: inline-block;
 }
 
