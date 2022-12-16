@@ -69,21 +69,25 @@ class Envelopes extends React.Component {
         var message = this.state.envelopes[id];
         return (
           <li key={id} className={`message-row ${message.flags.map(d => {return d.replace("\\","")}).join(" ")}`} >
-            <span className="message-from">{message.from[0]}</span>
-            <span className="message-date">{message.date}</span>
-            <span
+            <div className="message-line-1">
+              <div className="message-from">{message.from[0]}</div>
+              <div className="message-date">{message.date}</div>
+            </div>
+            <div
               id={id}
               className="message-subject"
               onClick={this.handleClick}
-            ><checkbox id={id} /> {message.subject}</span>
+            ><checkbox id={id} /> {message.subject}</div>
           </li>
         );
       }
       return (
         <li key={id} className="message-row loading">
-          <span className="message-from"></span>
-          <span className="message-date"></span>
-          <span className="message-subject"></span>
+          <div className="message-line-1">
+            <div className="message-from"></div>
+            <div className="message-date"></div>
+          </div>
+          <div className="message-subject"></div>
         </li>
       );
     });

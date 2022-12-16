@@ -172,16 +172,19 @@ ul.message-list, ul.message-list li.message-row {
 ul.message-list li.message-row {
   border-bottom: 1px solid #888;
   align-items: baseline;
+}
+
+ul.message-list li.message-row div.message-line-1 {
   display: grid;
   grid-template-columns: auto max-content;
 }
 
-ul.message-list span {
+ul.message-list div {
   display: block;
   padding: .25em;
 }
 
-ul.message-list span.message-subject {
+ul.message-list div.message-subject {
   font-size: 115%;
   font-weight: bold;
   white-space: nowrap;
@@ -189,30 +192,28 @@ ul.message-list span.message-subject {
   text-overflow: ellipsis;
 }
 
-ul.message-list span.message-subject:hover {
+ul.message-list div.message-subject:hover {
   text-decoration: underline;
 }
 
-ul.message-list span.message-subject::before {
+ul.message-list div.message-subject::before {
   content: '🔵';
   display: inline-block;
   padding-right: .2em;
 }
 
-ul.message-list li.Seen span.message-subject {
+ul.message-list li.Seen div.message-subject {
   font-size: 115%;
   font-weight: normal;
-  grid-column-start: 1;
-  grid-column-end: 3;
 }
 
-ul.message-list li.Seen span.message-subject::before {
+ul.message-list li.Seen div.message-subject::before {
   content: '✉️';
   display: inline-block;
   padding-right: .2em;
 }
 
-ul.message-list span.message-date {
+ul.message-list div.message-date {
   font-style: italic;
   text-align: right;
 }
