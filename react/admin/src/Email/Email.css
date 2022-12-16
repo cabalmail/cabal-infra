@@ -212,10 +212,6 @@ ul.message-list li.Seen span.message-subject::before {
   padding-right: .2em;
 }
 
-ul.message-list spam.message-from {
-  float: left;
-} 
-
 ul.message-list span.message-date {
   font-style: italic;
 }
