@@ -168,7 +168,7 @@ ul.message-list, ul.message-list li.message-row {
   list-style: none;
   padding: 0;
   display: grid;
-  grid-template-columns: auto min-content;
+  grid-template-columns: auto max-content;
 }
 
 ul.message-list li.message-row {
