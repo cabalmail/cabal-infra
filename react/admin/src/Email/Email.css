@@ -5,10 +5,13 @@
     display: grid;
     grid-template-columns: 450px auto;
     grid-column-gap: 1em;
+    max-height: 100vh;
   }
 
   div.email_list, div.message_overlay {
     position: static;
+    max-height: 100vh;
+    overflow: scroll;
   }
 }
 
