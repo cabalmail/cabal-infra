@@ -214,6 +214,8 @@ ul.message-list li.Seen div.message-subject::before {
 }
 
 ul.message-list div.message-from {
+  word-wrap: break-word;
+  word-break: break-all;
   text-overflow: ellipsis;
 }
 
