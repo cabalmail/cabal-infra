@@ -216,10 +216,9 @@ ul.message-list li.Seen div.message-subject::before {
 }
 
 ul.message-list div.message-from {
-  word-wrap: break-word;
-  word-break: break-all;
   height: 1.75em;
   text-overflow: ellipsis;
+  overflow: hidden;
 }
 
 ul.message-list div.message-date {
