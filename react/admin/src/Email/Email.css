@@ -167,6 +167,8 @@ body div.content div.overlay_hidden {
 ul.message-list, ul.message-list li.message-row {
   list-style: none;
   padding: 0;
+  display: grid;
+  grid-template-columns: auto min-content;
 }
 
 ul.message-list li.message-row {
@@ -200,6 +202,8 @@ ul.message-list span.message-subject::before {
 ul.message-list li.Seen span.message-subject {
   font-size: 115%;
   font-weight: normal;
+  grid-column-start: 1;
+  grid-column-end: 3;
 }
 
 ul.message-list li.Seen span.message-subject::before {
@@ -210,7 +214,6 @@ ul.message-list li.Seen span.message-subject::before {
 
 ul.message-list span.message-date {
   font-style: italic;
-  float: right;
 }
 
 ul.message-list li.loading {
