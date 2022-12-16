@@ -213,6 +213,10 @@ ul.message-list li.Seen div.message-subject::before {
   padding-right: .2em;
 }
 
+ul.message-list div.message-from {
+  text-overflow: ellipsis;
+}
+
 ul.message-list div.message-date {
   font-style: italic;
   text-align: right;
