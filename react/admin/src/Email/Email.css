@@ -4,6 +4,7 @@
   div.email {
     display: grid;
     grid-template-columns: 450px auto;
+    grid-column-gap: 1em;
   }
 
   div.email_list, div.message_overlay {
