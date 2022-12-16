@@ -140,7 +140,7 @@ class Messages extends React.Component {
       return <option id={i.css} value={i.imap}>{i.description}</option>;
     });
     return (
-      <>
+      <div className="email_list">
         <div className={`filter ${this.state.sort_order.css}`}>
           <Mailboxes 
             token={this.props.token}
@@ -174,7 +174,7 @@ class Messages extends React.Component {
         <ul className={`message-list ${this.state.loading ? "loading" : ""}`}>
           {list}
         </ul>
-      </>
+      </div>
     );
   }
 }

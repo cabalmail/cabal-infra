@@ -32,7 +32,18 @@ class Email extends React.Component {
 
   render() {
     return (
-      <>
+      <div className="email">
+        <Messages 
+          token={this.props.token}
+          password={this.props.password}
+          userName={this.props.userName}
+          api_url={this.props.api_url}
+          mailbox={this.state.mailbox}
+          host={this.props.host}
+          showOverlay={this.showOverlay}
+          setMailbox={this.selectMailbox}
+          setMessage={this.props.setMessage}
+        />
         <MessageOverlay 
           token={this.props.token}
           password={this.props.password}
@@ -45,18 +56,7 @@ class Email extends React.Component {
           hide={this.hideOverlay}
           setMessage={this.props.setMessage}
         />
-        <Messages 
-          token={this.props.token}
-          password={this.props.password}
-          userName={this.props.userName}
-          api_url={this.props.api_url}
-          mailbox={this.state.mailbox}
-          host={this.props.host}
-          showOverlay={this.showOverlay}
-          setMailbox={this.selectMailbox}
-          setMessage={this.props.setMessage}
-        />
-      </>
+      </div>
     );
   }
 }
