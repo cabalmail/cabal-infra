@@ -235,7 +235,7 @@ ul.message-list li.loading {
   border-bottom: 0;
 }
 
-ul.message-list li.loading span.message-subject::before {
+ul.message-list li.loading div.message-subject::before {
   content: '';
   display: none;
 }
