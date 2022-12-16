@@ -167,13 +167,13 @@ body div.content div.overlay_hidden {
 ul.message-list, ul.message-list li.message-row {
   list-style: none;
   padding: 0;
-  display: grid;
-  grid-template-columns: auto max-content;
 }
 
 ul.message-list li.message-row {
   border-bottom: 1px solid #888;
   align-items: baseline;
+  display: grid;
+  grid-template-columns: auto max-content;
 }
 
 ul.message-list span {
@@ -214,6 +214,7 @@ ul.message-list li.Seen span.message-subject::before {
 
 ul.message-list span.message-date {
   font-style: italic;
+  text-align: right;
 }
 
 ul.message-list li.loading {
