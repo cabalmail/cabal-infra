@@ -167,6 +167,7 @@ body div.content div.overlay_hidden {
 ul.message-list, ul.message-list li.message-row {
   list-style: none;
   padding: 0;
+  line-height: 1.75em;
 }
 
 ul.message-list li.message-row {
@@ -177,6 +178,7 @@ ul.message-list li.message-row {
 ul.message-list li.message-row div.message-line-1 {
   display: grid;
   grid-template-columns: auto max-content;
+  height: 1.75em;
 }
 
 ul.message-list div {
