@@ -62,7 +62,8 @@ class Envelopes extends React.Component {
   handleClick = (e) => {
     e.preventDefault();
     this.props.showOverlay(this.state.envelopes[e.target.id]);
-    this.setState({...this.state,selected:e.target.id.toString()});
+    this.setState({...this.state,selected:e.target.id});
+    console.log("Setting state");
   }
 
   render() {
@@ -71,6 +72,7 @@ class Envelopes extends React.Component {
         var message = this.state.envelopes[id];
         var flags = message.flags.map(d => {return d.replace("\\","")}).join(" ");
         var selected = this.state.selected === id ? "selected" : "";
+        console.log(`id is ${id}; this.state.selected is ${this.state.selected}`);
         return (
           <li
             id={id}
