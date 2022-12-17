@@ -71,13 +71,10 @@ class Envelopes extends React.Component {
       if (id.toString() in this.state.envelopes) {
         var message = this.state.envelopes[id];
         var flags = message.flags.map(d => {return d.replace("\\","")}).join(" ");
-        var selected = this.state.selected.toString() === id.toString() ? "selected" : "";
+        var selected = this.state.selected === id.toString() ? "selected" : "";
         console.log(`id is ${id}; this.state.selected is ${this.state.selected}`);
         return (
-          <li
-            id={id}
-            className={`message-row ${flags} ${selected}`}
-          >
+          <li className={`message-row ${flags} ${selected}`}>
             <div className="message-line-1">
               <div className="message-field message-from">{message.from[0]}</div>
               <div className="message-field message-date">{message.date}</div>
@@ -91,7 +88,7 @@ class Envelopes extends React.Component {
         );
       }
       return (
-        <li id={id} className="message-row loading">
+        <li className="message-row loading">
           <div className="message-line-1">
             <div className="message-field message-from">&nbsp;</div>
             <div className="message-field message-date">&nbsp;</div>
