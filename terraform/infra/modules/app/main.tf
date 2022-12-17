@@ -136,7 +136,7 @@ resource "aws_api_gateway_method_settings" "cache_settings" {
   for_each    = local.lambdas
   rest_api_id = aws_api_gateway_rest_api.gateway.id
   stage_name  = aws_api_gateway_stage.api_stage.stage_name
-  method_path = "${each.key}/{each.value.method}"
+  method_path = "${each.key}/${each.value.method}"
   settings {
     caching_enabled      = (
       each.value.method == "GET" ||
