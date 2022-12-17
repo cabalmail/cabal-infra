@@ -7,6 +7,7 @@ class Envelopes extends React.Component {
     super(props);
     this.state = {
       envelopes: [],
+      selected: null
     };
   }
 
@@ -61,33 +62,39 @@ class Envelopes extends React.Component {
   handleClick = (e) => {
     e.preventDefault();
     this.props.showOverlay(this.state.envelopes[e.target.id]);
+    this.setState({...this.state,selected:e.target.id});
   }
 
   render() {
     const message_list = this.props.message_ids.map(id => {
       if (id.toString() in this.state.envelopes) {
         var message = this.state.envelopes[id];
+        var flags = message.flags.map(d => {return d.replace("\\","")}).join(" ");
+        var selected = this.state.selected === id ? "selected" : "";
         return (
-          <li key={id} className={`message-row ${message.flags.map(d => {return d.replace("\\","")}).join(" ")}`} >
+          <li
+            id={id}
+            className={`message-row ${flags} ${selected}`}
+          >
             <div className="message-line-1">
-              <div className="message-from">{message.from[0]}</div>
-              <div className="message-date">{message.date}</div>
+              <div className="message-field message-from">{message.from[0]}</div>
+              <div className="message-field message-date">{message.date}</div>
             </div>
             <div
               id={id}
-              className="message-subject"
+              className="message-field message-subject"
               onClick={this.handleClick}
             ><checkbox id={id} /> {message.subject}</div>
           </li>
         );
       }
       return (
-        <li key={id} className="message-row loading">
+        <li id={id} className="message-row loading">
           <div className="message-line-1">
-            <div className="message-from">&nbsp;</div>
-            <div className="message-date">&nbsp;</div>
+            <div className="message-field message-from">&nbsp;</div>
+            <div className="message-field message-date">&nbsp;</div>
           </div>
-          <div className="message-subject">&nbsp;</div>
+          <div className="message-field message-subject">&nbsp;</div>
         </li>
       );
     });
