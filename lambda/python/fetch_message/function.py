@@ -37,14 +37,17 @@ def handler(event, _context):
 
     try:
         body_html_decoded = body_html.decode()
-    except AttributeError:
+    except:
         body_html_decoded = body_html.__str__()
+
     try:
         body_plain_decoded = body_plain.decode()
-    except AttributeError:
+    except:
         body_plain_decoded = body_plain.__str__()
+
     if len(message.__str__()) > 1000000:
         message = "Raw message too large to display"
+
     return {
         "statusCode": 200,
         "body": json.dumps({
