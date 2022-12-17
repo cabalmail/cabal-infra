@@ -138,12 +138,7 @@ resource "aws_api_gateway_method_settings" "cache_settings" {
   stage_name  = aws_api_gateway_stage.api_stage.stage_name
   method_path = "${each.key}/${each.value.method}"
   settings {
-    caching_enabled      = (
-      each.value.method == "GET" ||
-      (each.value.method == "POST" && each.value.type == "python") ||
-      each.value.method == "OPTIONS" ||
-      each.value.method == "HEAD"
-    )
-    cache_ttl_in_seconds = (60*60)
+    caching_enabled      = each.value.cache
+    cache_ttl_in_seconds = each.value.cache_ttl
   }
 }
