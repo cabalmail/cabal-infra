@@ -1,6 +1,10 @@
 /* layout */
 
 @media (min-width: 800px) {
+  body {
+    100vh;
+  }
+
   div.email {
     position: relative;
   }
