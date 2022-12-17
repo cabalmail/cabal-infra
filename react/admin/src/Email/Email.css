@@ -2,7 +2,7 @@
 
 @media (min-width: 800px) {
   body {
-    100vh;
+    height: 100vh;
   }
 
   div.email {
