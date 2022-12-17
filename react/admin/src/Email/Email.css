@@ -41,7 +41,7 @@ ul.message_list {
 }
 
 @media (max-width: 799px) {
-  div.message_overlay {
+  div.email_list, div.message_overlay {
     left: 0;
     right: 0;
   }
