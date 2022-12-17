@@ -84,10 +84,10 @@ class Envelopes extends React.Component {
       return (
         <li key={id} className="message-row loading">
           <div className="message-line-1">
-            <div className="message-from"></div>
-            <div className="message-date"></div>
+            <div className="message-from">&nbsp;</div>
+            <div className="message-date">&nbsp;</div>
           </div>
-          <div className="message-subject"></div>
+          <div className="message-subject">&nbsp;</div>
         </li>
       );
     });
