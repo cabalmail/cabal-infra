@@ -2,16 +2,24 @@
 
 @media (min-width: 800px) {
   div.email {
-    display: grid;
-    grid-template-columns: 450px auto;
-    grid-column-gap: 1em;
-    max-height: 100vh;
+    position: relative;
   }
 
   div.email_list, div.message_overlay {
-    position: static;
-    max-height: 100vh;
+    position: absolute;
+    top: 0;
+    bottom: 0;
     overflow: scroll;
+  }
+
+  div.email_list {
+    left: 0;
+    width: 450px;
+  }
+
+  div.message_overlay {
+    left: 450px;
+    right: 0;
   }
 }
 
