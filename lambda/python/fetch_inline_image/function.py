@@ -1,4 +1,4 @@
-'''Preps an attachment for download from S3 given a mailbox, message ID, and attachment uuid'''
+'''Preps an inline image attachment for download from S3 given a mailbox, message ID, and attachment uuid'''
 import json
 import email
 import boto3
@@ -18,7 +18,7 @@ s3 = boto3.client("s3",
                   config=boto3.session.Config(signature_version='s3v4'))
 
 def handler(event, _context):
-    '''Preps an attachment for download from S3 given a mailbox, message ID, and attachment uuid'''
+    '''Preps an inline image attachment for download from S3 given a mailbox, message ID, and attachment uuid'''
     body = json.loads(event['body'])
     bucket = body['host'].replace("imap", "cache")
     key = ""
