@@ -13,6 +13,11 @@ export const ARRIVAL = {
   css: "arrival",
   description: "Date Received"
 };
+export const DATE = {
+  imap: "DATE",
+  css: "date",
+  description: "Date Sent"
+};
 export const FROM = {
   imap: "FROM",
   css: "from",

@@ -7,7 +7,7 @@ import axios from 'axios';
 import LazyLoad from 'react-lazyload';
 import Envelopes from './Envelopes';
 import Mailboxes from './Mailboxes';
-import { ASC, DESC, ARRIVAL, FROM, SUBJECT, PAGE_SIZE} from '../constants'
+import { ASC, DESC, ARRIVAL, DATE, FROM, SUBJECT, PAGE_SIZE} from '../constants'
 
 class Messages extends React.Component {
 
@@ -16,7 +16,7 @@ class Messages extends React.Component {
     this.state = {
       message_ids: [],
       sort_order: DESC,
-      sort_field: ARRIVAL,
+      sort_field: DATE,
       loading: true
     };
   }
@@ -122,6 +122,9 @@ class Messages extends React.Component {
       case SUBJECT.imap:
         this.setState({...this.state, sort_field: SUBJECT, loading: true});
         break;
+      case DATE.imap:
+        this.setState({...this.state, sort_field: DATE, loading: true});
+        break;
       case ARRIVAL.imap:
         this.setState({...this.state, sort_field: ARRIVAL, loading: true});
         break;
@@ -129,14 +132,14 @@ class Messages extends React.Component {
         this.setState({...this.state, sort_field: FROM, loading: true});
         break;
       default:
-        this.setState({...this.state, sort_field: ARRIVAL, loading: true});
+        this.setState({...this.state, sort_field: DATE, loading: true});
     }
   }
 
   render() {
     const list = this.loadList();
     // TO field omitted since it's not displayed
-    const options = [ARRIVAL, SUBJECT, FROM].map(i => {
+    const options = [DATE, ARRIVAL, SUBJECT, FROM].map(i => {
       return <option id={i.css} value={i.imap}>{i.description}</option>;
     });
     return (
