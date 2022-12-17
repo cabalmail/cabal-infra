@@ -88,7 +88,7 @@ class Messages extends React.Component {
     var pages = [];
     for (var i = 0; i < num_ids; i+=PAGE_SIZE) {
       pages.push(
-        <LazyLoad offset={150}>
+        <LazyLoad offset={150} overflow={true}>
           <Envelopes
             message_ids={this.state.message_ids.slice(i, i+PAGE_SIZE)}
             userName={this.props.userName}

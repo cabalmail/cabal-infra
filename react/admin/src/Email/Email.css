@@ -30,6 +30,10 @@
     width: 450px;
   }
 
+  ul.message_list {
+    position: relative;
+  }
+
   div.message_overlay {
     left: 450px;
     right: 0;
