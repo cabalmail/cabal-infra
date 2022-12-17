@@ -1,37 +1,37 @@
 /* layout */
 
+body {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  overflow: hidden;
+}
+
+div.email {
+  position: absolute;
+  top: 8em;
+  bottom: 0;
+  left: 0;
+  right: 0;
+}
+
+div.email_list, div.message_overlay {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  overflow: scroll;
+}
+
+ul.message_list {
+  position: relative;
+}
+
 @media (min-width: 800px) {
-  body {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    overflow: hidden;
-  }
-
-  div.email {
-    position: absolute;
-    top: 8em;
-    bottom: 0;
-    left: 0;
-    right: 0;
-  }
-
-  div.email_list, div.message_overlay {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    overflow: scroll;
-  }
-
   div.email_list {
     left: 0;
     width: 450px;
-  }
-
-  ul.message_list {
-    position: relative;
   }
 
   div.message_overlay {
@@ -42,11 +42,8 @@
 
 @media (max-width: 799px) {
   div.message_overlay {
-    position: fixed;
-    top: 0;
     left: 0;
     right: 0;
-    bottom: 0;
   }
 }
 
