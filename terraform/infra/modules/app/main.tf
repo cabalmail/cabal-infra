@@ -65,10 +65,11 @@ resource "aws_api_gateway_deployment" "deployment" {
 #tfsec:ignore:aws-api-gateway-enable-access-logging
 #tfsec:ignore:aws-api-gateway-enable-tracing
 resource "aws_api_gateway_stage" "api_stage" {
-  deployment_id      = aws_api_gateway_deployment.deployment.id
-  rest_api_id        = aws_api_gateway_rest_api.gateway.id
-  stage_name         = var.stage_name
-  cache_cluster_size = "0.5"
+  deployment_id         = aws_api_gateway_deployment.deployment.id
+  rest_api_id           = aws_api_gateway_rest_api.gateway.id
+  stage_name            = var.stage_name
+  cache_cluster_enabled = true
+  cache_cluster_size    = "0.5"
 }
 
 resource "aws_iam_role" "cloudwatch" {
