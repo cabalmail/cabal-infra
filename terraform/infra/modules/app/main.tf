@@ -119,7 +119,7 @@ resource "aws_api_gateway_account" "apigw_account" {
   cloudwatch_role_arn = aws_iam_role.cloudwatch.arn
 }
 
-resource "aws_api_gateway_method_settings" "settings" {
+resource "aws_api_gateway_method_settings" "general_settings" {
   rest_api_id = aws_api_gateway_rest_api.gateway.id
   stage_name  = aws_api_gateway_stage.api_stage.stage_name
   method_path = "*/*"
@@ -129,5 +129,16 @@ resource "aws_api_gateway_method_settings" "settings" {
     logging_level          = "INFO"
     throttling_rate_limit  = 100
     throttling_burst_limit = 50
+  }
+}
+
+resource "aws_api_gateway_method_settings" "cache_settings" {
+  for_each    = local.lambdas
+  rest_api_id = aws_api_gateway_rest_api.gateway.id
+  stage_name  = aws_api_gateway_stage.api_stage.stage_name
+  method_path = "${each.key}/{each.method}"
+  settings {
+    caching_enabled      = (each.method == "GET" || each.method == "POST" || each.method == "OPTIONS" || each.method == "HEAD")
+    cache_ttl_in_seconds = (60*60*24)
   }
 }
