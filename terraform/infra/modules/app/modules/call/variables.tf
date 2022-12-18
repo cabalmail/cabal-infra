@@ -6,8 +6,8 @@ variable "runtime" {
   type = string
 }
 
-variable "layer_arn" {
-  type = string
+variable "layer_arns" {
+  type = list(string)
 }
 
 variable "type" {
