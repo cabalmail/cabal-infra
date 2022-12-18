@@ -36,7 +36,7 @@ data "aws_s3_object" "lambda_layer_hash" {
 }
 
 resource "aws_lambda_layer_version" "layer" {
-  for_each            = local.shared_lambdas
+  for_each            = local.lambda_layers
   layer_name          = each.value.name
   compatible_runtimes = each.value.runtime
   s3_bucket           = var.bucket
