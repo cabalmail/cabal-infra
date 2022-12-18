@@ -1,22 +1,22 @@
-total 2268
+total 2212
 drwxr-xr-x 6 runner docker   4096 Feb 29  2004 fetch_attachment
--rw-r--r-- 1 runner docker 323022 Dec 17 11:25 fetch_attachment.zip
--rw-r--r-- 1 runner docker     44 Dec 17 11:25 fetch_attachment.zip.base64sha256
+-rw-r--r-- 1 runner docker 314797 Dec 18 00:05 fetch_attachment.zip
+-rw-r--r-- 1 runner docker     44 Dec 18 00:05 fetch_attachment.zip.base64sha256
 drwxr-xr-x 6 runner docker   4096 Feb 29  2004 fetch_inline_image
--rw-r--r-- 1 runner docker 322988 Dec 17 11:25 fetch_inline_image.zip
--rw-r--r-- 1 runner docker     44 Dec 17 11:25 fetch_inline_image.zip.base64sha256
+-rw-r--r-- 1 runner docker 314884 Dec 18 00:05 fetch_inline_image.zip
+-rw-r--r-- 1 runner docker     44 Dec 18 00:05 fetch_inline_image.zip.base64sha256
 drwxr-xr-x 6 runner docker   4096 Feb 29  2004 fetch_message
--rw-r--r-- 1 runner docker 322707 Dec 17 11:25 fetch_message.zip
--rw-r--r-- 1 runner docker     44 Dec 17 11:25 fetch_message.zip.base64sha256
+-rw-r--r-- 1 runner docker 314569 Dec 18 00:05 fetch_message.zip
+-rw-r--r-- 1 runner docker     44 Dec 18 00:05 fetch_message.zip.base64sha256
 drwxr-xr-x 6 runner docker   4096 Feb 29  2004 list_attachments
--rw-r--r-- 1 runner docker 322564 Dec 17 11:25 list_attachments.zip
--rw-r--r-- 1 runner docker     44 Dec 17 11:25 list_attachments.zip.base64sha256
+-rw-r--r-- 1 runner docker 314425 Dec 18 00:05 list_attachments.zip
+-rw-r--r-- 1 runner docker     44 Dec 18 00:05 list_attachments.zip.base64sha256
 drwxr-xr-x 6 runner docker   4096 Feb 29  2004 list_envelopes
--rw-r--r-- 1 runner docker 322949 Dec 17 11:25 list_envelopes.zip
--rw-r--r-- 1 runner docker     44 Dec 17 11:25 list_envelopes.zip.base64sha256
+-rw-r--r-- 1 runner docker 314820 Dec 18 00:05 list_envelopes.zip
+-rw-r--r-- 1 runner docker     44 Dec 18 00:05 list_envelopes.zip.base64sha256
 drwxr-xr-x 6 runner docker   4096 Feb 29  2004 list_mailboxes
--rw-r--r-- 1 runner docker 322403 Dec 17 11:25 list_mailboxes.zip
--rw-r--r-- 1 runner docker     44 Dec 17 11:25 list_mailboxes.zip.base64sha256
+-rw-r--r-- 1 runner docker 314227 Dec 18 00:05 list_mailboxes.zip
+-rw-r--r-- 1 runner docker     44 Dec 18 00:05 list_mailboxes.zip.base64sha256
 drwxr-xr-x 6 runner docker   4096 Feb 29  2004 list_messages
--rw-r--r-- 1 runner docker 322303 Dec 17 11:25 list_messages.zip
--rw-r--r-- 1 runner docker     44 Dec 17 11:25 list_messages.zip.base64sha256
+-rw-r--r-- 1 runner docker 314210 Dec 18 00:05 list_messages.zip
+-rw-r--r-- 1 runner docker     44 Dec 18 00:05 list_messages.zip.base64sha256
