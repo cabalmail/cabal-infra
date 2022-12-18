@@ -2,6 +2,7 @@ import boto3
 import botocore
 from botocore.exceptions import ClientError
 import io
+import email
 from imapclient import IMAPClient
 from email.policy import default as default_policy
 

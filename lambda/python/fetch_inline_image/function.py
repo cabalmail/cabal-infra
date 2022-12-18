@@ -1,6 +1,5 @@
 '''Preps an inline image attachment for download from S3 given a mailbox, message ID, and attachment uuid'''
 import json
-import email
 import logging
 from s3 import upload_object
 from s3 import sign_url
