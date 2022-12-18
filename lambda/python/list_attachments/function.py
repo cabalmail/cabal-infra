@@ -1,11 +1,7 @@
 '''Retrieves list of attachments from a message given a mailbox and ID'''
 import json
 # import logging
-from datetime import datetime
 import email
-from email.policy import default as default_policy
-
-from imapclient import IMAPClient
 
 # logger = logging.getLogger()
 # logger.setLevel(logging.INFO)
@@ -13,11 +9,7 @@ from imapclient import IMAPClient
 def handler(event, _context):
     '''Retrieves list of attachments from a message given a mailbox and ID'''
     body = json.loads(event['body'])
-    client = IMAPClient(host=body['host'], use_uid=True, ssl=True)
-    client.login(body['user'], body['password'])
-    client.select_folder(body['mailbox'])
-    email_body_raw = client.fetch([body['id']],[b"RFC822"])
-    message = email.message_from_bytes(email_body_raw[body['id']][b"RFC822"], policy=default_policy)
+    message = get_message(bucket, body['host'], body['user'], body['password'], body['mailbox'], body['id'])
     attachments = []
     i = 0;
     if message.is_multipart():

@@ -2,11 +2,31 @@ import boto3
 import botocore
 from botocore.exceptions import ClientError
 import io
+from imapclient import IMAPClient
+from email.policy import default as default_policy
+
 s3r = boto3.resource("s3")
 s3c = boto3.client("s3",
                   region_name="us-east-1",
                   config=boto3.session.Config(signature_version='s3v4'))
-                  
+
+def get_message(bucket, host, user, password, mailbox, id):
+    client = IMAPClient(host=host, use_uid=True, ssl=True)
+    client.login(user, password)
+    client.select_folder(mailbox)
+    email_body_raw = b''
+    key = f"{user}/{mailbox}/{id}/bytes"
+    if key_exists(bucket, key):
+        email_body_raw = get_object(bucket, key)
+    else:
+        client = IMAPClient(host=host, use_uid=True, ssl=True)
+        client.login(user, password)
+        client.select_folder(mailbox)
+        email_body_raw = client.fetch([id],[b"RFC822"])[id][b"RFC822"]
+        upload_object(bucket, key, "application/octet-stream", email_body_raw)
+    message = email.message_from_bytes(email_body_raw, policy=default_policy)
+    return message
+
 def upload_object(bucket, key, content_type, obj):
     '''Uploads an object to s3'''
     with io.BytesIO() as f:
