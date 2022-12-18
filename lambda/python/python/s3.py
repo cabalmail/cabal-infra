@@ -1,4 +1,3 @@
-'''Uploads an object to s3'''
 import boto3
 import botocore
 from botocore.exceptions import ClientError
@@ -21,6 +20,7 @@ def upload_object(bucket, key, content_type, obj):
     return True
 
 def sign_url(bucket, key, expiration=86400):
+    '''Signs a URL for an object hosted in s3'''
     params = {
         'Bucket': bucket,
         'Key': key
