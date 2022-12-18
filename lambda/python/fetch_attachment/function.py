@@ -28,7 +28,7 @@ def handler(event, _context):
         for part in message.walk():
             ct = part.get_content_type()
             if i == body['index']:
-                if ! key_exists(bucket, key):
+                if not key_exists(bucket, key):
                     upload_object(bucket, key, ct, part.get_payload(decode=True))
             i += 1
     return {
