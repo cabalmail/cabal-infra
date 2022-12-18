@@ -38,6 +38,10 @@ ul.message_list {
     left: 460px;
     right: 0;
   }
+
+  button.close_overlay {
+    display: none;
+  }
 }
 
 @media (max-width: 799px) {
