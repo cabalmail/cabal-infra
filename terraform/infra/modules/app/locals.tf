@@ -1,4 +1,10 @@
 locals {
+  lambda_layers = {
+    python = {
+      runtime   = "python3.9"
+      name      = "shared"
+    }
+  }
   lambdas = {
     list_mailboxes   = {
       runtime   = "python3.9"

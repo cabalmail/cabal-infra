@@ -29,12 +29,28 @@ resource "aws_api_gateway_authorizer" "api_auth" {
   ]) ]
 }
 
+data "aws_s3_object" "lambda_layer_hash" {
+  for_each = local.shared_lambdas
+  bucket   = var.bucket
+  key      = "/lambda/${each.value.name}.zip.base64sha256"
+}
+
+resource "aws_lambda_layer_version" "layer" {
+  for_each            = local.shared_lambdas
+  layer_name          = each.value.name
+  compatible_runtimes = each.value.runtime
+  s3_bucket           = var.bucket
+  s3_key              = "lambda/${each.value.name}.zip"
+  source_code_hash    = data.aws_s3_object.lambda_layer_hash[each.value.name].body
+}
+
 module "cabal_method" {
   for_each         = local.lambdas
   source           = "./modules/call"
   name             = each.key
   runtime          = each.value.runtime
   type             = each.value.type
+  layer            = aws_lambda_layer_version.layer[each.value.type].arn
   method           = each.value.method
   memory           = each.value.memory
   region           = var.region

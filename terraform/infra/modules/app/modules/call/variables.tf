@@ -6,6 +6,10 @@ variable "runtime" {
   type = string
 }
 
+variable "layer_arn" {
+  type = string
+}
+
 variable "type" {
   type = string
 }
