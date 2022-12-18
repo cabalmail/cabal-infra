@@ -19,6 +19,11 @@ def upload_object(bucket, key, content_type, obj):
             return False
     return True
 
+def get_object(bucket, key):
+    '''Returns an object from s3'''
+    obj = s3r.Object(bucket, key)
+    return obj.get()['Body'].read()
+
 def sign_url(bucket, key, expiration=86400):
     '''Signs a URL for an object hosted in s3'''
     params = {

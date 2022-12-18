@@ -5,6 +5,7 @@ import logging
 from s3 import upload_object
 from s3 import sign_url
 from s3 import key_exists
+from s3 import get_object
 from datetime import datetime
 from email.policy import default as default_policy
 
@@ -18,11 +19,15 @@ def handler(event, _context):
     body = json.loads(event['body'])
     bucket = body['host'].replace("imap", "cache")
     key = ""
-    # TODO: Check if file is already on s3
-    client = IMAPClient(host=body['host'], use_uid=True, ssl=True)
-    client.login(body['user'], body['password'])
-    client.select_folder(body['mailbox'])
-    email_body_raw = client.fetch([body['id']],[b"RFC822"])
+    message_key = f"{body['user']}/{body['mailbox']}/{body['id']}/bytes"
+    email_body_raw = b''
+    if key_exists(bucket, message_key):
+        email_body_raw = get_object(bucket, message_key)
+    else:
+        client = IMAPClient(host=body['host'], use_uid=True, ssl=True)
+        client.login(body['user'], body['password'])
+        client.select_folder(body['mailbox'])
+        email_body_raw = client.fetch([body['id']],[b"RFC822"])
     message = email.message_from_bytes(email_body_raw[body['id']][b"RFC822"], policy=default_policy)
     for part in message.walk():
         ct = part.get_content_type()
