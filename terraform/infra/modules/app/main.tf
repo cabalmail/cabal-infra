@@ -41,7 +41,7 @@ resource "aws_lambda_layer_version" "layer" {
   compatible_runtimes = each.value.runtime
   s3_bucket           = var.bucket
   s3_key              = "lambda/${each.value.name}.zip"
-  source_code_hash    = data.aws_s3_object.lambda_layer_hash[each.value.name].body
+  source_code_hash    = data.aws_s3_object.lambda_layer_hash[each.key].body
 }
 
 module "cabal_method" {
