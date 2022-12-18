@@ -9,7 +9,7 @@ from s3 import get_message
 def handler(event, _context):
     '''Retrieves IMAP message given a mailbox and ID'''
     body = json.loads(event['body'])
-    message = get_message(bucket, body['host'], body['user'], body['password'], body['mailbox'], body['id'])
+    message = get_message(body['host'], body['user'], body['password'], body['mailbox'], body['id'])
     body_plain = ""
     body_html = ""
     if message.is_multipart():

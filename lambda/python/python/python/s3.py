@@ -10,10 +10,12 @@ s3c = boto3.client("s3",
                   region_name="us-east-1",
                   config=boto3.session.Config(signature_version='s3v4'))
 
-def get_message(bucket, host, user, password, mailbox, id):
+def get_message(host, user, password, mailbox, id):
+    '''Gets a message from cache on s3 or from imap server'''
     client = IMAPClient(host=host, use_uid=True, ssl=True)
     client.login(user, password)
     client.select_folder(mailbox)
+    bucket = host.replace("imap", "cache")
     email_body_raw = b''
     key = f"{user}/{mailbox}/{id}/bytes"
     if key_exists(bucket, key):

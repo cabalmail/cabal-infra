@@ -16,7 +16,7 @@ def handler(event, _context):
     body = json.loads(event['body'])
     bucket = body['host'].replace("imap", "cache")
     key = f"{body['user']}/{body['mailbox']}/{body['id']}/{body['filename']}"
-    message = get_message(bucket, body['host'], body['user'], body['password'], body['mailbox'], body['id'])
+    message = get_message(body['host'], body['user'], body['password'], body['mailbox'], body['id'])
     i = 0;
     if message.is_multipart():
         for part in message.walk():
