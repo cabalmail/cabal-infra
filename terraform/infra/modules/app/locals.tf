@@ -2,7 +2,6 @@ locals {
   lambda_layers = {
     python = {
       runtime   = "python3.9"
-      name      = "shared"
     }
   }
   lambdas = {

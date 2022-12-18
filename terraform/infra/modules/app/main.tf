@@ -37,7 +37,7 @@ data "aws_s3_object" "lambda_layer_hash" {
 
 resource "aws_lambda_layer_version" "layer" {
   for_each            = local.lambda_layers
-  layer_name          = each.value.name
+  layer_name          = each.key
   compatible_runtimes = [each.value.runtime]
   s3_bucket           = var.bucket
   s3_key              = "lambda/${each.value.name}.zip"
