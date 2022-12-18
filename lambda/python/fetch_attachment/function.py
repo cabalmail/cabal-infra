@@ -4,6 +4,7 @@ import email
 import logging
 from s3 import upload_object
 from s3 import sign_url
+from s3 import key_exists
 from datetime import datetime
 from email.policy import default as default_policy
 from imapclient import IMAPClient
@@ -27,7 +28,8 @@ def handler(event, _context):
         for part in message.walk():
             ct = part.get_content_type()
             if i == body['index']:
-                upload_object(bucket, key, ct, part.get_payload(decode=True))
+                if ! key_exists(bucket, key):
+                    upload_object(bucket, key, ct, part.get_payload(decode=True))
             i += 1
     return {
         "statusCode": 200,

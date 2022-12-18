@@ -4,6 +4,7 @@ import email
 import logging
 from s3 import upload_object
 from s3 import sign_url
+from s3 import key_exists
 from datetime import datetime
 from email.policy import default as default_policy
 
@@ -28,7 +29,8 @@ def handler(event, _context):
         if part.get('Content-ID'):
             if part.get('Content-ID') == body['index']:
                 key = f"{body['user']}/{body['mailbox']}/{body['id']}/{body['index']}/{part.get_filename()}"
-                upload_object(bucket, key, ct, part.get_payload(decode=True))
+                if ! key_exists(bucket, key):
+                    upload_object(bucket, key, ct, part.get_payload(decode=True))
 
     logger.info(f"Key is {key}")
     return {

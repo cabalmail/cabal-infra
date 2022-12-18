@@ -33,3 +33,15 @@ def sign_url(bucket, key, expiration=86400):
         logging.error(e)
         return "Error"
     return url
+
+def key_exists(bucket, key):
+    '''checks wither a key exists in a given bucket'''
+    try:
+        s3.Object(bucket, key).load()
+    except ClientError as e:
+        if e.response['Error']['Code'] == "404":
+            return False
+        else:
+            logging.error(e)
+            return False
+    return True
