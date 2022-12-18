@@ -2,8 +2,8 @@
 import json
 import email
 import logging
-from shared import upload_object
-from shared import sign_url
+import upload_object
+import sign_url
 from datetime import datetime
 from email.policy import default as default_policy
 from imapclient import IMAPClient
