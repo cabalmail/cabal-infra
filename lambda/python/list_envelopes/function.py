@@ -1,4 +1,4 @@
-'''Retrieves IMAP envelopes for a user given a mailbox and list of message ids'''
+'''Retrieves IMAP envelopes for a user given a folder and list of message ids'''
 import json
 # import logging
 from datetime import datetime
@@ -10,11 +10,11 @@ from imapclient import IMAPClient
 # logger.setLevel(logging.INFO)
 
 def handler(event, _context):
-    '''Retrieves IMAP messages for a user given a mailbox'''
+    '''Retrieves IMAP messages for a user given a folder'''
     body = json.loads(event['body'])
     client = IMAPClient(host=body['host'], use_uid=True, ssl=True)
     client.login(body['user'], body['password'])
-    client.select_folder(body['mailbox'])
+    client.select_folder(body['folder'])
     envelopes = {}
     for msgid, data in client.fetch(body['ids'], ['ENVELOPE', 'FLAGS', 'BODYSTRUCTURE']).items():
         envelope = data[b'ENVELOPE']

@@ -1,12 +1,12 @@
-'''Retrieves IMAP message given a mailbox and ID'''
+'''Retrieves IMAP message given a folder and ID'''
 import json
 from s3 import get_message
 from s3 import sign_url
 
 def handler(event, _context):
-    '''Retrieves IMAP message given a mailbox and ID'''
+    '''Retrieves IMAP message given a folder and ID'''
     body = json.loads(event['body'])
-    message = get_message(body['host'], body['user'], body['password'], body['mailbox'], body['id'])
+    message = get_message(body['host'], body['user'], body['password'], body['folder'], body['id'])
     body_plain = ""
     body_html = ""
     if message.is_multipart():
@@ -39,7 +39,7 @@ def handler(event, _context):
         "body": json.dumps({
             "message_raw": sign_url(
                                     body['host'].replace("imap", "cache"),
-                                    f"{body['user']}/{body['mailbox']}/{body['id']}/bytes"),
+                                    f"{body['user']}/{body['folder']}/{body['id']}/bytes"),
             "message_body_plain": body_plain_decoded,
             "message_body_html": body_html_decoded
         })

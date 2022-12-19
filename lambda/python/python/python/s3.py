@@ -11,20 +11,20 @@ s3c = boto3.client("s3",
                   region_name="us-east-1",
                   config=boto3.session.Config(signature_version='s3v4'))
 
-def get_message(host, user, password, mailbox, id):
+def get_message(host, user, password, folder, id):
     '''Gets a message from cache on s3 or from imap server'''
     client = IMAPClient(host=host, use_uid=True, ssl=True)
     client.login(user, password)
-    client.select_folder(mailbox)
+    client.select_folder(folder)
     bucket = host.replace("imap", "cache")
     email_body_raw = b''
-    key = f"{user}/{mailbox}/{id}/bytes"
+    key = f"{user}/{folder}/{id}/bytes"
     if key_exists(bucket, key):
         email_body_raw = get_object(bucket, key)
     else:
         client = IMAPClient(host=host, use_uid=True, ssl=True)
         client.login(user, password)
-        client.select_folder(mailbox)
+        client.select_folder(folder)
         email_body_raw = client.fetch([id],[b"RFC822"])[id][b"RFC822"]
         upload_object(bucket, key, "application/octet-stream", email_body_raw)
     message = email.message_from_bytes(email_body_raw, policy=default_policy)
