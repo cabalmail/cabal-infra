@@ -48,4 +48,11 @@ Parameters: e (null)
 
 Returns: null
 
+### handleCheck
+Modifiers: none
+
+Parameters: e (null)
+
+Returns: null
+
 </div>
