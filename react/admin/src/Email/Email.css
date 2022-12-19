@@ -265,6 +265,7 @@ ul.message-list div.message-subject input[type=checkbox]:checked ~ label .checke
   height: 1em;
   border: 1px solid #888;
   border-radius: 0.1em;
+  text-align: center;
   overflow: visible;
 }
 
