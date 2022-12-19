@@ -242,19 +242,14 @@ ul.message-list div.message-subject {
   text-overflow: ellipsis;
 }
 
-ul.message-list div.message-subject:hover {
+ul.message-list div.message-subject span:hover {
   text-decoration: underline;
 }
-
+/*
 ul.message-list div.message-subject::before {
   content: '🔵';
   display: inline-block;
   padding-right: .2em;
-}
-
-ul.message-list li.Seen div.message-subject {
-  font-size: 115%;
-  font-weight: normal;
 }
 
 ul.message-list li.Seen div.message-subject::before {
@@ -262,10 +257,15 @@ ul.message-list li.Seen div.message-subject::before {
   display: inline-block;
   padding-right: .2em;
 }
+*/
+ul.message-list li.Seen div.message-subject {
+  font-size: 115%;
+  font-weight: normal;
+}
 
 ul.message-list div.message-subject input[type=checkbox] {
   width: auto;
-  display: inline-block;
+  display: inline;
 }
 
 ul.message-list div.message-from {
