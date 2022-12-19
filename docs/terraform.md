@@ -11,7 +11,7 @@ After signing up, perform the following steps:
     | Description                 | Create Infrastructure and Application for Cabalmail           |
     | Terraform Working Directory | terraform/infra                                               |
     | Automatic Run Triggering    | Only trigger runs when the files in the spcified paths change |
-    | - Paths                     | terraform/infra, chef, lambda                                 |
+    | - Paths                     | terraform/infra, chef                                         |
     | VCS branch                  | default                                                       |
     | Include submodules on clone | Unchecked                                                     |
 
