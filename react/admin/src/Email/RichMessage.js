@@ -33,7 +33,7 @@ class RichMessage extends React.Component {
       JSON.stringify({
         user: this.props.userName,
         password: this.props.password,
-        mailbox: this.props.mailbox,
+        folder: this.props.folder,
         host: this.props.host,
         id: this.props.id,
         index: "<" + cid + ">"

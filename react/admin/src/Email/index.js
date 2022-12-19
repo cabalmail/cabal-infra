@@ -8,14 +8,14 @@ class Email extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      mailbox: "INBOX",
+      folder: "INBOX",
       overlayVisible: false,
       envelope: {}
     };
   }
 
-  selectMailbox = (mailbox) => {
-    this.setState({...this.state, mailbox: mailbox});
+  selectFolder = (folder) => {
+    this.setState({...this.state, folder: folder});
   }
 
   showOverlay = (envelope) => {
@@ -38,10 +38,10 @@ class Email extends React.Component {
           password={this.props.password}
           userName={this.props.userName}
           api_url={this.props.api_url}
-          mailbox={this.state.mailbox}
+          folder={this.state.folder}
           host={this.props.host}
           showOverlay={this.showOverlay}
-          setMailbox={this.selectMailbox}
+          setFolder={this.selectFolder}
           setMessage={this.props.setMessage}
         />
         <MessageOverlay 
@@ -51,7 +51,7 @@ class Email extends React.Component {
           api_url={this.props.api_url}
           envelope={this.state.envelope}
           visible={this.state.overlayVisible}
-          mailbox={this.state.mailbox}
+          folder={this.state.folder}
           host={this.props.host}
           hide={this.hideOverlay}
           setMessage={this.props.setMessage}

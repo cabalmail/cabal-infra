@@ -45,7 +45,7 @@ class Envelopes extends React.Component {
         user: this.props.userName,
         password: this.props.password,
         host: this.props.host,
-        mailbox: this.props.mailbox,
+        folder: this.props.folder,
         ids: this.props.message_ids
       }),
       {

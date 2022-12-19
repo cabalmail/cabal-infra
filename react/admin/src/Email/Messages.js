@@ -1,12 +1,12 @@
 /**
- * Fetches message ids for current users/mailbox and displays them
+ * Fetches message ids for current users/folder and displays them
  */
 
 import React from 'react';
 import axios from 'axios';
 import LazyLoad from 'react-lazyload';
 import Envelopes from './Envelopes';
-import Mailboxes from './Mailboxes';
+import Folders from './Folders';
 import { ASC, DESC, ARRIVAL, DATE, FROM, SUBJECT, PAGE_SIZE} from '../constants'
 
 class Messages extends React.Component {
@@ -36,7 +36,7 @@ class Messages extends React.Component {
   }
 
   componentDidUpdate(prevProps, prevState) {
-    if ((this.props.mailbox !== prevProps.mailbox) ||
+    if ((this.props.folder !== prevProps.folder) ||
       (this.state.sort_order !== prevState.sort_order) ||
       (this.state.sort_field !== prevState.sort_field)) {
       const response = this.getList();
@@ -60,7 +60,7 @@ class Messages extends React.Component {
       JSON.stringify({
         user: this.props.userName,
         password: this.props.password,
-        mailbox: this.props.mailbox,
+        folder: this.props.folder,
         host: this.props.host,
         sort_order: this.state.sort_order.imap,
         sort_field: this.state.sort_field.imap
@@ -93,7 +93,7 @@ class Messages extends React.Component {
             message_ids={this.state.message_ids.slice(i, i+PAGE_SIZE)}
             userName={this.props.userName}
             password={this.props.password}
-            mailbox={this.props.mailbox}
+            folder={this.props.folder}
             host={this.props.host}
             token={this.props.token}
             api_url={this.props.api_url}
@@ -145,14 +145,14 @@ class Messages extends React.Component {
     return (
       <div className="email_list">
         <div className={`filter ${this.state.sort_order.css}`}>
-          <Mailboxes 
+          <Folders 
             token={this.props.token}
             password={this.props.password}
             userName={this.props.userName}
             api_url={this.props.api_url}
-            setMailbox={this.props.setMailbox}
+            setFolder={this.props.setFolder}
             host={this.props.host}
-            mailbox={this.props.mailbox}
+            folder={this.props.folder}
             setMessage={this.props.setMessage}
           />
           <div>

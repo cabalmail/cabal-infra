@@ -53,7 +53,7 @@ class MessageOverlay extends React.Component {
       JSON.stringify({
         user: this.props.userName,
         password: this.props.password,
-        mailbox: this.props.mailbox,
+        folder: this.props.folder,
         host: this.props.host,
         id: this.props.envelope.id
       }),
@@ -73,7 +73,7 @@ class MessageOverlay extends React.Component {
       JSON.stringify({
         user: this.props.userName,
         password: this.props.password,
-        mailbox: this.props.mailbox,
+        folder: this.props.folder,
         host: this.props.host,
         id: this.props.envelope.id,
         index: a.id,
@@ -95,7 +95,7 @@ class MessageOverlay extends React.Component {
       JSON.stringify({
         user: this.props.userName,
         password: this.props.password,
-        mailbox: this.props.mailbox,
+        folder: this.props.folder,
         host: this.props.host,
         id: this.props.envelope.id
       }),
@@ -145,7 +145,7 @@ class MessageOverlay extends React.Component {
             id={this.props.envelope.id}
             userName={this.props.userName}
             password={this.props.password}
-            mailbox={this.props.mailbox}
+            folder={this.props.folder}
             host={this.props.host}
             token={this.props.token}
             api_url={this.props.api_url}
