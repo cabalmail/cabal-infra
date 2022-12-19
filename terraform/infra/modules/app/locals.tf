@@ -5,7 +5,7 @@ locals {
     }
   }
   lambdas = {
-    list_mailboxes   = {
+    list_folders     = {
       runtime   = "python3.9"
       type      = "python"
       method    = "POST"

@@ -1,9 +1,7 @@
 '''Retrieves IMAP message given a mailbox and ID'''
 import json
-# import logging
 from s3 import get_message
-# logger = logging.getLogger()
-# logger.setLevel(logging.INFO)
+from s3 import sign_url
 
 def handler(event, _context):
     '''Retrieves IMAP message given a mailbox and ID'''
@@ -36,13 +34,12 @@ def handler(event, _context):
     except:
         body_plain_decoded = body_plain.__str__()
 
-    if len(message.__str__()) > 1000000:
-        message = "Raw message too large to display"
-
     return {
         "statusCode": 200,
         "body": json.dumps({
-            "message_raw": message.__str__(),
+            "message_raw": sign_url(
+                                    body['host'].replace("imap", "cache"),
+                                    f"{body['user']}/{body['mailbox']}/{body['id']}/bytes"),
             "message_body_plain": body_plain_decoded,
             "message_body_html": body_html_decoded
         })

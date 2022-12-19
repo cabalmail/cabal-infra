@@ -1,9 +1,6 @@
 '''Retrieves list of attachments from a message given a mailbox and ID'''
 import json
-# import logging
 from s3 import get_message
-# logger = logging.getLogger()
-# logger.setLevel(logging.INFO)
 
 def handler(event, _context):
     '''Retrieves list of attachments from a message given a mailbox and ID'''

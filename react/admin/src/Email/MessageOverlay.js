@@ -159,6 +159,7 @@ class MessageOverlay extends React.Component {
       case "raw":
         return (
           <pre className="message message_raw">{this.state.message_raw}</pre>
+          
         );
       case "attachments":
         const attachments = this.state.attachments.map(a => {

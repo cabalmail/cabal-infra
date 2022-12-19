@@ -12,6 +12,8 @@ import Login from './Login';
 import Message from './Message';
 import Nav from './Nav';
 import Email from './Email';
+import Folders from './Folders';
+import './App.css';
 let UserPool = null;
 
 /**
@@ -201,6 +203,17 @@ class App extends React.Component {
             api_url={this.state.api_url}
             userName={this.state.userName}
             domains={this.state.domains}
+            setMessage={this.setMessage}
+          />
+        );
+      case "Folders":
+        return (
+          <Folders
+            token={this.state.token}
+            api_url={this.state.api_url}
+            password={this.state.password}
+            userName={this.state.userName}
+            host={`imap.${this.state.control_domain}`}
             setMessage={this.setMessage}
           />
         );

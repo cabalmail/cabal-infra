@@ -1,14 +1,10 @@
 '''Preps an attachment for download from S3 given a mailbox, message ID, and attachment serial number'''
 import json
-import logging
 from s3 import upload_object
 from s3 import sign_url
 from s3 import key_exists
 from s3 import get_object
 from s3 import get_message
-
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
 
 def handler(event, _context):
     '''Preps an attachment for download from S3 given a mailbox, message ID, and attachment serial number'''
