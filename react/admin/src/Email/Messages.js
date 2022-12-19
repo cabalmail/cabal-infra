@@ -15,6 +15,7 @@ class Messages extends React.Component {
     super(props);
     this.state = {
       message_ids: [],
+      selected_messages: [],
       sort_order: DESC,
       sort_field: DATE,
       loading: true
@@ -134,6 +135,11 @@ class Messages extends React.Component {
       default:
         this.setState({...this.state, sort_field: DATE, loading: true});
     }
+  }
+
+  handleCheck = (e) => {
+    e.preventDefault();
+    console.log(e.target.checked);
   }
 
   render() {

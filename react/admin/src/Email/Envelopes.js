@@ -69,7 +69,6 @@ class Envelopes extends React.Component {
     const message_list = this.props.message_ids.map(id => {
       if (id.toString() in this.state.envelopes) {
         var message = this.state.envelopes[id];
-        console.log(message.struct);
         var flags = message.flags.map(d => {return d.replace("\\","")}).join(" ");
         var selected = this.state.selected === id.toString() ? "selected" : "";
         return (
@@ -79,8 +78,10 @@ class Envelopes extends React.Component {
               <div className="message-field message-date">{message.date}</div>
             </div>
             <div className="message-field message-subject">
-              <input type="checkbox" id={id} />&nbsp;
+              <input type="checkbox" id={id} onChange={this.props.handleCheck} />&nbsp;
               {flags.match(/Seen/) ? '✉️ ' : '🔵 '}
+              {flags.match(/Flagged/) ? '🚩 ' : ''}
+              {flags.match(/Answered/) ? '⤶ ' : ''}
               {message.struct[1] === "mixed" ? '📎 ' : ''}
               <span id={id} onClick={this.handleClick}>{message.subject}</span>
             </div>
