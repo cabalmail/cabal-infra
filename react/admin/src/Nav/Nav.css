@@ -2,7 +2,8 @@
 .logged-out #logout,
 .logged-in #signup,
 .logged-in #login,
-.logged-out #email {
+.logged-out #email,
+.logged-out #folders {
   display: none;
 }
 
