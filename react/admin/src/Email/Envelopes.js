@@ -84,7 +84,7 @@ class Envelopes extends React.Component {
               {flags.match(/Flagged/) ? '🚩 ' : ''}
               {flags.match(/Answered/) ? '⤶ ' : ''}
               {message.struct[1] === "mixed" ? '📎 ' : ''}
-              <span id={id} onClick={this.handleClick}>{message.subject}</span>
+              <span className="subject" id={id} onClick={this.handleClick}>{message.subject}</span>
             </div>
           </li>
         );

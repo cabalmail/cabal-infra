@@ -242,7 +242,7 @@ ul.message-list div.message-subject {
   text-overflow: ellipsis;
 }
 
-ul.message-list div.message-subject span:hover {
+ul.message-list div.message-subject span.subject:hover {
   text-decoration: underline;
 }
 
@@ -256,6 +256,7 @@ ul.message-list div.message-subject label,
 ul.message-list div.message-subject input[type=checkbox]:not(:checked) ~ label .unchecked,
 ul.message-list div.message-subject input[type=checkbox]:checked ~ label .checked {
   display: inline;
+  font-family: courier;
 }
 
 /*
