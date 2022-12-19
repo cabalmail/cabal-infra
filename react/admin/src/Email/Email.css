@@ -265,6 +265,7 @@ ul.message-list li.Seen div.message-subject::before {
 
 ul.message-list div.message-subject input[type=checkbox] {
   width: auto;
+  display: inline-block;
 }
 
 ul.message-list div.message-from {
