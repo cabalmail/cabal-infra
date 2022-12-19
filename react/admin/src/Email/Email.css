@@ -255,9 +255,13 @@ ul.message-list div.message-subject input[type=checkbox]:checked ~ label .unchec
 ul.message-list div.message-subject label,
 ul.message-list div.message-subject input[type=checkbox]:not(:checked) ~ label .unchecked,
 ul.message-list div.message-subject input[type=checkbox]:checked ~ label .checked {
-  display: inline;
+  display: inline-block;
   font-family: arial;
   font-size: 150%;
+  width: 1.5em;
+  height: 1.5em;
+  border: 1px solid #888;
+  overflow: visible;
 }
 
 /*
