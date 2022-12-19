@@ -80,8 +80,8 @@ class Envelopes extends React.Component {
             </div>
             <div className="message-field message-subject">
               <input type="checkbox" id={id} />&nbsp;
-              {flags.match(/Seen/) ? '✉️&nbsp;' : '🔵&nbsp;'}
-              {message.struct[1] === "mixed" ? '📎&nbsp;' : ''}
+              {flags.match(/Seen/) ? '✉️ ' : '🔵 '}
+              {message.struct[1] === "mixed" ? '📎 ' : ''}
               <span id={id} onClick={this.handleClick}>{message.subject}</span>
             </div>
           </li>
