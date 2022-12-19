@@ -263,6 +263,10 @@ ul.message-list li.Seen div.message-subject::before {
   padding-right: .2em;
 }
 
+ul.message-list div.message-subject input[type=checkbox] {
+  width: auto;
+}
+
 ul.message-list div.message-from {
   height: 1.75em;
   text-overflow: ellipsis;
