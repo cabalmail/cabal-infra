@@ -246,23 +246,14 @@ ul.message-list div.message-subject span:hover {
   text-decoration: underline;
 }
 
-ul.message-list div.message-subject input[type=checkbox] {
+ul.message-list div.message-subject input[type=checkbox],
+ul.message-list div.message-subject input[type=checkbox]:not(:checked) ~ label .checked,
+ul.message-list div.message-subject input[type=checkbox]:checked ~ label .unchecked {
   display: none;
 }
 
-ul.message-list div.message-subject input[type=checkbox]:not(:checked) ~ lable .checked {
-  display: none;
-}
-
-ul.message-list div.message-subject input[type=checkbox]:checked ~ lable .unchecked {
-  display: none;
-}
-
-ul.message-list div.message-subject input[type=checkbox]:not(:checked) ~ lable .unchecked {
-  display: inline;
-}
-
-ul.message-list div.message-subject input[type=checkbox]:checked ~ lable .checked {
+ul.message-list div.message-subject input[type=checkbox]:not(:checked) ~ label .unchecked,
+ul.message-list div.message-subject input[type=checkbox]:checked ~ label .checked {
   display: inline;
 }
 
