@@ -252,6 +252,7 @@ ul.message-list div.message-subject input[type=checkbox]:checked ~ label .unchec
   display: none;
 }
 
+ul.message-list div.message-subject label,
 ul.message-list div.message-subject input[type=checkbox]:not(:checked) ~ label .unchecked,
 ul.message-list div.message-subject input[type=checkbox]:checked ~ label .checked {
   display: inline;
