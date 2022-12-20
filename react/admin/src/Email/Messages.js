@@ -217,15 +217,11 @@ class Messages extends React.Component {
           </div>
           <br />
           <div className="filter">
-            <label htmlFor="action">Batch action:</label>
-            <select id="action" name="action" className="action">
-              <option value="noop"  ></option>
-              <option value="delete">🗑️ Delete</option>
-              <option value="move"  >📨 Move to...</option>
-              <option value="read"  >✉️ Mark read</option>
-              <option value="unread">🔵 Mark unread</option>
-              <option value="flag"  >🚩 Flag</option>
-            </select>
+            <button value="delete" id="delete" name="delete">🗑️ Delete</button>
+            <button value="move" id="move" name="move">📨 Move to...</button>
+            <button value="read" id="read" name="read">✉️ Mark read</button>
+            <button value="unread" id="unread" name="unread">🔵 Mark unread</button>
+            <button value="flag" id="flag" name="flag">🚩 Flag</button>
           </div>
         </div>
         <ul className={`message-list ${this.state.loading ? "loading" : ""}`}>

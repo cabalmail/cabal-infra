@@ -89,15 +89,20 @@ div.filter button {
   border-width: 1px 1px 1px 0;
 }
 
+
 body div.filter select.sort-by {
   border-radius: 0;
 }
 
+div.filter button.move,
+div.filter button.read,
+div.filter button.unread,
 div.filter select {
   width: auto;
   border-radius: 0 4px 4px 0;
 }
 
+div.filter button.delete,
 div.filter label {
   border-radius: 4px 0 0 4px;
   border-width: 1px 0 1px 1px;
