@@ -26,7 +26,7 @@
   ul.message-list div.message-subject input[type=checkbox]:checked ~ label .checked {
     box-shadow: inset 0 0 0.35em #000;
     background-color: #200;
-    border-color: #800
+    border-color: #800;
   }
   /* inverted */
   body.inverted, a.inverted, button.inverted, select.inverted, div.inverted,
@@ -84,7 +84,7 @@
   ul.message-list div.message-subject input[type=checkbox]:not(:checked) ~ label .unchecked,
   ul.message-list div.message-subject input[type=checkbox]:checked ~ label .checked {
     box-shadow: inset 0 0 0.35em #fff;
-    background-color: #ffe
+    background-color: #ffe;
     border-color: #d00;
   }
   /* inverted */
