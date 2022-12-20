@@ -67,9 +67,10 @@ div.filter {
 }
 
 div.filter select,
+div.filter button,
 div.filter label {
   margin: 0;
-  font-size: 0.5em;
+  font-size: 9pt;
 }
 
 div.filter select {
