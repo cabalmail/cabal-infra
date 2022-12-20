@@ -53,11 +53,15 @@ ul.message_list {
 
 /* filters */
 
-div.email_list .expanded .filter, div.email_list .expanded button.expand_filter {
+div.email_list .expanded button.collapse_filter,
+div.email_list .collapsed button.expand_filter,
+div.email_list .expanded .filter,  {
   display: inline-block;
 }
 
-div.email_list .collapsed .filter, div.email_list .collapsed button.collapse_filter,
+div.email_list .collapsed .filter,
+div.email_list .collapsed button.collapse_filter,
+div.email_list .expanded button.expand_filter,
 div.ascending button#ascending, div.descending button#descending {
   display: none;
 }
