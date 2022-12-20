@@ -6,7 +6,8 @@ from email.header import decode_header
 from imapclient import IMAPClient
 
 ssm = boto3.client('ssm')
-mpw = ssm.get_parameter(Name='/cabal/master_password', WithDecryption=True)
+mpw = ssm.get_parameter(Name='/cabal/master_password',
+                        WithDecryption=True)["Parameter"]["Value"]
 
 def handler(event, _context):
     '''Retrieves IMAP messages for a user given a folder'''

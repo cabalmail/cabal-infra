@@ -126,3 +126,8 @@ variable "bucket_arn" {
   type        = string
   description = "ARN of s3 bucket"
 }
+
+variable "master_password" {
+  type        = string
+  description = "Master password for Lambda-to-IMAP access"
+}

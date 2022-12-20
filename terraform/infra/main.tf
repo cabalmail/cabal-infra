@@ -115,6 +115,7 @@ module "imap" {
   chef_license     = var.chef_license
   bucket           = module.bucket.bucket
   bucket_arn       = module.bucket.bucket_arn
+  master_password  = module.admin.master_password
   depends_on       = [ module.cert ]
 }
 
@@ -141,6 +142,7 @@ module "smtp_in" {
   chef_license     = var.chef_license
   bucket           = module.bucket.bucket
   bucket_arn       = module.bucket.bucket_arn
+  master_password  = module.admin.master_password
   depends_on       = [ module.cert ]
 }
 
@@ -170,6 +172,7 @@ module "smtp_out" {
   chef_license     = var.chef_license
   bucket           = module.bucket.bucket
   bucket_arn       = module.bucket.bucket_arn
+  master_password  = module.admin.master_password
   depends_on       = [ module.cert ]
 }
 

@@ -11,7 +11,8 @@ s3c = boto3.client("s3",
                   region_name="us-east-1",
                   config=boto3.session.Config(signature_version='s3v4'))
 ssm = boto3.client('ssm')
-mpw = ssm.get_parameter(Name='/cabal/master_password', WithDecryption=True)
+mpw = ssm.get_parameter(Name='/cabal/master_password',
+                        WithDecryption=True)["Parameter"]["Value"]
 
 def get_message(host, user, folder, id):
     '''Gets a message from cache on s3 or from imap server'''
