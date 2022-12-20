@@ -54,12 +54,16 @@ ul.message_list {
 /* filters */
 
 div.email_list .expanded .filter, div.email_list .expanded button.expand_filter {
-  display: block;
+  display: inline-block;
 }
 
 div.email_list .collapsed .filter, div.email_list .collapsed button.collapse_filter,
 div.ascending button#ascending, div.descending button#descending {
   display: none;
+}
+
+div.filter button.filter_expand_collapse {
+  width: auto;
 }
 
 div.filter button.sort-order {
