@@ -85,7 +85,10 @@ class Messages extends React.Component {
   }
 
   handleCheck = (id, checked) => {
-    this.setState({...this.state, selected_messages: {...this.state.selected_messages, id:checked}})
+    this.setState({
+      ...this.state,
+      selected_messages: {...this.state.selected_messages, [id]:checked}
+    })
     console.log(this.state.selected_messages);
   }
 
