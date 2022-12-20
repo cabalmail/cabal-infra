@@ -28,6 +28,10 @@
     background-color: #400;
     border-color: #000;
   }
+  /* forced */
+  .forced * {
+    color: #aaa !important;
+  }
   /* inverted */
   body.inverted, a.inverted, button.inverted, select.inverted, div.inverted,
   .inverted a, .inverted button, .inverted select, .inverted div {
@@ -86,6 +90,10 @@
     box-shadow: inset 0 0 0.35em #fff;
     background-color: #ffe;
     border-color: #aaa;
+  }
+  /* forced */
+  .forced * {
+    color: #222 !important;
   }
   /* inverted */
   body.inverted, a.inverted, button.inverted, select.inverted, div.inverted,

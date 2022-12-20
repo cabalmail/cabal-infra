@@ -8,7 +8,7 @@ class RichMessage extends React.Component {
     super(props);
     const body = this.props.body.replace(/src="http/g, 'src="disabled-http');
     this.state = {
-      invert: false,
+      render: "normal",
       body: body,
       imagesLoaded: false,
       hasRemoteImages: false
@@ -67,14 +67,26 @@ class RichMessage extends React.Component {
     });
   }
 
-  toggleBackground = (e) => {
+  rotateBackground = (e) => {
     e.preventDefault();
-    this.setState({...this.state, invert: !this.state.invert})
+    switch (this.state.render) {
+      case "inverted":
+        this.setState({...this.state, render: "forced"});
+        break;
+      case "forced":
+        this.setState({...this.state, render: "normal"});
+        break;
+      case "normal":
+        this.setState({...this.state, render: "inverted"});
+        break;
+      default:
+        this.setState({...this.state, render: "normal"});
+    }
   }
 
   render() {
     return (
-      <div className={`message message_html ${this.state.invert ? "inverted" : ""}`}>
+      <div className={`message message_html ${this.state.render}`}>
         <div class="buttons">
           <button
             className="invert"
