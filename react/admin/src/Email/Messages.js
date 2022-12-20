@@ -192,6 +192,16 @@ class Messages extends React.Component {
             >⩔</button>
           </div>
         </div>
+        <div>
+          <select id="action" name="action" className="action">
+            <option value="noop">Select an action</option>
+            <option value="delete">Delete</option>
+            <option value="move">Move</option>
+            <option value="read">Mark as read</option>
+            <option value="unread">Mark as unread</option>
+            <option value="flag">Flag</option>
+          </select>
+        </div>
         <ul className={`message-list ${this.state.loading ? "loading" : ""}`}>
           {list}
         </ul>
