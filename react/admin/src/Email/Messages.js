@@ -18,6 +18,7 @@ class Messages extends React.Component {
       selected_messages: [],
       sort_order: DESC,
       sort_field: DATE,
+      filter_state: "collapsed",
       loading: true
     };
   }
@@ -125,6 +126,16 @@ class Messages extends React.Component {
     return pages;
   }
 
+  collapse = (e) => {
+    e.preventDefault();
+    this.setState({...this.state, filter_state: "collapsed"});
+  }
+
+  expand = (e) => {
+    e.preventDefault();
+    this.setState({...this.state, filter_state: "expanded"});
+  }
+
   sortAscending = (e) => {
     e.preventDefault();
     this.setState({...this.state, sort_order: ASC, loading: true});
@@ -163,7 +174,17 @@ class Messages extends React.Component {
     });
     return (
       <div className="email_list">
-        <div className={`filter ${this.state.sort_order.css}`}>
+        <div className={`filter ${this.state.sort_order.css} ${this.state.filter_state}`}>
+          <button
+            onClick={this.collapse}
+            className="filter_expand_collapse collapse_filter"
+            title="Hide message header"
+          >⋀</button>
+          <button
+            onClick={this.expand}
+            className="filter_expand_collapse expand_filter"
+            title="Show message header"
+          >⋁</button>
           <Folders 
             token={this.props.token}
             password={this.props.password}
@@ -174,7 +195,7 @@ class Messages extends React.Component {
             folder={this.props.folder}
             setMessage={this.props.setMessage}
           />
-          <div>
+          <div className="filter">
             <label htmlFor="sort-field">Sort by:</label>
             <select id="sort-by" name="sort-by" className="sort-by" onChange={this.setSortField}>
               {options}
@@ -192,7 +213,7 @@ class Messages extends React.Component {
               onClick={this.sortDescending}
             >⩔</button>
           </div>
-          <div>
+          <div className="filter">
             <label htmlFor="action">Batch action:</label>
             <select id="action" name="action" className="action">
               <option value="noop"  ></option>

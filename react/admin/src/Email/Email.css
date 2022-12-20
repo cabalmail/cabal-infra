@@ -53,17 +53,17 @@ ul.message_list {
 
 /* filters */
 
+div.email_list .expanded .filter, div.email_list .expanded button.expand_filter {
+  display: block;
+}
+
+div.email_list .collapsed .filter, div.email_list .collapsed button.collapse_filter,
 div.ascending button#ascending, div.descending button#descending {
   display: none;
 }
 
 div.filter button.sort-order {
   width: 2em;
-}
-
-div.filter {
-  display: grid;
-  grid-template-columns: auto auto auto;
 }
 
 div.filter select,
@@ -84,7 +84,7 @@ body div.filter select.sort-by {
 }
 
 div.filter select {
-  width: 4em;
+  width: auto;
   border-radius: 0 4px 4px 0;
 }
 
