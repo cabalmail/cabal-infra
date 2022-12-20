@@ -261,8 +261,8 @@ ul.message-list div.message-subject input[type=checkbox]:checked ~ label .checke
   display: inline-block;
   font-family: arial;
   font-size: 150%;
-  width: 1em;
-  height: 1em;
+  width: 0.75em;
+  height: 0.75em;
   border: 1px solid #888;
   border-radius: 0.1em;
   text-align: center;
