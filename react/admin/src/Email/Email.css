@@ -81,7 +81,6 @@ div.filter button,
 div.filter label {
   margin: 0;
   font-size: 9pt;
-  border-radius: 0 4px 4px 0;
 }
 
 div.filter button.sort-order {
