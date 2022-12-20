@@ -175,7 +175,7 @@ class Messages extends React.Component {
           />
           <div>
             <label htmlFor="sort-field">Sort by:</label>
-            <select id="sort-by" name="sort-by" onChange={this.setSortField}>
+            <select id="sort-by" name="sort-by" className="sort-by" onChange={this.setSortField}>
               {options}
             </select>
             <button
