@@ -23,7 +23,7 @@ Returns: null
 ### handleCheck
 Modifiers: none
 
-Parameters: messege_id
+Parameters: message_id
 checked (null
 null)
 
