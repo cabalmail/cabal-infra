@@ -52,6 +52,20 @@ resource "aws_iam_role_policy" "lambda" {
         {
             "Effect": "Allow",
             "Action": [
+                "ssm:DescribeParameters"
+            ],
+            "Resource": "arn:aws:ssm:${var.region}:${var.account}:*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ssm:GetParameters"
+            ],
+            "Resource": "arn:aws:ssm:${var.region}:${var.account}:parameter/cabal/master_password"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
               "s3:ListBucket"
             ],
             "Resource": "arn:aws:s3:::cache.${var.control_domain}"
