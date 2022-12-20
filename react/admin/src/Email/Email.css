@@ -84,16 +84,16 @@ div.filter label {
   border-radius: 0 4px 4px 0;
 }
 
-div.filter button {
+div.filter button.sort-order {
   border-radius: 0 4px 4px 0;
   border-width: 1px 1px 1px 0;
 }
 
 
 body div.filter select.sort-by,
-body div.email_list div.filter button.move,
-body div.email_list div.filter button.read,
-body div.email_list div.filter button.unread {
+div.filter button.move,
+div.filter button.read,
+div.filter button.unread {
   border-radius: 0;
   border-width: 1px 0px 1px 1px;
   width: auto;
