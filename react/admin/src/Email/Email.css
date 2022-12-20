@@ -94,9 +94,9 @@ body div.filter select.sort-by {
   border-radius: 0;
 }
 
-div.filter button.move,
-div.filter button.read,
-div.filter button.unread,
+div.email_list .expanded div.filter button.move,
+div.email_list .expanded div.filter button.read,
+div.email_list .expanded div.filter button.unread,
 div.filter select {
   width: auto;
   border-radius: 0 4px 4px 0;
