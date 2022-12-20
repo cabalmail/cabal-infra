@@ -84,10 +84,9 @@ class Messages extends React.Component {
     })
   }
 
-  handleCheck = (e) => {
-    e.preventDefault();
-    console.log(e.target.checked);
-    console.log(e.target.id);
+  handleCheck = (id, checked) => {
+    console.log(id);
+    console.log(checked);
   }
 
   loadList() {

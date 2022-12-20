@@ -65,6 +65,10 @@ class Envelopes extends React.Component {
     this.setState({...this.state,selected:e.target.id});
   }
 
+  handleCheck = (e) => {
+    this.props.handleCheck(e.target.id, e.target.checked);
+  }
+
   render() {
     const message_list = this.props.message_ids.map(id => {
       if (id.toString() in this.state.envelopes) {
@@ -78,7 +82,7 @@ class Envelopes extends React.Component {
               <div className="message-field message-date">{message.date}</div>
             </div>
             <div className="message-field message-subject">
-              <input type="checkbox" id={id} onChange={this.props.handleCheck} />
+              <input type="checkbox" id={id} onChange={this.handleCheck} />
               <label htmlFor={id}><span className="checked">✓</span><span className="unchecked">&nbsp;</span></label>&nbsp;
               {flags.match(/Seen/) ? '✉️ ' : '🔵 '}
               {flags.match(/Flagged/) ? '🚩 ' : ''}
