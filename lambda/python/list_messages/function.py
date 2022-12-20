@@ -1,6 +1,6 @@
 '''Retrieves IMAP message ids for a user given a folder and sorting criteria'''
 import json
-
+import boto3
 from imapclient import IMAPClient
 
 ssm = boto3.client('ssm')

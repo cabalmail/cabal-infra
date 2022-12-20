@@ -1,8 +1,8 @@
 '''Retrieves IMAP envelopes for a user given a folder and list of message ids'''
 import json
 from datetime import datetime
+import boto3
 from email.header import decode_header
-
 from imapclient import IMAPClient
 
 ssm = boto3.client('ssm')
