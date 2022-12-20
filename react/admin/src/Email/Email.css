@@ -58,7 +58,7 @@ div.ascending button#ascending, div.descending button#descending {
 }
 
 div.filter button.sort-order {
-  width: 3em;
+  width: 4em;
 }
 
 div.filter {
@@ -71,6 +71,16 @@ div.filter button,
 div.filter label {
   margin: 0;
   font-size: 9pt;
+  border-radius: 0 4px 4px 0;
+}
+
+div.filter button {
+  border-radius: 0 4px 4px 0;
+  border-width: 1px 1px 1px 0;
+}
+
+div.filter select.sort-by {
+  border-radius: 0;
 }
 
 div.filter select {
