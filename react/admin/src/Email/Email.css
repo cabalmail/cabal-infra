@@ -79,7 +79,7 @@ div.filter button {
   border-width: 1px 1px 1px 0;
 }
 
-div.filter select.sort-by {
+body div.filter select.sort-by {
   border-radius: 0;
 }
 
