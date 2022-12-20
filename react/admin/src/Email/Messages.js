@@ -88,8 +88,8 @@ class Messages extends React.Component {
     this.setState({
       ...this.state,
       selected_messages: {...this.state.selected_messages, [id]:checked}
-    })
-    console.log(this.state.selected_messages);
+    });
+    setTimeout(() => {console.log(this.state.selected_messages);}, 50);
   }
 
   loadList() {
