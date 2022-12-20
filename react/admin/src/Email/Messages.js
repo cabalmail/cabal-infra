@@ -185,6 +185,7 @@ class Messages extends React.Component {
             className="filter_expand_collapse expand_filter"
             title="Show message header"
           >⋁</button>
+          <br />
           <Folders 
             token={this.props.token}
             password={this.props.password}
@@ -195,6 +196,7 @@ class Messages extends React.Component {
             folder={this.props.folder}
             setMessage={this.props.setMessage}
           />
+          <br />
           <div className="filter">
             <label htmlFor="sort-field">Sort by:</label>
             <select id="sort-by" name="sort-by" className="sort-by" onChange={this.setSortField}>
@@ -213,6 +215,7 @@ class Messages extends React.Component {
               onClick={this.sortDescending}
             >⩔</button>
           </div>
+          <br />
           <div className="filter">
             <label htmlFor="action">Batch action:</label>
             <select id="action" name="action" className="action">
