@@ -139,7 +139,7 @@ class Messages extends React.Component {
 
   handleCheck = (e) => {
     e.preventDefault();
-    console.log(e.target.checked);
+    console.log(e.target);
   }
 
   render() {
