@@ -95,7 +95,7 @@ class Messages extends React.Component {
         ...this.state,
         selected_messages: this.state.selected_messages.filter(function(i) { 
           return id !== i;
-        })}
+        })
       });
     }
     setTimeout(() => {
