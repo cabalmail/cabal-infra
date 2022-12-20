@@ -4,7 +4,7 @@ import boto3
 from imapclient import IMAPClient
 
 ssm = boto3.client('ssm')
-mpw = ssm.get_parameter(Name='/Prod/cabal/master_password', WithDecryption=True)
+mpw = ssm.get_parameter(Name='/cabal/master_password', WithDecryption=True)
 
 def handler(event, _context):
     '''Retrieves IMAP message ids for a user given a folder and sorting criteria'''
