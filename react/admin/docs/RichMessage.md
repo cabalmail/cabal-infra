@@ -29,7 +29,7 @@ Parameters:  ()
 
 Returns: null
 
-### toggleBackground
+### rotateBackground
 Modifiers: none
 
 Parameters: e (null)
