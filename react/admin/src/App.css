@@ -22,6 +22,11 @@
     background-color: #300;
     border-color: #800;
   }
+  ul.message-list div.message-subject input[type=checkbox]:not(:checked) ~ label .unchecked,
+  ul.message-list div.message-subject input[type=checkbox]:checked ~ label .checked {
+    box-shadow: inset 0 0 0.35em #000;
+    background-color: #200;
+  }
   /* inverted */
   body.inverted, a.inverted, button.inverted, select.inverted, div.inverted,
   .inverted a, .inverted button, .inverted select, .inverted div {
@@ -74,6 +79,11 @@
     color: #000;
     background-color: #a33;
     border-color: #d00;
+  }
+  ul.message-list div.message-subject input[type=checkbox]:not(:checked) ~ label .unchecked,
+  ul.message-list div.message-subject input[type=checkbox]:checked ~ label .checked {
+    box-shadow: inset 0 0 0.35em #ff0;
+    background-color: #fff
   }
   /* inverted */
   body.inverted, a.inverted, button.inverted, select.inverted, div.inverted,
