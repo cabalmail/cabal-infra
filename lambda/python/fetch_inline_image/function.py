@@ -11,7 +11,7 @@ def handler(event, _context):
     body = json.loads(event['body'])
     bucket = body['host'].replace("imap", "cache")
     key = ""
-    message = get_message(body['host'], body['user'], body['password'], body['folder'], body['id'])
+    message = get_message(body['host'], body['user'], body['folder'], body['id'])
     for part in message.walk():
         ct = part.get_content_type()
         if part.get('Content-ID'):

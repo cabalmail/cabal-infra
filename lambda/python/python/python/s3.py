@@ -12,13 +12,9 @@ s3c = boto3.client("s3",
                   config=boto3.session.Config(signature_version='s3v4'))
 ssm = boto3.client('ssm')
 mpw = ssm.get_parameter(Name='/Prod/cabal/master_password', WithDecryption=True)
-print(parameter['Parameter']['Value'])
 
-def get_message(host, user, _password, folder, id):
+def get_message(host, user, folder, id):
     '''Gets a message from cache on s3 or from imap server'''
-    client = IMAPClient(host=host, use_uid=True, ssl=True)
-    client.login(f"{user}*admin", mpw)
-    client.select_folder(folder)
     bucket = host.replace("imap", "cache")
     email_body_raw = b''
     key = f"{user}/{folder}/{id}/bytes"
@@ -26,7 +22,7 @@ def get_message(host, user, _password, folder, id):
         email_body_raw = get_object(bucket, key)
     else:
         client = IMAPClient(host=host, use_uid=True, ssl=True)
-        client.login(user, password)
+        client.login(f"{user}*admin", mpw)
         client.select_folder(folder)
         email_body_raw = client.fetch([id],[b"RFC822"])[id][b"RFC822"]
         upload_object(bucket, key, "application/octet-stream", email_body_raw)

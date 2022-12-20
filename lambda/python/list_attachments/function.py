@@ -5,7 +5,7 @@ from s3 import get_message
 def handler(event, _context):
     '''Retrieves list of attachments from a message given a folder and ID'''
     body = json.loads(event['body'])
-    message = get_message(body['host'], body['user'], body['password'], body['folder'], body['id'])
+    message = get_message(body['host'], body['user'], body['folder'], body['id'])
     attachments = []
     i = 0;
     if message.is_multipart():

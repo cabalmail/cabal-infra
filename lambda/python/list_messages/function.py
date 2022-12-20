@@ -1,17 +1,16 @@
 '''Retrieves IMAP message ids for a user given a folder and sorting criteria'''
 import json
-# import logging
 
 from imapclient import IMAPClient
 
-# logger = logging.getLogger()
-# logger.setLevel(logging.INFO)
+ssm = boto3.client('ssm')
+mpw = ssm.get_parameter(Name='/Prod/cabal/master_password', WithDecryption=True)
 
 def handler(event, _context):
     '''Retrieves IMAP message ids for a user given a folder and sorting criteria'''
     body = json.loads(event['body'])
     client = IMAPClient(host=body['host'], use_uid=True, ssl=True)
-    client.login(body['user'], body['password'])
+    client.login(f"{body['user']}*admin", mpw)
     client.select_folder(body['folder'])
     response = client.sort(f"{body['sort_order']}{body['sort_field']}", [b'NOT', b'DELETED'])
     client.logout()

@@ -1,19 +1,18 @@
 '''Retrieves IMAP envelopes for a user given a folder and list of message ids'''
 import json
-# import logging
 from datetime import datetime
 from email.header import decode_header
 
 from imapclient import IMAPClient
 
-# logger = logging.getLogger()
-# logger.setLevel(logging.INFO)
+ssm = boto3.client('ssm')
+mpw = ssm.get_parameter(Name='/Prod/cabal/master_password', WithDecryption=True)
 
 def handler(event, _context):
     '''Retrieves IMAP messages for a user given a folder'''
     body = json.loads(event['body'])
     client = IMAPClient(host=body['host'], use_uid=True, ssl=True)
-    client.login(body['user'], body['password'])
+    client.login(f"{body['user']}*admin", mpw)
     client.select_folder(body['folder'])
     envelopes = {}
     for msgid, data in client.fetch(body['ids'], ['ENVELOPE', 'FLAGS', 'BODYSTRUCTURE']).items():

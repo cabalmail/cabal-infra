@@ -6,7 +6,7 @@ from s3 import sign_url
 def handler(event, _context):
     '''Retrieves IMAP message given a folder and ID'''
     body = json.loads(event['body'])
-    message = get_message(body['host'], body['user'], body['password'], body['folder'], body['id'])
+    message = get_message(body['host'], body['user'], body['folder'], body['id'])
     body_plain = ""
     body_html = ""
     if message.is_multipart():

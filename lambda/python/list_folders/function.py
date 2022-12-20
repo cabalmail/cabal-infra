@@ -1,16 +1,15 @@
 '''Retrieves IMAP folders for a user'''
 import json
-# import logging
 from imapclient import IMAPClient
 
-# logger = logging.getLogger()
-# logger.setLevel(logging.INFO)
+ssm = boto3.client('ssm')
+mpw = ssm.get_parameter(Name='/Prod/cabal/master_password', WithDecryption=True)
 
 def handler(event, _context):
     '''Retrieves IMAP folders for a user'''
     body = json.loads(event['body'])
     client = IMAPClient(host=body['host'], use_uid=True, ssl=True)
-    client.login(body['user'], body['password'])
+    client.login(f"{body['user']}*admin", mpw)
     response = client.list_folders()
     client.logout()
     return {
