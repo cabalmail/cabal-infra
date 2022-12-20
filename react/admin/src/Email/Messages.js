@@ -98,9 +98,6 @@ class Messages extends React.Component {
         })
       });
     }
-    setTimeout(() => {
-      console.log(this.state.selected_messages);
-    }, 50);
   }
 
   loadList() {
