@@ -90,7 +90,7 @@ class RichMessage extends React.Component {
         <div class="buttons">
           <button
             className="invert"
-            onClick={this.toggleBackground}
+            onClick={this.retateBackground}
             title="Invert background (useful when the text color is too close to the default background color)"
           >◐</button>
           <button
@@ -100,7 +100,7 @@ class RichMessage extends React.Component {
           >⇩</button>
           <div
             id="message_html"
-            className={this.state.invert ? "inverted" : ""}
+            className={this.state.render}
             dangerouslySetInnerHTML={{__html: DOMPurify.sanitize(this.state.body)}}
           />
         </div>
