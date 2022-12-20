@@ -84,6 +84,12 @@ class Messages extends React.Component {
     })
   }
 
+  handleCheck = (e) => {
+    e.preventDefault();
+    console.log(e.target.checked);
+    console.log(e.target.id);
+  }
+
   loadList() {
     const num_ids = this.state.message_ids.length;
     var pages = [];
@@ -99,6 +105,7 @@ class Messages extends React.Component {
             token={this.props.token}
             api_url={this.props.api_url}
             showOverlay={this.props.showOverlay}
+            handleCheck={this.handleCheck}
             setMessage={this.props.setMessage}
           />
         </LazyLoad>
@@ -135,11 +142,6 @@ class Messages extends React.Component {
       default:
         this.setState({...this.state, sort_field: DATE, loading: true});
     }
-  }
-
-  handleCheck = (e) => {
-    e.preventDefault();
-    console.log(e.target);
   }
 
   render() {
