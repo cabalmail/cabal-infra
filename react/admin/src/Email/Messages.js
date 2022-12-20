@@ -15,7 +15,7 @@ class Messages extends React.Component {
     super(props);
     this.state = {
       message_ids: [],
-      selected_messages: [],
+      selected_messages: {},
       sort_order: DESC,
       sort_field: DATE,
       loading: true
@@ -85,8 +85,8 @@ class Messages extends React.Component {
   }
 
   handleCheck = (id, checked) => {
-    console.log(id);
-    console.log(checked);
+    this.setState({...this.state, selected_messages: {...this.state.selected_messages, id:checked}})
+    console.log(this.state.selected_messages);
   }
 
   loadList() {
