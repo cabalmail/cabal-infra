@@ -71,13 +71,13 @@ class RichMessage extends React.Component {
     e.preventDefault();
     switch (this.state.render) {
       case "inverted":
-        this.setState({...this.state, render: "forced"});
-        break;
-      case "forced":
         this.setState({...this.state, render: "normal"});
         break;
-      case "normal":
+      case "forced":
         this.setState({...this.state, render: "inverted"});
+        break;
+      case "normal":
+        this.setState({...this.state, render: "forced"});
         break;
       default:
         this.setState({...this.state, render: "normal"});
