@@ -91,9 +91,9 @@ div.filter button {
 
 
 body div.filter select.sort-by,
-body div.email_list .expanded div.filter button.move,
-body div.email_list .expanded div.filter button.read,
-body div.email_list .expanded div.filter button.unread {
+body div.email_list div.filter button.move,
+body div.email_list div.filter button.read,
+body div.email_list div.filter button.unread {
   border-radius: 0;
   width: auto;
 }
