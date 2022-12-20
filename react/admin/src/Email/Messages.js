@@ -192,13 +192,14 @@ class Messages extends React.Component {
             >⩔</button>
           </div>
           <div>
+            <label htmlFor="action">Batch action:</label>
             <select id="action" name="action" className="action">
-              <option value="noop">Select an action</option>
-              <option value="delete">Delete</option>
-              <option value="move">Move</option>
-              <option value="read">Mark as read</option>
-              <option value="unread">Mark as unread</option>
-              <option value="flag">Flag</option>
+              <option value="noop"></option>
+              <option value="delete" title="Delete">🗑️</option>
+              <option value="move" title="Move to folder...">📨</option>
+              <option value="read" title="Mark as read">✉️</option>
+              <option value="unread" title="Mark as unread">🔵</option>
+              <option value="flag" title="Flag">🚩</option>
             </select>
           </div>
         </div>

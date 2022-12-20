@@ -51,7 +51,7 @@ ul.message_list {
   }
 }
 
-/* sort options */
+/* filters */
 
 div.ascending button#ascending, div.descending button#descending {
   display: none;
@@ -68,11 +68,23 @@ div.filter {
 
 div.filter select {
   width: auto;
+  border-radius: 0 4px 4px 0;
+  margin: 0;
+}
+
+div.filter label {
+  border-radius: 4px 0 0 4px;
+  border-width: 1px;
+  border-style: solid;
+  padding: 0.5em;
+  margin: 0;
 }
 
 div.filter select, div.filter label, div.filter button {
   display: inline-block;
 }
+
+div
 
 /* message overlay */
 
