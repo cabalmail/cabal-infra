@@ -22,7 +22,7 @@ resource "random_password" "password" {
 resource "aws_ssm_parameter" "password" {
   name        = "/cabal/master_password"
   description = "Master IMAP password"
-  type        = "String"
+  type        = "SecureString"
   value       = random_password.password.result
 }
 
