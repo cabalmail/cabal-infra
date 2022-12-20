@@ -58,7 +58,7 @@ div.ascending button#ascending, div.descending button#descending {
 }
 
 div.filter button.sort-order {
-  width: 4em;
+  width: 2em;
 }
 
 div.filter {
