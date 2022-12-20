@@ -90,13 +90,14 @@ div.filter button {
 }
 
 
-body div.filter select.sort-by {
+body div.filter select.sort-by,
+body div.email_list .expanded div.filter button.move,
+body div.email_list .expanded div.filter button.read,
+body div.email_list .expanded div.filter button.unread {
   border-radius: 0;
+  width: auto;
 }
 
-div.email_list .expanded div.filter button.move,
-div.email_list .expanded div.filter button.read,
-div.email_list .expanded div.filter button.unread,
 div.filter select {
   width: auto;
   border-radius: 0 4px 4px 0;
