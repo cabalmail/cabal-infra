@@ -269,21 +269,6 @@ ul.message-list div.message-subject input[type=checkbox]:checked ~ label .checke
   overflow: visible;
 }
 
-/*
-\Answered \Flagged \Draft \Deleted \Seen
-
-ul.message-list div.message-subject::before {
-  content: '🔵';
-  display: inline-block;
-  padding-right: .2em;
-}
-
-ul.message-list li.Seen div.message-subject::before {
-  content: '✉️';
-  display: inline-block;
-  padding-right: .2em;
-}
-*/
 ul.message-list li.Seen div.message-subject {
   font-size: 115%;
   font-weight: normal;
