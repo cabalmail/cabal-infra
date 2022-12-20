@@ -17,6 +17,7 @@ Creates security group and autoscaling group for a tier (IMAP, SMTP submission, 
 | <a name="input_client_id"></a> [client\_id](#input\_client\_id) | App client ID for Cognito User Pool | `string` | n/a | yes |
 | <a name="input_control_domain"></a> [control\_domain](#input\_control\_domain) | Control domain | `string` | n/a | yes |
 | <a name="input_efs_dns"></a> [efs\_dns](#input\_efs\_dns) | DNS of Elastic File System | `string` | n/a | yes |
+| <a name="input_master_password"></a> [master\_password](#input\_master\_password) | Master password for Lambda-to-IMAP access | `string` | n/a | yes |
 | <a name="input_ports"></a> [ports](#input\_ports) | Ports to open in security group | `list(number)` | n/a | yes |
 | <a name="input_private_ports"></a> [private\_ports](#input\_private\_ports) | Ports to open for local traffic in security group | `list(number)` | n/a | yes |
 | <a name="input_private_subnets"></a> [private\_subnets](#input\_private\_subnets) | Subnets for imap ec2 instances. | `list` | n/a | yes |

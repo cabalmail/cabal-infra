@@ -38,7 +38,9 @@ Stands up the following resources to implement a web application that allows use
 | <a name="module_cabal_method"></a> [cabal\_method](#module\_cabal\_method) | ./modules/call | n/a |
 ## Outputs
 
-No outputs.
+| Name | Description |
+|------|-------------|
+| <a name="output_master_password"></a> [master\_password](#output\_master\_password) | n/a |
 ## Providers
 
 | Name | Version |
