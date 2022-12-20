@@ -217,11 +217,11 @@ class Messages extends React.Component {
           </div>
           <br />
           <div className="filter">
-            <button value="delete" id="delete" name="delete">🗑️ Delete</button>
-            <button value="move" id="move" name="move">📨 Move to...</button>
-            <button value="read" id="read" name="read">✉️ Mark read</button>
-            <button value="unread" id="unread" name="unread">🔵 Mark unread</button>
-            <button value="flag" id="flag" name="flag">🚩 Flag</button>
+            <button value="delete" id="delete" name="delete" className="delete">🗑️ Delete</button>
+            <button value="move" id="move" name="move" className="move">📨 Move to...</button>
+            <button value="read" id="read" name="read" className="read">✉️ Mark read</button>
+            <button value="unread" id="unread" name="unread" className="unread">🔵 Mark unread</button>
+            <button value="flag" id="flag" name="flag" className="flag">🚩 Flag</button>
           </div>
         </div>
         <ul className={`message-list ${this.state.loading ? "loading" : ""}`}>
