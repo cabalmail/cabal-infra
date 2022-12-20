@@ -85,7 +85,7 @@ div.filter label {
 
 div.filter button.sort-order {
   border-radius: 0 4px 4px 0;
-  border-width: 1px 1px 1px 0;
+  border-width: 1px;
 }
 
 
