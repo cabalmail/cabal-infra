@@ -23,7 +23,9 @@ Returns: null
 ### handleCheck
 Modifiers: none
 
-Parameters: e (null)
+Parameters: id
+checked (null
+null)
 
 Returns: null
 
