@@ -1,5 +1,5 @@
 @media (prefers-color-scheme: dark) {
-  body, a, button, select, div, filter {
+  body, a, button, select, div, label {
     color: #aaa;
     background-color: #200;
     border-color: #333;
@@ -57,7 +57,7 @@
 }
 
 @media (prefers-color-scheme: light) {
-  body, a, button, select, div, filter {
+  body, a, button, select, div, label {
     color: #222;
     background-color: #ffe;
     border-color: #999;
