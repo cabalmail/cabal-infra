@@ -90,7 +90,7 @@ class RichMessage extends React.Component {
         <div class="buttons">
           <button
             className="invert"
-            onClick={this.retateBackground}
+            onClick={this.rotateBackground}
             title="Invert background (useful when the text color is too close to the default background color)"
           >◐</button>
           <button
