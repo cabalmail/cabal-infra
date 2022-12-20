@@ -7,6 +7,7 @@ resource "aws_launch_template" "asg" {
   image_id               = data.aws_ami.amazon_linux_2.id
   instance_type          = "t2.micro"
   vpc_security_group_ids = [aws_security_group.sg.id]
+  update_default_version = true
   user_data             = base64encode(templatefile("${path.module}/templates/userdata", {
     control_domain  = var.control_domain,
     artifact_bucket = var.bucket,
