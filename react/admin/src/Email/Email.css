@@ -52,7 +52,7 @@ ul.message_list {
   button.action span.wide-screen {
     display: none;
   }
-  body div.content div.filter div.filter button.action {
+  body div.content div.filters div.filter button.action {
     padding-left: 2em;
     padding-right: 2em;
   }
@@ -115,7 +115,7 @@ div.filter label {
   padding: 0.5em;
 }
 
-div.filter {
+div.filters {
   width: 100%;
 }
 

@@ -163,7 +163,7 @@ class Messages extends React.Component {
     });
     return (
       <div className="email_list">
-        <div className={`filter ${this.state.sort_order.css}`}>
+        <div className={`filters ${this.state.sort_order.css}`}>
           <Folders 
             token={this.props.token}
             password={this.props.password}
