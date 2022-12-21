@@ -53,8 +53,8 @@ ul.message_list {
     display: none;
   }
   body div.content div.filter div.filter button.action {
-    padding-left: 1em;
-    padding-right: 1em;
+    padding-left: 2em;
+    padding-right: 2em;
   }
 }
 
