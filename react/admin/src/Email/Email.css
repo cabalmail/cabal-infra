@@ -49,6 +49,9 @@ ul.message_list {
     left: 0;
     right: 0;
   }
+  .wide-screen {
+    display: none;
+  }
 }
 
 /* filters */

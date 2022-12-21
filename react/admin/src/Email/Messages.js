@@ -195,15 +195,15 @@ class Messages extends React.Component {
           <br />
           <div className="filter">
             <button value="delete" id="delete" name="delete" className="delete"
-              title="Delete"        >🗑️</button>
+              title="Delete"        >🗑️<span className="wide-screen"> Delete</span></button>
             <button value="move"   id="move"   name="move"   className="move"
-              title="Move to..."    >📨</button>
+              title="Move to..."    >📨<span className="wide-screen"> Move to...</span></button>
             <button value="read"   id="read"   name="read"   className="read"
-              title="Mark as read"  >✉️</button>
+              title="Mark as read"  >✉️<span className="wide-screen"> Mark read</span></button>
             <button value="unread" id="unread" name="unread" className="unread"
-              title="Mark as unread">🔵</button>
+              title="Mark as unread">🔵<span className="wide-screen"> Mark unread</span></button>
             <button value="flag"   id="flag"   name="flag"   className="flag"
-              title="Flag"          >🚩</button>
+              title="Flag"          >🚩<span className="wide-screen"> Flag</span></button>
           </div>
         </div>
         <ul className={`message-list ${this.state.loading ? "loading" : ""}`}>
