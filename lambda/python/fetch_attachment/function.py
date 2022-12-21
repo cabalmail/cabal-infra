@@ -8,16 +8,16 @@ from s3 import get_message
 
 def handler(event, _context):
     '''Preps an attachment for download from S3 given a folder, message ID, and attachment serial number'''
-    body = json.loads(event['body'])
+    qs = json.loads(event['queryStringParameters'])
     user = event['requestContext']['authorizer']['claims']['cognito:username'];
-    bucket = body['host'].replace("imap", "cache")
-    key = f"{user}/{body['folder']}/{body['id']}/{body['filename']}"
-    message = get_message(body['host'], user, body['folder'], body['id'])
+    bucket = qs['host'].replace("imap", "cache")
+    key = f"{user}/{qs['folder']}/{qs['id']}/{qs['filename']}"
+    message = get_message(qs['host'], user, qs['folder'], qs['id'])
     i = 0;
     if message.is_multipart():
         for part in message.walk():
             ct = part.get_content_type()
-            if i == body['index']:
+            if i == qs['index']:
                 if not key_exists(bucket, key):
                     upload_object(bucket, key, ct, part.get_payload(decode=True))
             i += 1

@@ -5,9 +5,9 @@ from s3 import sign_url
 
 def handler(event, _context):
     '''Retrieves IMAP message given a folder and ID'''
-    body = json.loads(event['body'])
+    qs = json.loads(event['queryStringParameters'])
     user = event['requestContext']['authorizer']['claims']['cognito:username'];
-    message = get_message(body['host'], user, body['folder'], body['id'])
+    message = get_message(qs['host'], user, qs['folder'], qs['id'])
     body_plain = ""
     body_html = ""
     if message.is_multipart():
@@ -39,8 +39,8 @@ def handler(event, _context):
         "statusCode": 200,
         "body": json.dumps({
             "message_raw": sign_url(
-                                    body['host'].replace("imap", "cache"),
-                                    f"{user}/{body['folder']}/{body['id']}/raw"),
+                                    qs['host'].replace("imap", "cache"),
+                                    f"{user}/{qs['folder']}/{qs['id']}/raw"),
             "message_body_plain": body_plain_decoded,
             "message_body_html": body_html_decoded
         })
