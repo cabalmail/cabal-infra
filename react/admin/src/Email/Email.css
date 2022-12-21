@@ -31,11 +31,11 @@ ul.message_list {
 @media (min-width: 900px) {
   div.email_list {
     left: 0;
-    width: 480px;
+    width: 490px;
   }
 
   div.message_overlay {
-    left: 490px;
+    left: 500px;
     right: 0;
   }
 
