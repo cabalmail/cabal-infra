@@ -1,5 +1,5 @@
 import React from 'react';
-import './Message.css';
+import './AppMessage.css';
 
 /**
  * Renders message box
