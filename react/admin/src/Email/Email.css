@@ -91,6 +91,7 @@ div.filter button.sort-order {
 body div.filter select.sort-by,
 div.filter button.move,
 div.filter button.read,
+div.filter button.flag,
 div.filter button.unread {
   border-radius: 0;
   border-width: 1px 0px 1px 1px;
