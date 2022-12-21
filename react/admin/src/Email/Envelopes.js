@@ -48,7 +48,7 @@ class Envelopes extends React.Component {
           folder: this.props.folder,
           ids: this.props.message_ids
         },
-        paramsSerializer: (params) => Qs.stringify(params, {arrayFormat: 'repeat'}),
+        paramsSerializer: (params) => Qs.stringify(params, {arrayFormat: 'indices'}),
         baseURL: this.props.api_url,
         headers: {
           'Authorization': this.props.token
