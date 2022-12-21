@@ -16,7 +16,9 @@ Returns: null
 ### setMessage
 Modifiers: none
 
-Parameters: m (null)
+Parameters: m
+e (null
+null)
 
 Returns: null
 
