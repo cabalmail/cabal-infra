@@ -195,8 +195,7 @@ class Messages extends React.Component {
             host={this.props.host}
             folder={this.props.folder}
             setMessage={this.props.setMessage}
-          />
-          <br />
+          />&nbsp;
           <div className="filter">
             <label htmlFor="sort-field">Sort by:</label>
             <select id="sort-by" name="sort-by" className="sort-by" onChange={this.setSortField}>
