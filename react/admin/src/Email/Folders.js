@@ -25,18 +25,16 @@ class Folders extends React.Component {
   }
 
   getList = async (e) => {
-    const response = await axios.get('/list_folders',
-      {
-        params: {
-          host: this.props.host
-        },
-        baseURL: this.props.api_url,
-        headers: {
-          'Authorization': this.props.token
-        },
-        timeout: 10000
-      }
-    );
+    const response = await axios.get('/list_folders?host=imap.cabal-mail.net', {
+      params: {
+        host: this.props.host
+      },
+      baseURL: this.props.api_url,
+      headers: {
+        'Authorization': this.props.token
+      },
+      timeout: 10000
+    });
     return response;
   }
 
