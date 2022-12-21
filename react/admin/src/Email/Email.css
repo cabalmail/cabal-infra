@@ -256,6 +256,12 @@ div.message_overlay .message_attachments button.attachment span.attachment_type 
   display: none;
 }
 
+div.message_overlay iframe.message_raw {
+  width: 100%;
+  height: 100%;
+  border-width: 0;
+}
+
 /* message list */
 
 ul.message-list, ul.message-list li.message-row {
