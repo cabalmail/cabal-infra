@@ -39,7 +39,7 @@ def handler(event, _context):
         "body": json.dumps({
             "message_raw": sign_url(
                                     body['host'].replace("imap", "cache"),
-                                    f"{body['user']}/{body['folder']}/{body['id']}/bytes"),
+                                    f"{body['user']}/{body['folder']}/{body['id']}/raw"),
             "message_body_plain": body_plain_decoded,
             "message_body_html": body_html_decoded
         })

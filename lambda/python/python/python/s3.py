@@ -18,15 +18,15 @@ def get_message(host, user, folder, id):
     '''Gets a message from cache on s3 or from imap server'''
     bucket = host.replace("imap", "cache")
     email_body_raw = b''
-    key = f"{user}/{folder}/{id}/bytes"
+    key = f"{user}/{folder}/{id}/raw"
     if key_exists(bucket, key):
         email_body_raw = get_object(bucket, key)
     else:
         client = IMAPClient(host=host, use_uid=True, ssl=True)
         client.login(f"{user}*admin", mpw)
         client.select_folder(folder)
-        email_body_raw = client.fetch([id],[b"RFC822"])[id][b"RFC822"]
-        upload_object(bucket, key, "application/octet-stream", email_body_raw)
+        email_body_raw = client.fetch([id],[b"RFC822"])[id][b"RFC822"].__str__()
+        upload_object(bucket, key, "text/plain", email_body_raw)
     message = email.message_from_bytes(email_body_raw, policy=default_policy)
     return message
 
