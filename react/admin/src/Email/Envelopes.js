@@ -1,5 +1,6 @@
 import React from 'react';
 import axios from 'axios';
+import qs from 'qs';
 
 class Envelopes extends React.Component {
 
@@ -47,6 +48,7 @@ class Envelopes extends React.Component {
           folder: this.props.folder,
           ids: this.props.message_ids
         },
+        paramsSerializer: (params) => Qs.stringify(params, {arrayFormat: 'repeat'}),
         baseURL: this.props.api_url,
         headers: {
           'Authorization': this.props.token
