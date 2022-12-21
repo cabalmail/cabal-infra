@@ -7,6 +7,7 @@ def handler(event, _context):
     body = json.loads(event['body'])
     user = event['requestContext']['authorizer']['claims']['cognito:username'];
     client = get_imap_client(body['host'], user, 'INBOX')
+    response = client.list_folders()
     client.logout()
     return {
         "statusCode": 200,
