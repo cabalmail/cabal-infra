@@ -8,7 +8,7 @@ locals {
     list_folders     = {
       runtime   = "python3.9"
       type      = "python"
-      method    = "POST"
+      method    = "GET"
       memory    = 128
       cache     = true
       cache_ttl = 60
@@ -16,7 +16,7 @@ locals {
     list_messages    = {
       runtime   = "python3.9"
       type      = "python"
-      method    = "POST"
+      method    = "GET"
       memory    = 128
       cache     = true
       cache_ttl = 15
@@ -24,7 +24,7 @@ locals {
     list_envelopes   = {
       runtime   = "python3.9"
       type      = "python"
-      method    = "POST"
+      method    = "GET"
       memory    = 128
       cache     = true
       cache_ttl = 3600
@@ -32,7 +32,7 @@ locals {
     fetch_message    = {
       runtime   = "python3.9"
       type      = "python"
-      method    = "POST"
+      method    = "GET"
       memory    = 1024
       cache     = true
       cache_ttl = 3600
@@ -40,7 +40,7 @@ locals {
     list_attachments = {
       runtime   = "python3.9"
       type      = "python"
-      method    = "POST"
+      method    = "GET"
       memory    = 1024
       cache     = true
       cache_ttl = 3600
@@ -48,7 +48,7 @@ locals {
     fetch_attachment = {
       runtime   = "python3.9"
       type      = "python"
-      method    = "POST"
+      method    = "GET"
       memory    = 1024
       cache     = true
       cache_ttl = 3600
@@ -56,7 +56,7 @@ locals {
     fetch_inline_image = {
       runtime   = "python3.9"
       type      = "python"
-      method    = "POST"
+      method    = "GET"
       memory    = 1024
       cache     = true
       cache_ttl = 3600

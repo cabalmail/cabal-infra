@@ -57,7 +57,7 @@ class Messages extends React.Component {
 
   getList = async (e) => {
     this.setState({...this.state, loading: true})
-    const response = await axios.post('/list_messages',
+    const response = await axios.get('/list_messages',
       JSON.stringify({
         folder: this.props.folder,
         host: this.props.host,
