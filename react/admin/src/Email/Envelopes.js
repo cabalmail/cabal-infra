@@ -1,6 +1,6 @@
 import React from 'react';
 import axios from 'axios';
-import Qs from 'qs';
+// import Qs from 'qs';
 
 class Envelopes extends React.Component {
 
@@ -39,16 +39,15 @@ class Envelopes extends React.Component {
       });
     }
   }
-
+// paramsSerializer: (params) => Qs.stringify(params, {arrayFormat: 'comma'}),
   getList = async (e) => {
     const response = await axios.get('/list_envelopes',
       {
         params: {
           host: this.props.host,
           folder: this.props.folder,
-          ids: this.props.message_ids
+          ids: `[${this.props.message_ids.join(",")}]`
         },
-        paramsSerializer: (params) => Qs.stringify(params, {arrayFormat: 'indices'}),
         baseURL: this.props.api_url,
         headers: {
           'Authorization': this.props.token
