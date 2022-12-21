@@ -129,6 +129,11 @@ div.filter select, div.filter label, div.filter button {
   display: inline-block;
 }
 
+body div.content div.email div.email_list div.ascending button#ascending,
+body div.content div.email div.email_list div.descending button#descending {
+  display: none;
+}
+
 /* message overlay */
 
 body div.content div.overlay_hidden {
