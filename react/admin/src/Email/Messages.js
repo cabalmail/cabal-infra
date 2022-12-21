@@ -102,7 +102,9 @@ class Messages extends React.Component {
   }
 
   handleActionButtonClick = (e) => {
-    e.preventDefault();
+    if (e.target.tagName !=== 'button') {
+      return;
+    }
     const action = e.target.id;
     console.log(`${action} clicked`);
     switch (action) {
