@@ -51,12 +51,12 @@ class MessageOverlay extends React.Component {
 
   getMessage = async () => {
     const response = await axios.get('/fetch_message',
-      JSON.stringify({
-        folder: this.props.folder,
-        host: this.props.host,
-        id: this.props.envelope.id
-      }),
       {
+        params: {
+          folder: this.props.folder,
+          host: this.props.host,
+          id: this.props.envelope.id
+        },
         baseURL: this.props.api_url,
         headers: {
           'Authorization': this.props.token
@@ -69,14 +69,14 @@ class MessageOverlay extends React.Component {
 
   getAttachment = async (a) => {
     const response = await axios.get('/fetch_attachment',
-      JSON.stringify({
-        folder: this.props.folder,
-        host: this.props.host,
-        id: this.props.envelope.id,
-        index: a.id,
-        filename: a.name
-      }),
       {
+        params: {
+          folder: this.props.folder,
+          host: this.props.host,
+          id: this.props.envelope.id,
+          index: a.id,
+          filename: a.name
+        },
         baseURL: this.props.api_url,
         headers: {
           'Authorization': this.props.token
@@ -89,12 +89,12 @@ class MessageOverlay extends React.Component {
 
   getAttachments = async () => {
     const response = await axios.get('/list_attachments',
-      JSON.stringify({
-        folder: this.props.folder,
-        host: this.props.host,
-        id: this.props.envelope.id
-      }),
       {
+        params: {
+          folder: this.props.folder,
+          host: this.props.host,
+          id: this.props.envelope.id
+        }
         baseURL: this.props.api_url,
         headers: {
           'Authorization': this.props.token

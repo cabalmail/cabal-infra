@@ -30,13 +30,13 @@ class RichMessage extends React.Component {
 
   fetchImage = async (cid) => {
     const response = await axios.get('/fetch_inline_image',
-      JSON.stringify({
-        folder: this.props.folder,
-        host: this.props.host,
-        id: this.props.id,
-        index: "<" + cid + ">"
-      }),
       {
+        params: {
+          folder: this.props.folder,
+          host: this.props.host,
+          id: this.props.id,
+          index: "<" + cid + ">"
+        },
         baseURL: this.props.api_url,
         headers: {
           'Authorization': this.props.token

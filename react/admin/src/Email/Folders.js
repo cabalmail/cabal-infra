@@ -26,10 +26,10 @@ class Folders extends React.Component {
 
   getList = async (e) => {
     const response = await axios.get('/list_folders',
-      JSON.stringify({
-        host: this.props.host
-      }),
       {
+        params: {
+          host: this.props.host
+        },
         baseURL: this.props.api_url,
         headers: {
           'Authorization': this.props.token
