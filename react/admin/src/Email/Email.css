@@ -28,14 +28,14 @@ ul.message_list {
   position: relative;
 }
 
-@media (min-width: 800px) {
+@media (min-width: 900px) {
   div.email_list {
     left: 0;
-    width: 450px;
+    width: 480px;
   }
 
   div.message_overlay {
-    left: 460px;
+    left: 490px;
     right: 0;
   }
 
@@ -44,7 +44,7 @@ ul.message_list {
   }
 }
 
-@media (max-width: 799px) {
+@media (max-width: 899px) {
   div.email_list, div.message_overlay {
     left: 0;
     right: 0;
