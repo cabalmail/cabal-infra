@@ -83,7 +83,6 @@ class Envelopes extends React.Component {
             <div className="message-field message-subject">
               <input type="checkbox" id={id} onChange={this.handleCheck} />
               <label htmlFor={id}><span className="checked">✓</span><span className="unchecked">&nbsp;</span></label>&nbsp;
-              {flags.match(/Seen/) ? '✉️ ' : '🔵 '}
               {flags.match(/Flagged/) ? '🚩 ' : ''}
               {flags.match(/Answered/) ? '⤶ ' : ''}
               {message.struct[1] === "mixed" ? '📎 ' : ''}
