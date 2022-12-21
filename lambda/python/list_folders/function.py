@@ -6,7 +6,7 @@ def handler(event, _context):
     '''Retrieves IMAP folders for a user'''
     body = json.loads(event['body'])
     user = event['requestContext']['authorizer']['claims']['cognito:username'];
-    client = get_imap_client(body['host'], 'INBOX')
+    client = get_imap_client(body['host'], user, 'INBOX')
     client.logout()
     return {
         "statusCode": 200,
