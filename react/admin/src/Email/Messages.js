@@ -82,6 +82,75 @@ class Messages extends React.Component {
     })
   }
 
+  setFlag = async (flag) => {
+    const response = await axios.get('/set_flag',
+      {
+        params: {
+          host: this.props.host,
+          folder: this.props.folder,
+          ids: `[${this.props.selected_messages.join(",")}]`,
+          flag: flag
+        },
+        baseURL: this.props.api_url,
+        headers: {
+          'Authorization': this.props.token
+        },
+        timeout: 10000
+      }
+    );
+    return response;
+  }
+
+  handleActionButtonClick = (e) => {
+    e.preventDefault();
+    const action = e.target.id;
+    console.log(`${action} clicked`);
+    switch (action) {
+      case "delete":
+        this.props.setMessage("Deletion isn't implemented yet.");
+        break;
+      case "move":
+        this.props.setMessage("Moving messages isn't implamented yet.");
+        break;
+      case "read":
+        this.setFlag("\\Seen").then(data => {
+          this.setState({
+            ...this.state,
+            message_ids: data.data.message_ids,
+            loading: false
+          });
+        }).catch(e => {
+          this.props.setMessage("Unable to set selected messages to read.", true);
+          console.log(e);
+        });
+        break;
+      case "unread":
+        this.setFlag("\\Unseen").then(data => {
+          this.setState({
+            ...this.state,
+            message_ids: data.data.message_ids,
+            loading: false
+          });
+        }).catch(e => {
+          this.props.setMessage("Unable to set selected messages to unread.", true);
+          console.log(e);
+        });
+        break;
+      case "flag":
+        this.setFlag("\\Flagged").then(data => {
+          this.setState({
+            ...this.state,
+            message_ids: data.data.message_ids,
+            loading: false
+          });
+        }).catch(e => {
+          this.props.setMessage("Unable to set selected messages to flagged.", true);
+          console.log(e);
+        });
+        break;
+    }
+  }
+
   handleCheck = (message_id, checked) => {
     var id = parseInt(message_id);
     if (checked) {
@@ -188,16 +257,46 @@ class Messages extends React.Component {
           </div>
           <br />
           <div className="filter filter-actions">
-            <button value="delete" id="delete" name="delete" className="action delete"
-              title="Delete"        >🗑️<span className="wide-screen"> Delete</span></button>
-            <button value="move"   id="move"   name="move"   className="action move"
-              title="Move to..."    >📨<span className="wide-screen"> Move to...</span></button>
-            <button value="read"   id="read"   name="read"   className="action read"
-              title="Mark as read"  >✉️<span className="wide-screen"> Mark read</span></button>
-            <button value="unread" id="unread" name="unread" className="action unread"
-              title="Mark as unread">🔵<span className="wide-screen"> Mark unread</span></button>
-            <button value="flag"   id="flag"   name="flag"   className="action flag"
-              title="Flag"          >🚩<span className="wide-screen"> Flag</span></button>
+            <button
+              value="delete"
+              id="delete"
+              name="delete"
+              className="action delete"
+              title="Delete"
+              onClick={this.handleActionButtonClick}
+            >🗑️<span className="wide-screen"> Delete</span></button>
+            <button
+              value="move"
+              id="move"
+              name="move"
+              className="action move"
+              title="Move to..."
+              onClick={this.handleActionButtonClick}
+            >📨<span className="wide-screen"> Move to...</span></button>
+            <button
+              value="read"
+              id="read"
+              name="read"
+              className="action read"
+              title="Mark as read"
+              onClick={this.handleActionButtonClick}
+            >✉️<span className="wide-screen"> Mark read</span></button>
+            <button
+              value="unread"
+              id="unread"
+              name="unread"
+              className="action unread"
+              title="Mark as unread"
+              onClick={this.handleActionButtonClick}
+            >🔵<span className="wide-screen"> Mark unread</span></button>
+            <button
+              value="flag"
+              id="flag"
+              name="flag"
+              className="action flag"
+              title="Flag"
+              onClick={this.handleActionButtonClick}
+            >🚩<span className="wide-screen"> Flag</span></button>
           </div>
         </div>
         <ul className={`message-list ${this.state.loading ? "loading" : ""}`}>
