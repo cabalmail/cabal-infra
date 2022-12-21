@@ -159,7 +159,7 @@ class MessageOverlay extends React.Component {
         );
       case "raw":
         return (
-          <iframe src={this.state.message_raw_url} title="Raw message" />
+          <iframe src={this.state.message_raw_url} title="Raw message" className="message_raw" />
         );
       case "attachments":
         const attachments = this.state.attachments.map(a => {
