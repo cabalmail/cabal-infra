@@ -94,7 +94,7 @@ class MessageOverlay extends React.Component {
           folder: this.props.folder,
           host: this.props.host,
           id: this.props.envelope.id
-        }
+        },
         baseURL: this.props.api_url,
         headers: {
           'Authorization': this.props.token

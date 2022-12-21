@@ -46,7 +46,7 @@ class Envelopes extends React.Component {
           host: this.props.host,
           folder: this.props.folder,
           ids: this.props.message_ids
-        }
+        },
         baseURL: this.props.api_url,
         headers: {
           'Authorization': this.props.token
