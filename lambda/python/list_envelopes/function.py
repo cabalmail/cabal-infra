@@ -7,10 +7,11 @@ from s3 import get_imap_client
 def handler(event, _context):
     '''Retrieves IMAP envelopes for a user given a folder and list of message ids'''
     qs = event['queryStringParameters']
+    ids = json.loads(qs['ids'])
     user = event['requestContext']['authorizer']['claims']['cognito:username'];
     client = get_imap_client(qs['host'], user, qs['folder'])
     envelopes = {}
-    for msgid, data in client.fetch(qs['ids'], ['ENVELOPE', 'FLAGS', 'BODYSTRUCTURE']).items():
+    for msgid, data in client.fetch(ids, ['ENVELOPE', 'FLAGS', 'BODYSTRUCTURE']).items():
         envelope = data[b'ENVELOPE']
         envelopes[msgid] = {
             "id": msgid,
