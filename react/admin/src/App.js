@@ -32,6 +32,7 @@ class App extends React.Component {
       password: null,
       phone: null,
       message: null,
+      error: false,
       view: "Login",
       poolData: null,
       control_domain: null,
@@ -84,14 +85,15 @@ class App extends React.Component {
     }
   }
 
-  setMessage = (m) => {
+  setMessage = (m, e) => {
     var message = m;
+    var error = e;
     if (this.state.expires < Math.floor(new Date() / 1000) && this.state.loggedIn) {
       this.setState({...this.state, view: "Login", loggedIn: false});
       message = "Session expired";
-      return;
+      error = true;
     }
-    this.setState({...this.state, message: message, hideMessage: false});
+    this.setState({...this.state, message: message, error: error, hideMessage: false});
     setTimeout(() => {
       this.setState({...this.state, hideMessage: true});
     }, 15000);
@@ -125,13 +127,13 @@ class App extends React.Component {
             ...this.state,
             view: "Login"
           });
-          this.setMessage("Your registration has been submitted.");
+          this.setMessage("Your registration has been submitted.", false);
         } else {
           this.setState({
             ...this.state,
             view: "SignUp"
           });
-          this.setMessage(err);
+          this.setMessage("Registration failed.", true);
         }
       }
     );
@@ -166,7 +168,7 @@ class App extends React.Component {
           expires: Math.floor(new Date() / 1000) - 1,
           view: "Login"
         });
-        this.setMessage("Login failed");
+        this.setMessage("Login failed", true);
       }
     });
   }
@@ -270,7 +272,11 @@ class App extends React.Component {
           view={this.state.view}
           doLogout={this.doLogout}
         />
-        <AppMessage message={this.state.message} hide={this.state.hideMessage} />
+        <AppMessage
+          message={this.state.message}
+          hide={this.state.hideMessage}
+          error={this.state.error}
+        />
         <div className="content">
           {this.renderContent()}
         </div>

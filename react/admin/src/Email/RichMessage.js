@@ -54,7 +54,7 @@ class RichMessage extends React.Component {
     response.then(data => {
       img.src = data.data.url;
     }).catch(e => {
-      this.props.setMessage("Unable to load inline image.");
+      this.props.setMessage("Unable to load inline image.", true);
       console.log(e);
     });
   }

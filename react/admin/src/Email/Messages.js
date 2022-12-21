@@ -30,7 +30,7 @@ class Messages extends React.Component {
         message_ids: data.data.message_ids,
         loading: false
       }).catch(e => {
-        this.props.setMessage("Unable to get list of messages.");
+        this.props.setMessage("Unable to get list of messages.", true);
         console.log(e);
       });
     });
@@ -49,7 +49,7 @@ class Messages extends React.Component {
           loading: false
         });
       }).catch(e => {
-        this.props.setMessage("Unable to get list of messages.");
+        this.props.setMessage("Unable to get list of messages.", true);
         console.log(e);
       });
     }

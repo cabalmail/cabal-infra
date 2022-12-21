@@ -19,7 +19,7 @@ class Envelopes extends React.Component {
         envelopes: data.data.envelopes
       });
     }).catch( e => {
-      this.props.setMessage("Unable to fetch envelopes.");
+      this.props.setMessage("Unable to fetch envelopes.", true);
       console.log(e);
     });
   }
@@ -33,7 +33,7 @@ class Envelopes extends React.Component {
           envelopes: data.data.envelopes
         });
       }).catch( e => {
-        this.props.setMessage("Unable to fetch envelopes.");
+        this.props.setMessage("Unable to fetch envelopes.", true);
         console.log(e);
       });
     }
@@ -75,8 +75,9 @@ class Envelopes extends React.Component {
         var message = this.state.envelopes[id];
         var flags = message.flags.map(d => {return d.replace("\\","")}).join(" ");
         var selected = this.state.selected === id.toString() ? "selected" : "";
+        var classes = flags + (message.struct[1] === "mixed" ? " Attachment" : "") + selected;
         return (
-          <li className={`message-row ${flags} ${selected}`}>
+          <li className={`message-row ${classes}`}>
             <div className="message-line-1">
               <div className="message-field message-from">{message.from[0]}</div>
               <div className="message-field message-date">{message.date}</div>

@@ -9,8 +9,9 @@ class Message extends React.Component {
 
   render() {
     const hide = this.props.hide ? "hidden" : "visible"
+    const level = this.props.error ? "error" : "info"
     return (
-      <div className={`app-message ${hide}`}>{this.props.message}</div>
+      <div className={`app-message ${hide} ${level}`}>{this.props.message}</div>
     );
   }
 

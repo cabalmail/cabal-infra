@@ -19,3 +19,13 @@
   opacity: 0;
   transition: visibility 0s 2s, opacity 2s linear;
 }
+
+.error {
+  background-color: #500;
+  color: #994;
+}
+
+.info {
+  background-color: #050;
+  color: #6a6;
+}

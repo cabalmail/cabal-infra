@@ -19,7 +19,7 @@ class Folders extends React.Component {
     response.then(data => {
       this.setState({ ...this.state, folders: data.data });
     }).catch(e => {
-      this.props.setMessage("Unable to fetch folders.");
+      this.props.setMessage("Unable to fetch folders.", true);
       console.log(e);
     });
   }

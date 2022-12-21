@@ -24,11 +24,11 @@ class MessageOverlay extends React.Component {
       const attachmentResponse = this.getAttachments();
       Promise.all([
         messageResponse.catch(e => {
-          this.props.setMessage("Unable to get message.");
+          this.props.setMessage("Unable to get message.", true);
           console.log(e);
         }),
         attachmentResponse.catch(e => {
-          this.props.setMessage("Unable to get list of attachments.");
+          this.props.setMessage("Unable to get list of attachments.", true);
           console.log(e);
         })
       ]).then(data => {
@@ -127,7 +127,7 @@ class MessageOverlay extends React.Component {
       window.open(url);
     })
     .catch((e) => {
-      this.props.setMessage("Unable to download attachment.");
+      this.props.setMessage("Unable to download attachment.", true);
       console.log(e);
     });
   }

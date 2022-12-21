@@ -86,12 +86,12 @@ class List extends React.Component {
     this.revokeAddress(this.state.addresses.find(a => {
       return a.address === address;
     })).then(data => {
-      this.props.setMessage("Successfully revoked address.");
+      this.props.setMessage("Successfully revoked address.", false);
       this.setState({...this.state, addresses: this.state.addresses.filter(a => {
         return a.address !== address;
       })});
     }, reason => {
-      this.props.setMessage("Request failed.");
+      this.props.setMessage("Request to revoke address failed.", true);
       console.error("Promise rejected", reason);
     });
   }
@@ -100,7 +100,7 @@ class List extends React.Component {
     e.preventDefault();
     const address = e.target.value;
     navigator.clipboard.writeText(address);
-    this.props.setMessage(`The address ${address} has been copied to your clipboard.`);
+    this.props.setMessage(`The address ${address} has been copied to your clipboard.`, false);
   }
 
   reload = (e) => {
