@@ -102,7 +102,7 @@ class Messages extends React.Component {
   }
 
   handleActionButtonClick = (e) => {
-    if (e.target.tagName !=== 'button') {
+    if (e.target.tagName !== 'button') {
       return;
     }
     const action = e.target.id;
