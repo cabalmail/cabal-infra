@@ -150,6 +150,18 @@ class Messages extends React.Component {
           console.log(e);
         });
         break;
+      case "unflag":
+        this.setFlag("\\Unflagged").then(data => {
+          this.setState({
+            ...this.state,
+            message_ids: data.data.message_ids,
+            loading: false
+          });
+        }).catch(e => {
+          this.props.setMessage("Unable to set selected messages to unflagged.", true);
+          console.log(e);
+        });
+        break;
       default:
         console.log(`${action} clicked`);
     }
@@ -300,7 +312,15 @@ class Messages extends React.Component {
               className="action flag"
               title="Flag"
               onClick={this.handleActionButtonClick}
-            >🚩<span className="wide-screen"> Flag</span></button>
+            >📫<span className="wide-screen"> Flag</span></button>
+              <button
+              value="unflag"
+              id="unflag"
+              name="unflag"
+              className="action unflag"
+              title="Unflag"
+              onClick={this.handleActionButtonClick}
+            >📪<span className="wide-screen"> Unflag</span></button>
           </div>
         </div>
         <ul className={`message-list ${this.state.loading ? "loading" : ""}`}>
