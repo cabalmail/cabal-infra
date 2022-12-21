@@ -148,6 +148,8 @@ class Messages extends React.Component {
           console.log(e);
         });
         break;
+      default:
+        console.log(`${action} clicked`);
     }
   }
 
