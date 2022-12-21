@@ -72,7 +72,7 @@ class Envelopes extends React.Component {
       if (id.toString() in this.state.envelopes) {
         var message = this.state.envelopes[id];
         var flags = message.flags.map(d => {return d.replace("\\","")}).join(" ");
-        var selected = this.state.selected === id.toString() ? "selected" : "";
+        var selected = this.state.selected === id.toString() ? " selected" : "";
         var classes = flags + (message.struct[1] === "mixed" ? " Attachment" : "") + selected;
         return (
           <li className={`message-row ${classes}`}>
