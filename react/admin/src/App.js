@@ -9,7 +9,7 @@ import {
 import Addresses from './Addresses';
 import SignUp from './SignUp';
 import Login from './Login';
-import Message from './Message';
+import AppMessage from './AppMessage';
 import Nav from './Nav';
 import Email from './Email';
 import Folders from './Folders';
@@ -270,7 +270,7 @@ class App extends React.Component {
           view={this.state.view}
           doLogout={this.doLogout}
         />
-        <Message message={this.state.message} hide={this.state.hideMessage} />
+        <AppMessage message={this.state.message} hide={this.state.hideMessage} />
         <div className="content">
           {this.renderContent()}
         </div>
