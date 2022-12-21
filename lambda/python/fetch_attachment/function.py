@@ -9,9 +9,10 @@ from s3 import get_message
 def handler(event, _context):
     '''Preps an attachment for download from S3 given a folder, message ID, and attachment serial number'''
     body = json.loads(event['body'])
+    user = event['requestContext']['authorizer']['claims']['cognito:username'];
     bucket = body['host'].replace("imap", "cache")
-    key = f"{body['user']}/{body['folder']}/{body['id']}/{body['filename']}"
-    message = get_message(body['host'], body['user'], body['folder'], body['id'])
+    key = f"{user}/{body['folder']}/{body['id']}/{body['filename']}"
+    message = get_message(body['host'], user, body['folder'], body['id'])
     i = 0;
     if message.is_multipart():
         for part in message.walk():

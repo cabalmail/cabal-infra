@@ -1,20 +1,14 @@
 '''Retrieves IMAP envelopes for a user given a folder and list of message ids'''
 import json
 from datetime import datetime
-import boto3
 from email.header import decode_header
 from s3 import get_imap_client
 
-ssm = boto3.client('ssm')
-mpw = ssm.get_parameter(Name='/cabal/master_password',
-                        WithDecryption=True)["Parameter"]["Value"]
-
 def handler(event, _context):
-    '''Retrieves IMAP messages for a user given a folder'''
+    '''Retrieves IMAP envelopes for a user given a folder and list of message ids'''
     body = json.loads(event['body'])
     user = event['requestContext']['authorizer']['claims']['cognito:username'];
-    client = get_imap_client(body['host'], user)
-    client.select_folder(body['folder'])
+    client = get_imap_client(body['host'], user, body['folder'])
     envelopes = {}
     for msgid, data in client.fetch(body['ids'], ['ENVELOPE', 'FLAGS', 'BODYSTRUCTURE']).items():
         envelope = data[b'ENVELOPE']

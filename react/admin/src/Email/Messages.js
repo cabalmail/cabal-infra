@@ -59,8 +59,6 @@ class Messages extends React.Component {
     this.setState({...this.state, loading: true})
     const response = await axios.post('/list_messages',
       JSON.stringify({
-        user: this.props.userName,
-        password: this.props.password,
         folder: this.props.folder,
         host: this.props.host,
         sort_order: this.state.sort_order.imap,
@@ -109,8 +107,6 @@ class Messages extends React.Component {
         <LazyLoad offset={150} overflow={true}>
           <Envelopes
             message_ids={this.state.message_ids.slice(i, i+PAGE_SIZE)}
-            userName={this.props.userName}
-            password={this.props.password}
             folder={this.props.folder}
             host={this.props.host}
             token={this.props.token}
@@ -166,8 +162,6 @@ class Messages extends React.Component {
         <div className={`filters ${this.state.sort_order.css}`}>
           <Folders 
             token={this.props.token}
-            password={this.props.password}
-            userName={this.props.userName}
             api_url={this.props.api_url}
             setFolder={this.props.setFolder}
             host={this.props.host}

@@ -203,7 +203,6 @@ class App extends React.Component {
           <Addresses
             token={this.state.token}
             api_url={this.state.api_url}
-            userName={this.state.userName}
             domains={this.state.domains}
             setMessage={this.setMessage}
           />
@@ -213,8 +212,6 @@ class App extends React.Component {
           <Folders
             token={this.state.token}
             api_url={this.state.api_url}
-            password={this.state.password}
-            userName={this.state.userName}
             host={`imap.${this.state.control_domain}`}
             setMessage={this.setMessage}
           />
@@ -233,8 +230,6 @@ class App extends React.Component {
           <Email
             token={this.state.token}
             api_url={this.state.api_url}
-            password={this.state.password}
-            userName={this.state.userName}
             host={`imap.${this.state.control_domain}`}
             setMessage={this.setMessage}
           />

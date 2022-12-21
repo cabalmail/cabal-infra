@@ -42,8 +42,6 @@ class Envelopes extends React.Component {
   getList = async (e) => {
     const response = await axios.post('/list_envelopes',
       JSON.stringify({
-        user: this.props.userName,
-        password: this.props.password,
         host: this.props.host,
         folder: this.props.folder,
         ids: this.props.message_ids

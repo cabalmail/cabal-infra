@@ -25,8 +25,6 @@ class Addresses extends React.Component {
         >New Address {this.state.showRequest ? "∨" : ">"}</button>
         <Request
           token={this.props.token}
-          password={this.props.password}
-          userName={this.props.userName}
           domains={this.props.domains}
           api_url={this.props.api_url}
           setMessage={this.props.setMessage}
@@ -35,8 +33,6 @@ class Addresses extends React.Component {
         <hr />
         <List
           token={this.props.token}
-          password={this.props.password}
-          userName={this.props.userName}
           domains={this.props.domains}
           api_url={this.props.api_url}
           setMessage={this.props.setMessage}

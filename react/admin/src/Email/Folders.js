@@ -27,8 +27,6 @@ class Folders extends React.Component {
   getList = async (e) => {
     const response = await axios.post('/list_folders',
       JSON.stringify({
-        user: this.props.userName,
-        password: this.props.password,
         host: this.props.host
       }),
       {

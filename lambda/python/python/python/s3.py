@@ -10,14 +10,16 @@ s3r = boto3.resource("s3")
 s3c = boto3.client("s3",
                   region_name="us-east-1",
                   config=boto3.session.Config(signature_version='s3v4'))
+
 ssm = boto3.client('ssm')
 mpw = ssm.get_parameter(Name='/cabal/master_password',
                         WithDecryption=True)["Parameter"]["Value"]
 
-def get_imap_client(host, user):
-    '''Returns an IMAP client'''
+def get_imap_client(host, user, folder):
+    '''Returns an IMAP client for host/user with folder selected'''
     client = IMAPClient(host=host, use_uid=True, ssl=True)
     client.login(f"{user}*admin", mpw)
+    client.select_folder(folder)
     return client
 
 

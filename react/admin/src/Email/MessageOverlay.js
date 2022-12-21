@@ -52,8 +52,6 @@ class MessageOverlay extends React.Component {
   getMessage = async () => {
     const response = await axios.post('/fetch_message',
       JSON.stringify({
-        user: this.props.userName,
-        password: this.props.password,
         folder: this.props.folder,
         host: this.props.host,
         id: this.props.envelope.id
@@ -72,8 +70,6 @@ class MessageOverlay extends React.Component {
   getAttachment = async (a) => {
     const response = await axios.post('/fetch_attachment',
       JSON.stringify({
-        user: this.props.userName,
-        password: this.props.password,
         folder: this.props.folder,
         host: this.props.host,
         id: this.props.envelope.id,
@@ -94,8 +90,6 @@ class MessageOverlay extends React.Component {
   getAttachments = async () => {
     const response = await axios.post('/list_attachments',
       JSON.stringify({
-        user: this.props.userName,
-        password: this.props.password,
         folder: this.props.folder,
         host: this.props.host,
         id: this.props.envelope.id
@@ -144,8 +138,6 @@ class MessageOverlay extends React.Component {
           <RichMessage
             body={this.state.message_body_html}
             id={this.props.envelope.id}
-            userName={this.props.userName}
-            password={this.props.password}
             folder={this.props.folder}
             host={this.props.host}
             token={this.props.token}

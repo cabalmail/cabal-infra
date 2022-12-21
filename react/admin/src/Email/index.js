@@ -35,8 +35,6 @@ class Email extends React.Component {
       <div className="email">
         <Messages 
           token={this.props.token}
-          password={this.props.password}
-          userName={this.props.userName}
           api_url={this.props.api_url}
           folder={this.state.folder}
           host={this.props.host}
@@ -46,8 +44,6 @@ class Email extends React.Component {
         />
         <MessageOverlay 
           token={this.props.token}
-          password={this.props.password}
-          userName={this.props.userName}
           api_url={this.props.api_url}
           envelope={this.state.envelope}
           visible={this.state.overlayVisible}

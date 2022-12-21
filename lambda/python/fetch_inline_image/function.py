@@ -9,14 +9,15 @@ from s3 import get_message
 def handler(event, _context):
     '''Preps an inline image attachment for download from S3 given a folder, message ID, and attachment uuid'''
     body = json.loads(event['body'])
+    user = event['requestContext']['authorizer']['claims']['cognito:username'];
     bucket = body['host'].replace("imap", "cache")
     key = ""
-    message = get_message(body['host'], body['user'], body['folder'], body['id'])
+    message = get_message(body['host'], user, body['folder'], body['id'])
     for part in message.walk():
         ct = part.get_content_type()
         if part.get('Content-ID'):
             if part.get('Content-ID') == body['index']:
-                key = f"{body['user']}/{body['folder']}/{body['id']}/{body['index']}/{part.get_filename()}"
+                key = f"{user}/{body['folder']}/{body['id']}/{body['index']}/{part.get_filename()}"
                 if not key_exists(bucket, key):
                     upload_object(bucket, key, ct, part.get_payload(decode=True))
 
