@@ -102,10 +102,10 @@ class Messages extends React.Component {
   }
 
   handleActionButtonClick = (e) => {
+    var action = e.target.id;
     if (e.target.tagName !== 'BUTTON') {
-      return;
+      action = e.target.parentElement.id;
     }
-    const action = e.target.id;
     console.log(`${action} clicked`);
     switch (action) {
       case "delete":
