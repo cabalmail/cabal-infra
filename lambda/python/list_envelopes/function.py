@@ -3,7 +3,7 @@ import json
 from datetime import datetime
 import boto3
 from email.header import decode_header
-from imapclient import IMAPClient
+from s3 import get_imap_client
 
 ssm = boto3.client('ssm')
 mpw = ssm.get_parameter(Name='/cabal/master_password',
@@ -12,8 +12,8 @@ mpw = ssm.get_parameter(Name='/cabal/master_password',
 def handler(event, _context):
     '''Retrieves IMAP messages for a user given a folder'''
     body = json.loads(event['body'])
-    client = IMAPClient(host=body['host'], use_uid=True, ssl=True)
-    client.login(f"{body['user']}*admin", mpw)
+    user = event['requestContext']['authorizer']['claims']['cognito:username'];
+    client = get_imap_client(body['host'], user)
     client.select_folder(body['folder'])
     envelopes = {}
     for msgid, data in client.fetch(body['ids'], ['ENVELOPE', 'FLAGS', 'BODYSTRUCTURE']).items():

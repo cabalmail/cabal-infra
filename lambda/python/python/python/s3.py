@@ -14,6 +14,13 @@ ssm = boto3.client('ssm')
 mpw = ssm.get_parameter(Name='/cabal/master_password',
                         WithDecryption=True)["Parameter"]["Value"]
 
+def get_imap_client(host, user):
+    '''Returns an IMAP client'''
+    client = IMAPClient(host=host, use_uid=True, ssl=True)
+    client.login(f"{user}*admin", mpw)
+    return client
+
+
 def get_message(host, user, folder, id):
     '''Gets a message from cache on s3 or from imap server'''
     bucket = host.replace("imap", "cache")
@@ -22,10 +29,10 @@ def get_message(host, user, folder, id):
     if key_exists(bucket, key):
         email_body_raw = get_object(bucket, key)
     else:
-        client = IMAPClient(host=host, use_uid=True, ssl=True)
-        client.login(f"{user}*admin", mpw)
+        client = get_imap_client(host, user)
         client.select_folder(folder)
         email_body_raw = client.fetch([id],[b"RFC822"])[id][b"RFC822"]
+        client.logout()
         upload_object(bucket, key, "text/plain", email_body_raw)
     message = email.message_from_bytes(email_body_raw, policy=default_policy)
     return message
