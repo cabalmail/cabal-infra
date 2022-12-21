@@ -31,7 +31,7 @@ def get_message(host, user, folder, id):
     if key_exists(bucket, key):
         email_body_raw = get_object(bucket, key)
     else:
-        client = get_imap_client(host, user)
+        client = get_imap_client(host, user, folder)
         client.select_folder(folder)
         email_body_raw = client.fetch([id],[b"RFC822"])[id][b"RFC822"]
         client.logout()
