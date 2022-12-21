@@ -12,6 +12,12 @@
     color: #ccc;
     background-color: #111;
   }
+  ul.message-list div.message-subject {
+    color: #fff;
+  }
+  ul.message-list li.Seen div.message-subject {
+    color: #222;
+  }
   .nav, .nav .item {
     background-color: #000;
   }
@@ -73,6 +79,12 @@
   button {
     color: #333;
     background-color: #ddd;
+  }
+  ul.message-list div.message-subject {
+    color: #000;
+  }
+  ul.message-list li.Seen div.message-subject {
+    color: #222;
   }
   .nav, .nav .item {
     color: #aaa;
