@@ -115,6 +115,15 @@ div.filter label {
   padding: 0.5em;
 }
 
+div.filter {
+  width: 100%;
+}
+
+div.filter-actions {
+  width: 100%;
+  text-align: right;
+}
+
 div.filter select, div.filter label, div.filter button {
   display: inline-block;
 }

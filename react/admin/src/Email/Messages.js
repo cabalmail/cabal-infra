@@ -193,7 +193,7 @@ class Messages extends React.Component {
             >⩔</button>
           </div>
           <br />
-          <div className="filter">
+          <div className="filter filter-actions">
             <button value="delete" id="delete" name="delete" className="action delete"
               title="Delete"        >🗑️<span className="wide-screen"> Delete</span></button>
             <button value="move"   id="move"   name="move"   className="action move"
