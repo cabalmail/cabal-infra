@@ -4,7 +4,7 @@ from s3 import get_message
 
 def handler(event, _context):
     '''Retrieves list of attachments from a message given a folder and ID'''
-    qs = json.loads(event['queryStringParameters'])
+    qs = event['queryStringParameters']
     user = event['requestContext']['authorizer']['claims']['cognito:username'];
     message = get_message(qs['host'], user, qs['folder'], qs['id'])
     attachments = []

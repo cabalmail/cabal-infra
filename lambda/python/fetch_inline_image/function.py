@@ -8,7 +8,7 @@ from s3 import get_message
 
 def handler(event, _context):
     '''Preps an inline image attachment for download from S3 given a folder, message ID, and attachment uuid'''
-    qs = json.loads(event['queryStringParameters'])
+    qs = event['queryStringParameters']
     user = event['requestContext']['authorizer']['claims']['cognito:username'];
     bucket = qs['host'].replace("imap", "cache")
     key = ""

@@ -4,7 +4,7 @@ from s3 import get_imap_client
 
 def handler(event, _context):
     '''Retrieves IMAP folders for a user'''
-    qs = json.loads(event['queryStringParameters'])
+    qs = event['queryStringParameters']
     user = event['requestContext']['authorizer']['claims']['cognito:username'];
     client = get_imap_client(qs['host'], user, 'INBOX')
     response = client.list_folders()
