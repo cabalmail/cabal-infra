@@ -36,20 +36,6 @@ Parameters:  ()
 
 Returns: null
 
-### collapse
-Modifiers: none
-
-Parameters: e (null)
-
-Returns: null
-
-### expand
-Modifiers: none
-
-Parameters: e (null)
-
-Returns: null
-
 ### sortAscending
 Modifiers: none
 
