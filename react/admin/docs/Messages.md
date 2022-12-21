@@ -20,6 +20,20 @@ Parameters:  ()
 
 Returns: null
 
+### setFlag
+Modifiers: async
+
+Parameters: flag (null)
+
+Returns: null
+
+### handleActionButtonClick
+Modifiers: none
+
+Parameters: e (null)
+
+Returns: null
+
 ### handleCheck
 Modifiers: none
 
