@@ -83,14 +83,14 @@ class Messages extends React.Component {
   }
 
   setFlag = async (flag) => {
-    const response = await axios.get('/set_flag',
+    const response = await axios.put('/set_flag',
+      JSON.stringify({
+        host: this.props.host,
+        folder: this.props.folder,
+        ids: `[${this.props.selected_messages.join(",")}]`,
+        flag: flag
+      }),
       {
-        params: {
-          host: this.props.host,
-          folder: this.props.folder,
-          ids: `[${this.props.selected_messages.join(",")}]`,
-          flag: flag
-        },
         baseURL: this.props.api_url,
         headers: {
           'Authorization': this.props.token
