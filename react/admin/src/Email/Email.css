@@ -49,8 +49,12 @@ ul.message_list {
     left: 0;
     right: 0;
   }
-  .wide-screen {
+  button.action span.wide-screen {
     display: none;
+  }
+  button.action {
+    padding-left: 1em;
+    padding-right: 1em;
   }
 }
 

@@ -194,15 +194,15 @@ class Messages extends React.Component {
           </div>
           <br />
           <div className="filter">
-            <button value="delete" id="delete" name="delete" className="delete"
+            <button value="delete" id="delete" name="delete" className="action delete"
               title="Delete"        >🗑️<span className="wide-screen"> Delete</span></button>
-            <button value="move"   id="move"   name="move"   className="move"
+            <button value="move"   id="move"   name="move"   className="action move"
               title="Move to..."    >📨<span className="wide-screen"> Move to...</span></button>
-            <button value="read"   id="read"   name="read"   className="read"
+            <button value="read"   id="read"   name="read"   className="action read"
               title="Mark as read"  >✉️<span className="wide-screen"> Mark read</span></button>
-            <button value="unread" id="unread" name="unread" className="unread"
+            <button value="unread" id="unread" name="unread" className="action unread"
               title="Mark as unread">🔵<span className="wide-screen"> Mark unread</span></button>
-            <button value="flag"   id="flag"   name="flag"   className="flag"
+            <button value="flag"   id="flag"   name="flag"   className="action flag"
               title="Flag"          >🚩<span className="wide-screen"> Flag</span></button>
           </div>
         </div>
