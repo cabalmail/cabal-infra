@@ -8,6 +8,7 @@ class MessageOverlay extends React.Component {
     super(props);
     this.state = {
       message_raw: "",
+      message_raw_url: "",
       message_body: "",
       view: "rich",
       attachments: [],
@@ -37,12 +38,21 @@ class MessageOverlay extends React.Component {
           : "rich";
         this.setState({
           ...this.state,
-          message_raw: data[0].data.message_raw,
+          message_raw_url: data[0].data.message_raw,
           message_body_plain: data[0].data.message_body_plain,
           message_body_html: data[0].data.message_body_html,
           attachments: data[1].data.attachments,
           loading: false,
           view: view
+        });
+        axios.get(this.state.message_raw_url).then(data => {
+          this.setState({
+            ...this.state,
+            message_raw: data
+          });
+        }).catch(e => {
+          this.props.setMessage("Unable to get raw message.");
+          console.log(e);
         });
       }).catch();
     }
@@ -159,7 +169,6 @@ class MessageOverlay extends React.Component {
       case "raw":
         return (
           <pre className="message message_raw">{this.state.message_raw}</pre>
-          
         );
       case "attachments":
         const attachments = this.state.attachments.map(a => {
