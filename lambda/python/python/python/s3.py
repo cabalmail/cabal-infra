@@ -32,7 +32,7 @@ def get_message(host, user, folder, id):
         email_body_raw = get_object(bucket, key)
     else:
         client = get_imap_client(host, user, folder)
-        message = client.fetch([id],[['RFC822']])
+        message = client.fetch([id],['RFC822'])
         # msg = email.message_from_string(message[0]]['RFC822'])
         email_body_raw = message[id][b'RFC822']
         client.logout()
