@@ -7,21 +7,21 @@
 
 ## Methods
 ### getMessage
-Modifiers: async
+Modifiers: none
 
 Parameters:  ()
 
 Returns: null
 
 ### getAttachment
-Modifiers: async
+Modifiers: none
 
 Parameters: a (null)
 
 Returns: null
 
 ### getAttachments
-Modifiers: async
+Modifiers: none
 
 Parameters:  ()
 
