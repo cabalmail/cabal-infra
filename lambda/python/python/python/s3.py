@@ -33,7 +33,9 @@ def get_message(host, user, folder, id, seen):
     else:
         client = get_imap_client(host, user, folder)
         message = client.fetch([id],['RFC822'])
-        if not seen:
+        if seen:
+            client.set_flags([id], '\Seen', True)
+        else:
             client.remove_flags([id], '\Seen', True)
         email_body_raw = message[id][b'RFC822']
         client.logout()
