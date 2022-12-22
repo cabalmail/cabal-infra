@@ -32,10 +32,9 @@ def get_message(host, user, folder, id):
         email_body_raw = get_object(bucket, key)
     else:
         client = get_imap_client(host, user, folder)
-        client.select_folder(folder)
-        message_dict = client.fetch([id],[[b'RFC822']])
-        message = message_dict[id]
-        email_body_raw = message[b'RFC822']
+        message = client.fetch(id,[[b'RFC822']])
+        # msg = email.message_from_string(message[0]]['RFC822'])
+        email_body_raw = message[0]]['RFC822']
         client.logout()
         upload_object(bucket, key, "text/plain", email_body_raw)
     message = email.message_from_bytes(email_body_raw, policy=default_policy)
