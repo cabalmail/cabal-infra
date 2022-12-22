@@ -83,8 +83,8 @@ class Messages extends React.Component {
     })
   }
 
-  setFlag = async (flag, op) => {
-    const response = await axios.put('/set_flag',
+  setFlag = (flag, op) => {
+    const response = axios.put('/set_flag',
       JSON.stringify({
         host: this.props.host,
         folder: this.props.folder,
