@@ -88,7 +88,7 @@ class Messages extends React.Component {
       JSON.stringify({
         host: this.props.host,
         folder: this.props.folder,
-        ids: `[${this.state.selected_messages.join(",")}]`,
+        ids: this.state.selected_messages,
         flag: flag,
         op: op,
         sort_order: this.state.sort_order.imap,
