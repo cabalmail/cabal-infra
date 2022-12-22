@@ -34,3 +34,35 @@ export const TO = {
   description: "Recipient"
 };
 export const PAGE_SIZE = 50;
+export const SEEN = {
+  imap: "\\Seen",
+  css: "read",
+  description: "Mark read",
+  op: "set",
+  action: "read",
+  icon: "✉️"
+};
+export const UNSEEN = {
+  imap: "\\Seen",
+  css: "unread",
+  description: "Mark unread",
+  op: "unset",
+  action: "unread",
+  icon: "🔵"
+};
+export const FLAGGED = {
+  imap: "\\Flagged",
+  css: "flagged",
+  description: "Flag",
+  op: "set",
+  action: "flag",
+  icon: "📫"
+};
+export const UNFLAGGED = {
+  imap: "\\Flagged",
+  css: "unflagged",
+  description: "Unflag",
+  op: "unset",
+  action: "unflag",
+  icon: "📪"
+};

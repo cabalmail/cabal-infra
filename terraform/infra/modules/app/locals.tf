@@ -61,6 +61,14 @@ locals {
       cache     = true
       cache_ttl = 3600
     },
+    set_flag = {
+      runtime   = "python3.9"
+      type      = "python"
+      method    = "PUT"
+      memory    = 128
+      cache     = true
+      cache_ttl = 3600
+    },
     list             = {
       runtime   = "nodejs14.x"
       type      = "node"

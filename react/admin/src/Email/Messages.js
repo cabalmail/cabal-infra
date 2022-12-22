@@ -7,7 +7,8 @@ import axios from 'axios';
 import LazyLoad from 'react-lazyload';
 import Envelopes from './Envelopes';
 import Folders from './Folders';
-import { ASC, DESC, ARRIVAL, DATE, FROM, SUBJECT, PAGE_SIZE} from '../constants'
+import { ASC, DESC, ARRIVAL, DATE, FROM, SUBJECT, PAGE_SIZE,
+         READ, UNREAD, FLAGGED, UNFLAGGED } from '../constants'
 
 class Messages extends React.Component {
 
@@ -82,13 +83,16 @@ class Messages extends React.Component {
     })
   }
 
-  setFlag = async (flag) => {
+  setFlag = async (flag, op) => {
     const response = await axios.put('/set_flag',
       JSON.stringify({
         host: this.props.host,
         folder: this.props.folder,
         ids: `[${this.props.selected_messages.join(",")}]`,
-        flag: flag
+        flag: flag,
+        op: op,
+        sort_order: this.state.sort_order.imap,
+        sort_field: this.state.sort_field.imap
       }),
       {
         baseURL: this.props.api_url,
@@ -103,64 +107,40 @@ class Messages extends React.Component {
 
   handleActionButtonClick = (e) => {
     var action = e.target.id;
+    var callback = data => {
+      this.setState({
+        ...this.state,
+        message_ids: data.data.message_ids,
+        selected_messages: [],
+        loading: false
+      });
+    };
+    var catchback = e => {
+      this.props.setMessage(`Unable to set flag "${action}" on selected messages.`);
+      console.log(e);
+    };
     if (e.target.tagName !== 'BUTTON') {
       action = e.target.parentElement.id;
     }
     console.log(`${action} clicked`);
     switch (action) {
       case "delete":
-        this.props.setMessage("Deletion isn't implemented yet.");
+        this.props.setMessage("Deletion isn't implemented yet.", true);
         break;
       case "move":
-        this.props.setMessage("Moving messages isn't implamented yet.");
+        this.props.setMessage("Moving messages isn't implamented yet.", true);
         break;
-      case "read":
-        this.setFlag("\\Seen").then(data => {
-          this.setState({
-            ...this.state,
-            message_ids: data.data.message_ids,
-            loading: false
-          });
-        }).catch(e => {
-          this.props.setMessage("Unable to set selected messages to read.", true);
-          console.log(e);
-        });
+      case READ.action:
+        this.setFlag(READ.imap, READ.op).then(callback).catch(catchback);
         break;
-      case "unread":
-        this.setFlag("\\Unseen").then(data => {
-          this.setState({
-            ...this.state,
-            message_ids: data.data.message_ids,
-            loading: false
-          });
-        }).catch(e => {
-          this.props.setMessage("Unable to set selected messages to unread.", true);
-          console.log(e);
-        });
+      case UNREAD.action:
+        this.setFlag(UNREAD.imap, UNREAD.op).then(callback).catch(catchback);
         break;
-      case "flag":
-        this.setFlag("\\Flagged").then(data => {
-          this.setState({
-            ...this.state,
-            message_ids: data.data.message_ids,
-            loading: false
-          });
-        }).catch(e => {
-          this.props.setMessage("Unable to set selected messages to flagged.", true);
-          console.log(e);
-        });
+      case FLAGGED.action:
+        this.setFlag(FLAGGED.imap, FLAGGED.op).then(callback).catch(catchback);
         break;
-      case "unflag":
-        this.setFlag("\\Unflagged").then(data => {
-          this.setState({
-            ...this.state,
-            message_ids: data.data.message_ids,
-            loading: false
-          });
-        }).catch(e => {
-          this.props.setMessage("Unable to set selected messages to unflagged.", true);
-          console.log(e);
-        });
+      case UNFLAGGED.action:
+        this.setFlag(UNFLAGGED.imap, UNFLAGGED.op).then(callback).catch(catchback);
         break;
       default:
         console.log(`${action} clicked`);
@@ -196,6 +176,7 @@ class Messages extends React.Component {
             host={this.props.host}
             token={this.props.token}
             api_url={this.props.api_url}
+            selected_messages={this.state.selected_messages}
             showOverlay={this.props.showOverlay}
             handleCheck={this.handleCheck}
             setMessage={this.props.setMessage}
@@ -290,37 +271,37 @@ class Messages extends React.Component {
               onClick={this.handleActionButtonClick}
             >📨<span className="wide-screen"> Move to...</span></button>
             <button
-              value="read"
-              id="read"
-              name="read"
-              className="action read"
-              title="Mark as read"
+              value={READ.css}
+              id={READ.css}
+              name={READ.css}
+              className={`action ${READ.css}`}
+              title={READ.description}
               onClick={this.handleActionButtonClick}
-            >✉️<span className="wide-screen"> Mark read</span></button>
+            >{READ.icon}<span className="wide-screen"> {READ.description}</span></button>
             <button
-              value="unread"
-              id="unread"
-              name="unread"
-              className="action unread"
-              title="Mark as unread"
+              value={UNREAD.css}
+              id={UNREAD.css}
+              name={UNREAD.css}
+              className={`action ${UNREAD.css}`}
+              title={UNREAD.description}
               onClick={this.handleActionButtonClick}
-            >🔵<span className="wide-screen"> Mark unread</span></button>
+            >{UNREAD.icon}<span className="wide-screen"> {UNREAD.description}</span></button>
             <button
-              value="flag"
-              id="flag"
-              name="flag"
-              className="action flag"
-              title="Flag"
+              value={FLAGGED.css}
+              id={FLAGGED.css}
+              name={FLAGGED.css}
+              className={`action ${FLAGGED.css}`}
+              title={FLAG.description}
               onClick={this.handleActionButtonClick}
-            >📫<span className="wide-screen"> Flag</span></button>
+            >{FLAGGED.icon}<span className="wide-screen"> {FLAG.description}</span></button>
               <button
-              value="unflag"
-              id="unflag"
-              name="unflag"
-              className="action unflag"
-              title="Unflag"
+              value={UNFLAGGED.css}
+              id={UNFLAGGED.css}
+              name={UNFLAGGED.css}
+              className={`action ${UNFLAGGED.css}`}
+              title={UNFLAG.description}
               onClick={this.handleActionButtonClick}
-            >📪<span className="wide-screen"> Unflag</span></button>
+            >{UNFLAGGED.icon}<span className="wide-screen"> {UNFLAG.description}</span></button>
           </div>
         </div>
         <ul className={`message-list ${this.state.loading ? "loading" : ""}`}>
