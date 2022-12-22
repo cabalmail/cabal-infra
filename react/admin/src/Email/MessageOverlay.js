@@ -49,8 +49,8 @@ class MessageOverlay extends React.Component {
     }
   }
 
-  getMessage = async () => {
-    const response = await axios.get('/fetch_message',
+  getMessage = () => {
+    const response = axios.get('/fetch_message',
       {
         params: {
           folder: this.props.folder,
@@ -68,8 +68,8 @@ class MessageOverlay extends React.Component {
     return response;
   }
 
-  getAttachment = async (a) => {
-    const response = await axios.get('/fetch_attachment',
+  getAttachment = (a) => {
+    const response = axios.get('/fetch_attachment',
       {
         params: {
           folder: this.props.folder,
@@ -89,8 +89,8 @@ class MessageOverlay extends React.Component {
     return response;
   }
 
-  getAttachments = async () => {
-    const response = await axios.get('/list_attachments',
+  getAttachments = () => {
+    const response = axios.get('/list_attachments',
       {
         params: {
           folder: this.props.folder,
