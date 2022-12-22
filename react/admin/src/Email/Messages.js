@@ -106,11 +106,12 @@ class Messages extends React.Component {
   }
 
   handleActionButtonClick = (e) => {
+    e.stopPropagation();
     var action = e.target.id;
     if (e.target.tagName !== 'BUTTON') {
-      return;
+      action = e.target.parentElement.id;
     }
-    var callback = data => {
+    function callback = (data) {
       this.setState({
         ...this.state,
         message_ids: data.data.message_ids,
@@ -119,11 +120,10 @@ class Messages extends React.Component {
       });
       this.props.setMessage("Flag set.", false);
     };
-    var catchback = e => {
+    function catchback = (e) {
       this.props.setMessage(`Unable to set flag "${action}" on selected messages.`, true);
       console.log(e);
     };
-    console.log(`${action} clicked`);
     switch (action) {
       case "delete":
         this.props.setMessage("Deletion isn't implemented yet.", true);
