@@ -56,7 +56,7 @@ class MessageOverlay extends React.Component {
           folder: this.props.folder,
           host: this.props.host,
           id: this.props.envelope.id,
-          seen: this.props.envelope.flags.match(/Seen/)
+          seen: this.props.envelope.flags.includes("\\Seen")
         },
         baseURL: this.props.api_url,
         headers: {
@@ -77,7 +77,7 @@ class MessageOverlay extends React.Component {
           id: this.props.envelope.id,
           index: a.id,
           filename: a.name,
-          seen: this.props.envelope.flags.match(/Seen/)
+          seen: this.props.envelope.flags.includes("\\Seen")
         },
         baseURL: this.props.api_url,
         headers: {
@@ -96,7 +96,7 @@ class MessageOverlay extends React.Component {
           folder: this.props.folder,
           host: this.props.host,
           id: this.props.envelope.id,
-          seen: this.props.envelope.flags.match(/Seen/)
+          seen: this.props.envelope.flags.includes("\\Seen")
         },
         baseURL: this.props.api_url,
         headers: {
@@ -140,7 +140,7 @@ class MessageOverlay extends React.Component {
         return (
           <RichMessage
             body={this.state.message_body_html}
-            seen={this.props.envelope.flags.match(/Seen/)}
+            seen={this.props.envelope.flags.includes("\\Seen")}
             id={this.props.envelope.id}
             folder={this.props.folder}
             host={this.props.host}
