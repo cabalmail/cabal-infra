@@ -111,7 +111,7 @@ class Messages extends React.Component {
     if (e.target.tagName !== 'BUTTON') {
       action = e.target.parentElement.id;
     }
-    function callback = (data) {
+    function callback (data) = {
       this.setState({
         ...this.state,
         message_ids: data.data.message_ids,
@@ -120,7 +120,7 @@ class Messages extends React.Component {
       });
       this.props.setMessage("Flag set.", false);
     };
-    function catchback = (e) {
+    function catchback (e) = {
       this.props.setMessage(`Unable to set flag "${action}" on selected messages.`, true);
       console.log(e);
     };
