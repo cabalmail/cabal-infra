@@ -35,7 +35,7 @@ export const TO = {
 };
 export const PAGE_SIZE = 50;
 export const READ = {
-  imap: "\\Seen",
+  imap: '\Seen',
   css: "read",
   description: "Mark read",
   op: "set",
@@ -43,7 +43,7 @@ export const READ = {
   icon: "✉️"
 };
 export const UNREAD = {
-  imap: "\\Seen",
+  imap: '\Seen',
   css: "unread",
   description: "Mark unread",
   op: "unset",
@@ -51,7 +51,7 @@ export const UNREAD = {
   icon: "🔵"
 };
 export const FLAGGED = {
-  imap: "\\Flagged",
+  imap: '\Flagged',
   css: "flagged",
   description: "Flag",
   op: "set",
@@ -59,7 +59,7 @@ export const FLAGGED = {
   icon: "📫"
 };
 export const UNFLAGGED = {
-  imap: "\\Flagged",
+  imap: '\Flagged',
   css: "unflagged",
   description: "Unflag",
   op: "unset",
