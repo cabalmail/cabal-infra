@@ -24,6 +24,7 @@ class Email extends React.Component {
       overlayVisible: true,
       envelope: envelope
     });
+    console.log(envelope);
   }
 
   hideOverlay = () => {
