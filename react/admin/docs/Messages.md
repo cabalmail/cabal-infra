@@ -23,7 +23,9 @@ Returns: null
 ### setFlag
 Modifiers: async
 
-Parameters: flag (null)
+Parameters: flag
+op (null
+null)
 
 Returns: null
 
