@@ -291,17 +291,17 @@ class Messages extends React.Component {
               id={FLAGGED.css}
               name={FLAGGED.css}
               className={`action ${FLAGGED.css}`}
-              title={FLAG.description}
+              title={FLAGGED.description}
               onClick={this.handleActionButtonClick}
-            >{FLAGGED.icon}<span className="wide-screen"> {FLAG.description}</span></button>
+            >{FLAGGED.icon}<span className="wide-screen"> {FLAGGED.description}</span></button>
               <button
               value={UNFLAGGED.css}
               id={UNFLAGGED.css}
               name={UNFLAGGED.css}
               className={`action ${UNFLAGGED.css}`}
-              title={UNFLAG.description}
+              title={UNFLAGGED.description}
               onClick={this.handleActionButtonClick}
-            >{UNFLAGGED.icon}<span className="wide-screen"> {UNFLAG.description}</span></button>
+            >{UNFLAGGED.icon}<span className="wide-screen"> {UNFLAGGED.description}</span></button>
           </div>
         </div>
         <ul className={`message-list ${this.state.loading ? "loading" : ""}`}>
