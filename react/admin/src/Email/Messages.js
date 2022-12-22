@@ -84,7 +84,6 @@ class Messages extends React.Component {
   }
 
   setFlag = async (flag, op) => {
-    console.log(`flag: ${flag}; op: ${op}.`);
     const response = await axios.put('/set_flag',
       JSON.stringify({
         host: this.props.host,
@@ -121,10 +120,10 @@ class Messages extends React.Component {
       });
       this.props.setMessage("Flag set.", false);
     };
-    var catchback = (e) => {
+    var catchback = (err) => {
       this.props.setMessage(`Unable to set flag "${action}" on selected messages.`, true);
       console.log(`Unable to set flag "${action}" on selected messages.`);
-      console.log(e);
+      console.log(err);
     };
     switch (action) {
       case "delete":
