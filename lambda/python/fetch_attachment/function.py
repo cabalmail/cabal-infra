@@ -12,7 +12,7 @@ def handler(event, _context):
     user = event['requestContext']['authorizer']['claims']['cognito:username'];
     bucket = qs['host'].replace("imap", "cache")
     key = f"{user}/{qs['folder']}/{qs['id']}/{qs['filename']}"
-    message = get_message(qs['host'], user, qs['folder'], qs['id'])
+    message = get_message(qs['host'], user, qs['folder'], qs['id'], qs['seen'])
     i = 0;
     if message.is_multipart():
         for part in message.walk():

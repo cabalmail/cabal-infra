@@ -23,7 +23,7 @@ def get_imap_client(host, user, folder):
     return client
 
 
-def get_message(host, user, folder, id):
+def get_message(host, user, folder, id, seen):
     '''Gets a message from cache on s3 or from imap server'''
     bucket = host.replace("imap", "cache")
     email_body_raw = b''
@@ -33,7 +33,8 @@ def get_message(host, user, folder, id):
     else:
         client = get_imap_client(host, user, folder)
         message = client.fetch([id],['RFC822'])
-        client.remove_flags([id], '\Seen', True)
+        if not seen:
+            client.remove_flags([id], '\Seen', True)
         email_body_raw = message[id][b'RFC822']
         client.logout()
         upload_object(bucket, key, "text/plain", email_body_raw)

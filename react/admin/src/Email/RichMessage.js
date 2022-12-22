@@ -35,7 +35,8 @@ class RichMessage extends React.Component {
           folder: this.props.folder,
           host: this.props.host,
           id: this.props.id,
-          index: "<" + cid + ">"
+          index: "<" + cid + ">",
+          seen: this.props.seen
         },
         baseURL: this.props.api_url,
         headers: {
