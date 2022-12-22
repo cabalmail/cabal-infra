@@ -24,6 +24,19 @@ class Messages extends React.Component {
   }
 
   componentDidMount() {
+    this.poller();
+    this.interval = setInterval(this.poller, 10000);
+  }
+
+  componentDidUpdate(prevProps, prevState) {
+    if ((this.props.folder !== prevProps.folder) ||
+        (this.state.sort_order !== prevState.sort_order) ||
+        (this.state.sort_field !== prevState.sort_field)) {
+      this.poller();
+    }
+  }
+
+  poller = () => {
     const response = this.getList();
     response.then(data => {
       this.setState({
@@ -37,28 +50,9 @@ class Messages extends React.Component {
     });
   }
 
-  componentDidUpdate(prevProps, prevState) {
-    if ((this.props.folder !== prevProps.folder) ||
-      (this.state.sort_order !== prevState.sort_order) ||
-      (this.state.sort_field !== prevState.sort_field)) {
-      const response = this.getList();
-      this.setState({...this.state, loading: true});
-      response.then(data => {
-        this.setState({
-          ...this.state,
-          message_ids: data.data.message_ids,
-          loading: false
-        });
-      }).catch(e => {
-        this.props.setMessage("Unable to get list of messages.", true);
-        console.log(e);
-      });
-    }
-  }
-
-  getList = async (e) => {
+  getList = (e) => {
     this.setState({...this.state, loading: true})
-    const response = await axios.get('/list_messages',
+    const response = axios.get('/list_messages',
       {
         params: {
           folder: this.props.folder,
@@ -70,7 +64,7 @@ class Messages extends React.Component {
         headers: {
           'Authorization': this.props.token
         },
-        timeout: 10000
+        timeout: 8000
       }
     );
     return response;
