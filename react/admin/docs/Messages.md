@@ -21,7 +21,7 @@ Parameters:  ()
 Returns: null
 
 ### setFlag
-Modifiers: async
+Modifiers: none
 
 Parameters: flag
 op (null
