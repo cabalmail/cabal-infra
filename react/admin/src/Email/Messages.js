@@ -123,6 +123,7 @@ class Messages extends React.Component {
     };
     var catchback = (e) => {
       this.props.setMessage(`Unable to set flag "${action}" on selected messages.`, true);
+      console.log(`Unable to set flag "${action}" on selected messages.`);
       console.log(e);
     };
     switch (action) {
