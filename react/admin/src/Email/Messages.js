@@ -107,6 +107,9 @@ class Messages extends React.Component {
 
   handleActionButtonClick = (e) => {
     var action = e.target.id;
+    if (e.target.tagName !== 'BUTTON') {
+      return;
+    }
     var callback = data => {
       this.setState({
         ...this.state,
@@ -114,14 +117,12 @@ class Messages extends React.Component {
         selected_messages: [],
         loading: false
       });
+      this.props.setMessage("Flag set.", false);
     };
     var catchback = e => {
-      this.props.setMessage(`Unable to set flag "${action}" on selected messages.`);
+      this.props.setMessage(`Unable to set flag "${action}" on selected messages.`, true);
       console.log(e);
     };
-    if (e.target.tagName !== 'BUTTON') {
-      action = e.target.parentElement.id;
-    }
     console.log(`${action} clicked`);
     switch (action) {
       case "delete":
@@ -130,20 +131,20 @@ class Messages extends React.Component {
       case "move":
         this.props.setMessage("Moving messages isn't implamented yet.", true);
         break;
-      case READ.action:
+      case READ.css:
         this.setFlag(READ.imap, READ.op).then(callback).catch(catchback);
         break;
-      case UNREAD.action:
+      case UNREAD.css:
         this.setFlag(UNREAD.imap, UNREAD.op).then(callback).catch(catchback);
         break;
-      case FLAGGED.action:
+      case FLAGGED.css:
         this.setFlag(FLAGGED.imap, FLAGGED.op).then(callback).catch(catchback);
         break;
-      case UNFLAGGED.action:
+      case UNFLAGGED.css:
         this.setFlag(UNFLAGGED.imap, UNFLAGGED.op).then(callback).catch(catchback);
         break;
       default:
-        console.log(`${action} clicked`);
+        console.log(`"${action}" clicked`);
     }
   }
 
