@@ -64,7 +64,7 @@ locals {
     set_flag = {
       runtime   = "python3.9"
       type      = "python"
-      method    = "PUT"
+      method    = "POST"
       memory    = 128
       cache     = true
       cache_ttl = 3600
