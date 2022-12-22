@@ -34,7 +34,7 @@ export const TO = {
   description: "Recipient"
 };
 export const PAGE_SIZE = 50;
-export const SEEN = {
+export const READ = {
   imap: "\\Seen",
   css: "read",
   description: "Mark read",
@@ -42,7 +42,7 @@ export const SEEN = {
   action: "read",
   icon: "✉️"
 };
-export const UNSEEN = {
+export const UNREAD = {
   imap: "\\Seen",
   css: "unread",
   description: "Mark unread",
