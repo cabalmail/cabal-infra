@@ -6,8 +6,15 @@
 
 
 ## Methods
+### poller
+Modifiers: none
+
+Parameters:  ()
+
+Returns: null
+
 ### getList
-Modifiers: async
+Modifiers: none
 
 Parameters: e (null)
 
