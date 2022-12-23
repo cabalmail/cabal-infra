@@ -99,8 +99,8 @@ class App extends React.Component {
     }, 15000);
   }
 
-  getConfig = async () => {
-    const response = await axios.get('/config.js');
+  getConfig = () => {
+    const response = axios.get('/config.js');
     return response;
   }
 

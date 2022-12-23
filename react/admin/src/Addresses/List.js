@@ -63,8 +63,8 @@ class List extends React.Component {
     }
   }
 
-  revokeAddress = async (a) => {
-    const response = await axios.delete('/revoke', {
+  revokeAddress = (a) => {
+    const response = axios.delete('/revoke', {
       baseURL: this.props.api_url,
       data: JSON.stringify({
         address: a.address,
@@ -115,8 +115,8 @@ class List extends React.Component {
     e.preventDefault();
   }
 
-  getList = async (e) => {
-    const response = await axios.get('/list', {
+  getList = (e) => {
+    const response = axios.get('/list', {
       baseURL: this.props.api_url,
       headers: {
         'Authorization': this.props.token

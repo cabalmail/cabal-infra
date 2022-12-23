@@ -24,8 +24,8 @@ class Folders extends React.Component {
     });
   }
 
-  getList = async (e) => {
-    const response = await axios.get('/list_folders', {
+  getList = (e) => {
+    const response = axios.get('/list_folders', {
       params: {
         host: this.props.host
       },

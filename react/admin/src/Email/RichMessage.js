@@ -28,8 +28,8 @@ class RichMessage extends React.Component {
     }
   }
 
-  fetchImage = async (cid) => {
-    const response = await axios.get('/fetch_inline_image',
+  fetchImage = (cid) => {
+    const response = axios.get('/fetch_inline_image',
       {
         params: {
           folder: this.props.folder,
