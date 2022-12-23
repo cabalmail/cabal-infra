@@ -172,6 +172,7 @@ class App extends React.Component {
           expires: data.getIdToken().getExpiration(),
           view: "Email"
         });
+        this.setMessage("Login succeeded", false);
       },
       onFailure: data => {
         this.setState({
