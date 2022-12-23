@@ -7,7 +7,6 @@ div.folders ul.folder_list {
 div.folders ul.folder_list li.folder {
   list-style: none;
   margin: 0;
-  padding: 0.3em;
   display: grid;
   grid-template-columns: auto 3em 3em;
   border-bottom: 1px solid;
