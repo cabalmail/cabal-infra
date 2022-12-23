@@ -3,7 +3,21 @@
 <p><a href="/README.md">Main documentation</a></p>
 </div><div style="padding-left: 11em;">
 # Folders
-
+Fetches folders for current users and displays them
 
 ## Methods
+### getList
+Modifiers: none
+
+Parameters: e (null)
+
+Returns: null
+
+### setFolder
+Modifiers: none
+
+Parameters: e (null)
+
+Returns: null
+
 </div>
