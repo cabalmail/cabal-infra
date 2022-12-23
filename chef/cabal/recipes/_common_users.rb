@@ -1,12 +1,11 @@
 users = []
-uid   = 2000
 CognitoUsers.list(node['cognito']['pool_id'], { region: node['ec2']['region'] }).each do |user|
   users.push(user)
 end
 users.sort_by { |u| u.user_create_date }
 users.each do |u|
   user u.username do
-    uid uid
+    uid u.zoneinfo
   end
   directory "/home/#{u.username}" do
     owner u.username
@@ -29,5 +28,4 @@ users.each do |u|
     group u.username
     mode 0744
   end
-  uid += 1
 end
