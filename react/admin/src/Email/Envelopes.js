@@ -76,7 +76,6 @@ class Envelopes extends React.Component {
         var priority = message.priority !== "" ? ` ${message.priority}` : "";
         var selected = this.state.selected === id.toString() ? " selected" : "";
         var classes = flags + attachment + priority + selected;
-        console.log(">" + priority + "<");
         return (
           <li className={`message-row ${classes}`}>
             <div className="message-line-1">
@@ -91,7 +90,7 @@ class Envelopes extends React.Component {
                 onChange={this.handleCheck}
               />
               <label htmlFor={id}><span className="checked">✓</span><span className="unchecked">&nbsp;</span></label>&nbsp;
-              {priority !== "" ? '❗️ ' : ''}
+              {priority !== " " ? '❗️ ' : ''}
               {flags.match(/Flagged/) ? '🚩 ' : ''}
               {flags.match(/Answered/) ? '⤶ ' : ''}
               {message.struct[1] === "mixed" ? '📎 ' : ''}
