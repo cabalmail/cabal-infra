@@ -345,7 +345,7 @@ ul.message-list li.Seen div.message-subject {
   font-weight: normal;
 }
 
-ul.message-list li.Recent div.message-subject {
+ul.message-list li.Answered div.message-subject {
   font-size: 115%;
   font-style: italic;
 }
