@@ -36,6 +36,10 @@ class Messages extends React.Component {
     }
   }
 
+  componentWillUnmount() {
+    clearInterval(this.interval);
+  }
+
   poller = () => {
     const response = this.getList();
     response.then(data => {
