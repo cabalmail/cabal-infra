@@ -11,7 +11,7 @@ def handler(event, _context):
     user = event['requestContext']['authorizer']['claims']['cognito:username'];
     client = get_imap_client(qs['host'], user, qs['folder'])
     envelopes = {}
-    for msgid, data in client.fetch(ids, ['ENVELOPE', 'FLAGS', 'BODYSTRUCTURE']).items():
+    for msgid, data in client.fetch(ids, ['ENVELOPE', 'FLAGS', 'BODYSTRUCTURE', 'HEADER']).items():
         envelope = data[b'ENVELOPE']
         envelopes[msgid] = {
             "id": msgid,
@@ -20,7 +20,8 @@ def handler(event, _context):
             "from": decode_address(envelope.from_),
             "to": decode_address(envelope.to),
             "flags": decode_flags(data[b'FLAGS']),
-            "struct": decode_body_structure(data[b'BODYSTRUCTURE'])
+            "struct": decode_body_structure(data[b'BODYSTRUCTURE']),
+            "headers": data[b'HEADER'].decode()
         }
     client.logout()
     return {
