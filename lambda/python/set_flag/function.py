@@ -8,7 +8,7 @@ def handler(event, _context):
     user = event['requestContext']['authorizer']['claims']['cognito:username'];
     client = get_imap_client(body['host'], user, body['folder'])
     if body['op'] == 'set':
-        client.set_flags(body['ids'], body['flag'], True)
+        client.add_flags(body['ids'], body['flag'], True)
     else:
         client.remove_flags(body['ids'], body['flag'], True)
     response = client.sort(f"{body['sort_order']}{body['sort_field']}", [b'NOT', b'DELETED'])
