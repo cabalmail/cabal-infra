@@ -270,6 +270,10 @@ div.message_overlay .message_attachments button.attachment span.attachment_type 
   display: none;
 }
 
+div.message_overlay div.message_raw {
+  background-color: #ffe !important;
+}
+
 div.message_overlay div.message_raw iframe {
   width: 100%;
   height: 100%;
