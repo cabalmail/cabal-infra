@@ -1,6 +1,6 @@
 div.folders form.new_folder {
   display: grid;
-  grid-template-columns: auto 20em;
+  grid-template-columns: 31em auto;
   grid-column-gap: 1em;
   padding: 0.5em;
 }
