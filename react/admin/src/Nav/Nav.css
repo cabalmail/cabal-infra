@@ -80,3 +80,9 @@ body div.nav div.logo {
   height: 3.2em;
   width: auto;
 }
+
+@media (max-width: 899px) {
+  body div.nav div.logo {
+    display: none;
+  }
+}
