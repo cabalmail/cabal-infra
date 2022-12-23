@@ -91,6 +91,7 @@ class Folders extends React.Component {
           <button className="new_folder">New Folder</button>
         </form>
         <hr />
+        <div id="count">Found: {this.state.folders.length} folders</div>
         <ul className="folder_list">
           {folder_list}
         </ul>
