@@ -1,3 +1,5 @@
+// Third party libs
+
 import React from 'react';
 import axios from 'axios';
 import {
@@ -6,14 +8,29 @@ import {
   CognitoUserAttribute,
   AuthenticationDetails
 } from 'amazon-cognito-identity-js';
-import Addresses from './Addresses';
-import SignUp from './SignUp';
-import Login from './Login';
-import AppMessage from './AppMessage';
-import Nav from './Nav';
+
+// Main Components
+
 import Email from './Email';
 import Folders from './Folders';
+import Addresses from './Addresses';
+
+// Pre-login Components
+
+import SignUp from './SignUp';
+import Login from './Login';
+
+// Persistent Components
+
+import AppMessage from './AppMessage';
+import Nav from './Nav';
+
+// Site-wide and Theme-specific style
+
 import './App.css';
+
+// Globals
+
 let UserPool = null;
 
 /**
