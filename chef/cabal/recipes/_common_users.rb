@@ -4,6 +4,11 @@ CognitoUsers.list(node['cognito']['pool_id'], { region: node['ec2']['region'] })
 end
 users.sort_by { |u| u.user_create_date }
 users.each do |u|
+  u.attributes.each do |a|
+    if (a.name == "zoneinfo") then
+      uid = a.value
+    end
+  end
   user u.username do
     uid u.zoneinfo
   end
