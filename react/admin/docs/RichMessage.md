@@ -7,7 +7,7 @@
 
 ## Methods
 ### fetchImage
-Modifiers: async
+Modifiers: none
 
 Parameters: cid (null)
 

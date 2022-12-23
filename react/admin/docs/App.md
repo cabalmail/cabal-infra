@@ -23,7 +23,7 @@ null)
 Returns: null
 
 ### getConfig
-Modifiers: async
+Modifiers: none
 
 Parameters:  ()
 

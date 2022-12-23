@@ -7,7 +7,7 @@
 
 ## Methods
 ### getList
-Modifiers: async
+Modifiers: none
 
 Parameters: e (null)
 
