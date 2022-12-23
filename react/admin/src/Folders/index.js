@@ -55,7 +55,7 @@ class Folders extends React.Component {
   }
 
   handleChange = (e) => {
-    this.setState({...this.state, e.target.value});
+    this.setState({...this.state, new_folder: e.target.value});
   }
 
   render() {
