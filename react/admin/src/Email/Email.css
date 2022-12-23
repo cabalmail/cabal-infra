@@ -341,12 +341,10 @@ ul.message-list div.message-subject input[type=checkbox]:checked ~ label .checke
 }
 
 ul.message-list li.Seen div.message-subject {
-  font-size: 115%;
   font-weight: normal;
 }
 
 ul.message-list li.Recent div.message-subject {
-  font-size: 115%;
   font-style: italic;
 }
 
