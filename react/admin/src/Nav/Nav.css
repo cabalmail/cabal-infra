@@ -85,4 +85,7 @@ body div.nav div.logo {
   body div.nav div.logo {
     display: none;
   }
+  body div.nav {
+    text-align: left;
+  }
 }
