@@ -73,7 +73,7 @@ class Folders extends React.Component {
             className="folder_button delete_folder"
             onClick={this.handleDelClick}
             title="Delete folder"
-          >❌</button>
+          >🗑️</button>
         </li>
       );
     });
