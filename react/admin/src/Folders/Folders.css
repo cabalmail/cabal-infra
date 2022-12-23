@@ -5,3 +5,7 @@ div.folders ul.folder_list li.folder {
   display: grid;
   grid-template-columns: auto 3em 3em;
 }
+
+div.folders ul.folder_list li.folder button.folder_button {
+  width: 3em;
+}

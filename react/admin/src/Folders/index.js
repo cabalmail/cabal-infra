@@ -65,12 +65,12 @@ class Folders extends React.Component {
         <li className="folder" id={item}>
           <span className="folder_name">{item}</span>
           <button
-            className="new_subfolder"
+            className="folder_button new_subfolder"
             onClick={this.handleNewClick}
             title="New subfolder"
           >⊕</button>
           <button
-            className="delete_folder"
+            className="folder_button delete_folder"
             onClick={this.handleDelClick}
             title="Delete folder"
           >⊖</button>
