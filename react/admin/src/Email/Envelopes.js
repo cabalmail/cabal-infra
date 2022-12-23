@@ -73,7 +73,7 @@ class Envelopes extends React.Component {
         var message = this.state.envelopes[id];
         var flags = message.flags.map(d => {return d.replace("\\","")}).join(" ");
         var attachment = (message.struct[1] === "mixed" ? " Attachment" : "");
-        var priority = message.priority ? ` ${message.priority}` : "";
+        var priority = message.priority !== "" ? ` ${message.priority}` : "";
         var selected = this.state.selected === id.toString() ? " selected" : "";
         var classes = flags + attachment + priority + selected;
         return (
@@ -90,7 +90,7 @@ class Envelopes extends React.Component {
                 onChange={this.handleCheck}
               />
               <label htmlFor={id}><span className="checked">✓</span><span className="unchecked">&nbsp;</span></label>&nbsp;
-              {priority ? '❗️ ' : ''}
+              {priority !== "" ? '❗️ ' : ''}
               {flags.match(/Flagged/) ? '🚩 ' : ''}
               {flags.match(/Answered/) ? '⤶ ' : ''}
               {message.struct[1] === "mixed" ? '📎 ' : ''}
