@@ -34,7 +34,8 @@ import './App.css';
 let UserPool = null;
 
 /**
- * Application for managing Cabalmail addresses via web user interface
+ * Application for reading Cabalmail email and 
+ * managing Cabalmail addresses and folders
  */
 
 class App extends React.Component {
