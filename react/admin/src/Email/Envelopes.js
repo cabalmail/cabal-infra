@@ -72,9 +72,10 @@ class Envelopes extends React.Component {
       if (id.toString() in this.state.envelopes) {
         var message = this.state.envelopes[id];
         var flags = message.flags.map(d => {return d.replace("\\","")}).join(" ");
+        var attachment = (message.struct[1] === "mixed" ? " Attachment" : "");
+        var priority = message.priority ? ` ${message.priority}` : "";
         var selected = this.state.selected === id.toString() ? " selected" : "";
-        var classes = flags + (message.struct[1] === "mixed" ? " Attachment" : "") + selected;
-        console.log(`priority is "${message.priority}"`);
+        var classes = flags + attachment + priority + selected;
         return (
           <li className={`message-row ${classes}`}>
             <div className="message-line-1">
@@ -89,6 +90,7 @@ class Envelopes extends React.Component {
                 onChange={this.handleCheck}
               />
               <label htmlFor={id}><span className="checked">✓</span><span className="unchecked">&nbsp;</span></label>&nbsp;
+              {priority ? '❗️ ' : ''}
               {flags.match(/Flagged/) ? '🚩 ' : ''}
               {flags.match(/Answered/) ? '⤶ ' : ''}
               {message.struct[1] === "mixed" ? '📎 ' : ''}
