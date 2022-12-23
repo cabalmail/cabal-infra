@@ -3,15 +3,10 @@ div.folders form.new_folder {
   grid-template-columns: 20em auto;
   grid-column-gap: 1em;
   padding: 0;
-  margin-top: 1em;
 }
 
 div.folders form.new_folder input.new_folder {
   width: 15em;
-}
-
-div.folders form.new_folder button.new_folder {
-  margin: 0;
 }
 
 div.folders ul.folder_list {
