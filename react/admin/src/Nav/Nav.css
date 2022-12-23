@@ -81,7 +81,7 @@ body div.nav div.logo {
   width: auto;
 }
 
-@media (max-width: 899px) {
+@media (max-width: 699px) {
   body div.nav div.logo {
     display: none;
   }
