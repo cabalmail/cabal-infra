@@ -144,6 +144,10 @@ a {
   text-decoration: none;
 }
 
+hr {
+  margin: 1.5em;
+}
+
 .content {
   padding: 3.4em 3em 3em 3em;
 }

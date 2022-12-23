@@ -47,10 +47,6 @@
   transition: max-height 1s ease-in;
 }
 
-hr {
-  margin: 1.5em;
-}
-
 /* List Addresses */
 
 #filter {
