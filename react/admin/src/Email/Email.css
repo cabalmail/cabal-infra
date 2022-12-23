@@ -312,6 +312,14 @@ ul.message-list div.message-subject {
   text-overflow: ellipsis;
 }
 
+ul.message-list li.Seen div.message-subject {
+  font-weight: normal;
+}
+
+ul.message-list li.Recent div.message-subject {
+  font-style: italic;
+}
+
 ul.message-list div.message-subject span.subject:hover {
   text-decoration: underline;
 }
@@ -338,14 +346,6 @@ ul.message-list div.message-subject input[type=checkbox]:checked ~ label .checke
   border-radius: 0.1em;
   text-align: center;
   overflow: visible;
-}
-
-ul.message-list li.Seen div.message-subject {
-  font-weight: normal;
-}
-
-ul.message-list li.Recent div.message-subject {
-  font-style: italic;
 }
 
 ul.message-list div.message-from {
