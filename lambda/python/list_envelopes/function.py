@@ -23,7 +23,6 @@ def handler(event, _context):
             "flags": decode_flags(data[b'FLAGS']),
             "struct": decode_body_structure(data[b'BODYSTRUCTURE']),
             "priority": [f"priority-{s}" for s in priority_header.split() if s.isdigit()]
-            "priority": 
         }
     client.logout()
     return {
