@@ -345,6 +345,11 @@ ul.message-list li.Seen div.message-subject {
   font-weight: normal;
 }
 
+ul.message-list li.Recent div.message-subject {
+  font-size: 115%;
+  font-style: italic;
+}
+
 ul.message-list div.message-from {
   height: 1.75em;
   text-overflow: ellipsis;
