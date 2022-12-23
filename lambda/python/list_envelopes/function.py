@@ -13,6 +13,7 @@ def handler(event, _context):
     envelopes = {}
     for msgid, data in client.fetch(ids, ['ENVELOPE', 'FLAGS', 'BODYSTRUCTURE', 'BODY[HEADER.FIELDS (X-PRIORITY)]']).items():
         envelope = data[b'ENVELOPE']
+        priority_header = data[b'BODY[HEADER.FIELDS (X-PRIORITY)]'].decode()
         envelopes[msgid] = {
             "id": msgid,
             "date": envelope.date.__str__(),
@@ -21,7 +22,8 @@ def handler(event, _context):
             "to": decode_address(envelope.to),
             "flags": decode_flags(data[b'FLAGS']),
             "struct": decode_body_structure(data[b'BODYSTRUCTURE']),
-            "priority": data[b'BODY[HEADER.FIELDS (X-PRIORITY)]'].decode()
+            "priority": [f"priority-{s}" for s in priority_header.split() if s.isdigit()]
+            "priority": 
         }
     client.logout()
     return {
