@@ -90,7 +90,7 @@ class Folders extends React.Component {
           />
           <button className="new_folder">New Folder</button>
         </form>
-        </hr>
+        <hr />
         <ul className="folder_list">
           {folder_list}
         </ul>
