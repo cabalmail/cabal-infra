@@ -267,14 +267,14 @@ class App extends React.Component {
           view={this.state.view}
           doLogout={this.doLogout}
         />
+        <div className="content">
+          {this.renderContent()}
+        </div>
         <AppMessage
           message={this.state.message}
           hide={this.state.hideMessage}
           error={this.state.error}
         />
-        <div className="content">
-          {this.renderContent()}
-        </div>
       </div>
     );
   }
