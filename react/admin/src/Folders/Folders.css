@@ -29,3 +29,9 @@ div.folders ul.folder_list li.folder {
 div.folders ul.folder_list li.folder button.folder_button {
   width: 3em;
 }
+
+div.Folders div.content {
+  max-width: 60em;
+  margin-left: auto;
+  margin-right: auto;
+}

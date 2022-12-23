@@ -83,3 +83,9 @@ ul.address-list li.address span.address, ul.address-list button {
   width: 100%;
   box-sizing: border-box;
 }
+
+div.Addresses div.content {
+  max-width: 60em;
+  margin-left: auto;
+  margin-right: auto;
+}
