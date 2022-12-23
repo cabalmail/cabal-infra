@@ -1,8 +1,12 @@
 div.folders form.new_folder {
   display: grid;
-  grid-template-columns: 31em auto;
+  grid-template-columns: 20em auto;
   grid-column-gap: 1em;
   padding: 0.5em;
+}
+
+div.folders form.new_folder input.new_folder {
+  width: 15em;
 }
 
 div.folders ul.folder_list {
