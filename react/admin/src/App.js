@@ -10,27 +10,22 @@ import {
 } from 'amazon-cognito-identity-js';
 
 // Main Components
-
 import Email from './Email';
 import Folders from './Folders';
 import Addresses from './Addresses';
 
 // Pre-login Components
-
 import SignUp from './SignUp';
 import Login from './Login';
 
 // Persistent Components
-
 import AppMessage from './AppMessage';
 import Nav from './Nav';
 
 // Site-wide and Theme-specific style
-
 import './App.css';
 
 // Globals
-
 let UserPool = null;
 
 /**
