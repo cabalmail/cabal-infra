@@ -31,7 +31,7 @@ EOF
 }
 
 resource "aws_iam_role_policy" "lambda" {
-  name   = "${var.name}_policy"
+  name   = "assign_osid_policy"
   role   = aws_iam_role.for_lambda.id
   policy = <<RUNPOLICY
 {
