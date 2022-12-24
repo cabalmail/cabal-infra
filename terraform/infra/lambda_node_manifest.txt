@@ -1,14 +1,17 @@
-total 1980
-drwxr-xr-x 3 runner docker    4096 Feb 29  2004 assign_osid
--rw-r--r-- 1 runner docker 1974316 Dec 24 13:28 assign_osid.zip
--rw-r--r-- 1 runner docker      44 Dec 24 13:28 assign_osid.zip.base64sha256
+total 9684
+drwxr-xr-x 2 runner docker    4096 Dec 24 15:19 assign_osid
+-rw-r--r-- 1 runner docker 1973819 Dec 24 15:19 assign_osid.zip
+-rw-r--r-- 1 runner docker      44 Dec 24 15:19 assign_osid.zip.base64sha256
 -rw-r--r-- 1 runner docker     784 Dec 20 19:52 config.js
-drwxr-xr-x 2 runner docker    4096 Feb 29  2004 list
--rw-r--r-- 1 runner docker    1327 Dec 24 13:28 list.zip
--rw-r--r-- 1 runner docker      44 Dec 24 13:28 list.zip.base64sha256
-drwxr-xr-x 2 runner docker    4096 Feb 29  2004 new
--rw-r--r-- 1 runner docker    2332 Dec 24 13:28 new.zip
--rw-r--r-- 1 runner docker      44 Dec 24 13:28 new.zip.base64sha256
-drwxr-xr-x 2 runner docker    4096 Feb 29  2004 revoke
--rw-r--r-- 1 runner docker    1867 Dec 24 13:28 revoke.zip
--rw-r--r-- 1 runner docker      44 Dec 24 13:28 revoke.zip.base64sha256
+drwxr-xr-x 2 runner docker    4096 Dec 24 15:19 list
+-rw-r--r-- 1 runner docker 1973832 Dec 24 15:19 list.zip
+-rw-r--r-- 1 runner docker      44 Dec 24 15:19 list.zip.base64sha256
+drwxr-xr-x 2 runner docker    4096 Dec 24 15:19 new
+-rw-r--r-- 1 runner docker 1973832 Dec 24 15:19 new.zip
+-rw-r--r-- 1 runner docker      44 Dec 24 15:19 new.zip.base64sha256
+drwxr-xr-x 3 runner docker    4096 Feb 29  2004 nodejs
+-rw-r--r-- 1 runner docker 1973832 Dec 24 15:19 nodejs.zip
+-rw-r--r-- 1 runner docker      44 Dec 24 15:19 nodejs.zip.base64sha256
+drwxr-xr-x 2 runner docker    4096 Dec 24 15:19 revoke
+-rw-r--r-- 1 runner docker 1973832 Dec 24 15:19 revoke.zip
+-rw-r--r-- 1 runner docker      44 Dec 24 15:19 revoke.zip.base64sha256
