@@ -4,7 +4,10 @@
 <p><a href="/README.md">Main documentation</a></p>
 </div><div style="padding-left: 11em;">
 
-
+Creates Lambda layers for use by other modules: one for nodejs and another for python.
+Zip files are built with Github actions; see
+[lambda\_node\_build.yml](/.github/workflows/lambda\_node\_build.yml) and
+[lambda\_python\_build.yml](/.github/workflows/lambda\_python\_build.yml).
 
 ## Inputs
 
@@ -30,6 +33,7 @@ No requirements.
 | Name | Type |
 |------|------|
 | [aws_lambda_layer_version.layer](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lambda_layer_version) | resource |
+| [aws_s3_object.lambda_layer_hash](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/s3_object) | data source |
 
 </div>
 <!-- END_TF_DOCS -->
