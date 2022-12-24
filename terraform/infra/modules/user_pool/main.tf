@@ -3,13 +3,7 @@
 */
 
 resource "aws_cognito_user_pool" "users" {
-  name                     = "cabal"
-}
-
-resource "aws_cognito_user_pool_client" "users" {
-  name         = "cabal_admin_client"
-  user_pool_id = aws_cognito_user_pool.users.id
-  explicit_auth_flows = [ "USER_PASSWORD_AUTH" ]
+  name = "cabal"
   schema {
     name                     = "osid"
     attribute_data_type      = "Number"
@@ -20,4 +14,10 @@ resource "aws_cognito_user_pool_client" "users" {
       min_value = 2000
     }
   }
+}
+
+resource "aws_cognito_user_pool_client" "users" {
+  name         = "cabal_admin_client"
+  user_pool_id = aws_cognito_user_pool.users.id
+  explicit_auth_flows = [ "USER_PASSWORD_AUTH" ]
 }
