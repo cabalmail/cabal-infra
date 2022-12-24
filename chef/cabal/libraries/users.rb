@@ -5,7 +5,7 @@ class CognitoUsers
     cognito = Aws::CognitoIdentityProvider::Client.new(region: region)
     resp = cognito.list_users({
       user_pool_id: pool_id,
-      attributes_to_get: ["username", "zoneinfo"]
+      attributes_to_get: ["username", "custom:osid"]
     })
     resp.users
   end
