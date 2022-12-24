@@ -22,7 +22,7 @@ module "bucket" {
 }
 
 # Create Lambda layers for other modules
-module "lamgda_layers" {
+module "lambda_layers" {
   source = "./modules/lambda_layers"
   bucket = module.bucket.bucket
 }
