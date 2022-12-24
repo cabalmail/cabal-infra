@@ -74,7 +74,7 @@ locals {
     },
     list             = {
       runtime   = "nodejs14.x"
-      type      = "node"
+      type      = "nodejs"
       method    = "GET"
       memory    = 128
       cache     = true
@@ -82,7 +82,7 @@ locals {
     },
     new              = {
       runtime   = "nodejs14.x"
-      type      = "node"
+      type      = "nodejs"
       method    = "POST"
       memory    = 128
       cache     = false
@@ -90,7 +90,7 @@ locals {
     },
     revoke           = {
       runtime   = "nodejs14.x"
-      type      = "node"
+      type      = "nodejs"
       method    = "DELETE"
       memory    = 128
       cache     = false
