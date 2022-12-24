@@ -59,6 +59,6 @@ variable "control_domain" {
 }
 
 variable "layers" {
-  type        = list(string)
+  type        = map
   description = "Lambda layers ARNs indext by runtime 'python' or 'nodejs'"
 }

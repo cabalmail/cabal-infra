@@ -7,7 +7,7 @@ data "aws_s3_bucket" "this" {
 }
 
 variable "layers" {
-  type        = list(string)
+  type        = map
   description = "List of layer ARNs"
 }
 variable "user_pool_id" {
