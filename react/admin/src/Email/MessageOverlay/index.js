@@ -1,6 +1,7 @@
 import React from 'react';
 import axios from 'axios';
 import RichMessage from './RichMessage';
+import './MessageOverlay.css';
 
 class MessageOverlay extends React.Component {
 

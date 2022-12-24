@@ -10,6 +10,8 @@ import Folders from './Folders';
 import { ASC, DESC, ARRIVAL, DATE, FROM, SUBJECT, PAGE_SIZE,
          READ, UNREAD, FLAGGED, UNFLAGGED } from '../constants'
 
+import './Messages.css';
+
 class Messages extends React.Component {
 
   constructor(props) {
