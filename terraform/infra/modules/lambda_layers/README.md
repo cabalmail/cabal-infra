@@ -11,7 +11,6 @@
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
 | <a name="input_bucket"></a> [bucket](#input\_bucket) | S3 bucket for artifacts | `string` | n/a | yes |
-| <a name="input_layers"></a> [layers](#input\_layers) | List of lambda layers indext by runtime 'python' or 'nodejs' | `list(string)` | n/a | yes |
 ## Modules
 
 No modules.
