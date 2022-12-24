@@ -3,7 +3,7 @@
 */
 
 data "aws_s3_object" "lambda_function_hash" {
-  bucket = var.bucket
+  bucket = var.bucket_arn
   key    = "/lambda/assign_osid.zip.base64sha256"
 }
 
