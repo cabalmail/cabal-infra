@@ -48,6 +48,11 @@ variable "bucket_arn" {
   description = "ARN of S3 bucket for React app"
 }
 
+variable "bucket" {
+  type        = string
+  description = "Name of S3 bucket for React app"
+}
+
 variable "control_domain" {
   type        = string
   description = "Base for auth domain. E.g., if control_domain is example.com, then the autho domain will be auth.example.com."

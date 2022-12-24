@@ -25,6 +25,7 @@ module "bucket" {
 module "pool" {
   source         = "./modules/user_pool"
   control_domain = var.control_domain
+  bucket         = module.bucket.bucket
   bucket_arn     = module.bucket.bucket_arn
 }
 
