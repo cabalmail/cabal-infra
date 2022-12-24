@@ -65,7 +65,7 @@ module "cabal_method" {
   name             = each.key
   runtime          = each.value.runtime
   type             = each.value.type
-  layer_arns       = each.value.type [aws_lambda_layer_version.layer[each.value.type].arn]
+  layer_arns       = [aws_lambda_layer_version.layer[each.value.type].arn]
   method           = each.value.method
   memory           = each.value.memory
   region           = var.region
