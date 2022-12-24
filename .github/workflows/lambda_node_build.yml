@@ -28,11 +28,11 @@ jobs:
         AWS_S3_BUCKET="admin.$(aws ssm get-parameter --name '/cabal/control_domain_zone_name' --profile deploy_lambda | jq -r '.Parameter.Value')"
         aws s3 cp "s3://${AWS_S3_BUCKET}/node_config.js" ./config.js --profile deploy_lambda --no-progress
         for FUNC in $FUNCTIONS ; do
-          pushd "${FUNC}"
+        pushd nodejs
           cp ../config.js ./config.js
           if test -f requirements.txt; then
-            mkdir node_modules
-            cat requirements.txt | xargs npm install 
+            npm init --yes
+            cat requirements.txt | xargs npm install --save 
           fi
           find . -exec touch -d "2004-02-29 16:21:42" \{\} \; -print | sort | zip ../$FUNC.zip -@
           popd
