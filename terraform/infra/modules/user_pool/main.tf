@@ -2,6 +2,10 @@
 * Creates a Cognito User Pool for authentication against the management application and for authentication at the OS level (providing IMAP and SMTP authentication).
 */
 
+locals {
+  wildcard         = "*"
+}
+
 data "aws_s3_object" "lambda_function_hash" {
   bucket = var.bucket
   key    = "/lambda/assign_osid.zip.base64sha256"
@@ -36,7 +40,7 @@ resource "aws_iam_role_policy" "lambda" {
       {
             "Effect": "Allow",
             "Action": "logs:CreateLogGroup",
-            "Resource": "arn:aws:logs:${var.region}:${var.account}:${local.wildcard}"
+            "Resource": "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:${local.wildcard}"
         },
         {
             "Effect": "Allow",
@@ -45,7 +49,7 @@ resource "aws_iam_role_policy" "lambda" {
                 "logs:PutLogEvents"
             ],
             "Resource": [
-                "arn:aws:logs:${var.region}:${var.account}:log-group:/aws/lambda/${aws_lambda_function.api_call.function_name}:${local.wildcard}"
+                "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/assign_osid:${local.wildcard}"
             ]
         }
     ]
