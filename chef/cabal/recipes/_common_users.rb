@@ -10,7 +10,7 @@ users.each do |u|
     end
   end
   user u.username do
-    uid u.zoneinfo
+    uid uid
   end
   directory "/home/#{u.username}" do
     owner u.username
