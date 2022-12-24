@@ -2,6 +2,11 @@
 * Creates a Cognito User Pool for authentication against the management application and for authentication at the OS level (providing IMAP and SMTP authentication).
 */
 
+data "aws_s3_object" "lambda_function_hash" {
+  bucket = var.bucket
+  key    = "/lambda/assign_osid.zip.base64sha256"
+}
+
 resource "aws_iam_role" "for_lambda" {
   name               = "assign_osid"
   assume_role_policy = <<EOF
@@ -23,7 +28,7 @@ EOF
 
 resource "aws_lambda_function" "assign_osid" {
   s3_bucket        = var.bucket_arn
-  s3_key           = "lambda/${var.name}.zip"
+  s3_key           = "lambda/assign_osid.zip"
   source_code_hash = data.aws_s3_object.lambda_function_hash.body
   function_name    = "assign_osid"
   role             = aws_iam_role.for_lambda.arn
