@@ -26,6 +26,33 @@ resource "aws_iam_role" "for_lambda" {
 EOF
 }
 
+resource "aws_iam_role_policy" "lambda" {
+  name   = "${var.name}_policy"
+  role   = aws_iam_role.for_lambda.id
+  policy = <<RUNPOLICY
+{
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+            "Effect": "Allow",
+            "Action": "logs:CreateLogGroup",
+            "Resource": "arn:aws:logs:${var.region}:${var.account}:${local.wildcard}"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+            ],
+            "Resource": [
+                "arn:aws:logs:${var.region}:${var.account}:log-group:/aws/lambda/${aws_lambda_function.api_call.function_name}:${local.wildcard}"
+            ]
+        }
+    ]
+}
+RUNPOLICY
+}
+
 resource "aws_lambda_function" "assign_osid" {
   s3_bucket        = var.bucket
   s3_key           = "lambda/assign_osid.zip"
