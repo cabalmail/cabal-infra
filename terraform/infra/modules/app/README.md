@@ -23,6 +23,7 @@ Stands up the following resources to implement a web application that allows use
 | <a name="input_control_domain"></a> [control\_domain](#input\_control\_domain) | The control domain. | `string` | n/a | yes |
 | <a name="input_dev_mode"></a> [dev\_mode](#input\_dev\_mode) | If true, forces Cloudfront to non-caching configuration. | `bool` | n/a | yes |
 | <a name="input_domains"></a> [domains](#input\_domains) | List of email domains. | `list` | n/a | yes |
+| <a name="input_layers"></a> [layers](#input\_layers) | List of layer ARNs | `list(string)` | n/a | yes |
 | <a name="input_origin"></a> [origin](#input\_origin) | S3 Origin ID for CloudFront | `string` | n/a | yes |
 | <a name="input_region"></a> [region](#input\_region) | The AWS region. | `string` | n/a | yes |
 | <a name="input_relay_ips"></a> [relay\_ips](#input\_relay\_ips) | Egress IP addresses. | `list(string)` | n/a | yes |
@@ -41,6 +42,7 @@ Stands up the following resources to implement a web application that allows use
 | Name | Description |
 |------|-------------|
 | <a name="output_master_password"></a> [master\_password](#output\_master\_password) | n/a |
+| <a name="output_ålayers"></a> [ålayers](#output\_ålayers) | n/a |
 ## Providers
 
 | Name | Version |
@@ -68,7 +70,6 @@ Stands up the following resources to implement a web application that allows use
 | [aws_cloudfront_distribution.cdn](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudfront_distribution) | resource |
 | [aws_iam_role.cloudwatch](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role) | resource |
 | [aws_iam_role_policy.cloudwatch](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy) | resource |
-| [aws_lambda_layer_version.layer](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lambda_layer_version) | resource |
 | [aws_route53_record.admin_cname](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route53_record) | resource |
 | [aws_route53_record.spf](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route53_record) | resource |
 | [aws_s3_bucket.cache](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket) | resource |
