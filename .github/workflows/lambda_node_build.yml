@@ -31,7 +31,8 @@ jobs:
           pushd "${FUNC}"
           cp ../config.js ./config.js
           if test -f requirements.txt; then
-            cat requirements.txt | xargs npm install -g
+            mkdir node_modules
+            cat requirements.txt | xargs npm install 
           fi
           find . -exec touch -d "2004-02-29 16:21:42" \{\} \; -print | sort | zip ../$FUNC.zip -@
           popd
