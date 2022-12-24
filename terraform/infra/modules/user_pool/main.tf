@@ -64,7 +64,7 @@ resource "aws_lambda_function" "assign_osid" {
   function_name    = "assign_osid"
   role             = aws_iam_role.for_lambda.arn
   handler          = "index.handler"
-  runtime          = "python3.9"
+  runtime          = "nodejs14.x"
   timeout          = 30
 }
 
