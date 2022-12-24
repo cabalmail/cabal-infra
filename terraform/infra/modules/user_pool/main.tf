@@ -14,8 +14,8 @@ resource "aws_cognito_user_pool_client" "users" {
     name                     = "osid"
     attribute_data_type      = "Number"
     developer_only_attribute = false
-    mutable                  = false
-    required                 = true
+    mutable                  = true
+    required                 = false
     number_attribute_constraints {
       min_value = 2000
     }
