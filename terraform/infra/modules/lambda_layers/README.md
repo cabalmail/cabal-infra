@@ -19,7 +19,9 @@ Zip files are built with Github actions; see
 No modules.
 ## Outputs
 
-No outputs.
+| Name | Description |
+|------|-------------|
+| <a name="output_layers"></a> [layers](#output\_layers) | n/a |
 ## Providers
 
 | Name | Version |
