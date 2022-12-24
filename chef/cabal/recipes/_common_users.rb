@@ -5,7 +5,7 @@ end
 users.sort_by { |u| u.user_create_date }
 users.each do |u|
   u.attributes.each do |a|
-    if (a.name == "zoneinfo") then
+    if (a.name == "custom:osid") then
       uid = a.value
     end
   end
