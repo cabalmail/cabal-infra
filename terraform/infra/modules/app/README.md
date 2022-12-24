@@ -23,7 +23,7 @@ Stands up the following resources to implement a web application that allows use
 | <a name="input_control_domain"></a> [control\_domain](#input\_control\_domain) | The control domain. | `string` | n/a | yes |
 | <a name="input_dev_mode"></a> [dev\_mode](#input\_dev\_mode) | If true, forces Cloudfront to non-caching configuration. | `bool` | n/a | yes |
 | <a name="input_domains"></a> [domains](#input\_domains) | List of email domains. | `list` | n/a | yes |
-| <a name="input_layers"></a> [layers](#input\_layers) | List of layer ARNs | `list(string)` | n/a | yes |
+| <a name="input_layers"></a> [layers](#input\_layers) | List of layer ARNs | `map` | n/a | yes |
 | <a name="input_origin"></a> [origin](#input\_origin) | S3 Origin ID for CloudFront | `string` | n/a | yes |
 | <a name="input_region"></a> [region](#input\_region) | The AWS region. | `string` | n/a | yes |
 | <a name="input_relay_ips"></a> [relay\_ips](#input\_relay\_ips) | Egress IP addresses. | `list(string)` | n/a | yes |
