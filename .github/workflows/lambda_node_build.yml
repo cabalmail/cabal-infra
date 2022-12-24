@@ -30,6 +30,7 @@ jobs:
         for FUNC in $FUNCTIONS ; do
           pushd "${FUNC}"
           cp ../config.js ./config.js
+          npm install aws-sdk
           find . -exec touch -d "2004-02-29 16:21:42" \{\} \; -print | sort | zip ../$FUNC.zip -@
           popd
           openssl dgst -sha256 -binary "$FUNC.zip" | openssl enc -base64 | tr -d "\n" > "$FUNC.zip.base64sha256"

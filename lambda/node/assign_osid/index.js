@@ -29,10 +29,10 @@ exports.handler = (event, context, callback) => {
     });
     const UpdateCommand = new AdminUpdateUserAttributesCommand({
       UserPoolId: userPoolId,
-      UserAttributes: [
+      UserAttributes: [{
         Name: "custom:osid",
         Value: uid
-      ],
+      }],
       Username: user
     });
     client.send(UpdateCommand)
