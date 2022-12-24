@@ -21,12 +21,19 @@ module "bucket" {
   control_domain = var.control_domain
 }
 
+# Create Lambda layers for other modules
+module "lamgda_layers" {
+  source = "./modules/lambda_layers"
+  bucket = module.bucket.bucket
+}
+
 # Creates a Cognito User Pool
 module "pool" {
   source         = "./modules/user_pool"
   control_domain = var.control_domain
   bucket         = module.bucket.bucket
   bucket_arn     = module.bucket.bucket_arn
+  layers         = module.lambda_layers.layers
 }
 
 # Creates an AWS Certificate Manager certificate for use on load balancers and CloudFront and requests a Let's Encrypt certificate for use on EC2 instances
@@ -54,6 +61,7 @@ module "admin" {
   cert_arn            = module.cert.cert_arn
   zone_id             = data.aws_ssm_parameter.zone.value
   domains             = module.domains.domains
+  layers              = module.lambda_layers.layers
   bucket              = module.bucket.bucket
   relay_ips           = module.vpc.relay_ips
   origin              = module.bucket.origin

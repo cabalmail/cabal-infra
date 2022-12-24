@@ -6,6 +6,10 @@ data "aws_s3_bucket" "this" {
   bucket = "admin.${var.control_domain}"
 }
 
+variable "layers" {
+  type        = list(string)
+  description = "List of layer ARNs"
+}
 variable "user_pool_id" {
   type = string
   description = "ID of the Cognito user pool."

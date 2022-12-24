@@ -62,6 +62,7 @@ resource "aws_lambda_function" "assign_osid" {
   s3_key           = "lambda/assign_osid.zip"
   source_code_hash = data.aws_s3_object.lambda_function_hash.body
   function_name    = "assign_osid"
+  layers           = [var.layers["nodejs"]]
   role             = aws_iam_role.for_lambda.arn
   handler          = "index.handler"
   runtime          = "nodejs14.x"
