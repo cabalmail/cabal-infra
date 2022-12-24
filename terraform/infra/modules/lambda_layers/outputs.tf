@@ -1,6 +1,3 @@
 output "layers" {
-  value = {
-    "nodejs" = aws_lambda_layer_version.layer["nodejs"].arn,
-    "python" = aws_lambda_layer_version.layer["python"].arn
-  }
+  value = [for k, v in aws_lambda_layer_version.layer : k => v.arn ]
 }
