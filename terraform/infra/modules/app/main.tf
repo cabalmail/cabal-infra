@@ -44,12 +44,6 @@ resource "aws_api_gateway_authorizer" "api_auth" {
   ]) ]
 }
 
-data "aws_s3_object" "lambda_layer_hash" {
-  for_each = local.lambda_layers
-  bucket   = var.bucket
-  key      = "/lambda/${each.key}.zip.base64sha256"
-}
-
 module "cabal_method" {
   for_each         = local.lambdas
   source           = "./modules/call"
