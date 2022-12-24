@@ -13,7 +13,7 @@ Creates a Cognito User Pool for authentication against the management applicatio
 | <a name="input_bucket"></a> [bucket](#input\_bucket) | Name of S3 bucket for React app | `string` | n/a | yes |
 | <a name="input_bucket_arn"></a> [bucket\_arn](#input\_bucket\_arn) | ARN of S3 bucket for React app | `string` | n/a | yes |
 | <a name="input_control_domain"></a> [control\_domain](#input\_control\_domain) | Base for auth domain. E.g., if control\_domain is example.com, then the autho domain will be auth.example.com. | `string` | n/a | yes |
-| <a name="input_layers"></a> [layers](#input\_layers) | Lambda layers ARNs indext by runtime 'python' or 'nodejs' | `list(string)` | n/a | yes |
+| <a name="input_layers"></a> [layers](#input\_layers) | Lambda layers ARNs indext by runtime 'python' or 'nodejs' | `map` | n/a | yes |
 ## Modules
 
 No modules.
