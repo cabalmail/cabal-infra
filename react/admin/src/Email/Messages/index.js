@@ -225,9 +225,10 @@ class Messages extends React.Component {
     const options = [DATE, ARRIVAL, SUBJECT, FROM].map(i => {
       return <option id={i.css} value={i.imap}>{i.description}</option>;
     });
+    const selected = this.state.selected_messages.length ? " selected" : " none_selected";
     return (
       <div className="email_list">
-        <div className={`filters ${this.state.sort_order.css}`}>
+        <div className={`filters ${this.state.sort_order.css} ${selected}`}>
           <Folders 
             token={this.props.token}
             api_url={this.props.api_url}

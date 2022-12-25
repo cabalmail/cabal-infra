@@ -1,0 +1,98 @@
+ul.message-list, ul.message-list li.message-row {
+  list-style: none;
+  padding: 0;
+  line-height: 1.75em;
+}
+
+ul.message-list li.message-row {
+  border-bottom: 1px solid #888;
+  align-items: baseline;
+}
+
+ul.message-list li.message-row div.message-line-1 {
+  display: grid;
+  grid-template-columns: auto max-content;
+  height: 1.75em;
+}
+
+ul.message-list div {
+  display: block;
+  padding: .25em;
+}
+
+ul.message-list div.message-subject {
+  font-size: 115%;
+  font-weight: bold;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+ul.message-list li.Seen div.message-subject {
+  font-weight: normal;
+}
+
+ul.message-list li.Recent div.message-subject {
+  font-style: italic;
+}
+
+ul.message-list div.message-subject span.subject:hover {
+  text-decoration: underline;
+}
+
+ul.message-list div.message-subject input[type=checkbox],
+ul.message-list div.message-subject input[type=checkbox]:not(:checked) ~ label .checked,
+ul.message-list div.message-subject input[type=checkbox]:checked ~ label .unchecked {
+  display: none;
+}
+
+ul.message-list div.message-subject label {
+  display: inline;
+}
+
+ul.message-list div.message-subject input[type=checkbox]:not(:checked) ~ label .unchecked,
+ul.message-list div.message-subject input[type=checkbox]:checked ~ label .checked {
+  display: inline-block;
+  font-family: arial;
+  font-size: 150%;
+  width: 0.9em;
+  height: 0.9em;
+  border-width: 1px;
+  border-style: solid;
+  border-radius: 0.1em;
+  text-align: center;
+  overflow: visible;
+}
+
+ul.message-list div.message-from {
+  height: 1.75em;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+ul.message-list div.message-date {
+  font-style: italic;
+  text-align: right;
+}
+
+ul.message-list li.loading {
+  background: #000;
+  width: 3em;
+  height: 3em;
+  border-radius: 1.5em;
+  border-left: auto;
+  border-right: auto;
+  animation-name: ripple;
+  animation-duration: 0.5s;
+  animation-iteration-count: infinite;
+  border-bottom: 0;
+}
+
+ul.message-list li.loading div.message-subject::before {
+  content: '';
+  display: none;
+}
+
+div.message-list ul.loading {
+  display: none;
+}

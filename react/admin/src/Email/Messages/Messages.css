@@ -1,98 +1,77 @@
-ul.message-list, ul.message-list li.message-row {
-  list-style: none;
-  padding: 0;
-  line-height: 1.75em;
-}
-
-ul.message-list li.message-row {
-  border-bottom: 1px solid #888;
-  align-items: baseline;
-}
-
-ul.message-list li.message-row div.message-line-1 {
-  display: grid;
-  grid-template-columns: auto max-content;
-  height: 1.75em;
-}
-
-ul.message-list div {
-  display: block;
-  padding: .25em;
-}
-
-ul.message-list div.message-subject {
-  font-size: 115%;
-  font-weight: bold;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-ul.message-list li.Seen div.message-subject {
-  font-weight: normal;
-}
-
-ul.message-list li.Recent div.message-subject {
-  font-style: italic;
-}
-
-ul.message-list div.message-subject span.subject:hover {
-  text-decoration: underline;
-}
-
-ul.message-list div.message-subject input[type=checkbox],
-ul.message-list div.message-subject input[type=checkbox]:not(:checked) ~ label .checked,
-ul.message-list div.message-subject input[type=checkbox]:checked ~ label .unchecked {
-  display: none;
-}
-
-ul.message-list div.message-subject label {
-  display: inline;
-}
-
-ul.message-list div.message-subject input[type=checkbox]:not(:checked) ~ label .unchecked,
-ul.message-list div.message-subject input[type=checkbox]:checked ~ label .checked {
+div.email_list button.collapse_filter,
+div.email_list button.expand_filter,
+div.email_list .filter,  {
   display: inline-block;
-  font-family: arial;
-  font-size: 150%;
-  width: 0.9em;
-  height: 0.9em;
+  margin-top: 0.25em;
+}
+
+div.filter button.filter_expand_collapse {
+  width: auto;
+}
+
+div.filter button.sort-order {
+  width: 2em;
+}
+
+div.filter select,
+div.filter button,
+div.filter label {
+  margin: 0;
+  font-size: 9pt;
+}
+
+div.filter button.sort-order {
+  border-radius: 0 4px 4px 0;
   border-width: 1px;
+}
+
+
+body div.filter select.sort-by,
+div.filter button.move,
+div.filter button.read,
+div.filter button.flagged,
+div.filter button.unread {
+  border-radius: 0;
+  border-width: 1px 0px 1px 1px;
+  width: auto;
+  padding: 0.5em;
+}
+
+button.unflagged,
+div.filter select {
+  border-radius: 0 4px 4px 0;
+  border-width: 1px;
+  width: auto;
+  padding: 0.5em;
+}
+
+div.filter button.delete,
+div.filter label {
+  border-radius: 4px 0 0 4px;
+  border-width: 1px 0 1px 1px;
   border-style: solid;
-  border-radius: 0.1em;
-  text-align: center;
-  overflow: visible;
+  width: auto;
+  padding: 0.5em;
 }
 
-ul.message-list div.message-from {
-  height: 1.75em;
-  text-overflow: ellipsis;
-  overflow: hidden;
+div.selected button {
+  background-color: #888 !important;
 }
 
-ul.message-list div.message-date {
-  font-style: italic;
+div.filters {
+  width: 100%;
+}
+
+div.filter-actions {
+  width: 100%;
   text-align: right;
 }
 
-ul.message-list li.loading {
-  background: #000;
-  width: 3em;
-  height: 3em;
-  border-radius: 1.5em;
-  border-left: auto;
-  border-right: auto;
-  animation-name: ripple;
-  animation-duration: 0.5s;
-  animation-iteration-count: infinite;
-  border-bottom: 0;
+div.filter select, div.filter label, div.filter button {
+  display: inline-block;
 }
 
-ul.message-list li.loading div.message-subject::before {
-  content: '';
-  display: none;
-}
-
-div.message-list ul.loading {
+body div.content div.email div.email_list div.ascending button#ascending,
+body div.content div.email div.email_list div.descending button#descending {
   display: none;
 }
