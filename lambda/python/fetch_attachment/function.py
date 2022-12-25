@@ -12,12 +12,13 @@ def handler(event, _context):
     user = event['requestContext']['authorizer']['claims']['cognito:username'];
     bucket = qs['host'].replace("imap", "cache")
     key = f"{user}/{qs['folder']}/{qs['id']}/{qs['filename']}"
+    index = int(qs['index'])
     message = get_message(qs['host'], user, qs['folder'], qs['id'], qs['seen'])
     i = 0;
     if message.is_multipart():
         for part in message.walk():
             ct = part.get_content_type()
-            if i == qs['index']:
+            if i == index:
                 if not key_exists(bucket, key):
                     upload_object(bucket, key, ct, part.get_payload(decode=True))
             i += 1
