@@ -65,7 +65,7 @@ resource "aws_lambda_function" "assign_osid" {
   layers           = [var.layers["nodejs"]]
   role             = aws_iam_role.for_lambda.arn
   handler          = "index.handler"
-  runtime          = "nodejs14.x"
+  runtime          = "nodejs18.x"
   timeout          = 30
 }
 
