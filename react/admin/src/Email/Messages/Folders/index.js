@@ -51,17 +51,19 @@ class Folders extends React.Component {
       );
     });
     return (
-      <span className="filter filter-folder">
-        <label htmlFor="folder">Folder:</label>
-        <select
-          name="folder"
-          onChange={this.setFolder}
-          value={this.props.folder}
-          className="selectFolder"
-        >
-        {folder_list}
-        </select>
-      </span>
+      <div>
+        <span className="filter filter-folder">
+          <label htmlFor="folder">Folder:</label>
+          <select
+            name="folder"
+            onChange={this.setFolder}
+            value={this.props.folder}
+            className="selectFolder"
+          >
+          {folder_list}
+          </select>
+        </span>
+      </div>
     );
   }
 }
