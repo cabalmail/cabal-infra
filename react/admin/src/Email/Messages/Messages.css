@@ -64,14 +64,14 @@ div.filters {
 
 div.filters-dropdowns {
   display: grid;
-  grid-templates-columns: auto auto;
+  grid-template-columns: auto auto;
 }
 
-div.filters-dropdowns div.filter-folder {
+div.filters-dropdowns span.filter-folder {
   text-align: right;
 }
 
-span.filter-actions {
+div.filter-buttons {
   text-align: center;
 }
 
