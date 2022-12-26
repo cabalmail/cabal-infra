@@ -5,17 +5,17 @@ div.email_list .filter,  {
   margin-top: 0.25em;
 }
 
-div.filter button.filter_expand_collapse {
+span.filter button.filter_expand_collapse {
   width: auto;
 }
 
-div.filter button.sort-order {
+span.filter button.sort-order {
   width: 2em;
 }
 
-div.filter select,
-div.filter button,
-div.filter label {
+span.filter select,
+span.filter button,
+span.filter label {
   margin: 0;
   font-size: 9pt;
 }

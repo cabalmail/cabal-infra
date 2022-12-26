@@ -261,8 +261,7 @@ class Messages extends React.Component {
           </span>
         </div> 
         <div className={`filters filters-buttons ${selected}`}>
-          <br />
-          <div className="filter filter-actions">
+          <span className="filter filter-actions">
             <button
               value="delete"
               id="delete"
@@ -311,7 +310,7 @@ class Messages extends React.Component {
               title={UNFLAGGED.description}
               onClick={this.handleActionButtonClick}
             >{UNFLAGGED.icon}<span className="wide-screen"> {UNFLAGGED.description}</span></button>
-          </div>
+          </span>
         </div>
         <ul className={`message-list ${this.state.loading ? "loading" : ""}`}>
           {list}
