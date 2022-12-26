@@ -53,7 +53,8 @@ div.filters {
 
 div.filters-dropdowns {
   display: grid;
-  grid-template-columns: 50% 50%;
+  grid-template-columns: 1fr 1fr;
+  grid-auto-flow: column dense;
 }
 
 div.filters-dropdowns span.filter {
@@ -61,7 +62,7 @@ div.filters-dropdowns span.filter {
   width: auto;
 }
 
-div.filters-dropdowns span.filter-sort {
+div.filters-dropdowns div ~ div {
   text-align: right;
 }
 
