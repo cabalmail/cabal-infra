@@ -16,11 +16,9 @@ resource "aws_dynamodb_table" "users" {
 resource "aws_dynamodb_table_item" "seed" {
   table_name = aws_dynamodb_table.users.name
   hash_key   = "username"
-  item       = <<ITEM
-{
-  "username": {"S": "seed"},
-  "osid": {"N": "65535"},
-  "enabled": {"BOOL": "false"}
-}
-ITEM
+  item       = jsonencode({
+    username = { S = "seed" }
+    osid     = { N = "65535" }
+    enabled  = { BOOL = "true" }
+  })
 }
