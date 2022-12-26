@@ -19,6 +19,6 @@ resource "aws_dynamodb_table_item" "seed" {
   item       = jsonencode({
     username = { S    = "seed" }
     osid     = { N    = "65535" }
-    enabled  = { BOOL = true }
+    enabled  = { BOOL = false }
   })
 }
