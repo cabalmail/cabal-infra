@@ -5,9 +5,7 @@
 #tfsec:ignore:aws-dynamodb-table-customer-key
 resource "aws_dynamodb_table" "addresses" {
   name           = "cabal-addresses"
-  billing_mode   = "PROVISIONED"
-  read_capacity  = 5
-  write_capacity = 5
+  billing_mode   = "PAY_PER_REQUEST"
   hash_key       = "address"
 
   attribute {
