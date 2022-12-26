@@ -16,21 +16,10 @@ resource "aws_dynamodb_table" "users" {
     name = "osid"
     type = "N"
   }
-  
+
   attribute {
     name = "enabled"
     type = "BOOL"
-  }
-
-  global_secondary_index {
-    name               = "counter-index"
-    write_capacity     = 5
-    read_capacity      = 5
-    projection_type    = "ALL"
-    key_schema {
-      attribute_name = "osid"
-      key_type       = "HASH"
-    }
   }
 }
 
