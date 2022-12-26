@@ -20,17 +20,17 @@ span.filter label {
   font-size: 9pt;
 }
 
-div.filter button.sort-order {
+span.filter button.sort-order {
   border-radius: 0 4px 4px 0;
   border-width: 1px;
 }
 
 
 body span.filter select.sort-by,
-div.filter button.move,
-div.filter button.read,
-div.filter button.flagged,
-div.filter button.unread {
+span.filter button.move,
+span.filter button.read,
+span.filter button.flagged,
+span.filter button.unread {
   border-radius: 0;
   border-width: 1px 0px 1px 1px;
   width: auto;
@@ -45,8 +45,8 @@ span.filter select {
   padding: 0.5em;
 }
 
-div.filter button.delete,
-div.filter label {
+span.filter button.delete,
+span.filter label {
   border-radius: 4px 0 0 4px;
   border-width: 1px 0 1px 1px;
   border-style: solid;
@@ -54,7 +54,7 @@ div.filter label {
   padding: 0.5em;
 }
 
-div.none_selected div.filter-actions button {
+div.none_selected span.filter-actions button {
   background-color: #666 !important;
 }
 
@@ -62,21 +62,20 @@ div.filters {
   width: 100%;
 }
 
-span.filters-dropdowns {
+div.filters-dropdowns {
   display: grid;
   grid-templates-columns: auto auto;
 }
 
-span.filters-dropdowns div.filter-folder {
+div.filters-dropdowns div.filter-folder {
   text-align: right;
 }
 
-div.filter-actions {
-  width: 100%;
+span.filter-actions {
   text-align: center;
 }
 
-div.filter select, select.filter label, div.filter button {
+span.filter select, select.filter label, span.filter button {
   display: inline-block;
 }
 
