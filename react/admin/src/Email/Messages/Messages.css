@@ -76,7 +76,7 @@ div.filter-actions {
   text-align: center;
 }
 
-div.filter select, div.filter label, div.filter button {
+div.filter select, select.filter label, div.filter button {
   display: inline-block;
 }
 
