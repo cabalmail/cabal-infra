@@ -62,12 +62,12 @@ div.filters {
   width: 100%;
 }
 
-div.filter-dropdowns {
+span.filters-dropdowns {
   display: grid;
   grid-templates-columns: auto auto;
 }
 
-div.filter-dropdowns div.filter-folder {
+span.filters-dropdowns div.filter-folder {
   text-align: right;
 }
 

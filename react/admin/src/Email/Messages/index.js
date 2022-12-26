@@ -241,7 +241,7 @@ class Messages extends React.Component {
             folder={this.props.folder}
             setMessage={this.props.setMessage}
           />&nbsp;
-          <div className="filter filter-sort">
+          <span className="filter filter-sort">
             <label htmlFor="sort-field">Sort by:</label>
             <select id="sort-by" name="sort-by" className="sort-by" onChange={this.setSortField}>
               {options}
@@ -258,7 +258,7 @@ class Messages extends React.Component {
               title="Sort descending"
               onClick={this.sortDescending}
             >⩔</button>
-          </div>
+          </span>
         </div> 
         <div className={`filters filters-buttons ${selected}`}>
           <br />
