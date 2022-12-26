@@ -53,7 +53,7 @@ div.filters {
 
 div.filters-dropdowns {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: auto auto;
   grid-auto-flow: column dense;
 }
 
