@@ -19,7 +19,7 @@ resource "aws_dynamodb_table_item" "seed" {
   item       = <<ITEM
 {
   "username": {"S": "seed"},
-  "osid": {"N": "65535"}
+  "osid": {"N": "65535"},
   "enabled": {"BOOL": "false"}
 }
 ITEM
