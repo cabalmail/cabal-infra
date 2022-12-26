@@ -64,7 +64,7 @@ div.filters {
 
 div.filters-dropdowns {
   display: grid;
-  grid-template-columns: auto auto;
+  grid-template-columns: 50% 50%;
 }
 
 div.filters-dropdowns span.filter {
@@ -72,11 +72,11 @@ div.filters-dropdowns span.filter {
   width: auto;
 }
 
-div.filters-dropdowns span.filter-folder {
+div.filters-dropdowns span.filter-sort {
   text-align: right;
 }
 
-div.filter-buttons {
+div.filters-buttons {
   text-align: center;
 }
 
