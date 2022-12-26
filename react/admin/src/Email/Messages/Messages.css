@@ -67,6 +67,11 @@ div.filters-dropdowns {
   grid-template-columns: auto auto;
 }
 
+div.filters-dropdowns span.filter {
+  display: inline;
+  width: auto;
+}
+
 div.filters-dropdowns span.filter-folder {
   text-align: right;
 }
