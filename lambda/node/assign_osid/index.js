@@ -12,7 +12,7 @@ exports.handler = (event, context, callback) => {
     region: config.region
   });
   const ListCommand = new ListUsersCommand({
-    UserPoolId: config.userPoolId
+    UserPoolId: config.poolData.UserPoolId
   });
   client.send(ListCommand)
   .then(users => {
@@ -28,7 +28,7 @@ exports.handler = (event, context, callback) => {
       });
     });
     const UpdateCommand = new AdminUpdateUserAttributesCommand({
-      UserPoolId: config.userPoolId,
+      UserPoolId: config.poolData.UserPoolId,
       UserAttributes: [{
         Name: "custom:osid",
         Value: uid
