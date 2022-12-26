@@ -1,14 +1,3 @@
-div.email_list button.collapse_filter,
-div.email_list button.expand_filter,
-div.email_list .filter,  {
-  display: inline-block;
-  margin-top: 0.25em;
-}
-
-span.filter button.filter_expand_collapse {
-  width: auto;
-}
-
 span.filter button.sort-order {
   width: 2em;
 }
