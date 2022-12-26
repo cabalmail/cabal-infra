@@ -62,9 +62,18 @@ div.filters {
   width: 100%;
 }
 
+div.filter-dropdowns {
+  display: grid;
+  grid-templates-columns: auto auto;
+}
+
+div.filter-dropdowns div.filter-folder {
+  text-align: right;
+}
+
 div.filter-actions {
   width: 100%;
-  text-align: right;
+  text-align: center;
 }
 
 div.filter select, div.filter label, div.filter button {

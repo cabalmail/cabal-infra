@@ -228,7 +228,7 @@ class Messages extends React.Component {
     const selected = this.state.selected_messages.length ? " selected" : " none_selected";
     return (
       <div className="email_list">
-        <div className={`filters ${this.state.sort_order.css} ${selected}`}>
+        <div className={`filters filters-dropdowns ${this.state.sort_order.css}`}>
           <Folders 
             token={this.props.token}
             api_url={this.props.api_url}
@@ -237,7 +237,7 @@ class Messages extends React.Component {
             folder={this.props.folder}
             setMessage={this.props.setMessage}
           />&nbsp;
-          <div className="filter">
+          <div className="filter filter-sort">
             <label htmlFor="sort-field">Sort by:</label>
             <select id="sort-by" name="sort-by" className="sort-by" onChange={this.setSortField}>
               {options}
@@ -255,6 +255,8 @@ class Messages extends React.Component {
               onClick={this.sortDescending}
             >⩔</button>
           </div>
+        </div> 
+        <div className={`filters filters-buttons ${selected}`}>
           <br />
           <div className="filter filter-actions">
             <button

@@ -51,7 +51,7 @@ class Folders extends React.Component {
       );
     });
     return (
-      <div className="filter">
+      <div className="filter filter-folder">
         <label htmlFor="folder">Folder:</label>
         <select
           name="folder"
