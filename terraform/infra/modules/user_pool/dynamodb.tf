@@ -11,16 +11,6 @@ resource "aws_dynamodb_table" "users" {
     name = "username"
     type = "S"
   }
-
-  attribute {
-    name = "osid"
-    type = "N"
-  }
-
-  attribute {
-    name = "enabled"
-    type = "BOOL"
-  }
 }
 
 resource "aws_dynamodb_table_item" "seed" {
