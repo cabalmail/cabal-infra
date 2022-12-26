@@ -26,7 +26,7 @@ div.filter button.sort-order {
 }
 
 
-body div.filter select.sort-by,
+body span.filter select.sort-by,
 div.filter button.move,
 div.filter button.read,
 div.filter button.flagged,
@@ -38,7 +38,7 @@ div.filter button.unread {
 }
 
 button.unflagged,
-div.filter select {
+span.filter select {
   border-radius: 0 4px 4px 0;
   border-width: 1px;
   width: auto;
