@@ -75,7 +75,7 @@ span.filter-actions {
   text-align: center;
 }
 
-span.filter select, select.filter label, span.filter button {
+span.filter select, span.filter label, span.filter button {
   display: inline-block;
 }
 
