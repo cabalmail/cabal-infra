@@ -42,6 +42,7 @@ Stands up the following resources to implement a web application that allows use
 | Name | Description |
 |------|-------------|
 | <a name="output_master_password"></a> [master\_password](#output\_master\_password) | n/a |
+| <a name="output_ssm_document_arn"></a> [ssm\_document\_arn](#output\_ssm\_document\_arn) | n/a |
 ## Providers
 
 | Name | Version |
