@@ -21,4 +21,7 @@ resource "aws_dynamodb_table_item" "seed" {
     osid    = { N    = "65535" }
     enabled = { BOOL = false }
   })
+  lifecycle {
+    ignore_changes = [item]
+  }
 }
