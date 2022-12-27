@@ -18,6 +18,7 @@ class Messages extends React.Component {
     super(props);
     this.state = {
       message_ids: [],
+      shown_message: null,
       selected_messages: [],
       sort_order: DESC,
       sort_field: DATE,
@@ -84,11 +85,13 @@ class Messages extends React.Component {
   }
 
   setFlag = (flag, op) => {
+    var selected_messages = this.state.selected_messages;
+    selected_messages << this.state.selected_message;
     const response = axios.put('/set_flag',
       JSON.stringify({
         host: this.props.host,
         folder: this.props.folder,
-        ids: this.state.selected_messages,
+        ids: selected_messages,
         flag: flag,
         op: op,
         sort_order: this.state.sort_order.imap,
@@ -107,7 +110,7 @@ class Messages extends React.Component {
 
   handleActionButtonClick = (e) => {
     e.stopPropagation();
-    if (!this.state.selected_messages.length) {
+    if (!this.state.selected_messages.length || this.state.selected_message) {
       this.props.setMessage("Please select at least one message first.", true);
       return;
     } 
@@ -168,6 +171,14 @@ class Messages extends React.Component {
         })
       });
     }
+  }
+
+  handleSelect = (message_id) => {
+    var id = parseInt(message_id);
+    this.setState({
+      ...this.state,
+      selected_message: id
+    });
   }
 
   loadList() {
