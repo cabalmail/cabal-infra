@@ -37,6 +37,23 @@ resource "aws_iam_role_policy" "lambda" {
 {
   "Version": "2012-10-17",
   "Statement": [
+   {
+      "Sid": "lambda-allow-cognito",
+      "Effect": "Allow",
+      "Principal": {
+          "Service": "cognito-idp.amazonaws.com"
+      },
+      "Action": "lambda:InvokeFunction",
+      "Resource": "${aws_lambda_function.assign_osid.arn}",
+      "Condition": {
+          "StringEquals": {
+              "AWS:SourceAccount": "${data.aws_caller_identity.current.account_id}"
+          },
+          "ArnLike": {
+          "AWS:SourceArn": "${aws_cognito_user_pool.users.arn}"
+        }
+      }
+    },
     {
       "Effect": "Allow",
       "Action": "cognito-idp:AdminUpdateUserAttributes",

@@ -14,10 +14,11 @@ const client = new CognitoIdentityProviderClient({
 
 exports.handler = (event, context, callback) => {
   var user = event.request.userAttributes.username;
-  updateUser(user, getCounter());
+  updateUser(user, getCounter(), callback, event);
 }
 
 function getCounter() {
+  var uid;
   var params = {
     TableName: 'cabal-counter',
     Key: {
@@ -40,9 +41,10 @@ function getCounter() {
       console.log(data.Attributes.osid.N);
     }
   });
+  return uid;
 }
 
-function updateUser(user, uid) {
+function updateUser(user, uid, callback, event) {
   const UpdateCommand = new AdminUpdateUserAttributesCommand({
     UserPoolId: config.poolData.UserPoolId,
     UserAttributes: [{
