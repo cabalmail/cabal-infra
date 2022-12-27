@@ -86,7 +86,7 @@ class Messages extends React.Component {
 
   setFlag = (flag, op) => {
     var selected_messages = this.state.selected_messages;
-    selected_messages << this.state.selected_message;
+    selected_messages.push(this.state.selected_message);
     const response = axios.put('/set_flag',
       JSON.stringify({
         host: this.props.host,
