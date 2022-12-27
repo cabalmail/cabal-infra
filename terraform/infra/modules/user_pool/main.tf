@@ -39,6 +39,14 @@ resource "aws_iam_role_policy" "lambda" {
   "Statement": [
     {
       "Effect": "Allow",
+      "Action": [
+        "ssm:StartSession",
+        "ssm:SendCommand"
+      ],
+      "Resource": "arn:aws:ec2:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:instance/*"
+      },
+    {
+      "Effect": "Allow",
       "Action": "ssm:SendCommand",
       "Resource": "${var.ssm_document_arn}"
     },
