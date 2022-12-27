@@ -13,11 +13,10 @@ const client = new CognitoIdentityProviderClient({
 });
 
 exports.handler = (event, context, callback) => {
-  var user = event.request.userAttributes.username;
-  updateUser(user, getCounter(), callback, event);
+  getCounter(event.userName, callback, event);
 }
 
-function getCounter() {
+function getCounter(user, callback, event) {
   var uid;
   var params = {
     TableName: 'cabal-counter',
@@ -37,8 +36,7 @@ function getCounter() {
       console.error("ddb", err);
       console.error("params", params);
     } else {
-      uid = data.Attributes.osid.N;
-      console.log(data.Attributes.osid.N);
+      updateUser(user, data.Attributes.osid.N, callback, event);
     }
   });
   return uid;
