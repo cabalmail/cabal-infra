@@ -37,23 +37,6 @@ resource "aws_iam_role_policy" "lambda" {
 {
   "Version": "2012-10-17",
   "Statement": [
-   {
-      "Sid": "Knee",
-      "Effect": "Allow",
-      "Principal": {
-          "Service": "cognito-idp.amazonaws.com"
-      },
-      "Action": "lambda:InvokeFunction",
-      "Resource": "${aws_lambda_function.assign_osid.arn}",
-      "Condition": {
-          "StringEquals": {
-              "AWS:SourceAccount": "${data.aws_caller_identity.current.account_id}"
-          },
-          "ArnLike": {
-          "AWS:SourceArn": "${aws_cognito_user_pool.users.arn}"
-        }
-      }
-    },
     {
       "Effect": "Allow",
       "Action": "cognito-idp:AdminUpdateUserAttributes",
@@ -94,6 +77,12 @@ resource "aws_lambda_function" "assign_osid" {
   handler          = "index.handler"
   runtime          = "nodejs18.x"
   timeout          = 30
+}
+resource "aws_lambda_permission" "allow_cloudwatch" {
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.assign_osid.function_name
+  principal     = "cognito-idp.amazonaws.com"
+  source_arn    = aws_cognito_user_pool.users.arn
 }
 
 resource "aws_cognito_user_pool" "users" {
