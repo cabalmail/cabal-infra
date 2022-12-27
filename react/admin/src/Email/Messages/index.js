@@ -196,6 +196,7 @@ class Messages extends React.Component {
             selected_messages={this.state.selected_messages}
             showOverlay={this.props.showOverlay}
             handleCheck={this.handleCheck}
+            handleSelect={this.handleSelect}
             setMessage={this.props.setMessage}
           />
         </LazyLoad>
