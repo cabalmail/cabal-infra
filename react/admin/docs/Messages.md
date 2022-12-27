@@ -52,6 +52,13 @@ null)
 
 Returns: null
 
+### handleSelect
+Modifiers: none
+
+Parameters: message_id (null)
+
+Returns: null
+
 ### loadList
 Modifiers: none
 
