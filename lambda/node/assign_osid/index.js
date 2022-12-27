@@ -12,31 +12,25 @@ const config = require('./config.js').config.cognitoConfig;
 exports.handler = (event, context, callback) => {
   var user = event.request.userAttributes.username;
   var params = {
-    TableName: 'cabal-users',
-    Item: {
-      username: {S: "seed"}
+    TableName: 'cabal-counter',
+    Key: {
+      counter: {S: "counter"}
     },
     ExpressionAttributeValues: {
-      val: {
+      ":val": {
         N: "1"
       }
     },
     UpdateExpression: "SET osid = osid + :val",
     ReturnValues: "UPDATED_NEW"
   };
-  ddb.putItem(params, (err, data) => {
+  ddb.updateItem(params, (err, data) => {
     if (err) {
       console.error("ddb", err);
       console.error("params", params);
+    } else {
+      console.log(data);
     }
-  })
-  .then(data => {
-    console.log(data);
-    callback(null, event);
-  })
-  .catch(err => {
-    console.error(err);
-    callback(null, event);
   });
   // const client = new CognitoIdentityProviderClient({
   //   region: config.region
