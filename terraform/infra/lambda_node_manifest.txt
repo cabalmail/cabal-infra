@@ -1,17 +1,17 @@
-total 2028
-drwxr-xr-x 2 runner docker    4096 Dec 27 02:55 assign_osid
--rw-r--r-- 1 runner docker    1445 Dec 27 02:55 assign_osid.zip
--rw-r--r-- 1 runner docker      44 Dec 27 02:55 assign_osid.zip.base64sha256
--rw-r--r-- 1 runner docker     784 Dec 20 19:52 config.js
-drwxr-xr-x 2 runner docker    4096 Dec 27 02:55 list
--rw-r--r-- 1 runner docker    1327 Dec 27 02:55 list.zip
--rw-r--r-- 1 runner docker      44 Dec 27 02:55 list.zip.base64sha256
-drwxr-xr-x 2 runner docker    4096 Dec 27 02:55 new
--rw-r--r-- 1 runner docker    2332 Dec 27 02:55 new.zip
--rw-r--r-- 1 runner docker      44 Dec 27 02:55 new.zip.base64sha256
-drwxr-xr-x 3 runner docker    4096 Dec 27 02:55 nodejs
--rw-r--r-- 1 runner docker 2012276 Dec 27 02:55 nodejs.zip
--rw-r--r-- 1 runner docker      44 Dec 27 02:55 nodejs.zip.base64sha256
-drwxr-xr-x 2 runner docker    4096 Dec 27 02:55 revoke
--rw-r--r-- 1 runner docker    1867 Dec 27 02:55 revoke.zip
--rw-r--r-- 1 runner docker      44 Dec 27 02:55 revoke.zip.base64sha256
+total 13080
+drwxr-xr-x 2 runner docker     4096 Dec 27 12:59 assign_osid
+-rw-r--r-- 1 runner docker     1434 Dec 27 12:59 assign_osid.zip
+-rw-r--r-- 1 runner docker       44 Dec 27 12:59 assign_osid.zip.base64sha256
+-rw-r--r-- 1 runner docker      784 Dec 20 19:52 config.js
+drwxr-xr-x 2 runner docker     4096 Dec 27 12:59 list
+-rw-r--r-- 1 runner docker     1327 Dec 27 12:59 list.zip
+-rw-r--r-- 1 runner docker       44 Dec 27 12:59 list.zip.base64sha256
+drwxr-xr-x 2 runner docker     4096 Dec 27 12:59 new
+-rw-r--r-- 1 runner docker     2332 Dec 27 12:59 new.zip
+-rw-r--r-- 1 runner docker       44 Dec 27 12:59 new.zip.base64sha256
+drwxr-xr-x 3 runner docker     4096 Dec 27 12:59 nodejs
+-rw-r--r-- 1 runner docker 13331396 Dec 27 12:59 nodejs.zip
+-rw-r--r-- 1 runner docker       44 Dec 27 12:59 nodejs.zip.base64sha256
+drwxr-xr-x 2 runner docker     4096 Dec 27 12:59 revoke
+-rw-r--r-- 1 runner docker     1867 Dec 27 12:59 revoke.zip
+-rw-r--r-- 1 runner docker       44 Dec 27 12:59 revoke.zip.base64sha256
