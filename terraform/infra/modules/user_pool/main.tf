@@ -38,7 +38,7 @@ resource "aws_iam_role_policy" "lambda" {
   "Version": "2012-10-17",
   "Statement": [
    {
-      "Sid": "lambda-allow-cognito",
+      "Sid": "Knee",
       "Effect": "Allow",
       "Principal": {
           "Service": "cognito-idp.amazonaws.com"
