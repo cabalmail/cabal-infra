@@ -12,6 +12,8 @@ const client = new CognitoIdentityProviderClient({
   region: config.region
 });
 
+const ssm = new AWS.SSM();
+
 exports.handler = (event, context, callback) => {
   getCounter(event.userName, callback, event);
 }
@@ -54,10 +56,33 @@ function updateUser(user, uid, callback, event) {
   client.send(UpdateCommand)
   .then(data => {
     console.log(data);
-    callback(null, event);
+    kickOffChef(callback, event);
   })
   .catch(err => {
     console.error(err);
-    callback(null, event);
   });
+}
+
+function kickOffChef(callback, event) {
+  const command = {
+    DocumentName: 'cabal_chef_document',
+    Targets: [
+      { 
+         "Key": "tag:managed_by_terraform",
+         "Values": [ "y" ]
+      },
+      { 
+         "Key": "tag:environment",
+         "Values": [ "production" ]
+      }
+    ]
+  };
+  ssm.sendCommand(command, (err, data) => {
+    if (err) {
+      console.error("ssm", err);
+      console.error("command", command)
+    } else {
+      callback(null, event);
+    };
+  }).promise();
 }
