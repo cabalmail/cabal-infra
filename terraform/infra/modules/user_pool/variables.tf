@@ -62,3 +62,8 @@ variable "layers" {
   type        = map
   description = "Lambda layers ARNs indext by runtime 'python' or 'nodejs'"
 }
+
+variable "ssm_document_arn" {
+  type        = string
+  description = "ARN of SSM document for running chef on machines"
+}

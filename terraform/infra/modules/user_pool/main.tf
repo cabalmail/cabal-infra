@@ -39,6 +39,11 @@ resource "aws_iam_role_policy" "lambda" {
   "Statement": [
     {
       "Effect": "Allow",
+      "Action": "ssm:SendCommand",
+      "Resource": "${var.ssm_document_arn}"
+    },
+    {
+      "Effect": "Allow",
       "Action": "cognito-idp:AdminUpdateUserAttributes",
       "Resource": "${aws_cognito_user_pool.users.arn}"
     },

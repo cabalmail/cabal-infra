@@ -29,11 +29,12 @@ module "lambda_layers" {
 
 # Creates a Cognito User Pool
 module "pool" {
-  source         = "./modules/user_pool"
-  control_domain = var.control_domain
-  bucket         = module.bucket.bucket
-  bucket_arn     = module.bucket.bucket_arn
-  layers         = module.lambda_layers.layers
+  source           = "./modules/user_pool"
+  control_domain   = var.control_domain
+  bucket           = module.bucket.bucket
+  bucket_arn       = module.bucket.bucket_arn
+  layers           = module.lambda_layers.layers
+  ssm_document_arn = module.admin.ssm_document_arn
 }
 
 # Creates an AWS Certificate Manager certificate for use on load balancers and CloudFront and requests a Let's Encrypt certificate for use on EC2 instances
