@@ -110,7 +110,7 @@ class Messages extends React.Component {
 
   handleActionButtonClick = (e) => {
     e.stopPropagation();
-    if (!this.state.selected_messages.length || this.state.selected_message) {
+    if (!this.state.selected_messages.length && !this.state.selected_message) {
       this.props.setMessage("Please select at least one message first.", true);
       return;
     } 

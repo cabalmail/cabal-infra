@@ -62,7 +62,7 @@ class Envelopes extends React.Component {
     e.preventDefault();
     this.props.showOverlay(this.state.envelopes[e.target.id]);
     this.props.handleSelect(e.target.id);
-    this.setState({...this.state,selected:e.target.id});
+    this.setState({...this.state, selected:e.target.id});
   }
 
   handleCheck = (e) => {
