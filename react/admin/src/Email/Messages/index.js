@@ -95,7 +95,7 @@ class Messages extends React.Component {
     };
     switch (action) {
       case "delete":
-        this.moveMessages(
+        this.api.moveMessages(
           this.props.folder,
           "Deleted Items",
           this.state.selected_messages,
@@ -107,7 +107,7 @@ class Messages extends React.Component {
         this.props.setMessage("Moving messages isn't implamented yet.", true);
         break;
       case READ.css:
-        this.setFlag(
+        this.api.setFlag(
           this.props.folder,
           READ.imap,
           READ.op,
@@ -117,7 +117,7 @@ class Messages extends React.Component {
         ).then(callback).catch(catchback);
         break;
       case UNREAD.css:
-        this.setFlag(
+        this.api.setFlag(
           this.props.folder,
           UNREAD.imap,
           UNREAD.op,
@@ -127,7 +127,7 @@ class Messages extends React.Component {
         ).then(callback).catch(catchback);
         break;
       case FLAGGED.css:
-        this.setFlag(
+        this.api.setFlag(
           this.props.folder,
           FLAGGED.imap,
           FLAGGED.op,
@@ -137,7 +137,7 @@ class Messages extends React.Component {
         ).then(callback).catch(catchback);
         break;
       case UNFLAGGED.css:
-        this.setFlag(
+        this.api.setFlag(
           this.props.folder,
           UNFLAGGED.imap,
           UNFLAGGED.op,
