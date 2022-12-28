@@ -69,7 +69,7 @@ export default class ApiClient {
     const response = axios.get('/list_messages',
       {
         params: {
-          folder: this.props.folder,
+          folder: folder,
           host: this.host,
           sort_order: order,
           sort_field: field
