@@ -62,10 +62,8 @@ class Messages extends React.Component {
   }
 
   poller(api, folder, order, field) {
-    console.log("called");
     const response = api.getMessages(folder, order, field);
     response.then(data => {
-      console.log(data.data.message_ids);
       this.setState({
         ...this.state,
         message_ids: data.data.message_ids,
@@ -194,6 +192,7 @@ class Messages extends React.Component {
   loadList() {
     const num_ids = this.state.message_ids.length;
     var pages = [];
+    console.log(num_ids);
     for (var i = 0; i < num_ids; i+=PAGE_SIZE) {
       pages.push(
         <LazyLoad offset={150} overflow={true}>
@@ -211,6 +210,7 @@ class Messages extends React.Component {
           />
         </LazyLoad>
       );
+      console.log(`page ${i}`);
     }
     return pages;
   }
