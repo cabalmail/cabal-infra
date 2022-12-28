@@ -21,8 +21,18 @@ class MessageOverlay extends React.Component {
   componentDidUpdate(prevProps, prevState) {
     if (this.props.envelope.id !== prevProps.envelope.id) {
       this.setState({...this.state, loading: true, invert: false});
-      const messageResponse = this.getMessage();
-      const attachmentResponse = this.getAttachments();
+      const messageResponse = this.getMessage(
+        this.props.folder,
+        this.props.host,
+        this.props.envelope.id,
+        this.props.envelope.flags.includes("\\Seen")
+      );
+      const attachmentResponse = this.getAttachments(
+        this.props.folder,
+        this.props.host,
+        this.props.envelope.id,
+        this.props.envelope.flags.includes("\\Seen")
+      );
       Promise.all([
         messageResponse.catch(e => {
           this.props.setMessage("Unable to get message.", true);
@@ -50,14 +60,14 @@ class MessageOverlay extends React.Component {
     }
   }
 
-  getMessage = () => {
+  getMessage = (folder, host, id, seen) => {
     const response = axios.get('/fetch_message',
       {
         params: {
-          folder: this.props.folder,
-          host: this.props.host,
-          id: this.props.envelope.id,
-          seen: this.props.envelope.flags.includes("\\Seen")
+          folder: folder,
+          host: host,
+          id: id,
+          seen: seen
         },
         baseURL: this.props.api_url,
         headers: {
@@ -69,16 +79,16 @@ class MessageOverlay extends React.Component {
     return response;
   }
 
-  getAttachment = (a) => {
+  getAttachment = (a, folder, host, id, seen) => {
     const response = axios.get('/fetch_attachment',
       {
         params: {
-          folder: this.props.folder,
-          host: this.props.host,
-          id: this.props.envelope.id,
+          folder: folder,
+          host: host,
+          id: id,
           index: a.id,
           filename: a.name,
-          seen: this.props.envelope.flags.includes("\\Seen")
+          seen: seen
         },
         baseURL: this.props.api_url,
         headers: {
@@ -90,14 +100,14 @@ class MessageOverlay extends React.Component {
     return response;
   }
 
-  getAttachments = () => {
+  getAttachments = (folder, host, id, seen) => {
     const response = axios.get('/list_attachments',
       {
         params: {
-          folder: this.props.folder,
-          host: this.props.host,
-          id: this.props.envelope.id,
-          seen: this.props.envelope.flags.includes("\\Seen")
+          folder: folder,
+          host: host,
+          id: id,
+          seen: seen
         },
         baseURL: this.props.api_url,
         headers: {
@@ -119,7 +129,13 @@ class MessageOverlay extends React.Component {
     e.preventDefault();
     var id = parseInt(e.target.dataset.id);
     var a = this.state.attachments.find(e => e.id === id);
-    this.getAttachment(a)
+    this.getAttachment(
+      a,
+      this.props.folder,
+      this.props.host,
+      this.props.envelope.id,
+      this.props.envelope.flags.includes("\\Seen")
+    )
     .then((data) => {
       var url = data.data.url;
       window.open(url);
