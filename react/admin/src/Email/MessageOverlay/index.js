@@ -16,7 +16,7 @@ class MessageOverlay extends React.Component {
       loading: true,
       top_state: "expanded"
     }
-    this.api = new ApiClient(this.props.api_url, this.props.token);
+    this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
   }
 
   componentDidUpdate(prevProps, prevState) {
@@ -24,13 +24,11 @@ class MessageOverlay extends React.Component {
       this.setState({...this.state, loading: true, invert: false});
       const messageResponse = this.api.getMessage(
         this.props.folder,
-        this.props.host,
         this.props.envelope.id,
         this.props.envelope.flags.includes("\\Seen")
       );
       const attachmentResponse = this.api.getAttachments(
         this.props.folder,
-        this.props.host,
         this.props.envelope.id,
         this.props.envelope.flags.includes("\\Seen")
       );
@@ -74,7 +72,6 @@ class MessageOverlay extends React.Component {
     this.api.getAttachment(
       a,
       this.props.folder,
-      this.props.host,
       this.props.envelope.id,
       this.props.envelope.flags.includes("\\Seen")
     )

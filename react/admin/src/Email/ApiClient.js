@@ -2,17 +2,38 @@ import axios from 'axios';
 
 export default class ApiClient {
 
-  constructor(baseURL, token) {
+  constructor(baseURL, token, host) {
     this.baseURL = baseURL;
     this.token = token;
+    this.host = host;
   }
 
-  getMessage(folder, host, id, seen) {
+  fetchImage = (cid, folder, id, index, seen) => {
+    const response = axios.get('/fetch_inline_image',
+      {
+        params: {
+          folder: this.props.folder,
+          host: this.host,
+          id: this.props.id,
+          index: "<" + cid + ">",
+          seen: this.props.seen
+        },
+        baseURL: this.props.api_url,
+        headers: {
+          'Authorization': this.props.token
+        },
+        timeout: 90000
+      }
+    );
+    return response;
+  }
+
+  getMessage(folder, id, seen) {
     const response = axios.get('/fetch_message',
       {
         params: {
           folder: folder,
-          host: host,
+          host: this.host,
           id: id,
           seen: seen
         },
@@ -26,12 +47,12 @@ export default class ApiClient {
     return response;
   };
   
-  getAttachment(a, folder, host, id, seen) {
+  getAttachment(a, folder, id, seen) {
     const response = axios.get('/fetch_attachment',
       {
         params: {
           folder: folder,
-          host: host,
+          host: this.host,
           id: id,
           index: a.id,
           filename: a.name,
@@ -47,12 +68,12 @@ export default class ApiClient {
     return response;
   };
   
-  getAttachments(folder, host, id, seen) {
+  getAttachments(folder, id, seen) {
     const response = axios.get('/list_attachments',
       {
         params: {
           folder: folder,
-          host: host,
+          host: this.host,
           id: id,
           seen: seen
         },

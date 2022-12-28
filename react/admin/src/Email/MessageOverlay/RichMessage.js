@@ -1,5 +1,5 @@
 import React from 'react';
-import axios from 'axios';
+import ApiClient from '../ApiClient';
 import DOMPurify from 'dompurify';
 
 class RichMessage extends React.Component {
@@ -13,6 +13,7 @@ class RichMessage extends React.Component {
       imagesLoaded: false,
       hasRemoteImages: false
     }
+    this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
   }
 
   componentDidMount() {
@@ -28,28 +29,13 @@ class RichMessage extends React.Component {
     }
   }
 
-  fetchImage = (cid) => {
-    const response = axios.get('/fetch_inline_image',
-      {
-        params: {
-          folder: this.props.folder,
-          host: this.props.host,
-          id: this.props.id,
-          index: "<" + cid + ">",
-          seen: this.props.seen
-        },
-        baseURL: this.props.api_url,
-        headers: {
-          'Authorization': this.props.token
-        },
-        timeout: 90000
-      }
-    );
-    return response;
-  }
-
   loadImage(cid, img) {
-    var response = this.fetchImage(cid);
+    var response = this.fetchImage(
+      cid,
+      this.props.folder,
+      this.props.id,
+      this.props.seen
+    );
     response.then(data => {
       img.src = data.data.url;
     }).catch(e => {
