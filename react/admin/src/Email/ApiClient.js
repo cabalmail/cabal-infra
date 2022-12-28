@@ -8,7 +8,7 @@ export default class ApiClient {
     this.host = host;
   }
 
-  fetchImage = (cid, folder, id, index, seen) => {
+  fetchImage = (cid, folder, id, seen) => {
     const response = axios.get('/fetch_inline_image',
       {
         params: {
