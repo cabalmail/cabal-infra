@@ -48,7 +48,7 @@ class Messages extends React.Component {
     const response = this.getMessages(
       this.props.folder,
       this.state.sort_field.imap,
-      this.sate.sort_order.imap
+      this.state.sort_order.imap
     );
     response.then(data => {
       this.setState({
