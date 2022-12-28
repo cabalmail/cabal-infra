@@ -6,13 +6,6 @@
 
 
 ## Methods
-### fetchImage
-Modifiers: none
-
-Parameters: cid (null)
-
-Returns: null
-
 ### loadImage
 Modifiers: none
 
