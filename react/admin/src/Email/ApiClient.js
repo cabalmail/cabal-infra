@@ -12,15 +12,15 @@ export default class ApiClient {
     const response = axios.get('/fetch_inline_image',
       {
         params: {
-          folder: this.props.folder,
+          folder: folder,
           host: this.host,
-          id: this.props.id,
+          id: id,
           index: "<" + cid + ">",
-          seen: this.props.seen
+          seen: seen
         },
-        baseURL: this.props.api_url,
+        baseURL: this.baseURL,
         headers: {
-          'Authorization': this.props.token
+          'Authorization': token
         },
         timeout: 90000
       }
