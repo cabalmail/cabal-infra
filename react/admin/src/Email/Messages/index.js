@@ -212,6 +212,7 @@ class Messages extends React.Component {
       );
       console.log(`page ${i}`);
     }
+    this.forceUpdate();
     return pages;
   }
 
