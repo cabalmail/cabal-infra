@@ -65,7 +65,7 @@ export default class ApiClient {
     return response;
   }
 
-  getMessages(folder, field, order) {
+  getMessages(folder, order, field) {
     const response = axios.get('/list_messages',
       {
         params: {
