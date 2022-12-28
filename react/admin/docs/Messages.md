@@ -27,6 +27,13 @@ Parameters:  ()
 
 Returns: null
 
+### moveMessages
+Modifiers: none
+
+Parameters: folder (null)
+
+Returns: null
+
 ### setFlag
 Modifiers: none
 
