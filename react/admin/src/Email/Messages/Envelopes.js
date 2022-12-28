@@ -14,7 +14,10 @@ class Envelopes extends React.Component {
   }
 
   componentDidMount() {
-    const response = this.getList();
+    const response = this.api.getList(
+      this.folder,
+      `[${this.props.message_ids.join(",")}]`
+    );
     response.then(data => {
       this.setState({
         ...this.state,
@@ -28,7 +31,7 @@ class Envelopes extends React.Component {
 
   componentDidUpdate(prevProps, prevState) {
     if (this.props.message_ids !== prevProps.message_ids) {
-      const response = this.getList(
+      const response = this.api.getList(
         this.props.folder,
         `[${this.props.message_ids.join(",")}]`
       );
