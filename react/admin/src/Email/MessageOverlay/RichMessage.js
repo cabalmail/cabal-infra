@@ -30,7 +30,7 @@ class RichMessage extends React.Component {
   }
 
   loadImage(cid, img) {
-    var response = this.fetchImage(
+    var response = this.api.fetchImage(
       cid,
       this.props.folder,
       this.props.id,
