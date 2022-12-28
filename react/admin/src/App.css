@@ -13,7 +13,7 @@
     background-color: #111;
   }
   ul.message-list div.message-subject {
-    color: #fff;
+    color: #ccc;
   }
   ul.message-list li.CabalSeen div.message-subject {
     color: #aaa;
@@ -27,6 +27,9 @@
     color: #dda;
     background-color: #300;
     border-color: #800;
+  }
+  ul.message-list li.Seen.selected div.message-subject {
+    color: #fff
   }
   ul.message-list div.message-subject input[type=checkbox]:not(:checked) ~ label .unchecked,
   ul.message-list div.message-subject input[type=checkbox]:checked ~ label .checked {
@@ -81,10 +84,10 @@
     background-color: #ddd;
   }
   ul.message-list div.message-subject {
-    color: #000;
+    color: #222;
   }
   ul.message-list li.CabalSeen div.message-subject {
-    color: #222;
+    color: #444;
   }
   .nav, .nav .item {
     color: #aaa;
@@ -96,6 +99,9 @@
     color: #000;
     background-color: #a33;
     border-color: #d00;
+  }
+  ul.message-list li.Seen.selected div.message-subject {
+    color: #000
   }
   ul.message-list div.message-subject input[type=checkbox]:not(:checked) ~ label .unchecked,
   ul.message-list div.message-subject input[type=checkbox]:checked ~ label .checked {

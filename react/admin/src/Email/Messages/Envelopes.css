@@ -28,10 +28,6 @@ ul.message-list div.message-subject {
   text-overflow: ellipsis;
 }
 
-ul.message-list li.Seen div.message-subject {
-  font-weight: 100;
-}
-
 ul.message-list li.Recent div.message-subject {
   font-style: italic;
 }
