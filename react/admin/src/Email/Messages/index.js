@@ -28,7 +28,9 @@ class Messages extends React.Component {
   }
 
   componentDidMount() {
-    this.poller(
+    setTimeout(
+      this.poller,
+      10, 
       this.api,
       this.props.folder,
       this.state.sort_order.imap,
@@ -50,7 +52,9 @@ class Messages extends React.Component {
     if ((this.props.folder !== prevProps.folder) ||
         (this.state.sort_order !== prevState.sort_order) ||
         (this.state.sort_field !== prevState.sort_field)) {
-      this.poller(
+      setTimeout(
+        this.poller,
+        10, 
         this.api,
         this.props.folder,
         this.state.sort_order.imap,
