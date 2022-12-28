@@ -15,7 +15,7 @@ class Envelopes extends React.Component {
 
   componentDidMount() {
     const response = this.api.getList(
-      this.folder,
+      this.props.folder,
       `[${this.props.message_ids.join(",")}]`
     );
     response.then(data => {
