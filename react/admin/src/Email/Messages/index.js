@@ -32,7 +32,8 @@ class Messages extends React.Component {
       this.api,
       this.props.folder,
       this.state.sort_order.imap,
-      this.state.sort_field.imap
+      this.state.sort_field.imap,
+      this
     );
     this.interval = setInterval(
       this.poller,
@@ -40,7 +41,8 @@ class Messages extends React.Component {
       this.api,
       this.props.folder,
       this.state.sort_order.imap,
-      this.state.sort_field.imap
+      this.state.sort_field.imap,
+      this
     );
   }
 
@@ -52,7 +54,8 @@ class Messages extends React.Component {
         this.api,
         this.props.folder,
         this.state.sort_order.imap,
-        this.state.sort_field.imap
+        this.state.sort_field.imap,
+        this
       );
     }
   }
@@ -61,15 +64,15 @@ class Messages extends React.Component {
     clearInterval(this.interval);
   }
 
-  poller(api, folder, order, field) {
+  poller(api, folder, order, field, that) {
     const response = api.getMessages(folder, order, field);
     response.then(data => {
-      this.setState({
-        ...this.state,
+      that.setState({
+        ...that.state,
         message_ids: data.data.message_ids,
         loading: false
       }).catch(e => {
-        this.props.setMessage("Unable to get list of messages.", true);
+        that.props.setMessage("Unable to get list of messages.", true);
         console.log(e);
       });
     });
@@ -212,7 +215,6 @@ class Messages extends React.Component {
       );
       console.log(`page ${i}`);
     }
-    this.forceUpdate();
     return pages;
   }
 
