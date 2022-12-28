@@ -28,15 +28,24 @@ class Messages extends React.Component {
   }
 
   componentDidMount() {
-    // setTimeout(
-    //   this.poller,
-    //   100, 
-    //   this.api,
-    //   this.props.folder,
-    //   this.state.sort_order.imap,
-    //   this.state.sort_field.imap,
-    //   this
-    // );
+    setTimeout(
+      this.poller,
+      50, 
+      this.api,
+      this.props.folder,
+      this.state.sort_order.imap,
+      this.state.sort_field.imap,
+      this
+    );
+    setTimeout(
+      this.poller,
+      100, 
+      this.api,
+      this.props.folder,
+      this.state.sort_order.imap,
+      this.state.sort_field.imap,
+      this
+    );
     this.interval = setInterval(
       this.poller,
       10000, 
