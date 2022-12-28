@@ -61,7 +61,7 @@ class Messages extends React.Component {
     clearInterval(this.interval);
   }
 
-  poller(api, folder, order field) {
+  poller(api, folder, order, field) {
     console.log("called");
     const response = api.getMessages(folder, order, field);
     response.then(data => {
