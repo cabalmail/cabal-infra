@@ -28,15 +28,15 @@ class Messages extends React.Component {
   }
 
   componentDidMount() {
-    this.poller();
-    this.interval = setInterval(this.poller, 10000);
+    this.poller(this.api);
+    this.interval = setInterval(this.poller, 10000, this.api);
   }
 
   componentDidUpdate(prevProps, prevState) {
     if ((this.props.folder !== prevProps.folder) ||
         (this.state.sort_order !== prevState.sort_order) ||
         (this.state.sort_field !== prevState.sort_field)) {
-      this.poller();
+      this.poller(this.api);
     }
   }
 
@@ -44,9 +44,9 @@ class Messages extends React.Component {
     clearInterval(this.interval);
   }
 
-  poller() {
+  poller(api) {
     console.log("called");
-    const response = this.api.getMessages(
+    const response = api.getMessages(
       this.props.folder,
       this.state.sort_field.imap,
       this.state.sort_order.imap
