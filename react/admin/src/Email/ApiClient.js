@@ -8,7 +8,7 @@ export default class ApiClient {
     this.host = host;
   }
 
-  getFolderList = () => {
+  getFolderList() {
     const response = axios.get('/list_folders', {
       params: {
         host: this.host
@@ -22,7 +22,69 @@ export default class ApiClient {
     return response;
   }
 
-  getList = (folder, ids) => {
+  moveMessages(source, destination, ids, order, field) {
+    const response = axios.put('/move_message',
+      JSON.stringify({
+        host: this.host,
+        source: source,
+        destination: destination,
+        ids: ids,
+        sort_order: order,
+        sort_field: field
+      }),
+      {
+        baseURL: this.baseURL,
+        headers: {
+          'Authorization': this.token
+        },
+        timeout: 10000
+      }
+    );
+    return response;
+  } 
+
+  setFlag(folder, flag, op, ids, order, field) {
+    const response = axios.put('/set_flag',
+      JSON.stringify({
+        host: this.host,
+        folder: folder,
+        ids: ids,
+        flag: flag,
+        op: op,
+        sort_order: order,
+        sort_field: field
+      }),
+      {
+        baseURL: this.baseURL,
+        headers: {
+          'Authorization': this.token
+        },
+        timeout: 10000
+      }
+    );
+    return response;
+  }
+
+  getMessages(folder, field, order) {
+    const response = axios.get('/list_messages',
+      {
+        params: {
+          folder: this.props.folder,
+          host: host,
+          sort_order: order,
+          sort_field: field
+        },
+        baseURL: this.baseURL,
+        headers: {
+          'Authorization': this.token
+        },
+        timeout: 8000
+      }
+    );
+    return response;
+  }
+
+  getEnvelopes(folder, ids) {
     const response = axios.get('/list_envelopes',
       {
         params: {
@@ -40,7 +102,7 @@ export default class ApiClient {
     return response;
   }
 
-  fetchImage = (cid, folder, id, seen) => {
+  fetchImage(cid, folder, id, seen) {
     const response = axios.get('/fetch_inline_image',
       {
         params: {

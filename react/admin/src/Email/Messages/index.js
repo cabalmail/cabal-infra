@@ -3,7 +3,7 @@
  */
 
 import React from 'react';
-import axios from 'axios';
+import ApiClient from 'ApiClient';
 import LazyLoad from 'react-lazyload';
 import Envelopes from './Envelopes';
 import Folders from './Folders';
@@ -24,6 +24,7 @@ class Messages extends React.Component {
       sort_field: DATE,
       loading: true
     };
+    this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
   }
 
   componentDidMount() {
@@ -44,7 +45,11 @@ class Messages extends React.Component {
   }
 
   poller = () => {
-    const response = this.getList();
+    const response = this.getMessages(
+      this.props.folder,
+      this.state.sort_field.imap,
+      this.sate.sort_order.imap
+    );
     response.then(data => {
       this.setState({
         ...this.state,
@@ -57,78 +62,11 @@ class Messages extends React.Component {
     });
   }
 
-  getList = (e) => {
-    this.setState({...this.state, loading: true})
-    const response = axios.get('/list_messages',
-      {
-        params: {
-          folder: this.props.folder,
-          host: this.props.host,
-          sort_order: this.state.sort_order.imap,
-          sort_field: this.state.sort_field.imap
-        },
-        baseURL: this.props.api_url,
-        headers: {
-          'Authorization': this.props.token
-        },
-        timeout: 8000
-      }
-    );
-    return response;
-  }
-
   toggleOrder() {
     this.setState({
       ...this.state,
       sort_order: this.state.sort_order.imap === ASC.imap ? DESC : ASC
     })
-  }
-
-  moveMessages = (folder) => {
-    var selected_messages = this.state.selected_messages;
-    selected_messages.push(this.state.selected_message);
-    const response = axios.put('/move_message',
-      JSON.stringify({
-        host: this.props.host,
-        source: this.props.folder,
-        destination: folder,
-        ids: selected_messages,
-        sort_order: this.state.sort_order.imap,
-        sort_field: this.state.sort_field.imap
-      }),
-      {
-        baseURL: this.props.api_url,
-        headers: {
-          'Authorization': this.props.token
-        },
-        timeout: 10000
-      }
-    );
-    return response;
-  } 
-
-  setFlag = (flag, op) => {
-    var selected_messages = this.state.selected_messages;
-    selected_messages.push(this.state.selected_message);
-    const response = axios.put('/set_flag',
-      JSON.stringify({
-        host: this.props.host,
-        folder: this.props.folder,
-        ids: selected_messages,
-        flag: flag,
-        op: op,
-        sort_order: this.state.sort_order.imap,
-        sort_field: this.state.sort_field.imap
-      }),
-      {
-        baseURL: this.props.api_url,
-        headers: {
-          'Authorization': this.props.token
-        },
-        timeout: 10000
-      }
-    );
-    return response;
   }
 
   handleActionButtonClick = (e) => {
@@ -157,22 +95,56 @@ class Messages extends React.Component {
     };
     switch (action) {
       case "delete":
-        this.moveMessages("Deleted Items");
+        this.moveMessages(
+          this.props.folder,
+          "Deleted Items",
+          this.state.selected_messages,
+          this.state.sort_order.imap,
+          this.state.sort_field.imap
+        );
         break;
       case "move":
         this.props.setMessage("Moving messages isn't implamented yet.", true);
         break;
       case READ.css:
-        this.setFlag(READ.imap, READ.op).then(callback).catch(catchback);
+        this.setFlag(
+          this.state,folder,
+          READ.imap,
+          READ.op,
+          this.state.selected_messages,
+          this.state.sort_order.imap,
+          this.state.sort_field.imap
+        ).then(callback).catch(catchback);
         break;
       case UNREAD.css:
-        this.setFlag(UNREAD.imap, UNREAD.op).then(callback).catch(catchback);
+        this.setFlag(
+          this.state,folder,
+          UNREAD.imap,
+          UNREAD.op,
+          this.state.selected_messages,
+          this.state.sort_order.imap,
+          this.state.sort_field.imap
+        ).then(callback).catch(catchback);
         break;
       case FLAGGED.css:
-        this.setFlag(FLAGGED.imap, FLAGGED.op).then(callback).catch(catchback);
+        this.setFlag(
+          this.state,folder,
+          FLAGGED.imap,
+          FLAGGED.op,
+          this.state.selected_messages,
+          this.state.sort_order.imap,
+          this.state.sort_field.imap
+        ).then(callback).catch(catchback);
         break;
       case UNFLAGGED.css:
-        this.setFlag(UNFLAGGED.imap, UNFLAGGED.op).then(callback).catch(catchback);
+        this.setFlag(
+          this.state,folder,
+          UNFLAGGED.imap,
+          UNFLAGGED.op,
+          this.state.selected_messages,
+          this.state.sort_order.imap,
+          this.state.sort_field.imap
+        ).then(callback).catch(catchback);
         break;
       default:
         console.log(`"${action}" clicked`);
