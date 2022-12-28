@@ -13,33 +13,10 @@ Parameters:  ()
 
 Returns: null
 
-### getList
-Modifiers: none
-
-Parameters: e (null)
-
-Returns: null
-
 ### toggleOrder
 Modifiers: none
 
 Parameters:  ()
-
-Returns: null
-
-### moveMessages
-Modifiers: none
-
-Parameters: folder (null)
-
-Returns: null
-
-### setFlag
-Modifiers: none
-
-Parameters: flag
-op (null
-null)
 
 Returns: null
 
