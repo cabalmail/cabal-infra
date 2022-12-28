@@ -4,7 +4,7 @@ export const ASC = {
   description: "Ascending order (smallest/first to largest/last)"
 };
 export const DESC = {
-  imap: "REVERSE",
+  imap: "REVERSE ",
   css: "descending",
   description: "Descending order (largest/last to smallest/first)"
 };
