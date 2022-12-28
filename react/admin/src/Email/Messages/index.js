@@ -45,7 +45,7 @@ class Messages extends React.Component {
   }
 
   poller = () => {
-    const response = this.getMessages(
+    const response = this.api.getMessages(
       this.props.folder,
       this.state.sort_field.imap,
       this.state.sort_order.imap
