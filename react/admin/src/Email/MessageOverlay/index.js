@@ -16,7 +16,7 @@ class MessageOverlay extends React.Component {
       loading: true,
       top_state: "expanded"
     }
-    this.api = new ApiClient(this.props.api_url, this.props.token).
+    this.api = new ApiClient(this.props.api_url, this.props.token);
   }
 
   componentDidUpdate(prevProps, prevState) {
