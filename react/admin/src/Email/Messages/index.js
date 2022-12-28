@@ -108,7 +108,7 @@ class Messages extends React.Component {
         break;
       case READ.css:
         this.setFlag(
-          this.state,folder,
+          this.props.folder,
           READ.imap,
           READ.op,
           this.state.selected_messages,
@@ -118,7 +118,7 @@ class Messages extends React.Component {
         break;
       case UNREAD.css:
         this.setFlag(
-          this.state,folder,
+          this.props.folder,
           UNREAD.imap,
           UNREAD.op,
           this.state.selected_messages,
@@ -128,7 +128,7 @@ class Messages extends React.Component {
         break;
       case FLAGGED.css:
         this.setFlag(
-          this.state,folder,
+          this.props.folder,
           FLAGGED.imap,
           FLAGGED.op,
           this.state.selected_messages,
@@ -138,7 +138,7 @@ class Messages extends React.Component {
         break;
       case UNFLAGGED.css:
         this.setFlag(
-          this.state,folder,
+          this.props.folder,
           UNFLAGGED.imap,
           UNFLAGGED.op,
           this.state.selected_messages,
