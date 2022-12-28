@@ -84,6 +84,29 @@ class Messages extends React.Component {
     })
   }
 
+  moveMessages = (folder) => {
+    var selected_messages = this.state.selected_messages;
+    selected_messages.push(this.state.selected_message);
+    const response = axios.put('/move_message',
+      JSON.stringify({
+        host: this.props.host,
+        source: this.props.folder,
+        destination: folder,
+        ids: selected_messages,
+        sort_order: this.state.sort_order.imap,
+        sort_field: this.state.sort_field.imap
+      }),
+      {
+        baseURL: this.props.api_url,
+        headers: {
+          'Authorization': this.props.token
+        },
+        timeout: 10000
+      }
+    );
+    return response;
+  } 
+
   setFlag = (flag, op) => {
     var selected_messages = this.state.selected_messages;
     selected_messages.push(this.state.selected_message);
@@ -134,7 +157,7 @@ class Messages extends React.Component {
     };
     switch (action) {
       case "delete":
-        this.props.setMessage("Deletion isn't implemented yet.", true);
+        this.moveMessages("Deleted Items");
         break;
       case "move":
         this.props.setMessage("Moving messages isn't implamented yet.", true);
