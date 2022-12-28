@@ -2,7 +2,7 @@ import axios from 'axios';
 
 class ApiClient {
 
-  getMessage = (folder, host, id, seen, baseURL, token) => {
+  const getMessage = (folder, host, id, seen, baseURL, token) => {
     const response = axios.get('/fetch_message',
       {
         params: {
@@ -21,7 +21,7 @@ class ApiClient {
     return response;
   };
   
-  getAttachment = (a, folder, host, id, seen, baseURL, token) => {
+  const getAttachment = (a, folder, host, id, seen, baseURL, token) => {
     const response = axios.get('/fetch_attachment',
       {
         params: {
@@ -42,7 +42,7 @@ class ApiClient {
     return response;
   };
   
-  getAttachments = (folder, host, id, seen, baseURL, token) => {
+  const getAttachments = (folder, host, id, seen, baseURL, token) => {
     const response = axios.get('/list_attachments',
       {
         params: {
