@@ -6,47 +6,6 @@
 
 
 ## Methods
-### getMessage
-Modifiers: none
-
-Parameters: folder
-host
-id
-seen (null
-null
-null
-null)
-
-Returns: null
-
-### getAttachment
-Modifiers: none
-
-Parameters: a
-folder
-host
-id
-seen (null
-null
-null
-null
-null)
-
-Returns: null
-
-### getAttachments
-Modifiers: none
-
-Parameters: folder
-host
-id
-seen (null
-null
-null
-null)
-
-Returns: null
-
 ### hide
 Modifiers: none
 
