@@ -70,7 +70,7 @@ export default class ApiClient {
       {
         params: {
           folder: this.props.folder,
-          host: host,
+          host: this.host,
           sort_order: order,
           sort_field: field
         },
