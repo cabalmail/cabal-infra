@@ -31,16 +31,16 @@ class Messages extends React.Component {
     this.poller(
       this.api,
       this.props.folder,
-      this.props.sort_order.imap,
-      this.props.sort_field.imap
+      this.state.sort_order.imap,
+      this.state.sort_field.imap
     );
     this.interval = setInterval(
       this.poller,
       10000, 
       this.api,
       this.props.folder,
-      this.props.sort_order.imap,
-      this.props.sort_field.imap
+      this.state.sort_order.imap,
+      this.state.sort_field.imap
     );
   }
 
@@ -51,8 +51,8 @@ class Messages extends React.Component {
       this.poller(
         this.api,
         this.props.folder,
-        this.props.sort_order.imap,
-        this.props.sort_field.imap
+        this.state.sort_order.imap,
+        this.state.sort_field.imap
       );
     }
   }
