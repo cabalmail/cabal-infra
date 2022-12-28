@@ -6,13 +6,6 @@
 
 
 ## Methods
-### getList
-Modifiers: none
-
-Parameters: e (null)
-
-Returns: null
-
 ### handleClick
 Modifiers: none
 
