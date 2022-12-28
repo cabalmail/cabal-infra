@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-export class ApiClient {
+class ApiClient {
 
   getMessage = (folder, host, id, seen, baseURL, token) => {
     const response = axios.get('/fetch_message',
@@ -61,3 +61,5 @@ export class ApiClient {
     return response;
   };
 }
+
+export default ApiClient;
