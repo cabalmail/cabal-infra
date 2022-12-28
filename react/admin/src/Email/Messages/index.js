@@ -65,6 +65,7 @@ class Messages extends React.Component {
     console.log("called");
     const response = api.getMessages(folder, order, field);
     response.then(data => {
+      console.log(data.data.message_ids);
       this.setState({
         ...this.state,
         message_ids: data.data.message_ids,
