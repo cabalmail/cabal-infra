@@ -8,6 +8,24 @@ export default class ApiClient {
     this.host = host;
   }
 
+  getList = (folder, ids) => {
+    const response = axios.get('/list_envelopes',
+      {
+        params: {
+          host: this.host,
+          folder: folder,
+          ids: ids
+        },
+        baseURL: this.baseURL,
+        headers: {
+          'Authorization': this.token
+        },
+        timeout: 10000
+      }
+    );
+    return response;
+  }
+
   fetchImage = (cid, folder, id, seen) => {
     const response = axios.get('/fetch_inline_image',
       {

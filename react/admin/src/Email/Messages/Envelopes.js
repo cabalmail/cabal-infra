@@ -1,5 +1,5 @@
 import React from 'react';
-import axios from 'axios';
+import ApiClient from '../ApiClient';
 import './Envelopes.css';
 
 class Envelopes extends React.Component {
@@ -10,6 +10,7 @@ class Envelopes extends React.Component {
       envelopes: [],
       selected: null
     };
+    this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
   }
 
   componentDidMount() {
@@ -27,7 +28,10 @@ class Envelopes extends React.Component {
 
   componentDidUpdate(prevProps, prevState) {
     if (this.props.message_ids !== prevProps.message_ids) {
-      const response = this.getList();
+      const response = this.getList(
+        this.props.folder,
+        `[${this.props.message_ids.join(",")}]`
+      );
       response.then(data => {
         this.setState({
           ...this.state,
@@ -38,24 +42,6 @@ class Envelopes extends React.Component {
         console.log(e);
       });
     }
-  }
-
-  getList = (e) => {
-    const response = axios.get('/list_envelopes',
-      {
-        params: {
-          host: this.props.host,
-          folder: this.props.folder,
-          ids: `[${this.props.message_ids.join(",")}]`
-        },
-        baseURL: this.props.api_url,
-        headers: {
-          'Authorization': this.props.token
-        },
-        timeout: 10000
-      }
-    );
-    return response;
   }
 
   handleClick = (e) => {
