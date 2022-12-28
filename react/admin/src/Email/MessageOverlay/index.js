@@ -5,6 +5,7 @@ import './MessageOverlay.css';
 
 class MessageOverlay extends React.Component {
 
+  const api = new ApiClient();
   constructor(props) {
     super(props);
     this.state = {
@@ -21,7 +22,7 @@ class MessageOverlay extends React.Component {
   componentDidUpdate(prevProps, prevState) {
     if (this.props.envelope.id !== prevProps.envelope.id) {
       this.setState({...this.state, loading: true, invert: false});
-      const messageResponse = ApiClient.getMessage(
+      const messageResponse = api.getMessage(
         this.props.folder,
         this.props.host,
         this.props.envelope.id,
@@ -29,7 +30,7 @@ class MessageOverlay extends React.Component {
         this.props.api_url,
         this.props.token
       );
-      const attachmentResponse = ApiClient.getAttachments(
+      const attachmentResponse = api.getAttachments(
         this.props.folder,
         this.props.host,
         this.props.envelope.id,
@@ -74,7 +75,7 @@ class MessageOverlay extends React.Component {
     e.preventDefault();
     var id = parseInt(e.target.dataset.id);
     var a = this.state.attachments.find(e => e.id === id);
-    ApiClient.getAttachment(
+    api.getAttachment(
       a,
       this.props.folder,
       this.props.host,
