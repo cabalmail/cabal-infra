@@ -20,7 +20,7 @@ export default class ApiClient {
         },
         baseURL: this.baseURL,
         headers: {
-          'Authorization': token
+          'Authorization': this.token
         },
         timeout: 90000
       }
