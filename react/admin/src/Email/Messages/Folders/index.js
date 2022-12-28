@@ -1,5 +1,5 @@
 import React from 'react';
-import axios from 'axios';
+import ApiClient from '../ApiClient';
 
 /**
  * Fetches folders for current users and displays them
@@ -12,30 +12,17 @@ class Folders extends React.Component {
     this.state = {
       folders: []
     };
+    this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
   }
 
   componentDidMount() {
-    const response = this.getList();
+    const response = this.api.getFolderList();
     response.then(data => {
       this.setState({ ...this.state, folders: data.data });
     }).catch(e => {
       this.props.setMessage("Unable to fetch folders.", true);
       console.log(e);
     });
-  }
-
-  getList = (e) => {
-    const response = axios.get('/list_folders', {
-      params: {
-        host: this.props.host
-      },
-      baseURL: this.props.api_url,
-      headers: {
-        'Authorization': this.props.token
-      },
-      timeout: 10000
-    });
-    return response;
   }
 
   setFolder = (e) => {

@@ -8,6 +8,20 @@ export default class ApiClient {
     this.host = host;
   }
 
+  getFolderList = () => {
+    const response = axios.get('/list_folders', {
+      params: {
+        host: this.host
+      },
+      baseURL: this.baseURL,
+      headers: {
+        'Authorization': this.token
+      },
+      timeout: 10000
+    });
+    return response;
+  }
+
   getList = (folder, ids) => {
     const response = axios.get('/list_envelopes',
       {

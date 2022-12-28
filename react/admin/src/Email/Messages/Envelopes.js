@@ -13,22 +13,6 @@ class Envelopes extends React.Component {
     this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
   }
 
-  componentDidMount() {
-    const response = this.api.getList(
-      this.props.folder,
-      `[${this.props.message_ids.join(",")}]`
-    );
-    response.then(data => {
-      this.setState({
-        ...this.state,
-        envelopes: data.data.envelopes
-      });
-    }).catch( e => {
-      this.props.setMessage("Unable to fetch envelopes.", true);
-      console.log(e);
-    });
-  }
-
   componentDidUpdate(prevProps, prevState) {
     if (this.props.message_ids !== prevProps.message_ids) {
       const response = this.api.getList(
