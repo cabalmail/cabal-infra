@@ -22,14 +22,14 @@ ul.message-list div {
 
 ul.message-list div.message-subject {
   font-size: 115%;
-  font-weight: bold;
+  font-weight: 900;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 ul.message-list li.Seen div.message-subject {
-  font-weight: normal;
+  font-weight: 100;
 }
 
 ul.message-list li.Recent div.message-subject {
