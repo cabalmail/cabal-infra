@@ -2,7 +2,12 @@ import axios from 'axios';
 
 export default class ApiClient {
 
-  getMessage(folder, host, id, seen, baseURL, token) {
+  constructor(baseURL, token) {
+    this.baseURL = baseURL;
+    this.token = token;
+  }
+
+  getMessage(folder, host, id, seen) {
     const response = axios.get('/fetch_message',
       {
         params: {
@@ -11,9 +16,9 @@ export default class ApiClient {
           id: id,
           seen: seen
         },
-        baseURL: baseURL,
+        baseURL: this.baseURL,
         headers: {
-          'Authorization': token
+          'Authorization': this.token
         },
         timeout: 20000
       }
@@ -21,7 +26,7 @@ export default class ApiClient {
     return response;
   };
   
-  getAttachment(a, folder, host, id, seen, baseURL, token) {
+  getAttachment(a, folder, host, id, seen) {
     const response = axios.get('/fetch_attachment',
       {
         params: {
@@ -32,9 +37,9 @@ export default class ApiClient {
           filename: a.name,
           seen: seen
         },
-        baseURL: baseURL,
+        baseURL: this.baseURL,
         headers: {
-          'Authorization': token
+          'Authorization': this.token
         },
         timeout: 90000
       }
@@ -42,7 +47,7 @@ export default class ApiClient {
     return response;
   };
   
-  getAttachments(folder, host, id, seen, baseURL, token) {
+  getAttachments(folder, host, id, seen) {
     const response = axios.get('/list_attachments',
       {
         params: {
@@ -51,9 +56,9 @@ export default class ApiClient {
           id: id,
           seen: seen
         },
-        baseURL: baseURL,
+        baseURL: this.baseURL,
         headers: {
-          'Authorization': token
+          'Authorization': this.token
         },
         timeout: 20000
       }

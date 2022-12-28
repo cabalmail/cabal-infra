@@ -5,7 +5,6 @@ import './MessageOverlay.css';
 
 class MessageOverlay extends React.Component {
 
-  const api = new ApiClient();
   constructor(props) {
     super(props);
     this.state = {
@@ -17,26 +16,23 @@ class MessageOverlay extends React.Component {
       loading: true,
       top_state: "expanded"
     }
+    this.api = new ApiClient(this.props.api_url, this.props.token).
   }
 
   componentDidUpdate(prevProps, prevState) {
     if (this.props.envelope.id !== prevProps.envelope.id) {
       this.setState({...this.state, loading: true, invert: false});
-      const messageResponse = api.getMessage(
+      const messageResponse = this.api.getMessage(
         this.props.folder,
         this.props.host,
         this.props.envelope.id,
-        this.props.envelope.flags.includes("\\Seen"),
-        this.props.api_url,
-        this.props.token
+        this.props.envelope.flags.includes("\\Seen")
       );
-      const attachmentResponse = api.getAttachments(
+      const attachmentResponse = this.api.getAttachments(
         this.props.folder,
         this.props.host,
         this.props.envelope.id,
-        this.props.envelope.flags.includes("\\Seen"),
-        this.props.api_url,
-        this.props.token
+        this.props.envelope.flags.includes("\\Seen")
       );
       Promise.all([
         messageResponse.catch(e => {
@@ -75,14 +71,12 @@ class MessageOverlay extends React.Component {
     e.preventDefault();
     var id = parseInt(e.target.dataset.id);
     var a = this.state.attachments.find(e => e.id === id);
-    api.getAttachment(
+    this.api.getAttachment(
       a,
       this.props.folder,
       this.props.host,
       this.props.envelope.id,
-      this.props.envelope.flags.includes("\\Seen"),
-      this.props.api_url,
-      this.props.token
+      this.props.envelope.flags.includes("\\Seen")
     )
     .then((data) => {
       var url = data.data.url;
