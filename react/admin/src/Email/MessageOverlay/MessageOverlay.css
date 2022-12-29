@@ -124,11 +124,8 @@ div.message_overlay .message_attachments button.attachment span.attachment_type 
   bottom: 1em;
 }
 
-.expanded .expand_overlay_top, .collapsed .collapse_overlay_top {
-  display: none;
-}
-
-.collapsed .tabBar, .collapsed .collapsable {
+.expanded .expand_overlay_top, .collapsed .collapse_overlay_top,
+.collapsed .tabBar, .collapsed .collapsable, .collapsed .filter-buttons {
   display: none;
 }
 
