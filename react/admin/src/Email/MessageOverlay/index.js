@@ -212,8 +212,10 @@ class MessageOverlay extends React.Component {
   }
 
   render() {
-    console.log(this.props.envelope);
-    const flags = this.props.envelope.flags.map(d => {return d.replace("\\","")}).join(" ");
+    var flags = "";
+    if (this.props.envelope.flags) {
+      flags = this.props.envelope.flags.map(d => {return d.replace("\\","")}).join(" ");
+    }
     if (this.props.visible) {
       return (
         <div className="message_overlay">
