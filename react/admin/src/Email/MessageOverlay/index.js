@@ -87,8 +87,7 @@ class MessageOverlay extends React.Component {
   }
 
   callback = (d) => {
-    console.log(d);
-    this.api.getEnvelopes(this.props.folder, d.data.message_ids).then(data => {
+    this.api.getEnvelopes(this.props.folder, [this.props.envelope.id]).then(data => {
       console.log(data);
       this.props.updateOverlay(data.data.envelopes[0]);
     })
