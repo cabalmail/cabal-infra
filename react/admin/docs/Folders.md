@@ -13,4 +13,25 @@ Parameters: e (null)
 
 Returns: null
 
+### handleSubmit
+Modifiers: none
+
+Parameters: e (null)
+
+Returns: null
+
+### handleNewClick
+Modifiers: none
+
+Parameters: e (null)
+
+Returns: null
+
+### handleChange
+Modifiers: none
+
+Parameters: e (null)
+
+Returns: null
+
 </div>
