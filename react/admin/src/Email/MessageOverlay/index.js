@@ -86,8 +86,10 @@ class MessageOverlay extends React.Component {
     });
   }
 
-  callback = (data) => {
-    this.api.getEnvelopes(this.props.folder, data.data.message_ids).then(data => {
+  callback = (d) => {
+    console.log(d);
+    this.api.getEnvelopes(this.props.folder, d.data.message_ids).then(data => {
+      console.log(data);
       this.props.updateOverlay(data.data.envelopes[0]);
     })
     this.props.setMessage("Flag set.", false);
