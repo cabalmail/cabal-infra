@@ -29,6 +29,7 @@ class Email extends React.Component {
   }
 
   updateOverlay = () => {
+    console.log("called");
     this.showOverlay(this.state.envelope);
   }
 
