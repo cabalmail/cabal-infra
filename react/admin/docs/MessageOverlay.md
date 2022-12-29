@@ -23,7 +23,7 @@ Returns: null
 ### callback
 Modifiers: none
 
-Parameters: data (null)
+Parameters: d (null)
 
 Returns: null
 
