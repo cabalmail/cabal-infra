@@ -20,13 +20,6 @@ Parameters: envelope (null)
 
 Returns: null
 
-### updateOverlay
-Modifiers: none
-
-Parameters:  ()
-
-Returns: null
-
 ### hideOverlay
 Modifiers: none
 
