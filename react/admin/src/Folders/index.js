@@ -1,5 +1,6 @@
 import React from 'react';
 import ApiClient from '../ApiClient';
+import { IMMUTABLE_FOLDERS } from '../constants';
 import './Folders.css';
 
 /**
@@ -48,20 +49,23 @@ class Folders extends React.Component {
   render() {
     // TODO: handle nexted arrays
     const folder_list = this.state.folders.map(item => {
+      const buttons = item in IMMUTABLE_FOLDERS ? (
+        <button
+          className="folder_button new_subfolder"
+          onClick={this.handleNewClick}
+          title="New subfolder"
+        >📁</button>
+        <button
+          className="folder_button delete_folder"
+          onClick={this.handleDelClick}
+          title="Delete folder"
+        >🗑️</button>
+      ) : "";
       return (
         <li className="folder" id={item}>
           <span className="folder_name">{item}</span>
-          <button
-            className="folder_button new_subfolder"
-            onClick={this.handleNewClick}
-            title="New subfolder"
-          >📁</button>
-          <button
-            className="folder_button delete_folder"
-            onClick={this.handleDelClick}
-            title="Delete folder"
-          >🗑️</button>
         </li>
+        {buttons}
       );
     });
     return (

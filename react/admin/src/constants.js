@@ -1,3 +1,11 @@
+export const IMMUTABLE_FOLDERS = [
+  "INBOX",
+  "Deleted Messages",
+  "Sent Messages",
+  "Drafts",
+  "Archive"
+];
+
 export const ASC = {
   imap: "",
   css: "ascending",
