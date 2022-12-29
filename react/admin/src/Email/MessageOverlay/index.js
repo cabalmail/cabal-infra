@@ -194,7 +194,7 @@ class MessageOverlay extends React.Component {
         >&lt;/&gt;</button>
       </div>
     );
-  }  
+  }
 
   collapse = (e) => {
     e.preventDefault();
@@ -213,7 +213,7 @@ class MessageOverlay extends React.Component {
 
   render() {
     var flags = "";
-    if ('maps' in this.props.envelope) {
+    if ('flags' in this.props.envelope) {
       flags = this.props.envelope.flags.map(d => {return d.replace("\\","")}).join(" ");
     }
     if (this.props.visible) {
