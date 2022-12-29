@@ -1,8 +1,7 @@
 import React from 'react';
 import ApiClient from '../../ApiClient';
 import './Actions.css';
-import { ASC, DESC, ARRIVAL, DATE, FROM, SUBJECT, PAGE_SIZE,
-         READ, UNREAD, FLAGGED, UNFLAGGED } from '../../constants';
+import { READ, UNREAD, FLAGGED, UNFLAGGED } from '../../constants';
 
 class Actions extends React.Component {
 

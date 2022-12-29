@@ -8,8 +8,7 @@ import LazyLoad from 'react-lazyload';
 import Envelopes from './Envelopes';
 import Folders from './Folders';
 import Actions from '../Actions';
-import { ASC, DESC, ARRIVAL, DATE, FROM, SUBJECT, PAGE_SIZE,
-         READ, UNREAD, FLAGGED, UNFLAGGED } from '../../constants';
+import { ASC, DESC, ARRIVAL, DATE, FROM, SUBJECT, PAGE_SIZE } from '../../constants';
 
 import './Messages.css';
 
