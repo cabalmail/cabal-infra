@@ -66,8 +66,8 @@ class Folders extends React.Component {
       return (
         <li className="folder" id={item}>
           <span className="folder_name">{item}</span>
+          {buttons}
         </li>
-        {buttons}
       );
     });
     return (
