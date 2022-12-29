@@ -9,7 +9,7 @@ import Envelopes from './Envelopes';
 import Folders from './Folders';
 import Actions from '../Actions';
 import { ASC, DESC, ARRIVAL, DATE, FROM, SUBJECT, PAGE_SIZE,
-         READ, UNREAD, FLAGGED, UNFLAGGED } from '../../constants'
+         READ, UNREAD, FLAGGED, UNFLAGGED } from '../../constants';
 
 import './Messages.css';
 
@@ -238,6 +238,7 @@ class Messages extends React.Component {
           host={this.props.host}
           folder={this.props.folder}
           selected_messages={this.state.selected_messages}
+          selected={selected}
           order={this.state.sort_order.imap}
           field={this.state.sort_field.imap}
           callback={this.callback}

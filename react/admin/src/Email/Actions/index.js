@@ -1,6 +1,8 @@
 import React from 'react';
 import ApiClient from '../../ApiClient';
 import './Actions.css';
+import { ASC, DESC, ARRIVAL, DATE, FROM, SUBJECT, PAGE_SIZE,
+         READ, UNREAD, FLAGGED, UNFLAGGED } from '../../constants';
 
 class Actions extends React.Component {
 
@@ -79,7 +81,7 @@ class Actions extends React.Component {
 
   render() {
     return (
-      <div className={`filters filters-buttons ${selected}`}>
+      <div className={`filters filters-buttons ${this.props.selected}`}>
         <span className="filter filter-actions">
           <button
             value="delete"
