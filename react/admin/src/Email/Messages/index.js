@@ -59,6 +59,7 @@ class Messages extends React.Component {
     if ((this.props.folder !== prevProps.folder) ||
         (this.state.sort_order !== prevState.sort_order) ||
         (this.state.sort_field !== prevState.sort_field)) {
+      clearInterval(this.interval);
       setTimeout(
         this.poller,
         100, 
