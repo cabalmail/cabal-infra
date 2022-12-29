@@ -60,6 +60,22 @@ class Messages extends React.Component {
         (this.state.sort_order !== prevState.sort_order) ||
         (this.state.sort_field !== prevState.sort_field)) {
       clearInterval(this.interval);
+      this.poller(
+        this.api,
+        this.props.folder,
+        this.state.sort_order.imap,
+        this.state.sort_field.imap,
+        this
+      );
+      setTimeout(
+        this.poller,
+        10, 
+        this.api,
+        this.props.folder,
+        this.state.sort_order.imap,
+        this.state.sort_field.imap,
+        this
+      );
       this.interval = setInterval(
         this.poller,
         10000, 
