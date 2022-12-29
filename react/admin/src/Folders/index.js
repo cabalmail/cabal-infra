@@ -49,7 +49,7 @@ class Folders extends React.Component {
   render() {
     // TODO: handle nexted arrays
     const folder_list = this.state.folders.map(item => {
-      const buttons = item in IMMUTABLE_FOLDERS ? (
+      const buttons = item in IMMUTABLE_FOLDERS ? "" : (
         <>
           <button
             className="folder_button new_subfolder"
@@ -62,7 +62,7 @@ class Folders extends React.Component {
             title="Delete folder"
           >🗑️</button>
         </>
-      ) : "";
+      );
       return (
         <li className="folder" id={item}>
           <span className="folder_name">{item}</span>
