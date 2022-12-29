@@ -10,7 +10,8 @@ class Email extends React.Component {
     this.state = {
       folder: "INBOX",
       overlayVisible: false,
-      envelope: {}
+      envelope: {},
+      flags: []
     };
   }
 
@@ -22,7 +23,8 @@ class Email extends React.Component {
     this.setState({
       ...this.state,
       overlayVisible: true,
-      envelope: envelope
+      envelope: envelope,
+      flags: envelope.flags
     });
     console.log(envelope);
   }
@@ -47,7 +49,7 @@ class Email extends React.Component {
           token={this.props.token}
           api_url={this.props.api_url}
           envelope={this.state.envelope}
-          flags={'flags' in this.state.envelope ? this.state.envelope.flags : []}
+          flags={this.state.flags}
           visible={this.state.overlayVisible}
           folder={this.state.folder}
           host={this.props.host}
