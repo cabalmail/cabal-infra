@@ -36,12 +36,18 @@ div.message_overlay pre.message_plain {
   word-wrap: break-word;
 }
 
-div.message_overlay button.close_overlay,
 div.message_overlay button.invert {
   width: 3em;
   position: absolute;
   top: 1em;
   right: 1em;
+}
+
+div.message_overlay button.close_overlay {
+  width: 3em;
+  position: absolute;
+  top: 0;
+  right: 0;
 }
 
 div.message_overlay .message_html {
