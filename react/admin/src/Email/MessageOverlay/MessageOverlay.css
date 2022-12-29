@@ -125,7 +125,7 @@ div.message_overlay .message_attachments button.attachment span.attachment_type 
 }
 
 .expanded .expand_overlay_top, .collapsed .collapse_overlay_top,
-.collapsed .tabBar, .collapsed .collapsable, .collapsed .filter-buttons {
+.collapsed .tabBar, .collapsed .collapsable, .collapsed .filters-buttons {
   display: none;
 }
 
