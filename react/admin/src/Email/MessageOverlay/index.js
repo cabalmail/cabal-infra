@@ -1,5 +1,6 @@
 import React from 'react';
 import RichMessage from './RichMessage';
+import Actions from '../Actions';
 import ApiClient from '../../ApiClient';
 import './MessageOverlay.css';
 
@@ -85,6 +86,16 @@ class MessageOverlay extends React.Component {
     });
   }
 
+  callback = (data) => {
+    this.props.setMessage("Flag set.", false);
+  }
+
+  catchback = (err) => {
+    this.props.setMessage(`Unable to set flag on message.`, true);
+    console.log(`Unable to set flag on message.`);
+    console.log(err);
+  };
+
   renderView() {
     if (this.state.loading) {
       return (
@@ -154,7 +165,7 @@ class MessageOverlay extends React.Component {
     );
   }
 
-  renderButtonBar() {
+  renderTabBar() {
     return (
       <div className={`tabBar ${this.state.view}`}>
         <button
@@ -221,7 +232,20 @@ class MessageOverlay extends React.Component {
               title="Show message header"
             >⋁</button>
             {this.renderHeader()}
-            {this.renderButtonBar()}
+            <Actions
+              token={this.props.token}
+              api_url={this.props.api_url}
+              host={this.props.host}
+              folder={this.props.folder}
+              selected_messages={[this.props.envelope.id]}
+              selected="selected "
+              order=""
+              field="ARRIVAL"
+              callback={this.callback}
+              catchback={this.catchback}
+              setMessage={this.props.setMessage}
+            />
+            {this.renderTabBar()}
           </div>
           {this.renderView()}
         </div>

@@ -230,7 +230,7 @@ class Messages extends React.Component {
               >⩔</button>
             </span>
           </div>
-        </div> 
+        </div>
         <Actions
           token={this.props.token}
           api_url={this.props.api_url}
