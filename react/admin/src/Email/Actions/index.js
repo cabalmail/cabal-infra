@@ -134,3 +134,5 @@ class Actions extends React.Component {
     );
   }
 }
+
+export default Actions;
