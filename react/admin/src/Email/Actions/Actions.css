@@ -49,5 +49,12 @@ div.filters-buttons div.filter-folder {
   position: absolute;
   top: 2em;
   left: 5em;
+}
+
+div.show_folders div.filter-folder {
+  display: inline-block;
+}
+
+div.hide_folders div.filter-folder {
   display: none;
 }
