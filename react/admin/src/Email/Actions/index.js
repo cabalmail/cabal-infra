@@ -8,7 +8,21 @@ class Actions extends React.Component {
 
   constructor(props) {
     super(props);
+    this.state = {
+      show_folders: false
+    };
     this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
+  }
+
+  setDestination = (destination) => {
+    this.setState({...this.state, show_folders: false});
+    this.api.moveMessages(
+      this.props.folder,
+      destination,
+      this.props.selected_messages,
+      this.props.order,
+      this.props.field
+    );
   }
 
   handleActionButtonClick = (e) => {
@@ -32,7 +46,7 @@ class Actions extends React.Component {
         );
         break;
       case "move":
-        this.props.setMessage("Moving messages isn't implamented yet.", true);
+        this.setState({...this.state, show_folders: true});
         break;
       case READ.css:
         this.api.setFlag(
@@ -80,8 +94,9 @@ class Actions extends React.Component {
   }
 
   render() {
+    const show = this.state.show_folders ? "show_folders" : "hide_folders";
     return (
-      <div className={`filters filters-buttons ${this.props.selected}`}>
+      <div className={`filters filters-buttons ${this.props.selected} ${show}`}>
         <span className="filter filter-actions">
           <button
             value="delete"
@@ -102,7 +117,7 @@ class Actions extends React.Component {
           <Folders 
             token={this.props.token}
             api_url={this.props.api_url}
-            setFolder={this.props.setFolder}
+            setFolder={this.setDestination}
             host={this.props.host}
             folder={this.props.folder}
             setMessage={this.props.setMessage}
