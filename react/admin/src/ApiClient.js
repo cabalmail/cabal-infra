@@ -23,7 +23,7 @@ export default class ApiClient {
   }
 
   moveMessages(source, destination, ids, order, field) {
-    const response = axios.put('/move_message',
+    const response = axios.put('/move_messages',
       JSON.stringify({
         host: this.host,
         source: source,
