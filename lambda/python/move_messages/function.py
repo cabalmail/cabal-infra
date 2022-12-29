@@ -10,11 +10,11 @@ def handler(event, _context):
     if body['destination'] == "Deleted Messages":
         try:
             client.create_folder(body['destination'])
-        catch:
+        except:
             pass
     try:
         client.move(body['ids'], body['destination'])
-    catch:
+    except:
         client.logout()
         return {
             "statusCode": 500,
