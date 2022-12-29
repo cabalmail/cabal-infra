@@ -28,9 +28,7 @@ class Messages extends React.Component {
   }
 
   componentDidMount() {
-    setTimeout(
-      this.poller,
-      50, 
+    this.poller(
       this.api,
       this.props.folder,
       this.state.sort_order.imap,
@@ -39,7 +37,7 @@ class Messages extends React.Component {
     );
     setTimeout(
       this.poller,
-      100, 
+      10, 
       this.api,
       this.props.folder,
       this.state.sort_order.imap,
