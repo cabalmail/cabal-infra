@@ -141,3 +141,26 @@ div.message_overlay div.message_raw iframe {
   height: 100%;
   border-width: 0;
 }
+
+/* Action Button modifications */
+
+div.message_overlay button.unflagged, div.message_overlay button.flagged {
+  border-radius: 0 4px 4px 0;
+  border-width: 1px;
+  width: auto;
+  padding: 0.5em;
+}
+
+div.message_overlay .CabalSeen button.read,
+div.message_overlay .Flagged button.flag,
+div.message_overlay button.unread,
+div.message_overlay button.unflag {
+  display: none;
+}
+
+div.message_overlay button.read,
+div.message_overay button.flag,
+div.message_overlay .CabalSeen button.unread,
+div.message_overlay .Flagged button.unflag {
+  display: inline-block;
+}

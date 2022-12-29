@@ -212,10 +212,11 @@ class MessageOverlay extends React.Component {
   }
 
   render() {
+    const flags = message.flags.map(d => {return d.replace("\\","")}).join(" ");
     if (this.props.visible) {
       return (
         <div className="message_overlay">
-          <div className={`message_top ${this.state.top_state}`}>
+          <div className={`message_top ${this.state.top_state} ${flags}`}>
             <button
               onClick={this.hide}
               className="close_overlay"
