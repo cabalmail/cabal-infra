@@ -99,10 +99,8 @@ class Messages extends React.Component {
   callback = (data) => {
     this.setState({
       ...this.state,
-      message_ids: data.data.message_ids,
-      selected_messages: [],
-      loading: false
-    });
+      message_ids: data.data.message_ids
+    }); 
     this.props.setMessage("Flag set.", false);
   }
 
