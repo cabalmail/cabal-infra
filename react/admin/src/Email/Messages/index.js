@@ -206,6 +206,7 @@ class Messages extends React.Component {
             host={this.props.host}
             folder={this.props.folder}
             setMessage={this.props.setMessage}
+            label="Folder"
           />&nbsp;
           <div>
             <span className="filter filter-sort">

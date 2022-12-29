@@ -40,7 +40,7 @@ class Folders extends React.Component {
     return (
       <div className="filter-folder">
         <span className="filter filter-folder">
-          <label htmlFor="folder">Folder:</label>
+          <label htmlFor="folder">{this.props.label}:</label>
           <select
             name="folder"
             onChange={this.setFolder}

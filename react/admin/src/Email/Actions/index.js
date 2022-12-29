@@ -106,6 +106,7 @@ class Actions extends React.Component {
             host={this.props.host}
             folder={this.props.folder}
             setMessage={this.props.setMessage}
+            label="Destination"
           />
           <button
             value={READ.css}
