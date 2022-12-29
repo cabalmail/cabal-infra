@@ -3,7 +3,7 @@
  */
 
 import React from 'react';
-import ApiClient from '../ApiClient';
+import ApiClient from '../../ApiClient';
 import LazyLoad from 'react-lazyload';
 import Envelopes from './Envelopes';
 import Folders from './Folders';

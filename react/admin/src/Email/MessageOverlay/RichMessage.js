@@ -1,5 +1,5 @@
 import React from 'react';
-import ApiClient from '../ApiClient';
+import ApiClient from '../../ApiClient';
 import DOMPurify from 'dompurify';
 
 class RichMessage extends React.Component {

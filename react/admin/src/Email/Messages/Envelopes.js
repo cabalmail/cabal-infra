@@ -1,5 +1,5 @@
 import React from 'react';
-import ApiClient from '../ApiClient';
+import ApiClient from '../../ApiClient';
 import './Envelopes.css';
 
 class Envelopes extends React.Component {

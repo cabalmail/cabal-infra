@@ -1,5 +1,5 @@
 import React from 'react';
-import ApiClient from '../../ApiClient';
+import ApiClient from '../../../ApiClient';
 
 /**
  * Fetches folders for current users and displays them

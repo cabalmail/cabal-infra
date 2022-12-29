@@ -1,6 +1,6 @@
 import React from 'react';
 import RichMessage from './RichMessage';
-import ApiClient from '../ApiClient';
+import ApiClient from '../../ApiClient';
 import './MessageOverlay.css';
 
 class MessageOverlay extends React.Component {
