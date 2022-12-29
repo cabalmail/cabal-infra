@@ -1,5 +1,6 @@
 import React from 'react';
 import ApiClient from '../../ApiClient';
+import Folders from '../Messages/Folders';
 import './Actions.css';
 import { READ, UNREAD, FLAGGED, UNFLAGGED } from '../../constants';
 
@@ -98,6 +99,14 @@ class Actions extends React.Component {
             title="Move to..."
             onClick={this.handleActionButtonClick}
           >📨<span className="wide-screen"> Move to...</span></button>
+          <Folders 
+            token={this.props.token}
+            api_url={this.props.api_url}
+            setFolder={this.props.setFolder}
+            host={this.props.host}
+            folder={this.props.folder}
+            setMessage={this.props.setMessage}
+          />
           <button
             value={READ.css}
             id={READ.css}

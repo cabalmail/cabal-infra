@@ -38,8 +38,14 @@ div.filters {
 
 div.filters-buttons {
   text-align: center;
+  position: relative;
 }
 
 span.filter button {
   display: inline-block;
+}
+
+div.filter-folder {
+  position: absolute;
+  top: 2em;
 }
