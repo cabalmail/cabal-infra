@@ -87,6 +87,7 @@ class MessageOverlay extends React.Component {
   }
 
   callback = (data) => {
+    this.props.updateOverlay();
     this.props.setMessage("Flag set.", false);
   }
 
