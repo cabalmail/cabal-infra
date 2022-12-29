@@ -90,7 +90,7 @@ export default class ApiClient {
         params: {
           host: this.host,
           folder: folder,
-          ids: ids
+          ids: `[${ids.join(",")}]`
         },
         baseURL: this.baseURL,
         headers: {
