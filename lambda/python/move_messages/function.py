@@ -7,7 +7,21 @@ def handler(event, _context):
     body = json.loads(event['body'])
     user = event['requestContext']['authorizer']['claims']['cognito:username'];
     client = get_imap_client(body['host'], user, body['source'])
-    client.move(body['ids'], body['destination'])
+    if body['destination'] == "Deleted Messages":
+        try:
+            client.create_folder(body['destination'])
+        catch:
+            pass
+    try:
+        client.move(body['ids'], body['destination'])
+    catch:
+        client.logout()
+        return {
+            "statusCode": 500,
+            "body": json.dumps({
+                "status": "unable"
+            })
+        }
     client.logout()
     return {
         "statusCode": 200,

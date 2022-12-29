@@ -24,7 +24,7 @@ class Actions extends React.Component {
       case "delete":
         this.api.moveMessages(
           this.props.folder,
-          "Deleted Items",
+          "Deleted Messages",
           this.props.selected_messages,
           this.props.order,
           this.props.field
