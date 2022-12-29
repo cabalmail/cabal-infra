@@ -233,7 +233,6 @@ class MessageOverlay extends React.Component {
               className="overlay_expand_collapse expand_overlay_top"
               title="Show message header"
             >⋁</button>
-            {this.renderHeader()}
             <Actions
               token={this.props.token}
               api_url={this.props.api_url}
@@ -247,6 +246,7 @@ class MessageOverlay extends React.Component {
               catchback={this.catchback}
               setMessage={this.props.setMessage}
             />
+            {this.renderHeader()}
             {this.renderTabBar()}
           </div>
           {this.renderView()}
