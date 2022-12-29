@@ -20,6 +20,20 @@ Parameters: e (null)
 
 Returns: null
 
+### callback
+Modifiers: none
+
+Parameters: data (null)
+
+Returns: null
+
+### catchback
+Modifiers: none
+
+Parameters: err (null)
+
+Returns: null
+
 ### renderView
 Modifiers: none
 
@@ -34,7 +48,7 @@ Parameters:  ()
 
 Returns: null
 
-### renderButtonBar
+### renderTabBar
 Modifiers: none
 
 Parameters:  ()
