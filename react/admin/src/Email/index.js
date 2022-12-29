@@ -28,11 +28,6 @@ class Email extends React.Component {
     });
   }
 
-  updateOverlay = () => {
-    console.log("called");
-    this.showOverlay(this.state.envelope);
-  }
-
   hideOverlay = () => {
     this.setState({...this.state, overlayVisible: false});
   }
@@ -58,7 +53,7 @@ class Email extends React.Component {
           folder={this.state.folder}
           host={this.props.host}
           hide={this.hideOverlay}
-          updateOverlay={this.updateOverlay}
+          updateOverlay={this.showOverlay}
           setMessage={this.props.setMessage}
         />
       </div>
