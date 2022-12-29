@@ -6,13 +6,6 @@
 Fetches folders for current users and displays them
 
 ## Methods
-### getList
-Modifiers: none
-
-Parameters: e (null)
-
-Returns: null
-
 ### setFolder
 Modifiers: none
 
