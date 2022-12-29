@@ -7,6 +7,7 @@ import ApiClient from '../../ApiClient';
 import LazyLoad from 'react-lazyload';
 import Envelopes from './Envelopes';
 import Folders from './Folders';
+import Actions from '../Actions';
 import { ASC, DESC, ARRIVAL, DATE, FROM, SUBJECT, PAGE_SIZE,
          READ, UNREAD, FLAGGED, UNFLAGGED } from '../../constants'
 
@@ -107,8 +108,8 @@ class Messages extends React.Component {
   }
 
   catchback = (err) => {
-    this.props.setMessage(`Unable to set flag "${action}" on selected messages.`, true);
-    console.log(`Unable to set flag "${action}" on selected messages.`);
+    this.props.setMessage(`Unable to set flag on selected messages.`, true);
+    console.log(`Unable to set flag on selected messages.`);
     console.log(err);
   };
 
