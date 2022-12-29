@@ -21,6 +21,7 @@ div.message_overlay .message {
 
 div.message_overlay .message_top {
   position: relative;
+  padding: 0;
 }
 
 div.message_overlay .message_plain, pre {
@@ -59,10 +60,6 @@ div.message_overlay button.load {
   top: 1em;
   left: 1em;
 }
-
-div.message_overlay .message_top {
-  padding: 1em 1em 0 1em;
-} 
 
 div.message_overlay .tabBar {
   display: grid;
