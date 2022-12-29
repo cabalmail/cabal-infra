@@ -14,19 +14,13 @@ span.filter button.sort-order {
   border-width: 1px;
 }
 
-
-body span.filter select.sort-by,
-span.filter button.move,
-span.filter button.read,
-span.filter button.flagged,
-span.filter button.unread {
+body span.filter select.sort-by {
   border-radius: 0;
   border-width: 1px 0px 1px 1px;
   width: auto;
   padding: 0.5em;
 }
 
-button.unflagged,
 span.filter select {
   border-radius: 0 4px 4px 0;
   border-width: 1px;
@@ -34,17 +28,12 @@ span.filter select {
   padding: 0.5em;
 }
 
-span.filter button.delete,
 span.filter label {
   border-radius: 4px 0 0 4px;
   border-width: 1px 0 1px 1px;
   border-style: solid;
   width: auto;
   padding: 0.5em;
-}
-
-div.none_selected span.filter-actions button {
-  background-color: #666 !important;
 }
 
 div.filters {
@@ -64,10 +53,6 @@ div.filters-dropdowns span.filter {
 
 div.filters-dropdowns div ~ div {
   text-align: right;
-}
-
-div.filters-buttons {
-  text-align: center;
 }
 
 span.filter select, span.filter label, span.filter button {

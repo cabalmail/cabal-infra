@@ -1,0 +1,45 @@
+span.filter button {
+  margin: 0;
+  font-size: 9pt;
+}
+
+span.filter button.move,
+span.filter button.read,
+span.filter button.flagged,
+span.filter button.unread {
+  border-radius: 0;
+  border-width: 1px 0px 1px 1px;
+  width: auto;
+  padding: 0.5em;
+}
+
+button.unflagged {
+  border-radius: 0 4px 4px 0;
+  border-width: 1px;
+  width: auto;
+  padding: 0.5em;
+}
+
+span.filter button.delete {
+  border-radius: 4px 0 0 4px;
+  border-width: 1px 0 1px 1px;
+  border-style: solid;
+  width: auto;
+  padding: 0.5em;
+}
+
+div.none_selected span.filter-actions button {
+  background-color: #666 !important;
+}
+
+div.filters {
+  width: 100%;
+}
+
+div.filters-buttons {
+  text-align: center;
+}
+
+span.filter button {
+  display: inline-block;
+}

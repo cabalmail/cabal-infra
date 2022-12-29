@@ -96,87 +96,21 @@ class Messages extends React.Component {
     })
   }
 
-  handleActionButtonClick = (e) => {
-    e.stopPropagation();
-    if (!this.state.selected_messages.length && !this.state.selected_message) {
-      this.props.setMessage("Please select at least one message first.", true);
-      return;
-    } 
-    var action = e.target.id;
-    if (e.target.tagName !== 'BUTTON') {
-      action = e.target.parentElement.id;
-    }
-    var callback = (data) => {
-      this.setState({
-        ...this.state,
-        message_ids: data.data.message_ids,
-        selected_messages: [],
-        loading: false
-      });
-      this.props.setMessage("Flag set.", false);
-    };
-    var catchback = (err) => {
-      this.props.setMessage(`Unable to set flag "${action}" on selected messages.`, true);
-      console.log(`Unable to set flag "${action}" on selected messages.`);
-      console.log(err);
-    };
-    switch (action) {
-      case "delete":
-        this.api.moveMessages(
-          this.props.folder,
-          "Deleted Items",
-          this.state.selected_messages,
-          this.state.sort_order.imap,
-          this.state.sort_field.imap
-        );
-        break;
-      case "move":
-        this.props.setMessage("Moving messages isn't implamented yet.", true);
-        break;
-      case READ.css:
-        this.api.setFlag(
-          this.props.folder,
-          READ.imap,
-          READ.op,
-          this.state.selected_messages,
-          this.state.sort_order.imap,
-          this.state.sort_field.imap
-        ).then(callback).catch(catchback);
-        break;
-      case UNREAD.css:
-        this.api.setFlag(
-          this.props.folder,
-          UNREAD.imap,
-          UNREAD.op,
-          this.state.selected_messages,
-          this.state.sort_order.imap,
-          this.state.sort_field.imap
-        ).then(callback).catch(catchback);
-        break;
-      case FLAGGED.css:
-        this.api.setFlag(
-          this.props.folder,
-          FLAGGED.imap,
-          FLAGGED.op,
-          this.state.selected_messages,
-          this.state.sort_order.imap,
-          this.state.sort_field.imap
-        ).then(callback).catch(catchback);
-        break;
-      case UNFLAGGED.css:
-        this.api.setFlag(
-          this.props.folder,
-          UNFLAGGED.imap,
-          UNFLAGGED.op,
-          this.state.selected_messages,
-          this.state.sort_order.imap,
-          this.state.sort_field.imap
-        ).then(callback).catch(catchback);
-        break;
-      default:
-        console.log(`"${action}" clicked`);
-    }
+  callback = (data) => {
+    this.setState({
+      ...this.state,
+      message_ids: data.data.message_ids,
+      selected_messages: [],
+      loading: false
+    });
+    this.props.setMessage("Flag set.", false);
   }
+
+  catchback = (err) => {
+    this.props.setMessage(`Unable to set flag "${action}" on selected messages.`, true);
+    console.log(`Unable to set flag "${action}" on selected messages.`);
+    console.log(err);
+  };
 
   handleCheck = (message_id, checked) => {
     var id = parseInt(message_id);
@@ -297,58 +231,18 @@ class Messages extends React.Component {
             </span>
           </div>
         </div> 
-        <div className={`filters filters-buttons ${selected}`}>
-          <span className="filter filter-actions">
-            <button
-              value="delete"
-              id="delete"
-              name="delete"
-              className="action delete"
-              title="Delete"
-              onClick={this.handleActionButtonClick}
-            >🗑️<span className="wide-screen"> Delete</span></button>
-            <button
-              value="move"
-              id="move"
-              name="move"
-              className="action move"
-              title="Move to..."
-              onClick={this.handleActionButtonClick}
-            >📨<span className="wide-screen"> Move to...</span></button>
-            <button
-              value={READ.css}
-              id={READ.css}
-              name={READ.css}
-              className={`action ${READ.css}`}
-              title={READ.description}
-              onClick={this.handleActionButtonClick}
-            >{READ.icon}<span className="wide-screen"> {READ.description}</span></button>
-            <button
-              value={UNREAD.css}
-              id={UNREAD.css}
-              name={UNREAD.css}
-              className={`action ${UNREAD.css}`}
-              title={UNREAD.description}
-              onClick={this.handleActionButtonClick}
-            >{UNREAD.icon}<span className="wide-screen"> {UNREAD.description}</span></button>
-            <button
-              value={FLAGGED.css}
-              id={FLAGGED.css}
-              name={FLAGGED.css}
-              className={`action ${FLAGGED.css}`}
-              title={FLAGGED.description}
-              onClick={this.handleActionButtonClick}
-            >{FLAGGED.icon}<span className="wide-screen"> {FLAGGED.description}</span></button>
-              <button
-              value={UNFLAGGED.css}
-              id={UNFLAGGED.css}
-              name={UNFLAGGED.css}
-              className={`action ${UNFLAGGED.css}`}
-              title={UNFLAGGED.description}
-              onClick={this.handleActionButtonClick}
-            >{UNFLAGGED.icon}<span className="wide-screen"> {UNFLAGGED.description}</span></button>
-          </span>
-        </div>
+        <Actions
+          token={this.props.token}
+          api_url={this.props.api_url}
+          host={this.props.host}
+          folder={this.props.folder}
+          selected_messages={this.state.selected_messages}
+          order={this.state.sort_order.imap}
+          field={this.state.sort_field.imap}
+          callback={this.callback}
+          catchback={this.catchback}
+          setMessage={this.props.setMessage}
+        />
         <ul className={`message-list ${this.state.loading ? "loading" : ""}`}>
           {list}
         </ul>
