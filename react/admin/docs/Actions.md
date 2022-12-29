@@ -6,6 +6,13 @@
 
 
 ## Methods
+### setDestination
+Modifiers: none
+
+Parameters: destination (null)
+
+Returns: null
+
 ### handleActionButtonClick
 Modifiers: none
 
