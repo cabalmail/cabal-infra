@@ -62,7 +62,15 @@ locals {
       method    = "PUT"
       memory    = 128
       cache     = true
-      cache_ttl = 3600
+      cache_ttl = 0
+    },
+    move_messages = {
+      runtime   = "python3.9"
+      type      = "python"
+      method    = "PUT"
+      memory    = 128
+      cache     = true
+      cache_ttl = 0
     },
     list             = {
       runtime   = "nodejs14.x"
