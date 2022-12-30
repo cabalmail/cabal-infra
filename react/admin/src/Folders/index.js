@@ -49,7 +49,15 @@ class Folders extends React.Component {
   render() {
     // TODO: handle nexted arrays
     const folder_list = this.state.folders.map(item => {
-      const buttons = IMMUTABLE_FOLDERS.includes(item) ? "" : (
+      const buttons = IMMUTABLE_FOLDERS.includes(item) ? (
+        <>
+          <button
+            className="folder_button new_subfolder"
+            onClick={this.handleNewClick}
+            title="New subfolder"
+          >📁</button>
+        </>
+      ) : (
         <>
           <button
             className="folder_button new_subfolder"
