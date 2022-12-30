@@ -33,14 +33,14 @@ class Folders extends React.Component {
     this.props.setFolder(e.target.value);
   }
 
-  handleSubmit = (e) => {
-    e.preventDefault();
-    console.log("Form not implemeted yet.");
-  }
-
   handleNewClick = (e) => {
     console.log("New subfolder clicked");
-    console.log(e);
+    console.log(e.target.dataset.parent);
+  }
+
+  handleDelClick = (e) => {
+    console.log("New subfolder clicked");
+    console.log(e.target.dataset.folder);
   }
 
   handleChange = (e) => {
