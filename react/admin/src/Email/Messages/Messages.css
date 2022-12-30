@@ -72,18 +72,16 @@ button.sort-order hr {
   margin-top: 0.2em;
 }
 
-button.sort-order hr.middle {
+button.sort-order hr.medium {
   width: 50%;
   margin-left: 50%;
 }
 
-button#ascending hr.top,
-button#descending hr.bottom {
+button.sort-order hr.long {
   width: 100%;
 }
 
-button#ascending hr.bottom,
-button#descending hr.top {
+button.sort-order hr.short {
   width: 5%;
   margin-left: 95%;
 }
