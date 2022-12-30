@@ -66,6 +66,7 @@ body div.content div.email div.email_list div.descending button#descending {
 
 button.sort-order {
   width: 1em;
+  height: 1em;
 }
 
 button.sort-order hr {

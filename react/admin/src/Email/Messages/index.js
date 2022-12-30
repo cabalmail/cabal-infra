@@ -237,9 +237,9 @@ class Messages extends React.Component {
                 title="Sort ascending"
                 onClick={this.sortAscending}
               >
-                <hr className="short" />
-                <hr className="medium" />
                 <hr className="long" />
+                <hr className="medium" />
+                <hr className="short" />
               </button>
               <button
                 id={DESC.css}
@@ -247,9 +247,9 @@ class Messages extends React.Component {
                 title="Sort descending"
                 onClick={this.sortDescending}
               >
-                <hr className="long" />
-                <hr className="medium" />
                 <hr className="short" />
+                <hr className="medium" />
+                <hr className="long" />
               </button>
             </span>
           </div>
