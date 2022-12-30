@@ -4,6 +4,7 @@ span.filter button {
 }
 
 span.filter button.move,
+span.filter button.cancel,
 span.filter button.read,
 span.filter button.flagged,
 span.filter button.unread {
