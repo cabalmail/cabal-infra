@@ -8,13 +8,13 @@ span.filter button {
 span.filter button.move,
 span.filter button.read,
 span.filter button.flagged,
-span.filter button.unread {
+span.filter button.unread,
+span.filter button.cancel {
   border-radius: 0;
   border-width: 1px 0px 1px 1px;
 }
 
-button.unflagged,
-span.filter button.cancel {
+button.unflagged {
   border-radius: 0 4px 4px 0;
   border-width: 1px;
   width: auto;
