@@ -86,19 +86,21 @@ class Folders extends React.Component {
     });
     return (
       <div className="folders">
-        <input
-          type="text"
-          id="new_folder"
-          name="new_folder"
-          className="new_folder"
-          value={this.state.new_folder}
-          onChange={this.handleChange}
-        />
-        <button
-          className="new_folder"
-          data-parent="INBOX"
-          onClick={this.handleNewClick}
-        >New Folder</button>
+        <div className="new_folder"
+          <input
+            type="text"
+            id="new_folder"
+            name="new_folder"
+            className="new_folder"
+            value={this.state.new_folder}
+            onChange={this.handleChange}
+          />
+          <button
+            className="new_folder"
+            data-parent="INBOX"
+            onClick={this.handleNewClick}
+          >New Folder</button>
+        </div>
         <hr />
         <div id="count">Found: {this.state.folders.length} folders</div>
         <ul className="folder_list">
