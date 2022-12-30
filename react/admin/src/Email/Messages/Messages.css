@@ -70,6 +70,8 @@ button.sort-order {
 
 button.sort-order hr {
   margin-top: 0.2em;
+  margin-right: 0;
+  margin-bottom: 0;
 }
 
 button.sort-order hr.medium {
