@@ -124,7 +124,7 @@ class Actions extends React.Component {
             className="action cancel"
             title="Cancel move"
             onClick={this.handleActionButtonClick}
-          >❌<span className="wide-screen"> Cancel move</span></button>
+          >❌<span className="wide-screen"> Don't move</span></button>
           <Folders 
             token={this.props.token}
             api_url={this.props.api_url}
