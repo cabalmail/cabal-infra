@@ -57,6 +57,7 @@ class Folders extends React.Component {
         <>
           <button
             className="folder_button new_subfolder"
+            data-parent={item}
             onClick={this.handleNewClick}
             title="New subfolder"
           >📁</button>
