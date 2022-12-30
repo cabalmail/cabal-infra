@@ -40,6 +40,7 @@ class Folders extends React.Component {
 
   handleNewClick = (e) => {
     console.log("New subfolder clicked");
+    console.log(e);
   }
 
   handleChange = (e) => {
@@ -64,13 +65,15 @@ class Folders extends React.Component {
         <>
           <button
             className="folder_button new_subfolder"
+            data-parent={item}
             onClick={this.handleNewClick}
-            title="New subfolder"
+            title={`New subfolder of ${item}`}
           >📁</button>
           <button
             className="folder_button delete_folder"
+            data-folder={item}
             onClick={this.handleDelClick}
-            title="Delete folder"
+            title={`Delete ${item}`}
           >🗑️</button>
         </>
       );
@@ -83,17 +86,19 @@ class Folders extends React.Component {
     });
     return (
       <div className="folders">
-        <form onSubmit={this.handleSubmit} className="new_folder">
-          <input
-            type="text"
-            id="new_folder"
-            name="new_folder"
-            className="new_folder"
-            value={this.state.new_folder}
-            onChange={this.handleChange}
-          />
-          <button className="new_folder">New Folder</button>
-        </form>
+        <input
+          type="text"
+          id="new_folder"
+          name="new_folder"
+          className="new_folder"
+          value={this.state.new_folder}
+          onChange={this.handleChange}
+        />
+        <button
+          className="new_folder"
+          data-parent="INBOX"
+          onClick={this.handleNewClick}
+        >New Folder</button>
         <hr />
         <div id="count">Found: {this.state.folders.length} folders</div>
         <ul className="folder_list">
