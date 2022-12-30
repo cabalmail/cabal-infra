@@ -19,9 +19,9 @@ def decode_folder_list(data):
     folders = []
     for m in data:
         folders.append(m[2].replace(".","/"))
-    return folders.sort(key=folder_sort)
+    return sorted(folders, key=folder_sort)
 
 def folder_sort(k):
     if k == 'INBOX':
-        return ' '
-    return k
+        return k
+    return k.lower()
