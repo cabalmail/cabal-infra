@@ -51,6 +51,10 @@ div.filters-buttons div.filter-folder {
   left: 5em;
 }
 
+button.cancel {
+  display: none;
+}
+
 div.show_folders div.filter-folder,
 div.hide_folders button.move,
 div.show_folders button.cancel {
