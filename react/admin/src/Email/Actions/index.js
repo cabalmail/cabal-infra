@@ -101,6 +101,23 @@ class Actions extends React.Component {
     return (
       <div className={`filters filters-buttons ${this.props.selected} ${show}`}>
         <span className="filter filter-actions">
+          <Folders 
+            token={this.props.token}
+            api_url={this.props.api_url}
+            setFolder={this.setDestination}
+            host={this.props.host}
+            folder={this.props.folder}
+            setMessage={this.props.setMessage}
+            label="Destination"
+          />
+          <button
+            value="cancel"
+            id="cancel"
+            name="cancel"
+            className="action cancel"
+            title="Cancel move"
+            onClick={this.handleActionButtonClick}
+          >❌<span className="wide-screen"> Cancel move</span></button>
           <button
             value="delete"
             id="delete"
@@ -117,23 +134,6 @@ class Actions extends React.Component {
             title="Move to..."
             onClick={this.handleActionButtonClick}
           >📨<span className="wide-screen"> Move to...</span></button>
-          <button
-            value="cancel"
-            id="cancel"
-            name="cancel"
-            className="action cancel"
-            title="Cancel move"
-            onClick={this.handleActionButtonClick}
-          >❌<span className="wide-screen"> Don't move</span></button>
-          <Folders 
-            token={this.props.token}
-            api_url={this.props.api_url}
-            setFolder={this.setDestination}
-            host={this.props.host}
-            folder={this.props.folder}
-            setMessage={this.props.setMessage}
-            label="Destination"
-          />
           <button
             value={READ.css}
             id={READ.css}
