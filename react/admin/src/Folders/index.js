@@ -86,7 +86,7 @@ class Folders extends React.Component {
     });
     return (
       <div className="folders">
-        <div className="new_folder"
+        <div className="new_folder">
           <input
             type="text"
             id="new_folder"
