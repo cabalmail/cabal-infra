@@ -236,13 +236,21 @@ class Messages extends React.Component {
                 className="sort-order"
                 title="Sort ascending"
                 onClick={this.sortAscending}
-              >⩓</button>
+              >
+                <hr className="top" />
+                <hr className="middle />
+                <hr className="bottom" />
+              </button>
               <button
                 id={DESC.css}
                 className="sort-order"
                 title="Sort descending"
                 onClick={this.sortDescending}
-              >⩔</button>
+              >
+                <hr className="top" />
+                <hr className="middle />
+                <hr className="bottom" />
+              </button>
             </span>
           </div>
         </div>

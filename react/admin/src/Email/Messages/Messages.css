@@ -63,3 +63,27 @@ body div.content div.email div.email_list div.ascending button#ascending,
 body div.content div.email div.email_list div.descending button#descending {
   display: none;
 }
+
+button.sort-order {
+  width: 1em;
+}
+
+button.sort-order hr {
+  
+}
+
+button.sort-order hr.middle {
+  width: 50%;
+  margin-left: 50%;
+}
+
+button#ascending hr.top,
+button#descending hr.bottom {
+  width: 100%;
+}
+
+button#ascending hr.bottom,
+button#descending hr.top {
+  width: 5%;
+  margin-left: 95%;
+}
