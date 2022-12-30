@@ -109,7 +109,7 @@ class Actions extends React.Component {
             folder={this.props.folder}
             setMessage={this.props.setMessage}
             label="Destination"
-          />
+          />&nbsp;
           <button
             value="cancel"
             id="cancel"
