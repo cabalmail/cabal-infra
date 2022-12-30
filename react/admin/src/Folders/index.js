@@ -39,7 +39,7 @@ class Folders extends React.Component {
   }
 
   handleDelClick = (e) => {
-    console.log("New subfolder clicked");
+    console.log("Delete folder clicked");
     console.log(e.target.dataset.folder);
   }
 
@@ -53,23 +53,8 @@ class Folders extends React.Component {
       if (item === "INBOX") {
         return false;
       }
-      const buttons = PERMANENT_FOLDERS.includes(item) ? (
+      const deleteButton = PERMANENT_FOLDERS.includes(item) ? null : (
         <>
-          <button
-            className="folder_button new_subfolder"
-            data-parent={item}
-            onClick={this.handleNewClick}
-            title="New subfolder"
-          >📁</button>
-        </>
-      ) : (
-        <>
-          <button
-            className="folder_button new_subfolder"
-            data-parent={item}
-            onClick={this.handleNewClick}
-            title={`New subfolder of ${item}`}
-          >📁</button>
           <button
             className="folder_button delete_folder"
             data-folder={item}
@@ -81,7 +66,13 @@ class Folders extends React.Component {
       return (
         <li className="folder" id={item}>
           <span className="folder_name">{item}</span>
-          {buttons}
+          <button
+            className="folder_button new_subfolder"
+            data-parent={item}
+            onClick={this.handleNewClick}
+            title={`New subfolder of ${item}`}
+          >📁</button>
+          {deleteButton}
         </li>
       );
     });
