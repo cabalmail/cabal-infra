@@ -18,5 +18,5 @@ def decode_folder_list(data):
     '''Converts folder list to simple list'''
     folders = []
     for m in data:
-        folders.append(m[2])
+        folders.append(m[2].replace(".","/"))
     return folders
