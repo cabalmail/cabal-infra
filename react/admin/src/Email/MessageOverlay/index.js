@@ -221,11 +221,6 @@ class MessageOverlay extends React.Component {
         <div className="message_overlay">
           <div className={`message_top ${this.state.top_state} ${flags}`}>
             <button
-              onClick={this.hide}
-              className="close_overlay"
-              title="Close message"
-            >❌</button>
-            <button
               onClick={this.collapse}
               className="overlay_expand_collapse collapse_overlay_top"
               title="Hide message header"
@@ -248,6 +243,11 @@ class MessageOverlay extends React.Component {
               catchback={this.catchback}
               setMessage={this.props.setMessage}
             />
+            <button
+              onClick={this.hide}
+              className="close_overlay"
+              title="Close message"
+            >❌</button>
             {this.renderHeader()}
             {this.renderTabBar()}
           </div>
