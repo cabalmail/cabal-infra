@@ -11,7 +11,7 @@ def handler(event, _context):
     client.logout()
     return {
         "statusCode": 200,
-        "body": json.dumps(decode_folder_list(response).sort(key=folder_sort))
+        "body": json.dumps(decode_folder_list(response))
     }
 
 def decode_folder_list(data):
@@ -19,7 +19,7 @@ def decode_folder_list(data):
     folders = []
     for m in data:
         folders.append(m[2].replace(".","/"))
-    return folders
+    return folders.sort(key=folder_sort)
 
 def folder_sort(k):
     if k == 'INBOX':
