@@ -91,7 +91,7 @@ class Folders extends React.Component {
             className="new_folder"
             data-parent="INBOX"
             onClick={this.handleNewClick}
-          >New Folder</button>
+          >New Top-level Folder</button>
         </div>
         <hr />
         <div id="count">Found: {this.state.folders.length} folders</div>
