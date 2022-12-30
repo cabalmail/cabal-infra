@@ -50,17 +50,22 @@ button.cancel {
 
 div.show_folders div.filter-folder,
 div.hide_folders button.move,
-div.show_folders button.cancel {
+div.show_folders button.cancel,
+div.hide_folders span.filter button.delete,
+div.hide_folders span.filter button.read,
+div.hide_folders span.filter button.flagged,
+div.hide_folders span.filter button.unread,
+div.hide_folders span.filter button.unflagged {
   display: inline-block;
 }
 
 div.hide_folders div.filter-folder,
 div.show_folders button.move,
 div.hide_folders button.cancel,
-div.hide_folders span.filter button.delete,
-div.hide_folders span.filter button.read,
-div.hide_folders span.filter button.flagged,
-div.hide_folders span.filter button.unread,
-div.hide_folders span.filter button.unflagged {
+div.show_folders span.filter button.delete,
+div.show_folders span.filter button.read,
+div.show_folders span.filter button.flagged,
+div.show_folders span.filter button.unread,
+div.show_folders span.filter button.unflagged {
   display: none;
 }
