@@ -81,15 +81,15 @@ button.sort-order hr {
 }
 
 button.sort-order hr.first {
-  top: 0.4em;
+  top: 30%;
 }
 
 button.sort-order hr.second {
-  top: 1em;
+  top: 50%;
 }
 
 button.sort-order hr.third {
-  top: 1.5em;
+  bottom: 25%;
 }
 
 button.sort-order hr.medium {
@@ -101,5 +101,5 @@ button.sort-order hr.long {
 }
 
 button.sort-order hr.short {
-  right: 0.9em;
+  right: 1.2em;
 }
