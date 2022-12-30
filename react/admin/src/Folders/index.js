@@ -1,6 +1,6 @@
 import React from 'react';
 import ApiClient from '../ApiClient';
-import { IMMUTABLE_FOLDERS } from '../constants';
+import { PERMANENT_FOLDERS } from '../constants';
 import './Folders.css';
 
 /**
@@ -49,7 +49,7 @@ class Folders extends React.Component {
   render() {
     // TODO: handle nexted arrays
     const folder_list = this.state.folders.map(item => {
-      const buttons = IMMUTABLE_FOLDERS.includes(item) ? (
+      const buttons = PERMANENT_FOLDERS.includes(item) ? (
         <>
           <button
             className="folder_button new_subfolder"

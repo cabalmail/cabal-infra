@@ -1,4 +1,4 @@
-export const IMMUTABLE_FOLDERS = [
+export const PERMANENT_FOLDERS = [
   "INBOX",
   "Deleted Messages",
   "Sent Messages",
