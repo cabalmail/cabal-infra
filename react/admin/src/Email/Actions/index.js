@@ -48,6 +48,9 @@ class Actions extends React.Component {
       case "move":
         this.setState({...this.state, show_folders: true});
         break;
+      case "cancel":
+        this.setState({...this.state, show_folders: false});
+        break;
       case READ.css:
         this.api.setFlag(
           this.props.folder,
@@ -114,6 +117,14 @@ class Actions extends React.Component {
             title="Move to..."
             onClick={this.handleActionButtonClick}
           >📨<span className="wide-screen"> Move to...</span></button>
+          <button
+            value="cancel"
+            id="cancel"
+            name="cancel"
+            className="action cancel"
+            title="Cancel move"
+            onClick={this.handleActionButtonClick}
+          >❌<span className="wide-screen"> Cancel move</span></button>
           <Folders 
             token={this.props.token}
             api_url={this.props.api_url}
