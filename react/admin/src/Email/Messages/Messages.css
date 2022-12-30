@@ -74,9 +74,7 @@ button.sort-order {
 
 button.sort-order hr {
   position: absolute;
-  margin-top: 0.2em;
-  margin-left: 0;
-  margin-bottom: 0;
+  margin: 0;
   border-top: 1px solid;
   border-bottom: 0;
   left: 0.2em;
@@ -103,5 +101,5 @@ button.sort-order hr.long {
 }
 
 button.sort-order hr.short {
-  right: 0.7em;
+  right: 0.75em;
 }
