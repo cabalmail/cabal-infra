@@ -70,13 +70,13 @@ button.sort-order {
 
 button.sort-order hr {
   margin-top: 0.2em;
-  margin-right: 0;
+  margin-left: 0;
   margin-bottom: 0;
 }
 
 button.sort-order hr.medium {
   width: 50%;
-  margin-left: 50%;
+  margin-right: 50%;
 }
 
 button.sort-order hr.long {
@@ -85,5 +85,5 @@ button.sort-order hr.long {
 
 button.sort-order hr.short {
   width: 5%;
-  margin-left: 95%;
+  margin-right: 95%;
 }
