@@ -67,6 +67,9 @@ body div.content div.email div.email_list div.descending button#descending {
 button.sort-order {
   width: 1em;
   height: 2.5em;
+  position: relative;
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 button.sort-order hr {
@@ -75,6 +78,19 @@ button.sort-order hr {
   margin-bottom: 0;
   border-top: 1px solid;
   border-bottom: 0;
+  left: 0;
+}
+
+button.sort-order hr.first {
+  top: 0.3em;
+}
+
+button.sort-order hr.second {
+  top: 0.5em;
+}
+
+button.sort-order hr.third {
+  top: 0.8em;
 }
 
 button.sort-order hr.medium {
