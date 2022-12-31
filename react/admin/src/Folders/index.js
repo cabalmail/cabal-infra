@@ -40,7 +40,7 @@ class Folders extends React.Component {
       return;
     }
     this.api.newFolder(
-      e.target.dataset.folder,
+      e.target.dataset.parent,
       this.state.new_folder
     ).then(data => {
       this.setState({ ...this.state, folders: data.data });
