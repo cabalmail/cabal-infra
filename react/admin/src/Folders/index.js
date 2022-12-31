@@ -34,7 +34,6 @@ class Folders extends React.Component {
   }
 
   handleNewClick = (e) => {
-    console.log("New subfolder clicked");
     if (this.state.new_folder === "") {
       this.props.setMessage("Please enter a name in the input box.", true);
       return;
@@ -54,8 +53,14 @@ class Folders extends React.Component {
   }
 
   handleDelClick = (e) => {
-    console.log("Delete folder clicked");
-    console.log(e.target.dataset.folder);
+    this.api.deleteFolder(
+      e.target.dataset.folder,
+    ).then(data => {
+      this.setState({ ...this.state, folders: data.data });
+    }).catch(e => {
+      this.props.setMessage("Unable to delete folder.", true);
+      console.log(e);
+    });
   }
 
   handleChange = (e) => {

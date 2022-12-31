@@ -9,6 +9,23 @@ export default class ApiClient {
     this.host = host;
   }
 
+  deleteFolder(name) {
+    const response = axios.delete('/delete_folder',
+      JSON.stringify({
+        host: this.host,
+        name: name
+      }),
+      {
+        baseURL: this.baseURL,
+        headers: {
+          'Authorization': this.token
+        },
+        timeout: ONE_SECOND * 10
+      }
+    );
+    return response;
+  }
+
   newFolder(parent, name) {
     const response = axios.put('/new_folder',
       JSON.stringify({
