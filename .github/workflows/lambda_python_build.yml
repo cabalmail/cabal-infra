@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - 'main'
+      - '0.3.0'
     paths:
       - 'lambda/python/**'
       - '.github/workflows/lambda_python_build.yml'
