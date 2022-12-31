@@ -1,0 +1,193 @@
+@media (prefers-color-scheme: dark) {
+  body, a, button, select, div, label {
+    color: #aaa;
+    background-color: #200;
+    border-color: #333;
+  }
+  input, select, option {
+    color: #ccc;
+    background-color: #000;
+  }
+  button {
+    color: #ccc;
+    background-color: #111;
+  }
+  ul.message-list div.message-subject {
+    color: #ccc;
+  }
+  ul.message-list li.CabalSeen div.message-subject {
+    color: #aaa;
+  }
+  .nav, .nav .item {
+    background-color: #000;
+  }
+  body .highlight, body .active, body .default,
+  body .nav .active, body ul.message-list li.selected,
+  body ul.message-list li.selected * {
+    color: #dda;
+    background-color: #300;
+    border-color: #800;
+  }
+  ul.message-list li.Seen.selected div.message-subject {
+    color: #fff
+  }
+  ul.message-list div.message-subject input[type=checkbox]:not(:checked) ~ label .unchecked,
+  ul.message-list div.message-subject input[type=checkbox]:checked ~ label .checked {
+    box-shadow: inset 0 0 0.35em #200;
+    background-color: #400;
+    border-color: #aaa;
+  }
+  /* forced */
+  .forced * {
+    color: #aaa !important;
+  }
+  /* inverted */
+  body.inverted, a.inverted, button.inverted, select.inverted, div.inverted,
+  .inverted a, .inverted button, .inverted select, .inverted div {
+    color: #222;
+    background-color: #ffe;
+    border-color: #999;
+  }
+  input.inverted, select.inverted, option.inverted,
+  .inverted input, .inverted select, .inverted option {
+    color: #000;
+    background-color: #ffd;
+  }
+  button.inverted, .inverted button {
+    color: #333;
+    background-color: #ddd;
+  }
+  .inverted .nav, .inverted .nav .item {
+    color: #aaa;
+    background-color: #000;
+  }
+  body .inverted .highlight, body .inverted .active, body .inverted .default,
+  body .inverted .nav .active {
+    color: #000;
+    background-color: #a33;
+    border-color: #d00;
+  }
+}
+
+@media (prefers-color-scheme: light) {
+  body, a, button, select, div, label {
+    color: #222;
+    background-color: #ffe;
+    border-color: #999;
+  }
+  input, select, option {
+    color: #000;
+    background-color: #ffd;
+  }
+  button {
+    color: #333;
+    background-color: #ddd;
+  }
+  ul.message-list div.message-subject {
+    color: #222;
+  }
+  ul.message-list li.CabalSeen div.message-subject {
+    color: #444;
+  }
+  .nav, .nav .item {
+    color: #aaa;
+    background-color: #000;
+  }
+  body .highlight, body .active, body .default,
+  body .nav .active, body ul.message-list li.selected,
+  body ul.message-list li.selected * {
+    color: #000;
+    background-color: #a33;
+    border-color: #d00;
+  }
+  ul.message-list li.Seen.selected div.message-subject {
+    color: #000
+  }
+  ul.message-list div.message-subject input[type=checkbox]:not(:checked) ~ label .unchecked,
+  ul.message-list div.message-subject input[type=checkbox]:checked ~ label .checked {
+    box-shadow: inset 0 0 0.35em #fff;
+    background-color: #ffe;
+    border-color: #222;
+  }
+  /* forced */
+  .forced * {
+    color: #222 !important;
+  }
+  /* inverted */
+  body.inverted, a.inverted, button.inverted, select.inverted, div.inverted,
+  .inverted a, .inverted button, .inverted select, .inverted div {
+    color: #aaa;
+    background-color: #200;
+    border-color: #333;
+  }
+  input.inverted, select.inverted, option.inverted,
+  .inverted input, .inverted select, .inverted option {
+    color: #ccc;
+    background-color: #000;
+  }
+  button.inverted, .inverted button {
+    color: #ccc;
+    background-color: #111;
+  }
+  .inverted .nav, .inverted .nav .item {
+    background-color: #000;
+  }
+  body .inverted .highlight, body .inverted .active, body .inverted .default,
+  body .inverted .nav .active {
+    color: #dda;
+    background-color: #300;
+    border-color: #800;
+  }
+}
+
+body {
+  margin: 0;
+  font-family: 'Gugi';
+  font-size: small;
+}
+
+a {
+  text-decoration: none;
+}
+
+hr {
+  margin: 1.5em;
+}
+
+.content {
+  padding: 3.4em 3em 3em 3em;
+}
+
+input, select, button, option {
+  font-family: 'Gugi';
+  padding: 0.5em;
+  border-width: 1px;
+  border-style: solid;
+}
+
+input, select, option {
+  border-radius: 0.2em;
+  width: 30em;
+}
+
+select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+
+label {
+  display: block;
+  margin-top: 1em;
+}
+
+button {
+  display: block;
+  width: 15em;
+  margin-top: 1em;
+  border-radius: 4px;
+}
+
+fieldset {
+  border: 0;
+}

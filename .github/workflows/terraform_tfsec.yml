@@ -3,8 +3,6 @@ name: Run tfsec
 
 on:
   push:
-    branches:
-      - main
     paths:
       - 'terraform/**'
       - '.github/workflows/terraform_tfsec.yml'

@@ -26,7 +26,7 @@ If you don't have a preference for registrars, you can use the [Route 53 Registr
 
 # Provisioning
 
-The developers have striven to make provisioning as automated as possible. However, there are some manual steps. Several of these steps are discussed above under [Prerequisites](#Prerequisites), and others are discussed below under [Post-Autonation Steps](#PostAutomation). However, one step unavoidably must be attended to during the provsioning. This is why the terraform directoy has been subdivided into two subdirectories: The first performs the initial automation, and the second all the rest. The order is dns first and infra second. The overwhelming majority of resources are created by infra. In between, you will be instructed to update your domain registrations and add a secret to your Github repository settings.
+The developers have striven to make provisioning as automated as possible. However, there are some manual steps. Several of these steps are discussed above under [Prerequisites](#Prerequisites), and others are discussed below under [Post-Automation Steps](#PostAutomation). However, one step unavoidably must be attended to during the provsioning. This is why the terraform directoy has been subdivided into two subdirectories: The first performs the initial automation, and the second all the rest. The order is dns first and infra second. The overwhelming majority of resources are created by infra. In between, you will be instructed to update your domain registrations and add a secret to your Github repository settings.
 
 1. Set up the [prerequisites](#Prerequisites) above.
 

@@ -2,10 +2,14 @@ data "aws_caller_identity" "current" {}
 
 data "aws_region" "current" {}
 
-data "aws_ssm_parameter" "s3" {
-  name = "/cabal/admin/bucket"
+data "aws_s3_bucket" "this" {
+  bucket = "admin.${var.control_domain}"
 }
 
+variable "layers" {
+  type        = map
+  description = "List of layer ARNs"
+}
 variable "user_pool_id" {
   type = string
   description = "ID of the Cognito user pool."
@@ -60,4 +64,14 @@ variable "stage_name" {
   type        = string
   default     = "prod"
   description = "Name for the API Gateway stage. Default: prod."
+}
+
+variable "bucket" {
+  type        = string
+  description = "Name of s3 bucket"
+}
+
+variable "origin" {
+  type        = string
+  description = "S3 Origin ID for CloudFront"
 }

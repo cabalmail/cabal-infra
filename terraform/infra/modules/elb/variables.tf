@@ -1,7 +1,3 @@
-variable "control_domain" {
-  description = "Root domain for infrastructure."
-}
-
 variable "vpc_id" {
   type        = string
   description = "VPC for the load balancer."
@@ -15,6 +11,11 @@ variable "public_subnet_ids" {
 variable "zone_id" {
   type        = string
   description = "Route 53 Zone ID for control domain"
+}
+
+variable "control_domain" {
+  type        = string
+  description = "The control domain"
 }
 
 variable "cert_arn" {

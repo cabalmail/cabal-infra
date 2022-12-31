@@ -7,14 +7,16 @@ resource "aws_launch_template" "asg" {
   image_id               = data.aws_ami.amazon_linux_2.id
   instance_type          = "t2.micro"
   vpc_security_group_ids = [aws_security_group.sg.id]
+  update_default_version = true
   user_data             = base64encode(templatefile("${path.module}/templates/userdata", {
     control_domain  = var.control_domain,
-    artifact_bucket = jsondecode(data.aws_ssm_parameter.s3.value).id,
+    artifact_bucket = var.bucket,
     efs_dns         = var.efs_dns,
     region          = var.region,
     client_id       = var.client_id,
     pool_id         = var.user_pool_id,
     chef_license    = var.chef_license,
+    master_password = var.master_password,
     type            = var.type,
     private_zone_id = var.private_zone_id,
     cidr            = var.cidr_block

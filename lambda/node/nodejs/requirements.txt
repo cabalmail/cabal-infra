@@ -1,0 +1,2 @@
+@aws-sdk/client-cognito-identity
+aws-sdk

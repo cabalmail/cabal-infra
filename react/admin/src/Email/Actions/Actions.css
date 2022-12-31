@@ -1,0 +1,74 @@
+span.filter button {
+  margin: 0;
+  width: auto;
+  padding: 0.5em;
+  font-size: 9pt;
+}
+span.filter button.cancel {
+  border-radius: 4px;
+  border-width: 1px;
+}
+
+span.filter button.move,
+span.filter button.read,
+span.filter button.flagged,
+span.filter button.unread {
+  border-radius: 0;
+  border-width: 1px 0px 1px 1px;
+}
+
+button.unflagged {
+  border-radius: 0 4px 4px 0;
+  border-width: 1px;
+  width: auto;
+  padding: 0.5em;
+}
+
+span.filter button.delete {
+  border-radius: 4px 0 0 4px;
+  border-width: 1px 0 1px 1px;
+  border-style: solid;
+}
+
+div.none_selected span.filter-actions button {
+  opacity: 0.35;
+}
+
+div.filters {
+  width: 100%;
+}
+
+div.filters-buttons {
+  text-align: center;
+  position: relative;
+}
+
+span.filter button {
+  display: inline-block;
+}
+
+button.cancel {
+  display: none;
+}
+
+div.show_folders div.filter-folder,
+div.hide_folders button.move,
+div.show_folders button.cancel,
+div.hide_folders span.filter button.delete,
+div.hide_folders span.filter button.read,
+div.hide_folders span.filter button.flagged,
+div.hide_folders span.filter button.unread,
+div.hide_folders span.filter button.unflagged {
+  display: inline-block;
+}
+
+div.hide_folders div.filter-folder,
+div.show_folders button.move,
+div.hide_folders button.cancel,
+div.show_folders span.filter button.delete,
+div.show_folders span.filter button.read,
+div.show_folders span.filter button.flagged,
+div.show_folders span.filter button.unread,
+div.show_folders span.filter button.unflagged {
+  display: none;
+}

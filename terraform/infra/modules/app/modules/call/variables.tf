@@ -6,6 +6,14 @@ variable "runtime" {
   type = string
 }
 
+variable "layer_arns" {
+  type = list(string)
+}
+
+variable "type" {
+  type = string
+}
+
 variable "gateway_id" {
   type = string
 }
@@ -45,4 +53,13 @@ variable "domains" {
 variable "repo" {
   type        = string
   description = "Repo tag value for SSM run command target."
+}
+
+variable "bucket" {
+  type = string
+}
+
+variable "memory" {
+  type    = number
+  default = 128
 }

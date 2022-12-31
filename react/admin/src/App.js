@@ -1,3 +1,5 @@
+// Third party libs
+
 import React from 'react';
 import axios from 'axios';
 import {
@@ -6,16 +8,29 @@ import {
   CognitoUserAttribute,
   AuthenticationDetails
 } from 'amazon-cognito-identity-js';
-import Request from './Request';
-import List from './List';
+
+// Main Components
+import Email from './Email';
+import Folders from './Folders';
+import Addresses from './Addresses';
+
+// Pre-login Components
 import SignUp from './SignUp';
 import Login from './Login';
-import Message from './Message';
+
+// Persistent Components
+import AppMessage from './AppMessage';
 import Nav from './Nav';
+
+// Site-wide and Theme-specific style
+import './App.css';
+
+// Globals
 let UserPool = null;
 
 /**
- * Application for managing Cabalmail addresses via web user interface
+ * Application for reading Cabalmail email and 
+ * managing Cabalmail addresses and folders
  */
 
 class App extends React.Component {
@@ -30,8 +45,10 @@ class App extends React.Component {
       password: null,
       phone: null,
       message: null,
+      error: false,
       view: "Login",
       poolData: null,
+      control_domain: null,
       domains: {},
       api_url: null,
       hideMessage: true
@@ -46,12 +63,13 @@ class App extends React.Component {
   componentDidMount() {
     const response = this.getConfig();
     response.then(data => {
-      const { domains, cognitoConfig, invokeUrl } = data.data;
+      const { control_domain, domains, cognitoConfig } = data.data;
       this.setState({
         ...this.state,
         poolData: cognitoConfig.poolData,
+        control_domain: control_domain,
         domains: domains,
-        api_url: invokeUrl
+        api_url: "https://admin." + control_domain + "/prod"
       });
       UserPool = new CognitoUserPool(cognitoConfig.poolData);
     });
@@ -80,15 +98,22 @@ class App extends React.Component {
     }
   }
 
-  setMessage = (message) => {
-    this.setState({...this.state, message: message, hideMessage: false});
+  setMessage = (m, e) => {
+    var message = m;
+    var error = e;
+    if (this.state.expires < Math.floor(new Date() / 1000) && this.state.loggedIn) {
+      this.setState({...this.state, view: "Login", loggedIn: false});
+      message = "Session expired";
+      error = true;
+    }
+    this.setState({...this.state, message: message, error: error, hideMessage: false});
     setTimeout(() => {
       this.setState({...this.state, hideMessage: true});
     }, 15000);
   }
 
-  getConfig = async () => {
-    const response = await axios.get('/config.js');
+  getConfig = () => {
+    const response = axios.get('/config.js');
     return response;
   }
 
@@ -115,13 +140,13 @@ class App extends React.Component {
             ...this.state,
             view: "Login"
           });
-          this.setMessage("Your registration has been submitted.");
+          this.setMessage("Your registration has been submitted.", false);
         } else {
           this.setState({
             ...this.state,
             view: "SignUp"
           });
-          this.setMessage(err);
+          this.setMessage("Registration failed.", true);
         }
       }
     );
@@ -145,10 +170,9 @@ class App extends React.Component {
           loggedIn: true,
           token: data.getIdToken().getJwtToken(),
           expires: data.getIdToken().getExpiration(),
-          userName: null,
-          password: null,
-          view: "Request"
+          view: "Email"
         });
+        this.setMessage("Login succeeded", false);
       },
       onFailure: data => {
         this.setState({
@@ -158,7 +182,7 @@ class App extends React.Component {
           expires: Math.floor(new Date() / 1000) - 1,
           view: "Login"
         });
-        this.setMessage("Login failed");
+        this.setMessage("Login failed", true);
       }
     });
   }
@@ -188,13 +212,21 @@ class App extends React.Component {
 
   renderContent() {
     switch (this.state.view) {
-      case "Request":
+      case "Addresses":
         return (
-          <Request
+          <Addresses
             token={this.state.token}
             api_url={this.state.api_url}
-            userName={this.state.userName}
             domains={this.state.domains}
+            setMessage={this.setMessage}
+          />
+        );
+      case "Folders":
+        return (
+          <Folders
+            token={this.state.token}
+            api_url={this.state.api_url}
+            host={`imap.${this.state.control_domain}`}
             setMessage={this.setMessage}
           />
         );
@@ -207,12 +239,12 @@ class App extends React.Component {
             onPhoneChange={this.doInputChange}
           />
         );
-      case "List":
+      case "Email":
         return (
-          <List
+          <Email
             token={this.state.token}
             api_url={this.state.api_url}
-            userName={this.state.userName}
+            host={`imap.${this.state.control_domain}`}
             setMessage={this.setMessage}
           />
         );
@@ -249,10 +281,14 @@ class App extends React.Component {
           view={this.state.view}
           doLogout={this.doLogout}
         />
-        <Message message={this.state.message} hide={this.state.hideMessage} />
         <div className="content">
           {this.renderContent()}
         </div>
+        <AppMessage
+          message={this.state.message}
+          hide={this.state.hideMessage}
+          error={this.state.error}
+        />
       </div>
     );
   }

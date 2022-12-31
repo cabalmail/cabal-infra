@@ -31,11 +31,14 @@ This terraform stack stands up AWS infrastructure needed for a Cabalmail system.
 |------|--------|---------|
 | <a name="module_admin"></a> [admin](#module\_admin) | ./modules/app | n/a |
 | <a name="module_backup"></a> [backup](#module\_backup) | ./modules/backup | n/a |
+| <a name="module_bucket"></a> [bucket](#module\_bucket) | ./modules/s3 | n/a |
 | <a name="module_cert"></a> [cert](#module\_cert) | ./modules/cert | n/a |
 | <a name="module_domains"></a> [domains](#module\_domains) | ./modules/domains | n/a |
 | <a name="module_efs"></a> [efs](#module\_efs) | ./modules/efs | n/a |
 | <a name="module_imap"></a> [imap](#module\_imap) | ./modules/asg | n/a |
+| <a name="module_lambda_layers"></a> [lambda\_layers](#module\_lambda\_layers) | ./modules/lambda_layers | n/a |
 | <a name="module_load_balancer"></a> [load\_balancer](#module\_load\_balancer) | ./modules/elb | n/a |
+| <a name="module_pool"></a> [pool](#module\_pool) | ./modules/user_pool | n/a |
 | <a name="module_smtp_in"></a> [smtp\_in](#module\_smtp\_in) | ./modules/asg | n/a |
 | <a name="module_smtp_out"></a> [smtp\_out](#module\_smtp\_out) | ./modules/asg | n/a |
 | <a name="module_table"></a> [table](#module\_table) | ./modules/table | n/a |
@@ -51,19 +54,18 @@ This terraform stack stands up AWS infrastructure needed for a Cabalmail system.
 
 | Name | Version |
 |------|---------|
-| <a name="provider_aws"></a> [aws](#provider\_aws) | ~> 4.32.0 |
+| <a name="provider_aws"></a> [aws](#provider\_aws) | ~> 4.41 |
 ## Requirements
 
 | Name | Version |
 |------|---------|
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.1.2 |
 | <a name="requirement_acme"></a> [acme](#requirement\_acme) | 2.2.0 |
-| <a name="requirement_aws"></a> [aws](#requirement\_aws) | ~> 4.32.0 |
+| <a name="requirement_aws"></a> [aws](#requirement\_aws) | ~> 4.41 |
 ## Resources
 
 | Name | Type |
 |------|------|
-| [aws_ssm_parameter.user_pool](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ssm_parameter) | data source |
 | [aws_ssm_parameter.zone](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ssm_parameter) | data source |
 
 </div>

@@ -15,6 +15,28 @@ provider "aws" {
   }
 }
 
+# Create S3 bucket for React App
+module "bucket" {
+  source         = "./modules/s3"
+  control_domain = var.control_domain
+}
+
+# Create Lambda layers for other modules
+module "lambda_layers" {
+  source = "./modules/lambda_layers"
+  bucket = module.bucket.bucket
+}
+
+# Creates a Cognito User Pool
+module "pool" {
+  source           = "./modules/user_pool"
+  control_domain   = var.control_domain
+  bucket           = module.bucket.bucket
+  bucket_arn       = module.bucket.bucket_arn
+  layers           = module.lambda_layers.layers
+  ssm_document_arn = module.admin.ssm_document_arn
+}
+
 # Creates an AWS Certificate Manager certificate for use on load balancers and CloudFront and requests a Let's Encrypt certificate for use on EC2 instances
 module "cert" {
   source         = "./modules/cert"
@@ -34,13 +56,16 @@ module "domains" {
 module "admin" {
   source              = "./modules/app"
   control_domain      = var.control_domain
-  user_pool_id        = local.user_pool_id
-  user_pool_client_id = local.user_pool_client_id
+  user_pool_id        = module.pool.user_pool_id
+  user_pool_client_id = module.pool.user_pool_client_id
   region              = var.aws_region
   cert_arn            = module.cert.cert_arn
   zone_id             = data.aws_ssm_parameter.zone.value
   domains             = module.domains.domains
+  layers              = module.lambda_layers.layers
+  bucket              = module.bucket.bucket
   relay_ips           = module.vpc.relay_ips
+  origin              = module.bucket.origin
   repo                = var.repo
   dev_mode            = var.prod ? false : true
 }
@@ -64,8 +89,8 @@ module "load_balancer" {
   source            = "./modules/elb"
   public_subnet_ids = module.vpc.public_subnets[*].id
   vpc_id            = module.vpc.vpc.id
-  control_domain    = var.control_domain
   zone_id           = data.aws_ssm_parameter.zone.value
+  control_domain    = var.control_domain
   cert_arn          = module.cert.cert_arn
 }
 
@@ -87,17 +112,20 @@ module "imap" {
   target_groups    = [module.load_balancer.imap_tg]
   table_arn        = module.table.table_arn
   efs_dns          = module.efs.efs_dns
-  user_pool_arn    = local.user_pool_arn
+  user_pool_arn    = module.pool.user_pool_arn
   region           = var.aws_region
   ports            = [143, 993]
   private_ports    = [25]
   cidr_block       = var.cidr_block
   private_zone_id  = module.vpc.private_zone.zone_id
   private_zone_arn = module.vpc.private_zone.arn
-  client_id        = local.user_pool_client_id
-  user_pool_id     = local.user_pool_id
+  client_id        = module.pool.user_pool_client_id
+  user_pool_id     = module.pool.user_pool_id
   scale            = var.imap_scale
   chef_license     = var.chef_license
+  bucket           = module.bucket.bucket
+  bucket_arn       = module.bucket.bucket_arn
+  master_password  = module.admin.master_password
   depends_on       = [ module.cert ]
 }
 
@@ -117,11 +145,14 @@ module "smtp_in" {
   cidr_block       = var.cidr_block
   private_zone_id  = module.vpc.private_zone.zone_id
   private_zone_arn = module.vpc.private_zone.arn
-  client_id        = local.user_pool_client_id
-  user_pool_id     = local.user_pool_id
-  user_pool_arn    = local.user_pool_arn
+  client_id        = module.pool.user_pool_client_id
+  user_pool_id     = module.pool.user_pool_id
+  user_pool_arn    = module.pool.user_pool_arn
   scale            = var.smtpin_scale
   chef_license     = var.chef_license
+  bucket           = module.bucket.bucket
+  bucket_arn       = module.bucket.bucket_arn
+  master_password  = module.admin.master_password
   depends_on       = [ module.cert ]
 }
 
@@ -144,11 +175,14 @@ module "smtp_out" {
   cidr_block       = var.cidr_block
   private_zone_id  = module.vpc.private_zone.zone_id
   private_zone_arn = module.vpc.private_zone.arn
-  client_id        = local.user_pool_client_id
-  user_pool_id     = local.user_pool_id
-  user_pool_arn    = local.user_pool_arn
+  client_id        = module.pool.user_pool_client_id
+  user_pool_id     = module.pool.user_pool_id
+  user_pool_arn    = module.pool.user_pool_arn
   scale            = var.smtpout_scale
   chef_license     = var.chef_license
+  bucket           = module.bucket.bucket
+  bucket_arn       = module.bucket.bucket_arn
+  master_password  = module.admin.master_password
   depends_on       = [ module.cert ]
 }
 

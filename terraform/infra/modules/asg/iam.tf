@@ -12,7 +12,7 @@ resource "aws_iam_policy" "node_permissions" {
         ]
         Effect   = "Allow"
         Resource = [
-          "${jsondecode(data.aws_ssm_parameter.s3.value).arn}/cabal.tar.gz",
+          "${var.bucket_arn}/cabal.tar.gz",
         ]
       },
       {

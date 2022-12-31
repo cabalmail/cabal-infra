@@ -6,7 +6,7 @@ header-from: main.tf
 footer-from: ""
 
 recursive:
-  enabled: true
+  enabled: false
 
 sections:
   hide: []
@@ -21,7 +21,6 @@ content: |-
   {{ .Header }}
   {{ .Footer }}
   {{ .Inputs }}
-  {{ .Modules }}
   {{ .Outputs }}
   {{ .Providers }}
   {{ .Requirements }}

@@ -6,3 +6,4 @@ include_recipe 'cabal::_common_users'
 
 port '143'
 port '993'
+port '25'

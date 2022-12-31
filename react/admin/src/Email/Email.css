@@ -1,0 +1,57 @@
+body {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  overflow: hidden;
+}
+
+div.email {
+  position: absolute;
+  top: 3.2em;
+  bottom: 0;
+  left: 0;
+  right: 0;
+}
+
+div.email_list, div.message_overlay {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  overflow: scroll;
+}
+
+ul.message_list {
+  position: relative;
+}
+
+@media (min-width: 900px) {
+  div.email_list {
+    left: 0;
+    width: 490px;
+  }
+
+  div.message_overlay {
+    left: 500px;
+    right: 0;
+  }
+
+  button.close_overlay {
+    display: none;
+  }
+}
+
+@media (max-width: 899px) {
+  div.email_list, div.message_overlay {
+    left: 0;
+    right: 0;
+  }
+  button.action span.wide-screen {
+    display: none;
+  }
+  body div.content div.filters span.filter button.action {
+    padding-left: 2em;
+    padding-right: 2em;
+  }
+}

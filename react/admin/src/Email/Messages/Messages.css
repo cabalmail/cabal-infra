@@ -1,0 +1,105 @@
+span.filter button.sort-order {
+  width: 2em;
+}
+
+span.filter select,
+span.filter button,
+span.filter label {
+  margin: 0;
+  font-size: 9pt;
+}
+
+span.filter button.sort-order {
+  border-radius: 0 4px 4px 0;
+  border-width: 1px;
+}
+
+body span.filter select.sort-by {
+  border-radius: 0;
+  border-width: 1px 0px 1px 1px;
+  width: auto;
+  padding: 0.5em;
+}
+
+span.filter select {
+  border-radius: 0 4px 4px 0;
+  border-width: 1px;
+  width: auto;
+  padding: 0.5em;
+}
+
+span.filter label {
+  border-radius: 4px 0 0 4px;
+  border-width: 1px 0 1px 1px;
+  border-style: solid;
+  width: auto;
+  padding: 0.5em;
+}
+
+div.filters {
+  width: 100%;
+}
+
+div.filters-dropdowns {
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-auto-flow: column dense;
+}
+
+div.filters-dropdowns span.filter {
+  display: inline;
+  width: auto;
+}
+
+div.filters-dropdowns div ~ div {
+  text-align: right;
+}
+
+span.filter select, span.filter label, span.filter button {
+  display: inline-block;
+}
+
+body div.content div.email div.email_list div.ascending button#ascending,
+body div.content div.email div.email_list div.descending button#descending {
+  display: none;
+}
+
+button.sort-order {
+  width: 1em;
+  height: 2.5em;
+  position: relative;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+button.sort-order hr {
+  position: absolute;
+  margin: 0;
+  border-top: 1px solid;
+  border-bottom: 0;
+  left: 0.2em;
+}
+
+button.sort-order hr.first {
+  top: 30%;
+}
+
+button.sort-order hr.second {
+  top: 50%;
+}
+
+button.sort-order hr.third {
+  bottom: 25%;
+}
+
+button.sort-order hr.medium {
+  right: 0.7em;
+}
+
+button.sort-order hr.long {
+  right: 0.2em;
+}
+
+button.sort-order hr.short {
+  right: 1.2em;
+}

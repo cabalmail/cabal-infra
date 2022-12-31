@@ -1,0 +1,33 @@
+.app-message {
+  padding: 0.5em;
+  position: fixed;
+  left: 0;
+  right: 0;
+  min-height: 3em;
+  border-radius: 3em 3em 0 0;
+  text-align: center;
+}
+
+.visible {
+  visibility: visible;
+  bottom: 0;
+  opacity: 1;
+  transition: opacity 1s linear, bottom 1s linear;
+}
+
+.hidden {
+  visibility: hidden;
+  bottom: -3em;
+  opacity: 0;
+  transition: visibility 0s 1s, opacity 1s linear, bottom 1s linear;
+}
+
+.error {
+  background-color: #500;
+  color: #994;
+}
+
+.info {
+  background-color: #050;
+  color: #6a6;
+}
