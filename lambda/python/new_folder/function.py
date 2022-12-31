@@ -7,8 +7,8 @@ def handler(event, _context):
     '''Creates a new folder and returns updated folder list'''
     body = json.loads(event['body'])
     user = event['requestContext']['authorizer']['claims']['cognito:username'];
-    client = get_imap_client(body['host'], user, body['parent'])
-    client.create_folder(body['name'])
+    client = get_imap_client(body['host'], user, 'INBOX')
+    client.create_folder(f"{body['parent'].replace("/",".")}.{body['name']}")
     response = get_folder_list(client)
     client.logout()
     return {

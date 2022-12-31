@@ -39,6 +39,9 @@ class Folders extends React.Component {
       this.props.setMessage("Please enter a name in the input box.", true);
       return;
     }
+    if (this.state.new_folder.includes(".") || this.state.new_folder.includes("/")) {
+      this.props.setMessage("Folder names must not contain '.' or '/'.")
+    }
     this.api.newFolder(
       e.target.dataset.parent,
       this.state.new_folder
