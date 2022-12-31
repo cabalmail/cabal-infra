@@ -22,6 +22,22 @@ def get_imap_client(host, user, folder):
     client.select_folder(folder)
     return client
 
+def get_folder_list(client):
+    '''Retrieves IMAP folders'''
+    response = client.list_folders()
+    return decode_folder_list(response)
+
+def decode_folder_list(data):
+    '''Converts folder list to simple list'''
+    folders = []
+    for m in data:
+        folders.append(m[2].replace(".","/"))
+    return sorted(folders, key=folder_sort)
+
+def folder_sort(k):
+    if k == 'INBOX':
+        return k
+        return k.lower()
 
 def get_message(host, user, folder, id, seen):
     '''Gets a message from cache on s3 or from imap server'''
