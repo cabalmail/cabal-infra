@@ -8,8 +8,8 @@ def handler(event, _context):
     body = json.loads(event['body'])
     user = event['requestContext']['authorizer']['claims']['cognito:username'];
     client = get_imap_client(body['host'], user, 'INBOX')
-    parent = body['parent'].replace("/",".")
-    client.delete_folder(f"{parent}.{body['name']}")
+    name = body['name'].replace("/",".")
+    client.delete_folder(name)
     response = get_folder_list(client)
     client.logout()
     return {

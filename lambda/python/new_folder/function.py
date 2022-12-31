@@ -1,4 +1,4 @@
-'''Sets IMAP flags on messages for a user given a folder and list of message ids'''
+'''Creates a new folder and returns updated folder list'''
 import json
 from helper import get_imap_client
 from helper import get_folder_list
