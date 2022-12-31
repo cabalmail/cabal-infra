@@ -116,7 +116,9 @@ resource "aws_cognito_user_pool" "users" {
 }
 
 resource "aws_cognito_user_pool_client" "users" {
-  name         = "cabal_admin_client"
-  user_pool_id = aws_cognito_user_pool.users.id
-  explicit_auth_flows = [ "USER_PASSWORD_AUTH" ]
+  name                  = "cabal_admin_client"
+  user_pool_id          = aws_cognito_user_pool.users.id
+  explicit_auth_flows   = [ "USER_PASSWORD_AUTH" ]
+  access_token_validity = 12
+  id_token_validity     = 12
 }
