@@ -36,7 +36,7 @@ class Folders extends React.Component {
   handleNewClick = (e) => {
     console.log("New subfolder clicked");
     if (this.state.new_folder === "") {
-      this.props.setMessage("Please enter a name in the input box.");
+      this.props.setMessage("Please enter a name in the input box.", true);
       return;
     }
     this.api.newFolder().then(data => {
