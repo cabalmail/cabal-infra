@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { ONE_SECOND } from 'constants';
+import { ONE_SECOND } from './constants';
 
 export default class ApiClient {
 
