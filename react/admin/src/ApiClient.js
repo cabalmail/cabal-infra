@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { ONE_SECOND } from 'constants';
 
 export default class ApiClient {
 
@@ -6,6 +7,24 @@ export default class ApiClient {
     this.baseURL = baseURL;
     this.token = token;
     this.host = host;
+  }
+
+  newFolder(parent, name) {
+    const response = axios.put('/new_folder',
+      JSON.stringify({
+        host: this.host,
+        name: name,
+        parent: parent
+      }),
+      {
+        baseURL: this.baseURL,
+        headers: {
+          'Authorization': this.token
+        },
+        timeout: ONE_SECOND * 10
+      }
+    );
+    return response;
   }
 
   getFolderList() {
@@ -17,7 +36,7 @@ export default class ApiClient {
       headers: {
         'Authorization': this.token
       },
-      timeout: 10000
+      timeout: ONE_SECOND * 10
     });
     return response;
   }
@@ -37,7 +56,7 @@ export default class ApiClient {
         headers: {
           'Authorization': this.token
         },
-        timeout: 10000
+        timeout: ONE_SECOND * 10
       }
     );
     return response;
@@ -59,7 +78,7 @@ export default class ApiClient {
         headers: {
           'Authorization': this.token
         },
-        timeout: 10000
+        timeout: ONE_SECOND * 10
       }
     );
     return response;
@@ -78,7 +97,7 @@ export default class ApiClient {
         headers: {
           'Authorization': this.token
         },
-        timeout: 8000
+        timeout: ONE_SECOND * 10
       }
     );
     return response;
@@ -96,7 +115,7 @@ export default class ApiClient {
         headers: {
           'Authorization': this.token
         },
-        timeout: 10000
+        timeout: ONE_SECOND * 10
       }
     );
     return response;
@@ -116,7 +135,7 @@ export default class ApiClient {
         headers: {
           'Authorization': this.token
         },
-        timeout: 90000
+        timeout: ONE_SECOND * 10
       }
     );
     return response;
@@ -135,7 +154,7 @@ export default class ApiClient {
         headers: {
           'Authorization': this.token
         },
-        timeout: 20000
+        timeout: ONE_SECOND * 20
       }
     );
     return response;
@@ -156,7 +175,7 @@ export default class ApiClient {
         headers: {
           'Authorization': this.token
         },
-        timeout: 90000
+        timeout: ONE_SECOND * 90
       }
     );
     return response;
@@ -175,7 +194,7 @@ export default class ApiClient {
         headers: {
           'Authorization': this.token
         },
-        timeout: 20000
+        timeout: ONE_SECOND * 20
       }
     );
     return response;

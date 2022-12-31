@@ -35,7 +35,15 @@ class Folders extends React.Component {
 
   handleNewClick = (e) => {
     console.log("New subfolder clicked");
-    console.log(e.target.dataset.parent);
+    if (this.state.new_folder === "") {
+      this.props.setMessage("Please enter a name in the input box.");
+    }
+    this.api.newFolder().then(data => {
+      this.setState({ ...this.state, folders: data.data });
+    }).catch(e => {
+      this.props.setMessage("Unable to fetch folders.", true);
+      console.log(e);
+    });
   }
 
   handleDelClick = (e) => {
