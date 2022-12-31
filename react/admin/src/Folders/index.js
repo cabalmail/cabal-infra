@@ -39,7 +39,10 @@ class Folders extends React.Component {
       this.props.setMessage("Please enter a name in the input box.", true);
       return;
     }
-    this.api.newFolder().then(data => {
+    this.api.newFolder(
+      e.target.dataset.folder,
+      this.state.new_folder
+    ).then(data => {
       this.setState({ ...this.state, folders: data.data });
     }).catch(e => {
       this.props.setMessage("Unable to create folder.", true);
