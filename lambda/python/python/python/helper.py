@@ -37,7 +37,7 @@ def decode_folder_list(data):
 def folder_sort(k):
     if k == 'INBOX':
         return k
-        return k.lower()
+    return k.lower()
 
 def get_message(host, user, folder, id, seen):
     '''Gets a message from cache on s3 or from imap server'''
