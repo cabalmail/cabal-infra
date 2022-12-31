@@ -1,7 +1,7 @@
 '''Retrieves IMAP message given a folder and ID'''
 import json
-from s3 import get_message
-from s3 import sign_url
+from helper import get_message
+from helper import sign_url
 
 def handler(event, _context):
     '''Retrieves IMAP message given a folder and ID'''

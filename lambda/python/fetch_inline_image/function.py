@@ -1,10 +1,10 @@
 '''Preps an inline image attachment for download from S3 given a folder, message ID, and attachment uuid'''
 import json
-from s3 import upload_object
-from s3 import sign_url
-from s3 import key_exists
-from s3 import get_object
-from s3 import get_message
+from helper import upload_object
+from helper import sign_url
+from helper import key_exists
+from helper import get_object
+from helper import get_message
 
 def handler(event, _context):
     '''Preps an inline image attachment for download from S3 given a folder, message ID, and attachment uuid'''

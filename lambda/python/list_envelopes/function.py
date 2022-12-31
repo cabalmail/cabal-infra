@@ -2,7 +2,7 @@
 import json
 from datetime import datetime
 from email.header import decode_header
-from s3 import get_imap_client
+from helper import get_imap_client
 
 def handler(event, _context):
     '''Retrieves IMAP envelopes for a user given a folder and list of message ids'''

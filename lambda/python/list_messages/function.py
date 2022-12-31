@@ -1,6 +1,6 @@
 '''Retrieves IMAP message ids for a user given a folder and sorting criteria'''
 import json
-from s3 import get_imap_client
+from helper import get_imap_client
 
 def handler(event, _context):
     '''Retrieves IMAP message ids for a user given a folder and sorting criteria'''

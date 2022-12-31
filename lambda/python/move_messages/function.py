@@ -1,6 +1,6 @@
 '''Sets IMAP flags on messages for a user given a folder and list of message ids'''
 import json
-from s3 import get_imap_client
+from helper import get_imap_client
 
 def handler(event, _context):
     '''Sets IMAP flags on messages for a user given a folder and list of message ids'''

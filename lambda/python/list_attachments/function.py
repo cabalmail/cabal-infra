@@ -1,6 +1,6 @@
 '''Retrieves list of attachments from a message given a folder and ID'''
 import json
-from s3 import get_message
+from helper import get_message
 
 def handler(event, _context):
     '''Retrieves list of attachments from a message given a folder and ID'''
