@@ -72,6 +72,14 @@ locals {
       cache     = true
       cache_ttl = 0
     },
+    delete_folder = {
+      runtime   = "python3.9"
+      type      = "python"
+      method    = "DELETE"
+      memory    = 128
+      cache     = true
+      cache_ttl = 0
+    },
     move_messages = {
       runtime   = "python3.9"
       type      = "python"
