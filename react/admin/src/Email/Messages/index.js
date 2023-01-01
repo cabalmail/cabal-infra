@@ -117,8 +117,7 @@ class Messages extends React.Component {
     this.setState({
       ...this.state,
       message_ids: data.data.message_ids
-    }); 
-    this.props.setMessage("Flag set.", false);
+    });
   }
 
   catchback = (err) => {
