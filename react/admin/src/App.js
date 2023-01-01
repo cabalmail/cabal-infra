@@ -51,7 +51,8 @@ class App extends React.Component {
       control_domain: null,
       domains: {},
       api_url: null,
-      hideMessage: true
+      hideMessage: true,
+      countdown: null
     };
   }
 
@@ -171,9 +172,16 @@ class App extends React.Component {
           loggedIn: true,
           token: data.getIdToken().getJwtToken(),
           expires: data.getIdToken().getExpiration(),
+          countdown: data.getIdToken().getExpiration()
           view: "Email"
         });
         this.setMessage("Login succeeded", false);
+        this.interval = setInterval((that) => {
+          that.setState({
+            ...that.state,
+            countdown: that.state.countdown - 1
+          })
+        }, 1000, this)
       },
       onFailure: data => {
         this.setState({
@@ -279,6 +287,7 @@ class App extends React.Component {
         <Nav
           onClick={this.updateView}
           loggedIn={this.state.loggedIn}
+          countdown={this.state.countdown}
           view={this.state.view}
           doLogout={this.doLogout}
         />
