@@ -54,7 +54,7 @@ class Nav extends React.Component {
           name="LogOut"
           onClick={this.props.doLogout}
           href="#login"
-        >Log out {this.props.countdown}</button>
+        >Log out</button>
       </div>
     );
   }
