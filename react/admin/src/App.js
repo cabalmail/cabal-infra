@@ -172,7 +172,7 @@ class App extends React.Component {
           loggedIn: true,
           token: data.getIdToken().getJwtToken(),
           expires: data.getIdToken().getExpiration(),
-          countdown: data.getIdToken().getExpiration(),
+          countdown: data.getIdToken().getExpiration() - (new Date() / 1000),
           view: "Email"
         });
         this.setMessage("Login succeeded", false);
