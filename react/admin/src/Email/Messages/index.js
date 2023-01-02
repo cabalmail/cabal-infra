@@ -205,6 +205,11 @@ class Messages extends React.Component {
     }
   }
 
+  setFolder(folder) {
+    this.setState({...this.state, selected_messages: []});
+    this.props.setFolder(folder);
+  }
+
   render() {
     const list = this.loadList();
     // TO field omitted since it's not displayed
@@ -218,7 +223,7 @@ class Messages extends React.Component {
           <Folders 
             token={this.props.token}
             api_url={this.props.api_url}
-            setFolder={this.props.setFolder}
+            setFolder={this.setFolder}
             host={this.props.host}
             folder={this.props.folder}
             setMessage={this.props.setMessage}
