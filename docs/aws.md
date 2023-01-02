@@ -28,7 +28,7 @@ After signing up, perform the following steps:
                     "apigateway:*",
                     "autoscaling:*",
                     "backup:*",
-                    "backup-storage:*"
+                    "backup-storage:*",
                     "cloudfront:*",
                     "cognito-identity:*",
                     "cognito-idp:*",
