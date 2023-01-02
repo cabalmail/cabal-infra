@@ -86,4 +86,11 @@ Parameters: e (null)
 
 Returns: null
 
+### setFolder
+Modifiers: none
+
+Parameters: folder (null)
+
+Returns: null
+
 </div>
