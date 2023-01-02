@@ -14,6 +14,7 @@ on:
 jobs:
   prod-deploy:
     runs-on: ubuntu-latest
+    branch: main
     environment: prod
     steps:
     - uses: actions/checkout@main
@@ -32,6 +33,7 @@ jobs:
 
   stage-deploy:
     runs-on: ubuntu-latest
+    branch: '0.3.0'
     environment: stage
     steps:
     - uses: actions/checkout@main
