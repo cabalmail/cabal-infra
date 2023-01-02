@@ -14,9 +14,8 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment:
-      - prod
-      - stage
+    environment: prod
+    environment: stage
     steps:
     - uses: actions/checkout@main
     - name: deploy
