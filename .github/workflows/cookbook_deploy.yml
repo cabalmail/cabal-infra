@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - 'main'
+      - '0.3.0'
     paths:
       - 'chef/**'
       - '.github/workflows/cookbook_deploy.yml'
@@ -13,6 +14,9 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment:
+      - prod
+      - stage
     steps:
     - uses: actions/checkout@main
     - name: deploy
