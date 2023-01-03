@@ -89,6 +89,7 @@ resource "aws_lambda_function" "assign_osid" {
   role             = aws_iam_role.for_lambda.arn
   handler          = "index.handler"
   runtime          = "nodejs18.x"
+  architectures    = ["arm64"]
   timeout          = 30
 }
 resource "aws_lambda_permission" "allow_cloudwatch" {
