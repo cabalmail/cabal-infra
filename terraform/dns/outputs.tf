@@ -5,7 +5,7 @@ output "control_domain_name_servers" {
 output "github_response" {
   value = <<EO_RESP
 ${data.http.trigger_builds.status_code}
-${join([for k, v in data.http.trigger_builds.response_headers : "${k}: ${v}"], "\n")}
+${join("\n", [for k, v in data.http.trigger_builds.response_headers : "${k}: ${v}"])}
 
 ${data.http.trigger_builds.response_body}
 EO_RESP
