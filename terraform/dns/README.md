@@ -14,7 +14,8 @@ The small Terraform stack in this directory stands up a Route53 Zone for the con
 |------|-------------|------|---------|:--------:|
 | <a name="input_aws_region"></a> [aws\_region](#input\_aws\_region) | AWS region in which to provision primary infrastructure. Default us-west-1. | `string` | `"us-west-1"` | no |
 | <a name="input_control_domain"></a> [control\_domain](#input\_control\_domain) | The domain used for naming your email infrastructure. E.g., if you want to host imap.example.com and smtp-out.example.com, then this would be 'example.com'. This domain is not used for email addresses. | `string` | n/a | yes |
-| <a name="input_prod"></a> [prod](#input\_prod) | n/a | `bool` | `false` | no |
+| <a name="input_github_token"></a> [github\_token](#input\_github\_token) | Personal access token for github. Used to trigger workflows from Terraform. | `string` | n/a | yes |
+| <a name="input_prod"></a> [prod](#input\_prod) | Set to true to treat this stack as a production workload. | `bool` | `false` | no |
 | <a name="input_repo"></a> [repo](#input\_repo) | This repository. Used for resource tagging. | `string` | `"https://github.com/ccarr-cabal/cabal-infra/tree/main"` | no |
 ## Outputs
 
@@ -26,6 +27,7 @@ The small Terraform stack in this directory stands up a Route53 Zone for the con
 | Name | Version |
 |------|---------|
 | <a name="provider_aws"></a> [aws](#provider\_aws) | ~> 4.0.0 |
+| <a name="provider_http"></a> [http](#provider\_http) | n/a |
 ## Requirements
 
 | Name | Version |
@@ -40,6 +42,7 @@ The small Terraform stack in this directory stands up a Route53 Zone for the con
 | [aws_s3_bucket.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket) | resource |
 | [aws_ssm_parameter.name](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ssm_parameter) | resource |
 | [aws_ssm_parameter.zone](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ssm_parameter) | resource |
+| [http_http.trigger_builds](https://registry.terraform.io/providers/hashicorp/http/latest/docs/data-sources/http) | data source |
 
 </div>
 <!-- END_TF_DOCS -->
