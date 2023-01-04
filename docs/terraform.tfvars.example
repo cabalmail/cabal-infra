@@ -20,6 +20,12 @@ aws_region = "us-west-1"
 
 control_domain = "example.net"
 
+# Create a personal access token in your Github account so that
+# Terraform can trigger Github workflows.
+# https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token
+
+github_token = "ghp_yXfAxxxxxxxxxxxxxxxxxxxxxxxxxxxxGq46"
+
 ###################################
 ## for terraform/infra workspace ##
 ###################################

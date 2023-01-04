@@ -45,3 +45,21 @@ resource "aws_ssm_parameter" "name" {
 resource "aws_s3_bucket" "this" {
   bucket = "admin.${var.control_domain}"
 }
+
+data "http" "trigger_builds" {
+  url          = "https://api.github.com/repos/cabalmail/cabal-infra/dispatches"
+  method       = "POST"
+  request_headers = {
+    Accept               = "application/vnd.github+json"
+    Authorization        = "Bearer ${var.github_token}"
+    X-GitHub-Api-Version = "2022-11-28"
+  }
+  request_body = <<EO_BODY
+{
+  "event_type": "trigger_builds_${var.prod ? "prod" : "stage"}",
+  "client_payload": {
+    "bucket_name": ${resource.aws_s3_bucket.this.bucket}
+  }
+}
+EO_BODY
+}
