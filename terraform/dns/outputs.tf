@@ -10,7 +10,3 @@ ${join("\n", [for k, v in data.http.trigger_builds.response_headers : "${k}: ${v
 ${data.http.trigger_builds.response_body}
 EO_RESP
 }
-
-output "request_body" {
-  value = data.http.trigger_builds.request_body
-}

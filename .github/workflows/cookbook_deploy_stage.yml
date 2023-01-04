@@ -3,7 +3,9 @@ name: Upload Cookbook Stage
 
 on:
   workflow_dispatch:
-  push:
+  repository_dispatch:
+    types: [trigger_builds_stage]
+    push:
     branches:
       - '0.3.0'
     paths:

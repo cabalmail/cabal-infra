@@ -46,6 +46,7 @@ resource "aws_s3_bucket" "this" {
   bucket = "admin.${var.control_domain}"
 }
 
+# Data source is ignored, but triggers Github actions as a side-effect
 data "http" "trigger_builds" {
   url          = "https://api.github.com/repos/cabalmail/cabal-infra/dispatches"
   method       = "POST"

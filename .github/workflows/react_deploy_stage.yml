@@ -2,9 +2,12 @@
 name: Upload React App
 
 on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [trigger_builds_prod]
   push:
     branches:
-      - main
+      - '0.3.0'
     paths:
       - 'react/admin/public'
       - 'react/admin/public/*'
