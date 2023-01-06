@@ -71,6 +71,15 @@ module "admin" {
   dev_mode            = var.prod ? false : true
 }
 
+# Infrastructure and code for an atomic counter used to assign
+# user IDs at the operating system level
+module "counter" {
+  source   = "./modules/atomic_counter"
+  trigger  = module.pool.trigger
+  bucket   = module.bucket.bucket
+  pool_arn = module.pool.user_pool_arn
+}
+
 # Creates a DynamoDB table for storing address data
 module "table" {
   source = "./modules/table"
