@@ -66,6 +66,7 @@ module "admin" {
   bucket              = module.bucket.bucket
   relay_ips           = module.vpc.relay_ips
   origin              = module.bucket.origin
+  github_token        = var.github_token
   repo                = var.repo
   dev_mode            = var.prod ? false : true
 }

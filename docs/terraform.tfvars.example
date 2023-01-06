@@ -100,6 +100,12 @@ smtpout_scale = {
   des = 1
 }
 
+# Create a personal access token in your Github account so that
+# Terraform can trigger Github workflows.
+# https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token
+
+github_token = "ghp_yXfAxxxxxxxxxxxxxxxxxxxxxxxxxxxxGq46"
+
 # This repository installs Chef Infra Client on EC2 instances.
 # For Chef Client to run, you must accept the Chef license.
 # It is available here:
