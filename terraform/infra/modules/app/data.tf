@@ -31,9 +31,7 @@ data "http" "trigger_python_builds" {
   request_body = <<EO_BODY
 {
   "event_type": "trigger_python_build_${var.dev_mode ? "stage" : "prod"}",
-  "client_payload": {
-    "bucket_name": "${aws_s3_object.node_config.key}"
-  }
+  "client_payload": {}
 }
 EO_BODY
 }
@@ -52,7 +50,7 @@ data "http" "trigger_react_build" {
 {
   "event_type": "trigger_react_build_${var.dev_mode ? "stage" : "prod"}",
   "client_payload": {
-    "bucket_name": "${aws_ssm_parameter.cf_distribution.name}"
+    "cf_distribution": "${aws_ssm_parameter.cf_distribution.name}"
   }
 }
 EO_BODY
