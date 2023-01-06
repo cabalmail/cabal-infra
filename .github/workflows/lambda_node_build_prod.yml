@@ -1,10 +1,10 @@
 ---
-name: Build Lambda (NodeJS Runtime)
+name: Build Lambda (NodeJS Runtime) Prod
 
 on:
   workflow_dispatch:
   repository_dispatch:
-    types: [trigger_builds_prod]
+    types: [trigger_node_build_prod]
   push:
     branches:
       - 'main'

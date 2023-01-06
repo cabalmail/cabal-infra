@@ -1,10 +1,10 @@
 ---
-name: Build Lambda (Python Runtime)
+name: Build Lambda (Python Runtime) Stage
 
 on:
   workflow_dispatch:
   repository_dispatch:
-    types: [trigger_builds_stage]
+    types: [trigger_python_build_stage]
   push:
     branches:
       - '0.3.0'
