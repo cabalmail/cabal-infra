@@ -13,7 +13,7 @@ data "aws_s3_object" "lambda_function_hash" {
 
 data "aws_region" "current" {}
 
-data "aws_caller_identity" {}
+data "aws_caller_identity" "current" {}
 
 resource "aws_iam_role" "for_lambda" {
   name               = "assign_osid"
