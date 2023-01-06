@@ -75,7 +75,7 @@ module "admin" {
 # user IDs at the operating system level
 module "counter" {
   source   = "./modules/atomic_counter"
-  trigger  = module.pool.trigger
+  trigger  = module.admin.trigger
   bucket   = module.bucket.bucket
   pool_arn = module.pool.user_pool_arn
 }
