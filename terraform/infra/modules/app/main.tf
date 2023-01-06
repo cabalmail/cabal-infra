@@ -63,6 +63,7 @@ module "cabal_method" {
   repo             = var.repo
   domains          = var.domains
   bucket           = var.bucket
+  trigger          = "${data.http.trigger_node_builds.response_body}:${data.http.trigger_python_builds.response_body}"
 }
 
 resource "aws_api_gateway_deployment" "deployment" {

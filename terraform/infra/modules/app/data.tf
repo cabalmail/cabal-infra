@@ -10,9 +10,9 @@ data "http" "trigger_node_builds" {
   }
   request_body = <<EO_BODY
 {
-  "event_type": "trigger_node_build_${var.prod ? "prod" : "stage"}",
+  "event_type": "trigger_node_build_${var.dev_mode ? "stage" : "prod"}",
   "client_payload": {
-    "node_config.js": "${module.admin.node_config}"
+    "node_config.js": "${aws_s3_object.node_config.key}"
   }
 }
 EO_BODY
@@ -30,9 +30,9 @@ data "http" "trigger_python_builds" {
   }
   request_body = <<EO_BODY
 {
-  "event_type": "trigger_python_build_${var.prod ? "prod" : "stage"}",
+  "event_type": "trigger_python_build_${var.dev_mode ? "stage" : "prod"}",
   "client_payload": {
-    "bucket_name": "${module.}"
+    "bucket_name": "${aws_s3_object.node_config.key}"
   }
 }
 EO_BODY
@@ -50,9 +50,9 @@ data "http" "trigger_react_build" {
   }
   request_body = <<EO_BODY
 {
-  "event_type": "trigger_react_build_${var.prod ? "prod" : "stage"}",
+  "event_type": "trigger_react_build_${var.dev_mode ? "stage" : "prod"}",
   "client_payload": {
-    "bucket_name": "${module.app.cf_distribution}"
+    "bucket_name": "${aws_ssm_parameter.cf_distribution.name}"
   }
 }
 EO_BODY

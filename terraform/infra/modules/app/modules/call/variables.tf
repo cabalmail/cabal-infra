@@ -63,3 +63,7 @@ variable "memory" {
   type    = number
   default = 128
 }
+
+variable "trigger" {
+  type    = string
+}
