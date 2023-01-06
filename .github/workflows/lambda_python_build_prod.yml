@@ -10,7 +10,7 @@ on:
       - 'main'
     paths:
       - 'lambda/python/**'
-      - '.github/workflows/lambda_python_build.yml'
+      - '.github/workflows/lambda_python_build_prod.yml'
 
 jobs:
   deploy:

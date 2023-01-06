@@ -10,7 +10,7 @@ on:
       - '0.3.0'
     paths:
       - 'lambda/node/**'
-      - '.github/workflows/lambda_node_build.yml'
+      - '.github/workflows/lambda_node_build_stage.yml'
 
 jobs:
   deploy:

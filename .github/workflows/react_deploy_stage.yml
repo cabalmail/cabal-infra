@@ -15,7 +15,7 @@ on:
       - 'react/admin/src'
       - 'react/admin/src/*'
       - 'react/admin/src/*/**'
-      - '.github/workflows/react_deploy.yml'
+      - '.github/workflows/react_deploy_stage.yml'
 
 jobs:
   deploy:
