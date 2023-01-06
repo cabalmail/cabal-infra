@@ -139,13 +139,7 @@ RUNPOLICY
 
 data "aws_s3_object" "lambda_function_hash" {
   bucket = var.bucket
-  key    = "/lambda/${var.name}.zip.base64sha256"
-  lifecycle {
-    precondition {
-      condition     = var.trigger == ":"
-      error_message = "Can't get object hash before builds have computed them."
-    }
-  }
+  key    = "/${var.trigger}/${var.name}.zip.base64sha256"
 }
 
 #tfsec:ignore:aws-lambda-enable-tracing
