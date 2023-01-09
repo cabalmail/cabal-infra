@@ -11,14 +11,15 @@ Creates a DynamoDB table as system of record for user properties and preferences
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
 | <a name="input_bucket"></a> [bucket](#input\_bucket) | n/a | `string` | n/a | yes |
-| <a name="input_pool_arn"></a> [pool\_arn](#input\_pool\_arn) | n/a | `string` | n/a | yes |
 | <a name="input_trigger"></a> [trigger](#input\_trigger) | n/a | `string` | n/a | yes |
 ## Modules
 
 No modules.
 ## Outputs
 
-No outputs.
+| Name | Description |
+|------|-------------|
+| <a name="output_counter"></a> [counter](#output\_counter) | n/a |
 ## Providers
 
 | Name | Version |
