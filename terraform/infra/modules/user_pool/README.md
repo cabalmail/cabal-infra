@@ -30,6 +30,7 @@ No modules.
 | Name | Version |
 |------|---------|
 | <a name="provider_aws"></a> [aws](#provider\_aws) | ~> 4.41 |
+| <a name="provider_http"></a> [http](#provider\_http) | n/a |
 ## Requirements
 
 | Name | Version |
@@ -59,6 +60,7 @@ No modules.
 | [aws_iam_policy_document.users](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_region.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/region) | data source |
 | [aws_s3_object.lambda_function_hash](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/s3_object) | data source |
+| [http_http.trigger_counter_builds](https://registry.terraform.io/providers/hashicorp/http/latest/docs/data-sources/http) | data source |
 
 </div>
 <!-- END_TF_DOCS -->
