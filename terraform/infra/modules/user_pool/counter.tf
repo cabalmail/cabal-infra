@@ -11,10 +11,6 @@ data "aws_s3_object" "lambda_function_hash" {
   key    = "/lambda/assign_osid.zip.base64sha256"
 }
 
-data "aws_region" "current" {}
-
-data "aws_caller_identity" "current" {}
-
 resource "aws_iam_role" "for_lambda" {
   name               = "assign_osid"
   assume_role_policy = <<EOF
