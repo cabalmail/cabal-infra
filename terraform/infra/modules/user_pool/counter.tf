@@ -1,5 +1,6 @@
 /**
-* Creates a DynamoDB table as system of record for user properties and preferences.
+* Creates a DynamoDB table and Lambda function to implement an atomic counter
+* used for operating system user IDs.
 */
 
 locals {
@@ -8,7 +9,7 @@ locals {
 
 data "aws_s3_object" "lambda_function_hash" {
   bucket = var.bucket
-  key    = "/lambda/assign_osid.zip.base64sha256"
+  key    = "/${data.http.trigger_node_builds.response_body}lambda/assign_osid.zip.base64sha256"
 }
 
 resource "aws_iam_role" "for_lambda" {

@@ -4,7 +4,7 @@ name: Build Lambda API (Python Runtime) Stage
 on:
   workflow_dispatch:
   repository_dispatch:
-    types: [trigger_python_build_stage]
+    types: [trigger_api_python_build_stage]
   push:
     branches:
       - '0.3.0'
