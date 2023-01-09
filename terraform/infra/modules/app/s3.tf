@@ -28,12 +28,10 @@ resource "aws_s3_object" "node_config" {
   key          = "/node_config.js"
   content_type = "text/javascript"
   content      = templatefile("${path.module}/templates/node_config.js", {
-      invoke_url     = "https://${aws_api_gateway_rest_api.gateway.id}.execute-api.${var.region}.amazonaws.com/${var.stage_name}",
-      domains        = var.domains,
-      control_domain = var.control_domain
-    }),
-    ";"
-  ])
+    invoke_url     = "https://${aws_api_gateway_rest_api.gateway.id}.execute-api.${var.region}.amazonaws.com/${var.stage_name}",
+    domains        = var.domains,
+    control_domain = var.control_domain
+  })
   etag         = md5(templatefile("${path.module}/templates/node_config.js", {
       invoke_url     = "https://${aws_api_gateway_rest_api.gateway.id}.execute-api.${var.region}.amazonaws.com/${var.stage_name}",
       domains        = var.domains,
