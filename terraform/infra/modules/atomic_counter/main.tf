@@ -8,7 +8,7 @@ locals {
 
 data "aws_s3_object" "lambda_function_hash" {
   bucket = var.bucket
-  key    = "/${var.trigger}/assign_osid.zip.base64sha256"
+  key    = "/lambda/assign_osid.zip.base64sha256"
 }
 
 data "aws_region" "current" {}
@@ -96,7 +96,8 @@ resource "aws_lambda_function" "assign_osid" {
   architectures    = ["arm64"]
   timeout          = 30
 }
-resource "aws_lambda_permission" "allow_cloudwatch" {
+
+resource "aws_lambda_permission" "allow_cognito" {
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.assign_osid.function_name
   principal     = "cognito-idp.amazonaws.com"
