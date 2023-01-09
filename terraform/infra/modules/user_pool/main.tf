@@ -15,7 +15,7 @@ resource "aws_cognito_user_pool" "users" {
     }
   }
   lambda_config {
-    post_confirmation = var.counter
+    post_confirmation = aws_cognito_user_pool.users.id
   }
 }
 
