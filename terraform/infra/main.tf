@@ -35,6 +35,7 @@ module "pool" {
   bucket_arn       = module.bucket.bucket_arn
   layers           = module.lambda_layers.layers
   ssm_document_arn = module.admin.ssm_document_arn
+  counter          = module.counter.counter
 }
 
 # Creates an AWS Certificate Manager certificate for use on load balancers and CloudFront and requests a Let's Encrypt certificate for use on EC2 instances
@@ -77,7 +78,6 @@ module "counter" {
   source   = "./modules/atomic_counter"
   trigger  = module.admin.trigger
   bucket   = module.bucket.bucket
-  pool_arn = module.pool.user_pool_arn
 }
 
 # Creates a DynamoDB table for storing address data

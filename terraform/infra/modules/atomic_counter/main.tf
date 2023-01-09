@@ -57,7 +57,7 @@ resource "aws_iam_role_policy" "lambda" {
     {
       "Effect": "Allow",
       "Action": "cognito-idp:AdminUpdateUserAttributes",
-      "Resource": "${var.pool_arn}"
+      "Resource": "arn:aws:cognito:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:*"
     },
     {
       "Effect": "Allow",

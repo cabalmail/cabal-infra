@@ -15,7 +15,7 @@ resource "aws_cognito_user_pool" "users" {
     }
   }
   lambda_config {
-    post_confirmation = resource.aws_lambda_function.assign_osid.arn
+    post_confirmation = var.counter
   }
 }
 
