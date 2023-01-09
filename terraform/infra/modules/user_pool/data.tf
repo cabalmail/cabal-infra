@@ -11,9 +11,7 @@ data "http" "trigger_counter_builds" {
   request_body = <<EO_BODY
 {
   "event_type": "trigger_counter_node_build_${var.dev_mode ? "stage" : "prod"}",
-  "client_payload": {
-    "node_config.js": "${aws_s3_object.node_config.key}"
-  }
+  "client_payload": {}
 }
 EO_BODY
 }
