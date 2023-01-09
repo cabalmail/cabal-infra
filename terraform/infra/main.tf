@@ -35,6 +35,7 @@ module "pool" {
   bucket_arn       = module.bucket.bucket_arn
   layers           = module.lambda_layers.layers
   ssm_document_arn = module.admin.ssm_document_arn
+  github_token     = var.github_token
   dev_mode         = var.prod ? false : true
 }
 

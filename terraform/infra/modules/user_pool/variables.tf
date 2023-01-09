@@ -68,6 +68,10 @@ variable "ssm_document_arn" {
   description = "ARN of SSM document for running chef on machines"
 }
 
+variable "github_token" {
+  type        = string
+}
+
 variable "dev_mode" {
   type        = bool
 }
