@@ -27,30 +27,16 @@ resource "aws_s3_object" "node_config" {
   bucket       = var.bucket
   key          = "/node_config.js"
   content_type = "text/javascript"
-  content      = join("", [
-    "exports.config = ",
-    templatefile("${path.module}/templates/config.js", {
-      pool_id        = var.user_pool_id,
-      pool_client_id = var.user_pool_client_id,
-      region         = var.region,
+  content      = templatefile("${path.module}/templates/node_config.js", {
+    invoke_url     = "https://${aws_api_gateway_rest_api.gateway.id}.execute-api.${var.region}.amazonaws.com/${var.stage_name}",
+    domains        = var.domains,
+    control_domain = var.control_domain
+  })
+  etag         = md5(templatefile("${path.module}/templates/node_config.js", {
       invoke_url     = "https://${aws_api_gateway_rest_api.gateway.id}.execute-api.${var.region}.amazonaws.com/${var.stage_name}",
       domains        = var.domains,
       control_domain = var.control_domain
-    }),
-    ";"
-  ])
-  etag         = md5(join("", [
-    "exports.config = ",
-      templatefile("${path.module}/templates/config.js", {
-        pool_id        = var.user_pool_id,
-        pool_client_id = var.user_pool_client_id,
-        region         = var.region,
-        invoke_url     = "https://${aws_api_gateway_rest_api.gateway.id}.execute-api.${var.region}.amazonaws.com/${var.stage_name}",
-        domains        = var.domains,
-        control_domain = var.control_domain
-      }),
-      ";"
-    ])
+    })
   )
 }
 

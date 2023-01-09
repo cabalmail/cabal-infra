@@ -43,21 +43,8 @@ resource "aws_iam_role_policy" "lambda" {
   "Statement": [
     {
       "Effect": "Allow",
-      "Action": [
-        "ssm:StartSession",
-        "ssm:SendCommand"
-      ],
-      "Resource": "arn:aws:ec2:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:instance/*"
-      },
-    {
-      "Effect": "Allow",
-      "Action": "ssm:SendCommand",
-      "Resource": "${var.ssm_document_arn}"
-    },
-    {
-      "Effect": "Allow",
       "Action": "cognito-idp:AdminUpdateUserAttributes",
-      "Resource": "${var.pool_arn}"
+      "Resource": "arn:aws:cognito:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:*"
     },
     {
       "Effect": "Allow",
@@ -89,7 +76,6 @@ resource "aws_lambda_function" "assign_osid" {
   s3_key           = "lambda/assign_osid.zip"
   source_code_hash = data.aws_s3_object.lambda_function_hash.body
   function_name    = "assign_osid"
-  layers           = [var.layers["nodejs"]]
   role             = aws_iam_role.for_lambda.arn
   handler          = "index.handler"
   runtime          = "nodejs18.x"
