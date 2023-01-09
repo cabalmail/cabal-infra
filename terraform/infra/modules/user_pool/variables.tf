@@ -67,8 +67,3 @@ variable "ssm_document_arn" {
   type        = string
   description = "ARN of SSM document for running chef on machines"
 }
-
-variable "counter" {
-  type        = string
-  description = "ARN of lambda function to assign OS user IDs after confirmation."
-}
