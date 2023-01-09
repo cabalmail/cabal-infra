@@ -35,6 +35,7 @@ module "pool" {
   bucket_arn       = module.bucket.bucket_arn
   layers           = module.lambda_layers.layers
   ssm_document_arn = module.admin.ssm_document_arn
+  dev_mode         = var.prod ? false : true
 }
 
 # Creates an AWS Certificate Manager certificate for use on load balancers and CloudFront and requests a Let's Encrypt certificate for use on EC2 instances

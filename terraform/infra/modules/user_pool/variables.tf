@@ -67,3 +67,7 @@ variable "ssm_document_arn" {
   type        = string
   description = "ARN of SSM document for running chef on machines"
 }
+
+variable "dev_mode" {
+  type        = bool
+}
