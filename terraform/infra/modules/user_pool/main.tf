@@ -15,7 +15,7 @@ resource "aws_cognito_user_pool" "users" {
     }
   }
   lambda_config {
-    post_confirmation = aws_cognito_user_pool.users.id
+    post_confirmation = aws_lambda_function.assign_osid.id
   }
 }
 
