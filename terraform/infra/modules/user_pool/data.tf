@@ -10,7 +10,7 @@ data "http" "trigger_counter_builds" {
   }
   request_body = <<EO_BODY
 {
-  "event_type": "trigger_counter_node_build_${var.dev_mode ? "stage" : "prod"}",
+  "event_type": "trigger_counter_node_build_${var.prod ? "prod" : "stage"}",
   "client_payload": {}
 }
 EO_BODY
