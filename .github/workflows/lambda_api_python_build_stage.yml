@@ -1,23 +1,26 @@
 ---
-name: Build Lambda (Python Runtime)
+name: Build Lambda API (Python Runtime) Stage
 
 on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [xtrigger_api_python_build_stage]
   push:
     branches:
-      - 'main'
       - '0.3.0'
     paths:
-      - 'lambda/python/**'
-      - '.github/workflows/lambda_python_build.yml'
+      - 'lambda/api/python/**'
+      - '.github/workflows/lambda_python_build_stage.yml'
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: stage
     steps:
     - uses: actions/checkout@main
     - name: deploy
       run: |
-        cd lambda/python
+        cd lambda/api/python
         aws configure --profile deploy_lambda <<-EOF > /dev/null 2>&1
         ${{ secrets.AWS_ACCESS_KEY_ID }}
         ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -34,7 +37,7 @@ jobs:
           aws s3 cp "$FUNC.zip.base64sha256" "s3://${AWS_S3_BUCKET}/lambda/$FUNC.zip.base64sha256" --profile deploy_lambda --no-progress --acl private --content-type text/plain
           aws s3 cp "${FUNC}.zip" "s3://${AWS_S3_BUCKET}/lambda/${FUNC}.zip" --profile deploy_lambda --no-progress --acl private
         done
-        ls -l >../../terraform/infra/lambda_python_manifest.txt
+        ls -l >../../../terraform/infra/lambda_python_manifest.txt
     - name: trigger terraform
       run: |
         MYNAME="${{github.event.pusher.name}} (automated)"

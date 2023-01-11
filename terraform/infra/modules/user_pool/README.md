@@ -13,6 +13,8 @@ Creates a Cognito User Pool for authentication against the management applicatio
 | <a name="input_bucket"></a> [bucket](#input\_bucket) | Name of S3 bucket for React app | `string` | n/a | yes |
 | <a name="input_bucket_arn"></a> [bucket\_arn](#input\_bucket\_arn) | ARN of S3 bucket for React app | `string` | n/a | yes |
 | <a name="input_control_domain"></a> [control\_domain](#input\_control\_domain) | Base for auth domain. E.g., if control\_domain is example.com, then the autho domain will be auth.example.com. | `string` | n/a | yes |
+| <a name="input_dev_mode"></a> [dev\_mode](#input\_dev\_mode) | n/a | `bool` | n/a | yes |
+| <a name="input_github_token"></a> [github\_token](#input\_github\_token) | n/a | `string` | n/a | yes |
 | <a name="input_layers"></a> [layers](#input\_layers) | Lambda layers ARNs indext by runtime 'python' or 'nodejs' | `map` | n/a | yes |
 | <a name="input_ssm_document_arn"></a> [ssm\_document\_arn](#input\_ssm\_document\_arn) | ARN of SSM document for running chef on machines | `string` | n/a | yes |
 ## Modules
@@ -30,6 +32,7 @@ No modules.
 | Name | Version |
 |------|---------|
 | <a name="provider_aws"></a> [aws](#provider\_aws) | ~> 4.41 |
+| <a name="provider_http"></a> [http](#provider\_http) | n/a |
 ## Requirements
 
 | Name | Version |
@@ -52,13 +55,14 @@ No modules.
 | [aws_iam_role_policy_attachment.sns](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy_attachment) | resource |
 | [aws_iam_role_policy_attachment.users](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy_attachment) | resource |
 | [aws_lambda_function.assign_osid](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lambda_function) | resource |
-| [aws_lambda_permission.allow_cloudwatch](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lambda_permission) | resource |
+| [aws_lambda_permission.allow_cognito](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lambda_permission) | resource |
 | [aws_caller_identity.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity) | data source |
 | [aws_iam_policy_document.cognito_to_s3](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.sns_users](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.users](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_region.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/region) | data source |
 | [aws_s3_object.lambda_function_hash](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/s3_object) | data source |
+| [http_http.trigger_counter_builds](https://registry.terraform.io/providers/hashicorp/http/latest/docs/data-sources/http) | data source |
 
 </div>
 <!-- END_TF_DOCS -->

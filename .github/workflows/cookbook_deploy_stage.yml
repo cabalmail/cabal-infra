@@ -1,18 +1,21 @@
 ---
-name: Upload Cookbook
+name: Upload Cookbook Stage
 
 on:
-  push:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [trigger_cookbook_build_stage]
+    push:
     branches:
-      - 'main'
       - '0.3.0'
     paths:
       - 'chef/**'
-      - '.github/workflows/cookbook_deploy.yml'
+      - '.github/workflows/cookbook_deploy_stage.yml'
 
 jobs:
-  deploy:
+  prod-deploy:
     runs-on: ubuntu-latest
+    environment: stage
     steps:
     - uses: actions/checkout@main
     - name: deploy

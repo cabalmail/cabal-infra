@@ -1,10 +1,12 @@
 ---
-name: Upload React App
+name: Upload React App Stage
 
 on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [trigger_react_build_prod]
   push:
     branches:
-      - main
       - '0.3.0'
     paths:
       - 'react/admin/public'
@@ -13,11 +15,12 @@ on:
       - 'react/admin/src'
       - 'react/admin/src/*'
       - 'react/admin/src/*/**'
-      - '.github/workflows/react_deploy.yml'
+      - '.github/workflows/react_deploy_stage.yml'
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: stage
     steps:
     - uses: actions/checkout@main
     - name: deploy

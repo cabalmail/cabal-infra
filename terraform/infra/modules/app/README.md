@@ -23,6 +23,7 @@ Stands up the following resources to implement a web application that allows use
 | <a name="input_control_domain"></a> [control\_domain](#input\_control\_domain) | The control domain. | `string` | n/a | yes |
 | <a name="input_dev_mode"></a> [dev\_mode](#input\_dev\_mode) | If true, forces Cloudfront to non-caching configuration. | `bool` | n/a | yes |
 | <a name="input_domains"></a> [domains](#input\_domains) | List of email domains. | `list` | n/a | yes |
+| <a name="input_github_token"></a> [github\_token](#input\_github\_token) | Token for triggering Github workflows | `string` | n/a | yes |
 | <a name="input_layers"></a> [layers](#input\_layers) | List of layer ARNs | `map` | n/a | yes |
 | <a name="input_origin"></a> [origin](#input\_origin) | S3 Origin ID for CloudFront | `string` | n/a | yes |
 | <a name="input_region"></a> [region](#input\_region) | The AWS region. | `string` | n/a | yes |
@@ -43,11 +44,13 @@ Stands up the following resources to implement a web application that allows use
 |------|-------------|
 | <a name="output_master_password"></a> [master\_password](#output\_master\_password) | n/a |
 | <a name="output_ssm_document_arn"></a> [ssm\_document\_arn](#output\_ssm\_document\_arn) | n/a |
+| <a name="output_trigger"></a> [trigger](#output\_trigger) | n/a |
 ## Providers
 
 | Name | Version |
 |------|---------|
 | <a name="provider_aws"></a> [aws](#provider\_aws) | ~> 4.41 |
+| <a name="provider_http"></a> [http](#provider\_http) | n/a |
 | <a name="provider_random"></a> [random](#provider\_random) | ~> 3.0 |
 ## Requirements
 
@@ -85,6 +88,9 @@ Stands up the following resources to implement a web application that allows use
 | [aws_caller_identity.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity) | data source |
 | [aws_region.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/region) | data source |
 | [aws_s3_bucket.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/s3_bucket) | data source |
+| [http_http.trigger_node_builds](https://registry.terraform.io/providers/hashicorp/http/latest/docs/data-sources/http) | data source |
+| [http_http.trigger_python_builds](https://registry.terraform.io/providers/hashicorp/http/latest/docs/data-sources/http) | data source |
+| [http_http.trigger_react_build](https://registry.terraform.io/providers/hashicorp/http/latest/docs/data-sources/http) | data source |
 
 </div>
 <!-- END_TF_DOCS -->

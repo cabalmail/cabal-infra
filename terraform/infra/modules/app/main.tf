@@ -63,6 +63,7 @@ module "cabal_method" {
   repo             = var.repo
   domains          = var.domains
   bucket           = var.bucket
+  trigger          = "${data.http.trigger_node_builds.response_body}lambda${data.http.trigger_python_builds.response_body}"
 }
 
 resource "aws_api_gateway_deployment" "deployment" {
@@ -125,7 +126,7 @@ resource "aws_iam_role_policy" "cloudwatch" {
         "logs:GetLogEvents",
         "logs:PutLogEvents"
       ],
-      "Resource": "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:API-Gateway-Execution-Logs_*/${var.stage_name}:*"
+      "Resource": "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:*:*"
     }
   ]
 }
@@ -147,6 +148,7 @@ resource "aws_api_gateway_method_settings" "general_settings" {
     throttling_rate_limit  = 100
     throttling_burst_limit = 50
   }
+  depends_on  = [aws_api_gateway_account.apigw_account]
 }
 
 resource "aws_api_gateway_method_settings" "cache_settings" {
