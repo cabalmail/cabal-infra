@@ -70,6 +70,7 @@ variable "ssm_document_arn" {
 
 variable "github_token" {
   type        = string
+  description = "Personal access token for github. Used to trigger workflows from Terraform."
 }
 
 variable "dev_mode" {

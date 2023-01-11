@@ -3,13 +3,11 @@ name: Build Lambda API (NodeJS Runtime) Prod
 
 on:
   workflow_dispatch:
-  repository_dispatch:
-    types: [xtrigger_counter_node_build_prod]
   push:
     branches:
       - 'main'
     paths:
-      - 'lambda/api/node/**'
+      - 'lambda/counter/node/**'
       - '.github/workflows/lambda_node_build_prod.yml'
 
 jobs:
