@@ -4,7 +4,7 @@ name: Build Lambda API (Python Runtime) Prod
 on:
   workflow_dispatch:
   repository_dispatch:
-    types: [trigger_api_python_build_prod]
+    types: [xtrigger_api_python_build_prod]
   push:
     branches:
       - 'main'

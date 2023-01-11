@@ -4,7 +4,7 @@ name: Build Lambda API (NodeJS Runtime) Prod
 on:
   workflow_dispatch:
   repository_dispatch:
-    types: [trigger_counter_node_build_prod]
+    types: [xtrigger_counter_node_build_prod]
   push:
     branches:
       - 'main'
