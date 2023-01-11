@@ -46,8 +46,16 @@ resource "aws_s3_bucket" "this" {
   bucket = "admin.${var.control_domain}"
 }
 
-# Trigger cookbook build
-# Data source is ignored, but triggers Github actions as a side-effect
+# This object must exist for the next stage to run without error. It will
+# get replaced with correct hash content by the Lambda Counter Github actions.
+resource "aws_s3_object" "seed" {
+  key     = "/lambda/assign_osid.zip.base64sha256"
+  bucket  = aws_s3_bucket.this.bucket
+  content = "check-meets-egg"
+}
+
+# Trigger cookbook build.
+# Data source is ignored, but triggers Github actions as a side-effect.
 data "http" "trigger_builds" {
   url          = "https://api.github.com/repos/cabalmail/cabal-infra/dispatches"
   method       = "POST"
