@@ -50,10 +50,14 @@ resource "aws_s3_bucket" "this" {
 # get replaced with correct hash content by the Lambda Counter Github actions.
 resource "aws_s3_object" "seed" {
   for_each = toset([
-    "/lambda/nodejs.zip.base64sha256",
-    "/lambda/assign_osid.zip.base64sha256"
+    "nodejs",        "python",           "assign_osid",
+    "list",          "new",              "revoke",
+    "delete_folder", "fetch_attachment", "fetch_inline_image",
+    "fetch_message", "list_attachments", "list_envelopes",
+    "list_folders",  "move_messages",    "new_folder",
+    "set_flag"
   ])
-  key      = each.key
+  key      = "/lambda/${each.key}.zip.base64sha256"
   bucket   = aws_s3_bucket.this.bucket
   content  = "check-meets-egg"
 }
