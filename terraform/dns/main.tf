@@ -49,9 +49,10 @@ resource "aws_s3_bucket" "this" {
 # This object must exist for the next stage to run without error. It will
 # get replaced with correct hash content by the Lambda Counter Github actions.
 resource "aws_s3_object" "seed" {
-  key     = "/lambda/assign_osid.zip.base64sha256"
-  bucket  = aws_s3_bucket.this.bucket
-  content = "check-meets-egg"
+  for_each = ["/lambda/nodejs.zip.base64sha256", "/lambda/assign_osid.zip.base64sha256"]
+  key      = each.key
+  bucket   = aws_s3_bucket.this.bucket
+  content  = "check-meets-egg"
 }
 
 # Trigger cookbook build.
