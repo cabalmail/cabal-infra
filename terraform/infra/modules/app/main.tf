@@ -148,6 +148,7 @@ resource "aws_api_gateway_method_settings" "general_settings" {
     throttling_rate_limit  = 100
     throttling_burst_limit = 50
   }
+  depends_on  = [aws_api_gateway_account.apigw_account]
 }
 
 resource "aws_api_gateway_method_settings" "cache_settings" {
