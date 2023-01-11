@@ -67,12 +67,3 @@ variable "ssm_document_arn" {
   type        = string
   description = "ARN of SSM document for running chef on machines"
 }
-
-variable "github_token" {
-  type        = string
-  description = "Personal access token for github. Used to trigger workflows from Terraform."
-}
-
-variable "dev_mode" {
-  type        = bool
-}

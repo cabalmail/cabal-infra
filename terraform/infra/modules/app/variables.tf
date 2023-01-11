@@ -75,8 +75,3 @@ variable "origin" {
   type        = string
   description = "S3 Origin ID for CloudFront"
 }
-
-variable "github_token" {
-  type        = string
-  description = "Token for triggering Github workflows"
-}
