@@ -2,6 +2,7 @@
 name: Build Lambda Counter Prod
 
 on:
+  workflow_dispatch:
   repository_dispatch:
     types: [trigger_build_prod]
   push:

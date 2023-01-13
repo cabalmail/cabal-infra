@@ -61,7 +61,7 @@ resource "aws_s3_object" "seed_zips" {
   content  = "check-meets-egg"
 }
 
-# Trigger cookbook build.
+# Trigger builds.
 # Data source is ignored, but triggers Github actions as a side-effect.
 data "http" "trigger_builds" {
   url          = "https://api.github.com/repos/cabalmail/cabal-infra/dispatches"

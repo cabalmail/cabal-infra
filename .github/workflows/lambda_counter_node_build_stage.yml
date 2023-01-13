@@ -2,6 +2,7 @@
 name: Build Lambda Counter Stage
 
 on:
+  workflow_dispatch:
   repository_dispatch:
     types: [trigger_build_stage]
   push:
