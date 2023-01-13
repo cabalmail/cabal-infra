@@ -73,7 +73,7 @@ data "http" "trigger_builds" {
   }
   request_body = <<EO_BODY
 {
-  "event_type": "trigger_cookbook_build_${var.prod ? "prod" : "stage"}",
+  "event_type": "trigger_build_${var.prod ? "prod" : "stage"}",
   "client_payload": {
     "bucket_name": "${resource.aws_s3_bucket.this.bucket}"
   }

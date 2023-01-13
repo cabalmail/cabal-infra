@@ -3,6 +3,8 @@ name: Build Lambda Counter (NodeJS Runtime) Prod
 
 on:
   workflow_dispatch:
+  repository_dispatch:
+    types: [trigger_build_prod]
   push:
     branches:
       - 'main'

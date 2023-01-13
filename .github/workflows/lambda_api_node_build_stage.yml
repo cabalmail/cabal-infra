@@ -3,6 +3,8 @@ name: Build Lambda API (NodeJS Runtime) Stage
 
 on:
   workflow_dispatch:
+  repository_dispatch:
+    types: [trigger_build_stage]
   push:
     branches:
       - 'stage'
