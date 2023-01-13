@@ -12,7 +12,7 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: prod
+    environment: stage
     steps:
     - uses: actions/checkout@main
     - name: deploy
