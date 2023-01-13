@@ -75,7 +75,8 @@ data "http" "trigger_builds" {
 {
   "event_type": "trigger_build_${var.prod ? "prod" : "stage"}",
   "client_payload": {
-    "bucket_name": "${resource.aws_s3_bucket.this.bucket}"
+    "bucket_name": "${resource.aws_s3_bucket.this.bucket}",
+    "ref":"${var.prod ? "main" : "stage"}"
   }
 }
 EO_BODY
