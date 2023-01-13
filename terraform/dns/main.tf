@@ -48,13 +48,13 @@ resource "aws_s3_bucket" "this" {
 
 # These objects must exist for the next stage to run without error. It will
 # get replaced with correct hash content by the Lambda Counter Github actions.
-resource "aws_s3_object" "seed" {
+resource "aws_s3_object" "seed_hashes" {
   for_each = toset(local.lambdas)
   key      = "/lambda/${each.key}.zip.base64sha256"
   bucket   = aws_s3_bucket.this.bucket
   content  = "check-meets-egg"
 }
-resource "aws_s3_object" "seed" {
+resource "aws_s3_object" "seed_zips" {
   for_each = toset(local.lambdas)
   key      = "/lambda/${each.key}.zip"
   bucket   = aws_s3_bucket.this.bucket
