@@ -8,7 +8,7 @@ on:
       - 'main'
     paths:
       - 'lambda/counter/node/**'
-      - '.github/workflows/lambda_node_build_prod.yml'
+      - '.github/workflows/lambda_api_node_build_prod.yml'
 
 jobs:
   deploy:

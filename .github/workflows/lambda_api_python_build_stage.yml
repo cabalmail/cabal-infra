@@ -8,7 +8,7 @@ on:
       - 'stage'
     paths:
       - 'lambda/api/python/**'
-      - '.github/workflows/lambda_python_build_stage.yml'
+      - '.github/workflows/lambda_api_python_build_stage.yml'
 
 jobs:
   deploy:

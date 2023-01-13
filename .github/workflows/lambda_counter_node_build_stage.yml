@@ -8,7 +8,7 @@ on:
       - 'stage'
     paths:
       - 'lambda/counter/node/**'
-      - '.github/workflows/lambda_node_build_stage.yml'
+      - '.github/workflows/lambda_counter_node_build_stage.yml'
 
 jobs:
   deploy:
