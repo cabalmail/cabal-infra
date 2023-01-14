@@ -12,6 +12,7 @@ const control_domain = config.control_domain;
     const domains = result.HostedZones.map(i => {
       return { [i.Name]: i.Id };
     });
+    Object.defineProperty(global, "domains", domains);
   } catch (err) {
     console.error(err)
   }
