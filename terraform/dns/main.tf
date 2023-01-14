@@ -49,13 +49,7 @@ resource "aws_s3_bucket" "this" {
 # Trigger builds.
 # Data source is ignored, but triggers Github actions as a side-effect.
 data "http" "trigger_builds" {
-  for_each     = toset([
-    "cookbook_deploy",
-    "lambda_api_node",
-    "lambda_api_python",
-    "lambda_counter_node",
-    "react_deploy"
-  ])
+  for_each     = toset(local.builds)
   url          = "${local.base_url}/${each.key}_${var.prod ? "prod" : "stage"}/dispatches"
   method       = "POST"
   request_headers = {
@@ -66,3 +60,11 @@ data "http" "trigger_builds" {
   }
   request_body = "inputs={\"bucket\":\"${resource.aws_s3_bucket.this.bucket}\"}&ref=${var.prod ? "main" : "stage"}"
 }
+
+curl \
+  -X POST \
+  -H "Accept: application/vnd.github+json" \
+  -H "Authorization: Bearer <YOUR-TOKEN>"\
+  -H "X-GitHub-Api-Version: 2022-11-28" \
+  https://api.github.com/repos/OWNER/REPO/actions/workflows/WORKFLOW_ID/dispatches \
+  -d '{"ref":"topic-branch","inputs":{"name":"Mona the Octocat","home":"San Francisco, CA"}}'
