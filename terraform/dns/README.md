@@ -22,10 +22,6 @@ The small Terraform stack in this directory stands up a Route53 Zone for the con
 | Name | Description |
 |------|-------------|
 | <a name="output_control_domain_name_servers"></a> [control\_domain\_name\_servers](#output\_control\_domain\_name\_servers) | n/a |
-| <a name="output_http_body"></a> [http\_body](#output\_http\_body) | n/a |
-| <a name="output_http_request_body"></a> [http\_request\_body](#output\_http\_request\_body) | n/a |
-| <a name="output_http_status"></a> [http\_status](#output\_http\_status) | n/a |
-| <a name="output_request_url"></a> [request\_url](#output\_request\_url) | n/a |
 ## Providers
 
 | Name | Version |
