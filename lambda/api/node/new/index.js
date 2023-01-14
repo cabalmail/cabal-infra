@@ -3,16 +3,16 @@ const AWS = require('aws-sdk');
 
 const config = require('./config.js').config;
 const control_domain = config.control_domain;
+var domains;
 (async function () {
   const route53 = new Route53Client({});
   const command = new ListHostedZonesCommand({});
 
   try {
     const result = await route53.send(command);
-    const domains = result.HostedZones.map(i => {
+    domains = result.HostedZones.map(i => {
       return { [i.Name]: i.Id };
     });
-    Object.defineProperty(global, "domains", domains);
   } catch (err) {
     console.error(err)
   }
