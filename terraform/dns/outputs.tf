@@ -3,7 +3,7 @@ output "control_domain_name_servers" {
 }
 
 output "request_url" {
-  value = "${local.base_url}/${each.key}_${var.prod ? "prod" : "stage"}/dispatches"
+  value = "${local.base_url}/cookbook_deploy_${var.prod ? "prod" : "stage"}/dispatches"
 }
 
 output "http_status" {

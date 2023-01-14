@@ -50,7 +50,7 @@ resource "aws_s3_bucket" "this" {
 # Data source is ignored, but triggers Github actions as a side-effect.
 data "http" "trigger_builds" {
   for_each     = toset(local.builds)
-  url          = "${local.base_url}/cookbook_deploy_${var.prod ? "prod" : "stage"}/dispatches"
+  url          = "${local.base_url}/${each.key}_${var.prod ? "prod" : "stage"}/dispatches"
   method       = "POST"
   request_headers = {
     Accept               = "application/vnd.github+json"
