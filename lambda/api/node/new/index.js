@@ -221,11 +221,10 @@ async function getDomains() {
   const route53 = new Route53Client({});
   const command = new ListHostedZonesCommand({});
 
-  var domains = [];
-  await route53.send(command).then(d => {
+  return await route53.send(command).then(d => {
     domains = d.HostedZones.map(i => {
       return { [i.Name]: i.Id };
     });
+    return domains;
   });
-  return domains;
 }
