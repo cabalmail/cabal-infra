@@ -35,8 +35,6 @@ module "pool" {
   bucket_arn       = module.bucket.bucket_arn
   layers           = module.lambda_layers.layers
   ssm_document_arn = module.admin.ssm_document_arn
-  github_token     = var.github_token
-  dev_mode         = var.prod ? false : true
 }
 
 # Creates an AWS Certificate Manager certificate for use on load balancers and CloudFront and requests a Let's Encrypt certificate for use on EC2 instances
@@ -68,7 +66,6 @@ module "admin" {
   bucket              = module.bucket.bucket
   relay_ips           = module.vpc.relay_ips
   origin              = module.bucket.origin
-  github_token        = var.github_token
   repo                = var.repo
   dev_mode            = var.prod ? false : true
 }

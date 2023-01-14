@@ -4,13 +4,13 @@ name: Build Lambda API (Python Runtime) Prod
 on:
   workflow_dispatch:
   repository_dispatch:
-    types: [xtrigger_api_python_build_prod]
+    types: [trigger_build_prod]
   push:
     branches:
       - 'main'
     paths:
       - 'lambda/api/python/**'
-      - '.github/workflows/lambda_python_build_prod.yml'
+      - '.github/workflows/lambda_api_python_build_prod.yml'
 
 jobs:
   deploy:

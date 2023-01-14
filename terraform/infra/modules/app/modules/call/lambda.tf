@@ -139,7 +139,7 @@ RUNPOLICY
 
 data "aws_s3_object" "lambda_function_hash" {
   bucket = var.bucket
-  key    = "/${var.trigger}/${var.name}.zip.base64sha256"
+  key    = "/lambda/${var.name}.zip.base64sha256"
 }
 
 #tfsec:ignore:aws-lambda-enable-tracing
@@ -152,7 +152,7 @@ resource "aws_lambda_function" "api_call" {
   role             = aws_iam_role.lambda.arn
   handler          = var.type == "python" ? "function.handler" : "index.handler"
   runtime          = var.runtime
-  architectures    = [ "arm64" ]
+  architectures    = ["arm64"]
   timeout          = 30
   memory_size      = var.memory
 }

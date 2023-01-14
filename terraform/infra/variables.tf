@@ -180,11 +180,6 @@ variable "smtpout_scale" {
   }
 }
 
-variable "github_token" {
-  type        = string
-  description = "Personal access token for github. Used to trigger workflows from Terraform."
-}
-
 variable "backup" {
   type        = bool
   description = "Whether to create backups of critical data. Defaults to the prod setting. Defaults to false."

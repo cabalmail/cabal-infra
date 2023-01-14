@@ -1,16 +1,16 @@
 ---
-name: Build Lambda API (NodeJS Runtime) Prod
+name: Build Lambda Counter Prod
 
 on:
   workflow_dispatch:
   repository_dispatch:
-    types: [xtrigger_counter_node_build_prod]
+    types: [trigger_build_prod]
   push:
     branches:
       - 'main'
     paths:
-      - 'lambda/api/node/**'
-      - '.github/workflows/lambda_node_build_prod.yml'
+      - 'lambda/counter/node/**'
+      - '.github/workflows/lambda_counter_node_build_prod.yml'
 
 jobs:
   deploy:
@@ -20,7 +20,7 @@ jobs:
     - uses: actions/checkout@main
     - name: deploy
       run: |
-        cd lambda/api/node
+        cd lambda/counter/node
         aws configure --profile deploy_lambda <<-EOF > /dev/null 2>&1
         ${{ secrets.AWS_ACCESS_KEY_ID }}
         ${{ secrets.AWS_SECRET_ACCESS_KEY }}

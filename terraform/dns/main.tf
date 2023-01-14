@@ -41,43 +41,23 @@ resource "aws_ssm_parameter" "name" {
   value       = var.control_domain
 }
 
-# S3 bucket for hosting React app
+# S3 bucket for hosting React app and artifacts.
 resource "aws_s3_bucket" "this" {
   bucket = "admin.${var.control_domain}"
 }
 
-# This object must exist for the next stage to run without error. It will
-# get replaced with correct hash content by the Lambda Counter Github actions.
-resource "aws_s3_object" "seed" {
-  for_each = toset([
-    "nodejs",        "python",           "assign_osid",
-    "list",          "new",              "revoke",
-    "delete_folder", "fetch_attachment", "fetch_inline_image",
-    "fetch_message", "list_attachments", "list_envelopes",
-    "list_folders",  "move_messages",    "new_folder",
-    "set_flag"
-  ])
-  key      = "/lambda/${each.key}.zip.base64sha256"
-  bucket   = aws_s3_bucket.this.bucket
-  content  = "check-meets-egg"
-}
-
-# Trigger cookbook build.
+# Trigger builds.
 # Data source is ignored, but triggers Github actions as a side-effect.
 data "http" "trigger_builds" {
-  url          = "https://api.github.com/repos/cabalmail/cabal-infra/dispatches"
+  for_each     = toset(local.builds)
+  url          = "${local.base_url}/${each.key}_${var.prod ? "prod" : "stage"}.yml/dispatches"
   method       = "POST"
   request_headers = {
     Accept               = "application/vnd.github+json"
     Authorization        = "Bearer ${var.github_token}"
     X-GitHub-Api-Version = "2022-11-28"
+    Content-Type         = "application/x-www-form-urlencoded"
+    X-Cabal-Bucket       = resource.aws_s3_bucket.this.bucket
   }
-  request_body = <<EO_BODY
-{
-  "event_type": "trigger_cookbook_build_${var.prod ? "prod" : "stage"}",
-  "client_payload": {
-    "bucket_name": "${resource.aws_s3_bucket.this.bucket}"
-  }
-}
-EO_BODY
+  request_body = "{\"inputs\":{},\"ref\":\"${var.prod ? "main" : "stage"}\"}"
 }

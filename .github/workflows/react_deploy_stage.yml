@@ -4,10 +4,10 @@ name: Upload React App Stage
 on:
   workflow_dispatch:
   repository_dispatch:
-    types: [trigger_react_build_prod]
+    types: [trigger_build_stage]
   push:
     branches:
-      - '0.3.0'
+      - 'stage'
     paths:
       - 'react/admin/public'
       - 'react/admin/public/*'

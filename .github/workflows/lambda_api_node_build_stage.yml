@@ -4,13 +4,13 @@ name: Build Lambda API (NodeJS Runtime) Stage
 on:
   workflow_dispatch:
   repository_dispatch:
-    types: [xtrigger_api_node_build_stage]
+    types: [trigger_build_stage]
   push:
     branches:
-      - '0.3.0'
+      - 'stage'
     paths:
       - 'lambda/api/node/**'
-      - '.github/workflows/lambda_node_build_stage.yml'
+      - '.github/workflows/lambda_api_node_build_stage.yml'
 
 jobs:
   deploy:

@@ -22,7 +22,6 @@ The small Terraform stack in this directory stands up a Route53 Zone for the con
 | Name | Description |
 |------|-------------|
 | <a name="output_control_domain_name_servers"></a> [control\_domain\_name\_servers](#output\_control\_domain\_name\_servers) | n/a |
-| <a name="output_github_response"></a> [github\_response](#output\_github\_response) | n/a |
 ## Providers
 
 | Name | Version |
@@ -41,7 +40,6 @@ The small Terraform stack in this directory stands up a Route53 Zone for the con
 |------|------|
 | [aws_route53_zone.cabal_control_zone](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route53_zone) | resource |
 | [aws_s3_bucket.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket) | resource |
-| [aws_s3_object.seed](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_object) | resource |
 | [aws_ssm_parameter.name](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ssm_parameter) | resource |
 | [aws_ssm_parameter.zone](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ssm_parameter) | resource |
 | [http_http.trigger_builds](https://registry.terraform.io/providers/hashicorp/http/latest/docs/data-sources/http) | data source |

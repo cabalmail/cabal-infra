@@ -1,21 +1,21 @@
 ---
-name: Build Lambda API (NodeJS Runtime) Stage
+name: Build Lambda Counter Stage
 
 on:
   workflow_dispatch:
   repository_dispatch:
-    types: [xtrigger_counter_node_build_prod]
+    types: [trigger_build_stage]
   push:
     branches:
-      - '0.3.0'
+      - 'stage'
     paths:
       - 'lambda/counter/node/**'
-      - '.github/workflows/lambda_node_build_prod.yml'
+      - '.github/workflows/lambda_counter_node_build_stage.yml'
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: prod
+    environment: stage
     steps:
     - uses: actions/checkout@main
     - name: deploy

@@ -4,7 +4,7 @@ name: Upload Cookbook Prod
 on:
   workflow_dispatch:
   repository_dispatch:
-    types: [trigger_cookbook_build_prod]
+    types: [trigger_build_prod]
   push:
     branches:
       - 'main'

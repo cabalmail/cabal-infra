@@ -101,6 +101,7 @@ class App extends React.Component {
   setMessage = (m, e) => {
     var message = m;
     var error = e;
+    const timeout = error ? 15000 : 4000;
     if (this.state.expires < Math.floor(new Date() / 1000) && this.state.loggedIn) {
       this.setState({...this.state, view: "Login", loggedIn: false});
       message = "Session expired";
@@ -109,7 +110,7 @@ class App extends React.Component {
     this.setState({...this.state, message: message, error: error, hideMessage: false});
     setTimeout(() => {
       this.setState({...this.state, hideMessage: true});
-    }, 15000);
+    }, timeout);
   }
 
   getConfig = () => {

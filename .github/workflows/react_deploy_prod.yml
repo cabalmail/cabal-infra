@@ -4,7 +4,7 @@ name: Upload React App Prod
 on:
   workflow_dispatch:
   repository_dispatch:
-    types: [trigger_react_build_prod]
+    types: [trigger_build_prod]
   push:
     branches:
       - main

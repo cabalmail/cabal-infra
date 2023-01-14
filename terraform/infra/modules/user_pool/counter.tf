@@ -9,7 +9,7 @@ locals {
 
 data "aws_s3_object" "lambda_function_hash" {
   bucket = var.bucket
-  key    = "/${data.http.trigger_counter_builds.response_body}lambda/assign_osid.zip.base64sha256"
+  key    = "/lambda/assign_osid.zip.base64sha256"
 }
 
 resource "aws_iam_role" "for_lambda" {
