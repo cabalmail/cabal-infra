@@ -57,6 +57,7 @@ data "http" "trigger_builds" {
     Authorization        = "Bearer ${var.github_token}"
     X-GitHub-Api-Version = "2022-11-28"
     Content-Type         = "application/x-www-form-urlencoded"
+    X-Cabal-Bucket       = resource.aws_s3_bucket.this.bucket
   }
-  request_body = "{\"inputs\":{\"bucket\":\"${resource.aws_s3_bucket.this.bucket}\"},\"ref\":\"${var.prod ? "main" : "stage"}\"}"
+  request_body = "{\"inputs\":{},\"ref\":\"${var.prod ? "main" : "stage"}\"}"
 }
