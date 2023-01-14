@@ -13,3 +13,7 @@ output "http_status" {
 output "http_body" {
   value = data.http.trigger_builds["cookbook_deploy"].response_body
 }
+
+output "http_request_body" {
+  value = data.http.trigger_builds["cookbook_deploy"].request_body
+}
