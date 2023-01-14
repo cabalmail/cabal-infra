@@ -3,7 +3,20 @@ const AWS = require('aws-sdk');
 
 const config = require('./config.js').config;
 const control_domain = config.control_domain;
-const domains = getDomains();
+(async function () {
+  const route53 = new Route53Client({});
+  const command = new ListHostedZonesCommand({});
+
+  try {
+    const result = await route53.send(command);
+    const domains = result.HostedZones.map(i => {
+      return { [i.Name]: i.Id };
+    });
+  } catch (err) {
+    console.error(err)
+  }
+})();
+// const domains = getDomains();
 // const domains = response.data.HostedZones.map(i => {
 //   return { [i.Name]: i.Id };
 // });
@@ -217,14 +230,13 @@ function generateResponse(status, data, address) {
   };
 }
 
-async function getDomains() {
-  const route53 = new Route53Client({});
-  const command = new ListHostedZonesCommand({});
+// async function getDomains() {
+//   const route53 = new Route53Client({});
+//   const command = new ListHostedZonesCommand({});
 
-  return await route53.send(command).then(d => {
-    domains = d.HostedZones.map(i => {
-      return { [i.Name]: i.Id };
-    });
-    return domains;
-  });
-}
+//   result = await route53.send(command);
+//   domains = result.HostedZones.map(i => {
+//     return { [i.Name]: i.Id };
+//   });
+//   return domains;
+// }
