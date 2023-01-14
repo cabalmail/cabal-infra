@@ -1,2 +1,2 @@
-@aws-sdk/client-cognito-identity
+@aws-sdk/client-route-53
 aws-sdk
