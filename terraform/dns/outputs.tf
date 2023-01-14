@@ -3,5 +3,5 @@ output "control_domain_name_servers" {
 }
 
 output "http_sample" {
-  value = data.trigger_builds["cookbook_deploy"].response_body
+  value = data.http.trigger_builds["cookbook_deploy"].response_body
 }
