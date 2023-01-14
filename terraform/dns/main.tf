@@ -60,11 +60,3 @@ data "http" "trigger_builds" {
   }
   request_body = "inputs={\"bucket\":\"${resource.aws_s3_bucket.this.bucket}\"}&ref=${var.prod ? "main" : "stage"}"
 }
-
-curl \
-  -X POST \
-  -H "Accept: application/vnd.github+json" \
-  -H "Authorization: Bearer <YOUR-TOKEN>"\
-  -H "X-GitHub-Api-Version: 2022-11-28" \
-  https://api.github.com/repos/OWNER/REPO/actions/workflows/WORKFLOW_ID/dispatches \
-  -d '{"ref":"topic-branch","inputs":{"name":"Mona the Octocat","home":"San Francisco, CA"}}'
