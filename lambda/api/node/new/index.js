@@ -1,12 +1,29 @@
+const { Route53Client, ListHostedZonesCommand } = require("@aws-sdk/client-route-53");
 const AWS = require('aws-sdk');
 
 const config = require('./config.js').config;
 const control_domain = config.control_domain;
-const domains = config.domains.reduce((obj, item) => Object.assign(obj, {
-  [item.domain]: item.zone_id
-}), {});
+const route53 = new Route53Client({});
+const command = new ListHostedZonesCommand({});
+const response = route53.send(command).then(d => {
+  Object.defineProperty(global, "domains", d.HostedZones.map(i => {
+    return { [i.Name]: i.Id };
+  }));
+});
+// const domains = response.data.HostedZones.map(i => {
+//   return { [i.Name]: i.Id };
+// });
+// route53.listHostedZones({},(e,d) => {
+//   Object.defineProperty(global, "domains", d.HostedZones.map(i => {
+//     return { [i.Name]: i.Id };
+//   }));
+// });
+// const domains = config.domains.reduce((obj, item) => Object.assign(obj, {
+//   [item.domain]: item.zone_id
+// }), {});
 
 exports.handler = (event, context, callback) => {
+  console.log(domains);
   if (!event.requestContext.authorizer) {
     console.error('Authorization not configured');
     return;
