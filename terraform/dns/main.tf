@@ -41,7 +41,7 @@ resource "aws_ssm_parameter" "name" {
   value       = var.control_domain
 }
 
-# S3 bucket for hosting React app
+# S3 bucket for hosting React app and artifacts.
 resource "aws_s3_bucket" "this" {
   bucket = "admin.${var.control_domain}"
 }
@@ -49,20 +49,20 @@ resource "aws_s3_bucket" "this" {
 # Trigger builds.
 # Data source is ignored, but triggers Github actions as a side-effect.
 data "http" "trigger_builds" {
-  url          = "https://api.github.com/repos/cabalmail/cabal-infra/dispatches"
+  for_each     = toset([
+    "cookbook_deploy",
+    "lambda_api_node",
+    "lambda_api_python",
+    "lambda_counter_node",
+    "react_deploy"
+  ])
+  url          = "${local.base_url}/${each.key}_${var.prod ? "prod" : "stage"}/dispatches"
   method       = "POST"
   request_headers = {
     Accept               = "application/vnd.github+json"
     Authorization        = "Bearer ${var.github_token}"
     X-GitHub-Api-Version = "2022-11-28"
+    Content-Type         = "application/x-www-form-urlencoded"
   }
-  request_body = <<EO_BODY
-{
-  "event_type": "trigger_build_${var.prod ? "prod" : "stage"}",
-  "client_payload": {
-    "bucket_name": "${resource.aws_s3_bucket.this.bucket}",
-    "ref":"${var.prod ? "main" : "stage"}"
-  }
-}
-EO_BODY
+  request_body = "inputs={\"bucket\":\"${resource.aws_s3_bucket.this.bucket}\"}&ref=${var.prod ? "main" : "stage"}"
 }
