@@ -3,20 +3,7 @@ const AWS = require('aws-sdk');
 
 const config = require('./config.js').config;
 const control_domain = config.control_domain;
-var domains;
-(async function () {
-  const route53 = new Route53Client({});
-  const command = new ListHostedZonesCommand({});
-
-  try {
-    const result = await route53.send(command);
-    domains = result.HostedZones.map(i => {
-      return { [i.Name]: i.Id };
-    });
-  } catch (err) {
-    console.error(err)
-  }
-})();
+const domains = getDomains();
 // const domains = getDomains();
 // const domains = response.data.HostedZones.map(i => {
 //   return { [i.Name]: i.Id };
@@ -31,7 +18,7 @@ var domains;
 // }), {});
 
 exports.handler = (event, context, callback) => {
-  console.log(domains);
+  console.log(domains); // undefined
   if (!event.requestContext.authorizer) {
     console.error('Authorization not configured');
     return;
@@ -229,6 +216,23 @@ function generateResponse(status, data, address) {
       'Access-Control-Allow-Origin': '*',
     }
   };
+}
+
+function getDomains() {
+  return (async function () {
+    const route53 = new Route53Client({});
+    const command = new ListHostedZonesCommand({});
+  
+    try {
+      const result = await route53.send(command);
+      domains = result.HostedZones.map(i => {
+        return { [i.Name]: i.Id };
+      });
+      return domains;
+    } catch (err) {
+      console.error(err)
+    }
+  })();
 }
 
 // async function getDomains() {
