@@ -58,5 +58,5 @@ data "http" "trigger_builds" {
     X-GitHub-Api-Version = "2022-11-28"
     Content-Type         = "application/x-www-form-urlencoded"
   }
-  request_body = "inputs={\"bucket\":\"${resource.aws_s3_bucket.this.bucket}\"}&ref=${var.prod ? "main" : "stage"}"
+  request_body = "\"inputs\":{\"bucket\":\"${resource.aws_s3_bucket.this.bucket}\"},\"ref\":\"${var.prod ? "main" : "stage"}\""
 }
