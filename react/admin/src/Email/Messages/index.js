@@ -205,7 +205,7 @@ class Messages extends React.Component {
     }
   }
 
-  setFolder(folder) {
+  setFolder = (folder) => {
     this.setState({...this.state, selected_messages: []});
     this.props.setFolder(folder);
   }
