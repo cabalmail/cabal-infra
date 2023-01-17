@@ -88,7 +88,7 @@ class Request extends React.Component {
     return axios(
       {
         method: 'post',
-        url: '/new',
+        url: '/new_address',
         baseURL: this.props.api_url,
         headers: {
           'Authorization': this.props.token

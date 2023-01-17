@@ -96,9 +96,9 @@ locals {
       cache     = true
       cache_ttl = 60
     },
-    new              = {
-      runtime   = "nodejs14.x"
-      type      = "nodejs"
+    new_address      = {
+      runtime   = "python2.9"
+      type      = "python"
       method    = "POST"
       memory    = 128
       cache     = false
