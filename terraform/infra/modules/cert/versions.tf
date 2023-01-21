@@ -2,11 +2,15 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 3.70.0"
+      version = "~> 4.41"
     }
     acme = {
       source  = "vancluever/acme"
       version = "2.2.0"
+    }
+    tls = {
+      source = "hashicorp/tls"
+      version = ">= 4.0.0"
     }
   }
 

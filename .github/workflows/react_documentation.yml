@@ -1,11 +1,11 @@
+---
 name: Document React App
 
 on:
   push:
-    branches:
-      - main
     paths:
-      - 'react/**'
+      - 'react/admin/src/**/*.js'
+      - 'react/admin/src/*.js'
       - '.github/workflows/react_documentation.yml'
 
 jobs:

@@ -2,19 +2,21 @@
 
 Before using this repo, you must set up an appropriate environment.
 
+## Amazon Web Services Account
+
+[Set up an Amazon Web Services Account](./aws.md).
+
 ## Github
 
 [Set up a Github repository](./github.md).
-
-## AWS Account
-
-[Set up an AWS Account](./aws.md).
 
 ## Terraform
 
 [Set up Terraform](./terraform.md).
 
 ## Domain registration
+
+NOTE: Domain registration is not free. You will need to provide a form of payment.
 
 You must register your desired domains (control and mail) with your chosen registrar. Cabalmail requires exactly one control domain and at least one mail domain. Registration requires an email address. You can use a temporary email account with any of the free providers for this address, and later, you can update the registration records with a self-hosted address once your hosting infrastructure is up and running.
 
@@ -24,17 +26,17 @@ If you don't have a preference for registrars, you can use the [Route 53 Registr
 
 # Provisioning
 
-The developers have striven to make provisioning as automated as possible. However, there are some manual steps. Several of these steps are discussed above under [Prerequisites](#Prerequisites), and others are discussed below under [Post-Autonation Steps](#PostAutomation). However, one unavoidably must be attended to during the provsioning. This is why the terraform directoy has been subdivided into two subdirectories: The first attends to the initial steps, and the second all the rest. The order is dns first and infra second. The overwhelming majority of resources are created by infra.
+The developers have striven to make provisioning as automated as possible. However, there are some manual steps. Several of these steps are discussed above under [Prerequisites](#Prerequisites), and others are discussed below under [Post-Automation Steps](#PostAutomation). However, one step unavoidably must be attended to during the provsioning. This is why the terraform directoy has been subdivided into two subdirectories: The first performs the initial automation, and the second all the rest. The order is dns first and infra second. The overwhelming majority of resources are created by infra. In between, you will be instructed to update your domain registrations and add a secret to your Github repository settings.
 
 1. Set up the [prerequisites](#Prerequisites) above.
 
-2. Run the terraform/dns stack.
+2. Run the terraform/dns workspace. WARNING: Performing this step will result in charges on your credit card from Amazon Web Services.
 
     1. Queue a plan in your Terraform Cloud terraform/dns workspace.
     2. When it finishes the plan phase, confirm and apply.
-    3. The output will include name servers. [Update the domain registration](./registrar.md) for your control domain with these name servers. *Before proceeding to the next step, make sure this change is complete*.
+    3. The output will include name servers. [Update the domain registration](./registrar.md) for your control domain with these name servers. *Before proceeding to the terraform/infa workspace, make sure this change is complete*.
 
-3. Run the terraform/infra workspace.
+3. Run the terraform/infra workspace. WARNING: Performing this step will result in charges on your credit card from Amazon Web Services.
 
     1. Queue a plan in your Terraform Cloud terraform/infra workspace.
     2. When it finishes the plan phase, confirm and apply.
@@ -43,7 +45,7 @@ The developers have striven to make provisioning as automated as possible. Howev
 
 # Reprovisioning
 
-You can rerun the provisioning steps any time. If you have not changed anything in the code or in the variables, the operation should be safe. At worst, it will update the AMI on which the machines run, resulting in new machines being launched, but no mail will be lost, with the rare exception of mail that had been queued for redelivery following a transitory error.
+You can rerun the provisioning steps any time. If you have not changed anything in the code or in the variables, the operation should be safe. If either of the above Terraform workspaces fail to provision, running them again may be sufficient.
 
 Theoretically, it should also be safe to change any of the variables except the AWS region. As long as the new values are sensible, Terraform should reestablish the infrastructure with the new parameters, and your mail should still be there. But we do not guarantee this, and we strongly recommend that you [perform backups](./operations.md) first.
 

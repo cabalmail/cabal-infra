@@ -22,3 +22,14 @@ variable "control_domain" {
     error_message = "The control_domain does not appear to be a valid domain name."
   }
 }
+
+variable "prod" {
+  type        = bool
+  default     = false
+  description = "Set to true to treat this stack as a production workload."
+}
+
+variable "github_token" {
+  type        = string
+  description = "Personal access token for github. Used to trigger workflows from Terraform."
+}

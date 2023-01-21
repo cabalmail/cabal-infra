@@ -3,7 +3,7 @@
 <p><a href="/README.md">Main documentation</a></p>
 </div><div style="padding-left: 11em;">
 # App
-Application for managing Cabalmail addresses via web user interface
+Application for reading Cabalmail email and managing Cabalmail addresses and folders
 
 ## Methods
 ### setState
@@ -16,12 +16,14 @@ Returns: null
 ### setMessage
 Modifiers: none
 
-Parameters: message (null)
+Parameters: m
+e (null
+null)
 
 Returns: null
 
 ### getConfig
-Modifiers: async
+Modifiers: none
 
 Parameters:  ()
 

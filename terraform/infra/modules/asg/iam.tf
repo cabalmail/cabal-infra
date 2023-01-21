@@ -8,12 +8,11 @@ resource "aws_iam_policy" "node_permissions" {
     Statement = [
       {
         Action   = [
-          "s3:*",
+          "s3:GetObject",
         ]
         Effect   = "Allow"
         Resource = [
-          var.s3_arn,
-          "${var.s3_arn}/*",
+          "${var.bucket_arn}/cabal.tar.gz",
         ]
       },
       {

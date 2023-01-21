@@ -1,6 +1,6 @@
-# Recommended Steps for Setting Up an AWS Account
+# Recommended Steps for Setting Up an Amazon Web Services Account
 
-You must [sign up for an AWS account](https://portal.aws.amazon.com/billing/signup#/start). You may use an existing account, but I recommend creating a dedicated account for this workload.
+You must [sign up for an Amazon Web Services account](https://portal.aws.amazon.com/billing/signup#/start). You may use an existing account, but I recommend creating a dedicated account for this workload.
 
 After signing up, perform the following steps:
 
@@ -28,12 +28,13 @@ After signing up, perform the following steps:
                     "apigateway:*",
                     "autoscaling:*",
                     "backup:*",
-                    "backup-storage:*"
+                    "backup-storage:*",
                     "cloudfront:*",
                     "cognito-identity:*",
                     "cognito-idp:*",
                     "dynamodb:*",
                     "ec2:*",
+                    "ecr:*",
                     "elasticfilesystem:*",
                     "elasticloadbalancing:*",
                     "iam:*",
@@ -73,14 +74,37 @@ After signing up, perform the following steps:
                 "Sid": "TheSloth",
                 "Effect": "Allow",
                 "Action": [
-                  "s3:DeleteObject",
-                  "s3:GetObject",
-                  "s3:GetObjectAcl",
-                  "s3:ListAllMyBuckets",
-                  "s3:ListBucket",
-                  "s3:PutObject",
-                  "s3:PutObjectAcl"
-                  ],
+                    "s3:DeleteObject",
+                    "s3:GetObject",
+                    "s3:GetObjectAcl",
+                    "s3:ListAllMyBuckets",
+                    "s3:ListBucket",
+                    "s3:PutObject",
+                    "s3:PutObjectAcl"
+                ],
+                "Resource": "*"
+            },
+            {
+                "Sid": "NeyOperaHouse",
+                "Effect": "Allow",
+                "Action": [
+                    "ssm:GetParameter*"
+                ],
+                "Resource": "arn:aws:ssm:*:*:parameter/cabal/*"
+            },
+            {
+                "Sid": "Hartha",
+                "Effect": "Allow",
+                "Action": [
+                    "cloudfront:GetDistribution",
+                    "cloudfront:GetStreamingDistribution",
+                    "cloudfront:GetDistributionConfig",
+                    "cloudfront:ListDistributions",
+                    "cloudfront:ListCloudFrontOriginAccessIdentities",
+                    "cloudfront:CreateInvalidation",
+                    "cloudfront:GetInvalidation",
+                    "cloudfront:ListInvalidations"
+                ],
                 "Resource": "*"
             }
         ]

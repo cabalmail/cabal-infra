@@ -1,0 +1,27 @@
+---
+name: Run tfsec
+
+on:
+  push:
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/terraform_tfsec.yml'
+
+jobs:
+  tfsec:
+    name: tfsec
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@master
+      - name: tfsec infra
+        uses: aquasecurity/tfsec-action@v1.0.0
+        with:
+          soft_fail: false
+          working_directory: ./terraform/infra
+      - name: tfsec dns
+        uses: aquasecurity/tfsec-action@v1.0.0
+        with:
+          soft_fail: false
+          working_directory: ./terraform/dns

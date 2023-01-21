@@ -14,7 +14,7 @@ Parameters: data (null)
 Returns: null
 
 ### revokeAddress
-Modifiers: async
+Modifiers: none
 
 Parameters: a (null)
 
@@ -49,7 +49,7 @@ Parameters: e (null)
 Returns: null
 
 ### getList
-Modifiers: async
+Modifiers: none
 
 Parameters: e (null)
 

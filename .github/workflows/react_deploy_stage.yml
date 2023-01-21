@@ -1,0 +1,40 @@
+---
+name: Upload React App Stage
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [trigger_build_stage]
+  push:
+    branches:
+      - 'stage'
+    paths:
+      - 'react/admin/public'
+      - 'react/admin/public/*'
+      - 'react/admin/public/*/**'
+      - 'react/admin/src'
+      - 'react/admin/src/*'
+      - 'react/admin/src/*/**'
+      - '.github/workflows/react_deploy_stage.yml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: stage
+    steps:
+    - uses: actions/checkout@main
+    - name: deploy
+      run: |
+        cd react/admin
+        aws configure --profile deploy_react <<-EOF > /dev/null 2>&1
+        ${{ secrets.AWS_ACCESS_KEY_ID }}
+        ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        us-east-1
+        json
+        EOF
+        yarn install
+        NODE_ENV=development yarn build --profile
+        AWS_S3_BUCKET="admin.$(aws ssm get-parameter --name '/cabal/control_domain_zone_name' --profile deploy_react | jq -r '.Parameter.Value')"
+        AWS_CF_DISTRIBUTION=$(aws ssm get-parameter --name "/cabal/react-config/cf-distribution" --profile deploy_react | jq -r '.Parameter.Value')
+        aws s3 sync build "s3://${AWS_S3_BUCKET}/" --profile deploy_react --no-progress
+        aws cloudfront create-invalidation --distribution-id "${AWS_CF_DISTRIBUTION}" --paths '/*' --profile deploy_react

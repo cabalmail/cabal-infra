@@ -1,6 +1,6 @@
 {
-  "short_name": "Cabalmail Admin",
-  "name": "Manage Cabalmail email addresses",
+  "short_name": "Cabalmail Web App",
+  "name": "Cabalmail Web Application",
   "icons": [
     {
       "src": "favicon.ico",

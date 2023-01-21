@@ -25,16 +25,11 @@ resource "aws_ssm_parameter" "cabal_private_key" {
   description = "Cabal SSL Key"
   type        = "SecureString"
   value       = tls_private_key.pk.private_key_pem
-
-  tags = {
-    environment = "production"
-  }
 }
 
 resource "tls_cert_request" "csr" {
-  key_algorithm             = "RSA"
-  private_key_pem           = tls_private_key.pk.private_key_pem
-  dns_names                 = ["*.${var.control_domain}"]
+  private_key_pem = tls_private_key.pk.private_key_pem
+  dns_names       = ["*.${var.control_domain}"]
 
   subject {
     common_name = var.control_domain
@@ -58,10 +53,6 @@ resource "aws_ssm_parameter" "cert" {
   description = "Cabal SSL Certificate"
   type        = "SecureString"
   value       = acme_certificate.cert.certificate_pem
-
-  tags = {
-    environment = "production"
-  }
 }
 
 resource "aws_ssm_parameter" "chain" {
@@ -69,8 +60,4 @@ resource "aws_ssm_parameter" "chain" {
   description = "Cabal Chain Certificate"
   type        = "SecureString"
   value       = acme_certificate.cert.issuer_pem
-
-  tags = {
-    environment = "production"
-  }
 }

@@ -1,10 +1,21 @@
 data "aws_ami" "amazon_linux_2" {
   most_recent = true
   owners      = ["amazon"]
-  name_regex  = "^amzn2-ami-hvm-2.0.20\\d{6}.\\d-x86_64-gp2$"
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-2.0.20*"]
+  }
+  filter {
+    name   = "architecture"
+    values = ["x86_64"]
+  }
   filter {
     name   = "virtualization-type"
     values = ["hvm"]
+  }
+  filter {
+    name   = "root-device-type"
+    values = ["ebs"]
   }
 }
 
@@ -41,19 +52,9 @@ variable "target_groups" {
   description = "List of load balancer target groups in which to register IMAP instances."
 }
 
-variable "artifact_bucket" {
-  type        = string
-  description = "S3 bucket where cookbooks are stored."
-}
-
 variable "table_arn" {
   type        = string
   description = "DynamoDB table arn"
-}
-
-variable "s3_arn" {
-  type        = string
-  description = "S3 bucket arn"
 }
 
 variable "efs_dns" {
@@ -116,7 +117,17 @@ variable "cidr_block" {
   description = "Local CIDR range"
 }
 
-variable "cookbook_etag" {
+variable "bucket" {
   type        = string
-  description = "Hash value that changes when the cookbook changes. Used to trigger recreation of autoscale groups and thus replacement of instances."
+  description = "Name of s3 bucket"
+}
+
+variable "bucket_arn" {
+  type        = string
+  description = "ARN of s3 bucket"
+}
+
+variable "master_password" {
+  type        = string
+  description = "Master password for Lambda-to-IMAP access"
 }

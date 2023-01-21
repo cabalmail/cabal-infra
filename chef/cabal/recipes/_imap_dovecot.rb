@@ -25,6 +25,11 @@ cookbook_file '/etc/dovecot/conf.d/20-imap.conf' do
   notifies :restart, 'service[dovecot]', :delayed
 end
 
+cookbook_file '/etc/dovecot/conf.d/auth-master.conf.ext' do
+  source 'dovecot-auth-master.conf'
+  notifies :restart, 'service[dovecot]', :delayed
+end
+
 cookbook_file '/etc/pam.d/dovecot' do
   source 'pam-dovecot'
   notifies :restart, 'service[dovecot]', :delayed

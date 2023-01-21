@@ -13,6 +13,7 @@ resource "aws_nat_gateway" "nat" {
     Name = "cabal-nat-${count.index}"
   }
   # No native way to do this in the aws terraform provider
+  # See https://github.com/hashicorp/terraform-provider-aws/issues/20876
   provisioner "local-exec" { # Create reverse DNS
     command = join(" ", [
       "aws ec2 modify-address-attribute",

@@ -6,6 +6,13 @@
 
 provider "aws" {
   region = var.aws_region
+  default_tags {
+    tags = {
+      environment          = var.prod ? "production" : "non-production"
+      managed_by_terraform = "y"
+      terraform_repo       = var.repo
+    }
+  }
 }
 
 # Create the zone for the control domain.
@@ -14,9 +21,7 @@ resource "aws_route53_zone" "cabal_control_zone" {
   comment       = "Control domain for cabal-mail infrastructure"
   force_destroy = true
   tags          = {
-    Name                 = "cabal-control-zone"
-    managed_by_terraform = "y"
-    terraform_repo       = var.repo
+    Name = "cabal-control-zone"
   }
 }
 
@@ -26,55 +31,33 @@ resource "aws_ssm_parameter" "zone" {
   description = "Route 53 Zone ID"
   type        = "String"
   value       = aws_route53_zone.cabal_control_zone.zone_id
-
-  tags = {
-    environment          = "production"
-    managed_by_terraform = "y"
-    terraform_repo       = var.repo
-  }
 }
 
-# Creates a Cognito User Pool
-module "pool" {
-  source         = "./modules/user_pool"
-  control_domain = var.control_domain
-  zone_id        = aws_route53_zone.cabal_control_zone.zone_id
-}
-
-# Save Cognito user pool information in AWS SSM Parameter Store so that terraform/infra can read it.
-resource "aws_ssm_parameter" "cognito" {
-  name        = "/cabal/admin/cognito"
-  description = "Cognito User Pool"
+# Save the zone name in AWS SSM Parameter Store so that terraform/infra can read it.
+resource "aws_ssm_parameter" "name" {
+  name        = "/cabal/control_domain_zone_name"
+  description = "Route 53 Zone Name"
   type        = "String"
-  value       = jsonencode(module.pool)
-
-  tags = {
-    environment          = "production"
-    managed_by_terraform = "y"
-    terraform_repo       = var.repo
-  }
+  value       = var.control_domain
 }
 
-# S3 bucket for deploying React app
-resource "aws_s3_bucket" "react_app" {
-  acl    = "public-read"
+# S3 bucket for hosting React app and artifacts.
+resource "aws_s3_bucket" "this" {
   bucket = "admin.${var.control_domain}"
-  website {
-    index_document = "index.html"
-    error_document = "error.html"
-  }
 }
 
-# Save bucket information in AWS SSM Parameter Store so that terraform/infra can read it.
-resource "aws_ssm_parameter" "react_app" {
-  name        = "/cabal/admin/bucket"
-  description = "S3 bucket for React App"
-  type        = "String"
-  value       = jsonencode(aws_s3_bucket.react_app)
-
-  tags = {
-    environment          = "production"
-    managed_by_terraform = "y"
-    terraform_repo       = var.repo
+# Trigger builds.
+# Data source is ignored, but triggers Github actions as a side-effect.
+data "http" "trigger_builds" {
+  for_each     = toset(local.builds)
+  url          = "${local.base_url}/${each.key}_${var.prod ? "prod" : "stage"}.yml/dispatches"
+  method       = "POST"
+  request_headers = {
+    Accept               = "application/vnd.github+json"
+    Authorization        = "Bearer ${var.github_token}"
+    X-GitHub-Api-Version = "2022-11-28"
+    Content-Type         = "application/x-www-form-urlencoded"
+    X-Cabal-Bucket       = resource.aws_s3_bucket.this.bucket
   }
+  request_body = "{\"inputs\":{},\"ref\":\"${var.prod ? "main" : "stage"}\"}"
 }

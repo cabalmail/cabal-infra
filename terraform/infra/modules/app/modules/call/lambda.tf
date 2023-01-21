@@ -1,15 +1,7 @@
-data "archive_file" "code" {
-  type        = "zip"
-  output_path = "${var.name}_lambda.zip"
-
-  source {
-    content  = templatefile("${path.module}/../../${var.name}_source/index.js", {
-      control_domain = var.control_domain
-      repo           = var.repo
-      domains        = {for domain in var.domains : domain.domain => domain.zone_id}
-      })
-    filename = "index.js"
-  }
+locals {
+  hosted_zone_arns = join(",",[for domain in var.domains : "\"${domain.arn}\""])
+  wildcard         = "*"
+  zip_file         = "s3://${var.bucket}/lambda/${var.name}_lambda.zip"
 }
 
 resource "aws_lambda_permission" "api_exec" {
@@ -43,7 +35,7 @@ resource "aws_iam_role" "lambda" {
         "Service": "lambda.amazonaws.com"
       },
       "Effect": "Allow",
-      "Sid": "${var.name}Sid"
+      "Sid": "${replace(var.name, "_", "")}Sid"
     }
   ]
 }
@@ -60,25 +52,56 @@ resource "aws_iam_role_policy" "lambda" {
         {
             "Effect": "Allow",
             "Action": [
+                "ssm:DescribeParameters"
+            ],
+            "Resource": "arn:aws:ssm:${var.region}:${var.account}:*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ssm:GetParameter"
+            ],
+            "Resource": "arn:aws:ssm:${var.region}:${var.account}:parameter/cabal/master_password"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+              "s3:ListBucket"
+            ],
+            "Resource": "arn:aws:s3:::cache.${var.control_domain}"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+              "s3:PutObject",
+              "s3:GetObject"
+            ],
+            "Resource": "arn:aws:s3:::cache.${var.control_domain}/${local.wildcard}"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
                 "ssm:StartSession",
                 "ssm:SendCommand"
             ],
-            "Resource": "arn:aws:ec2:${var.region}:${var.account}:instance/*"
+            "Resource": "arn:aws:ec2:${var.region}:${var.account}:instance/${local.wildcard}"
         },
         {
             "Effect": "Allow",
             "Action": "ssm:SendCommand",
-            "Resource": "arn:aws:ssm:${var.region}:${var.account}:document/cabal_*"
+            "Resource": "arn:aws:ssm:${var.region}:${var.account}:document/cabal_chef_document"
         },
         {
             "Effect": "Allow",
             "Action": "route53:ChangeResourceRecordSets",
-            "Resource": "arn:aws:route53:::hostedzone/*"
+            "Resource": [
+              ${local.hosted_zone_arns}
+            ]
         },
         {
             "Effect": "Allow",
             "Action": "logs:CreateLogGroup",
-            "Resource": "arn:aws:logs:${var.region}:*:*"
+            "Resource": "arn:aws:logs:${var.region}:${var.account}:${local.wildcard}"
         },
         {
             "Effect": "Allow",
@@ -87,7 +110,7 @@ resource "aws_iam_role_policy" "lambda" {
                 "logs:PutLogEvents"
             ],
             "Resource": [
-                "arn:aws:logs:${var.region}:*:log-group:/aws/lambda/${aws_lambda_function.api_call.function_name}:*"
+                "arn:aws:logs:${var.region}:${var.account}:log-group:/aws/lambda/${aws_lambda_function.api_call.function_name}:${local.wildcard}"
             ]
         },
         {
@@ -106,7 +129,7 @@ resource "aws_iam_role_policy" "lambda" {
                 "dynamodb:DescribeGlobalTable"
             ],
             "Resource": [
-                "arn:aws:dynamodb:${var.region}:*:table/cabal-addresses"
+                "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-addresses"
             ]
         }
     ]
@@ -114,11 +137,22 @@ resource "aws_iam_role_policy" "lambda" {
 RUNPOLICY
 }
 
+data "aws_s3_object" "lambda_function_hash" {
+  bucket = var.bucket
+  key    = "/lambda/${var.name}.zip.base64sha256"
+}
+
+#tfsec:ignore:aws-lambda-enable-tracing
 resource "aws_lambda_function" "api_call" {
-  filename = "${var.name}_lambda.zip"
-  source_code_hash = data.archive_file.code.output_base64sha256
-  function_name = var.name
-  role = aws_iam_role.lambda.arn
-  handler = "index.handler"
-  runtime = var.runtime
+  s3_bucket        = var.bucket
+  s3_key           = "lambda/${var.name}.zip"
+  source_code_hash = data.aws_s3_object.lambda_function_hash.body
+  layers           = var.layer_arns
+  function_name    = var.name
+  role             = aws_iam_role.lambda.arn
+  handler          = var.type == "python" ? "function.handler" : "index.handler"
+  runtime          = var.runtime
+  architectures    = ["arm64"]
+  timeout          = 30
+  memory_size      = var.memory
 }

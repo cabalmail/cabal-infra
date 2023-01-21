@@ -1,0 +1,166 @@
+body div.content div.overlay_hidden {
+  display: none;
+}
+
+div.message_overlay {
+  overflow: scroll;
+  border-width: 1px;
+  border-radius: 0.5em;
+  display: grid;
+  row-gap: 0;
+  grid-template-rows: max-content auto;
+}
+
+div.message_overlay .message {
+  overflow: scroll;
+  text-align: left;
+  padding: 0 1em 1em 1em;
+  margin: 0;
+  position: relative;
+}
+
+div.message_overlay .message_top {
+  position: relative;
+  padding: 0;
+}
+
+div.message_overlay .message_plain, pre {
+  font-family: 'Share Tech Mono', monospace, courier;
+}
+
+div.message_overlay pre.message_plain {
+  white-space: pre-wrap;
+  white-space: -moz-pre-wrap;
+  white-space: -pre-wrap;
+  white-space: -o-pre-wrap;
+  word-wrap: break-word;
+}
+
+div.message_overlay button.invert {
+  width: 3em;
+  position: absolute;
+  top: 1em;
+  right: 1em;
+}
+
+div.message_overlay button.close_overlay {
+  width: 3em;
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+
+div.message_overlay .message_html {
+  position: relative;
+}
+
+div.message_overlay .buttons {
+  position: -webkit-sticky;
+  position: sticky;
+  top: 1em;
+}
+
+div.message_overlay button.load {
+  width: 3em;
+  position: absolute;
+  top: 1em;
+  left: 1em;
+}
+
+div.message_overlay .tabBar {
+  display: grid;
+  grid-template-columns: auto auto 3em 3em;
+  width: 50%;
+  margin: auto;
+  min-width: 25em;
+}
+
+div.message_overlay .tabBar button {
+  width: 100%;
+  border-radius: 4px 4px 0 0;
+}
+
+div.message_overlay .message_loading {
+  animation-name: ripple;
+  animation-duration: 0.5s;
+  animation-iteration-count: infinite;
+  min-height: 30em;
+}
+
+div.message_overlay .message_attachments {
+  display: grid;
+  grid-gap: 0.5em;
+  grid-template-columns: max-content auto auto;
+  grid-template-rows: none;
+  grid-auto-rows: max-content;
+}
+
+div.message_overlay .message_attachments button.attachment {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column-start: 1;
+  grid-column-end: 4;
+  margin: 1em 2em;
+  padding: 0.75em;
+  height: auto;
+}
+
+div.message_overlay .message_attachments button.attachment:hover span.attachment_name {
+  text-decoration: underline;
+} 
+
+div.message_overlay .message_attachments button.attachment span.attachment_type {
+  font-style: italic;
+} 
+
+.overlay_expand_collapse {
+  width: 3em;
+  position: absolute;
+  left: 0;
+}
+
+.expand_overlay_top {
+  top: 0;
+}
+
+.collapse_overlay_top {
+  bottom: 1em;
+}
+
+.expanded .expand_overlay_top, .collapsed .collapse_overlay_top,
+.collapsed .tabBar, .collapsed .collapsable, .collapsed .filters-buttons {
+  display: none;
+}
+
+div.message_overlay div.message_raw {
+  background-color: #ffe !important;
+}
+
+div.message_overlay div.message_raw iframe {
+  width: 100%;
+  height: 100%;
+  border-width: 0;
+}
+
+/* Action Button modifications */
+
+div.message_overlay button.unflagged, div.message_overlay button.flagged {
+  border-radius: 0 4px 4px 0;
+  border-width: 1px;
+  width: auto;
+  padding: 0.5em;
+}
+
+div.message_overlay .CabalSeen button.read,
+div.message_overlay .Flagged button.flagged,
+div.message_overlay button.unread,
+div.message_overlay button.unflagged {
+  display: none;
+}
+
+div.message_overlay button.read,
+div.message_overay button.flagged,
+div.message_overlay .CabalSeen button.unread,
+div.message_overlay .Flagged button.unflagged {
+  display: inline-block;
+}

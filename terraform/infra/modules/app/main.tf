@@ -11,6 +11,21 @@
 *
 */
 
+# Password for IMAP admin
+resource "random_password" "password" {
+  length           = 16
+  special          = true
+  override_special = "()-_=+[]{}<>:"
+}
+
+# Save admin password in parameter store.
+resource "aws_ssm_parameter" "password" {
+  name        = "/cabal/master_password"
+  description = "Master IMAP password"
+  type        = "SecureString"
+  value       = random_password.password.result
+}
+
 resource "aws_api_gateway_rest_api" "gateway" {
   name = "cabal_gateway"
 }
@@ -29,11 +44,15 @@ resource "aws_api_gateway_authorizer" "api_auth" {
   ]) ]
 }
 
-module "cabal_list_method" {
+module "cabal_method" {
+  for_each         = local.lambdas
   source           = "./modules/call"
-  name             = "list"
-  runtime          = "nodejs14.x"
-  method           = "GET"
+  name             = each.key
+  runtime          = each.value.runtime
+  type             = each.value.type
+  layer_arns       = [var.layers[each.value.type]]
+  method           = each.value.method
+  memory           = each.value.memory
   region           = var.region
   account          = data.aws_caller_identity.current.account_id
   gateway_id       = aws_api_gateway_rest_api.gateway.id
@@ -43,48 +62,15 @@ module "cabal_list_method" {
   relay_ips        = var.relay_ips
   repo             = var.repo
   domains          = var.domains
-}
-
-module "cabal_new_method" {
-  source           = "./modules/call"
-  name             = "new"
-  runtime          = "nodejs14.x"
-  method           = "POST"
-  region           = var.region
-  account          = data.aws_caller_identity.current.account_id
-  gateway_id       = aws_api_gateway_rest_api.gateway.id
-  root_resource_id = aws_api_gateway_rest_api.gateway.root_resource_id
-  authorizer       = aws_api_gateway_authorizer.api_auth.id
-  control_domain   = var.control_domain
-  relay_ips        = var.relay_ips
-  repo             = var.repo
-  domains          = var.domains
-}
-
-module "cabal_revoke_method" {
-  source           = "./modules/call"
-  name             = "revoke"
-  runtime          = "nodejs14.x"
-  method           = "DELETE"
-  region           = var.region
-  account          = data.aws_caller_identity.current.account_id
-  gateway_id       = aws_api_gateway_rest_api.gateway.id
-  root_resource_id = aws_api_gateway_rest_api.gateway.root_resource_id
-  authorizer       = aws_api_gateway_authorizer.api_auth.id
-  control_domain   = var.control_domain
-  relay_ips        = var.relay_ips
-  repo             = var.repo
-  domains          = var.domains
+  bucket           = var.bucket
 }
 
 resource "aws_api_gateway_deployment" "deployment" {
   rest_api_id = aws_api_gateway_rest_api.gateway.id
   triggers = {
     redeployment = sha1(jsonencode([
-      jsonencode(aws_api_gateway_rest_api.gateway),
-      module.cabal_list_method.hash_key,
-      module.cabal_new_method.hash_key,
-      module.cabal_revoke_method.hash_key,
+      aws_api_gateway_rest_api.gateway,
+      [for k, v in local.lambdas : module.cabal_method[k].hash_key]
     ]))
   }
   lifecycle {
@@ -92,11 +78,14 @@ resource "aws_api_gateway_deployment" "deployment" {
   }
 }
 
+#tfsec:ignore:aws-api-gateway-enable-access-logging
+#tfsec:ignore:aws-api-gateway-enable-tracing
 resource "aws_api_gateway_stage" "api_stage" {
-  deployment_id      = aws_api_gateway_deployment.deployment.id
-  rest_api_id        = aws_api_gateway_rest_api.gateway.id
-  stage_name         = "prod"
-  cache_cluster_size = "0.5"
+  deployment_id         = aws_api_gateway_deployment.deployment.id
+  rest_api_id           = aws_api_gateway_rest_api.gateway.id
+  stage_name            = var.stage_name
+  cache_cluster_enabled = false
+  cache_cluster_size    = "0.5"
 }
 
 resource "aws_iam_role" "cloudwatch" {
@@ -136,7 +125,7 @@ resource "aws_iam_role_policy" "cloudwatch" {
         "logs:GetLogEvents",
         "logs:PutLogEvents"
       ],
-      "Resource": "*"
+      "Resource": "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:*:*"
     }
   ]
 }
@@ -147,7 +136,7 @@ resource "aws_api_gateway_account" "apigw_account" {
   cloudwatch_role_arn = aws_iam_role.cloudwatch.arn
 }
 
-resource "aws_api_gateway_method_settings" "settings" {
+resource "aws_api_gateway_method_settings" "general_settings" {
   rest_api_id = aws_api_gateway_rest_api.gateway.id
   stage_name  = aws_api_gateway_stage.api_stage.stage_name
   method_path = "*/*"
@@ -157,5 +146,17 @@ resource "aws_api_gateway_method_settings" "settings" {
     logging_level          = "INFO"
     throttling_rate_limit  = 100
     throttling_burst_limit = 50
+  }
+  depends_on  = [aws_api_gateway_account.apigw_account]
+}
+
+resource "aws_api_gateway_method_settings" "cache_settings" {
+  for_each    = local.lambdas
+  rest_api_id = aws_api_gateway_rest_api.gateway.id
+  stage_name  = aws_api_gateway_stage.api_stage.stage_name
+  method_path = "${each.key}/${each.value.method}"
+  settings {
+    caching_enabled      = each.value.cache
+    cache_ttl_in_seconds = each.value.cache_ttl
   }
 }

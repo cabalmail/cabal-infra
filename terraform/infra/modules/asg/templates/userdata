@@ -5,6 +5,9 @@ amazon-linux-extras install epel -y
 %{ if type == "imap" }
 sudo mount -t nfs -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport ${efs_dns}:/ /home
 grep -q ${efs_dns} /etc/fstab || grep ${efs_dns} /etc/mtab | sudo tee -a /etc/fstab
+yum install -y httpd-tools dovecot
+htpasswd -b -c -s /etc/dovecot/master-users admin "${master_password}"
+yum remove -y httpd-tools
 %{ endif }
 /bin/mkdir -p /etc/chef
 /bin/mkdir -p /var/lib/chef/{cookbooks,attributes}
@@ -48,11 +51,7 @@ mv /tmp/cabal.ca-bundle /etc/pki/tls/certs/${control_domain}.ca-bundle
 mv /tmp/cabal.crt /etc/pki/tls/certs/${control_domain}.crt
 mv /tmp/cabal.key /etc/pki/tls/private/${control_domain}.key
 chmod go-rwx /etc/pki/tls/private/${control_domain}.key
-aws s3 cp s3://${artifact_bucket}/cabal.zip /var/lib/chef/cookbooks/cabal.zip
-cat > '/tmp/hashes' << EOH
-${cookbook_etag}  /var/lib/chef/cookbooks/cabal.zip
-EOH
-md5sum -c /tmp/hashes || rm /var/lib/chef/cookbooks/cabal.zip
+aws s3 cp s3://${artifact_bucket}/cabal.tar.gz /var/lib/chef/cookbooks/cabal.tar.gz
 cd /var/lib/chef/cookbooks
-unzip cabal.zip
+tar xzvf cabal.tar.gz
 chef-solo -c /etc/chef/solo.rb -z -j /var/lib/chef/attributes/node.json

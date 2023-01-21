@@ -1,0 +1,35 @@
+---
+name: Run checkov
+on:
+  push:
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/terraform_checkov.yml'
+
+jobs:
+  checkov-job:
+    runs-on: ubuntu-latest
+    name: checkov-action
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@master
+
+      - name: Run Checkov on infra
+        id: checkov_infra
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: terraform/infra/
+          quiet: true
+          soft_fail: true
+          framework: terraform
+          download_external_modules: false
+
+      - name: Run Checkov on dns
+        id: checkov_dns
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: terraform/dns/
+          quiet: true
+          soft_fail: true
+          framework: terraform
+          download_external_modules: false
