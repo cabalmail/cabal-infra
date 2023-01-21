@@ -142,6 +142,9 @@
 
 body {
   margin: 0;
+}
+
+* {
   font-family: 'Tahoma', 'Verdana', 'Trebuchet MS', 'Arial';
   font-size: small;
 }
