@@ -162,7 +162,6 @@ hr {
 }
 
 input, select, button, option {
-  font-family: 'Gugi';
   padding: 0.5em;
   border-width: 1px;
   border-style: solid;
@@ -177,8 +176,6 @@ select {
   -webkit-appearance: none;
   -moz-appearance: none;
   appearance: none;
-  font-family: 'Tahoma', 'Verdana', 'Trebuchet MS', 'Arial';
-  font-size: small;
 }
 
 label {
