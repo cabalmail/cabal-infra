@@ -1,24 +1,14 @@
-const { Route53Client, ListHostedZonesCommand } = require("@aws-sdk/client-route-53");
 const AWS = require('aws-sdk');
 
-const config = require('./config.js').config;
-const control_domain = config.control_domain;
-const domains = getDomains();
-
-// Test Case
-// {
-//   "body": "{\"username\":\"63fc0nlv\",\"subdomain\":\"w1cny62q\",\"tld\":\"cabal-mail.com\",\"comment\":\"blah\",\"address\":\"63fc0nlv@w1cny62q.cabal-mail.com\"}",
-//   "requestContext": {
-//     "authorizer": {
-//       "claims": {
-//         "cognito:username": "chris"
-//       }
-//     }
-//   }
-// }
+// TODO: Convert to ENVIRONMENT variable
+// https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lambda_function#environment
+// const config = require('./config.js').config;
+// const control_domain = config.control_domain;
+// const domains = config.domains.reduce((obj, item) => Object.assign(obj, {
+//   [item.domain]: item.zone_id
+// }), {});
 
 exports.handler = (event, context, callback) => {
-  console.log(domains); // undefined
   if (!event.requestContext.authorizer) {
     console.error('Authorization not configured');
     return;
@@ -217,31 +207,3 @@ function generateResponse(status, data, address) {
     }
   };
 }
-
-function getDomains() {
-  return (async function () {
-    const route53 = new Route53Client({});
-    const command = new ListHostedZonesCommand({});
-  
-    try {
-      const result = await route53.send(command);
-      domains = result.HostedZones.map(i => {
-        return { [i.Name]: i.Id };
-      });
-      return domains;
-    } catch (err) {
-      console.error(err)
-    }
-  })();
-}
-
-// async function getDomains() {
-//   const route53 = new Route53Client({});
-//   const command = new ListHostedZonesCommand({});
-
-//   result = await route53.send(command);
-//   domains = result.HostedZones.map(i => {
-//     return { [i.Name]: i.Id };
-//   });
-//   return domains;
-// }
