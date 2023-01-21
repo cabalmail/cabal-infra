@@ -177,6 +177,8 @@ select {
   -webkit-appearance: none;
   -moz-appearance: none;
   appearance: none;
+  font-family: 'Tahoma', 'Verdana', 'Trebuchet MS', 'Arial';
+  font-size: small;
 }
 
 label {
