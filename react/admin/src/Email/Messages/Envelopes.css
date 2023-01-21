@@ -73,6 +73,7 @@ ul.message-list div.message-from {
 ul.message-list div.message-date {
   font-style: italic;
   text-align: right;
+  font-size: x-small;
 }
 
 ul.message-list li.loading {
