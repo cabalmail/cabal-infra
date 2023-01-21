@@ -165,6 +165,9 @@ input, select, button, option {
   padding: 0.5em;
   border-width: 1px;
   border-style: solid;
+}
+
+button, button * {
   font-size: x-small;
 }
 
