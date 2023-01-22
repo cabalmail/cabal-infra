@@ -1,12 +1,5 @@
 const AWS = require('aws-sdk');
-
-// TODO: Convert to ENVIRONMENT variable
-// https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lambda_function#environment
-// const config = require('./config.js').config;
-// const control_domain = config.control_domain;
-// const domains = config.domains.reduce((obj, item) => Object.assign(obj, {
-//   [item.domain]: item.zone_id
-// }), {});
+const domains = process.env.DOMAINS;
 
 exports.handler = (event, context, callback) => {
   if (!event.requestContext.authorizer) {
