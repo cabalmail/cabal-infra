@@ -1,10 +1,8 @@
 const AWS = require('aws-sdk');
-const domains = process.env.DOMAINS;
+const domains = JSON.parse(process.env.DOMAINS);
 const control_domain = process.env.CONTROL_DOMAIN;
 
 exports.handler = (event, context, callback) => {
-  console.log(domains);
-  console.log(control_domain);
   if (!event.requestContext.authorizer) {
     console.error('Authorization not configured');
     return;
