@@ -116,7 +116,7 @@ function changeItem(name, value, type) {
           Value: value
         }
       ],
-      TTL: 3600.
+      TTL: 3600,
       Type: type
     }
   };
@@ -130,13 +130,13 @@ function buildR53Params(zone_id, subdomain, tld, control_domain, key_record) {
     HostedZoneId: zone_id
   };
 
-  r53_params.ChangeBatch.Change.push(changeItem(
+  r53_params.ChangeBatch.Changes.push(changeItem(
     subdomain + '.' + tld,
     '"v=spf1 include:' + control_domain + ' ~all"',
     'TXT'
   ));
 
-  r53_params.ChangeBatch.Change.push(changeItem(
+  r53_params.ChangeBatch.Changes.push(changeItem(
     subdomain + '.' + tld,
     '10 smtp-in.' + control_domain,
     'MX'
