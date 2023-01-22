@@ -106,6 +106,22 @@ function kickOffChef() {
   }).promise();
 }
 
+function changeItem(name, value, type) {
+  return {
+    Action: "UPSERT",
+    ResourceRecordSet: {
+      Name: name,
+      ResourceRecords: [
+        {
+          Value: value
+        }
+      ],
+      TTL: 3600.
+      Type: type
+    }
+  };
+}
+
 function buildR53Params(zone_id, subdomain, tld, control_domain, key_record) {
   let r53_params = {
     ChangeBatch: {
@@ -114,54 +130,24 @@ function buildR53Params(zone_id, subdomain, tld, control_domain, key_record) {
     HostedZoneId: zone_id
   };
 
-  r53_params.ChangeBatch.Changes.push(
-    {
-      Action: "UPSERT",
-      ResourceRecordSet: {
-        Name: subdomain + '.' + tld,
-        ResourceRecords: [
-          {
-            Value: '"v=spf1 include:' + control_domain + ' ~all"'
-          }
-        ],
-        TTL: 3600,
-        Type: 'TXT'
-      }
-    }
-  );
+  r53_params.ChangeBatch.Change.push(changeItem(
+    subdomain + '.' + tld,
+    '"v=spf1 include:' + control_domain + ' ~all"',
+    'TXT'
+  ));
 
-  r53_params.ChangeBatch.Changes.push(
-    {
-      Action: "UPSERT",
-      ResourceRecordSet: {
-        Name: subdomain + '.' + tld,
-        ResourceRecords: [
-          {
-            Value: '10 smtp-in.' + control_domain
-          }
-        ],
-        TTL: 3600,
-        Type: 'MX'
-      }
-    }
-  );
+  r53_params.ChangeBatch.Change.push(changeItem(
+    subdomain + '.' + tld,
+    '10 smtp-in.' + control_domain,
+    'MX'
+  ));
 
-  r53_params.ChangeBatch.Changes.push(
-    {
-      Action: "UPSERT",
-      ResourceRecordSet: {
-        Name: 'cabal._domainkey.' + subdomain + '.' + tld,
-        ResourceRecords: [
-          {
-            Value: '"v=DKIM1; k=rsa; p=' + key_record + '"'
-          }
-        ],
-        TTL: 3600,
-        Type: 'TXT'
-      }
-    }
-  );
-  
+  r53_params.ChangeBatch.Changes.push(changeItem(
+    'cabal._domainkey.' + subdomain + '.' + tld,
+    '"v=DKIM1; k=rsa; p=' + key_record + '"',
+    'TXT'
+  ));
+
   return r53_params;
 }
 
