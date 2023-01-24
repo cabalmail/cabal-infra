@@ -1,12 +1,8 @@
 const AWS = require('aws-sdk');
 const ddb = new AWS.DynamoDB.DocumentClient();
 const route53 = new AWS.Route53();
-
-const config = require('./config.js').config;
-const control_domain = config.control_domain;
-const domains = config.domains.reduce((obj, item) => Object.assign(obj, {
-  [item.domain]: item.zone_id
-}), {});
+const domains = JSON.parse(process.env.DOMAINS);
+const control_domain = process.env.CONTROL_DOMAIN;
 
 exports.handler = (event, context, callback) => {
     if (!event.requestContext.authorizer) {
