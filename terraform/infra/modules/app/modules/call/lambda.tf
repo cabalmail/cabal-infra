@@ -157,8 +157,9 @@ resource "aws_lambda_function" "api_call" {
   memory_size      = var.memory
   environment {
     variables = {
-      DOMAINS = jsonencode({ for r in var.domains : r.domain => r.zone_id })
+      DOMAINS        = jsonencode({ for r in var.domains : r.domain => r.zone_id })
       CONTROL_DOMAIN = var.control_domain
+      AWS_REGION     = var.region
     }
   }
 }
