@@ -142,7 +142,10 @@
 
 body {
   margin: 0;
-  font-family: 'Gugi';
+}
+
+* {
+  font-family: 'Tahoma', 'Verdana', 'Trebuchet MS', 'Arial';
   font-size: small;
 }
 
@@ -159,10 +162,13 @@ hr {
 }
 
 input, select, button, option {
-  font-family: 'Gugi';
   padding: 0.5em;
   border-width: 1px;
   border-style: solid;
+}
+
+button, button * {
+  font-size: x-small;
 }
 
 input, select, option {

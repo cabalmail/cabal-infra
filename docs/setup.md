@@ -41,7 +41,7 @@ The developers have striven to make provisioning as automated as possible. Howev
     1. Queue a plan in your Terraform Cloud terraform/infra workspace.
     2. When it finishes the plan phase, confirm and apply.
 
-4. Perform the [post-autonation tasks](#PostAutomation) below.
+4. Perform the [post-automation tasks](#PostAutomation) below.
 
 # Reprovisioning
 
