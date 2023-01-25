@@ -9,7 +9,7 @@ on:
     branches:
       - 'main'
     paths:
-      - 'lambda/counter/node/**'
+      - 'lambda/api/node/**'
       - '.github/workflows/lambda_api_node_build_prod.yml'
 
 jobs:
@@ -20,7 +20,7 @@ jobs:
     - uses: actions/checkout@main
     - name: deploy
       run: |
-        cd lambda/counter/node
+        cd lambda/api/node
         aws configure --profile deploy_lambda <<-EOF > /dev/null 2>&1
         ${{ secrets.AWS_ACCESS_KEY_ID }}
         ${{ secrets.AWS_SECRET_ACCESS_KEY }}
