@@ -1,5 +1,5 @@
 ---
-name: Build Lambda Counter (NodeJS Runtime) Prod
+name: Build Lambda API (NodeJS Runtime) Prod
 
 on:
   workflow_dispatch:
