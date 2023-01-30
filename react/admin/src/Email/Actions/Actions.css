@@ -72,3 +72,18 @@ div.show_folders span.filter button.unread,
 div.show_folders span.filter button.unflagged {
   display: none;
 }
+
+div.message_overlay span.filter button.read,
+div.message_overlay span.filter button.unflagged {
+  display: none;
+}
+
+div.message_overlay span.filter button.unread,
+div.message_overlay span.filter button.flagged {
+  display: inline-block;
+}
+
+div.message_overlay div.CabalSeen span.filter button.unread,
+div.message_overlay div.Flagged span.filter button.flagged {
+  display: none;
+}
