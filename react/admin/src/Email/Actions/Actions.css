@@ -43,14 +43,7 @@ div.filters-buttons {
   position: relative;
 }
 
-span.filter button {
-  display: inline-block;
-}
-
-button.cancel {
-  display: none;
-}
-
+span.filter button,
 div.show_folders div.filter-folder,
 div.hide_folders button.move,
 div.show_folders button.cancel,
@@ -58,21 +51,7 @@ div.hide_folders span.filter button.delete,
 div.hide_folders span.filter button.read,
 div.hide_folders span.filter button.flagged,
 div.hide_folders span.filter button.unread,
-div.hide_folders span.filter button.unflagged {
-  display: inline-block;
-}
-
-div.hide_folders div.filter-folder,
-div.show_folders button.move,
-div.hide_folders button.cancel,
-div.show_folders span.filter button.delete,
-div.show_folders span.filter button.read,
-div.show_folders span.filter button.flagged,
-div.show_folders span.filter button.unread,
-div.show_folders span.filter button.unflagged {
-  display: none;
-}
-
+div.hide_folders span.filter button.unflagged,
 div.message_overlay div.CabalSeen span.filter button.unread,
 div.message_overlay div.Flagged span.filter button.unflagged,
 div.message_overlay span.filter button.read,
@@ -80,6 +59,15 @@ div.message_overlay span.filter button.flagged {
   display: inline-block;
 }
 
+button.cancel,
+div.hide_folders div.filter-folder,
+div.show_folders button.move,
+div.hide_folders button.cancel,
+div.show_folders span.filter button.delete,
+div.show_folders span.filter button.read,
+div.show_folders span.filter button.flagged,
+div.show_folders span.filter button.unread,
+div.show_folders span.filter button.unflagged,
 div.message_overlay span.filter button.unread,
 div.message_overlay span.filter button.unflagged,
 div.message_overlay div.CabalSeen span.filter button.read,
