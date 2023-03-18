@@ -56,7 +56,6 @@ This terraform stack stands up AWS infrastructure needed for a Cabalmail system.
 | Name | Version |
 |------|---------|
 | <a name="provider_aws"></a> [aws](#provider\_aws) | ~> 4.41 |
-| <a name="provider_git"></a> [git](#provider\_git) | 2023.3.17 |
 ## Requirements
 
 | Name | Version |
@@ -64,14 +63,11 @@ This terraform stack stands up AWS infrastructure needed for a Cabalmail system.
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.1.2 |
 | <a name="requirement_acme"></a> [acme](#requirement\_acme) | 2.2.0 |
 | <a name="requirement_aws"></a> [aws](#requirement\_aws) | ~> 4.41 |
-| <a name="requirement_git"></a> [git](#requirement\_git) | 2023.3.17 |
 ## Resources
 
 | Name | Type |
 |------|------|
 | [aws_ssm_parameter.zone](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ssm_parameter) | data source |
-| [git_remote.remote](https://registry.terraform.io/providers/metio/git/2023.3.17/docs/data-sources/remote) | data source |
-| [git_repository.repository](https://registry.terraform.io/providers/metio/git/2023.3.17/docs/data-sources/repository) | data source |
 
 </div>
 <!-- END_TF_DOCS -->
