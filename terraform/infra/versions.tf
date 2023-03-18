@@ -8,11 +8,6 @@ terraform {
       source  = "vancluever/acme"
       version = "2.2.0"
     }
-    git = {
-      source = "metio/git"
-      version = "2023.3.17"
-      }
-    }
 
   required_version = ">= 1.1.2"
 }
