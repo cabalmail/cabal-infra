@@ -8,9 +8,10 @@ provider "aws" {
   region = var.aws_region
   default_tags {
     tags = {
-      environment          = var.environment
-      managed_by_terraform = "y"
-      terraform_repo       = var.repo
+      environment           = var.environment
+      managed_by_terraform  = "y"
+      terraform_repo        = data.git_remote.remote.urls[0]
+      terraform_repo_branch = data.git_repository.repository.branch
     }
   }
 }

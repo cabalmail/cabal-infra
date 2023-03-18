@@ -2,6 +2,15 @@ data "aws_ssm_parameter" "zone" {
   name = "/cabal/control_domain_zone_id"
 }
 
+data "git_repository" "repository" {
+  directory = path.root
+}
+
+data "git_remote" "remote" {
+  directory = path.root
+  name      = "origin"
+}
+
 variable "environment" {
   type        = string
   description = "A name for your environment such as 'production' or 'staging'."
