@@ -1,4 +1,4 @@
-total 12
-drwxr-xr-x 2 runner docker 4096 Jan 25 01:19 assign_osid
--rw-r--r-- 1 runner docker  946 Jan 25 01:19 assign_osid.zip
--rw-r--r-- 1 runner docker   44 Jan 25 01:19 assign_osid.zip.base64sha256
+total 13860
+drwxr-xr-x 3 runner docker     4096 Apr  2 21:04 assign_osid
+-rw-r--r-- 1 runner docker 14181555 Apr  2 21:04 assign_osid.zip
+-rw-r--r-- 1 runner docker       44 Apr  2 21:04 assign_osid.zip.base64sha256

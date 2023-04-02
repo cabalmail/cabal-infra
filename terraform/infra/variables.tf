@@ -2,6 +2,11 @@ data "aws_ssm_parameter" "zone" {
   name = "/cabal/control_domain_zone_id"
 }
 
+variable "environment" {
+  type        = string
+  description = "A name for your environment such as 'production' or 'staging'."
+}
+
 variable "aws_region" {
   type        = string
   description = "AWS region in which to provision primary infrastructure. Default us-west-1."

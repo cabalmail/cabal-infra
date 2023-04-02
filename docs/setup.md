@@ -26,7 +26,7 @@ If you don't have a preference for registrars, you can use the [Route 53 Registr
 
 # Provisioning
 
-The developers have striven to make provisioning as automated as possible. However, there are some manual steps. Several of these steps are discussed above under [Prerequisites](#Prerequisites), and others are discussed below under [Post-Automation Steps](#PostAutomation). However, one step unavoidably must be attended to during the provsioning. This is why the terraform directoy has been subdivided into two subdirectories: The first performs the initial automation, and the second all the rest. The order is dns first and infra second. The overwhelming majority of resources are created by infra. In between, you will be instructed to update your domain registrations and add a secret to your Github repository settings.
+The developers have striven to make provisioning as automated as possible. However, there are some necessarily manual steps. Several of these steps are discussed above under [Prerequisites](#Prerequisites), and others are discussed below under [Post-Automation Steps](#PostAutomation). However, one step unavoidably must be attended to during the initial provsioning. This is why the terraform directoy has been subdivided into two subdirectories: The first performs the initial automation, and the second all the rest. The order is dns first and infra second. The overwhelming majority of resources are created by infra. In between, you will be instructed to update your domain registrations and add a secret to your Github repository settings.
 
 1. Set up the [prerequisites](#Prerequisites) above.
 
@@ -34,18 +34,26 @@ The developers have striven to make provisioning as automated as possible. Howev
 
     1. Queue a plan in your Terraform Cloud terraform/dns workspace.
     2. When it finishes the plan phase, confirm and apply.
-    3. The output will include name servers. [Update the domain registration](./registrar.md) for your control domain with these name servers. *Before proceeding to the terraform/infa workspace, make sure this change is complete*.
+    3. Note the output. You will need it for step 3.
 
-3. Run the terraform/infra workspace. WARNING: Performing this step will result in charges on your credit card from Amazon Web Services.
+3. The output from the Terraform run in step 2 will include name servers. [Update the domain registration](./registrar.md) for your control domain with these name servers. *Before proceeding to the terraform/infa workspace, make sure this change is complete*.
+
+4. *WHOA*. Verify that steps 2 and 3 were successful. Do not proceed to step 5 otherwise.
+
+    1. Several GitHub Actions will have been triggered. Make sure they finish successfully.
+    2. Make sure your registration change from step 3 is complete, and your registrar confirms that your nameservers match those in the output from Terraform. You can check whether your changes have been implemented by looking up your domain in [the whois database](https://lookup.icann.org/).
+
+5. If step 2 was successful, Terraform Cloud will already have queued a plan, and you need only apply it. WARNING: Performing this step will result in charges on your credit card from Amazon Web Services.
 
     1. Queue a plan in your Terraform Cloud terraform/infra workspace.
     2. When it finishes the plan phase, confirm and apply.
+    3. Note the output. You will need it for the [post-automation tasks](#PostAutomation) below.
 
-4. Perform the [post-automation tasks](#PostAutomation) below.
+6. Perform the [post-automation tasks](#PostAutomation) below.
 
 # Reprovisioning
 
-You can rerun the provisioning steps any time. If you have not changed anything in the code or in the variables, the operation should be safe. If either of the above Terraform workspaces fail to provision, running them again may be sufficient.
+You can rerun the infra provisioning (step 5) any time. If you have not changed anything in the code or in the variables, the operation should be safe. If either of the above Terraform workspaces fail to provision, running them again may be sufficient.
 
 Theoretically, it should also be safe to change any of the variables except the AWS region. As long as the new values are sensible, Terraform should reestablish the infrastructure with the new parameters, and your mail should still be there. But we do not guarantee this, and we strongly recommend that you [perform backups](./operations.md) first.
 

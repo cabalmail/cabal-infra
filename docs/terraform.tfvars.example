@@ -30,6 +30,11 @@ github_token = "ghp_yXfAxxxxxxxxxxxxxxxxxxxxxxxxxxxxGq46"
 ## for terraform/infra workspace ##
 ###################################
 
+# Create a name for your environment such as 'production' or 
+# 'staging'.
+
+environment = "development"
+
 # Pick the AWS region closest to your end user population. A
 # single VPC will be created, and all infrastructure will be
 # inside of it.

@@ -5,10 +5,12 @@ import io
 import email
 from imapclient import IMAPClient
 from email.policy import default as default_policy
+import os
 
+region = os.environ['AWS_REGION']
 s3r = boto3.resource("s3")
 s3c = boto3.client("s3",
-                  region_name="us-east-1",
+                  region_name=region,
                   config=boto3.session.Config(signature_version='s3v4'))
 
 ssm = boto3.client('ssm')
