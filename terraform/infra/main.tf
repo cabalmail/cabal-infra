@@ -10,8 +10,7 @@ provider "aws" {
     tags = {
       environment           = var.environment
       managed_by_terraform  = "y"
-      terraform_repo        = data.git_remote.remote.urls[0]
-      terraform_repo_branch = data.git_repository.repository.branch
+      terraform_repo        = var.repo
     }
   }
 }
