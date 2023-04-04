@@ -41,8 +41,8 @@ resource "aws_iam_role_policy" "lambda" {
     {
       "Effect": "Allow",
       "Action": "cognito-idp:AdminUpdateUserAttributes",
-      "Resource": "arn:aws:cognito:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:${local.wildcard}"
-    },
+      "Resource": "arn:aws:cognito-idp:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:userpool/${local.wildcard}"
+      },
     {
       "Effect": "Allow",
       "Action": "dynamodb:UpdateItem",
