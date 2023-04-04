@@ -7,18 +7,17 @@ const {
 const AWS = require('aws-sdk');
 const ddb = new AWS.DynamoDB();
 
-const config = require('./config.js').config.cognitoConfig;
 const client = new CognitoIdentityProviderClient({
-  region: config.region
+  region: process.env.AWS_REGION
 });
 
 const ssm = new AWS.SSM();
 
 exports.handler = (event, context, callback) => {
-  getCounter(event.userName, callback, event);
+  getCounter(callback, event);
 }
 
-function getCounter(user, callback, event) {
+function getCounter(callback, event) {
   var uid;
   var params = {
     TableName: 'cabal-counter',
@@ -38,20 +37,20 @@ function getCounter(user, callback, event) {
       console.error("ddb", err);
       console.error("params", params);
     } else {
-      updateUser(user, data.Attributes.osid.N, callback, event);
+      updateUser(data.Attributes.osid.N, callback, event);
     }
   });
   return uid;
 }
 
-function updateUser(user, uid, callback, event) {
+function updateUser(uid, callback, event) {
   const UpdateCommand = new AdminUpdateUserAttributesCommand({
-    UserPoolId: config.poolData.UserPoolId,
+    UserPoolId: event.userPoolId,
     UserAttributes: [{
       Name: "custom:osid",
       Value: uid
     }],
-    Username: user
+    Username: event.userName
   });
   client.send(UpdateCommand)
   .then(data => {

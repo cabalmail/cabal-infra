@@ -4,7 +4,7 @@
 */
 
 locals {
-  wildcard         = "*"
+  wildcard = "*"
 }
 
 data "aws_s3_object" "lambda_function_hash" {
@@ -41,8 +41,8 @@ resource "aws_iam_role_policy" "lambda" {
     {
       "Effect": "Allow",
       "Action": "cognito-idp:AdminUpdateUserAttributes",
-      "Resource": "arn:aws:cognito:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:*"
-    },
+      "Resource": "arn:aws:cognito-idp:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:userpool/${local.wildcard}"
+      },
     {
       "Effect": "Allow",
       "Action": "dynamodb:UpdateItem",
@@ -53,6 +53,11 @@ resource "aws_iam_role_policy" "lambda" {
       "Action": "logs:CreateLogGroup",
       "Resource": "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:${local.wildcard}"
     },
+    {
+        "Effect": "Allow",
+        "Action": "ssm:SendCommand",
+        "Resource": "arn:aws:ssm:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:document/cabal_chef_document"
+      },
     {
       "Effect": "Allow",
       "Action": [

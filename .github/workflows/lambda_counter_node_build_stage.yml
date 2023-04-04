@@ -32,11 +32,8 @@ jobs:
         for FUNC in $FUNCTIONS ; do
           pushd $FUNC
           if test -f requirements.txt; then
-            mkdir nodejs
-            pushd nodejs
             npm init --yes
-            cat ../requirements.txt | xargs npm install --save 
-            popd
+            cat requirements.txt | xargs npm install --save 
           fi
           zip -r ../$FUNC.zip .
           popd
