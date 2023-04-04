@@ -8,7 +8,7 @@ const AWS = require('aws-sdk');
 const ddb = new AWS.DynamoDB();
 
 const client = new CognitoIdentityProviderClient({
-  region: process.env.AWS_REGION;
+  region: process.env.AWS_REGION
 });
 
 const ssm = new AWS.SSM();
