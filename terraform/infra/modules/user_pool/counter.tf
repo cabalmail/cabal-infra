@@ -4,7 +4,7 @@
 */
 
 locals {
-  wildcard         = "*"
+  wildcard = "*"
 }
 
 data "aws_s3_object" "lambda_function_hash" {
@@ -41,7 +41,7 @@ resource "aws_iam_role_policy" "lambda" {
     {
       "Effect": "Allow",
       "Action": "cognito-idp:AdminUpdateUserAttributes",
-      "Resource": "arn:aws:cognito:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:*"
+      "Resource": "arn:aws:cognito:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:${local.wildcard}"
     },
     {
       "Effect": "Allow",
