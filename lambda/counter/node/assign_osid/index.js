@@ -7,9 +7,8 @@ const {
 const AWS = require('aws-sdk');
 const ddb = new AWS.DynamoDB();
 
-const config = require('./config.js').config.cognitoConfig;
 const client = new CognitoIdentityProviderClient({
-  region: config.region
+  region: process.env.AWS_REGION;
 });
 
 const ssm = new AWS.SSM();
@@ -46,7 +45,7 @@ function getCounter(user, callback, event) {
 
 function updateUser(user, uid, callback, event) {
   const UpdateCommand = new AdminUpdateUserAttributesCommand({
-    UserPoolId: config.poolData.UserPoolId,
+    UserPoolId: process.env.USER_POOL_ID,
     UserAttributes: [{
       Name: "custom:osid",
       Value: uid
