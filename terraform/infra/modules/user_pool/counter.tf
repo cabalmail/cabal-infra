@@ -78,11 +78,6 @@ resource "aws_lambda_function" "assign_osid" {
   runtime          = "nodejs18.x"
   architectures    = ["arm64"]
   timeout          = 30
-  environment {
-    variables = {
-      USER_POOL_ID = aws_cognito_user_pool.users.id
-    }
-  }
 }
 
 resource "aws_lambda_permission" "allow_cognito" {
