@@ -50,7 +50,7 @@ function updateUser(uid, callback, event) {
       Name: "custom:osid",
       Value: uid
     }],
-    Username: event.user
+    Username: event.userName
   });
   client.send(UpdateCommand)
   .then(data => {
