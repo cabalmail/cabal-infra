@@ -7,7 +7,7 @@ resource "aws_lb" "elb" {
   internal                         = false #tfsec:ignore:aws-elb-alb-not-public
   load_balancer_type               = "network"
   subnets                          = var.public_subnet_ids
-  enable_cross_zone_load_balancing = false
+  enable_cross_zone_load_balancing = true
   tags                             = {
     Name = "cabal-nlb"
   }
