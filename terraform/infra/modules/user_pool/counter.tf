@@ -54,6 +54,11 @@ resource "aws_iam_role_policy" "lambda" {
       "Resource": "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:${local.wildcard}"
     },
     {
+        "Effect": "Allow",
+        "Action": "ssm:SendCommand",
+        "Resource": "arn:aws:ssm:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:document/cabal_chef_document"
+      },
+    {
       "Effect": "Allow",
       "Action": "ssm:SendCommand",
       "Resource": "arn:aws:ssm:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:document/cabal_chef_document"
