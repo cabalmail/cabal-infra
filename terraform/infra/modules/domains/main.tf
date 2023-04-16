@@ -10,7 +10,7 @@ resource "aws_route53_zone" "mail_dns" {
 }
 
 resource "aws_route53_record" "a" {
-  for_each = toset(var.mail_domains)
+  for_each = toset(var.mail_domains[each.key])
   name     = "*.${each.key}"
   type     = "A"
   zone_id  = aws_route53_zone.mail_dns.id
