@@ -129,6 +129,12 @@ function buildR53Params(zone_id, subdomain, tld, control_domain, key_record) {
   };
 
   r53_params.ChangeBatch.Changes.push(changeItem(
+    '_dmarc.' + subdomain + '.' + tld,
+    '"v=DMARC1; p=reject; rua=mailto:dmarc-reports@mail-admin.cabalmail.com; ruf=mailto:dmarc-reports@mail-admin.cabalmail.com; fo=1; pct=100"',
+    'TXT'
+  ));
+
+  r53_params.ChangeBatch.Changes.push(changeItem(
     subdomain + '.' + tld,
     '"v=spf1 include:' + control_domain + ' ~all"',
     'TXT'
