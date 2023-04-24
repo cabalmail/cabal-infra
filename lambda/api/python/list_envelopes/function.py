@@ -56,7 +56,10 @@ def decode_address(data):
     '''Converts a tuple of Address objects to a simple list of strings'''
     r = []
     for f in data:
-        r.append(f"{f.mailbox.decode()}@{f.host.decode()}")
+        try:
+            r.append(f"{f.mailbox.decode()}@{f.host.decode()}")
+        except:
+            r.append("undisclosed-recipients")
     return r
 
 def decode_flags(data):
