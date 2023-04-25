@@ -30,11 +30,13 @@ function listAddresses(user) {
         "TableName": "cabal-addresses",
         "FilterExpression": "#user = :user",
         "ExpressionAttributeNames": {
-            "#user": "user"
+            "#user": "user",
+            "#c": "comment"
         },
         "ExpressionAttributeValues": {
             ":user": user
-        }
+        },
+        "ProjectionExpression": "subdomain, #c, tld, address, username, #user"
     };
     return ddb.scan(parameters).promise();
 }
