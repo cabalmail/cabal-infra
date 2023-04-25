@@ -36,7 +36,7 @@ function listAddresses(user) {
         "ExpressionAttributeValues": {
             ":user": user
         },
-        "ProjectionExpression": "subdomain, #c, tld, address, username, #u"
+        "ProjectionExpression": "subdomain, #c, tld, address, username, #user"
     };
     return ddb.scan(parameters).promise();
 }
