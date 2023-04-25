@@ -18,13 +18,7 @@ class List extends React.Component {
   filter(data) {
     this.setState({ ...this.state, addresses: data.Items.filter(
       (a) => {
-        if (a.address.includes(this.state.filter)) {
-          return true;
-        }
-        if (a.comment.includes(this.state.filter)) {
-          return true;
-        }
-        return false;
+        return [a.address, a.comment].join('.').includes(this.state.filter);
       }
     ).sort(
       (a,b) => {
