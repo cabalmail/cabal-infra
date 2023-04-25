@@ -15,6 +15,7 @@ div.folders ul.folder_list {
   list-style: none;
   padding: 0;
   margin: 0;
+  overflow: scroll;
 }
 
 div.folders ul.folder_list li.folder {
