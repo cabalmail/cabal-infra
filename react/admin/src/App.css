@@ -159,6 +159,7 @@ hr {
 
 .content {
   padding: 3.4em 3em 3em 3em;
+  overflow: scroll;
 }
 
 input, select, button, option {
