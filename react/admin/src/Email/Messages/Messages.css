@@ -57,6 +57,7 @@ div.filters-dropdowns div ~ div {
 
 span.filter select, span.filter label, span.filter button {
   display: inline-block;
+  max-width: 9em;
 }
 
 body div.content div.email div.email_list div.ascending button#ascending,
