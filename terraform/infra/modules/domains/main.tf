@@ -28,7 +28,7 @@ resource "aws_route53_record" "dkim_public_key" {
         slice(
           split(
             "\n",trimspace(
-              tls_private_key.key.public_key_pem
+              tls_private_key.key[each.key].public_key_pem
             )
           ), 1, 3
         )
@@ -38,7 +38,7 @@ resource "aws_route53_record" "dkim_public_key" {
       slice(
         split(
           "\n",trimspace(
-            tls_private_key.key.public_key_pem
+            tls_private_key.key[each.key].public_key_pem
           )
         ), 4, 7
       )
@@ -51,5 +51,5 @@ resource "aws_ssm_parameter" "dkim_private_key" {
   name        = "/cabal/dkim_private_key/${each.key}"
   description = "Private key for mail in the ${each.key} domain"
   type        = "SecureString"
-  value       = tls_private_key.key.private_key_pem
+  value       = tls_private_key.key[each.key].private_key_pem
 }
