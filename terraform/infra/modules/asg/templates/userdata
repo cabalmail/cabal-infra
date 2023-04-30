@@ -1,6 +1,6 @@
 #!/bin/bash -xev
 cd /tmp
-yum install -y awscli jq
+yum install -y awscli jq opendkim
 amazon-linux-extras install epel -y
 %{ if type == "imap" }
 sudo mount -t nfs -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport ${efs_dns}:/ /home
@@ -47,9 +47,12 @@ EOF
 aws --region ${region} ssm get-parameter --with-decryption --name "/cabal/control_domain_chain_cert" | jq -r '.Parameter.Value' > /tmp/cabal.ca-bundle
 aws --region ${region} ssm get-parameter --with-decryption --name "/cabal/control_domain_ssl_cert" | jq -r '.Parameter.Value' > /tmp/cabal.crt
 aws --region ${region} ssm get-parameter --with-decryption --name "/cabal/control_domain_ssl_key" | jq -r '.Parameter.Value' > /tmp/cabal.key
+aws --region ${region} ssm get-parameter --with-decryption --name "/cabal/dkim_private_key" | jq -r '.Parameter.Value' > /tmp/cabal.dkim
 mv /tmp/cabal.ca-bundle /etc/pki/tls/certs/${control_domain}.ca-bundle
 mv /tmp/cabal.crt /etc/pki/tls/certs/${control_domain}.crt
 mv /tmp/cabal.key /etc/pki/tls/private/${control_domain}.key
+mkdir -p /etc/opendkim/keys
+mv /tmp/cabal.dkim /etc/opendkim/keys/cabal
 chmod go-rwx /etc/pki/tls/private/${control_domain}.key
 aws s3 cp s3://${artifact_bucket}/cabal.tar.gz /var/lib/chef/cookbooks/cabal.tar.gz
 cd /var/lib/chef/cookbooks
