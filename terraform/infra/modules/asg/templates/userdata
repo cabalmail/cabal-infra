@@ -53,7 +53,8 @@ mv /tmp/cabal.crt /etc/pki/tls/certs/${control_domain}.crt
 mv /tmp/cabal.key /etc/pki/tls/private/${control_domain}.key
 mkdir -p /etc/opendkim/keys
 mv /tmp/cabal.dkim /etc/opendkim/keys/cabal
-chmod go-rwx /etc/pki/tls/private/${control_domain}.key
+chmod go-rwx /etc/pki/tls/private/${control_domain}.key /etc/opendkim/keys/cabal
+chown opendkim /etc/opendkim/keys/cabal
 aws s3 cp s3://${artifact_bucket}/cabal.tar.gz /var/lib/chef/cookbooks/cabal.tar.gz
 cd /var/lib/chef/cookbooks
 tar xzvf cabal.tar.gz
