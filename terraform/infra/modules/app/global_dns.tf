@@ -54,8 +54,6 @@ resource "aws_route53_record" "dmarc" {
   ]
 }
 
-# SPF is defined in /infra/modules/app/global_dns.tf
-
 resource "aws_ssm_parameter" "dkim_private_key" {
   name        = "/cabal/dkim_private_key"
   description = "Private key for mail managed by ${var.control_domain}"
