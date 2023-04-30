@@ -47,6 +47,17 @@ resource "aws_route53_record" "dkim_public_key" {
   ]
 }
 
+resource "aws_route53_record" "dmarc" {
+  for_each  = toset(var.mail_domains)
+  zone_id   = aws_route53_zone.mail_dns[each.key].id
+  name      = "cabal._domainkey.${each.key}"
+  type      = "TXT"
+  ttl       = "3600"
+  records   = [
+    "v=DMARC1; p=reject; rua=mailto:dmarc-reports@mail-admin.cabalmail.com; ruf=mailto:dmarc-reports@mail-admin.cabalmail.com; fo=1; pct=100"
+  ]
+}
+
 resource "aws_ssm_parameter" "dkim_private_key" {
   for_each    = toset(var.mail_domains)
   name        = "/cabal/dkim_private_key/${each.key}"
