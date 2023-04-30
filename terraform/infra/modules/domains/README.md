@@ -24,6 +24,7 @@ No modules.
 | Name | Version |
 |------|---------|
 | <a name="provider_aws"></a> [aws](#provider\_aws) | ~> 4.41 |
+| <a name="provider_tls"></a> [tls](#provider\_tls) | n/a |
 ## Requirements
 
 | Name | Version |
@@ -34,7 +35,10 @@ No modules.
 
 | Name | Type |
 |------|------|
+| [aws_route53_record.dkim_public_key](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route53_record) | resource |
 | [aws_route53_zone.mail_dns](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route53_zone) | resource |
+| [aws_ssm_parameter.dkim_private_key](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ssm_parameter) | resource |
+| [tls_private_key.key](https://registry.terraform.io/providers/hashicorp/tls/latest/docs/resources/private_key) | resource |
 
 </div>
 <!-- END_TF_DOCS -->
