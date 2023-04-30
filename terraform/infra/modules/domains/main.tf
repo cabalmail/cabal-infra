@@ -18,12 +18,12 @@ resource "tls_private_key" "key" {
 resource "aws_route53_record" "dkim_public_key" {
   for_each  = toset(var.mail_domains)
   zone_id   = aws_route53_zone.mail_dns[each.key].id
-  name      = "cabal._dmainkey.${each.key}"
+  name      = "cabal._domainkey.${each.key}"
   type      = "TXT"
   ttl       = "3600"
   records   = [
-    join("", [
-      "v=DKIM1; k=rsa; p=",
+    join("\" \"", [
+      "\"v=DKIM1; k=rsa; p=",
       join("",
         slice(
           split(
@@ -32,17 +32,18 @@ resource "aws_route53_record" "dkim_public_key" {
             )
           ), 1, 3
         )
-      )
-    ]),
-    join("",
-      slice(
-        split(
-          "\n",trimspace(
-            tls_private_key.key[each.key].public_key_pem
-          )
-        ), 4, 7
-      )
-    )
+      ),
+      join("",
+        slice(
+          split(
+            "\n",trimspace(
+              tls_private_key.key[each.key].public_key_pem
+            )
+          ), 4, 7
+        )
+      ),
+      "\""
+    ]
   ]
 }
 
