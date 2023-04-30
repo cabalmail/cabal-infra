@@ -18,3 +18,8 @@ output "domains" {
   value       = module.domains.domains
   description = "Nameservers to be added to your domain registrations."
 }
+
+output "dkim" {
+  value       = module.admin.public_dkim_key
+  description = "Public DKIM key."
+}
