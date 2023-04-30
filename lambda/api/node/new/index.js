@@ -9,13 +9,11 @@ exports.handler = (event, context, callback) => {
   }
   const requestBody = JSON.parse(event.body);
   const user = event.requestContext.authorizer.claims['cognito:username'];
-  const key = generateKeyPair();
   const r53_params = buildR53Params(
     domains[requestBody.tld],
     requestBody.subdomain,
     requestBody.tld,
-    control_domain,
-    key.publicKeyFlattened
+    control_domain
   );
   const dyndb_payload = {
     user: user,
@@ -24,9 +22,7 @@ exports.handler = (event, context, callback) => {
     zone_id: domains[requestBody.tld],
     subdomain: requestBody.subdomain,
     comment: requestBody.comment,
-    tld: requestBody.tld,
-    public_key: key.publicKey,
-    private_key: key.privateKey
+    tld: requestBody.tld
   };
 
   const r53_req = createDnsRecords(r53_params);
@@ -68,8 +64,6 @@ function recordAddress(obj) {
       "zone-id": { S: domains[obj.tld] },
       subdomain: { S: obj.subdomain },
       comment: { S: obj.comment || '' },
-      public_key: { S: obj.public_key },
-      private_key: { S: obj.private_key },
       RequestTime: { S: new Date().toISOString() },
     },
   };
@@ -120,7 +114,7 @@ function changeItem(name, value, type) {
   };
 }
 
-function buildR53Params(zone_id, subdomain, tld, control_domain, key_record) {
+function buildR53Params(zone_id, subdomain, tld, control_domain) {
   let r53_params = {
     ChangeBatch: {
       Changes: []
@@ -130,8 +124,8 @@ function buildR53Params(zone_id, subdomain, tld, control_domain, key_record) {
 
   r53_params.ChangeBatch.Changes.push(changeItem(
     '_dmarc.' + subdomain + '.' + tld,
-    '"v=DMARC1; p=reject; rua=mailto:dmarc-reports@mail-admin.cabalmail.com; ruf=mailto:dmarc-reports@mail-admin.cabalmail.com; fo=1; pct=100"',
-    'TXT'
+    '_dmarc.' + control_domain,
+    'CNAME'
   ));
 
   r53_params.ChangeBatch.Changes.push(changeItem(
@@ -148,33 +142,11 @@ function buildR53Params(zone_id, subdomain, tld, control_domain, key_record) {
 
   r53_params.ChangeBatch.Changes.push(changeItem(
     'cabal._domainkey.' + subdomain + '.' + tld,
-    '"v=DKIM1; k=rsa; p=' + key_record + '"',
-    'TXT'
+    'cabal._domainkey.' + control_domain,
+    'CNAME'
   ));
 
   return r53_params;
-}
-
-function generateKeyPair() {
-  const { generateKeyPairSync } = require('crypto');
-  const { publicKey, privateKey } = generateKeyPairSync('rsa', {
-    modulusLength: 1024,
-    publicKeyEncoding: {
-      type: 'pkcs1',
-      format: 'pem'
-    },
-    privateKeyEncoding: {
-      type: 'pkcs1',
-      format: 'pem'
-    }
-  });
-  const lines = publicKey.split(/\r?\n/);
-  const publicKeyFlattened = lines[1] + lines[2] + lines[3];
-  return {
-    publicKey: publicKey,
-    privateKey: privateKey,
-    publicKeyFlattened: publicKeyFlattened
-  };
 }
 
 function generateBody(data, address) {

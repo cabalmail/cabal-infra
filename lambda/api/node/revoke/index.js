@@ -47,10 +47,23 @@ exports.handler = (event, context, callback) => {
             "ResourceRecordSet": {
               "Name": 'cabal._domainkey.' + subdomain + '.' + tld,
               "TTL": 3600,
-              "Type": "TXT",
+              "Type": "CNAME",
               "ResourceRecords": [
                 {
-                  Value: '"v=DKIM1; k=rsa; p=' + publicKeyFlattened + '"'
+                  Value: 'cabal._domainkey.' + control_domain
+                }
+              ]
+            }
+          },
+          {
+            "Action": "DELETE",
+            "ResourceRecordSet": {
+              "Name": '_dmarc.' + subdomain + '.' + tld,
+              "TTL": 3600,
+              "Type": "CNAME",
+              "ResourceRecords": [
+                {
+                  Value: '_dmarc.' + control_domain
                 }
               ]
             }
