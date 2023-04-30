@@ -22,21 +22,6 @@ DynamoDBQuery.scan('cabal-addresses', { region: node['ec2']['region'] }).each do
   end
 end
 
-for tld in domains.keys.sort do
-  tldobj = domains[tld]
-  for subd in tldobj['subdomains'].keys.sort do
-    subdobj = tldobj['subdomains'][subd]
-    cabal_dkimkey "#{subd}.#{tld} create" do
-      domain "#{subd}.#{tld}"
-      realm 'cabal'
-      private_key tldobj['private_key']
-      action :create
-      notifies :restart, 'service[opendkim]', :delayed
-      notifies :restart, 'service[sendmail]', :delayed
-    end
-  end
-end
-
 template '/etc/opendkim/KeyTable' do
   source 'dkim-keytable.erb'
   variables ({'domains' => domains})
