@@ -81,8 +81,8 @@ function kickOffChef() {
     DocumentName: 'cabal_chef_document',
     Targets: [
       {
-         "Key": "tag:environment",
-         "Values": [ "production" ]
+         "Key": "tag:managed_by_terraform",
+         "Values": [ "y" ]
       }
     ]
   };
