@@ -80,11 +80,7 @@ function kickOffChef() {
   const command = {
     DocumentName: 'cabal_chef_document',
     Targets: [
-      { 
-         "Key": "tag:managed_by_terraform",
-         "Values": [ "y" ]
-      },
-      { 
+      {
          "Key": "tag:environment",
          "Values": [ "production" ]
       }
