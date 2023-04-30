@@ -20,11 +20,8 @@ exports.handler = (event, context, callback) => {
     const subdomain = requestBody.subdomain;
     const tld = requestBody.tld;
     const zone_id = domains[tld];
-    const public_key = requestBody.public_key;
     console.log('Received event (', address, '): ', event);
 
-    const lines = public_key.split(/\r?\n/);
-    const publicKeyFlattened = lines[1] + lines[2] + lines[3];
     const params = {
       "HostedZoneId": zone_id,
       "ChangeBatch": {
