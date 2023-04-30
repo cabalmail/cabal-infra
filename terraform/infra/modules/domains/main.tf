@@ -19,7 +19,7 @@ resource "aws_route53_record" "dkim_public_key" {
   for_each  = toset(var.mail_domains)
   zone_id   = aws_route53_zone.mail_dns[each.key].id
   name      = "cabal._dmainkey.${each.key}"
-  type      = "CNAME"
+  type      = "TXT"
   ttl       = "3600"
   records   = [
     join("", [
