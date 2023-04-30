@@ -17,7 +17,7 @@ resource "tls_private_key" "key" {
 
 resource "aws_route53_record" "dkim_public_key" {
   for_each  = toset(var.mail_domains)
-  zone_id   = aws_route53_zone.mail_dns.id
+  zone_id   = aws_route53_zone.mail_dns[each.key].id
   name      = "cabal._dmainkey.${each.key}"
   type      = "CNAME"
   ttl       = "3600"
