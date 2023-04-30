@@ -22,7 +22,7 @@ resource "aws_route53_record" "dkim_public_key" {
   type      = "TXT"
   ttl       = "3600"
   records   = [
-    join("\" \"", [
+    join("", [
       "\"v=DKIM1; k=rsa; p=",
       join("",
         slice(
@@ -33,6 +33,7 @@ resource "aws_route53_record" "dkim_public_key" {
           ), 1, 3
         )
       ),
+      "\" \"",
       join("",
         slice(
           split(
