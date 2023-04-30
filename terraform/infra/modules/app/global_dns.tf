@@ -45,7 +45,7 @@ resource "aws_route53_record" "dkim_public_key" {
 }
 
 resource "aws_route53_record" "dmarc" {
-  zone_id   = var.control_zone
+  zone_id   = var.zone_id
   name      = "cabal._domainkey.${var.control_domain}"
   type      = "TXT"
   ttl       = "3600"
