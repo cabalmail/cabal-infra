@@ -27,7 +27,7 @@ resource "aws_route53_record" "dkim_public_key" {
             "\n",trimspace(
               tls_private_key.key.public_key_pem
             )
-          ), 1, 3
+          ), 1, 4
         )
       ),
       "\" \"",
@@ -37,7 +37,7 @@ resource "aws_route53_record" "dkim_public_key" {
             "\n",trimspace(
               tls_private_key.key.public_key_pem
             )
-          ), 4, 7
+          ), 4, 8
         )
       )
     ])
