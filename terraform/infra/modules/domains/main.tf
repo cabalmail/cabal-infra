@@ -44,7 +44,7 @@ resource "aws_route53_record" "dkim_public_key" {
         )
       ),
       "\""
-    ]
+    ])
   ]
 }
 
