@@ -129,7 +129,7 @@ class List extends React.Component {
     const addressList = this.state.addresses.map(a => {
       return (
         <li key={a.address} className="address">
-          <span>{a.address.replace(/([.@])/g, "$&\u200B");}</span>
+          <span>{a.address.replace(/([.@])/g, "$&\u200B")}</span>
           <span>{a.comment}</span>
           <button
             onClick={this.copy}
