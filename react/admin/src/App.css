@@ -1,5 +1,5 @@
 @media (min-width: 900px) and (prefers-color-scheme: dark) {
-  .email_list, .email_list * {
+  .email_list, .email_list :not(.highlight, .active) {
     background-color: #181818 !important;
   }
 }
@@ -76,7 +76,7 @@
 }
 
 @media (min-width: 900px) and (prefers-color-scheme: light) {
-  .email_list, .email_list * {
+  .email_list, .email_list :not(.highlight, .active) {
     background-color: #e8e8e8 !important;
   }
 }
