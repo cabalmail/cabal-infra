@@ -9,7 +9,9 @@
                    .default *,
                    .selected *,
                    button,
-                   select) {
+                   select,
+                   span.checked,
+                   span.unchecked) {
     background-color: #181818 !important;
   }
 }
@@ -96,7 +98,9 @@
                    .default *,
                    .selected *,
                    button,
-                   select) {
+                   select,
+                   span.checked,
+                   span.unchecked) {
     background-color: #e8e8e8 !important;
   }
 }
