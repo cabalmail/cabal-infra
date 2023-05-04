@@ -18,7 +18,9 @@ class List extends React.Component {
   filter(data) {
     this.setState({ ...this.state, addresses: data.Items.filter(
       (a) => {
-        return [a.address, a.comment].join('.').includes(this.state.filter);
+        return [a.address, a.comment].join('.')
+          .toLowerCase()
+          .includes(this.state.filter.toLowerCase());
       }
     ).sort(
       (a,b) => {
