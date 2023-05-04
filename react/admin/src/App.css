@@ -7,7 +7,9 @@
                    .highlight *,
                    .active *,
                    .default *,
-                   .selected *) {
+                   .selected *,
+                   button,
+                   select) {
     background-color: #181818 !important;
   }
 }
@@ -92,7 +94,9 @@
                    .highlight *,
                    .active *,
                    .default *,
-                   .selected *) {
+                   .selected *,
+                   button,
+                   select) {
     background-color: #e8e8e8 !important;
   }
 }
