@@ -1,11 +1,14 @@
+@media (min-width: 900px) and (prefers-color-scheme: dark) {
+  .email_list, .email_list * {
+    background-color: #181818 !important;
+  }
+}
+
 @media (prefers-color-scheme: dark) {
   body, a, button, select, div, label {
     color: #aaa;
     background-color: #200;
     border-color: #333;
-  }
-  .email_list, .email_list * {
-    background-color: #181818 !important;
   }
   input, select, option {
     color: #ccc;
@@ -72,14 +75,17 @@
   }
 }
 
+@media (min-width: 900px) and (prefers-color-scheme: light) {
+  .email_list, .email_list * {
+    background-color: #e8e8e8 !important;
+  }
+}
+
 @media (prefers-color-scheme: light) {
   body, a, button, select, div, label {
     color: #222;
     background-color: #ffe;
     border-color: #999;
-  }
-  .email_list, .email_list * {
-    background-color: #e8e8e8 !important;
   }
   input, select, option {
     color: #000;
