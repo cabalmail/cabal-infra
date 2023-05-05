@@ -45,7 +45,7 @@ export const TO = {
 };
 export const PAGE_SIZE = 50;
 export const READ = {
-  imap: 'CabalSeen',
+  imap: '\\Seen',
   css: "read",
   description: "Mark read",
   op: "set",
@@ -53,7 +53,7 @@ export const READ = {
   icon: "✉️"
 };
 export const UNREAD = {
-  imap: 'CabalSeen',
+  imap: '\\Seen',
   css: "unread",
   description: "Mark unread",
   op: "unset",

@@ -17,11 +17,11 @@ ssm = boto3.client('ssm')
 mpw = ssm.get_parameter(Name='/cabal/master_password',
                         WithDecryption=True)["Parameter"]["Value"]
 
-def get_imap_client(host, user, folder):
+def get_imap_client(host, user, folder, read_only=False):
     '''Returns an IMAP client for host/user with folder selected'''
     client = IMAPClient(host=host, use_uid=True, ssl=True)
     client.login(f"{user}*admin", mpw)
-    client.select_folder(folder)
+    client.select_folder(folder, read_only)
     return client
 
 def get_folder_list(client):
@@ -41,7 +41,7 @@ def folder_sort(k):
         return k
     return k.lower()
 
-def get_message(host, user, folder, id, seen):
+def get_message(host, user, folder, id):
     '''Gets a message from cache on s3 or from imap server'''
     bucket = host.replace("imap", "cache")
     email_body_raw = b''
@@ -49,12 +49,8 @@ def get_message(host, user, folder, id, seen):
     if key_exists(bucket, key):
         email_body_raw = get_object(bucket, key)
     else:
-        client = get_imap_client(host, user, folder)
+        client = get_imap_client(host, user, folder, True)
         message = client.fetch([id],['RFC822'])
-        if seen:
-            client.add_flags([id], '\Seen', True)
-        else:
-            client.remove_flags([id], '\Seen', True)
         email_body_raw = message[id][b'RFC822']
         client.logout()
         upload_object(bucket, key, "text/plain", email_body_raw)

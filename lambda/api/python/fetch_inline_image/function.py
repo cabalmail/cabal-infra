@@ -12,7 +12,7 @@ def handler(event, _context):
     user = event['requestContext']['authorizer']['claims']['cognito:username'];
     bucket = qs['host'].replace("imap", "cache")
     key = ""
-    message = get_message(qs['host'], user, qs['folder'], qs['id'], qs['seen'])
+    message = get_message(qs['host'], user, qs['folder'], qs['id'])
     for part in message.walk():
         ct = part.get_content_type()
         if part.get('Content-ID'):
