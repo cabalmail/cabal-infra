@@ -88,21 +88,24 @@ cidr_block = "10.0.0.0/9"
 # autoscaling.
 
 imap_scale = {
-  min = 1
-  max = 1
-  des = 1
+  min  = 1
+  max  = 1
+  des  = 1
+  size = "t2.micro"
 }
 
 smtpin_scale = {
-  min = 1
-  max = 5
-  des = 1
+  min  = 1
+  max  = 5
+  des  = 1
+  size = "t2.micro"
 }
 
 smtpout_scale = {
-  min = 1
-  max = 2
-  des = 1
+  min  = 1
+  max  = 2
+  des  = 1
+  size = "t2.micro"
 }
 
 # Create a personal access token in your Github account so that
