@@ -33,7 +33,7 @@
   ul.message-list div.message-subject {
     color: #ccc;
   }
-  ul.message-list li.CabalSeen div.message-subject {
+  ul.message-list li.Seen div.message-subject {
     color: #aaa;
   }
   .nav, .nav .item {
@@ -122,7 +122,7 @@
   ul.message-list div.message-subject {
     color: #222;
   }
-  ul.message-list li.CabalSeen div.message-subject {
+  ul.message-list li.Seen div.message-subject {
     color: #444;
   }
   .nav, .nav .item {

@@ -151,7 +151,7 @@ div.message_overlay button.unflagged, div.message_overlay button.flagged {
   padding: 0.5em;
 }
 
-div.message_overlay .CabalSeen button.read,
+div.message_overlay .Seen button.read,
 div.message_overlay .Flagged button.flagged,
 div.message_overlay button.unread,
 div.message_overlay button.unflagged {
@@ -160,7 +160,7 @@ div.message_overlay button.unflagged {
 
 div.message_overlay button.read,
 div.message_overay button.flagged,
-div.message_overlay .CabalSeen button.unread,
+div.message_overlay .Seen button.unread,
 div.message_overlay .Flagged button.unflagged {
   display: inline-block;
 }

@@ -9,7 +9,7 @@ def handler(event, _context):
     qs = event['queryStringParameters']
     ids = json.loads(qs['ids'])
     user = event['requestContext']['authorizer']['claims']['cognito:username'];
-    client = get_imap_client(qs['host'], user, qs['folder'])
+    client = get_imap_client(qs['host'], user, qs['folder'], True)
     envelopes = {}
     for msgid, data in client.fetch(ids, ['ENVELOPE', 'FLAGS', 'BODYSTRUCTURE', 'BODY[HEADER.FIELDS (X-PRIORITY)]']).items():
         envelope = data[b'ENVELOPE']

@@ -28,7 +28,7 @@ ul.message-list div.message-subject {
   text-overflow: ellipsis;
 }
 
-ul.message-list li.CabalSeen div.message-subject {
+ul.message-list li.Seen div.message-subject {
   font-weight: 400;
 }
 

@@ -13,7 +13,7 @@ def handler(event, _context):
     bucket = qs['host'].replace("imap", "cache")
     key = f"{user}/{qs['folder']}/{qs['id']}/{qs['filename']}"
     index = int(qs['index'])
-    message = get_message(qs['host'], user, qs['folder'], qs['id'], qs['seen'])
+    message = get_message(qs['host'], user, qs['folder'], qs['id'])
     i = 0;
     if message.is_multipart():
         for part in message.walk():
