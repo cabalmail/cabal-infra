@@ -9,7 +9,7 @@ def handler(event, _context):
     user = event['requestContext']['authorizer']['claims']['cognito:username'];
     client = get_imap_client(body['host'], user, 'INBOX')
     if body['parent'] == "":
-        client.create_folder({body['name']})
+        client.create_folder(body['name'])
     else:
         parent = body['parent'].replace("/",".")
         client.create_folder(f"{parent}.{body['name']}")
