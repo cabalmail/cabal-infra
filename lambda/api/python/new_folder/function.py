@@ -8,7 +8,7 @@ def handler(event, _context):
     body = json.loads(event['body'])
     user = event['requestContext']['authorizer']['claims']['cognito:username'];
     client = get_imap_client(body['host'], user, 'INBOX')
-    if parent == "":
+    if body['parent'] == "":
         client.create_folder({body['name']})
     else:
         parent = body['parent'].replace("/",".")
