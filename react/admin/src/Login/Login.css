@@ -5,6 +5,6 @@ div.login {
 }
 
 div.login form.login input.login {
-  width: auto;
-  max-width: 30em;
+  width: 100%;
+  box-sizing: border-box;
 }
