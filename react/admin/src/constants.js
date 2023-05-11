@@ -50,7 +50,7 @@ export const READ = {
   description: "Mark read",
   op: "set",
   action: "read",
-  icon: "✉️"
+  icon: "🐵"
 };
 export const UNREAD = {
   imap: '\\Seen',
@@ -58,7 +58,7 @@ export const UNREAD = {
   description: "Mark unread",
   op: "unset",
   action: "unread",
-  icon: "🔵"
+  icon: "🙈"
 };
 export const FLAGGED = {
   imap: '\\Flagged',
