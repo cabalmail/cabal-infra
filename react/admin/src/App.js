@@ -60,6 +60,10 @@ class App extends React.Component {
     super.setState(state);
   }
 
+  componentWillUnmount() {
+    window.removeEventListener("focus", this.checkSession);
+  }
+
   componentDidMount() {
     const response = this.getConfig();
     response.then(data => {
@@ -73,9 +77,14 @@ class App extends React.Component {
       });
       UserPool = new CognitoUserPool(cognitoConfig.poolData);
     });
+    window.addEventListener("focus", this.checkSession);
   }
 
   componentDidUpdate(prevProps, prevState) {
+    this.checkSession();
+  }
+
+  checkSession = () => {
     if (this.state.expires < Math.floor(Date.now() / 1000)) {
       if (this.state.view !== "Login" && this.state.view !== "SignUp") {
         this.setState({
@@ -102,11 +111,7 @@ class App extends React.Component {
     var message = m;
     var error = e;
     const timeout = error ? 15000 : 4000;
-    if (this.state.expires < Math.floor(new Date() / 1000) && this.state.loggedIn) {
-      this.setState({...this.state, view: "Login", loggedIn: false});
-      message = "Session expired";
-      error = true;
-    }
+    this.checkSession()
     this.setState({...this.state, message: message, error: error, hideMessage: false});
     setTimeout(() => {
       this.setState({...this.state, hideMessage: true});
