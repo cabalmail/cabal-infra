@@ -13,6 +13,13 @@ Parameters: state (null)
 
 Returns: null
 
+### checkSession
+Modifiers: none
+
+Parameters:  ()
+
+Returns: null
+
 ### setMessage
 Modifiers: none
 
