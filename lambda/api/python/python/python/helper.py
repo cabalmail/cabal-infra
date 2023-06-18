@@ -6,7 +6,6 @@ import email
 from imapclient import IMAPClient
 from email.policy import default as default_policy
 import os
-import dnspython as dns
 import dns.resolver
 
 region = os.environ['AWS_REGION']
@@ -20,7 +19,7 @@ mpw = ssm.get_parameter(Name='/cabal/master_password',
                         WithDecryption=True)["Parameter"]["Value"]
 
 def dns_lookup(record, type):
-    return dns.resolver.query(record, type)
+    return dns.resolver.resolve(record, type)
 
 def get_imap_client(host, user, folder, read_only=False):
     '''Returns an IMAP client for host/user with folder selected'''
