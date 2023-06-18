@@ -13,4 +13,3 @@ def handler(event, _context):
             "url": answer[0].__str__().split(";")[1].split("=")[1]
         })
     }
-    
