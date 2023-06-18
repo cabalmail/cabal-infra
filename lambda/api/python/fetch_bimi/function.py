@@ -5,7 +5,15 @@ def handler(event, _context):
     '''Checks for the presence of a BIMI record and returns the image URL if found'''
     qs = event['queryStringParameters']
     sender_domain = qs['sender_domain']
-    answer = dns.resolver.query(f'default._bimi.{sender_domain}', 'TXT')
+    try:
+        answer = dns.resolver.query(f'default._bimi.{sender_domain}', 'TXT')
+    except dns.resolver.NXDOMAIN:
+        return {
+            "statusCode": 404,
+            "body": json.dumps({
+                "url": "/mask.png"
+            })
+        }
 
     return {
         "statusCode": 200,
