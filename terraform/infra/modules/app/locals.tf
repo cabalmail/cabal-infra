@@ -32,6 +32,14 @@ locals {
       cache     = true
       cache_ttl = 3600
     },
+    fetch_bimi    = {
+      runtime   = "python3.9"
+      type      = "python"
+      method    = "GET"
+      memory    = 1024
+      cache     = true
+      cache_ttl = 3600
+    },
     list_attachments = {
       runtime   = "python3.9"
       type      = "python"
