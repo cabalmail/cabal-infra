@@ -6,6 +6,8 @@ import email
 from imapclient import IMAPClient
 from email.policy import default as default_policy
 import os
+import dnspython as dns
+import dns.resolver
 
 region = os.environ['AWS_REGION']
 s3r = boto3.resource("s3")
@@ -16,6 +18,9 @@ s3c = boto3.client("s3",
 ssm = boto3.client('ssm')
 mpw = ssm.get_parameter(Name='/cabal/master_password',
                         WithDecryption=True)["Parameter"]["Value"]
+
+def dns_lookup(record, type):
+    return dns.resolver.query(record, type)
 
 def get_imap_client(host, user, folder, read_only=False):
     '''Returns an IMAP client for host/user with folder selected'''
