@@ -18,9 +18,6 @@ ssm = boto3.client('ssm')
 mpw = ssm.get_parameter(Name='/cabal/master_password',
                         WithDecryption=True)["Parameter"]["Value"]
 
-def dns_lookup(record, type):
-    return dns.resolver.resolve(record, type)
-
 def get_imap_client(host, user, folder, read_only=False):
     '''Returns an IMAP client for host/user with folder selected'''
     client = IMAPClient(host=host, use_uid=True, ssl=True)
