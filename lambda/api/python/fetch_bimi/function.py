@@ -6,7 +6,8 @@ def handler(event, _context):
     qs = event['queryStringParameters']
     sender_domain = qs['sender_domain']
     sender_domain_parts = sender_domain.split(".")
-    for x in range(len(sender_domain_parts)):
+    l = len(sender_domain_parts)
+    for x in range(l):
         domain = ".".join(sender_domain_parts[x:])
         print(domain)
         try:
@@ -21,12 +22,11 @@ def handler(event, _context):
             pass
         except dns.resolver.NoAnswer:
             pass
-        except dns.resolver.LifetimeTimeout:
-            pass
 
     return {
         "statusCode": 200,
         "body": json.dumps({
-            "url": "/mask.png"
+            "url": f'https://www.{".".join(sender_domain_parts[l-2:])}/favicon.ico'
         })
     }
+    
