@@ -257,7 +257,9 @@ class MessageOverlay extends React.Component {
             >❌</button>
             {this.renderHeader()}
             {this.renderTabBar()}
-            <div className="bimi"><img src={this.state.bimi_url} /></div>
+            <div className="bimi">
+              <img src={this.state.bimi_url} alt="" />
+            </div>
           </div>
           {this.renderView()}
         </div>
