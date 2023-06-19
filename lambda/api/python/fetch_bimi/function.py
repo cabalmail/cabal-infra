@@ -14,6 +14,13 @@ def handler(event, _context):
                 "url": "/mask.png"
             })
         }
+    except dns.resolver.NoAnswer:
+        return {
+            "statusCode": 200,
+            "body": json.dumps({
+                "url": "/mask.png"
+            })
+        }
 
     return {
         "statusCode": 200,
