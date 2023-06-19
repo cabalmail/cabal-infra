@@ -31,7 +31,7 @@ class MessageOverlay extends React.Component {
         this.props.envelope.flags.includes("\\Seen")
       ).then(data => {
         const view =
-          data[0].data.message_body_plain.length > data.data.message_body_html
+          data.data.message_body_plain.length > data.data.message_body_html
           ? "plain"
           : "rich";
         this.setState({
