@@ -15,7 +15,8 @@ class MessageOverlay extends React.Component {
       view: "rich",
       attachments: [],
       loading: true,
-      top_state: "expanded"
+      top_state: "expanded",
+      bimi_url: "/mask.png"
     }
     this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
   }
@@ -23,40 +24,53 @@ class MessageOverlay extends React.Component {
   componentDidUpdate(prevProps, prevState) {
     if (this.props.envelope.id !== prevProps.envelope.id) {
       this.setState({...this.state, loading: true, invert: false});
-      const messageResponse = this.api.getMessage(
+
+      this.api.getMessage(
         this.props.folder,
         this.props.envelope.id,
         this.props.envelope.flags.includes("\\Seen")
-      );
-      const attachmentResponse = this.api.getAttachments(
-        this.props.folder,
-        this.props.envelope.id,
-        this.props.envelope.flags.includes("\\Seen")
-      );
-      Promise.all([
-        messageResponse.catch(e => {
-          this.props.setMessage("Unable to get message.", true);
-          console.log(e);
-        }),
-        attachmentResponse.catch(e => {
-          this.props.setMessage("Unable to get list of attachments.", true);
-          console.log(e);
-        })
-      ]).then(data => {
+      ).then(data => {
         const view =
-          data[0].data.message_body_plain.length > data[0].data.message_body_html
+          data.data.message_body_plain.length > data.data.message_body_html
           ? "plain"
           : "rich";
         this.setState({
           ...this.state,
-          message_raw_url: data[0].data.message_raw,
-          message_body_plain: data[0].data.message_body_plain,
-          message_body_html: data[0].data.message_body_html,
-          attachments: data[1].data.attachments,
+          message_raw_url: data.data.message_raw,
+          message_body_plain: data.data.message_body_plain,
+          message_body_html: data.data.message_body_html,
           loading: false,
           view: view
         });
-      }).catch();
+      }).catch(e => {
+        this.props.setMessage("Unable to get message.", true);
+        console.log(e);
+      });
+
+      this.api.getAttachments(
+        this.props.folder,
+        this.props.envelope.id,
+        this.props.envelope.flags.includes("\\Seen")
+      ).then(data => {
+        this.setState({
+          ...this.state,
+          attachments: data.data.attachments
+        });
+      }).catch(e => {
+        this.props.setMessage("Unable to get list of attachments.", true);
+        console.log(e);
+      });
+
+      this.api.getBimiUrl(
+        this.props.envelope.from[0]
+      ).then(data => {
+        this.setState({
+          ...this.state,
+          bimi_url: data.data.url
+        });
+      }).catch(e => {
+        console.log(e);
+      });
     }
   }
 
@@ -249,6 +263,9 @@ class MessageOverlay extends React.Component {
             >❌</button>
             {this.renderHeader()}
             {this.renderTabBar()}
+            <div className="bimi">
+              <img src={this.state.bimi_url} alt="" />
+            </div>
           </div>
           {this.renderView()}
         </div>
