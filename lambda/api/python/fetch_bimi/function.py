@@ -21,6 +21,8 @@ def handler(event, _context):
             pass
         except dns.resolver.NoAnswer:
             pass
+        except dns.resolver.LifetimeTimeout:
+            pass
 
     return {
         "statusCode": 200,
