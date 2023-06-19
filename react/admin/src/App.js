@@ -112,6 +112,9 @@ class App extends React.Component {
     var error = e;
     const timeout = error ? 15000 : 4000;
     this.checkSession()
+    if (!this.state.loggedIn) {
+      message = "Session expired. Please log in again.";
+    }
     this.setState({...this.state, message: message, error: error, hideMessage: false});
     setTimeout(() => {
       this.setState({...this.state, hideMessage: true});
