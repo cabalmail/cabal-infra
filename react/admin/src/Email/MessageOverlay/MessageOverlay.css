@@ -164,3 +164,17 @@ div.message_overlay .Seen button.unread,
 div.message_overlay .Flagged button.unflagged {
   display: inline-block;
 }
+
+div.bimi {
+  position: absolute;
+  top:3em;
+  left:0;
+  height:100px;
+  width:100px;
+  padding-top:1em;
+}
+
+div.message_overlay div.message_top dl {
+  margin-left:100px;
+  padding-left: 1em;
+}
