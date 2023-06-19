@@ -1,6 +1,0 @@
-<% for tld in @domains.keys.sort do %>
-  <% tldobj = @domains[tld] %>
-  <% for subd in tldobj['subdomains'].keys.sort do %>
-cabal._domainkey.<%= subd -%>.<%= tld -%> <%= subd -%>.<%= tld -%>:cabal:/etc/opendkim/keys/cabal
-  <% end %>
-<% end %>
