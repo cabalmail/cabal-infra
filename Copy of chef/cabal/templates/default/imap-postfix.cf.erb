@@ -1,0 +1,20 @@
+queue_directory = /var/spool/postfix
+command_directory = /usr/sbin
+daemon_directory = /usr/libexec/postfix
+data_directory = /var/lib/postfix
+mail_owner = postfix
+inet_interfaces = localhost
+inet_protocols = all
+mydestination = /etc/postfix/local-host-names
+local_recipient_maps = $alias_maps  # need to research this
+unknown_local_recipient_reject_code = 550
+mynetworks = <%=node['network']['cidr']%>  # Need to add this to attributes
+relay_domains = $mydestination
+relay_recipient_maps = hash:/etc/postfix/relay_recipients
+myorigin = imap.<%=node['sendmail']['cert']%>
+alias_maps = hash:/etc/aliases
+alias_database = hash:/etc/aliases
+recipient_delimiter = +
+home_mailbox = Maildir/
+sendmail_path = /usr/sbin/sendmail.postfix
+setgid_group = postdrop
