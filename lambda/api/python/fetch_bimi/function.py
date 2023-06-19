@@ -9,7 +9,7 @@ def handler(event, _context):
         answer = dns.resolver.query(f'default._bimi.{sender_domain}', 'TXT')
     except dns.resolver.NXDOMAIN:
         return {
-            "statusCode": 404,
+            "statusCode": 200,
             "body": json.dumps({
                 "url": "/mask.png"
             })
