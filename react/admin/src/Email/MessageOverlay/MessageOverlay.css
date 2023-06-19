@@ -172,6 +172,7 @@ div.bimi {
   height:100px;
   width:100px;
   padding-top:1em;
+  overflow: hidden;
 }
 
 div.message_overlay div.message_top dl {
