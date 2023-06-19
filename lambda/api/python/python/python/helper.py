@@ -6,6 +6,7 @@ import email
 from imapclient import IMAPClient
 from email.policy import default as default_policy
 import os
+import dns.resolver
 
 region = os.environ['AWS_REGION']
 s3r = boto3.resource("s3")

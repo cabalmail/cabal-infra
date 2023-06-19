@@ -9,6 +9,21 @@ export default class ApiClient {
     this.host = host;
   }
 
+  getBimiUrl(sender) {
+    const sender_domain = sender.split("@")[1];
+    const response = axios.get('/fetch_bimi', {
+      params: {
+        sender_domain: sender_domain
+      },
+      baseURL: this.baseURL,
+      headers: {
+        'Authorization': this.token
+      },
+      timeout: ONE_SECOND * 10
+    });
+    return response;
+  }
+
   deleteFolder(name) {
     const response = axios.delete('/delete_folder',
       {
