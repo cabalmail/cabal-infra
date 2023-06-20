@@ -7,7 +7,7 @@ on:
     types: [trigger_build_dev]
   push:
     branches:
-      - 'dev'
+      - '0.3.0'
     paths:
       - 'lambda/api/python/**'
       - '.github/workflows/lambda_api_python_build_dev.yml'

@@ -7,7 +7,7 @@ on:
     types: [trigger_build_dev]
   push:
     branches:
-      - 'dev'
+      - '0.3.0'
     paths:
       - 'react/admin/public'
       - 'react/admin/public/*'

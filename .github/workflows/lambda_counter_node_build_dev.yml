@@ -7,7 +7,7 @@ on:
     types: [trigger_build_dev]
   push:
     branches:
-      - 'dev'
+      - '0.3.0'
     paths:
       - 'lambda/counter/node/**'
       - '.github/workflows/lambda_counter_node_build_dev.yml'
