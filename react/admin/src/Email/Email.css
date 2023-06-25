@@ -58,6 +58,12 @@ ul.message_list {
 
 /* Composer view */
 
+.compose-button {
+  position: absolute;
+  bottom: 1em;
+  right: 1em;
+}
+
 .compose-wrapper {
   position: absolute;
   width: 90%;
