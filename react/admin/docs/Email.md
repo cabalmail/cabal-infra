@@ -27,4 +27,18 @@ Parameters:  ()
 
 Returns: null
 
+### showCompose
+Modifiers: none
+
+Parameters:  ()
+
+Returns: null
+
+### hideCompose
+Modifiers: none
+
+Parameters: envelope (null)
+
+Returns: null
+
 </div>
