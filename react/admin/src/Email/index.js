@@ -2,6 +2,7 @@ import React from 'react';
 import './Email.css';
 import Messages from './Messages';
 import MessageOverlay from './MessageOverlay';
+import ComposeOverlay from './ComposeOverlay';
 
 class Email extends React.Component {
 
@@ -10,6 +11,7 @@ class Email extends React.Component {
     this.state = {
       folder: "INBOX",
       overlayVisible: false,
+      composeVisible: false,
       envelope: {},
       flags: []
     };
@@ -30,6 +32,14 @@ class Email extends React.Component {
 
   hideOverlay = () => {
     this.setState({...this.state, overlayVisible: false});
+  }
+
+  showCompose = () => {
+    this.setState({...this.state, composeVisible: true});
+  }
+
+  hideCompose = (envelope) => {
+    this.setState({...this.state, composeVisible: false});
   }
 
   render() {
@@ -56,6 +66,15 @@ class Email extends React.Component {
           updateOverlay={this.showOverlay}
           setMessage={this.props.setMessage}
         />
+        <button onclick={this.showCompose}>New Email</button>
+        <div className={`compose-wrapper ${this.state.overayVisible ? 'show-compose' : 'hide-compose'}`}>
+          <ComposeOverlay
+            token={this.props.token}
+            api_url={this.props.api_url}
+            host={this.props.host}
+            hide={this.hideCompose}
+          />
+        </div>
       </div>
     );
   }
