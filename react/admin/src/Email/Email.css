@@ -55,3 +55,19 @@ ul.message_list {
     padding-right: 2em;
   }
 }
+
+/* Composer view */
+
+.compose-wrapper {
+  position: absolute;
+  width: 90%;
+  max-width: 50em;
+}
+
+.show-compose {
+  display: block;
+}
+
+.hide-compose {
+  display: none;
+}
