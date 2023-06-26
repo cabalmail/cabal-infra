@@ -27,4 +27,11 @@ Parameters: e (null)
 
 Returns: null
 
+### onMessageChange
+Modifiers: none
+
+Parameters: editorState (null)
+
+Returns: null
+
 </div>
