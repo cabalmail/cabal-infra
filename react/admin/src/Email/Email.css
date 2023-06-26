@@ -66,8 +66,10 @@ ul.message_list {
 
 .compose-wrapper {
   position: absolute;
-  width: 90%;
-  max-width: 50em;
+  top: 1em;
+  bottom: 1em;
+  right: 1em;
+  left: 1em;
 }
 
 .show-compose {

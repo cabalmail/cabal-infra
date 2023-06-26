@@ -66,7 +66,7 @@ class Email extends React.Component {
           updateOverlay={this.showOverlay}
           setMessage={this.props.setMessage}
         />
-        <button className="compose-button" onclick={this.showCompose}>New Email</button>
+        <button className="compose-button" onClick={this.showCompose}>New Email</button>
         <div className={`compose-wrapper ${this.state.composeVisible ? 'show-compose' : 'hide-compose'}`}>
           <ComposeOverlay
             token={this.props.token}
