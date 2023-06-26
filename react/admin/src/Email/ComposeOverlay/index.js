@@ -1,6 +1,6 @@
 import React from 'react';
 import './ComposeOverlay.css';
-import { Editable, useEditor } from "@wysimark/react";
+import { useEditor } from "@wysimark/react";
 
 class ComposeOverlay extends React.Component {
 
