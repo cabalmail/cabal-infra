@@ -1,6 +1,12 @@
 import React from 'react';
+import './ComposeOverlay.css'
+import { Editable, useEditor } from "@wysimark/react"
 
 class ComposeOverlay extends React.Component {
+
+  const editor = useEditor({
+    initialMarkdown: this.props.quotedMessage,
+  })
 
   handleSubmit = (e) => {
     e.preventDefault();
@@ -9,6 +15,9 @@ class ComposeOverlay extends React.Component {
 
   handleSend = (e) => {
     e.preventDefault();
+    const markdown = this.editor.getMarkdown();
+    console.log(markdown);
+    this.props.hide();
     return false;
   }
 
@@ -38,6 +47,7 @@ class ComposeOverlay extends React.Component {
         </fieldset>
         <fieldset>
           <legend>Message</legend>
+          <Editable editor={editor} />
         </fieldset>
         <fieldset>
           <button onClick={this.handleSend}>Send</button>
