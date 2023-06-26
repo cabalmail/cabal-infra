@@ -1,17 +1,8 @@
 import React from 'react';
 import './ComposeOverlay.css';
-import ReactDOM from 'react-dom';
-import {Editor, EditorState} from 'draft-js';
-import 'draft-js/dist/Draft.css';
+import Editor from './Editor';
 
 class ComposeOverlay extends React.Component {
-
-  constructor(props) {
-    super(props);
-    this.state = {
-      editorState: EditorState.createEmpty()
-    };
-  }
 
   handleSubmit = (e) => {
     e.preventDefault();
@@ -56,7 +47,9 @@ class ComposeOverlay extends React.Component {
         </fieldset>
         <fieldset>
           <legend>Message</legend>
-          <Editor editorState={this.state.editorState} onChange={this.onMessageChange} />
+          <div id="container">
+            <Editor editorState={this.state.editorState} onChange={this.onMessageChange} />
+          </div>
         </fieldset>
         <fieldset>
           <button onClick={this.handleSend}>Send</button>
@@ -68,5 +61,3 @@ class ComposeOverlay extends React.Component {
 }
 
 export default ComposeOverlay;
-
-ReactDOM.render(<ComposeOverlay />, document.getElementById('compose-wrapper'));
