@@ -1,22 +1,19 @@
 import React from 'react';
-import ReactDOM from 'react-dom';
-import {Editor, EditorState} from 'draft-js';
-import 'draft-js/dist/Draft.css';
 
 class Composer extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = {editorState: EditorState.createEmpty()};
-    this.onChange = editorState => this.setState({editorState});
-  }
+
+  // constructor(props) {
+  //   super(props);
+  //   this.state = {};
+  // }
 
   render() {
     return (
-      <Editor editorState={this.state.editorState} onChange={this.onChange} />
+      <div className="composer-wrapper">
+        <textarea className="composer-text">{this.props.quotedText}</textarea>
+      </div>
     );
   }
 }
 
 export default Composer;
-
-ReactDOM.render(<Composer />, document.getElementById('container'));
