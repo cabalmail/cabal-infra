@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom';
 import {Editor, EditorState} from 'draft-js';
 import 'draft-js/dist/Draft.css';
 
-class MyEditor extends React.Component {
+class Composer extends React.Component {
   constructor(props) {
     super(props);
     this.state = {editorState: EditorState.createEmpty()};
@@ -16,5 +16,7 @@ class MyEditor extends React.Component {
     );
   }
 }
+
+export default Composer;
 
 ReactDOM.render(<MyEditor />, document.getElementById('container'));

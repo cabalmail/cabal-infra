@@ -1,6 +1,6 @@
 import React from 'react';
 import './ComposeOverlay.css';
-import Editor from './Editor';
+import Composer from './Composer';
 
 class ComposeOverlay extends React.Component {
 
@@ -48,7 +48,7 @@ class ComposeOverlay extends React.Component {
         <fieldset>
           <legend>Message</legend>
           <div id="container">
-            <Editor editorState={this.state.editorState} onChange={this.onMessageChange} />
+            <Composer editorState={this.state.editorState} onChange={this.onMessageChange} />
           </div>
         </fieldset>
         <fieldset>
