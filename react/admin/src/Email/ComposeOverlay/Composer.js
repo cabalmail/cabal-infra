@@ -19,4 +19,4 @@ class Composer extends React.Component {
 
 export default Composer;
 
-ReactDOM.render(<MyEditor />, document.getElementById('container'));
+ReactDOM.render(<Composer />, document.getElementById('container'));
