@@ -6,4 +6,25 @@
 
 
 ## Methods
+### handleSubmit
+Modifiers: none
+
+Parameters: e (null)
+
+Returns: null
+
+### handleSend
+Modifiers: none
+
+Parameters: e (null)
+
+Returns: null
+
+### handleCancel
+Modifiers: none
+
+Parameters: e (null)
+
+Returns: null
+
 </div>
