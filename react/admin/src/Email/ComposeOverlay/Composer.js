@@ -18,8 +18,8 @@ class Composer extends React.Component {
     return (
       <div className="composer-wrapper">
         <textarea
-          rows=40
-          cols=120
+          rows={40}
+          cols={120}
           value={this.state.text}
           defaultValue={this.props.quotedText}
           className="composer-text"
