@@ -1,12 +1,17 @@
 import React from 'react';
-import './ComposeOverlay.css'
-import { Editable, useEditor } from "@wysimark/react"
+import './ComposeOverlay.css';
+import { Editable, useEditor } from "@wysimark/react";
 
 class ComposeOverlay extends React.Component {
 
-  const editor = useEditor({
-    initialMarkdown: this.props.quotedMessage,
-  })
+  constructor(props) {
+    super(props);
+    this.state = {
+      editor: useEditor({
+        initialMarkdown: this.props.quotedMessage,
+      })
+    };
+  }
 
   handleSubmit = (e) => {
     e.preventDefault();
@@ -15,7 +20,7 @@ class ComposeOverlay extends React.Component {
 
   handleSend = (e) => {
     e.preventDefault();
-    const markdown = this.editor.getMarkdown();
+    const markdown = this.state.editor.getMarkdown();
     console.log(markdown);
     this.props.hide();
     return false;
