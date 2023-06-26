@@ -6,4 +6,11 @@
 
 
 ## Methods
+### onChange
+Modifiers: none
+
+Parameters: e (null)
+
+Returns: null
+
 </div>
