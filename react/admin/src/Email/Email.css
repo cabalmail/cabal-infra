@@ -70,6 +70,7 @@ ul.message_list {
   bottom: 1em;
   right: 1em;
   left: 1em;
+  border: 1px solid;
 }
 
 .show-compose {
