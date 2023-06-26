@@ -1,6 +1,6 @@
 import React from 'react';
 import './ComposeOverlay.css';
-import ReactDOM from 'react-dom';
+//import ReactDOM from 'react-dom';
 import {Editor, EditorState} from 'draft-js';
 import 'draft-js/dist/Draft.css';
 
