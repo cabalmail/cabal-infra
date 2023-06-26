@@ -1,15 +1,15 @@
 import React from 'react';
 import './ComposeOverlay.css';
-import { Editable, useEditor } from "@wysimark/react";
+import ReactDOM from 'react-dom';
+import {Editor, EditorState} from 'draft-js';
+import 'draft-js/dist/Draft.css';
 
 class ComposeOverlay extends React.Component {
 
   constructor(props) {
     super(props);
     this.state = {
-      editor: useEditor({
-        initialMarkdown: this.props.quotedMessage,
-      })
+      editorState: EditorState.createEmpty()
     };
   }
 
@@ -32,6 +32,10 @@ class ComposeOverlay extends React.Component {
     this.props.hide();
   }
 
+  onMessageChange = (editorState) => {
+    this.setState({editorState});
+  }
+
   render() {
     return (
       <form className="compose-overlay" onSubmit={this.handleSubmit}>
@@ -52,7 +56,7 @@ class ComposeOverlay extends React.Component {
         </fieldset>
         <fieldset>
           <legend>Message</legend>
-          <Editable editor={this.state.editor} />
+          <Editor editorState={this.state.editorState} onChange={this.onMessageChange} />
         </fieldset>
         <fieldset>
           <button onClick={this.handleSend}>Send</button>
