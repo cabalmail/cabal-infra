@@ -1,6 +1,6 @@
 import React from 'react';
 import './ComposeOverlay.css';
-import { useEditor } from "@wysimark/react";
+import { Editable, useEditor } from "@wysimark/react";
 
 class ComposeOverlay extends React.Component {
 
@@ -52,7 +52,7 @@ class ComposeOverlay extends React.Component {
         </fieldset>
         <fieldset>
           <legend>Message</legend>
-          <Editable editor={editor} />
+          <Editable editor={this.state.editor} />
         </fieldset>
         <fieldset>
           <button onClick={this.handleSend}>Send</button>
