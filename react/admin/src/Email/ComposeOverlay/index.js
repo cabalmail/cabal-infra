@@ -4,7 +4,7 @@ import Composer from './Composer';
 
 class ComposeOverlay extends React.Component {
 
-  constructor() {
+  constructor(props) {
     super(props);
     this.state = {
       editorState: null
@@ -18,7 +18,6 @@ class ComposeOverlay extends React.Component {
 
   handleSend = (e) => {
     e.preventDefault();
-    console.log(markdown);
     this.props.hide();
     return false;
   }
