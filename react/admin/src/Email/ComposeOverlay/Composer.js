@@ -32,8 +32,9 @@ class Composer extends React.Component {
     return (
       <div className="composer-wrapper">
         <div className="composer-toolbar">
-          <span className="composer-toolbar-style">
-            <select className="composer-toolbar-style-select">
+          <label className="composer-toolbar-style">
+            Style:
+            <select id="composer-toolbar-style-select" className="composer-toolbar-style-select">
               <option value="body-text">Body Text</option>
               <option value="h1">Header Level 1</option>
               <option value="h2">Header Level 2</option>
@@ -44,14 +45,15 @@ class Composer extends React.Component {
               <option value="block-quote">Block Quote</option>
               <option value="pre">Monospace</option>
             </select>
-          </span>
-          <span className="composer-toolbar-bold">B</span>
-          <span className="composer-toolbar-italic">I</span>
-          <span className="composer-toolbar-underline">U</span>
-          <span className="composer-toolbar-strikethrough">S</span>
-          <span className="composer-toolbar-linebreak">BR</span>
-          <span className="composer-toolbar-incmargin">⇥</span>
-          <span className="composer-toolbar-decmargin">⇤</span>
+          </label>
+          <button className="composer-toolbar-button composer-toolbar-bold">B</button>
+          <button className="composer-toolbar-button composer-toolbar-italic">I</button>
+          <button className="composer-toolbar-button composer-toolbar-underline">U</button>
+          <button className="composer-toolbar-button composer-toolbar-strikethrough">S</button>
+          <button className="composer-toolbar-button composer-toolbar-linebreak">BR</button>
+          <button className="composer-toolbar-button composer-toolbar-incmargin">⏭️</button>
+          <button className="composer-toolbar-button composer-toolbar-decmargin">⏮️</button>
+          <button className="composer-toolbar-button composer-toolbar-link">🔗</button>
         </div>
         <textarea
           rows={10}
