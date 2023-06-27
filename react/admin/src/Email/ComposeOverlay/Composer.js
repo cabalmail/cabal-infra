@@ -54,8 +54,8 @@ class Composer extends React.Component {
           <span className="composer-toolbar-decmargin">⇤</span>
         </div>
         <textarea
-          rows={40}
-          cols={20}
+          rows={10}
+          cols={120}
           value={this.state.text}
           defaultValue={this.props.quotedText}
           className="composer-text"
