@@ -6,7 +6,7 @@ form.compose-overlay {
 
 form.compose-overlay div.composer-toolbar {
   width: 40em;
-  padding: 1em;
+  padding: .5em;
   border: 1px solid;
 }
 
@@ -14,8 +14,8 @@ form.compose-overlay div.composer-toolbar button.composer-toolbar-button,
 form.compose-overlay div.composer-toolbar label.composer-toolbar-style {
   height: 3em;
   text-align: center;
-  margin-left: 1em;
-  margin-right: 1em;
+  margin-left: .5em;
+  margin-right: .5em;
   display: inline-block;
 }
 
