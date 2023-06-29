@@ -23,7 +23,7 @@ form.compose-overlay div.composer-toolbar label.composer-toolbar-style {
   width: 12em;
 }
 
-form.compose-overlay div.composer-toolbar label.composer-toolbar-style select..composer-toolbar-style-select {
+form.compose-overlay div.composer-toolbar label.composer-toolbar-style select.composer-toolbar-style-select {
   width: 8em;
 }
 
