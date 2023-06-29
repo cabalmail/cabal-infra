@@ -3,3 +3,26 @@ form.compose-overlay {
   border-radius: 1em;
   border-width: 1px;
 }
+
+form.compose-overlay div.composer-toolbar {
+  width: 24em;
+  padding: .5em;
+  border: 1px solid;
+}
+
+form.compose-overlay div.composer-toolbar button.composer-toolbar-button,
+form.compose-overlay div.composer-toolbar label.composer-toolbar-style {
+  height: 1.5em;
+  text-align: center;
+  margin-left: .5em;
+  margin-right: .5em;
+  
+}
+
+form.compose-overlay div.composer-toolbar label.composer-toolbar-style {
+  width: 6em;
+}
+
+form.compose-overlay div.composer-toolbar button.composer-toolbar-button {
+  width: 1.5em;
+}

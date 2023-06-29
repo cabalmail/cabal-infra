@@ -50,7 +50,7 @@ class Composer extends React.Component {
           <button className="composer-toolbar-button composer-toolbar-italic">I</button>
           <button className="composer-toolbar-button composer-toolbar-underline">U</button>
           <button className="composer-toolbar-button composer-toolbar-strikethrough">S</button>
-          <button className="composer-toolbar-button composer-toolbar-linebreak">BR</button>
+          <button className="composer-toolbar-button composer-toolbar-linebreak">↩️</button>
           <button className="composer-toolbar-button composer-toolbar-incmargin">⏭️</button>
           <button className="composer-toolbar-button composer-toolbar-decmargin">⏮️</button>
           <button className="composer-toolbar-button composer-toolbar-link">🔗</button>
