@@ -20,6 +20,8 @@
   body, a, button, select, div, label, form, textarea {
     color: #aaa;
     background-color: #200;
+  }
+  * {
     border-color: #333;
   }
   input, select, option {
@@ -109,6 +111,8 @@
   body, a, button, select, div, label, form, textarea {
     color: #222;
     background-color: #ffe;
+  }
+  * {
     border-color: #999;
   }
   input, select, option {
@@ -208,8 +212,11 @@ button, button * {
   font-size: x-small;
 }
 
-input, select, option {
+* {
   border-radius: 0.2em;
+}
+
+input, select, option {
   width: 30em;
 }
 
