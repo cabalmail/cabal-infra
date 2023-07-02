@@ -7,7 +7,7 @@ form.compose-overlay {
 
 form.compose-overlay textarea.composer-text {
   width: 39em;
-  height: 40em;
+  height: 20em;
   border-top-width: 0;
   border-top-left-radius: 0;
   border-top-right-radius: 0;
