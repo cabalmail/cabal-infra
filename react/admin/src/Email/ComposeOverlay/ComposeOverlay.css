@@ -23,10 +23,6 @@ form.compose-overlay textarea.composer-text {
   padding: 0;
 }
 
-form.composer-overlay input {
-  width: 38em;
-}
-
 /* toolbar */
 form.compose-overlay div.composer-toolbar {
   width: 39em;
@@ -51,4 +47,20 @@ form.compose-overlay div.composer-toolbar select.composer-toolbar-style-select {
 
 form.compose-overlay div.composer-toolbar button.composer-toolbar-button {
   width: 3em;
+}
+
+form.composer-overlay div.composer-toolbar button.composer-toolbar-bold {
+  font-weight: bold;
+}
+
+form.composer-overlay div.composer-toolbar button.composer-toolbar-italic {
+  font-style: italic;
+}
+
+form.composer-overlay div.composer-toolbar button.composer-toolbar-underline {
+  text-decoration: underline;
+}
+
+form.composer-overlay div.composer-toolbar button.composer-toolbar-strikthrough {
+  text-decoration: line-through;
 }
