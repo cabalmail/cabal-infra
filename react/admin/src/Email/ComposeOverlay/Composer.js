@@ -31,6 +31,7 @@ class Composer extends React.Component {
   render() {
     return (
       <div className="composer-wrapper">
+        <label htmlFor="composer-text">Message Body</label>
         <div className="composer-toolbar">
           <label className="composer-toolbar-style">
             Style:
@@ -56,11 +57,11 @@ class Composer extends React.Component {
           <button className="composer-toolbar-button composer-toolbar-link">🔗</button>
         </div>
         <textarea
-          rows={10}
-          cols={120}
           value={this.state.text}
           defaultValue={this.props.quotedText}
           className="composer-text"
+          id="composer-text"
+          name="composer-text"
           onChange={this.onChange}
         />
       </div>

@@ -36,16 +36,16 @@ class ComposeOverlay extends React.Component {
     return (
       <form className="compose-overlay" onSubmit={this.handleSubmit}>
         <input type="radio" value="old" id="address-select-old" name="address-select" />
-        <label for="address-select-old">Use an existing address</label>
+        <label htmlFor="address-select-old">Use an existing address</label>
         <input type="radio" value="new" id="address-select-old" name="address-select" />
-        <label for="address-select-new">Use an existing address</label>
+        <label htmlFor="address-select-new">Use an existing address</label>
         <label for="address-to">To</label>
         <input type="text" id="address-to" name="address-to" />
-        <label for="address-cc">CC</label>
+        <label htmlFor="address-cc">CC</label>
         <input type="text" id="address-cc" name="address-cc" />
-        <label for="address-bcc">BCC</label>
+        <label htmlFor="address-bcc">BCC</label>
         <input type="text" id="address-bcc" name="address-cc" />
-        <label for="subject">Subject</label>
+        <label htmlFor="subject">Subject</label>
         <input type="text" id="subject" name="subject" />
         <Composer editorState={this.state.editorState} onChange={this.onMessageChange} />
         <button onClick={this.handleSend}>Send</button>
