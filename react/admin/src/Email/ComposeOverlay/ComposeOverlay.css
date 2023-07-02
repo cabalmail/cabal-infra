@@ -2,12 +2,25 @@ form.compose-overlay {
   padding: 1em;
   border-radius: 1em;
   border-width: 1px;
+  border-color: inherit;
 }
 
+form.compose-overlay textarea.composer-text {
+  width: 39em;
+  height: 40em;
+  border-top-width: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+/* toolbar */
 form.compose-overlay div.composer-toolbar {
-  width: 40em;
+  width: 39em;
   padding: 0;
   border: 1px solid;
+  border-color: inherit;
+  border-bottom-right-radius: 0;
+  border-bottom-left-radius: 0;
 }
 
 form.compose-overlay div.composer-toolbar button.composer-toolbar-button,
