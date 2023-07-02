@@ -88,3 +88,12 @@ ul.message_list {
 form.composer-overlay input[type=text] {
   width: 38em;
 }
+
+* {
+  font-family: 'Tahoma', 'Verdana', 'Trebuchet MS', 'Arial';
+  font-size: small;
+}
+
+button, button * {
+  font-size: x-small;
+}
