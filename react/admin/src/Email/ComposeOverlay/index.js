@@ -48,7 +48,7 @@ class ComposeOverlay extends React.Component {
         <label htmlFor="subject">Subject</label>
         <input type="text" id="subject" name="subject" />
         <Composer editorState={this.state.editorState} onChange={this.onMessageChange} />
-        <button onClick={this.handleSend}>Send</button>
+        <button onClick={this.handleSend} className="default">Send</button>
         <button onClick={this.handleCancel}>Cancel</button>
       </form>
     );

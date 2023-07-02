@@ -71,6 +71,7 @@ ul.message_list {
   right: 1em;
   left: 1em;
   border: 1px solid;
+  border-color: inherit;
 }
 
 .show-compose {
