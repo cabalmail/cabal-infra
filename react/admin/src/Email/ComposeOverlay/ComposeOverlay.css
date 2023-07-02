@@ -1,3 +1,12 @@
+* {
+  font-family: 'Tahoma', 'Verdana', 'Trebuchet MS', 'Arial';
+  font-size: small;
+}
+
+button, button * {
+  font-size: x-small;
+}
+
 form.compose-overlay {
   padding: 1em;
   border-radius: 1em;
