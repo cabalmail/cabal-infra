@@ -68,8 +68,11 @@ ul.message_list {
   position: absolute;
   top: 1em;
   bottom: 1em;
-  right: 1em;
-  left: 1em;
+  right: 0;
+  left: 0;
+  width: 43em;
+  margin-right: auto;
+  margin-left: auto;
   border: 1px solid;
   border-color: inherit;
 }
