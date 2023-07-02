@@ -7,6 +7,10 @@ button, button * {
   font-size: x-small;
 }
 
+form.composer-overlay input[type=text] {
+  width: 38em;
+}
+
 form.compose-overlay {
   padding: 1em;
   border-radius: 1em;

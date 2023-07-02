@@ -85,10 +85,6 @@ ul.message_list {
   display: none;
 }
 
-form.composer-overlay input[type=text] {
-  width: 38em;
-}
-
 * {
   font-family: 'Tahoma', 'Verdana', 'Trebuchet MS', 'Arial';
   font-size: small;
