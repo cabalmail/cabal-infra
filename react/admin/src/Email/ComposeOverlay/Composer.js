@@ -1,4 +1,5 @@
 import React from 'react';
+import './ComposeOverlay.css';
 
 class Composer extends React.Component {
 
