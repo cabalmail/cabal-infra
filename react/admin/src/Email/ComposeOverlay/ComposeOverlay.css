@@ -38,18 +38,14 @@ form.compose-overlay div.composer-toolbar {
 }
 
 form.compose-overlay div.composer-toolbar button.composer-toolbar-button,
-form.compose-overlay div.composer-toolbar label.composer-toolbar-style {
+form.compose-overlay div.composer-toolbar select.composer-toolbar-style-select {
   height: 3em;
   text-align: center;
   margin: .5em;
   display: inline-block;
 }
 
-form.compose-overlay div.composer-toolbar label.composer-toolbar-style {
-  width: 12em;
-}
-
-form.compose-overlay div.composer-toolbar label.composer-toolbar-style select.composer-toolbar-style-select {
+form.compose-overlay div.composer-toolbar select.composer-toolbar-style-select {
   width: 8em;
 }
 
