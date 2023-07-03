@@ -53,18 +53,18 @@ form.compose-overlay div.composer-toolbar button.composer-toolbar-button {
   width: 3em;
 }
 
-form.composer-overlay div.composer-toolbar button.composer-toolbar-bold {
+form.compose-overlay div.composer-toolbar button.composer-toolbar-bold {
   font-weight: bold;
 }
 
-form.composer-overlay div.composer-toolbar button.composer-toolbar-italic {
+form.compose-overlay div.composer-toolbar button.composer-toolbar-italic {
   font-style: italic;
 }
 
-form.composer-overlay div.composer-toolbar button.composer-toolbar-underline {
+form.compose-overlay div.composer-toolbar button.composer-toolbar-underline {
   text-decoration: underline;
 }
 
-form.composer-overlay div.composer-toolbar button.composer-toolbar-strikthrough {
+form.compose-overlay div.composer-toolbar button.composer-toolbar-strikthrough {
   text-decoration: line-through;
 }
