@@ -25,7 +25,8 @@ form.compose-overlay input[type=radio] {
 
 form.compose-overlay label[for=address-select-old],
 form.compose-overlay label[for=address-select-new] {
-  display: inline;
+  display: inline-block;
+  margin-left: 4em;;
 }
 
 form.compose-overlay textarea.composer-text {
