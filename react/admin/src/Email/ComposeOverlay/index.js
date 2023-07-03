@@ -39,6 +39,8 @@ class ComposeOverlay extends React.Component {
         <label htmlFor="address-select-old">Use an existing address</label>
         <input type="radio" value="new" id="address-select-old" name="address-select" />
         <label htmlFor="address-select-new">Create a new address</label>
+        <label for="address-from">From</label>
+        <input type="text" id="address-from" name="address-from" />
         <label for="address-to">To</label>
         <input type="text" id="address-to" name="address-to" />
         <label htmlFor="address-cc">CC</label>
