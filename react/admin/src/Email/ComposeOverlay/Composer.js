@@ -70,7 +70,7 @@ class Composer extends React.Component {
       case 66: // b
         // TODO: handle selection
         if (e.metaKey) {
-          newMarkdown = markdown.substring(0, start) + ____ + markdown.substring(end);
+          newMarkdown = markdown.substring(0, start) + '____' + markdown.substring(end);
           newCursorStart = start + 2;
           newCursorEnd = start + 2;
         } else {
@@ -80,7 +80,7 @@ class Composer extends React.Component {
       case 73: // i
         // TODO: handle selection
         if (e.metaKey) {
-          newMarkdown = markdown.substring(0, start) + __ + markdown.substring(end);
+          newMarkdown = markdown.substring(0, start) + '__' + markdown.substring(end);
           newCursorStart = start + 1;
           newCursorEnd = start + 1;
         } else {
@@ -90,7 +90,7 @@ class Composer extends React.Component {
       case 83: // s
         // TODO: handle selection
         if (e.metaKey) {
-          newMarkdown = markdown.substring(0, start) + ~~~~ + markdown.substring(end);
+          newMarkdown = markdown.substring(0, start) + '~~~~' + markdown.substring(end);
           newCursorStart = start + 2;
           newCursorEnd = start + 2;
         } else {
