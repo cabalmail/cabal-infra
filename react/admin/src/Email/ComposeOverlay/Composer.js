@@ -182,12 +182,26 @@ class Composer extends React.Component {
     }
   }
 
+  fireItalic = (e) => {
+    e.preventDefault();
+    var ta = document.getElementById("composer-text");
+    ta.focus();
+    var message = {
+      target: ta,
+      keyCode: 73,
+      key: "i",
+      metaKey: true,
+      preventDefault: function () => { return true; }
+    };
+    return this.handleKeyDown(message);
+  }
+
   render() {
     return (
       <div className="composer-wrapper">
         <label htmlFor="composer-text">Message Body</label>
         <div className="composer-toolbar">
-        <select id="composer-toolbar-style-select" className="composer-toolbar-style-select">
+          <select id="composer-toolbar-style-select" className="composer-toolbar-style-select">
             <option value="body-text">Body Text</option>
             <option value="h1">Header Level 1</option>
             <option value="h2">Header Level 2</option>
@@ -198,10 +212,30 @@ class Composer extends React.Component {
             <option value="block-quote">Block Quote</option>
             <option value="pre">Monospace</option>
           </select>
-          <button className="composer-toolbar-button composer-toolbar-bold">B</button>
-          <button className="composer-toolbar-button composer-toolbar-italic">I</button>
-          <button className="composer-toolbar-button composer-toolbar-strikethrough">S</button>
-          <button className="composer-toolbar-button composer-toolbar-link">🔗</button>
+          <button
+            className="composer-toolbar-button composer-toolbar-bold"
+            onClick={this.fireBold}
+          >B</button>
+          <button
+            className="composer-toolbar-button composer-toolbar-italic"
+            onClick={this.fireItalic}
+          >I</button>
+          <button
+            className="composer-toolbar-button composer-toolbar-strikethrough"
+            onClick={this.fireStrikethrough}
+          >S</button>
+          <button
+            className="composer-toolbar-button composer-toolbar-link"
+            onClick={this.fireLink}
+          >🔗</button>
+          <button
+            className="composer-toolbar-button composer-toolbar-undo"
+            onClick={this.fireUndo}
+          >↺</button>
+          <button
+            className="composer-toolbar-button composer-toolbar-redo"
+            onClick={this.fireRedo}
+          >↻</button>
         </div>
         <textarea
           value={this.state.markdown}
