@@ -250,7 +250,7 @@ class Composer extends React.Component {
     return this.handleKeyDown(message);
   }
 
-  fireUndo = (e) => {
+  fireRedo = (e) => {
     e.preventDefault();
     var ta = document.getElementById("composer-text");
     ta.focus();
