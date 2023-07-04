@@ -16,41 +16,7 @@ class Composer extends React.Component {
   // - Links [x](htts://example.com/x)
   // - Block quotes > 
 
-  #history = {
-    
-    push: function (val) {
-      console.log(this);
-      this.setState({
-        markdown: val,
-        history: this.state.history.slice(0, this.state.history_index).push(val),
-        history_index: this.state.history_index + 1
-      });
-    },
-
-    undo: function () {
-      if (this.state.history_index <= 0) {
-        return this.state.markdown;
-      }
-      var newIndex = this.state.history_index - 1;
-      this.setState({
-        history_index: newIndex,
-        markdown: this.#history[newIndex]
-      });
-      return this.state.markdown;
-    },
-
-    redo: function () {
-      if (this.state.history_index + 1 > this.state.history.length) {
-        return this.state.markdown;
-      }
-      var newIndex = this.state.history_index + 1;
-      this.setState({
-        history_index: newIndex,
-        markdown: this.#history[newIndex]
-      });
-      return this.state.markdown;
-    }
-  }
+  #history;
 
   constructor(props) {
     super(props);
@@ -59,6 +25,41 @@ class Composer extends React.Component {
       history: [],
       history_index: 0
     };
+    var that = this;
+    this.#history = {
+      supra: that,
+      push: function (val) {
+        that.setState({
+          markdown: val,
+          history: this.supra.state.history.slice(0, this.supra.state.history_index).push(val),
+          history_index: this.supra.state.history_index + 1
+        });
+      },
+  
+      undo: function () {
+        if (this.supra.state.history_index <= 0) {
+          return this.supra.state.markdown;
+        }
+        var newIndex = this.supra.state.history_index - 1;
+        this.supra.setState({
+          history_index: newIndex,
+          markdown: this.supra.#history[newIndex]
+        });
+        return this.supra.state.markdown;
+      },
+  
+      redo: function () {
+        if (this.supra.state.history_index + 1 > this.supra.state.history.length) {
+          return this.supra.state.markdown;
+        }
+        var newIndex = this.supra.state.history_index + 1;
+        this.supra.setState({
+          history_index: newIndex,
+          markdown: this.supra.#history[newIndex]
+        });
+        return this.supra.state.markdown;
+      }
+    }
   }
 
   handleKeyDown = (e) => {
