@@ -19,7 +19,8 @@ class Composer extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      markdown: ""
+      markdown: "",
+      cursor: 0
     };
   }
 
@@ -37,7 +38,7 @@ class Composer extends React.Component {
             markdown: newMarkdown
           }
         );
-        e.target.selectionStart = start + 1;
+        setTimeout(() => {e.target.selectionStart = start + 1}, 10);
         break;
     }
   }
