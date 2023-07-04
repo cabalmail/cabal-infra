@@ -25,7 +25,6 @@ class Composer extends React.Component {
   }
 
   handleKeyPress = (e) => {
-    e.preventDefault();
     console.log(`key press: ${e.keyCode}`)
     this.setState({text: e.target.value});
   }
