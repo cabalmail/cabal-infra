@@ -13,7 +13,35 @@ Parameters: e (null)
 
 Returns: null
 
+### fireBold
+Modifiers: none
+
+Parameters: e (null)
+
+Returns: null
+
 ### fireItalic
+Modifiers: none
+
+Parameters: e (null)
+
+Returns: null
+
+### fireStrikethrough
+Modifiers: none
+
+Parameters: e (null)
+
+Returns: null
+
+### fireUndo
+Modifiers: none
+
+Parameters: e (null)
+
+Returns: null
+
+### fireUndo
 Modifiers: none
 
 Parameters: e (null)
