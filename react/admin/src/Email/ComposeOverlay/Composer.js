@@ -19,7 +19,7 @@ class Composer extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      markdown,
+      markdown: "",
       history: [],
       historyIndex: 0
     };
@@ -149,7 +149,7 @@ handleKeyDown = (e) => {
         newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
         break;
     }
-    history.push(newMarkdown);
+    this.history.push(newMarkdown);
     if (!preventCursorMove) {
       setTimeout(() => {
         e.target.selectionStart = newCursorStart;
