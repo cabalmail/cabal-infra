@@ -56,7 +56,7 @@ class Composer extends React.Component {
     this.state = {
       markdown: "",
       history: [],
-      historyIndex: 0
+      history_index: 0
     };
   }
 
