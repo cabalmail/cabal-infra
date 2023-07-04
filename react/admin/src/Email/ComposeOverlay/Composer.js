@@ -33,6 +33,7 @@ class Composer extends React.Component {
     var end = e.target.selectionEnd;
     var newCursorStart = start + 1;
     var newCursorEnd = newCursorStart;
+    var preventCursorMove = false;
     switch (e.keyCode) {
       case 8: // backspace
         newMarkdown = markdown.substring(0, start -1) + markdown.substring(end);
@@ -55,15 +56,16 @@ class Composer extends React.Component {
       case 18: // alt/option
         break;
       case 37: // left arrow
-        // TODO: Handle selection with shift key
-        newCursorStart = start - 1;
-        newCursorEnd = start - 1;
+        preventCursorMove = true;
         break;
       case 38: // up arrow
+        preventCursorMove = true;
         break;
       case 39: // right arrow
+        preventCursorMove = true;
         break;
       case 40: // down arrow
+        preventCursorMove = true;
         break;
       case 66: // b
         // TODO: handle selection
