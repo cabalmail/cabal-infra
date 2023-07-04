@@ -58,7 +58,7 @@ class Composer extends React.Component {
           className="composer-text"
           id="composer-text"
           name="composer-text"
-          onKeyPress={handleKeyPress}
+          onKeyPress={this.handleKeyPress}
         />
         <div id="key-codes"></div>
       </div>
