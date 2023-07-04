@@ -25,7 +25,7 @@ class Composer extends React.Component {
     };
   }
 
-  const history = {
+  #history = {
     
     function push = (val) {
       this.setState({
