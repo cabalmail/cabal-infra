@@ -41,7 +41,7 @@ Parameters: e (null)
 
 Returns: null
 
-### fireUndo
+### fireRedo
 Modifiers: none
 
 Parameters: e (null)
