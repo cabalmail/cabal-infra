@@ -24,7 +24,7 @@ class Composer extends React.Component {
     };
   }
 
-  handleKeyDown = (e) => {
+  handleKeyPress = (e) => {
     e.preventDefault();
     console.log(e);
     var markdown = this.state.markdown;
@@ -44,6 +44,11 @@ class Composer extends React.Component {
         }, 10);
         break;
     }
+  }
+
+  handleKeyDown = (e) => {
+    e.preventDefault();
+    console.log(e);
   }
 
   render() {
@@ -72,7 +77,8 @@ class Composer extends React.Component {
           className="composer-text"
           id="composer-text"
           name="composer-text"
-          onKeyDown={this.handleKeyPress}
+          onKeyPress={this.handleKeyPress}
+          onKeyDown={this.handleKeyDown}
         />
       </div>
     );
