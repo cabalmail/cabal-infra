@@ -31,6 +31,8 @@ class Composer extends React.Component {
     var newMarkdown = markdown;
     var start = e.target.selectionStart;
     var end = e.target.selectionEnd;
+    var newCursorStart = start + 1;
+    var newCursorEnd = newCursorStart;
     switch (e.keyCode) {
       case 8: // backspace
         newMarkdown = markdown.substring(0, start -1) + markdown.substring(end);
@@ -38,21 +40,60 @@ class Composer extends React.Component {
       case 9: // tab
         break;
       case 13: // enter
-        newMarkdown = markdown.substring(0, start) + "\n\n" + markdown.substring(end);
+        if (e.shiftKey) { // line break without paragraph
+          newMarkdown = markdown.substring(0, start) + "  \n" + markdown.substring(end);
+          newCursorStart = start + 3;
+          newCursorEnd = start + 3;
+        } else {
+          newMarkdown = markdown.substring(0, start) + "\n" + markdown.substring(end);
+        }
         break;
       case 16: // shift
         break;
       case 17: // control
         break;
-      case 18: // option/alt
+      case 18: // alt/option
         break;
       case 37: // left arrow
+        // TODO: Handle selection with shift key
+        newCursorStart = start - 1;
+        newCursorEnd = start - 1;
         break;
       case 38: // up arrow
         break;
       case 39: // right arrow
         break;
       case 40: // down arrow
+        break;
+      case 66: // b
+        // TODO: handle selection
+        if (e.metaKey) {
+          newMarkdown = markdown.substring(0, start) + ____ + markdown.substring(end);
+          newCursorStart = start + 2;
+          newCursorEnd = start + 2;
+        } else {
+          newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
+        }
+        break;
+      case 73: // i
+        // TODO: handle selection
+        if (e.metaKey) {
+          newMarkdown = markdown.substring(0, start) + __ + markdown.substring(end);
+          newCursorStart = start + 1;
+          newCursorEnd = start + 1;
+        } else {
+          newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
+        }
+        break;
+      case 83: // s
+        // TODO: handle selection
+        if (e.metaKey) {
+          newMarkdown = markdown.substring(0, start) + ~~~~ + markdown.substring(end);
+          newCursorStart = start + 2;
+          newCursorEnd = start + 2;
+        } else {
+          newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
+        }
         break;
       case 91: // meta/command
         break;
@@ -66,8 +107,8 @@ class Composer extends React.Component {
       }
     );
     setTimeout(() => {
-      e.target.selectionStart = start + 1;
-      e.target.selectionEnd = start + 1;
+      e.target.selectionStart = newCursorStart;
+      e.target.selectionEnd = newCursorEnd;
     }, 10);
   }
 
