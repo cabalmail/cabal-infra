@@ -27,49 +27,48 @@ class Composer extends React.Component {
     };
     var that = this;
     this.#history = {
-      state: that.state,
-      setState: that.setState,
+      supra: that,
       push: function (val) {
-        var history = this.state.history.slice(0, this.state.history_index + 1);
+        var history = this.supra.state.history.slice(0, this.supra.state.history_index + 1);
         history.push(val);
-        this.setState({
+        this.supra.setState({
           markdown: val,
           history: history,
-          history_index: this.state.history_index + 1
+          history_index: this.supra.state.history_index + 1
         });
       },
 
       replace: function (val) {
-        var history = this.state.history.slice(0, this.state.history_index + 1);
-        history[this.state.history_index] = val;
-        this.setState({
+        var history = this.supra.state.history.slice(0, this.supra.state.history_index + 1);
+        history[this.supra.state.history_index] = val;
+        this.supra.setState({
           markdown: val,
           history: history
         });
       },
 
       undo: function () {
-        if (this.state.history_index <= 0) {
-          return this.state.markdown;
+        if (this.supra.state.history_index <= 0) {
+          return this.supra.state.markdown;
         }
-        var newIndex = this.state.history_index - 1;
-        this.setState({
+        var newIndex = this.supra.state.history_index - 1;
+        this.supra.setState({
           history_index: newIndex,
-          markdown: this.state.history[newIndex]
+          markdown: this.supra.state.history[newIndex]
         });
-        return this.state.markdown;
+        return this.supra.state.markdown;
       },
 
       redo: function () {
-        if (this.state.history_index + 1 > this.state.history.length) {
-          return this.state.markdown;
+        if (this.supra.state.history_index + 1 > this.supra.state.history.length) {
+          return this.supra.state.markdown;
         }
-        var newIndex = this.state.history_index + 1;
-        this.setState({
+        var newIndex = this.supra.state.history_index + 1;
+        this.supra.setState({
           history_index: newIndex,
-          markdown: this.state.history[newIndex]
+          markdown: this.supra.state.history[newIndex]
         });
-        return this.state.markdown;
+        return this.supra.state.markdown;
       }
     }
   }
@@ -170,7 +169,7 @@ class Composer extends React.Component {
           }
         } else {
           newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
-          // this.#history.replace(newMarkdown);
+          this.#history.replace(newMarkdown);
         }
         break;
     }
