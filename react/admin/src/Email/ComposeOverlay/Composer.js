@@ -24,7 +24,7 @@ class Composer extends React.Component {
     };
   }
 
-  handleKeyPress = (e) => {
+  handleKeyDown = (e) => {
     e.preventDefault();
     console.log(e);
     var markdown = this.state.markdown;
@@ -38,7 +38,10 @@ class Composer extends React.Component {
             markdown: newMarkdown
           }
         );
-        setTimeout(() => {e.target.selectionStart = start + 1}, 10);
+        setTimeout(() => {
+          e.target.selectionStart = start + 1;
+          e.target.selectionEnd = start + 1;
+        }, 10);
         break;
     }
   }
@@ -69,7 +72,7 @@ class Composer extends React.Component {
           className="composer-text"
           id="composer-text"
           name="composer-text"
-          onKeyPress={this.handleKeyPress}
+          onKeyDown={this.handleKeyPress}
         />
       </div>
     );
