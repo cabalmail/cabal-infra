@@ -108,10 +108,12 @@ class Composer extends React.Component {
         markdown: newMarkdown
       }
     );
-    setTimeout(() => {
-      e.target.selectionStart = newCursorStart;
-      e.target.selectionEnd = newCursorEnd;
-    }, 10);
+    if (!preventCursorMove) {
+      setTimeout(() => {
+        e.target.selectionStart = newCursorStart;
+        e.target.selectionEnd = newCursorEnd;
+      }, 100);
+    }
   }
 
   // handleKeyDown = (e) => {
