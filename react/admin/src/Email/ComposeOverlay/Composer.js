@@ -29,17 +29,17 @@ class Composer extends React.Component {
     var markdown = this.state.markdown;
     var start = e.target.selectionStart;
     var end = e.target.selectionEnd;
-    switch (e.keyCode) {
-      case 0:
+    switch (e.key) {
+      default:
+        var newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
+        console.log(`Setting markdown to ${newMarkdown}`);
         this.setState(
           {
-            text: markdown.substring(0, start) + e.key + markdown.substring(end)
+            text: newMarkdown
           }
         );
         e.target.selectionStart = start + 1;
         break;
-      default:
-        console.err("Unhandled.")
     }
   }
 
@@ -66,7 +66,6 @@ class Composer extends React.Component {
         </div>
         <textarea
           value={this.state.markdown}
-          defaultValue={this.props.quotedText}
           className="composer-text"
           id="composer-text"
           name="composer-text"
