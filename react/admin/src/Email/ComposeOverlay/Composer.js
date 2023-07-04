@@ -25,15 +25,22 @@ class Composer extends React.Component {
 
   handleKeyPress = (e) => {
     e.preventDefault();
+    console.log(e);
     var markdown = this.state.markdown;
     var start = e.target.selectionStart;
     var end = e.target.selectionEnd;
-    this.setState(
-      {
-        text: markdown.substring(0, start) + e.key + markdown.substring(end)
-      }
-    )
-    console.log(e);
+    switch (e.keyCode) {
+      case 0:
+        this.setState(
+          {
+            text: markdown.substring(0, start) + e.key + markdown.substring(end)
+          }
+        );
+        e.target.selectionStart = start + 1;
+        break;
+      default:
+        console.err("Unhandled.")
+    }
   }
 
   render() {
