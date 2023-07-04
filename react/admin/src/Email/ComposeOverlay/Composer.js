@@ -25,15 +25,36 @@ class Composer extends React.Component {
   }
 
   handleKeyDown = (e) => {
-    e.preventDefault();
+    // e.preventDefault();
     console.log(e);
     var markdown = this.state.markdown;
     var start = e.target.selectionStart;
     var end = e.target.selectionEnd;
-    switch (e.key) {
-      case "Backspace":
+    switch (e.keyCode) {
+      case 8: // backspace
         var newMarkdown = markdown.substring(0, start -1) + markdown.substring(end);
         break;
+      case 9: // tab
+        break;
+      case 13: // enter
+        var newMarkdown = markdown.substring(0, start) + "\n\n" + markdown.substring(end);
+        break;
+      case 16: // shift
+        break;
+      case 17: // control
+        break;
+      case 18: // option/alt
+        break;
+      case 37: // left arrow
+        break;
+      case 38: // up arrow
+        break;
+      case 39: // right arrow
+        break;
+      case 40: // down arrow
+        break;
+      case 91: // meta/command
+        brear;
       default:
         var newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
         break;
