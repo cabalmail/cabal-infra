@@ -6,7 +6,7 @@
 
 
 ## Methods
-### onChange
+### handleKeyPress
 Modifiers: none
 
 Parameters: e (null)
