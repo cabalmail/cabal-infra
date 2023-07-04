@@ -16,15 +16,6 @@ class Composer extends React.Component {
   // - Links [x](htts://example.com/x)
   // - Block quotes > 
 
-  constructor(props) {
-    super(props);
-    this.state = {
-      markdown: "",
-      history: [],
-      historyIndex: 0
-    };
-  }
-
   #history = {
     
     push: function (val) {
@@ -60,7 +51,16 @@ class Composer extends React.Component {
     }
   }
 
-handleKeyDown = (e) => {
+  constructor(props) {
+    super(props);
+    this.state = {
+      markdown: "",
+      history: [],
+      historyIndex: 0
+    };
+  }
+
+  handleKeyDown = (e) => {
     console.log(e);
     var markdown = this.state.markdown;
     var newMarkdown = markdown;
@@ -143,7 +143,6 @@ handleKeyDown = (e) => {
         break;
       case 91: // meta/command
         return;
-        break;
       default:
         newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
         break;
