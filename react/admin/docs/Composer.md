@@ -13,4 +13,11 @@ Parameters: e (null)
 
 Returns: null
 
+### fireItalic
+Modifiers: none
+
+Parameters: e (null)
+
+Returns: null
+
 </div>
