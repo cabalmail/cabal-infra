@@ -58,14 +58,14 @@ Returns: null
 ### showPreview
 Modifiers: none
 
-Parameters:  ()
+Parameters: e (null)
 
 Returns: null
 
 ### showEdit
 Modifiers: none
 
-Parameters:  ()
+Parameters: e (null)
 
 Returns: null
 
