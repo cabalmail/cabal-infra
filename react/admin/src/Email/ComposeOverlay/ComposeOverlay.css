@@ -26,7 +26,7 @@ form.compose-overlay input[type=radio] {
 form.compose-overlay label[for=address-select-old],
 form.compose-overlay label[for=address-select-new] {
   display: inline-block;
-  margin-right: 4em;;
+  margin-right: 4em;
 }
 
 form.compose-overlay textarea.composer-text,
@@ -42,8 +42,10 @@ form.compose-overlay textarea.composer-text {
   height: 20em;
 }
 
-form.compose-overlay div#composer-preview {
-  height: 3em;
+form.compose-overlay div.composer-wrapper div#composer-preview {
+  height: 24em;
+  padding-top: 3em;
+  border-width: 1px;
 }
 
 /* toolbar */
@@ -89,8 +91,8 @@ form.compose-overlay div.composer-toolbar button.composer-toolbar-strikethrough 
 div.composer-preview-toggle button {
   display: inline-block;
   padding: 1em;
-  border-radius-top-left: 0;
-  border-radius-top-right: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
   margin: 0;
 }
 

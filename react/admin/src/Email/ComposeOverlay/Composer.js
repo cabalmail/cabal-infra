@@ -369,8 +369,14 @@ class Composer extends React.Component {
           {this.renderPreview()}
         </div>
         <div className="composer-preview-toggle">
-          <button className="composer-preview-edit" onClick={this.showEdit}>Edit</button>
-          <button className="composer-preview-preview" onClick={this.showPreview}>Preview</button>
+          <button
+            className={`composer-preview-edit ${this.state.preview ? "not-active" : "active"}`}
+            onClick={this.showEdit}
+          >Edit</button>
+          <button
+            className={`composer-preview-preview ${this.state.preview ? "active" : "not-active"}`}
+            onClick={this.showPreview}
+          >Preview</button>
         </div>
       </div>
     );
