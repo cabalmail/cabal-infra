@@ -306,7 +306,7 @@ class Composer extends React.Component {
     // strikethrough
     html.replace(/~~(.*)~~/g, "<span style=\"text-decoration:line-through\">$1</span>");
     // link
-    html.replace(/\[(.*)\]\((.*)\)/g, "<a href="$1">$2</a>");
+    html.replace(/\[(.*)\]\((.*)\)/g, "<a href=\"$1\">$2</a>");
     return <div dangerouslySetInnerHTML={{__html: html}}></div>;
   }
 
