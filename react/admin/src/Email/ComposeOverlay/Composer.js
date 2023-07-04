@@ -91,14 +91,11 @@ class Composer extends React.Component {
         }
         break;
       case 16: // shift
-        preventCursorMove = true;
-        break;
+        return;
       case 17: // control
-        preventCursorMove = true;
-        break;
+        return;
       case 18: // alt/option
-        preventCursorMove = true;
-        break;
+        return;
       case 37: // left arrow
         preventCursorMove = true;
         break;
