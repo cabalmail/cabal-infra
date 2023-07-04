@@ -128,7 +128,8 @@ class Composer extends React.Component {
         preventCursorMove = true;
         break;
       case 91: // meta/command
-        return;
+        preventCursorMove = true;
+        break;
       default: // normal letters, digits, and symbols
         if (e.metaKey) { // check for keyboard shortcuts
           switch (e.keyCode) {
