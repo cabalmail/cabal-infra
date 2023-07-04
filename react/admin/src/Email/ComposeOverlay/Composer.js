@@ -26,7 +26,7 @@ class Composer extends React.Component {
 
   handleKeyPress = (e) => {
     e.preventDefault();
-    document.getElementById("key-codes").innerHTML(`<p>${e.keyCode}</p>`)
+    console.log(`key press: ${e.keyCode}`)
     this.setState({text: e.target.value});
   }
 
@@ -60,7 +60,6 @@ class Composer extends React.Component {
           name="composer-text"
           onKeyPress={this.handleKeyPress}
         />
-        <div id="key-codes"></div>
       </div>
     );
   }
