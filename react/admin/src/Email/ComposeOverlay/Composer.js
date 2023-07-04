@@ -19,6 +19,7 @@ class Composer extends React.Component {
   #history = {
     
     push: function (val) {
+      console.log(this);
       this.setState({
         markdown: val,
         history: this.state.history.slice(0, this.state.history_index).push(val),
