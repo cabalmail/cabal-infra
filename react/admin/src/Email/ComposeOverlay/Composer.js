@@ -7,9 +7,6 @@ class Composer extends React.Component {
   // - File upload
   // - - Inline Images
   // - - Attachments
-  // - Bold __x__
-  // - Italics _x_
-  // - Strikethrough ~~x~~ 
   // - Paragraph
   // - Headings
   // - Ordered and unordered lists
@@ -151,7 +148,7 @@ class Composer extends React.Component {
               break;
             case 75: // k
               newMarkdown = markdown.substring(0, start) + '[' + markdown.substring(start, end) + '](https://example.com)' + markdown.substring(end);
-              newCusorStart = start + 1;
+              newCursorStart = start + 1;
               newCursorEnd = end + 1;
               this.#history.push(newMarkdown);
               break;
