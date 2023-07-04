@@ -302,13 +302,13 @@ class Composer extends React.Component {
   renderPreview() {
     var html = this.state.markdown;
     // bold
-    html.replace(/__(.*)__/g, "<strong>$1</strong>");
+    html = html.replace(/__(.*)__/g, "<strong>$1</strong>");
     // italic
-    html.replace(/_(.*)_/g, "<em>$1</em>");
+    html = html.replace(/_(.*)_/g, "<em>$1</em>");
     // strikethrough
-    html.replace(/~~(.*)~~/g, "<span style=\"text-decoration:line-through\">$1</span>");
+    html = html.replace(/~~(.*)~~/g, "<span style=\"text-decoration:line-through\">$1</span>");
     // link
-    html.replace(/\[(.*)\]\((.*)\)/g, "<a href=\"$1\">$2</a>");
+    html = html.replace(/\[(.*)\]\((.*)\)/g, "<a href=\"$1\">$2</a>");
     return <div dangerouslySetInnerHTML={{__html: html}}></div>;
   }
 
