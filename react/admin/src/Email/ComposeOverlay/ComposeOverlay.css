@@ -75,3 +75,15 @@ form.compose-overlay div.composer-toolbar button.composer-toolbar-italic {
 form.compose-overlay div.composer-toolbar button.composer-toolbar-strikethrough {
   text-decoration: line-through;
 }
+
+/* preview/edit */
+
+div.composer-preview-preview div.composer-preview,
+div.composer-preview-edit div.composer-edit {
+  display: block;
+}
+
+div.composer-preview-preview div.composer-edit,
+div.composer-preview-edit div.composer-preview {
+  display: none;
+}

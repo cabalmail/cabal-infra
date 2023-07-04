@@ -20,7 +20,8 @@ class Composer extends React.Component {
     this.state = {
       markdown: "",
       history: [""],
-      history_index: 0
+      history_index: 0,
+      preview: false
     };
     var that = this;
     this.#history = {
@@ -288,55 +289,91 @@ class Composer extends React.Component {
     return this.handleKeyDown(message);
   }
 
+  showPreview() {
+    this.setState({preview: true});
+  }
+
+  showEdit() {
+    this.setState({preview: false});
+  }
+
+  renderPreview() {
+    var html = this.state.markdown;
+    // bold
+    html.replace(/__(.*)__/g, "<strong>$1</strong>";
+    // italic
+    html.replace(/_(.*)_/g, "<em>$1</em>";
+    // strikethrough
+    html.replace(/~~(.*)~~/g, "<span style=\"text-decoration:line-through\">$1</span>";
+    // link
+    html.replace(/\[(.*)\]\((.*)\)/g, "<a href="$1">$2</a>";
+    return <div dangerouslySetInnerHTML={{__html: html}}></div>;
+  }
+
   render() {
+    const previewClass = this.state.preview
+                       ? "composer-wrapper composer-preview-preview"
+                       : "composer-wrapper composer-preview-edit";
     return (
-      <div className="composer-wrapper">
+      <div className={previewClass}>
         <label htmlFor="composer-text">Message Body</label>
-        <div className="composer-toolbar">
-          <select id="composer-toolbar-style-select" className="composer-toolbar-style-select">
-            <option value="body-text">Body Text</option>
-            <option value="h1">Header Level 1</option>
-            <option value="h2">Header Level 2</option>
-            <option value="h2">Header Level 3</option>
-            <option value="h2">Header Level 4</option>
-            <option value="h2">Header Level 5</option>
-            <option value="h2">Header Level 6</option>
-            <option value="block-quote">Block Quote</option>
-            <option value="pre">Monospace</option>
-          </select>
-          <button
-            className="composer-toolbar-button composer-toolbar-bold"
-            onClick={this.fireBold}
-          >B</button>
-          <button
-            className="composer-toolbar-button composer-toolbar-italic"
-            onClick={this.fireItalic}
-          >I</button>
-          <button
-            className="composer-toolbar-button composer-toolbar-strikethrough"
-            onClick={this.fireStrikethrough}
-          >S</button>
-          <button
-            className="composer-toolbar-button composer-toolbar-link"
-            onClick={this.fireLink}
-          >🔗</button>
-          <button
-            className="composer-toolbar-button composer-toolbar-undo"
-            onClick={this.fireUndo}
-          >↺</button>
-          <button
-            className="composer-toolbar-button composer-toolbar-redo"
-            onClick={this.fireRedo}
-          >↻</button>
+        <ul className="composer-preview-toggle">
+          <li className="composer-preview-edit">
+            <button className="composer-preview-edit" onClick={this.showEdit}>Edit</button>
+          </li>
+          <li className="composer-preview-preview">
+            <button className="composer-preview-preview" onClick={this.showPreview}>Preview</button>
+          </li>
+        </ul>
+        <div id="composer-edit">
+          <div className="composer-toolbar">
+            <select id="composer-toolbar-style-select" className="composer-toolbar-style-select">
+              <option value="body-text">Body Text</option>
+              <option value="h1">Header Level 1</option>
+              <option value="h2">Header Level 2</option>
+              <option value="h2">Header Level 3</option>
+              <option value="h2">Header Level 4</option>
+              <option value="h2">Header Level 5</option>
+              <option value="h2">Header Level 6</option>
+              <option value="block-quote">Block Quote</option>
+              <option value="pre">Monospace</option>
+            </select>
+            <button
+              className="composer-toolbar-button composer-toolbar-bold"
+              onClick={this.fireBold}
+            >B</button>
+            <button
+              className="composer-toolbar-button composer-toolbar-italic"
+              onClick={this.fireItalic}
+            >I</button>
+            <button
+              className="composer-toolbar-button composer-toolbar-strikethrough"
+              onClick={this.fireStrikethrough}
+            >S</button>
+            <button
+              className="composer-toolbar-button composer-toolbar-link"
+              onClick={this.fireLink}
+            >🔗</button>
+            <button
+              className="composer-toolbar-button composer-toolbar-undo"
+              onClick={this.fireUndo}
+            >↺</button>
+            <button
+              className="composer-toolbar-button composer-toolbar-redo"
+              onClick={this.fireRedo}
+            >↻</button>
+          </div>
+          <textarea
+            value={this.state.markdown}
+            className="composer-text"
+            id="composer-text"
+            name="composer-text"
+            onKeyDown={this.handleKeyDown}
+          />
         </div>
-        <textarea
-          value={this.state.markdown}
-          className="composer-text"
-          id="composer-text"
-          name="composer-text"
-          
-          onKeyDown={this.handleKeyDown}
-        />
+        <div id="composer-preview">
+          {this.renderPreview()}
+        </div>
       </div>
     );
   }
