@@ -75,7 +75,7 @@ class Composer extends React.Component {
   }
 
   handleKeyDown = (e) => {
-    if (e.keyCode < 48 or e.keyCode > 90){
+    if (e.keyCode < 48 || e.keyCode > 90) {
       console.log(e);
     }
     var markdown = this.state.markdown;
