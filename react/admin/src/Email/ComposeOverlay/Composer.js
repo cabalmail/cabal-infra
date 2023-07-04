@@ -46,7 +46,9 @@ class Composer extends React.Component {
           newCursorStart = start + 3;
           newCursorEnd = start + 3;
         } else {
-          newMarkdown = markdown.substring(0, start) + "\n" + markdown.substring(end);
+          newMarkdown = markdown.substring(0, start) + "\n\n" + markdown.substring(end);
+          newCursorStart = start + 2;
+          newCursorEnd = start + 2;
         }
         break;
       case 16: // shift
@@ -112,7 +114,7 @@ class Composer extends React.Component {
       setTimeout(() => {
         e.target.selectionStart = newCursorStart;
         e.target.selectionEnd = newCursorEnd;
-      }, 100);
+      }, 10);
     }
   }
 
