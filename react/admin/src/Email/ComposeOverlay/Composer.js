@@ -28,16 +28,17 @@ class Composer extends React.Component {
     // e.preventDefault();
     console.log(e);
     var markdown = this.state.markdown;
+    var newMarkdown = markdown;
     var start = e.target.selectionStart;
     var end = e.target.selectionEnd;
     switch (e.keyCode) {
       case 8: // backspace
-        var newMarkdown = markdown.substring(0, start -1) + markdown.substring(end);
+        newMarkdown = markdown.substring(0, start -1) + markdown.substring(end);
         break;
       case 9: // tab
         break;
       case 13: // enter
-        var newMarkdown = markdown.substring(0, start) + "\n\n" + markdown.substring(end);
+        newMarkdown = markdown.substring(0, start) + "\n\n" + markdown.substring(end);
         break;
       case 16: // shift
         break;
@@ -56,7 +57,7 @@ class Composer extends React.Component {
       case 91: // meta/command
         break;
       default:
-        var newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
+        newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
         break;
     }
     this.setState(
