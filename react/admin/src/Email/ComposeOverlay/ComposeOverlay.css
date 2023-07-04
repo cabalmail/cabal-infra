@@ -72,10 +72,6 @@ form.compose-overlay div.composer-toolbar button.composer-toolbar-italic {
   font-style: italic;
 }
 
-form.compose-overlay div.composer-toolbar button.composer-toolbar-underline {
-  text-decoration: underline;
-}
-
 form.compose-overlay div.composer-toolbar button.composer-toolbar-strikethrough {
   text-decoration: line-through;
 }

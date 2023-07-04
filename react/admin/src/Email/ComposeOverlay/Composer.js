@@ -7,26 +7,33 @@ class Composer extends React.Component {
   // - File upload
   // - - Inline Images
   // - - Attachments
-  // - Italics
-  // - Underline
+  // - Bold __x__
+  // - Italics _x_
+  // - Strikethrough ~~x~~ 
   // - Paragraph
-  // - BR
   // - Headings
   // - Ordered and unordered lists
-  // - Links
-  // - Strikethrough
-  // - Block quotes
+  // - Links [x](htts://example.com/x)
+  // - Block quotes > 
 
   constructor(props) {
     super(props);
     this.state = {
-      text: ""
+      markdown: ""
     };
   }
 
   handleKeyPress = (e) => {
+    e.preventDefault();
+    var markdown = this.state.markdown;
+    var start = e.target.selectionStart;
+    var end = e.target.selectionEnd;
+    this.setState(
+      {
+        text: markdown.substring(0, start) + e.key + markdown.substring(end)
+      }
+    )
     console.log(e);
-    this.setState({text: e.target.value});
   }
 
   render() {
@@ -47,12 +54,11 @@ class Composer extends React.Component {
           </select>
           <button className="composer-toolbar-button composer-toolbar-bold">B</button>
           <button className="composer-toolbar-button composer-toolbar-italic">I</button>
-          <button className="composer-toolbar-button composer-toolbar-underline">U</button>
           <button className="composer-toolbar-button composer-toolbar-strikethrough">S</button>
           <button className="composer-toolbar-button composer-toolbar-link">🔗</button>
         </div>
         <textarea
-          value={this.state.text}
+          value={this.state.markdown}
           defaultValue={this.props.quotedText}
           className="composer-text"
           id="composer-text"
