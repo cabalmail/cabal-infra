@@ -31,19 +31,22 @@ class Composer extends React.Component {
     var start = e.target.selectionStart;
     var end = e.target.selectionEnd;
     switch (e.key) {
+      case "Backspace":
+        var newMarkdown = markdown.substring(0, start -1) + markdown.substring(end);
+        break;
       default:
         var newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
-        this.setState(
-          {
-            markdown: newMarkdown
-          }
-        );
-        setTimeout(() => {
-          e.target.selectionStart = start + 1;
-          e.target.selectionEnd = start + 1;
-        }, 10);
         break;
     }
+    this.setState(
+      {
+        markdown: newMarkdown
+      }
+    );
+    setTimeout(() => {
+      e.target.selectionStart = start + 1;
+      e.target.selectionEnd = start + 1;
+    }, 10);
   }
 
   // handleKeyDown = (e) => {
