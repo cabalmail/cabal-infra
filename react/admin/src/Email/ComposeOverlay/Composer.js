@@ -149,6 +149,12 @@ class Composer extends React.Component {
               newCursorEnd = end + 1;
               this.#history.push(newMarkdown);
               break;
+            case 75: // k
+              newMarkdown = markdown.substring(0, start) + '[' + markdown.substring(start, end) + '](https://example.com)' + markdown.substring(end);
+              newCusorStart = start + 1;
+              newCursorEnd = end + 1;
+              this.#history.push(newMarkdown);
+              break;
             case 83: // s
               // TODO: toggle on/off
               newMarkdown = markdown.substring(0, start) + '~~' + markdown.substring(start, end) + '~~' + markdown.substring(end);
@@ -207,6 +213,23 @@ class Composer extends React.Component {
       target: ta,
       keyCode: 73,
       key: "i",
+      metaKey: true,
+      shiftKey: false,
+      preventDefault: function () {
+        return true;
+      }
+    };
+    return this.handleKeyDown(message);
+  }
+
+  fireLink = (e) => {
+    e.preventDefault();
+    var ta = document.getElementById("composer-text");
+    ta.focus();
+    var message = {
+      target: ta,
+      keyCode: 75,
+      key: "k",
       metaKey: true,
       shiftKey: false,
       preventDefault: function () {
