@@ -29,9 +29,11 @@ class Composer extends React.Component {
     this.#history = {
       supra: that,
       push: function (val) {
+        var history = this.supra.state.history.slice(0, this.supra.state.history_index);
+        history.push(val);
         this.supra.setState({
           markdown: val,
-          history: this.supra.state.history.slice(0, this.supra.state.history_index).push(val),
+          history: history,
           history_index: this.supra.state.history_index + 1
         });
       },
