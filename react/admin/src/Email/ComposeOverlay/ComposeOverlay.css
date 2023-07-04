@@ -43,8 +43,8 @@ form.compose-overlay textarea.composer-text {
 }
 
 form.compose-overlay div.composer-wrapper div#composer-preview {
-  height: 24em;
-  padding-top: 3em;
+  height: 21em;
+  padding-top: 3.5em;
   border-width: 1px;
 }
 
