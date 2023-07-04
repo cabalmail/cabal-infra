@@ -22,7 +22,7 @@ class Composer extends React.Component {
     super(props);
     this.state = {
       markdown: "",
-      history: [],
+      history: [""],
       history_index: 0
     };
     var that = this;
