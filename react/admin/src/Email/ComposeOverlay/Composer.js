@@ -36,34 +36,33 @@ class Composer extends React.Component {
     },
 
     undo: function () {
+      if (this.state.history_index <= 0) {
+        return this.state.markdown;
+      }
       var newIndex = this.state.history_index - 1;
       this.setState({
         history_index: newIndex,
         markdown: this.history[newIndex]
       });
-      return this.history.current();
+      return this.state.markdown;
     },
 
     redo: function () {
       if (this.state.history_index + 1 > this.state.history.length) {
-        return this.history.current();
+        return this.state.markdown;
       }
       var newIndex = this.state.history_index + 1;
       this.setState({
         history_index: newIndex,
         markdown: this.history[newIndex]
       });
-      return this.history.current();
-    },
-
-    current: function () {
-      return this.state.history[this.state.history.length - 1];
+      return this.state.markdown;
     }
   }
 
 handleKeyDown = (e) => {
     console.log(e);
-    var markdown = this.history.current;
+    var markdown = this.state.markdown;
     var newMarkdown = markdown;
     var start = e.target.selectionStart;
     var end = e.target.selectionEnd;
