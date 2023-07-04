@@ -19,15 +19,51 @@ class Composer extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      markdown: "",
-      cursor: 0
+      markdown,
+      history: [],
+      historyIndex: 0
     };
   }
 
-  handleKeyDown = (e) => {
-    e.preventDefault();
+  const history = {
+    
+    function push = (val) {
+      this.setState({
+        markdown: val,
+        history: this.state.history.slice(0, this.state.history_index).push(val),
+        history_index: this.state.history_index + 1
+      });
+    }
+
+    function undo = () {
+      var newIndex = this.state.history_index - 1;
+      this.setState({
+        history_index: newIndex,
+        markdown: this.history[newIndex]
+      });
+      return this.history.current();
+    }
+
+    function redo = () {
+      if (this.state.history_index + 1 > this.state.history.length) {
+        return this.history.current();
+      }
+      var newIndex = this.state.history_index + 1;
+      this.setState({
+        history_index: newIndex,
+        markdown: this.history[newIndex]
+      });
+      return this.history.current();
+    }
+
+    function current = () {
+      return this.state.history[this.state.history.length - 1];
+    }
+  }
+
+handleKeyDown = (e) => {
     console.log(e);
-    var markdown = this.state.markdown;
+    var markdown = this.history.current;
     var newMarkdown = markdown;
     var start = e.target.selectionStart;
     var end = e.target.selectionEnd;
@@ -37,10 +73,14 @@ class Composer extends React.Component {
     switch (e.keyCode) {
       case 8: // backspace
         newMarkdown = markdown.substring(0, start - 1) + markdown.substring(end);
+        preventCursorMove = true;
         break;
       case 9: // tab
+        e.preventDefault();
+        newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
         break;
       case 13: // enter
+        e.preventDefault();
         if (e.shiftKey) { // line break without paragraph
           newMarkdown = markdown.substring(0, start) + "  \n" + markdown.substring(end);
           newCursorStart = start + 3;
@@ -73,28 +113,31 @@ class Composer extends React.Component {
         preventCursorMove = true;
         break;
       case 66: // b
+        // TODO: toggle on/off
         if (e.metaKey) {
           newMarkdown = markdown.substring(0, start) + '__' + markdown.substring(start, end) + '__' + markdown.substring(end);
           newCursorStart = start + 2;
-          newCursorEnd = start + 2;
+          newCursorEnd = end + 2;
         } else {
           newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
         }
         break;
       case 73: // i
+        // TODO: toggle on/off
         if (e.metaKey) {
           newMarkdown = markdown.substring(0, start) + '_' + markdown.substring(start, end) + '_' + markdown.substring(end);
           newCursorStart = start + 1;
-          newCursorEnd = start + 1;
+          newCursorEnd = end + 1;
         } else {
           newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
         }
         break;
       case 83: // s
+        // TODO: toggle on/off
         if (e.metaKey) {
           newMarkdown = markdown.substring(0, start) + '~~' + markdown.substring(start, end) + '~~' + markdown.substring(end);
           newCursorStart = start + 2;
-          newCursorEnd = start + 2;
+          newCursorEnd = end + 2;
         } else {
           newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
         }
@@ -106,7 +149,7 @@ class Composer extends React.Component {
         newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
         break;
     }
-    this.setState({ markdown: newMarkdown });
+    history.push(newMarkdown);
     if (!preventCursorMove) {
       setTimeout(() => {
         e.target.selectionStart = newCursorStart;
@@ -114,11 +157,6 @@ class Composer extends React.Component {
       }, 10);
     }
   }
-
-  // handleKeyDown = (e) => {
-  //   e.preventDefault();
-  //   console.log(e);
-  // }
 
   render() {
     return (
