@@ -29,13 +29,21 @@ form.compose-overlay label[for=address-select-new] {
   margin-right: 4em;;
 }
 
-form.compose-overlay textarea.composer-text {
+form.compose-overlay textarea.composer-text,
+form.compose-overlay div#composer-preview {
   width: 39em;
-  height: 20em;
   border-top-width: 0;
   border-top-left-radius: 0;
   border-top-right-radius: 0;
   padding: 0;
+}
+
+form.compose-overlay textarea.composer-text {
+  height: 20em;
+}
+
+form.compose-overlay div#composer-preview {
+  height: 3em;
 }
 
 /* toolbar */
@@ -77,6 +85,14 @@ form.compose-overlay div.composer-toolbar button.composer-toolbar-strikethrough 
 }
 
 /* preview/edit */
+
+div.composer-preview-toggle button {
+  display: inline-block;
+  padding: 1em;
+  border-radius-top-left: 0;
+  border-radius-top-right: 0;
+  margin: 0;
+}
 
 div.composer-preview-preview div#composer-preview,
 div.composer-preview-edit div#composer-edit {

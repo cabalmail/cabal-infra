@@ -308,7 +308,7 @@ class Composer extends React.Component {
     // strikethrough
     html = html.replace(/~~(.*?)~~/g, "<span style=\"text-decoration:line-through\">$1</span>");
     // link
-    html = html.replace(/\[(.*?)\]\((.*?)\)/g, "<a href=\"$1\">$2</a>");
+    html = html.replace(/\[(.*?)\]\((.*?)\)/g, "<a href=\"$2\">$1</a>");
     return <div dangerouslySetInnerHTML={{__html: html}}></div>;
   }
 
@@ -319,14 +319,6 @@ class Composer extends React.Component {
     return (
       <div className={previewClass}>
         <label htmlFor="composer-text">Message Body</label>
-        <ul className="composer-preview-toggle">
-          <li className="composer-preview-edit">
-            <button className="composer-preview-edit" onClick={this.showEdit}>Edit</button>
-          </li>
-          <li className="composer-preview-preview">
-            <button className="composer-preview-preview" onClick={this.showPreview}>Preview</button>
-          </li>
-        </ul>
         <div id="composer-edit">
           <div className="composer-toolbar">
             <select id="composer-toolbar-style-select" className="composer-toolbar-style-select">
@@ -375,6 +367,10 @@ class Composer extends React.Component {
         </div>
         <div id="composer-preview">
           {this.renderPreview()}
+        </div>
+        <div className="composer-preview-toggle">
+          <button className="composer-preview-edit" onClick={this.showEdit}>Edit</button>
+          <button className="composer-preview-preview" onClick={this.showPreview}>Preview</button>
         </div>
       </div>
     );
