@@ -163,13 +163,15 @@ class Composer extends React.Component {
               } else {
                 this.#history.undo();
               }
+              preventCursorMove = true;
+              break;
             default:
               break;
           }
-          return;
+        } else {
+          newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
+          this.#history.replace(newMarkdown);
         }
-        newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
-        this.#history.replace(newMarkdown);
         break;
     }
 
