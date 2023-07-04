@@ -170,7 +170,7 @@ class Composer extends React.Component {
           }
         } else {
           newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
-          this.#history.replace(newMarkdown);
+          // this.#history.replace(newMarkdown);
         }
         break;
     }
