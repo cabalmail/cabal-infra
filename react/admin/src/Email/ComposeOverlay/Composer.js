@@ -32,10 +32,9 @@ class Composer extends React.Component {
     switch (e.key) {
       default:
         var newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
-        console.log(`Setting markdown to ${newMarkdown}`);
         this.setState(
           {
-            text: newMarkdown
+            markdown: newMarkdown
           }
         );
         e.target.selectionStart = start + 1;
