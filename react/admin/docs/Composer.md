@@ -55,4 +55,25 @@ Parameters: e (null)
 
 Returns: null
 
+### showPreview
+Modifiers: none
+
+Parameters:  ()
+
+Returns: null
+
+### showEdit
+Modifiers: none
+
+Parameters:  ()
+
+Returns: null
+
+### renderPreview
+Modifiers: none
+
+Parameters:  ()
+
+Returns: null
+
 </div>
