@@ -27,24 +27,24 @@ class Composer extends React.Component {
 
   #history = {
     
-    function push = (val) {
+    push: function (val) {
       this.setState({
         markdown: val,
         history: this.state.history.slice(0, this.state.history_index).push(val),
         history_index: this.state.history_index + 1
       });
-    }
+    },
 
-    function undo = () {
+    undo: function () {
       var newIndex = this.state.history_index - 1;
       this.setState({
         history_index: newIndex,
         markdown: this.history[newIndex]
       });
       return this.history.current();
-    }
+    },
 
-    function redo = () {
+    redo: function () {
       if (this.state.history_index + 1 > this.state.history.length) {
         return this.history.current();
       }
@@ -54,9 +54,9 @@ class Composer extends React.Component {
         markdown: this.history[newIndex]
       });
       return this.history.current();
-    }
+    },
 
-    function current = () {
+    current: function () {
       return this.state.history[this.state.history.length - 1];
     }
   }
