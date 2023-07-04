@@ -42,7 +42,7 @@ class Composer extends React.Component {
       var newIndex = this.state.history_index - 1;
       this.setState({
         history_index: newIndex,
-        markdown: this.history[newIndex]
+        markdown: this.#history[newIndex]
       });
       return this.state.markdown;
     },
@@ -54,7 +54,7 @@ class Composer extends React.Component {
       var newIndex = this.state.history_index + 1;
       this.setState({
         history_index: newIndex,
-        markdown: this.history[newIndex]
+        markdown: this.#history[newIndex]
       });
       return this.state.markdown;
     }
@@ -142,13 +142,13 @@ handleKeyDown = (e) => {
         }
         break;
       case 91: // meta/command
-        preventCursorMove = true;
+        return;
         break;
       default:
         newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
         break;
     }
-    this.history.push(newMarkdown);
+    this.#history.push(newMarkdown);
     if (!preventCursorMove) {
       setTimeout(() => {
         e.target.selectionStart = newCursorStart;
