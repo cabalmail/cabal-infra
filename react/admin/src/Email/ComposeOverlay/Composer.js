@@ -182,6 +182,23 @@ class Composer extends React.Component {
     }
   }
 
+  fireBold = (e) => {
+    e.preventDefault();
+    var ta = document.getElementById("composer-text");
+    ta.focus();
+    var message = {
+      target: ta,
+      keyCode: 66,
+      key: "b",
+      metaKey: true,
+      shiftKey: false,
+      preventDefault: function () {
+        return true;
+      }
+    };
+    return this.handleKeyDown(message);
+  }
+
   fireItalic = (e) => {
     e.preventDefault();
     var ta = document.getElementById("composer-text");
@@ -191,6 +208,58 @@ class Composer extends React.Component {
       keyCode: 73,
       key: "i",
       metaKey: true,
+      shiftKey: false,
+      preventDefault: function () {
+        return true;
+      }
+    };
+    return this.handleKeyDown(message);
+  }
+
+  fireStrikethrough = (e) => {
+    e.preventDefault();
+    var ta = document.getElementById("composer-text");
+    ta.focus();
+    var message = {
+      target: ta,
+      keyCode: 83,
+      key: "s",
+      metaKey: true,
+      shiftKey: false,
+      preventDefault: function () {
+        return true;
+      }
+    };
+    return this.handleKeyDown(message);
+  }
+
+  fireUndo = (e) => {
+    e.preventDefault();
+    var ta = document.getElementById("composer-text");
+    ta.focus();
+    var message = {
+      target: ta,
+      keyCode: 90,
+      key: "z",
+      metaKey: true,
+      shiftKey: false,
+      preventDefault: function () {
+        return true;
+      }
+    };
+    return this.handleKeyDown(message);
+  }
+
+  fireUndo = (e) => {
+    e.preventDefault();
+    var ta = document.getElementById("composer-text");
+    ta.focus();
+    var message = {
+      target: ta,
+      keyCode: 90,
+      key: "z",
+      metaKey: true,
+      shiftKey: true,
       preventDefault: function () {
         return true;
       }
