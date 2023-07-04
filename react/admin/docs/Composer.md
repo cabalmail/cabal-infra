@@ -27,6 +27,13 @@ Parameters: e (null)
 
 Returns: null
 
+### fireLink
+Modifiers: none
+
+Parameters: e (null)
+
+Returns: null
+
 ### fireStrikethrough
 Modifiers: none
 
