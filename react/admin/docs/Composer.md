@@ -6,7 +6,7 @@
 
 
 ## Methods
-### handleKeyPress
+### handleKeyDown
 Modifiers: none
 
 Parameters: e (null)
