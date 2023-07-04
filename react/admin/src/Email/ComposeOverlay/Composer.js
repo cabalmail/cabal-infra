@@ -54,7 +54,7 @@ class Composer extends React.Component {
       case 40: // down arrow
         break;
       case 91: // meta/command
-        brear;
+        break;
       default:
         var newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
         break;
