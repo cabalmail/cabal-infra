@@ -289,11 +289,13 @@ class Composer extends React.Component {
     return this.handleKeyDown(message);
   }
 
-  showPreview() {
+  showPreview = (e) => {
+    e.preventDefault();
     this.setState({preview: true});
   }
 
-  showEdit() {
+  showEdit = (e) => {
+    e.preventDefault();
     this.setState({preview: false});
   }
 
