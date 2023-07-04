@@ -191,7 +191,9 @@ class Composer extends React.Component {
       keyCode: 73,
       key: "i",
       metaKey: true,
-      preventDefault: function () => { return true; }
+      preventDefault: function () {
+        return true;
+      }
     };
     return this.handleKeyDown(message);
   }
