@@ -58,20 +58,6 @@ ul.message_list {
 
 /* Composer view */
 
-button#compose-send {
-  margin: 0;
-  position: absolute;
-  top: 1em;
-  left: 1em;
-}
-
-button#compose-cancel {
-  margin: 0;
-  position: absolute;
-  top: 1em;
-  right: 1em;
-}
-
 .compose-button {
   position: absolute;
   bottom: 1em;
