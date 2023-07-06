@@ -70,7 +70,7 @@ ul.message_list {
   bottom: 1em;
   right: 0;
   left: 0;
-  width: 41em;
+  width: 49em;
   margin-right: auto;
   margin-left: auto;
   border-radius: 1em;
@@ -98,6 +98,6 @@ button, button * {
 
 @media (max-width: 899px) {
   .compose-wrapper {
-    width: 33em;
+    width: 30em;
   }
 }
