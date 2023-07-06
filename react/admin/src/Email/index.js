@@ -68,16 +68,21 @@ class Email extends React.Component {
         />
         <button className="compose-button" onClick={this.showCompose}>New Email</button>
         <div
-          className={`compose-wrapper ${this.state.composeVisible ? 'show-compose' : 'hide-compose'}`}
-          id="compose-wrapper"
+          className={`compose-blackout ${this.state.composeVisible ? 'show-compose' : 'hide-compose'}`}
+          id="compose-blackout"
         >
+          <div
+            className={`compose-wrapper ${this.state.composeVisible ? 'show-compose' : 'hide-compose'}`}
+            id="compose-wrapper"
+          >
           <ComposeOverlay
-            token={this.props.token}
-            api_url={this.props.api_url}
-            host={this.props.host}
-            hide={this.hideCompose}
-            quotedMessage=""
-          />
+              token={this.props.token}
+              api_url={this.props.api_url}
+              host={this.props.host}
+              hide={this.hideCompose}
+              quotedMessage=""
+            />
+          </div>
         </div>
       </div>
     );
