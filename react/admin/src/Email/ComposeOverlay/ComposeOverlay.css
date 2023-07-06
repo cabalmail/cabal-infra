@@ -30,7 +30,7 @@ button#compose-cancel {
 }
 
 form.compose-overlay input[type=text] {
-  width: 33em;
+  width: 38em;
 }
 
 form.compose-overlay input[type=radio] {
@@ -46,7 +46,7 @@ form.compose-overlay label[for=address-select-new] {
 
 form.compose-overlay textarea.composer-text,
 form.compose-overlay div#composer-preview {
-  width: 34em;
+  width: 39em;
   border-top-width: 0;
   border-top-left-radius: 0;
   border-top-right-radius: 0;
@@ -65,12 +65,25 @@ form.compose-overlay div.composer-wrapper div#composer-preview {
 
 /* toolbar */
 form.compose-overlay div.composer-toolbar {
-  width: 34em;
+  width: 39em;
   padding: 0;
   border: 1px solid;
   border-color: inherit;
   border-bottom-right-radius: 0;
   border-bottom-left-radius: 0;
+}
+
+@media (max-width: 899px) {
+  form.compose-overlay textarea.composer-text,
+  form.compose-overlay div#composer-preview {
+    width: 31em;
+  }
+  form.compose-overlay div.composer-toolbar {
+    width: 30em;
+  }
+  form.compose-overlay input[type=text] {
+    width: 30em;
+  }
 }
 
 form.compose-overlay div.composer-toolbar button.composer-toolbar-button,
