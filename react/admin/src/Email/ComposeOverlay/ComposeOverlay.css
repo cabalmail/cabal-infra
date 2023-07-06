@@ -30,7 +30,7 @@ button#compose-cancel {
 }
 
 form.compose-overlay input[type=text] {
-  width: 38em;
+  width: 33em;
 }
 
 form.compose-overlay input[type=radio] {
@@ -46,7 +46,7 @@ form.compose-overlay label[for=address-select-new] {
 
 form.compose-overlay textarea.composer-text,
 form.compose-overlay div#composer-preview {
-  width: 39em;
+  width: 34em;
   border-top-width: 0;
   border-top-left-radius: 0;
   border-top-right-radius: 0;
@@ -65,7 +65,7 @@ form.compose-overlay div.composer-wrapper div#composer-preview {
 
 /* toolbar */
 form.compose-overlay div.composer-toolbar {
-  width: 39em;
+  width: 34em;
   padding: 0;
   border: 1px solid;
   border-color: inherit;
