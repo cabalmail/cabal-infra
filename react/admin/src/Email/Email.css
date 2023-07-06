@@ -75,6 +75,7 @@ ul.message_list {
   margin-left: auto;
   border: 1px solid;
   border-color: inherit;
+  overflow: scroll;
 }
 
 .show-compose {

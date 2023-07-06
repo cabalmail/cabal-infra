@@ -11,7 +11,7 @@ form.compose-overlay {
   padding: 1em;
   padding-top: 3em;
   border-radius: 1em;
-  border-width: 1px;
+  border: 1px solid;
   border-color: inherit;
 }
 
@@ -60,7 +60,7 @@ form.compose-overlay textarea.composer-text {
 form.compose-overlay div.composer-wrapper div#composer-preview {
   height: 21em;
   padding-top: 3.5em;
-  border-width: 1px;
+  border: 1px solid;
 }
 
 /* toolbar */
