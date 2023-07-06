@@ -73,6 +73,7 @@ ul.message_list {
   width: 41em;
   margin-right: auto;
   margin-left: auto;
+  border-radius: 1em;
   border: 1px solid;
   border-color: inherit;
   overflow: scroll;

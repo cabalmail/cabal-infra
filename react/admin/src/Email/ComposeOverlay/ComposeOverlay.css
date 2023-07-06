@@ -10,8 +10,6 @@ button, button * {
 form.compose-overlay {
   padding: 1em;
   padding-top: 3em;
-  border-radius: 1em;
-  border: 1px solid;
   border-color: inherit;
 }
 
