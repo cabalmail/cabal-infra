@@ -88,18 +88,18 @@ ul.message_list {
 }
 
 .show-compose,
-div.compose-from-old label.compose-from-old,
-div.compose-from-old input.compose-from-old,
-div.compose-from-new label.compose-from-new,
-div.compose-from-new input.compose-from-new {
+div.compose-from-old label.address-select-old,
+div.compose-from-old input.address-select-old,
+div.compose-from-new label.address-select-new,
+div.compose-from-new input.address-select-new {
   display: block;
 }
 
 .hide-compose,
-div.compose-from-old label.compose-from-new,
-div.compose-from-old input.compose-from-new,
-div.compose-from-new label.compose-from-old,
-div.compose-from-new input.compose-from-old  {
+div.compose-from-old label.address-select-new,
+div.compose-from-old input.address-select-new,
+div.compose-from-new label.address-select-old,
+div.compose-from-new input.address-select-old  {
   display: none;
 }
 
