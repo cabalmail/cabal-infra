@@ -87,11 +87,19 @@ ul.message_list {
   overflow: scroll;
 }
 
-.show-compose {
+.show-compose,
+div.compose-from-old label.compose-from-old,
+div.compose-from-old input.compose-from-old,
+div.compose-from-new label.compose-from-new,
+div.compose-from-new input.compose-from-new {
   display: block;
 }
 
-.hide-compose {
+.hide-compose,
+div.compose-from-old label.compose-from-new,
+div.compose-from-old input.compose-from-new,
+div.compose-from-new label.compose-from-old,
+div.compose-from-new input.compose-from-old  {
   display: none;
 }
 

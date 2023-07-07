@@ -7,7 +7,8 @@ class ComposeOverlay extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      editorState: null
+      editorState: null,
+      showOldFrom: true
     };
   }
 
@@ -32,15 +33,47 @@ class ComposeOverlay extends React.Component {
     this.setState({editorState});
   }
 
+  onRadioChange = (e) => {
+    this.setState({showOldFrom: !this.state.showOldFrom});
+  }
+
   render() {
     return (
       <form className="compose-overlay" onSubmit={this.handleSubmit}>
-        <input type="radio" value="old" id="address-select-old" name="address-select" />
-        <label htmlFor="address-select-old">Use an existing address</label>
-        <input type="radio" value="new" id="address-select-new" name="address-select" />
-        <label htmlFor="address-select-new">Create a new address</label>
-        <label for="address-from">From</label>
-        <input type="text" id="address-from" name="address-from" />
+        <div className={this.state.showOldFrom ? "compose-from-old" : "compose-from-new"}>
+          <label className="radio">
+            <input
+              type="radio"
+              value="old"
+              id="address-select-old"
+              name="address-select"
+              checked={this.state.showOldFrom}
+            />Use an existing address</label>
+          <label className="radio">
+            <input
+              type="radio"
+              value="new"
+              id="address-select-new"
+              name="address-select"
+              checked={!this.state.showOldFrom}
+            />Create a new address</label>
+          <label for="address-from-old" className="address-from-old">From</label>
+          <input
+            type="text"
+            id="address-from-old"
+            name="address-from-old"
+            className="address-from-old"
+            placeholder="Find existing address"
+          />
+          <label for="address-from-new" className="address-from-new">From</label>
+          <input
+            type="text"
+            id="address-from-new"
+            name="address-from-new"
+            className="address-from-new"
+            placeholder="Enter new address"
+          />
+        </div>
         <label for="address-to">To</label>
         <input type="text" id="address-to" name="address-to" />
         <label htmlFor="address-cc">CC</label>
