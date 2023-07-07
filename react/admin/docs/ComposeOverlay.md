@@ -34,4 +34,11 @@ Parameters: editorState (null)
 
 Returns: null
 
+### onRadioChange
+Modifiers: none
+
+Parameters: e (null)
+
+Returns: null
+
 </div>
