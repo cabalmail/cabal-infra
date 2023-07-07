@@ -210,6 +210,11 @@ input, select, button, option {
   border-style: solid;
 }
 
+input::placeholder {
+  font-style: italic;
+  color: #888;
+}
+
 button, button * {
   font-size: x-small;
 }
