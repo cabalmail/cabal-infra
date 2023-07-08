@@ -254,13 +254,21 @@ label input[type=radio] {
 }
 
 label input[type=radio] ~ .radio-button:after {
+  /*
   content: "○";
-  display: inline-block;
   font-size: 150%;
   font-family: 'Courier New', monospace;
+  */
+  height: 2.5ex;
+  width: 2.5ex;
+  border: 1px solid;
+  border-radius: 1.25ex;
+  display: inline-block;
   margin-right: 0.3em;
+  background-color: rgba(0,0,0,0);
 }
 
 label input[type=radio]:checked ~ .radio-button:after {
-  content: "⦿";
+  /* content: "⦿"; */
+  background-color: currentcolor;
 }
