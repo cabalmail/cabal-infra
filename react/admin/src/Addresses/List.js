@@ -1,5 +1,4 @@
 import React from 'react';
-import axios from 'axios';
 
 /**
  * Fetches addresses for current user and displays them
@@ -13,6 +12,7 @@ class List extends React.Component {
       filter: "",
       addresses: []
     };
+    this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
   }
 
   filter(data) {
@@ -60,20 +60,7 @@ class List extends React.Component {
   }
 
   revokeAddress = (a) => {
-    const response = axios.delete('/revoke', {
-      baseURL: this.props.api_url,
-      data: JSON.stringify({
-        address: a.address,
-        subdomain: a.subdomain,
-        tld: a.tld,
-        public_key: a.public_key
-      }),
-      headers: {
-        'Authorization': this.props.token
-      },
-      timeout: 10000
-    });
-    return response;
+    return this.api.deleteAddress(a.address, a.subdomain, a.tld, a.public_key);
   }
 
   revoke = (e) => {
@@ -112,14 +99,7 @@ class List extends React.Component {
   }
 
   getList = (e) => {
-    const response = axios.get('/list', {
-      baseURL: this.props.api_url,
-      headers: {
-        'Authorization': this.props.token
-      },
-      timeout: 10000
-    });
-    return response;
+    return this.api.getAddresses();
   }
 
   updateFilter = (e) => {

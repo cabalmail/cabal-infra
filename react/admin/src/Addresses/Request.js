@@ -1,5 +1,4 @@
 import React from 'react';
-import axios from 'axios';
 
 /**
  * Renders a form for requesting a new address and handles
@@ -17,6 +16,7 @@ class Request extends React.Component {
       comment: '',
       address: ''
     }
+    this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
   }
 
   componentDidUpdate(prevProps, prevState) {
@@ -85,23 +85,12 @@ class Request extends React.Component {
   }
 
   submitRequest = (e) => {
-    return axios(
-      {
-        method: 'post',
-        url: '/new',
-        baseURL: this.props.api_url,
-        headers: {
-          'Authorization': this.props.token
-        },
-        timeout: 10000,
-        data: {
-          username: this.state.username,
-          subdomain: this.state.subdomain,
-          tld: this.state.domain,
-          comment: this.state.comment,
-          address: this.state.username + '@' + this.state.subdomain + '.' + this.state.domain
-        }
-      }
+    return this.api.newAddress(
+      this.state.username,
+      this.state.subdomain,
+      this.state.domain,
+      this.state.comment,
+      this.state.username + '@' + this.state.subdomain + '.' + this.state.domain
     );
   }
 

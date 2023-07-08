@@ -9,6 +9,65 @@ export default class ApiClient {
     this.host = host;
   }
 
+  // Addresses
+axios.post('/user', {
+    firstName: 'Fred',
+    lastName: 'Flintstone'
+  })
+
+  newAddress(username, subdomain, tld, comment, address) {
+    const response = axios.post(
+      '/new',
+      {
+        username: username,
+        subdomain: subdomain,
+        tld: domain,
+        comment: comment,
+        address: address
+      },
+      {
+        baseURL: this.baseUrl,
+        headers: {
+          'Authorization': this.token
+        },
+        timeout: ONE_SECOND * 10
+      }
+    );
+  }
+
+  getAddresses() {
+    if (localStorage.getItem("address_list") !== null) {
+      return localStorage.getItem("address_list");
+    }
+    const response = axios.get('/list', {
+      baseURL: this.baseURL,
+      headers: {
+        'Authorization': this.token
+      },
+      timeout: ONE_SECOND * 10
+    });
+  }
+
+  deleteAddress(address, subdomain, tld, public_key) {
+    localStorage.removeItem("address_list");
+    const response = axios.delete('/revoke', {
+      baseURL: this.baseURL,
+      data: JSON.stringify({
+        address: address,
+        subdomain: subdomain,
+        tld: tld,
+        public_key: public_key
+      }),
+      headers: {
+        'Authorization': this.token
+      },
+      timeout: ONE_SECOND * 10
+    });
+    return response;
+  }
+
+  // BIMI
+
   getBimiUrl(sender) {
     const sender_domain = sender.split("@")[1];
     const response = axios.get('/fetch_bimi', {
@@ -24,7 +83,10 @@ export default class ApiClient {
     return response;
   }
 
+  // IMAP Folders
+
   deleteFolder(name) {
+    localStorage.removeItem("folder_list");
     const response = axios.delete('/delete_folder',
       {
         baseURL: this.baseURL,
@@ -42,6 +104,7 @@ export default class ApiClient {
   }
 
   newFolder(parent, name) {
+    localStorage.removeItem("folder_list");
     const response = axios.put('/new_folder',
       JSON.stringify({
         host: this.host,
@@ -60,6 +123,9 @@ export default class ApiClient {
   }
 
   getFolderList() {
+    if (localStorage.getItem("folder_list") !== null) {
+      return localStorage.getItem("folder_list");
+    }
     const response = axios.get('/list_folders', {
       params: {
         host: this.host
@@ -73,7 +139,12 @@ export default class ApiClient {
     return response;
   }
 
+  // IMAP Messages
+
   moveMessages(source, destination, ids, order, field) {
+    if (source == "INBOX" || destination == "INBOX") {
+      localStorage.removeItem("INBOX");
+    }
     const response = axios.put('/move_messages',
       JSON.stringify({
         host: this.host,
@@ -117,6 +188,11 @@ export default class ApiClient {
   }
 
   getMessages(folder, order, field) {
+    if (folder == "INBOX") {
+      if (localStorage.getItem("INBOX") !== null) {
+        return localStorage.getItem("INBOX");
+      }
+    }
     const response = axios.get('/list_messages',
       {
         params: {
