@@ -100,7 +100,7 @@ class Composer extends React.Component {
         break;
       case 9: // tab
         e.preventDefault();
-        newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
+        newMarkdown = markdown.substring(0, start) + "\t" + markdown.substring(end);
         this.#history.push(newMarkdown);
         break;
       case 13: // enter
