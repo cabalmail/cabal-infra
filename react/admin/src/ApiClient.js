@@ -38,7 +38,7 @@ export default class ApiClient {
     console.log(localStorage.getItem("address_list"));
     if (localStorage.getItem("address_list") !== null) {
       console.log("Returning address list from local storage.")
-      let p = new Promise((resolve, reject) => {
+      let p = new Promise(function(resolve, reject) {
         let d = localStorage.getItem("address_list");
         if (d !== null) {
           resolve(d);
@@ -136,7 +136,7 @@ export default class ApiClient {
     console.log(localStorage.getItem("folder_list"));
     if (localStorage.getItem("folder_list") !== null) {
       console.log("Returning folder list from local storage.")
-      let p = new Promise((resolve, reject) => {
+      let p = new Promise(function(resolve, reject) {
         let d = localStorage.getItem("folder_list");
         if (d !== null) {
           resolve(d);
@@ -218,7 +218,7 @@ export default class ApiClient {
     }
     if (localStorage.getItem("INBOX") !== null) {
       console.log("Returning address list from local storage.")
-      let p = new Promise((resolve, reject) => {
+      let p = new Promise(function(resolve, reject) {
         let d = localStorage.getItem("INBOX");
         if (d !== null) {
           resolve(d);
