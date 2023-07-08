@@ -34,6 +34,7 @@ export default class ApiClient {
   }
 
   getAddresses() {
+    console.log(localStorage.getItem("address_list"));
     if (localStorage.getItem("address_list") !== null) {
       console.log("Returning address list from local storage.")
       return localStorage.getItem("address_list");
@@ -45,6 +46,7 @@ export default class ApiClient {
       },
       timeout: ONE_SECOND * 10
     });
+    localStorage.setItem(address_list, response);
     return response;
   }
 
@@ -123,6 +125,7 @@ export default class ApiClient {
   }
 
   getFolderList() {
+    console.log(localStorage.getItem("folder_list"));
     if (localStorage.getItem("folder_list") !== null) {
       console.log("Returning folder list from local storage.")
       return localStorage.getItem("folder_list");
@@ -137,6 +140,7 @@ export default class ApiClient {
       },
       timeout: ONE_SECOND * 10
     });
+    localStorage.setItem("folder_list", response);
     return response;
   }
 
@@ -189,6 +193,8 @@ export default class ApiClient {
   }
 
   getMessages(folder, order, field) {
+    console.log(folder);
+    console.log(localStorage.getItem("INBOX"));
     if (folder === "INBOX") {
       if (localStorage.getItem("INBOX") !== null) {
         console.log("Returning message list from local storage.")
@@ -210,6 +216,7 @@ export default class ApiClient {
         timeout: ONE_SECOND * 10
       }
     );
+    localStorage.setItem("INBOX", response);
     return response;
   }
 
