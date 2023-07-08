@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { ONE_SECOND } from './constants';
+const TIMEOUT = ONE_SECOND * 10;
 
 export default class ApiClient {
 
@@ -27,7 +28,7 @@ export default class ApiClient {
         headers: {
           'Authorization': this.token
         },
-        timeout: ONE_SECOND * 10
+        timeout: TIMEOUT
       }
     );
     return response;
@@ -52,7 +53,7 @@ export default class ApiClient {
       headers: {
         'Authorization': this.token
       },
-      timeout: ONE_SECOND * 10
+      timeout: TIMEOUT
     });
     return response;
   }
@@ -70,7 +71,7 @@ export default class ApiClient {
       headers: {
         'Authorization': this.token
       },
-      timeout: ONE_SECOND * 10
+      timeout: TIMEOUT
     });
     return response;
   }
@@ -87,7 +88,7 @@ export default class ApiClient {
       headers: {
         'Authorization': this.token
       },
-      timeout: ONE_SECOND * 10
+      timeout: TIMEOUT
     });
     return response;
   }
@@ -106,7 +107,7 @@ export default class ApiClient {
         headers: {
           'Authorization': this.token
         },
-        timeout: ONE_SECOND * 10
+        timeout: TIMEOUT
       }
     );
     return response;
@@ -125,7 +126,7 @@ export default class ApiClient {
         headers: {
           'Authorization': this.token
         },
-        timeout: ONE_SECOND * 10
+        timeout: TIMEOUT
       }
     );
     return response;
@@ -153,9 +154,8 @@ export default class ApiClient {
       headers: {
         'Authorization': this.token
       },
-      timeout: ONE_SECOND * 10
+      timeout: TIMEOUT
     });
-    localStorage.setItem("folder_list", response);
     return response;
   }
 
@@ -179,7 +179,7 @@ export default class ApiClient {
         headers: {
           'Authorization': this.token
         },
-        timeout: ONE_SECOND * 10
+        timeout: TIMEOUT
       }
     );
     return response;
@@ -201,7 +201,7 @@ export default class ApiClient {
         headers: {
           'Authorization': this.token
         },
-        timeout: ONE_SECOND * 10
+        timeout: TIMEOUT
       }
     );
     return response;
@@ -240,10 +240,9 @@ export default class ApiClient {
         headers: {
           'Authorization': this.token
         },
-        timeout: ONE_SECOND * 10
+        timeout: TIMEOUT
       }
     );
-    localStorage.setItem("INBOX", response);
     return response;
   }
 
@@ -259,7 +258,7 @@ export default class ApiClient {
         headers: {
           'Authorization': this.token
         },
-        timeout: ONE_SECOND * 10
+        timeout: TIMEOUT
       }
     );
     return response;
@@ -279,7 +278,7 @@ export default class ApiClient {
         headers: {
           'Authorization': this.token
         },
-        timeout: ONE_SECOND * 10
+        timeout: TIMEOUT
       }
     );
     return response;

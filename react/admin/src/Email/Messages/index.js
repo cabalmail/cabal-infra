@@ -95,6 +95,7 @@ class Messages extends React.Component {
   poller(api, folder, order, field, that) {
     const response = api.getMessages(folder, order, field);
     response.then(data => {
+      localStorage.setItem("INBOX", data);
       that.setState({
         ...that.state,
         message_ids: data.data.message_ids,
