@@ -31,6 +31,7 @@ class Composer extends React.Component {
         var history = this.supra.state.history.slice(0, this.supra.state.history_index + 1);
         history.push(val);
         this.supra.setState({
+          ...this.supra.state,
           markdown: val,
           history: history,
           history_index: this.supra.state.history_index + 1
@@ -41,6 +42,7 @@ class Composer extends React.Component {
         var history = this.supra.state.history.slice(0, this.supra.state.history_index + 1);
         history[this.supra.state.history_index] = val;
         this.supra.setState({
+          ...this.supra.state,
           markdown: val,
           history: history
         });
@@ -52,6 +54,7 @@ class Composer extends React.Component {
         }
         var newIndex = this.supra.state.history_index - 1;
         this.supra.setState({
+          ...this.supra.state,
           history_index: newIndex,
           markdown: this.supra.state.history[newIndex]
         });
@@ -64,6 +67,7 @@ class Composer extends React.Component {
         }
         var newIndex = this.supra.state.history_index + 1;
         this.supra.setState({
+          ...this.state,
           history_index: newIndex,
           markdown: this.supra.state.history[newIndex]
         });
@@ -297,12 +301,12 @@ class Composer extends React.Component {
 
   showPreview = (e) => {
     e.preventDefault();
-    this.setState({preview: true});
+    this.setState({..this.state, preview: true});
   }
 
   showEdit = (e) => {
     e.preventDefault();
-    this.setState({preview: false});
+    this.setState({...this.state, preview: false});
   }
 
   renderPreview() {

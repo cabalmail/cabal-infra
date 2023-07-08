@@ -25,7 +25,7 @@ class ComposeOverlay extends React.Component {
   componentDidMount() {
     this.api.getAddresses().then(data => {
       localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
-      this.setState({addresses: data.data.Items.map(a => a.address).sort()});
+      this.setState({...this.state, addresses: data.data.Items.map(a => a.address).sort()});
     });
   }
 
@@ -53,11 +53,11 @@ class ComposeOverlay extends React.Component {
   }
 
   onMessageChange = (editorState) => {
-    this.setState({editorState});
+    this.setState({...this.state, editorState});
   }
 
   onRadioChange = (e) => {
-    this.setState({showOldFrom: !this.state.showOldFrom});
+    this.setState({...this.state, showOldFrom: !this.state.showOldFrom});
   }
 
   render() {
