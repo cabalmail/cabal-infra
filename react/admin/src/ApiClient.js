@@ -35,6 +35,7 @@ export default class ApiClient {
 
   getAddresses() {
     if (localStorage.getItem("address_list") !== null) {
+      console.log("Returning address list from local storage.")
       return localStorage.getItem("address_list");
     }
     const response = axios.get('/list', {
@@ -123,6 +124,7 @@ export default class ApiClient {
 
   getFolderList() {
     if (localStorage.getItem("folder_list") !== null) {
+      console.log("Returning folder list from local storage.")
       return localStorage.getItem("folder_list");
     }
     const response = axios.get('/list_folders', {
@@ -189,6 +191,7 @@ export default class ApiClient {
   getMessages(folder, order, field) {
     if (folder === "INBOX") {
       if (localStorage.getItem("INBOX") !== null) {
+        console.log("Returning message list from local storage.")
         return localStorage.getItem("INBOX");
       }
     }
