@@ -96,7 +96,7 @@ class Messages extends React.Component {
     const response = api.getMessages(folder, order, field);
     response.then(data => {
       if (folder === "INBOX"){
-        Window.localStorage.setItem("INBOX", JSON.stringify(data));
+        localStorage.setItem("INBOX", JSON.stringify(data));
       }
       that.setState({
         ...that.state,

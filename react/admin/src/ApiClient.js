@@ -210,17 +210,19 @@ export default class ApiClient {
   getMessages(folder, order, field) {
     console.log(folder);
     console.log(localStorage.getItem("INBOX"));
-    if (localStorage.getItem("INBOX") !== null) {
-      console.log("Returning address list from local storage.")
-      let p = new Promise(function(resolve, reject) {
-        let d = localStorage.getItem("INBOX");
-        if (d !== null) {
-          resolve(JSON.parse(d));
-        } else {
-          reject("Storage error");
-        }
-      });
-      return p;
+    if (folder === "INBOX") {
+      if (localStorage.getItem("INBOX") !== null) {
+        console.log("Returning address list from local storage.")
+        let p = new Promise(function(resolve, reject) {
+          let d = localStorage.getItem("INBOX");
+          if (d !== null) {
+            resolve(JSON.parse(d));
+          } else {
+            reject("Storage error");
+          }
+        });
+        return p;
+      }
     }
     const response = axios.get('/list_messages',
       {
