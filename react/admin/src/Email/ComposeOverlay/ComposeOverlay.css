@@ -11,6 +11,11 @@ form.compose-overlay {
   padding: 1em;
   padding-top: 3em;
   border-color: inherit;
+  box-sizing: border-box;
+}
+
+form.compose-overlay div {
+  box-sizing: border-box;
 }
 
 button#compose-send {
@@ -30,7 +35,7 @@ button#compose-cancel {
 form.compose-overlay input[type=text],
 form.compose-overlay input[type=email],
 form.compose-overlay select, {
-  width: 46em;
+  box-sizing: border-box;
 }
 
 form.compose-overlay label.radio {
@@ -40,11 +45,12 @@ form.compose-overlay label.radio {
 
 form.compose-overlay textarea.composer-text,
 form.compose-overlay div#composer-preview {
-  width: 47em;
+  width: 100%;
   border-top-width: 0;
   border-top-left-radius: 0;
   border-top-right-radius: 0;
   padding: 0;
+  box-sizing: border-box;
 }
 
 form.compose-overlay textarea.composer-text {
@@ -61,15 +67,16 @@ form.compose-overlay div.composer-wrapper div#composer-preview {
 
 /* toolbar */
 form.compose-overlay div.composer-toolbar {
-  width: 47em;
+  width: 100%;
   padding: 0;
   border: 1px solid;
   border-color: inherit;
   border-bottom-right-radius: 0;
   border-bottom-left-radius: 0;
+  box-sizing: border-box;
 }
 
-@media (max-width: 899px) {
+/*@media (max-width: 899px) {
   form.compose-overlay textarea.composer-text,
   form.compose-overlay div#composer-preview {
     width: 28em;
@@ -82,7 +89,7 @@ form.compose-overlay div.composer-toolbar {
   form.compose-overlay select {
     width: 27em;
   }
-}
+}*/
 
 form.compose-overlay div.composer-toolbar button.composer-toolbar-button,
 form.compose-overlay div.composer-toolbar select.composer-toolbar-style-select {

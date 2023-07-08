@@ -79,6 +79,7 @@ ul.message_list {
   right: 0;
   left: 0;
   width: 49em;
+  box-sizing: border-box;
   margin-right: auto;
   margin-left: auto;
   border-radius: 1em;
