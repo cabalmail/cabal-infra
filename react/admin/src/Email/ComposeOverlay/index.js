@@ -98,7 +98,7 @@ class ComposeOverlay extends React.Component {
             name="address-from-old"
             className="address-from-old"
             placeholder="Find existing address"
-          />{options}</select>
+          >{options}</select>
           <label for="address-from-new" className="address-from-new">From</label>
           <input
             type="text"
