@@ -1,4 +1,5 @@
 import React from 'react';
+import ApiClient from '../ApiClient';
 
 /**
  * Fetches addresses for current user and displays them

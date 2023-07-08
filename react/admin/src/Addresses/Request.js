@@ -1,4 +1,5 @@
 import React from 'react';
+import ApiClient from '../ApiClient';
 
 /**
  * Renders a form for requesting a new address and handles

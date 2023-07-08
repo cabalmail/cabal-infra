@@ -16,6 +16,7 @@ axios.post('/user', {
   })
 
   newAddress(username, subdomain, tld, comment, address) {
+    localStorage.removeItem("address_list");
     const response = axios.post(
       '/new',
       {
