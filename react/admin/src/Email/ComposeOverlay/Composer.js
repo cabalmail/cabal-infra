@@ -301,7 +301,7 @@ class Composer extends React.Component {
 
   showPreview = (e) => {
     e.preventDefault();
-    this.setState({..this.state, preview: true});
+    this.setState({...this.state, preview: true});
   }
 
   showEdit = (e) => {
