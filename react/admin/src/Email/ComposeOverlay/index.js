@@ -1,6 +1,8 @@
 import React from 'react';
 import './ComposeOverlay.css';
+import ApiClient from '../../ApiClient';
 import Composer from './Composer';
+import { ADDRESS_LIST } from '../../constants';
 
 class ComposeOverlay extends React.Component {
 
@@ -8,8 +10,37 @@ class ComposeOverlay extends React.Component {
     super(props);
     this.state = {
       editorState: null,
-      showOldFrom: true
+      showOldFrom: true,
+      addresses: []
     };
+    api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
+    const response = api.getAddresses();
+    response.then(data => {
+      localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
+      this.setState({addresses: data.Items
+        .map(
+          (a) => {
+            return a.address;
+          }
+        )
+        .sort(
+          (a,b) => {
+            if (a > b) {
+              return 1;
+            } else if (a < b) {
+              return -1;
+            }
+            return 0;
+          }
+        )
+      })
+    });
+  }
+
+  getOptions() {
+    return this.addresses.map((a) => {
+      <option value={a}>{a}</option>
+    });
   }
 
   handleSubmit = (e) => {
@@ -38,6 +69,7 @@ class ComposeOverlay extends React.Component {
   }
 
   render() {
+    const options = this.getOptions();
     return (
       <form className="compose-overlay" onSubmit={this.handleSubmit}>
         <div className={this.state.showOldFrom ? "compose-from-old" : "compose-from-new"}>
@@ -60,13 +92,13 @@ class ComposeOverlay extends React.Component {
               onChange={this.onRadioChange}
             /><span className="radio-button"></span>Create a new address</label>
           <label for="address-from-old" className="address-from-old">From</label>
-          <input
+          <select
             type="text"
             id="address-from-old"
             name="address-from-old"
             className="address-from-old"
             placeholder="Find existing address"
-          />
+          />{options}</select>
           <label for="address-from-new" className="address-from-new">From</label>
           <input
             type="text"
