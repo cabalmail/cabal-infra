@@ -21,7 +21,7 @@ class Folders extends React.Component {
   componentDidMount() {
     const response = this.api.getFolderList();
     response.then(data => {
-      localStorage.setItem("folder_list", data);
+      localStorage.setItem("folder_list", JSON.stringify(data));
       this.setState({ ...this.state, folders: data.data });
     }).catch(e => {
       console.log(e);

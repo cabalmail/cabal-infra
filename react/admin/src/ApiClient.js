@@ -41,7 +41,7 @@ export default class ApiClient {
       let p = new Promise(function(resolve, reject) {
         let d = localStorage.getItem("address_list");
         if (d !== null) {
-          resolve(d);
+          resolve(JSON.parse(d));
         } else {
           reject("Storage error");
         }
@@ -139,7 +139,7 @@ export default class ApiClient {
       let p = new Promise(function(resolve, reject) {
         let d = localStorage.getItem("folder_list");
         if (d !== null) {
-          resolve(d);
+          resolve(JSON.parse(d));
         } else {
           reject("Storage error");
         }
@@ -221,7 +221,7 @@ export default class ApiClient {
       let p = new Promise(function(resolve, reject) {
         let d = localStorage.getItem("INBOX");
         if (d !== null) {
-          resolve(d);
+          resolve(JSON.parse(d));
         } else {
           reject("Storage error");
         }
