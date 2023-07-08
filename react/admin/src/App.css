@@ -256,11 +256,10 @@ label input[type=radio] {
 label input[type=radio] ~ .radio-button:after {
   content: "○";
   display: inline-block;
-  font-size: 200%;
+  font-size: 150%;
   margin-right: 0.3em;
 }
 
 label input[type=radio]:checked ~ .radio-button:after {
   content: "⦿";
-  font-size: 150%;
 }
