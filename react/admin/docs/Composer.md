@@ -6,6 +6,13 @@
 
 
 ## Methods
+### setState
+Modifiers: none
+
+Parameters: state (null)
+
+Returns: null
+
 ### handleKeyDown
 Modifiers: none
 
