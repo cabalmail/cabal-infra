@@ -1,5 +1,6 @@
 import React from 'react';
 import './ComposeOverlay.css';
+const STATE_KEY = 'composer-state';
 
 class Composer extends React.Component {
 
@@ -17,7 +18,7 @@ class Composer extends React.Component {
 
   constructor(props) {
     super(props);
-    this.state = {
+    this.state = JSON.parse(window.localStorage.getItem(STATE_KEY)) || {
       markdown: "",
       history: [""],
       history_index: 0,
@@ -69,6 +70,11 @@ class Composer extends React.Component {
         return this.supra.state.markdown;
       }
     }
+  }
+
+  setState(state) {
+    window.localStorage.setItem(STATE_KEY, JSON.stringify(state));
+    super.setState(state);
   }
 
   handleKeyDown = (e) => {

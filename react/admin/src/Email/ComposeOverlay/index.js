@@ -3,18 +3,25 @@ import './ComposeOverlay.css';
 import ApiClient from '../../ApiClient';
 import Composer from './Composer';
 import { ADDRESS_LIST } from '../../constants';
+const STATE_KEY = 'compose-state';
 
 class ComposeOverlay extends React.Component {
 
   constructor(props) {
     super(props);
-    this.state = {
+    this.state = JSON.parse(window.localStorage.getItem(STATE_KEY)) || {
       editorState: null,
       showOldFrom: true,
       addresses: []
     };
     this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
   }
+
+  setState(state) {
+    window.localStorage.setItem(STATE_KEY, JSON.stringify(state));
+    super.setState(state);
+  }
+
   componentDidMount() {
     this.api.getAddresses().then(data => {
       localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));

@@ -254,11 +254,6 @@ label input[type=radio] {
 }
 
 label input[type=radio] ~ .radio-button:after {
-  /*
-  content: "○";
-  font-size: 150%;
-  font-family: 'Courier New', monospace;
-  */
   content: " ";
   height: 1em;
   width: 1em;
@@ -270,6 +265,5 @@ label input[type=radio] ~ .radio-button:after {
 }
 
 label input[type=radio]:checked ~ .radio-button:after {
-  /* content: "⦿"; */
   background-color: currentcolor;
 }
