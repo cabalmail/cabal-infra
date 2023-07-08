@@ -50,7 +50,7 @@ export default class ApiClient {
 
   getAddresses() {
     if (localStorage.getItem(ADDRESS_LIST) !== null) {
-      return #createPromise(ADDRESS_LIST);
+      return this.#createPromise(ADDRESS_LIST);
     }
     const response = axios.get('/list', {
       baseURL: this.baseURL,
@@ -138,7 +138,7 @@ export default class ApiClient {
 
   getFolderList() {
     if (localStorage.getItem(FOLDER_LIST) !== null) {
-      return #createPromise(FOLDER_LIST);
+      return this.#createPromise(FOLDER_LIST);
     }
     const response = axios.get('/list_folders', {
       params: {
