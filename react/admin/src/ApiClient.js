@@ -30,6 +30,7 @@ export default class ApiClient {
         timeout: ONE_SECOND * 10
       }
     );
+    return response;
   }
 
   getAddresses() {
@@ -43,6 +44,7 @@ export default class ApiClient {
       },
       timeout: ONE_SECOND * 10
     });
+    return response;
   }
 
   deleteAddress(address, subdomain, tld, public_key) {
@@ -139,7 +141,7 @@ export default class ApiClient {
   // IMAP Messages
 
   moveMessages(source, destination, ids, order, field) {
-    if (source == "INBOX" || destination == "INBOX") {
+    if (source === "INBOX" || destination === "INBOX") {
       localStorage.removeItem("INBOX");
     }
     const response = axios.put('/move_messages',
@@ -185,7 +187,7 @@ export default class ApiClient {
   }
 
   getMessages(folder, order, field) {
-    if (folder == "INBOX") {
+    if (folder === "INBOX") {
       if (localStorage.getItem("INBOX") !== null) {
         return localStorage.getItem("INBOX");
       }
