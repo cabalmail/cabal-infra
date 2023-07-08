@@ -54,7 +54,6 @@ class ComposeOverlay extends React.Component {
   }
 
   render() {
-    const options = this.getOptions();
     return (
       <form className="compose-overlay" onSubmit={this.handleSubmit}>
         <div className={this.state.showOldFrom ? "compose-from-old" : "compose-from-new"}>
@@ -83,7 +82,7 @@ class ComposeOverlay extends React.Component {
             name="address-from-old"
             className="address-from-old"
             placeholder="Find existing address"
-          >{options}</select>
+          >{this.getOptions()}</select>
           <label for="address-from-new" className="address-from-new">From</label>
           <input
             type="text"
