@@ -138,7 +138,7 @@ class ComposeOverlay extends React.Component {
           id="address-to"
           name="address-to"
           onChange={this.onToChange}
-          value={this.stage.To}
+          value={this.state.To}
         />
         <label htmlFor="address-cc">CC</label>
         <input
