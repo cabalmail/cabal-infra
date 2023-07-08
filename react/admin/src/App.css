@@ -256,7 +256,7 @@ label input[type=radio] {
 label input[type=radio] ~ .radio-button:after {
   content: "○";
   display: inline-block;
-  font-size: 175%;
+  font-size: 200%;
   margin-right: 0.3em;
 }
 

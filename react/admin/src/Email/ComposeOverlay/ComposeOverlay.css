@@ -76,7 +76,8 @@ form.compose-overlay div.composer-toolbar {
   form.compose-overlay div.composer-toolbar {
     width: 28em;
   }
-  form.compose-overlay input[type=text] {
+  form.compose-overlay input[type=text],
+  form.compose-overlay select {
     width: 27em;
   }
 }
