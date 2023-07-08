@@ -38,7 +38,7 @@ class ComposeOverlay extends React.Component {
   }
 
   getOptions() {
-    return this.addresses.map((a) => {
+    return this.state.addresses.map((a) => {
       return <option value={a}>{a}</option>;
     });
   }
