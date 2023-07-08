@@ -13,7 +13,7 @@ class ComposeOverlay extends React.Component {
       editorState: null,
       showOldFrom: true,
       addresses: [],
-      addressOld: null,
+      addressOld: "",
       addressNew: null,
       To: null,
       CC: null,
@@ -121,7 +121,7 @@ class ComposeOverlay extends React.Component {
             placeholder="Find existing address"
             onChange={this.onSelectChange}
             value={this.state.address}
-          >{this.getOptions()}</select>
+          ><option value="">Select an address</option>{this.getOptions()}</select>
           <label for="address-from-new" className="address-from-new">From</label>
           <input
             type="text"
