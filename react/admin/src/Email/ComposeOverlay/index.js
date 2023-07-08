@@ -13,27 +13,12 @@ class ComposeOverlay extends React.Component {
       showOldFrom: true,
       addresses: []
     };
-    const api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
-    const response = api.getAddresses();
-    response.then(data => {
+    this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
+  }
+  componentDidMount() {
+    this.api.getAddresses().then(data => {
       localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
-      this.setState({addresses: data.Items
-        .map(
-          (a) => {
-            return a.address;
-          }
-        )
-        .sort(
-          (a,b) => {
-            if (a > b) {
-              return 1;
-            } else if (a < b) {
-              return -1;
-            }
-            return 0;
-          }
-        )
-      })
+      this.setState({addresses: data.Items.map(a => a.address).sort()});
     });
   }
 
