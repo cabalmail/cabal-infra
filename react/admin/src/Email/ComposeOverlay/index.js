@@ -120,7 +120,7 @@ class ComposeOverlay extends React.Component {
             className="address-from-old"
             placeholder="Find existing address"
             onChange={this.onSelectChange}
-            value={this.state.address}
+            value={this.state.addressOld}
           ><option value="">Select an address</option>{this.getOptions()}</select>
           <label for="address-from-new" className="address-from-new">From</label>
           <input
