@@ -13,7 +13,7 @@ class ComposeOverlay extends React.Component {
       showOldFrom: true,
       addresses: []
     };
-    api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
+    const api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
     const response = api.getAddresses();
     response.then(data => {
       localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
