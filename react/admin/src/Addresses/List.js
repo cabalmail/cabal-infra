@@ -38,6 +38,7 @@ class List extends React.Component {
   componentDidMount() {
     const response = this.getList();
     response.then(data => {
+      localStorage.setItem("address_list", data);
       this.setState({ ...this.state, addresses: data.data.Items.sort(
         (a,b) => {
           if (a.address > b.address) {
@@ -55,6 +56,7 @@ class List extends React.Component {
     if (this.state.filter !== prevState.filter) {
       const response = this.getList();
       response.then(data => {
+        localStorage.setItem("address_list", data);
         this.filter(data.data);
       });
     }
@@ -91,6 +93,7 @@ class List extends React.Component {
     e.preventDefault();
     const response = this.getList();
     response.then(data => {
+      localStorage.setItem("address_list", data);
       this.filter(data.data);
     });
   }

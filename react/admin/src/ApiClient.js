@@ -37,7 +37,15 @@ export default class ApiClient {
     console.log(localStorage.getItem("address_list"));
     if (localStorage.getItem("address_list") !== null) {
       console.log("Returning address list from local storage.")
-      return localStorage.getItem("address_list");
+      let p = new Promise((resolve, reject) => {
+        let d = localStorage.getItem("address_list");
+        if (d !== null) {
+          resolve(d);
+        } else {
+          reject("Storage error");
+        }
+      });
+      return p;
     }
     const response = axios.get('/list', {
       baseURL: this.baseURL,
@@ -46,7 +54,6 @@ export default class ApiClient {
       },
       timeout: ONE_SECOND * 10
     });
-    localStorage.setItem("address_list", response);
     return response;
   }
 
