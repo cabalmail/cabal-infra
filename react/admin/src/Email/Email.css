@@ -89,7 +89,7 @@ ul.message_list {
 
 .show-compose,
 div.compose-from-old label.address-from-old,
-div.compose-from-old input.address-from-old,
+div.compose-from-old select.address-from-old,
 div.compose-from-new label.address-from-new,
 div.compose-from-new input.address-from-new {
   display: block;
@@ -99,7 +99,7 @@ div.compose-from-new input.address-from-new {
 div.compose-from-old label.address-from-new,
 div.compose-from-old input.address-from-new,
 div.compose-from-new label.address-from-old,
-div.compose-from-new input.address-from-old  {
+div.compose-from-new select.address-from-old  {
   display: none;
 }
 

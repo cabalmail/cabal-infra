@@ -27,7 +27,8 @@ button#compose-cancel {
   right: 1em;
 }
 
-form.compose-overlay input[type=text] {
+form.compose-overlay input[type=text],
+form.compose-overlay select, {
   width: 46em;
 }
 
