@@ -124,7 +124,7 @@ class ComposeOverlay extends React.Component {
           ><option value="">Select an address</option>{this.getOptions()}</select>
           <label for="address-from-new" className="address-from-new">From</label>
           <input
-            type="text"
+            type="email"
             id="address-from-new"
             name="address-from-new"
             className="address-from-new"
@@ -134,7 +134,7 @@ class ComposeOverlay extends React.Component {
         </div>
         <label for="address-to">To</label>
         <input
-          type="text"
+          type="email"
           id="address-to"
           name="address-to"
           onChange={this.onToChange}
@@ -142,7 +142,7 @@ class ComposeOverlay extends React.Component {
         />
         <label htmlFor="address-cc">CC</label>
         <input
-          type="text"
+          type="email"
           id="address-cc"
           name="address-cc"
           onChange={this.onCcChange}
@@ -150,7 +150,7 @@ class ComposeOverlay extends React.Component {
         />
         <label htmlFor="address-bcc">BCC</label>
         <input
-          type="text"
+          type="email"
           id="address-bcc"
           name="address-cc"
           onChange={this.onBccChange}
