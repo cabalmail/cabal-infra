@@ -3,18 +3,24 @@ import './Email.css';
 import Messages from './Messages';
 import MessageOverlay from './MessageOverlay';
 import ComposeOverlay from './ComposeOverlay';
+const STATE_KEY = 'email-state';
 
 class Email extends React.Component {
 
   constructor(props) {
     super(props);
-    this.state = {
+    this.state = JSON.parse(window.localStorage.getItem(STATE_KEY)) || {
       folder: "INBOX",
       overlayVisible: false,
       composeVisible: false,
       envelope: {},
       flags: []
     };
+  }
+
+  setState(state) {
+    window.localStorage.setItem(STATE_KEY, JSON.stringify(state));
+    super.setState(state);
   }
 
   selectFolder = (folder) => {
