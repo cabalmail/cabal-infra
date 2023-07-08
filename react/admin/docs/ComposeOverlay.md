@@ -55,4 +55,46 @@ Parameters: e (null)
 
 Returns: null
 
+### onSelectChange
+Modifiers: none
+
+Parameters: e (null)
+
+Returns: null
+
+### onAddressNewChange
+Modifiers: none
+
+Parameters: e (null)
+
+Returns: null
+
+### onToChange
+Modifiers: none
+
+Parameters: e (null)
+
+Returns: null
+
+### onCcChange
+Modifiers: none
+
+Parameters: e (null)
+
+Returns: null
+
+### onBccChange
+Modifiers: none
+
+Parameters: e (null)
+
+Returns: null
+
+### onSubjectChange
+Modifiers: none
+
+Parameters: e (null)
+
+Returns: null
+
 </div>
