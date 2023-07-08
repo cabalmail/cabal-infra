@@ -31,11 +31,6 @@ form.compose-overlay input[type=text] {
   width: 46em;
 }
 
-form.compose-overlay input[type=radio] {
-  display: inline;
-  width: auto;
-}
-
 form.compose-overlay label.radio {
   display: inline-block;
   margin-right: 3em;
