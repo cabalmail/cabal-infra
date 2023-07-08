@@ -248,3 +248,15 @@ button {
 fieldset {
   border: 0;
 }
+
+label input[type=radio] {
+  display: none;
+}
+
+label input[type=radio] ~ .radio-button:after {
+  content: "○";
+}
+
+label input[type=radio]:checked ~ .radio-button:after {
+  content: "◉";
+}

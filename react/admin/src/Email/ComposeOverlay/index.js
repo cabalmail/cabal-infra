@@ -49,7 +49,7 @@ class ComposeOverlay extends React.Component {
               name="address-select"
               checked={this.state.showOldFrom}
               onChange={this.onRadioChange}
-            />Use an existing address</label>
+            /><span className="radio-button"></span>Use an existing address</label>
           <label className="radio">
             <input
               type="radio"
@@ -58,7 +58,7 @@ class ComposeOverlay extends React.Component {
               name="address-select"
               checked={!this.state.showOldFrom}
               onChange={this.onRadioChange}
-            />Create a new address</label>
+            /><span className="radio-button"></span>Create a new address</label>
           <label for="address-from-old" className="address-from-old">From</label>
           <input
             type="text"
