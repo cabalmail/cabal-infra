@@ -17,12 +17,8 @@ class ComposeOverlay extends React.Component {
   }
   componentDidMount() {
     this.api.getAddresses().then(data => {
-      console.log(data);
-      console.log(data.Items);
-      console.log(data.items.map(a => a.address));
-      console.log(data.items.map(a => a.address).sort());
       localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
-      this.setState({addresses: data.Items.map(a => a.address).sort()});
+      this.setState({addresses: data.data.Items.map(a => a.address).sort()});
     });
   }
 
