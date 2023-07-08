@@ -11,7 +11,7 @@ export default class ApiClient {
 
   // Addresses
 
-  newAddress(username, subdomain, tld, comment, address) {
+  newAddress(username, subdomain, domain, tld, comment, address) {
     localStorage.removeItem("address_list");
     const response = axios.post(
       '/new',
