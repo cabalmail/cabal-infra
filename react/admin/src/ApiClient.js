@@ -10,10 +10,6 @@ export default class ApiClient {
   }
 
   // Addresses
-axios.post('/user', {
-    firstName: 'Fred',
-    lastName: 'Flintstone'
-  })
 
   newAddress(username, subdomain, tld, comment, address) {
     localStorage.removeItem("address_list");
