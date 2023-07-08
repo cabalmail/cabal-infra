@@ -6,6 +6,13 @@
 
 
 ## Methods
+### getOptions
+Modifiers: none
+
+Parameters:  ()
+
+Returns: null
+
 ### handleSubmit
 Modifiers: none
 
