@@ -46,7 +46,7 @@ export default class ApiClient {
       },
       timeout: ONE_SECOND * 10
     });
-    localStorage.setItem(address_list, response);
+    localStorage.setItem("address_list", response);
     return response;
   }
 
