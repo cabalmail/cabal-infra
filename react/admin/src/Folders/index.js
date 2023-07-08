@@ -1,6 +1,6 @@
 import React from 'react';
 import ApiClient from '../ApiClient';
-import { PERMANENT_FOLDERS, FOLDER_LIST } from '../constants';
+import { FOLDER_LIST } from '../constants';
 import './Folders.css';
 
 /**
