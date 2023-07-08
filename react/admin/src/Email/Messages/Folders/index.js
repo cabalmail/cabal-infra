@@ -1,5 +1,6 @@
 import React from 'react';
 import ApiClient from '../../../ApiClient';
+import { PERMANENT_FOLDERS, FOLDER_LIST } from '../../../constants';
 
 /**
  * Fetches folders for current users and displays them
@@ -18,7 +19,7 @@ class Folders extends React.Component {
   componentDidMount() {
     const response = this.api.getFolderList();
     response.then(data => {
-      localStorage.setItem("folder_list", JSON.stringify(data));
+      localStorage.setItem(FOLDER_LIST, JSON.stringify(data));
       this.setState({ ...this.state, folders: data.data });
     }).catch(e => {
       this.props.setMessage("Unable to fetch folders.", true);

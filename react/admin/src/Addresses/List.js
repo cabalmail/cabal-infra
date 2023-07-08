@@ -1,5 +1,6 @@
 import React from 'react';
 import ApiClient from '../ApiClient';
+import { ADDRESS_LIST } from '../constants';
 
 /**
  * Fetches addresses for current user and displays them
@@ -38,7 +39,7 @@ class List extends React.Component {
   componentDidMount() {
     const response = this.getList();
     response.then(data => {
-      localStorage.setItem("address_list", JSON.stringify(data));
+      localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
       this.setState({ ...this.state, addresses: data.data.Items.sort(
         (a,b) => {
           if (a.address > b.address) {
@@ -56,7 +57,7 @@ class List extends React.Component {
     if (this.state.filter !== prevState.filter) {
       const response = this.getList();
       response.then(data => {
-        localStorage.setItem("address_list", JSON.stringify(data));
+        localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
         this.filter(data.data);
       });
     }

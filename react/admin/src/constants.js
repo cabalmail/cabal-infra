@@ -76,3 +76,5 @@ export const UNFLAGGED = {
   action: "unflag",
   icon: "📪"
 };
+export const FOLDER_LIST = "folder_list";
+export const ADDRESS_LIST = "address_list";

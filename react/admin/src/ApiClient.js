@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { ONE_SECOND } from './constants';
+import { ONE_SECOND, ADDRESS_LIST, FOLDER_LIST } from './constants';
 const TIMEOUT = ONE_SECOND * 10;
 
 export default class ApiClient {
@@ -10,10 +10,24 @@ export default class ApiClient {
     this.host = host;
   }
 
+  // Helper
+
+  #createPromise(key) {
+    let p = new Promise(function(resolve, reject) {
+      let d = localStorage.getItem(key);
+      if (d !== null) {
+        resolve(JSON.parse(d));
+      } else {
+        reject("Storage error");
+      }
+    });
+    return p;
+  }
+
   // Addresses
 
   newAddress(username, subdomain, domain, tld, comment, address) {
-    localStorage.removeItem("address_list");
+    localStorage.removeItem(ADDRESS_LIST);
     const response = axios.post(
       '/new',
       {
@@ -35,16 +49,8 @@ export default class ApiClient {
   }
 
   getAddresses() {
-    if (localStorage.getItem("address_list") !== null) {
-      let p = new Promise(function(resolve, reject) {
-        let d = localStorage.getItem("address_list");
-        if (d !== null) {
-          resolve(JSON.parse(d));
-        } else {
-          reject("Storage error");
-        }
-      });
-      return p;
+    if (localStorage.getItem(ADDRESS_LIST) !== null) {
+      return #createPromise(ADDRESS_LIST);
     }
     const response = axios.get('/list', {
       baseURL: this.baseURL,
@@ -57,7 +63,7 @@ export default class ApiClient {
   }
 
   deleteAddress(address, subdomain, tld, public_key) {
-    localStorage.removeItem("address_list");
+    localStorage.removeItem(ADDRESS_LIST);
     const response = axios.delete('/revoke', {
       baseURL: this.baseURL,
       data: JSON.stringify({
@@ -94,7 +100,7 @@ export default class ApiClient {
   // IMAP Folders
 
   deleteFolder(name) {
-    localStorage.removeItem("folder_list");
+    localStorage.removeItem(FOLDER_LIST);
     const response = axios.delete('/delete_folder',
       {
         baseURL: this.baseURL,
@@ -112,7 +118,7 @@ export default class ApiClient {
   }
 
   newFolder(parent, name) {
-    localStorage.removeItem("folder_list");
+    localStorage.removeItem(FOLDER_LIST);
     const response = axios.put('/new_folder',
       JSON.stringify({
         host: this.host,
@@ -131,16 +137,8 @@ export default class ApiClient {
   }
 
   getFolderList() {
-    if (localStorage.getItem("folder_list") !== null) {
-      let p = new Promise(function(resolve, reject) {
-        let d = localStorage.getItem("folder_list");
-        if (d !== null) {
-          resolve(JSON.parse(d));
-        } else {
-          reject("Storage error");
-        }
-      });
-      return p;
+    if (localStorage.getItem(FOLDER_LIST) !== null) {
+      return #createPromise(FOLDER_LIST);
     }
     const response = axios.get('/list_folders', {
       params: {
