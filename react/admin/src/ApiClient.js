@@ -38,7 +38,7 @@ export default class ApiClient {
         address: address
       },
       {
-        baseURL: this.baseUrl,
+        baseURL: this.baseURL,
         headers: {
           'Authorization': this.token
         },
