@@ -50,7 +50,7 @@ form.compose-overlay div#composer-preview {
   border-top-width: 0;
   border-top-left-radius: 0;
   border-top-right-radius: 0;
-  padding: 0;
+  padding: 0.25em;
   box-sizing: border-box;
 }
 
