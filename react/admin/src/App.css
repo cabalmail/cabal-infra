@@ -259,10 +259,10 @@ label input[type=radio] ~ .radio-button:after {
   font-size: 150%;
   font-family: 'Courier New', monospace;
   */
-  height: 2.5ex;
-  width: 2.5ex;
+  height: 2em;
+  width: 2em;
   border: 1px solid;
-  border-radius: 1.25ex;
+  border-radius: 1em;
   display: inline-block;
   margin-right: 0.3em;
   background-color: rgba(0,0,0,0);
