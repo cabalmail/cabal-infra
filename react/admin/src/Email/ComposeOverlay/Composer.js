@@ -97,6 +97,7 @@ class Composer extends React.Component {
         || prevState.cursorEnd !== this.state.cursorEnd) {
       setTimeout(() => {
         const ta = document.getElementById("composer-text");
+        window.getSelection().collapse(body, 0);
         ta.blur();
         ta.focus();
         ta.selectionStart = this.state.cursorStart;
