@@ -23,7 +23,9 @@ class Composer extends React.Component {
       markdown: "",
       history: [""],
       history_index: 0,
-      preview: false
+      preview: false,
+      cursorStart: 0,
+      cursorEnd: 0
     };
     var that = this;
     this.#history = {
@@ -86,6 +88,17 @@ class Composer extends React.Component {
     super.setState(state);
   }
 
+  componentDidUpdate(prevProps, prevState) {
+    if (prevState.cursorStart !== this.state.cursorStart
+        || preState.cursorEnd !== this.state.cursorEnd) {
+      const ta = document.getElementById("composer-text");
+      ta.blur();
+      ta.focus();
+      ta.selectionStart = this.state.cursorStart;
+      ta.selectionEnd = this.state.cursorEnd;
+    }
+  }
+
   handleKeyDown = (e) => {
     if (e.keyCode < 48 || e.keyCode > 90) {
       console.log(e);
@@ -95,8 +108,8 @@ class Composer extends React.Component {
     var start = e.target.selectionStart;
     var end = e.target.selectionEnd;
     var newCursorStart = start + 1;
-    var newCursorEnd = newCursorStart;
-    var preventCursorMove = false;
+    var newCursorEnd = start + 1;
+    // var preventCursorMove = false;
     switch (e.keyCode) {
       // TODO: 
       // - delete key
@@ -131,19 +144,19 @@ class Composer extends React.Component {
         this.#history.push(newMarkdown);
         break;
       case 37: // left arrow
-        preventCursorMove = true;
+        // preventCursorMove = true;
         break;
       case 38: // up arrow
-        preventCursorMove = true;
+        // preventCursorMove = true;
         break;
       case 39: // right arrow
-        preventCursorMove = true;
+        // preventCursorMove = true;
         break;
       case 40: // down arrow
-        preventCursorMove = true;
+        // preventCursorMove = true;
         break;
       case 91: // meta/command
-        preventCursorMove = true;
+        // preventCursorMove = true;
         break;
       default: // normal letters, digits, and symbols
         if (e.metaKey) { // check for keyboard shortcuts
@@ -181,7 +194,7 @@ class Composer extends React.Component {
               } else {
                 this.#history.undo();
               }
-              preventCursorMove = true;
+              // preventCursorMove = true;
               break;
             default:
               break;
@@ -192,14 +205,15 @@ class Composer extends React.Component {
         }
         break;
     }
+    this.setState({...this.state,cursorStart:newCursorStart,cursorEnd:newCursorEnd});
 
-    if (!preventCursorMove) {
-      setTimeout(() => {
-        e.target.selectionStart = newCursorStart;
-        e.target.selectionEnd = newCursorEnd;
-        e.target.selection.createRange().scrollIntoView();
-      }, 30);
-    }
+    // if (!preventCursorMove) {
+    //   setTimeout(() => {
+    //     e.target.selectionStart = newCursorStart;
+    //     e.target.selectionEnd = newCursorEnd;
+    //     e.target.selection.createRange().scrollIntoView();
+    //   }, 30);
+    // }
   }
 
   fireBold = (e) => {
