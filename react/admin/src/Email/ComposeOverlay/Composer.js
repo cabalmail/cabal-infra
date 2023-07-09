@@ -345,6 +345,9 @@ class Composer extends React.Component {
     html = html.replace(/<p>> *?(.*?)<\/p>/g,"<h1>$1</h1>");
     // monospace
     html = html.replace(/<p> {4}(.*?)<\/p>/g,"<pre>$1</pre>");
+    html = html.replace(/\n {4}(.*?)<\/p>/g,"<pre>$1</pre>");
+    html = html.replace(/<br \/> {4}(.*?)<\/p>/g,"<pre>$1</pre>");
+    console.log(html);
     return <div dangerouslySetInnerHTML={{__html: html}}></div>;
   }
 
