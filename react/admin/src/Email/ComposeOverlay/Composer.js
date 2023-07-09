@@ -322,10 +322,8 @@ class Composer extends React.Component {
     // link
     html = html.replace(/\[(.*?)\]\((.*?)\)/g, "<a href=\"$2\">$1</a>");
     // paragraphs
-    html = html.replace(/^(.*?\S\S)$/g,"<p>$1</p>\n");
-    html = html.replace(/\n(.*?\S\S)$/g,"<p>$1</p>\n");
-    html = html.replace(/^(.*?\S\S)\n/g,"<p>$1</p>\n");
-    html = html.replace(/\n(.*?\S\S)\n/g,"<p>$1</p>\n");
+    html = `<p>${html}</p>`;
+    html = html.replace(/\n/g,"</p><p>");
     // headers
     html = html.replace(/<p>###### *?(.*?)<\/p>/g,"<h6>$1</h6>");
     html = html.replace(/<p>##### *?(.*?)<\/p>/g,"<h5>$1</h5>");
