@@ -313,6 +313,9 @@ class Composer extends React.Component {
 
   renderPreview() {
     var html = this.state.markdown;
+    html = html.replaceAll(/&/g, "&amp;");
+    html = html.replaceAll(/</g, "&lt;");
+    html = html.replaceAll(/>/g, "&gt;");
     // bold
     html = html.replace(/__(.*?)__/g, "<strong>$1</strong>");
     // italic
