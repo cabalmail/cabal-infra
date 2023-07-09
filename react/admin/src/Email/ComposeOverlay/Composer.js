@@ -20,9 +20,9 @@ class Composer extends React.Component {
   constructor(props) {
     super(props);
     this.state = JSON.parse(localStorage.getItem(STATE_KEY)) || {
-      markdown: "",
-      history: [""],
-      history_index: 0,
+      markdown: "Your message here.",
+      // history: [""],
+      // history_index: 0,
       preview: false,
       cursorStart: 0,
       cursorEnd: 0
