@@ -15,7 +15,7 @@ class Composer extends React.Component {
   // - Block quotes > 
   // - Monospace
 
-  #history;
+  // #history;
 
   constructor(props) {
     super(props);
@@ -27,56 +27,56 @@ class Composer extends React.Component {
       cursorStart: 0,
       cursorEnd: 0
     };
-    var that = this;
-    this.#history = {
-      supra: that,
-      push: function (val) {
-        var history = this.supra.state.history.slice(0, this.supra.state.history_index + 1);
-        history.push(val);
-        this.supra.setState({
-          ...this.supra.state,
-          markdown: val,
-          history: history,
-          history_index: this.supra.state.history_index + 1
-        });
-      },
+    // var that = this;
+    // this.#history = {
+    //   supra: that,
+    //   push: function (val) {
+    //     var history = this.supra.state.history.slice(0, this.supra.state.history_index + 1);
+    //     history.push(val);
+    //     this.supra.setState({
+    //       ...this.supra.state,
+    //       markdown: val,
+    //       history: history,
+    //       history_index: this.supra.state.history_index + 1
+    //     });
+    //   },
 
-      replace: function (val) {
-        var history = this.supra.state.history.slice(0, this.supra.state.history_index + 1);
-        history[this.supra.state.history_index] = val;
-        this.supra.setState({
-          ...this.supra.state,
-          markdown: val,
-          history: history
-        });
-      },
+    //   replace: function (val) {
+    //     var history = this.supra.state.history.slice(0, this.supra.state.history_index + 1);
+    //     history[this.supra.state.history_index] = val;
+    //     this.supra.setState({
+    //       ...this.supra.state,
+    //       markdown: val,
+    //       history: history
+    //     });
+    //   },
 
-      undo: function () {
-        if (this.supra.state.history_index <= 0) {
-          return this.supra.state.markdown;
-        }
-        var newIndex = this.supra.state.history_index - 1;
-        this.supra.setState({
-          ...this.supra.state,
-          history_index: newIndex,
-          markdown: this.supra.state.history[newIndex]
-        });
-        return this.supra.state.markdown;
-      },
+    //   undo: function () {
+    //     if (this.supra.state.history_index <= 0) {
+    //       return this.supra.state.markdown;
+    //     }
+    //     var newIndex = this.supra.state.history_index - 1;
+    //     this.supra.setState({
+    //       ...this.supra.state,
+    //       history_index: newIndex,
+    //       markdown: this.supra.state.history[newIndex]
+    //     });
+    //     return this.supra.state.markdown;
+    //   },
 
-      redo: function () {
-        if (this.supra.state.history_index + 1 > this.supra.state.history.length) {
-          return this.supra.state.markdown;
-        }
-        var newIndex = this.supra.state.history_index + 1;
-        this.supra.setState({
-          ...this.state,
-          history_index: newIndex,
-          markdown: this.supra.state.history[newIndex]
-        });
-        return this.supra.state.markdown;
-      }
-    }
+    //   redo: function () {
+    //     if (this.supra.state.history_index + 1 > this.supra.state.history.length) {
+    //       return this.supra.state.markdown;
+    //     }
+    //     var newIndex = this.supra.state.history_index + 1;
+    //     this.supra.setState({
+    //       ...this.state,
+    //       history_index: newIndex,
+    //       markdown: this.supra.state.history[newIndex]
+    //     });
+    //     return this.supra.state.markdown;
+    //   }
+    // }
   }
 
   setState(state) {
@@ -119,14 +119,14 @@ class Composer extends React.Component {
       // Update style dropdown as cursor lands in new line
       case 8: // backspace
         newMarkdown = markdown.substring(0, start - 1) + markdown.substring(end);
-        this.#history.replace(newMarkdown);
+        // this.#history.replace(newMarkdown);
         newCursorStart = start - 1;
         newCursorEnd = start - 1;
         break;
       case 9: // tab
         e.preventDefault();
         newMarkdown = markdown.substring(0, start) + "\t" + markdown.substring(end);
-        this.#history.push(newMarkdown);
+        // this.#history.push(newMarkdown);
         newCursorStart = start + 1;
         newCursorEnd = start + 1;
         break;
@@ -135,7 +135,7 @@ class Composer extends React.Component {
         newMarkdown = markdown.substring(0, start) + "\n" + markdown.substring(end);
         newCursorStart = start + 1;
         newCursorEnd = start + 1;
-        this.#history.push(newMarkdown);
+        // this.#history.push(newMarkdown);
         break;
       case 16: // shift
         return;
@@ -145,7 +145,7 @@ class Composer extends React.Component {
         return;
       case 32: // space
         newMarkdown = markdown.substring(0, start) + " " + markdown.substring(end);
-        this.#history.push(newMarkdown);
+        // this.#history.push(newMarkdown);
         newCursorStart = start + 1;
         newCursorEnd = start + 1;
         break;
@@ -172,42 +172,42 @@ class Composer extends React.Component {
               newMarkdown = markdown.substring(0, start) + '__' + markdown.substring(start, end) + '__' + markdown.substring(end);
               newCursorStart = start + 2;
               newCursorEnd = end + 2;
-              this.#history.push(newMarkdown);
+              // this.#history.push(newMarkdown);
               break;
             case 73: // i
               // TODO: toggle on/off
               newMarkdown = markdown.substring(0, start) + '_' + markdown.substring(start, end) + '_' + markdown.substring(end);
               newCursorStart = start + 1;
               newCursorEnd = end + 1;
-              this.#history.push(newMarkdown);
+              // this.#history.push(newMarkdown);
               break;
             case 75: // k
               newMarkdown = markdown.substring(0, start) + '[' + markdown.substring(start, end) + '](https://example.com)' + markdown.substring(end);
               newCursorStart = start + 1;
               newCursorEnd = end + 1;
-              this.#history.push(newMarkdown);
+              // this.#history.push(newMarkdown);
               break;
             case 83: // s
               // TODO: toggle on/off
               newMarkdown = markdown.substring(0, start) + '~~' + markdown.substring(start, end) + '~~' + markdown.substring(end);
               newCursorStart = start + 2;
               newCursorEnd = end + 2;
-              this.#history.push(newMarkdown);
+              // this.#history.push(newMarkdown);
               break;
-            case 90: // z
-              if (e.shiftKey) {
-                this.#history.redo();
-              } else {
-                this.#history.undo();
-              }
-              // preventCursorMove = true;
-              break;
+            // case 90: // z
+            //   if (e.shiftKey) {
+            //     this.#history.redo();
+            //   } else {
+            //     this.#history.undo();
+            //   }
+            //   // preventCursorMove = true;
+            //   break;
             default:
               break;
           }
         } else {
           newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
-          this.#history.replace(newMarkdown);
+          // this.#history.replace(newMarkdown);
           newCursorStart = start + 1;
           newCursorEnd = start + 1;
         }
@@ -407,14 +407,14 @@ class Composer extends React.Component {
               className="composer-toolbar-button composer-toolbar-link"
               onClick={this.fireLink}
             >🔗</button>
-            <button
+            {/* <button
               className="composer-toolbar-button composer-toolbar-undo"
               onClick={this.fireUndo}
             >↺</button>
             <button
               className="composer-toolbar-button composer-toolbar-redo"
               onClick={this.fireRedo}
-            >↻</button>
+            >↻</button> */}
           </div>
           <textarea
             value={this.state.markdown}
