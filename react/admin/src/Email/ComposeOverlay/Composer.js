@@ -95,7 +95,9 @@ class Composer extends React.Component {
   componentDidUpdate(prevProps, prevState) {
     if (prevState.cursorStart !== this.state.cursorStart
         || prevState.cursorEnd !== this.state.cursorEnd) {
+      console.log("Setting timeout");
       setTimeout(() => {
+        console.log("Timeout fired");
         const ta = document.getElementById("composer-text");
         window.getSelection().collapse(ta, 0);
         ta.blur();
