@@ -81,6 +81,8 @@ class Composer extends React.Component {
   }
 
   setState(state) {
+    console.log("Setting");
+    console.log(state);
     try {
       localStorage.setItem(STATE_KEY, JSON.stringify(state));
     } catch (e) {
