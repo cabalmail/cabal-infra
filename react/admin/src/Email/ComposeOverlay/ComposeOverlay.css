@@ -64,6 +64,7 @@ form.compose-overlay div.composer-wrapper div#composer-preview {
   padding-top: 4.5em;
   border: 1px solid;
   border-color: inherit;
+  overflow: scroll;
 }
 
 /* toolbar */
