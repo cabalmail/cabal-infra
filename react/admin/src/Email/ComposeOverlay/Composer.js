@@ -19,6 +19,7 @@ class Composer extends React.Component {
 
   constructor(props) {
     super(props);
+    this.scroll = 0;
     this.state = JSON.parse(localStorage.getItem(STATE_KEY)) || {
       markdown: "Your message here.",
       history: [""],
@@ -104,6 +105,7 @@ class Composer extends React.Component {
         ta.focus();
         ta.selectionStart = this.state.cursorStart;
         ta.selectionEnd = this.state.cursorEnd;
+        ta.scrollTop = this.scroll;
       }, 30);
     }
   }
@@ -118,6 +120,7 @@ class Composer extends React.Component {
     var end = e.target.selectionEnd;
     var newCursorStart = start;
     var newCursorEnd = end;
+    this.scroll = e.target.scrollTop;
     // var preventCursorMove = false;
     switch (e.keyCode) {
       // TODO: 
