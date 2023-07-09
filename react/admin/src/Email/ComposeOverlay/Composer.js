@@ -407,14 +407,14 @@ class Composer extends React.Component {
               className="composer-toolbar-button composer-toolbar-link"
               onClick={this.fireLink}
             >🔗</button>
-            {/* <button
+            <button
               className="composer-toolbar-button composer-toolbar-undo"
               onClick={this.fireUndo}
             >↺</button>
             <button
               className="composer-toolbar-button composer-toolbar-redo"
               onClick={this.fireRedo}
-            >↻</button> */}
+            >↻</button>
           </div>
           <textarea
             value={this.state.markdown}
