@@ -91,12 +91,14 @@ class Composer extends React.Component {
   componentDidUpdate(prevProps, prevState) {
     if (prevState.cursorStart !== this.state.cursorStart
         || prevState.cursorEnd !== this.state.cursorEnd) {
-      const ta = document.getElementById("composer-text");
-      ta.blur();
-      ta.focus();
-      ta.selectionStart = this.state.cursorStart;
-      ta.selectionEnd = this.state.cursorEnd;
-      console.log(`Set cursor start to ${this.state.cursorStart}`);
+      setTimeout(() => {
+        const ta = document.getElementById("composer-text");
+        ta.blur();
+        ta.focus();
+        ta.selectionStart = this.state.cursorStart;
+        ta.selectionEnd = this.state.cursorEnd;
+        console.log(`Set cursor start to ${this.state.cursorStart}`);
+      }, 30);
     }
   }
 
