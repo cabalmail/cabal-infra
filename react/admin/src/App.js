@@ -59,11 +59,7 @@ class App extends React.Component {
     try {
       window.localStorage.setItem('state', JSON.stringify(state));
     } catch (e) {
-      if (e instanceof QuotaExceededError) {
-        console.log("Quota exceeded.")
-      } else {
-        console.log(e);
-      }
+      console.log(e);
     }
     super.setState(state);
   }

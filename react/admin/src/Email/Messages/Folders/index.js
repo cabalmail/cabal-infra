@@ -22,11 +22,7 @@ class Folders extends React.Component {
       try {
         localStorage.setItem(FOLDER_LIST, JSON.stringify(data));
       } catch (e) {
-        if (e instanceof QuotaExceededError) {
-          console.log("Quota exceeded.")
-        } else {
-          console.log(e);
-        }
+        console.log(e);
       }
       this.setState({ ...this.state, folders: data.data });
     }).catch(e => {

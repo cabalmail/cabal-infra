@@ -22,11 +22,7 @@ class Email extends React.Component {
     try {
       localStorage.setItem(STATE_KEY, JSON.stringify(state));
     } catch (e) {
-      if (e instanceof QuotaExceededError) {
-        console.log("Quota exceeded.")
-      } else {
-        console.log(e);
-      }
+      console.log(e);
     }
     super.setState(state);
   }

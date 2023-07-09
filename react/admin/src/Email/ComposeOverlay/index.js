@@ -27,11 +27,7 @@ class ComposeOverlay extends React.Component {
     try {
       localStorage.setItem(STATE_KEY, JSON.stringify(state));
     } catch (e) {
-      if (e instanceof QuotaExceededError) {
-        console.log("Quota exceeded.")
-      } else {
-        console.log(e);
-      }
+      console.log(e);
     }
     super.setState(state);
   }
@@ -41,11 +37,7 @@ class ComposeOverlay extends React.Component {
       try {
         localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
       } catch (e) {
-        if (e instanceof QuotaExceededError) {
-          console.log("Quota exceeded.")
-        } else {
-          console.log(e);
-        }
+        console.log(e);
       }
       this.setState({...this.state, addresses: data.data.Items.map(a => a.address).sort()});
     });

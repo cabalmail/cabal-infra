@@ -42,11 +42,7 @@ class List extends React.Component {
       try {
         localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
       } catch (e) {
-        if (e instanceof QuotaExceededError) {
-          console.log("Quota exceeded.")
-        } else {
-          console.log(e);
-        }
+        console.log(e);
       }
       this.setState({ ...this.state, addresses: data.data.Items.sort(
         (a,b) => {
@@ -68,11 +64,7 @@ class List extends React.Component {
         try {
           localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
         } catch (e) {
-          if (e instanceof QuotaExceededError) {
-            console.log("Quota exceeded.")
-          } else {
-            console.log(e);
-          }
+          console.log(e);
         }
         this.filter(data.data);
       });
@@ -113,11 +105,7 @@ class List extends React.Component {
       try {
         localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
       } catch (e) {
-        if (e instanceof QuotaExceededError) {
-          console.log("Quota exceeded.")
-        } else {
-          console.log(e);
-        }
+        console.log(e);
       }
       this.filter(data.data);
     });
