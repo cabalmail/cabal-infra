@@ -90,7 +90,7 @@ class Composer extends React.Component {
 
   componentDidUpdate(prevProps, prevState) {
     if (prevState.cursorStart !== this.state.cursorStart
-        || preState.cursorEnd !== this.state.cursorEnd) {
+        || prevState.cursorEnd !== this.state.cursorEnd) {
       const ta = document.getElementById("composer-text");
       ta.blur();
       ta.focus();
