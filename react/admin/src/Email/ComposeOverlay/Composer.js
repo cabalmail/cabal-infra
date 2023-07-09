@@ -325,19 +325,19 @@ class Composer extends React.Component {
     html = html.replace(/~~(.*?)~~/g, "<span style=\"text-decoration:line-through\">$1</span>");
     // link
     html = html.replace(/\[(.*?)\]\((.*?)\)/g, "<a href=\"$2\">$1</a>");
-    // paragraphs
-    html = html.replace(/^(.*?)\n\n/,"<p>$1</p>\n\n");
-    html = html.replace(/\n\n(.*?)$/g,"\n\n<p>$1</p>");
-    html = html.replace(/\n\n(.*?)\n\n/g,"<p>$1</p>");
     // line breaks
     html = html.replace(/ {2,*}\n/g,"</ br>");
+    // paragraphs
+    html = html.replace(/^(.*?)\n/,"<p>$1</p>\n");
+    html = html.replace(/\n(.*?)$/g,"\n<p>$1</p>");
+    html = html.replace(/\n(.*?)\n/g,"<p>$1</p>");
     // headers
-    html = html.replace(/<p>###### (.*?)<\/p>/g,"<h6>$1</h6>");
-    html = html.replace(/<p>##### (.*?)<\/p>/g,"<h5>$1</h5>");
-    html = html.replace(/<p>#### (.*?)<\/p>/g,"<h4>$1</h4>");
-    html = html.replace(/<p>### (.*?)<\/p>/g,"<h3>$1</h3>");
-    html = html.replace(/<p>## (.*?)<\/p>/g,"<h2>$1</h2>");
-    html = html.replace(/<p># (.*?)<\/p>/g,"<h1>$1</h1>");
+    html = html.replace(/<p>###### *?(.*?)<\/p>/g,"<h6>$1</h6>");
+    html = html.replace(/<p>##### *?(.*?)<\/p>/g,"<h5>$1</h5>");
+    html = html.replace(/<p>#### *?(.*?)<\/p>/g,"<h4>$1</h4>");
+    html = html.replace(/<p>### *?(.*?)<\/p>/g,"<h3>$1</h3>");
+    html = html.replace(/<p>## *?(.*?)<\/p>/g,"<h2>$1</h2>");
+    html = html.replace(/<p># *?(.*?)<\/p>/g,"<h1>$1</h1>");
     // block quotes
     // monospace
     return <div dangerouslySetInnerHTML={{__html: html}}></div>;
