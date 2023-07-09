@@ -12,6 +12,7 @@ class Composer extends React.Component {
   // - Headings
   // - Links [x](htts://example.com/x)
   // - Block quotes > 
+  // - Monospace
 
   #history;
 
@@ -99,6 +100,7 @@ class Composer extends React.Component {
       // TODO: 
       // - delete key
       // - delete and backspace with opt, ctl, and cmd
+      // Update style dropdown as cursor lands in new line
       case 8: // backspace
         newMarkdown = markdown.substring(0, start - 1) + markdown.substring(end);
         this.#history.replace(newMarkdown);
@@ -111,14 +113,14 @@ class Composer extends React.Component {
         break;
       case 13: // enter
         e.preventDefault();
-        if (e.shiftKey) { // line break without paragraph
-          newMarkdown = markdown.substring(0, start) + "  \n" + markdown.substring(end);
-          newCursorStart = start + 3;
-          newCursorEnd = start + 3;
-        } else {
+        if (e.shiftKey) { // normal paragraph
           newMarkdown = markdown.substring(0, start) + "\n\n" + markdown.substring(end);
           newCursorStart = start + 2;
           newCursorEnd = start + 2;
+        } else { // line break without paragraph
+          newMarkdown = markdown.substring(0, start) + "  \n" + markdown.substring(end);
+          newCursorStart = start + 3;
+          newCursorEnd = start + 3;
         }
         this.#history.push(newMarkdown);
         break;
@@ -340,7 +342,9 @@ class Composer extends React.Component {
     html = html.replace(/<p>## *?(.*?)<\/p>/g,"<h2>$1</h2>");
     html = html.replace(/<p># *?(.*?)<\/p>/g,"<h1>$1</h1>");
     // block quotes
+    html = html.replace(/<p>> *?(.*?)<\/p>/g,"<h1>$1</h1>");
     // monospace
+    html = html.replace(/<p> {4,*}(.*?)<\/p>/g,"<pre>$1</pre>");
     return <div dangerouslySetInnerHTML={{__html: html}}></div>;
   }
 
