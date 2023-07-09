@@ -330,7 +330,7 @@ class Composer extends React.Component {
     html = html.replace(/\n\n(.*?)$/g,"\n\n<p>$1</p>");
     html = html.replace(/\n\n(.*?)\n\n/g,"<p>$1</p>");
     // line breaks
-    html = html.replace(/\n/g,"</ br>");
+    html = html.replace(/ {2,*}\n/g,"</ br>");
     // headers
     html = html.replace(/<p>###### (.*?)<\/p>/g,"<h6>$1</h6>");
     html = html.replace(/<p>##### (.*?)<\/p>/g,"<h5>$1</h5>");
