@@ -338,7 +338,7 @@ class Composer extends React.Component {
     html = html.replace(/<p> {4}(.*?)<\/p>/g,"<pre>$1</pre>");
     html = html.replace(/<\/pre><pre>/g,"\n");
     html = html.split("<pre>").map(s => {
-      str = s;
+      let str = s;
       str = str.replaceAll(/&(?=.*?<\/pre>)/g, "&amp;");
       str = str.replaceAll(/<(?=.*?<\/pre>)/g, "&lt;");
       str = str.replaceAll(/>(?=.*?<\/pre>)/g, "&gt;");
