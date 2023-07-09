@@ -125,7 +125,7 @@ div.composer-preview-edit div#composer-preview {
   display: none;
 }
 
-div.composer-preview-edit div#composer-preview p {
+div#composer-preview p {
   margin: 0;
   min-height: 1.5em;
 }
