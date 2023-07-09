@@ -105,7 +105,8 @@ class Composer extends React.Component {
       case 8: // backspace
         newMarkdown = markdown.substring(0, start - 1) + markdown.substring(end);
         this.#history.replace(newMarkdown);
-        preventCursorMove = true;
+        newCursorStart = start - 1;
+        newCursorEnd = start - 1;
         break;
       case 9: // tab
         e.preventDefault();
@@ -196,7 +197,7 @@ class Composer extends React.Component {
       setTimeout(() => {
         e.target.selectionStart = newCursorStart;
         e.target.selectionEnd = newCursorEnd;
-      }, 10);
+      }, 30);
     }
   }
 
