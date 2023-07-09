@@ -107,8 +107,8 @@ class Composer extends React.Component {
     var newMarkdown = markdown;
     var start = e.target.selectionStart;
     var end = e.target.selectionEnd;
-    var newCursorStart = start + 1;
-    var newCursorEnd = start + 1;
+    var newCursorStart = start;
+    var newCursorEnd = end;
     // var preventCursorMove = false;
     switch (e.keyCode) {
       // TODO: 
@@ -125,6 +125,8 @@ class Composer extends React.Component {
         e.preventDefault();
         newMarkdown = markdown.substring(0, start) + "\t" + markdown.substring(end);
         this.#history.push(newMarkdown);
+        newCursorStart = start + 1;
+        newCursorEnd = start + 1;
         break;
       case 13: // enter
         e.preventDefault();
@@ -142,6 +144,8 @@ class Composer extends React.Component {
       case 32: // space
         newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
         this.#history.push(newMarkdown);
+        newCursorStart = start + 1;
+        newCursorEnd = start + 1;
         break;
       case 37: // left arrow
         // preventCursorMove = true;
@@ -202,6 +206,8 @@ class Composer extends React.Component {
         } else {
           newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
           this.#history.replace(newMarkdown);
+          newCursorStart = start + 1;
+          newCursorEnd = start + 1;
         }
         break;
     }
