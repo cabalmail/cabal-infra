@@ -344,7 +344,7 @@ class Composer extends React.Component {
     // block quotes
     html = html.replace(/<p>> *?(.*?)<\/p>/g,"<h1>$1</h1>");
     // monospace
-    html = html.replace(/<p> {4,*}(.*?)<\/p>/g,"<pre>$1</pre>");
+    html = html.replace(/<p> {4}(.*?)<\/p>/g,"<pre>$1</pre>");
     return <div dangerouslySetInnerHTML={{__html: html}}></div>;
   }
 
