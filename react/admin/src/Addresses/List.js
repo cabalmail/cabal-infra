@@ -39,7 +39,15 @@ class List extends React.Component {
   componentDidMount() {
     const response = this.getList();
     response.then(data => {
-      localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
+      try {
+        localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
+      } catch (e) {
+        if (e instanceof QuotaExceededError) {
+          console.log("Quota exceeded.")
+        } else {
+          console.log(e);
+        }
+      }
       this.setState({ ...this.state, addresses: data.data.Items.sort(
         (a,b) => {
           if (a.address > b.address) {
@@ -57,7 +65,15 @@ class List extends React.Component {
     if (this.state.filter !== prevState.filter) {
       const response = this.getList();
       response.then(data => {
-        localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
+        try {
+          localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
+        } catch (e) {
+          if (e instanceof QuotaExceededError) {
+            console.log("Quota exceeded.")
+          } else {
+            console.log(e);
+          }
+        }
         this.filter(data.data);
       });
     }
@@ -94,7 +110,15 @@ class List extends React.Component {
     e.preventDefault();
     const response = this.getList();
     response.then(data => {
-      localStorage.setItem("address_list", JSON.stringify(data));
+      try {
+        localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
+      } catch (e) {
+        if (e instanceof QuotaExceededError) {
+          console.log("Quota exceeded.")
+        } else {
+          console.log(e);
+        }
+      }
       this.filter(data.data);
     });
   }

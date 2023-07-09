@@ -19,7 +19,15 @@ class Folders extends React.Component {
   componentDidMount() {
     const response = this.api.getFolderList();
     response.then(data => {
-      localStorage.setItem(FOLDER_LIST, JSON.stringify(data));
+      try {
+        localStorage.setItem(FOLDER_LIST, JSON.stringify(data));
+      } catch (e) {
+        if (e instanceof QuotaExceededError) {
+          console.log("Quota exceeded.")
+        } else {
+          console.log(e);
+        }
+      }
       this.setState({ ...this.state, folders: data.data });
     }).catch(e => {
       this.props.setMessage("Unable to fetch folders.", true);
