@@ -96,16 +96,19 @@ class Composer extends React.Component {
   componentDidUpdate(prevProps, prevState) {
     if (prevState.cursorStart !== this.state.cursorStart
         || prevState.cursorEnd !== this.state.cursorEnd) {
-      console.log("Setting timeout");
       setTimeout(() => {
-        console.log("Timeout fired");
         const ta = document.getElementById("composer-text");
         window.getSelection().collapse(ta, 0);
         ta.blur();
         ta.focus();
         ta.selectionStart = this.state.cursorStart;
         ta.selectionEnd = this.state.cursorEnd;
-        ta.scrollTop = this.scroll;
+        if (ta.value.length < this.state.cursorEnd + 60) {
+          // Cursor is near the bottom of the document
+          ta.scrollTop = 999999999;
+        } else {
+          ta.scrollTop =  this.scroll;
+        }
       }, 30);
     }
   }
@@ -223,14 +226,6 @@ class Composer extends React.Component {
         }
         break;
     }
-
-    // if (!preventCursorMove) {
-    //   setTimeout(() => {
-    //     e.target.selectionStart = newCursorStart;
-    //     e.target.selectionEnd = newCursorEnd;
-    //     e.target.selection.createRange().scrollIntoView();
-    //   }, 30);
-    // }
   }
 
   fireBold = (e) => {
