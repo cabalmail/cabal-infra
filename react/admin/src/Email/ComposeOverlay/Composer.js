@@ -97,7 +97,6 @@ class Composer extends React.Component {
         ta.focus();
         ta.selectionStart = this.state.cursorStart;
         ta.selectionEnd = this.state.cursorEnd;
-        console.log(`Set cursor start to ${this.state.cursorStart}`);
       }, 30);
     }
   }
@@ -210,6 +209,7 @@ class Composer extends React.Component {
           newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
           console.log(newMarkdown);
           this.#history.replace(newMarkdown);
+          console.log(this.state.markdown);
           newCursorStart = start + 1;
           newCursorEnd = start + 1;
         }
