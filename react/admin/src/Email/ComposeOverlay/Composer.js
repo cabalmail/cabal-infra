@@ -30,24 +30,28 @@ class Composer extends React.Component {
     var that = this;
     this.#history = {
       supra: that,
-      push: function (val) {
+      push: function (md, cs, ce) {
         var history = this.supra.state.history.slice(0, this.supra.state.history_index + 1);
-        history.push(val);
+        history.push(md);
         this.supra.setState({
           ...this.supra.state,
-          markdown: val,
+          markdown: md,
           history: history,
-          history_index: this.supra.state.history_index + 1
+          history_index: this.supra.state.history_index + 1,
+          cursorStart: cs,
+          cursorEnd: ce
         });
       },
 
-      replace: function (val) {
+      replace: function (md, cs, ce) {
         var history = this.supra.state.history.slice(0, this.supra.state.history_index + 1);
-        history[this.supra.state.history_index] = val;
+        history[this.supra.state.history_index] = md;
         this.supra.setState({
           ...this.supra.state,
-          markdown: val,
-          history: history
+          markdown: md,
+          history: history,
+          cursorStart: cs,
+          cursorEnd: ce
         });
       },
 
@@ -119,23 +123,23 @@ class Composer extends React.Component {
       // Update style dropdown as cursor lands in new line
       case 8: // backspace
         newMarkdown = markdown.substring(0, start - 1) + markdown.substring(end);
-        this.#history.replace(newMarkdown);
         newCursorStart = start - 1;
         newCursorEnd = start - 1;
+        this.#history.replace(newMarkdown, newCursorStart, newCursorEnd);
         break;
       case 9: // tab
         e.preventDefault();
         newMarkdown = markdown.substring(0, start) + "\t" + markdown.substring(end);
-        this.#history.push(newMarkdown);
         newCursorStart = start + 1;
         newCursorEnd = start + 1;
+        this.#history.push(newMarkdown, newCursorStart, newCursorEnd);
         break;
       case 13: // enter
         e.preventDefault();
         newMarkdown = markdown.substring(0, start) + "\n" + markdown.substring(end);
         newCursorStart = start + 1;
         newCursorEnd = start + 1;
-        this.#history.push(newMarkdown);
+        this.#history.push(newMarkdown, newCursorStart, newCursorEnd);
         break;
       case 16: // shift
         return;
@@ -145,9 +149,9 @@ class Composer extends React.Component {
         return;
       case 32: // space
         newMarkdown = markdown.substring(0, start) + " " + markdown.substring(end);
-        this.#history.push(newMarkdown);
         newCursorStart = start + 1;
         newCursorEnd = start + 1;
+        this.#history.push(newMarkdown, newCursorStart, newCursorEnd);
         break;
       case 37: // left arrow
         // preventCursorMove = true;
@@ -172,27 +176,27 @@ class Composer extends React.Component {
               newMarkdown = markdown.substring(0, start) + '__' + markdown.substring(start, end) + '__' + markdown.substring(end);
               newCursorStart = start + 2;
               newCursorEnd = end + 2;
-              this.#history.push(newMarkdown);
+              this.#history.push(newMarkdown, newCursorStart, newCursorEnd);
               break;
             case 73: // i
               // TODO: toggle on/off
               newMarkdown = markdown.substring(0, start) + '_' + markdown.substring(start, end) + '_' + markdown.substring(end);
               newCursorStart = start + 1;
               newCursorEnd = end + 1;
-              this.#history.push(newMarkdown);
+              this.#history.push(newMarkdown, newCursorStart, newCursorEnd);
               break;
             case 75: // k
               newMarkdown = markdown.substring(0, start) + '[' + markdown.substring(start, end) + '](https://example.com)' + markdown.substring(end);
               newCursorStart = start + 1;
               newCursorEnd = end + 1;
-              this.#history.push(newMarkdown);
+              this.#history.push(newMarkdown, newCursorStart, newCursorEnd);
               break;
             case 83: // s
               // TODO: toggle on/off
               newMarkdown = markdown.substring(0, start) + '~~' + markdown.substring(start, end) + '~~' + markdown.substring(end);
               newCursorStart = start + 2;
               newCursorEnd = end + 2;
-              this.#history.push(newMarkdown);
+              this.#history.push(newMarkdown, newCursorStart, newCursorEnd);
               break;
             case 90: // z
               if (e.shiftKey) {
@@ -207,13 +211,12 @@ class Composer extends React.Component {
           }
         } else {
           newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
-          this.#history.replace(newMarkdown);
           newCursorStart = start + 1;
           newCursorEnd = start + 1;
+          this.#history.replace(newMarkdown, newCursorStart, newCursorEnd);
         }
         break;
     }
-    this.setState({...this.state,markdown:newMarkdown,cursorStart:newCursorStart,cursorEnd:newCursorEnd});
 
     // if (!preventCursorMove) {
     //   setTimeout(() => {
