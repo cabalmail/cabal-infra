@@ -218,7 +218,7 @@ class Composer extends React.Component {
         }
         break;
     }
-    this.setState({...this.state,cursorStart:newCursorStart,cursorEnd:newCursorEnd});
+    this.setState({cursorStart:newCursorStart,cursorEnd:newCursorEnd});
 
     // if (!preventCursorMove) {
     //   setTimeout(() => {
