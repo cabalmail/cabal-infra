@@ -103,9 +103,9 @@ class Composer extends React.Component {
   }
 
   handleKeyDown = (e) => {
-    if (e.keyCode < 48 || e.keyCode > 90) {
-      console.log(e);
-    }
+    // if (e.keyCode < 48 || e.keyCode > 90) {
+    //   console.log(e);
+    // }
     var markdown = this.state.markdown;
     var newMarkdown = markdown;
     var start = e.target.selectionStart;
@@ -133,9 +133,9 @@ class Composer extends React.Component {
         break;
       case 13: // enter
         e.preventDefault();
-        newMarkdown = markdown.substring(0, start) + "\n\n" + markdown.substring(end);
-        newCursorStart = start + 2;
-        newCursorEnd = start + 2;
+        newMarkdown = markdown.substring(0, start) + "\n" + markdown.substring(end);
+        newCursorStart = start + 1;
+        newCursorEnd = start + 1;
         this.#history.push(newMarkdown);
         break;
       case 16: // shift
@@ -208,6 +208,7 @@ class Composer extends React.Component {
           }
         } else {
           newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
+          console.log(newMarkdown);
           this.#history.replace(newMarkdown);
           newCursorStart = start + 1;
           newCursorEnd = start + 1;
@@ -369,7 +370,6 @@ class Composer extends React.Component {
       str = str.replaceAll(/>(?=[^]*?<\/pre>)/g, "&gt;");
       return str;
     }).join("<pre>");
-    console.log(html);
     return <div dangerouslySetInnerHTML={{__html: html}}></div>;
   }
 
