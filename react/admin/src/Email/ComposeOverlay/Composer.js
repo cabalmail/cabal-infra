@@ -1,5 +1,6 @@
 import React from 'react';
 import './ComposeOverlay.css';
+import DOMPurify from 'dompurify';
 const STATE_KEY = 'composer-state';
 
 class Composer extends React.Component {
@@ -312,10 +313,7 @@ class Composer extends React.Component {
   }
 
   renderPreview() {
-    var html = this.state.markdown;
-    html = html.replaceAll(/&/g, "&amp;");
-    html = html.replaceAll(/</g, "&lt;");
-    html = html.replaceAll(/>/g, "&gt;");
+    var html = DOMPurify.sanitize(this.state.markdown);
     // bold
     html = html.replace(/__(.*?)__/g, "<strong>$1</strong>");
     // italic
