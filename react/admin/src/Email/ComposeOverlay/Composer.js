@@ -42,7 +42,6 @@ class Composer extends React.Component {
       },
 
       replace: function (val) {
-        console.log(`Got: ${val}`);
         var history = this.supra.state.history.slice(0, this.supra.state.history_index + 1);
         history[this.supra.state.history_index] = val;
         this.supra.setState({
@@ -81,8 +80,6 @@ class Composer extends React.Component {
   }
 
   setState(state) {
-    console.log("Setting");
-    console.log(state);
     try {
       localStorage.setItem(STATE_KEY, JSON.stringify(state));
     } catch (e) {
@@ -210,9 +207,7 @@ class Composer extends React.Component {
           }
         } else {
           newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
-          console.log(newMarkdown);
           this.#history.replace(newMarkdown);
-          console.log(this.state.markdown);
           newCursorStart = start + 1;
           newCursorEnd = start + 1;
         }
