@@ -195,10 +195,9 @@ class Composer extends React.Component {
 
     if (!preventCursorMove) {
       setTimeout(() => {
-        e.target.blur();
-        e.target.focus();
         e.target.selectionStart = newCursorStart;
         e.target.selectionEnd = newCursorEnd;
+        e.target.selection.createRange().scrollIntoView();
       }, 30);
     }
   }
