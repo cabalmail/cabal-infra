@@ -113,15 +113,9 @@ class Composer extends React.Component {
         break;
       case 13: // enter
         e.preventDefault();
-        if (e.shiftKey) { // normal paragraph
-          newMarkdown = markdown.substring(0, start) + "\n\n" + markdown.substring(end);
-          newCursorStart = start + 2;
-          newCursorEnd = start + 2;
-        } else { // line break without paragraph
-          newMarkdown = markdown.substring(0, start) + "  \n" + markdown.substring(end);
-          newCursorStart = start + 3;
-          newCursorEnd = start + 3;
-        }
+        newMarkdown = markdown.substring(0, start) + "\n\n" + markdown.substring(end);
+        newCursorStart = start + 2;
+        newCursorEnd = start + 2;
         this.#history.push(newMarkdown);
         break;
       case 16: // shift
@@ -327,8 +321,6 @@ class Composer extends React.Component {
     html = html.replace(/~~(.*?)~~/g, "<span style=\"text-decoration:line-through\">$1</span>");
     // link
     html = html.replace(/\[(.*?)\]\((.*?)\)/g, "<a href=\"$2\">$1</a>");
-    // line breaks
-    html = html.replace(/ {2}\n/g,"<br />");
     // paragraphs
     html = html.replace(/^(.*?\S\S)$/g,"<p>$1</p>\n");
     html = html.replace(/\n(.*?\S\S)$/g,"<p>$1</p>\n");
@@ -345,8 +337,6 @@ class Composer extends React.Component {
     html = html.replace(/<p>> *?(.*?)<\/p>/g,"<h1>$1</h1>");
     // monospace
     html = html.replace(/<p> {4}(.*?)<\/p>/g,"<pre>$1</pre>");
-    html = html.replace(/\n {4}(.*?)<\/p>/g,"<pre>$1</pre>");
-    html = html.replace(/<br \/> {4}(.*?)<\/p>/g,"<pre>$1</pre>");
     console.log(html);
     return <div dangerouslySetInnerHTML={{__html: html}}></div>;
   }
