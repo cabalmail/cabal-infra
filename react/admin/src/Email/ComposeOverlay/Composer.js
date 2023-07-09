@@ -42,6 +42,7 @@ class Composer extends React.Component {
       },
 
       replace: function (val) {
+        console.log(`Got: ${val}`);
         var history = this.supra.state.history.slice(0, this.supra.state.history_index + 1);
         history[this.supra.state.history_index] = val;
         this.supra.setState({
