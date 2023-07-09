@@ -50,7 +50,7 @@ form.compose-overlay div#composer-preview {
   border-top-width: 0;
   border-top-left-radius: 0;
   border-top-right-radius: 0;
-  padding: 0.25em;
+  padding: 0.5em;
   box-sizing: border-box;
 }
 
@@ -76,21 +76,6 @@ form.compose-overlay div.composer-toolbar {
   border-bottom-left-radius: 0;
   box-sizing: border-box;
 }
-
-/*@media (max-width: 899px) {
-  form.compose-overlay textarea.composer-text,
-  form.compose-overlay div#composer-preview {
-    width: 28em;
-  }
-  form.compose-overlay div.composer-toolbar {
-    width: 28em;
-  }
-  form.compose-overlay input[type=text],
-  form.compose-overlay input[type=email],
-  form.compose-overlay select {
-    width: 27em;
-  }
-}*/
 
 form.compose-overlay div.composer-toolbar button.composer-toolbar-button,
 form.compose-overlay div.composer-toolbar select.composer-toolbar-style-select {
