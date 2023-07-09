@@ -144,7 +144,7 @@ class Composer extends React.Component {
       case 18: // alt/option
         return;
       case 32: // space
-        newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
+        newMarkdown = markdown.substring(0, start) + " " + markdown.substring(end);
         this.#history.push(newMarkdown);
         newCursorStart = start + 1;
         newCursorEnd = start + 1;
@@ -213,7 +213,7 @@ class Composer extends React.Component {
         }
         break;
     }
-    this.setState({cursorStart:newCursorStart,cursorEnd:newCursorEnd});
+    this.setState({...this.state,markdown:newMarkdown,cursorStart:newCursorStart,cursorEnd:newCursorEnd});
 
     // if (!preventCursorMove) {
     //   setTimeout(() => {
