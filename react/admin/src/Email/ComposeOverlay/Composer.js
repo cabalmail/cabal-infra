@@ -326,12 +326,12 @@ class Composer extends React.Component {
     html = `<p>${html}</p>`;
     html = html.replace(/\n/g,"</p><p>");
     // headers
-    html = html.replace(/<p>###### *?(.*?)<\/p>/g,"<h6>$1</h6>");
-    html = html.replace(/<p>##### *?(.*?)<\/p>/g,"<h5>$1</h5>");
-    html = html.replace(/<p>#### *?(.*?)<\/p>/g,"<h4>$1</h4>");
-    html = html.replace(/<p>### *?(.*?)<\/p>/g,"<h3>$1</h3>");
-    html = html.replace(/<p>## *?(.*?)<\/p>/g,"<h2>$1</h2>");
-    html = html.replace(/<p># *?(.*?)<\/p>/g,"<h1>$1</h1>");
+    html = html.replace(/<p>###### *(.*?)<\/p>/g,"<h6>$1</h6>");
+    html = html.replace(/<p>##### *(.*?)<\/p>/g,"<h5>$1</h5>");
+    html = html.replace(/<p>#### *(.*?)<\/p>/g,"<h4>$1</h4>");
+    html = html.replace(/<p>### *(.*?)<\/p>/g,"<h3>$1</h3>");
+    html = html.replace(/<p>## *(.*?)<\/p>/g,"<h2>$1</h2>");
+    html = html.replace(/<p># *(.*?)<\/p>/g,"<h1>$1</h1>");
     // block quotes
     html = html.replace(/<p>> *?(.*?)<\/p>/g,"<h1>$1</h1>");
     // monospace
