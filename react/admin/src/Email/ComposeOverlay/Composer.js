@@ -96,6 +96,7 @@ class Composer extends React.Component {
       ta.focus();
       ta.selectionStart = this.state.cursorStart;
       ta.selectionEnd = this.state.cursorEnd;
+      console.log(`Set cursor start to ${this.state.cursorStart}`);
     }
   }
 
