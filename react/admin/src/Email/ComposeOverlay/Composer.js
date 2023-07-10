@@ -20,7 +20,7 @@ class Composer extends React.Component {
     this.scroll = 0;
     this.timeout = null;
     this.state = JSON.parse(localStorage.getItem(STATE_KEY)) || {
-      markdown: ,
+      markdown: "",
       history: [""],
       history_index: 0,
       preview: false,
