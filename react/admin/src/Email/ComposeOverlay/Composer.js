@@ -106,7 +106,6 @@ class Composer extends React.Component {
   }
 
   handleKeyDown = (e) => {
-    e.preventDefault();
     // if (e.keyCode < 48 || e.keyCode > 90) {
     //   console.log(e);
     // }
@@ -124,20 +123,21 @@ class Composer extends React.Component {
       // - delete and backspace with opt, ctl, and cmd
       // Update style dropdown as cursor lands in new line
       case 8: // backspace
+        e.preventDefault();
         newMarkdown = markdown.substring(0, start - 1) + markdown.substring(end);
         newCursorStart = start - 1;
         newCursorEnd = start - 1;
         this.historyReplace(newMarkdown, newCursorStart, newCursorEnd);
         break;
       case 9: // tab
-        // e.preventDefault();
+        e.preventDefault();
         newMarkdown = markdown.substring(0, start) + "\t" + markdown.substring(end);
         newCursorStart = start + 1;
         newCursorEnd = start + 1;
         this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
         break;
       case 13: // enter
-        // e.preventDefault();
+        e.preventDefault();
         newMarkdown = markdown.substring(0, start) + "\n" + markdown.substring(end);
         newCursorStart = start + 1;
         newCursorEnd = start + 1;
@@ -150,18 +150,23 @@ class Composer extends React.Component {
       case 18: // alt/option
         return;
       case 32: // space
+        e.preventDefault();
         newMarkdown = markdown.substring(0, start) + " " + markdown.substring(end);
         newCursorStart = start + 1;
         newCursorEnd = start + 1;
         this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
         break;
       case 37: // left arrow
+        this.setState({...this.state,cursorStart: start,cursorEnd: end});
         break;
       case 38: // up arrow
+        this.setState({...this.state,cursorStart: start,cursorEnd: end});
         break;
       case 39: // right arrow
+        this.setState({...this.state,cursorStart: start,cursorEnd: end});
         break;
       case 40: // down arrow
+        this.setState({...this.state,cursorStart: start,cursorEnd: end});
         break;
       case 91: // meta/command
         return;
@@ -170,6 +175,7 @@ class Composer extends React.Component {
           switch (e.keyCode) {
             case 66: // b
               // TODO: toggle on/off
+              e.preventDefault();
               newMarkdown = markdown.substring(0, start) + '__' + markdown.substring(start, end) + '__' + markdown.substring(end);
               newCursorStart = start + 2;
               newCursorEnd = end + 2;
@@ -177,12 +183,14 @@ class Composer extends React.Component {
               break;
             case 73: // i
               // TODO: toggle on/off
+              e.preventDefault();
               newMarkdown = markdown.substring(0, start) + '_' + markdown.substring(start, end) + '_' + markdown.substring(end);
               newCursorStart = start + 1;
               newCursorEnd = end + 1;
               this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
               break;
             case 75: // k
+              e.preventDefault();
               newMarkdown = markdown.substring(0, start) + '[' + markdown.substring(start, end) + '](https://example.com)' + markdown.substring(end);
               newCursorStart = start + 1;
               newCursorEnd = end + 1;
@@ -190,12 +198,14 @@ class Composer extends React.Component {
               break;
             case 83: // s
               // TODO: toggle on/off
+              e.preventDefault();
               newMarkdown = markdown.substring(0, start) + '~~' + markdown.substring(start, end) + '~~' + markdown.substring(end);
               newCursorStart = start + 2;
               newCursorEnd = end + 2;
               this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
               break;
             case 90: // z
+              e.preventDefault();
               if (e.shiftKey) {
                 this.historyRedo();
               } else {
@@ -206,6 +216,7 @@ class Composer extends React.Component {
               break;
           }
         } else {
+          e.preventDefault();
           newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
           newCursorStart = start + 1;
           newCursorEnd = start + 1;
