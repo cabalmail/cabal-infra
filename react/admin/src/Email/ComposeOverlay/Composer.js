@@ -216,7 +216,7 @@ class Composer extends React.Component {
     }
     this.timeout = setTimeout(() => {
       this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
-    }, 500);
+    }, 5000);
   }
 
   fireBold = (e) => {
