@@ -6,6 +6,13 @@
 
 
 ## Methods
+### setState
+Modifiers: none
+
+Parameters: state (null)
+
+Returns: null
+
 ### historyPush
 Modifiers: none
 
@@ -39,13 +46,6 @@ Returns: null
 Modifiers: none
 
 Parameters:  ()
-
-Returns: null
-
-### setState
-Modifiers: none
-
-Parameters: state (null)
 
 Returns: null
 
