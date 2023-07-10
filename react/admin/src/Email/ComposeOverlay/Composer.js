@@ -53,7 +53,7 @@ class Composer extends React.Component {
         } else {
           ta.scrollTop =  this.scroll;
         }
-      }, 10);
+      }, 20);
     }
   }
 
