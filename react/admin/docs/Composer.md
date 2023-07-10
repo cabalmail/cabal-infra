@@ -49,6 +49,13 @@ Parameters:  ()
 
 Returns: null
 
+### handleChange
+Modifiers: none
+
+Parameters: e (null)
+
+Returns: null
+
 ### handleKeyDown
 Modifiers: none
 
