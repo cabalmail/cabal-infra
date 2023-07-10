@@ -18,6 +18,7 @@ class Composer extends React.Component {
   constructor(props) {
     super(props);
     this.scroll = 0;
+    this.timeout = null;
     this.state = JSON.parse(localStorage.getItem(STATE_KEY)) || {
       markdown: "Your message here.",
       history: [""],
@@ -37,22 +38,22 @@ class Composer extends React.Component {
     super.setState(state);
   }
 
-  componentDidUpdate(prevProps, prevState) {
-    if (prevState.cursorStart !== this.state.cursorStart
-        || prevState.cursorEnd !== this.state.cursorEnd) {
-      setTimeout(() => {
-        const ta = document.getElementById("composer-text");
-        ta.selectionStart = this.state.cursorStart;
-        ta.selectionEnd = this.state.cursorEnd;
-        if (ta.value.length < this.state.cursorEnd + 60) {
-          // Cursor is near the bottom of the document
-          ta.scrollTop = 999999999;
-        } else {
-          ta.scrollTop =  this.scroll;
-        }
-      }, 20);
-    }
-  }
+  // componentDidUpdate(prevProps, prevState) {
+  //   if (prevState.cursorStart !== this.state.cursorStart
+  //       || prevState.cursorEnd !== this.state.cursorEnd) {
+  //     setTimeout(() => {
+  //       const ta = document.getElementById("composer-text");
+  //       ta.selectionStart = this.state.cursorStart;
+  //       ta.selectionEnd = this.state.cursorEnd;
+  //       if (ta.value.length < this.state.cursorEnd + 60) {
+  //         // Cursor is near the bottom of the document
+  //         ta.scrollTop = 999999999;
+  //       } else {
+  //         ta.scrollTop =  this.scroll;
+  //       }
+  //     }, 20);
+  //   }
+  // }
 
   historyPush(md, cs, ce) {
     var history = this.state.history.slice(0, this.state.history_index + 1);
@@ -106,6 +107,7 @@ class Composer extends React.Component {
   }
 
   handleKeyDown = (e) => {
+    clearTimeout(this.timeout);
     // if (e.keyCode < 48 || e.keyCode > 90) {
     //   console.log(e);
     // }
@@ -126,21 +128,21 @@ class Composer extends React.Component {
         newMarkdown = markdown.substring(0, start - 1) + markdown.substring(end);
         newCursorStart = start - 1;
         newCursorEnd = start - 1;
-        this.historyReplace(newMarkdown, newCursorStart, newCursorEnd);
+        // this.historyReplace(newMarkdown, newCursorStart, newCursorEnd);
         break;
       case 9: // tab
         e.preventDefault();
         newMarkdown = markdown.substring(0, start) + "\t" + markdown.substring(end);
         newCursorStart = start + 1;
         newCursorEnd = start + 1;
-        this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
+        // this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
         break;
       case 13: // enter
         e.preventDefault();
         newMarkdown = markdown.substring(0, start) + "\n" + markdown.substring(end);
         newCursorStart = start + 1;
         newCursorEnd = start + 1;
-        this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
+        // this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
         break;
       case 16: // shift
         return;
@@ -152,7 +154,7 @@ class Composer extends React.Component {
         newMarkdown = markdown.substring(0, start) + " " + markdown.substring(end);
         newCursorStart = start + 1;
         newCursorEnd = start + 1;
-        this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
+        // this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
         break;
       case 37: // left arrow
         break;
@@ -208,10 +210,13 @@ class Composer extends React.Component {
           newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
           newCursorStart = start + 1;
           newCursorEnd = start + 1;
-          this.historyReplace(newMarkdown, newCursorStart, newCursorEnd);
+          // this.historyReplace(newMarkdown, newCursorStart, newCursorEnd);
         }
         break;
     }
+    this.timeout = setTimeout(() => {
+      this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
+    }, 200);
   }
 
   fireBold = (e) => {
