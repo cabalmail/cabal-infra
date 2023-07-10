@@ -20,7 +20,7 @@ class Composer extends React.Component {
     this.scroll = 0;
     this.timeout = null;
     this.state = JSON.parse(localStorage.getItem(STATE_KEY)) || {
-      markdown: "Your message here.",
+      markdown: ,
       history: [""],
       history_index: 0,
       preview: false,
@@ -46,7 +46,7 @@ class Composer extends React.Component {
   //       ta.selectionStart = this.state.cursorStart;
   //       ta.selectionEnd = this.state.cursorEnd;
   //       if (ta.value.length < this.state.cursorEnd + 60) {
-  //         // Cursor is near the bottom of the document
+  //         // Cursor is near the bottom of the textarea
   //         ta.scrollTop = 999999999;
   //       } else {
   //         ta.scrollTop =  this.scroll;
@@ -106,6 +106,18 @@ class Composer extends React.Component {
     return this.state.markdown;
   }
 
+  handleKeyUp = (e) => {
+    const ta = e.target;
+    ta.selectionStart = this.state.cursorStart;
+    ta.selectionEnd = this.state.cursorEnd;
+    if (ta.value.length < this.state.cursorEnd + 60) {
+      // Cursor is near the bottom of the textarea
+      ta.scrollTop = 999999999;
+    } else {
+      ta.scrollTop =  this.scroll;
+    }
+  }
+
   handleKeyDown = (e) => {
     clearTimeout(this.timeout);
     // if (e.keyCode < 48 || e.keyCode > 90) {
@@ -128,21 +140,21 @@ class Composer extends React.Component {
         newMarkdown = markdown.substring(0, start - 1) + markdown.substring(end);
         newCursorStart = start - 1;
         newCursorEnd = start - 1;
-        // this.historyReplace(newMarkdown, newCursorStart, newCursorEnd);
+        this.historyReplace(newMarkdown, newCursorStart, newCursorEnd);
         break;
       case 9: // tab
         e.preventDefault();
         newMarkdown = markdown.substring(0, start) + "\t" + markdown.substring(end);
         newCursorStart = start + 1;
         newCursorEnd = start + 1;
-        // this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
+        this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
         break;
       case 13: // enter
         e.preventDefault();
         newMarkdown = markdown.substring(0, start) + "\n" + markdown.substring(end);
         newCursorStart = start + 1;
         newCursorEnd = start + 1;
-        // this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
+        this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
         break;
       case 16: // shift
         return;
@@ -154,7 +166,7 @@ class Composer extends React.Component {
         newMarkdown = markdown.substring(0, start) + " " + markdown.substring(end);
         newCursorStart = start + 1;
         newCursorEnd = start + 1;
-        // this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
+        this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
         break;
       case 37: // left arrow
         break;
@@ -210,13 +222,10 @@ class Composer extends React.Component {
           newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
           newCursorStart = start + 1;
           newCursorEnd = start + 1;
-          // this.historyReplace(newMarkdown, newCursorStart, newCursorEnd);
+          this.historyReplace(newMarkdown, newCursorStart, newCursorEnd);
         }
         break;
     }
-    this.timeout = setTimeout(() => {
-      this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
-    }, 5000);
   }
 
   fireBold = (e) => {
@@ -382,6 +391,7 @@ class Composer extends React.Component {
             id="composer-text"
             name="composer-text"
             onKeyDown={this.handleKeyDown}
+            onKeyUp={this.handleKeyUp}
           />
         </div>
         <div id="composer-preview">
