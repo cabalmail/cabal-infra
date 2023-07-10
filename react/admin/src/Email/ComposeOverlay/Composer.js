@@ -18,7 +18,6 @@ class Composer extends React.Component {
   constructor(props) {
     super(props);
     this.scroll = 0;
-    this.timeout = null;
     this.state = JSON.parse(localStorage.getItem(STATE_KEY)) || {
       markdown: "",
       history: [""],
@@ -107,7 +106,7 @@ class Composer extends React.Component {
   }
 
   handleKeyDown = (e) => {
-    clearTimeout(this.timeout);
+    e.preventDefault();
     // if (e.keyCode < 48 || e.keyCode > 90) {
     //   console.log(e);
     // }
@@ -131,14 +130,14 @@ class Composer extends React.Component {
         this.historyReplace(newMarkdown, newCursorStart, newCursorEnd);
         break;
       case 9: // tab
-        e.preventDefault();
+        // e.preventDefault();
         newMarkdown = markdown.substring(0, start) + "\t" + markdown.substring(end);
         newCursorStart = start + 1;
         newCursorEnd = start + 1;
         this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
         break;
       case 13: // enter
-        e.preventDefault();
+        // e.preventDefault();
         newMarkdown = markdown.substring(0, start) + "\n" + markdown.substring(end);
         newCursorStart = start + 1;
         newCursorEnd = start + 1;
