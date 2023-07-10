@@ -6,6 +6,42 @@
 
 
 ## Methods
+### historyPush
+Modifiers: none
+
+Parameters: md
+cs
+ce (null
+null
+null)
+
+Returns: null
+
+### historyReplace
+Modifiers: none
+
+Parameters: md
+cs
+ce (null
+null
+null)
+
+Returns: null
+
+### historyUndo
+Modifiers: none
+
+Parameters:  ()
+
+Returns: null
+
+### historyRedo
+Modifiers: none
+
+Parameters:  ()
+
+Returns: null
+
 ### setState
 Modifiers: none
 
