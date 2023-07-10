@@ -157,16 +157,12 @@ class Composer extends React.Component {
         this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
         break;
       case 37: // left arrow
-        this.setState({...this.state,cursorStart: start,cursorEnd: end});
         break;
       case 38: // up arrow
-        this.setState({...this.state,cursorStart: start,cursorEnd: end});
         break;
       case 39: // right arrow
-        this.setState({...this.state,cursorStart: start,cursorEnd: end});
         break;
       case 40: // down arrow
-        this.setState({...this.state,cursorStart: start,cursorEnd: end});
         break;
       case 91: // meta/command
         return;
