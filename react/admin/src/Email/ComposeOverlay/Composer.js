@@ -15,8 +15,6 @@ class Composer extends React.Component {
   // - Block quotes > 
   // - Monospace
 
-  // #history;
-
   constructor(props) {
     super(props);
     this.scroll = 0;
@@ -28,60 +26,35 @@ class Composer extends React.Component {
       cursorStart: 0,
       cursorEnd: 0
     };
-    // var that = this;
-    // this.#history = {
-    //   supra: that,
-    //   push: function (md, cs, ce) {
-    //     var history = this.supra.state.history.slice(0, this.supra.state.history_index + 1);
-    //     history.push(md);
-    //     this.supra.setState({
-    //       ...this.supra.state,
-    //       markdown: md,
-    //       history: history,
-    //       history_index: this.supra.state.history_index + 1,
-    //       cursorStart: cs,
-    //       cursorEnd: ce
-    //     });
-    //   },
+  }
 
-    //   replace: function (md, cs, ce) {
-    //     var history = this.supra.state.history.slice(0, this.supra.state.history_index + 1);
-    //     history[this.supra.state.history_index] = md;
-    //     this.supra.setState({
-    //       ...this.supra.state,
-    //       markdown: md,
-    //       history: history,
-    //       cursorStart: cs,
-    //       cursorEnd: ce
-    //     });
-    //   },
+  setState(state) {
+    try {
+      localStorage.setItem(STATE_KEY, JSON.stringify(state));
+    } catch (e) {
+      console.log(e);
+    }
+    super.setState(state);
+  }
 
-    //   undo: function () {
-    //     if (this.supra.state.history_index <= 0) {
-    //       return this.supra.state.markdown;
-    //     }
-    //     var newIndex = this.supra.state.history_index - 1;
-    //     this.supra.setState({
-    //       ...this.supra.state,
-    //       history_index: newIndex,
-    //       markdown: this.supra.state.history[newIndex]
-    //     });
-    //     return this.supra.state.markdown;
-    //   },
-
-    //   redo: function () {
-    //     if (this.supra.state.history_index + 1 > this.supra.state.history.length) {
-    //       return this.supra.state.markdown;
-    //     }
-    //     var newIndex = this.supra.state.history_index + 1;
-    //     this.supra.setState({
-    //       ...this.state,
-    //       history_index: newIndex,
-    //       markdown: this.supra.state.history[newIndex]
-    //     });
-    //     return this.supra.state.markdown;
-    //   }
-    // }
+  componentDidUpdate(prevProps, prevState) {
+    if (prevState.cursorStart !== this.state.cursorStart
+        || prevState.cursorEnd !== this.state.cursorEnd) {
+      setTimeout(() => {
+        const ta = document.getElementById("composer-text");
+        window.getSelection().collapse(ta, 0);
+        ta.blur();
+        ta.focus();
+        ta.selectionStart = this.state.cursorStart;
+        ta.selectionEnd = this.state.cursorEnd;
+        if (ta.value.length < this.state.cursorEnd + 60) {
+          // Cursor is near the bottom of the document
+          ta.scrollTop = 999999999;
+        } else {
+          ta.scrollTop =  this.scroll;
+        }
+      }, 10);
+    }
   }
 
   historyPush(md, cs, ce) {
@@ -135,35 +108,6 @@ class Composer extends React.Component {
     return this.state.markdown;
   }
 
-  setState(state) {
-    try {
-      localStorage.setItem(STATE_KEY, JSON.stringify(state));
-    } catch (e) {
-      console.log(e);
-    }
-    super.setState(state);
-  }
-
-  componentDidUpdate(prevProps, prevState) {
-    if (prevState.cursorStart !== this.state.cursorStart
-        || prevState.cursorEnd !== this.state.cursorEnd) {
-      setTimeout(() => {
-        const ta = document.getElementById("composer-text");
-        window.getSelection().collapse(ta, 0);
-        ta.blur();
-        ta.focus();
-        ta.selectionStart = this.state.cursorStart;
-        ta.selectionEnd = this.state.cursorEnd;
-        if (ta.value.length < this.state.cursorEnd + 60) {
-          // Cursor is near the bottom of the document
-          ta.scrollTop = 999999999;
-        } else {
-          ta.scrollTop =  this.scroll;
-        }
-      }, 20);
-    }
-  }
-
   handleKeyDown = (e) => {
     // if (e.keyCode < 48 || e.keyCode > 90) {
     //   console.log(e);
@@ -214,20 +158,15 @@ class Composer extends React.Component {
         this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
         break;
       case 37: // left arrow
-        // preventCursorMove = true;
         break;
       case 38: // up arrow
-        // preventCursorMove = true;
         break;
       case 39: // right arrow
-        // preventCursorMove = true;
         break;
       case 40: // down arrow
-        // preventCursorMove = true;
         break;
       case 91: // meta/command
-        // preventCursorMove = true;
-        break;
+        return;
       default: // normal letters, digits, and symbols
         if (e.metaKey) { // check for keyboard shortcuts
           switch (e.keyCode) {
@@ -264,7 +203,6 @@ class Composer extends React.Component {
               } else {
                 this.historyUndo();
               }
-              // preventCursorMove = true;
               break;
             default:
               break;
