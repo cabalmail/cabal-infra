@@ -76,11 +76,4 @@ Parameters: e (null)
 
 Returns: null
 
-### renderPreview
-Modifiers: none
-
-Parameters:  ()
-
-Returns: null
-
 </div>
