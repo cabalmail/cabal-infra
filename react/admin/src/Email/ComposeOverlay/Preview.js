@@ -30,8 +30,8 @@ class Preview extends React.Component {
     html = html.replace(/<p> {4}(.*?)<\/p>/g,"<pre>$1</pre>");
     html = html.replace(/<\/pre><pre>/g,"\n");
     html = html.split("<pre>").map(s => {
-      return s.replaceAll(/&(?=[^]*?<\/pre>)/g, "&amp;");
-              .replaceAll(/<(?=[^]*?<\/pre>)/g, "&lt;");
+      return s.replaceAll(/&(?=[^]*?<\/pre>)/g, "&amp;")
+              .replaceAll(/<(?=[^]*?<\/pre>)/g, "&lt;")
               .replaceAll(/>(?=[^]*?<\/pre>)/g, "&gt;");
     }).join("<pre>");
     return <div dangerouslySetInnerHTML={{__html: html}}></div>;
