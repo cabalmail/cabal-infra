@@ -95,7 +95,7 @@ class Composer extends React.Component {
       cursorStart: cs,
       cursorEnd: ce
     });
-  },
+  }
 
   historyReplace(md, cs, ce) {
     var history = this.state.history.slice(0, this.state.history_index + 1);
@@ -107,7 +107,7 @@ class Composer extends React.Component {
       cursorStart: cs,
       cursorEnd: ce
     });
-  },
+  }
 
   historyUndo() {
     if (this.state.history_index <= 0) {
@@ -120,7 +120,7 @@ class Composer extends React.Component {
       markdown: this.state.history[newIndex]
     });
     return this.state.markdown;
-  },
+  }
 
   historyRedo() {
     if (this.state.history_index + 1 > this.state.history.length) {
