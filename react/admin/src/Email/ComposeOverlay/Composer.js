@@ -37,22 +37,22 @@ class Composer extends React.Component {
     super.setState(state);
   }
 
-  componentDidUpdate(prevProps, prevState) {
-    if (prevState.cursorStart !== this.state.cursorStart
-        || prevState.cursorEnd !== this.state.cursorEnd) {
-      setTimeout(() => {
-        const ta = document.getElementById("composer-text");
-        ta.selectionStart = this.state.cursorStart;
-        ta.selectionEnd = this.state.cursorEnd;
-        if (ta.value.length < this.state.cursorEnd + 60) {
-          // Cursor is near the bottom of the textarea
-          ta.scrollTop = 999999999;
-        } else {
-          ta.scrollTop =  this.scroll;
-        }
-      }, 20);
-    }
-  }
+  // componentDidUpdate(prevProps, prevState) {
+  //   if (prevState.cursorStart !== this.state.cursorStart
+  //       || prevState.cursorEnd !== this.state.cursorEnd) {
+  //     setTimeout(() => {
+  //       const ta = document.getElementById("composer-text");
+  //       ta.selectionStart = this.state.cursorStart;
+  //       ta.selectionEnd = this.state.cursorEnd;
+  //       if (ta.value.length < this.state.cursorEnd + 60) {
+  //         // Cursor is near the bottom of the textarea
+  //         ta.scrollTop = 999999999;
+  //       } else {
+  //         ta.scrollTop =  this.scroll;
+  //       }
+  //     }, 20);
+  //   }
+  // }
 
   historyPush(md, cs, ce) {
     var history = this.state.history.slice(0, this.state.history_index + 1);
@@ -202,9 +202,9 @@ class Composer extends React.Component {
             case 90: // z
               e.preventDefault();
               if (e.shiftKey) {
-                this.historyRedo();
+                newMarkdown = this.historyRedo();
               } else {
-                this.historyUndo();
+                newMarkdown = this.historyUndo();
               }
               break;
             default:
@@ -219,6 +219,9 @@ class Composer extends React.Component {
         }
         break;
     }
+    e.target.value = newMarkdown;
+    e.target.selectionStart = newCursorStart;
+    e.target.selectionEnd = newCursorEnd;
   }
 
   fireBold = (e) => {
@@ -379,7 +382,7 @@ class Composer extends React.Component {
             >↻</button>
           </div>
           <textarea
-            value={this.state.markdown}
+            defaultValue={this.state.markdown}
             className="composer-text"
             id="composer-text"
             name="composer-text"
