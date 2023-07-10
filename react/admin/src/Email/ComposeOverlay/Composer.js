@@ -24,7 +24,8 @@ class Composer extends React.Component {
       history_index: 0,
       preview: false,
       cursorStart: 0,
-      cursorEnd: 0
+      cursorEnd: 0,
+      state_changed_by_keystroke: false
     };
   }
 
@@ -35,6 +36,10 @@ class Composer extends React.Component {
       console.log(e);
     }
     super.setState(state);
+  }
+
+  shouldComponentUpdate(_nextProps, nextState) {
+    return ! nextState.state_changed_by_keystroke;
   }
 
   componentDidUpdate(prevProps, prevState) {
@@ -63,7 +68,8 @@ class Composer extends React.Component {
       history: history,
       history_index: this.state.history_index + 1,
       cursorStart: cs,
-      cursorEnd: ce
+      cursorEnd: ce,
+      state_changed_by_keystroke: true
     });
   }
 
@@ -75,7 +81,8 @@ class Composer extends React.Component {
       markdown: md,
       history: history,
       cursorStart: cs,
-      cursorEnd: ce
+      cursorEnd: ce,
+      state_changed_by_keystroke: true
     });
   }
 
@@ -87,7 +94,8 @@ class Composer extends React.Component {
     this.setState({
       ...this.state,
       history_index: newIndex,
-      markdown: this.state.history[newIndex]
+      markdown: this.state.history[newIndex],
+      state_changed_by_keystroke: true
     });
     return this.state.markdown;
   }
@@ -100,9 +108,18 @@ class Composer extends React.Component {
     this.setState({
       ...this.state,
       history_index: newIndex,
-      markdown: this.state.history[newIndex]
+      markdown: this.state.history[newIndex],
+      state_changed_by_keystroke: true
     });
     return this.state.markdown;
+  }
+
+  handleChange = (e) => {
+    this.setState({
+      ...this.state,
+      markdown: e.target.value,
+      state_changed_by_keystroke: false
+    });
   }
 
   handleKeyDown = (e) => {
@@ -116,7 +133,6 @@ class Composer extends React.Component {
     var newCursorStart = start;
     var newCursorEnd = end;
     this.scroll = e.target.scrollTop;
-    // var preventCursorMove = false;
     switch (e.keyCode) {
       // TODO: 
       // - delete key
@@ -144,11 +160,11 @@ class Composer extends React.Component {
         this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
         break;
       case 16: // shift
-        return;
+        break;
       case 17: // control
-        return;
+        break;
       case 18: // alt/option
-        return;
+        break;
       case 32: // space
         e.preventDefault();
         newMarkdown = markdown.substring(0, start) + " " + markdown.substring(end);
@@ -326,12 +342,12 @@ class Composer extends React.Component {
 
   showPreview = (e) => {
     e.preventDefault();
-    this.setState({...this.state, preview: true});
+    this.setState({...this.state, preview: true, set_by_keystroke: false});
   }
 
   showEdit = (e) => {
     e.preventDefault();
-    this.setState({...this.state, preview: false});
+    this.setState({...this.state, preview: false, set_by_keystroke: false});
   }
 
   render() {
@@ -385,6 +401,7 @@ class Composer extends React.Component {
             id="composer-text"
             name="composer-text"
             onKeyDown={this.handleKeyDown}
+            onChange={this.handleChange}
           />
         </div>
         <div id="composer-preview">
