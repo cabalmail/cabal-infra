@@ -24,8 +24,7 @@ class Composer extends React.Component {
       history_index: 0,
       preview: false,
       cursorStart: 0,
-      cursorEnd: 0,
-      state_changed_by_keystroke: false
+      cursorEnd: 0
     };
   }
 
@@ -36,10 +35,6 @@ class Composer extends React.Component {
       console.log(e);
     }
     super.setState(state);
-  }
-
-  shouldComponentUpdate(_nextProps, nextState) {
-    return ! nextState.state_changed_by_keystroke;
   }
 
   componentDidUpdate(prevProps, prevState) {
@@ -68,8 +63,7 @@ class Composer extends React.Component {
       history: history,
       history_index: this.state.history_index + 1,
       cursorStart: cs,
-      cursorEnd: ce,
-      state_changed_by_keystroke: true
+      cursorEnd: ce
     });
   }
 
@@ -81,8 +75,7 @@ class Composer extends React.Component {
       markdown: md,
       history: history,
       cursorStart: cs,
-      cursorEnd: ce,
-      state_changed_by_keystroke: true
+      cursorEnd: ce
     });
   }
 
@@ -94,8 +87,7 @@ class Composer extends React.Component {
     this.setState({
       ...this.state,
       history_index: newIndex,
-      markdown: this.state.history[newIndex],
-      state_changed_by_keystroke: true
+      markdown: this.state.history[newIndex]
     });
     return this.state.markdown;
   }
@@ -108,18 +100,9 @@ class Composer extends React.Component {
     this.setState({
       ...this.state,
       history_index: newIndex,
-      markdown: this.state.history[newIndex],
-      state_changed_by_keystroke: true
+      markdown: this.state.history[newIndex]
     });
     return this.state.markdown;
-  }
-
-  handleChange = (e) => {
-    this.setState({
-      ...this.state,
-      markdown: e.target.value,
-      state_changed_by_keystroke: false
-    });
   }
 
   handleKeyDown = (e) => {
@@ -342,12 +325,12 @@ class Composer extends React.Component {
 
   showPreview = (e) => {
     e.preventDefault();
-    this.setState({...this.state, preview: true, set_by_keystroke: false});
+    this.setState({...this.state, preview: true});
   }
 
   showEdit = (e) => {
     e.preventDefault();
-    this.setState({...this.state, preview: false, set_by_keystroke: false});
+    this.setState({...this.state, preview: false});
   }
 
   render() {
