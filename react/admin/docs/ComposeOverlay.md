@@ -114,7 +114,7 @@ Returns: null
 ### requestCallback
 Modifiers: none
 
-Parameters: _address (null)
+Parameters: address (null)
 
 Returns: null
 
