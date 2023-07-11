@@ -99,6 +99,7 @@ class Request extends React.Component {
     e.preventDefault();
     this.submitRequest().then(data => {
       this.props.setMessage(`Successfully requested ${data.data.address}.`, false);
+      console.log("Calling callback");
       this.props.callback(data.data.address);
     }, reason => {
       this.props.setMessage("Request failed.", true);
