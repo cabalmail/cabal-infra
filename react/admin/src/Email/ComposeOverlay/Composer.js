@@ -65,7 +65,7 @@ class Composer extends React.Component {
   }
 
   historyUndo() {
-    if (this.state.history_index < 0) {
+    if (this.state.history_index <= 0) {
       return this.state.markdown;
     }
     var newIndex = this.state.history_index - 1;
