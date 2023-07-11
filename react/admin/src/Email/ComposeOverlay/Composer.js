@@ -104,7 +104,10 @@ class Composer extends React.Component {
     var end = e.target.selectionEnd;
     var newCursorStart = start + 1;
     var newCursorEnd = end + 1;
-    if ((e.keyCode >= 37 && e.keyCode <= 40) || (e.keyCode >= 16 && e.keyCode <= 18)) {
+    if ((e.keyCode >= 37 && e.keyCode <= 40)
+        || (e.keyCode >= 16 && e.keyCode <= 18)
+        || (e.keyCode === 91)
+        || (e.keyCode === 92)) {
       // These keys don't alter the content
       console.log(e.keyCode);
       setTimeout(() => {
