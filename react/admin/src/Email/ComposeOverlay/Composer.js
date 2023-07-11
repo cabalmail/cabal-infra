@@ -91,6 +91,10 @@ class Composer extends React.Component {
   }
 
   handleKeyDown = (e) => {
+    // TODO: 
+    // - delete key
+    // - delete and backspace with opt, ctl, and cmd
+    // Update style dropdown as cursor lands in new line
     // if (e.keyCode < 48 || e.keyCode > 90) {
     //   console.log(e);
     // }
@@ -98,89 +102,79 @@ class Composer extends React.Component {
     var newMarkdown = markdown;
     var start = e.target.selectionStart;
     var end = e.target.selectionEnd;
+    var newCursorStart = start + 1;
+    var newCursorEnd = end + 1;
     if ((e.keyCode >= 37 && e.keyCode <= 40) || (e.keyCode >= 16 && e.keyCode <= 18)) {
+      // These keys don't alter the content
       setTimeout(() => {
         var start = e.target.selectionStart;
         this.setStyle(markdown, start);
-      }, 10);
+      }, 50);
       return;
-    }
-    var newCursorStart = start + 1;
-    var newCursorEnd = end + 1;
-    switch (e.keyCode) {
-      // TODO: 
-      // - delete key
-      // - delete and backspace with opt, ctl, and cmd
-      // Update style dropdown as cursor lands in new line
-      case 8: // backspace
-        e.preventDefault();
-        newMarkdown = markdown.substring(0, start - 1) + markdown.substring(end);
-        newCursorStart = start - 1;
-        newCursorEnd = end - 1;
-        this.historyReplace(newMarkdown);
-        break;
-      case 9: // tab
-        e.preventDefault();
-        newMarkdown = markdown.substring(0, start) + "\t" + markdown.substring(end);
-        this.historyReplace(newMarkdown);
-        break;
-      case 13: // enter
-        e.preventDefault();
-        newMarkdown = markdown.substring(0, start) + "\n" + markdown.substring(end);
-        this.historyReplace(newMarkdown);
-        break;
-      case 32: // space
-        e.preventDefault();
-        newMarkdown = markdown.substring(0, start) + " " + markdown.substring(end);
-        this.historyReplace(newMarkdown);
-        break;
-      default: // normal letters, digits, and symbols
-        if (e.metaKey) { // check for keyboard shortcuts
-          switch (e.keyCode) {
-            case 66: // b
-              // TODO: toggle on/off
-              e.preventDefault();
-              newMarkdown = markdown.substring(0, start) + '__' + markdown.substring(start, end) + '__' + markdown.substring(end);
-              newCursorStart = start + 2;
-              newCursorEnd = end + 2;
-              this.historyPush(newMarkdown);
-              break;
-            case 73: // i
-              // TODO: toggle on/off
-              e.preventDefault();
-              newMarkdown = markdown.substring(0, start) + '_' + markdown.substring(start, end) + '_' + markdown.substring(end);
-              this.historyPush(newMarkdown);
-              break;
-            case 75: // k
-              e.preventDefault();
-              newMarkdown = markdown.substring(0, start) + '[' + markdown.substring(start, end) + '](https://example.com)' + markdown.substring(end);
-              this.historyPush(newMarkdown);
-              break;
-            case 83: // s
-              // TODO: toggle on/off
-              e.preventDefault();
-              newMarkdown = markdown.substring(0, start) + '~~' + markdown.substring(start, end) + '~~' + markdown.substring(end);
-              newCursorStart = start + 2;
-              newCursorEnd = end + 2;
-              this.historyPush(newMarkdown);
-              break;
-            case 90: // z
-              e.preventDefault();
-              if (e.shiftKey) {
-                newMarkdown = this.historyRedo();
-              } else {
-                newMarkdown = this.historyUndo();
-              }
-              break;
-            default:
-              break;
-          }
-        } else {
-          e.preventDefault();
-          newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
-          this.historyReplace(newMarkdown);
+    } else if (e.keyCode === 8) { // backspace
+      e.preventDefault();
+      newMarkdown = markdown.substring(0, start - 1) + markdown.substring(end);
+      newCursorStart = start - 1;
+      newCursorEnd = end - 1;
+      this.historyReplace(newMarkdown);
+    } else if (e.keyCode === 9) { // tab
+      e.preventDefault();
+      newMarkdown = markdown.substring(0, start) + "\t" + markdown.substring(end);
+      this.historyReplace(newMarkdown);
+    } else if (e.keyCode === 13) { // enter
+      e.preventDefault();
+      newMarkdown = markdown.substring(0, start) + "\n" + markdown.substring(end);
+      this.historyReplace(newMarkdown);
+    } else if (e.keyCode === 32) { // space
+      e.preventDefault();
+      newMarkdown = markdown.substring(0, start) + " " + markdown.substring(end);
+      this.historyReplace(newMarkdown);
+    } else {// normal letters, digits, and symbols
+      if (e.metaKey) { // check for keyboard shortcuts
+        switch (e.keyCode) {
+          case 66: // b
+            // TODO: toggle on/off
+            e.preventDefault();
+            newMarkdown = markdown.substring(0, start) + '__' + markdown.substring(start, end) + '__' + markdown.substring(end);
+            newCursorStart = start + 2;
+            newCursorEnd = end + 2;
+            this.historyPush(newMarkdown);
+            break;
+          case 73: // i
+            // TODO: toggle on/off
+            e.preventDefault();
+            newMarkdown = markdown.substring(0, start) + '_' + markdown.substring(start, end) + '_' + markdown.substring(end);
+            this.historyPush(newMarkdown);
+            break;
+          case 75: // k
+            e.preventDefault();
+            newMarkdown = markdown.substring(0, start) + '[' + markdown.substring(start, end) + '](https://example.com)' + markdown.substring(end);
+            this.historyPush(newMarkdown);
+            break;
+          case 83: // s
+            // TODO: toggle on/off
+            e.preventDefault();
+            newMarkdown = markdown.substring(0, start) + '~~' + markdown.substring(start, end) + '~~' + markdown.substring(end);
+            newCursorStart = start + 2;
+            newCursorEnd = end + 2;
+            this.historyPush(newMarkdown);
+            break;
+          case 90: // z
+            e.preventDefault();
+            if (e.shiftKey) {
+              newMarkdown = this.historyRedo();
+            } else {
+              newMarkdown = this.historyUndo();
+            }
+            break;
+          default:
+            break;
         }
-        break;
+      } else {
+        e.preventDefault();
+        newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
+        this.historyReplace(newMarkdown);
+      }
     }
     e.target.value = newMarkdown;
     e.target.selectionStart = newCursorStart;
