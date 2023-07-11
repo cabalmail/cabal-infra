@@ -119,19 +119,19 @@ class Composer extends React.Component {
       newMarkdown = markdown.substring(0, start - 1) + markdown.substring(end);
       newCursorStart = start - 1;
       newCursorEnd = end - 1;
-      this.historyReplace(newMarkdown);
+      this.historyPush(newMarkdown);
     } else if (e.keyCode === 9) { // tab
       e.preventDefault();
       newMarkdown = markdown.substring(0, start) + "\t" + markdown.substring(end);
-      this.historyReplace(newMarkdown);
+      this.historyPush(newMarkdown);
     } else if (e.keyCode === 13) { // enter
       e.preventDefault();
       newMarkdown = markdown.substring(0, start) + "\n" + markdown.substring(end);
-      this.historyReplace(newMarkdown);
+      this.historyPush(newMarkdown);
     } else if (e.keyCode === 32) { // space
       e.preventDefault();
       newMarkdown = markdown.substring(0, start) + " " + markdown.substring(end);
-      this.historyReplace(newMarkdown);
+      this.historyPush(newMarkdown);
     } else {// normal letters, digits, and symbols
       if (e.metaKey) { // check for keyboard shortcuts
         switch (e.keyCode) {
