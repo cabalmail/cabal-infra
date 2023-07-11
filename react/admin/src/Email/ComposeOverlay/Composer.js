@@ -185,32 +185,34 @@ class Composer extends React.Component {
     e.target.value = newMarkdown;
     e.target.selectionStart = newCursorStart;
     e.target.selectionEnd = newCursorEnd;
-    this.setStyle(newMarkdown, newCursorStart);
+    setTimeout(() => {
+      this.setStyle(newMarkdown, newCursorStart);
+    }, 500);
   }
 
   setStyle(md, cs) {
     var paragraphs = md.substring(0, cs).split("\n");
     var lastParagraph = paragraphs[paragraphs.length - 1];
     if (lastParagraph === "" || lastParagraph === null) {
-      this.setState({...this.state,markdown:md,style:BODY_TEXT});
+      this.setState({...this.state,style:BODY_TEXT});
     } else if (lastParagraph.match(/^###### /)) {
-      this.setState({...this.state,markdown:md,style:H6});
+      this.setState({...this.state,style:H6});
     } else if (lastParagraph.match(/^##### /)) {
-      this.setState({...this.state,markdown:md,style:H5});
+      this.setState({...this.state,style:H5});
     } else if (lastParagraph.match(/^#### /)) {
       this.setState({...this.state,markdown:md,style:H4});
     } else if (lastParagraph.match(/^### /)) {
-      this.setState({...this.state,markdown:md,style:H3});
+      this.setState({...this.state,style:H3});
     } else if (lastParagraph.match(/^## /)) {
-      this.setState({...this.state,markdown:md,style:H2});
+      this.setState({...this.state,style:H2});
     } else if (lastParagraph.match(/^# /)) {
-      this.setState({...this.state,markdown:md,style:H1});
+      this.setState({...this.state,style:H1});
     } else if (lastParagraph.match(/^> /)) {
-      this.setState({...this.state,markdown:md,style:BLOCK_QUOTE});
+      this.setState({...this.state,style:BLOCK_QUOTE});
     } else if (lastParagraph.match(/^ {4}/)) {
-      this.setState({...this.state,markdown:md,style:PRE});
+      this.setState({...this.state,style:PRE});
     } else {
-      this.setState({...this.state,markdown:md,style:BODY_TEXT});
+      this.setState({...this.state,style:BODY_TEXT});
     }
   }
 
