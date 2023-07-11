@@ -91,6 +91,7 @@ class Email extends React.Component {
               host={this.props.host}
               hide={this.hideCompose}
               domains={this.props.domains}
+              setMessage={this.props.setMessage}
               quotedMessage=""
             />
           </div>

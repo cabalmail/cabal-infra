@@ -27,7 +27,7 @@ class Addresses extends React.Component {
         <button
           onClick={this.toggleRequest}
           className="toggleRequest"
-        >New Address {this.state.showRequest ? "∨" : ">"}</button>
+        >New Address {this.state.showRequest ? "▼" : "▶︎"}</button>
         <Request
           token={this.props.token}
           domains={this.props.domains}
@@ -35,7 +35,7 @@ class Addresses extends React.Component {
           setMessage={this.props.setMessage}
           showRequest={this.state.showRequest}
           host={this.props.host}
-          callback={this.null}
+          callback={this.regenerateList}
         />
         <hr />
         <List

@@ -135,7 +135,7 @@ class ComposeOverlay extends React.Component {
           <button
             onClick={this.toggleRequest}
             className="toggleRequest"
-          >New Address {this.state.showRequest ? "∨" : ">"}</button>
+          >New Address {this.state.showRequest ? "▼" : "▶︎"}</button>
           <Request
             token={this.props.token}
             domains={this.props.domains}
