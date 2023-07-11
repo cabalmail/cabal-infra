@@ -16,14 +16,22 @@ Returns: null
 ### historyPush
 Modifiers: none
 
-Parameters: md (null)
+Parameters: md
+cs
+ce (null
+null
+null)
 
 Returns: null
 
 ### historyReplace
 Modifiers: none
 
-Parameters: md (null)
+Parameters: md
+cs
+ce (null
+null
+null)
 
 Returns: null
 
