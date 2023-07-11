@@ -34,10 +34,6 @@ class ComposeOverlay extends React.Component {
     super.setState(state);
   }
 
-  componentDidUpdate(prevProps, prevState) {
-    if ((prevState.addresses.length !== this.state.address.length))
-  }
-
   componentDidMount() {
     this.getAddresses();
   }
