@@ -119,19 +119,19 @@ class Composer extends React.Component {
       newMarkdown = markdown.substring(0, start - 1) + markdown.substring(end);
       newCursorStart = start - 1;
       newCursorEnd = end - 1;
-      this.historyPush(newMarkdown);
+      this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
     } else if (e.keyCode === 9) { // tab
       e.preventDefault();
       newMarkdown = markdown.substring(0, start) + "\t" + markdown.substring(end);
-      this.historyPush(newMarkdown);
+      this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
     } else if (e.keyCode === 13) { // enter
       e.preventDefault();
       newMarkdown = markdown.substring(0, start) + "\n" + markdown.substring(end);
-      this.historyPush(newMarkdown);
+      this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
     } else if (e.keyCode === 32) { // space
       e.preventDefault();
       newMarkdown = markdown.substring(0, start) + " " + markdown.substring(end);
-      this.historyPush(newMarkdown);
+      this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
     } else {// normal letters, digits, and symbols
       if (e.metaKey) { // check for keyboard shortcuts
         switch (e.keyCode) {
@@ -141,18 +141,18 @@ class Composer extends React.Component {
             newMarkdown = markdown.substring(0, start) + '__' + markdown.substring(start, end) + '__' + markdown.substring(end);
             newCursorStart = start + 2;
             newCursorEnd = end + 2;
-            this.historyPush(newMarkdown);
+            this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
             break;
           case 73: // i
             // TODO: toggle on/off
             e.preventDefault();
             newMarkdown = markdown.substring(0, start) + '_' + markdown.substring(start, end) + '_' + markdown.substring(end);
-            this.historyPush(newMarkdown);
+            this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
             break;
           case 75: // k
             e.preventDefault();
             newMarkdown = markdown.substring(0, start) + '[' + markdown.substring(start, end) + '](https://example.com)' + markdown.substring(end);
-            this.historyPush(newMarkdown);
+            this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
             break;
           case 83: // s
             // TODO: toggle on/off
@@ -160,7 +160,7 @@ class Composer extends React.Component {
             newMarkdown = markdown.substring(0, start) + '~~' + markdown.substring(start, end) + '~~' + markdown.substring(end);
             newCursorStart = start + 2;
             newCursorEnd = end + 2;
-            this.historyPush(newMarkdown);
+            this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
             break;
           case 90: // z
             e.preventDefault();
@@ -176,7 +176,7 @@ class Composer extends React.Component {
       } else {
         e.preventDefault();
         newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
-        this.historyReplace(newMarkdown);
+        this.historyReplace(newMarkdown, newCursorStart, newCursorEnd);
       }
     }
     e.target.value = newMarkdown;
