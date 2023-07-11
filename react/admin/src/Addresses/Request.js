@@ -85,19 +85,15 @@ class Request extends React.Component {
     });
   }
 
-  submitRequest = (e) => {
-    return this.api.newAddress(
+  handleSubmit = () => {
+    console.log("Called handleSubmit");
+    this.api.newAddress(
       this.state.username,
       this.state.subdomain,
       this.state.domain,
       this.state.comment,
       this.state.username + '@' + this.state.subdomain + '.' + this.state.domain
-    );
-  }
-
-  handleSubmit = (e) => {
-    e.preventDefault();
-    this.submitRequest().then(data => {
+    ).then(data => {
       this.props.setMessage(`Successfully requested ${data.data.address}.`, false);
       console.log("Calling callback");
       this.props.callback(data.data.address);
