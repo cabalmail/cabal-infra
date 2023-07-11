@@ -180,12 +180,11 @@ class Composer extends React.Component {
     e.target.value = newMarkdown;
     e.target.selectionStart = newCursorStart;
     e.target.selectionEnd = newCursorEnd;
-    setStyle(newMarkdown, newCursorStart);
+    this.setStyle(newMarkdown, newCursorStart);
   }
 
   setStyle(md, cs) {
-    var markdown = substring(0, cs);
-    var paragraphs = markdown.split("\n");
+    var paragraphs = md.substring(0, cs).split("\n");
     var lastParagraph = paragraphs[paragraphs.length - 1];
     if (lastParagraph.match(/^###### /)) {
       this.setState({...this.state,style:H6});
