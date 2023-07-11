@@ -164,19 +164,11 @@ class Composer extends React.Component {
             break;
           case 90: // z
             e.preventDefault();
-            if (e.shiftKey) {
-              {
-                markdown: newMarkdown,
-                cursor_start: newCursorStart,
-                cursor_end: newCursorEnd
-              } = this.historyRedo();
-            } else {
-              {
-                markdown: newMarkdown,
-                cursor_start: newCursorStart,
-                cursor_end: newCursorEnd
-              } = this.historyUndo();
-            }
+            const { markdown: md, cursor_start: cs, cursor_end: ce } =
+              e.shiftKey ? this.historyRedo() : this.history.Undo();
+            newMarkdown = md;
+            newCursorStart = cs;
+            newCursorEnd = ce;
             break;
           default:
             break;
