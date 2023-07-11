@@ -82,7 +82,7 @@ class Composer extends React.Component {
 
   historyRedo() {
     console.log("Redo invoked");
-    if (this.state.history_index + 1 > this.state.history.length) {
+    if (this.state.history_index + 1 >= this.state.history.length) {
       return this.state.markdown;
     }
     var newIndex = this.state.history_index + 1;
