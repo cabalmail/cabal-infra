@@ -121,7 +121,6 @@ class Request extends React.Component {
     // TODO: Wire up select field for TLD
     return (
       <div className={`request ${this.props.showRequest ? "requestVisible" : "requestHidden"}`}>
-        <form className="request-form" onSubmit={this.handleSubmit}>
         <fieldset className="address-fields">
           <legend>Address</legend>
           <input
@@ -168,11 +167,10 @@ class Request extends React.Component {
           />
         </fieldset>
         <fieldset className="button-fields">
-          <button id="request" type="submit" className="default">Request {this.state.address}</button>
+          <button id="request" className="default" onClick={this.handleSubmit}>Request {this.state.address}</button>
           <button onClick={this.generateRandom}>Random</button>
           <button onClick={this.doClear}>Clear</button>
         </fieldset>
-        </form>
       </div>
     );
   }
