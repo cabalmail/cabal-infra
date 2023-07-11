@@ -176,7 +176,8 @@ class Composer extends React.Component {
       } else {
         e.preventDefault();
         newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
-        this.historyReplace(newMarkdown, newCursorStart, newCursorEnd);
+        markdown === "" ? this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
+                        : this.historyReplace(newMarkdown, newCursorStart, newCursorEnd);
       }
     }
     e.target.value = newMarkdown;
