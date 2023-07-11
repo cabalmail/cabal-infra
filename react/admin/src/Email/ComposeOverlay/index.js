@@ -12,10 +12,8 @@ class ComposeOverlay extends React.Component {
     super(props);
     this.state = JSON.parse(localStorage.getItem(STATE_KEY)) || {
       editorState: null,
-      showOldFrom: true,
       addresses: [],
-      addressOld: "",
-      addressNew: null,
+      address: "",
       To: null,
       CC: null,
       BCC: null,
@@ -76,16 +74,8 @@ class ComposeOverlay extends React.Component {
     this.setState({...this.state, editorState});
   }
 
-  onRadioChange = (e) => {
-    this.setState({...this.state, showOldFrom: !this.state.showOldFrom});
-  }
-
   onSelectChange = (e) => {
-    this.setState({...this.state, addressOld: e.target.value});
-  }
-
-  onAddressNewChange = (e) => {
-    this.setState({...this.state, addressNew: e.target.value});
+    this.setState({...this.state, address: e.target.value});
   }
 
   onToChange = (e) => {
@@ -115,6 +105,7 @@ class ComposeOverlay extends React.Component {
     this.setState({
       ...this.state,
       addresses: addressList,
+      address: address,
       showRequest: false
     });
   }
@@ -131,7 +122,7 @@ class ComposeOverlay extends React.Component {
             className="address-from-old"
             placeholder="Find existing address"
             onChange={this.onSelectChange}
-            value={this.state.addressOld}
+            value={this.state.address}
           ><option value="">Select an address</option>{this.getOptions()}</select>
           <button
             onClick={this.toggleRequest}
