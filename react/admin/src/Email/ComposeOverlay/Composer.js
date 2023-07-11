@@ -99,7 +99,10 @@ class Composer extends React.Component {
     var start = e.target.selectionStart;
     var end = e.target.selectionEnd;
     if ((37 <= e.keyCode <= 40) || (16 <= e.keyCode <= 18)) {
-      this.setStyle(markdown, start);
+      setTimeout(() => {
+        var start = e.target.selectionStart;
+        this.setStyle(markdown, start);
+      }, 10);
       return;
     }
     var newCursorStart = start + 1;
