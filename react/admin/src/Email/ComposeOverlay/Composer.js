@@ -44,6 +44,7 @@ class Composer extends React.Component {
   }
 
   historyPush(md) {
+    console.log("Push invoked");
     var history = this.state.history.slice(0, this.state.history_index + 1);
     history.push(md);
     this.setState({
@@ -55,6 +56,7 @@ class Composer extends React.Component {
   }
 
   historyReplace(md) {
+    console.log("Replace invoked");
     var history = this.state.history.slice(0, this.state.history_index + 1);
     history[this.state.history_index] = md;
     this.setState({
@@ -65,6 +67,7 @@ class Composer extends React.Component {
   }
 
   historyUndo() {
+    console.log("Undo invoked");
     if (this.state.history_index <= 0) {
       return this.state.markdown;
     }
@@ -78,6 +81,7 @@ class Composer extends React.Component {
   }
 
   historyRedo() {
+    console.log("Redo invoked");
     if (this.state.history_index + 1 > this.state.history.length) {
       return this.state.markdown;
     }
