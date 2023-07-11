@@ -191,7 +191,7 @@ class Composer extends React.Component {
     e.target.value = newMarkdown;
     e.target.selectionStart = newCursorStart;
     e.target.selectionEnd = newCursorEnd;
-    this.setStyle(newMarkdown, newCursorStart);
+    // this.setStyle(newMarkdown, newCursorStart);
   }
 
   setStyle(md, cs) {
