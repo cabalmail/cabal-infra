@@ -55,6 +55,7 @@ class Composer extends React.Component {
   }
 
   historyReplace(md) {
+    console.log(md);
     var history = this.state.history.slice(0, this.state.history_index + 1);
     history[this.state.history_index] = md;
     this.setState({
@@ -98,7 +99,7 @@ class Composer extends React.Component {
     // if (e.keyCode < 48 || e.keyCode > 90) {
     //   console.log(e);
     // }
-    var markdown = e.target.value;
+    var markdown = this.state.markdown;
     var newMarkdown = markdown;
     var start = e.target.selectionStart;
     var end = e.target.selectionEnd;
