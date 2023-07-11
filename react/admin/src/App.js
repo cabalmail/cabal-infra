@@ -256,6 +256,7 @@ class App extends React.Component {
             token={this.state.token}
             api_url={this.state.api_url}
             host={`imap.${this.state.control_domain}`}
+            domains={this.state.domains}
             setMessage={this.setMessage}
           />
         );

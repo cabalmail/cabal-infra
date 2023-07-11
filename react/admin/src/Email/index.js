@@ -90,6 +90,7 @@ class Email extends React.Component {
               api_url={this.props.api_url}
               host={this.props.host}
               hide={this.hideCompose}
+              domains={this.props.domains}
               quotedMessage=""
             />
           </div>
