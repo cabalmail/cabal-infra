@@ -8,12 +8,17 @@ class Addresses extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      showRequest: false
+      showRequest: false,
+      trigger: ""
     };
   }
 
   toggleRequest = () => {
     this.setState({...this.state, showRequest: !this.state.showRequest})
+  }
+
+  regenerateList(address) {
+    this.setState({...this.state, trigger: address});
   }
 
   render() {
@@ -30,6 +35,7 @@ class Addresses extends React.Component {
           setMessage={this.props.setMessage}
           showRequest={this.state.showRequest}
           host={this.props.host}
+          callback={this.null}
         />
         <hr />
         <List
@@ -38,6 +44,7 @@ class Addresses extends React.Component {
           api_url={this.props.api_url}
           setMessage={this.props.setMessage}
           host={this.props.host}
+          regenerate={this.state.trigger}
         />
       </>
     );

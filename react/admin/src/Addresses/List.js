@@ -58,7 +58,7 @@ class List extends React.Component {
   }
 
   componentDidUpdate(prevProps, prevState) {
-    if (this.state.filter !== prevState.filter) {
+    if ((this.state.filter !== prevState.filter) || (this.props.trigger !== prefProps.trigger)) {
       const response = this.getList();
       response.then(data => {
         try {
@@ -115,7 +115,7 @@ class List extends React.Component {
     e.preventDefault();
   }
 
-  getList = (e) => {
+  getList = () => {
     return this.api.getAddresses();
   }
 

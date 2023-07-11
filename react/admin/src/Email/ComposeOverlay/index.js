@@ -35,6 +35,10 @@ class ComposeOverlay extends React.Component {
   }
 
   componentDidMount() {
+    this.getAddresses();
+  }
+
+  getAddresses() {
     this.api.getAddresses().then(data => {
       try {
         localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
@@ -104,6 +108,10 @@ class ComposeOverlay extends React.Component {
     this.setState({...this.state, showRequest: !this.state.showRequest})
   }
 
+  requestCallback(_address) {
+    this.getAddresses();
+  }
+
   render() {
     return (
       <form className="compose-overlay" onSubmit={this.handleSubmit}>
@@ -129,6 +137,7 @@ class ComposeOverlay extends React.Component {
             setMessage={this.props.setMessage}
             showRequest={this.state.showRequest}
             host={this.props.host}
+            callback={this.requestCallback}
           />
         </div>
         <label for="address-to">To</label>
