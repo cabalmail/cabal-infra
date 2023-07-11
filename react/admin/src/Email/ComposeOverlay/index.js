@@ -110,7 +110,7 @@ class ComposeOverlay extends React.Component {
 
   requestCallback(address) {
     this.getAddresses();
-    toggleRequest();
+    this.toggleRequest();
     this.setState({...this.state, addressOld: address})
   }
 
