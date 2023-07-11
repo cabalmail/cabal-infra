@@ -94,13 +94,14 @@ class Composer extends React.Component {
     // if (e.keyCode < 48 || e.keyCode > 90) {
     //   console.log(e);
     // }
-    if ((37 <= e.keyCode <= 40) || (16 <= e.keyCode <= 18)) {
-      return;
-    }
     var markdown = this.state.markdown;
     var newMarkdown = markdown;
     var start = e.target.selectionStart;
     var end = e.target.selectionEnd;
+    if ((37 <= e.keyCode <= 40) || (16 <= e.keyCode <= 18)) {
+      this.setStyle(markdown, start);
+      return;
+    }
     var newCursorStart = start + 1;
     var newCursorEnd = end + 1;
     switch (e.keyCode) {
