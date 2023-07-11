@@ -106,6 +106,7 @@ class Composer extends React.Component {
     var newCursorEnd = end + 1;
     if ((e.keyCode >= 37 && e.keyCode <= 40) || (e.keyCode >= 16 && e.keyCode <= 18)) {
       // These keys don't alter the content
+      console.log(e.keyCode);
       setTimeout(() => {
         var start = e.target.selectionStart;
         this.setStyle(markdown, start);
