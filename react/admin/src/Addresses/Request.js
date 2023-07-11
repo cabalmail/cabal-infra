@@ -86,7 +86,6 @@ class Request extends React.Component {
   }
 
   handleSubmit = () => {
-    console.log("Called handleSubmit");
     this.api.newAddress(
       this.state.username,
       this.state.subdomain,
@@ -95,7 +94,6 @@ class Request extends React.Component {
       this.state.username + '@' + this.state.subdomain + '.' + this.state.domain
     ).then(data => {
       this.props.setMessage(`Successfully requested ${data.data.address}.`, false);
-      console.log("Calling callback");
       this.props.callback(data.data.address);
     });
   }
