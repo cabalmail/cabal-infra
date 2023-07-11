@@ -98,7 +98,7 @@ class Composer extends React.Component {
     var newMarkdown = markdown;
     var start = e.target.selectionStart;
     var end = e.target.selectionEnd;
-    if ((37 <= e.keyCode <= 40) || (16 <= e.keyCode <= 18)) {
+    if ((e.keyCode >= 37 && e.keyCode <= 40) || (e.keyCode >= 16 && e.keyCode <= 18)) {
       setTimeout(() => {
         var start = e.target.selectionStart;
         this.setStyle(markdown, start);
