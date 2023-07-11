@@ -44,6 +44,8 @@ class Composer extends React.Component {
   }
 
   historyPush(md) {
+    console.log("Pushing")
+    console.log(md);
     var history = this.state.history.slice(0, this.state.history_index + 1);
     history.push(md);
     this.setState({
@@ -55,6 +57,7 @@ class Composer extends React.Component {
   }
 
   historyReplace(md) {
+    console.log("Replacing")
     console.log(md);
     var history = this.state.history.slice(0, this.state.history_index + 1);
     history[this.state.history_index] = md;
@@ -181,6 +184,8 @@ class Composer extends React.Component {
         this.historyReplace(newMarkdown);
       }
     }
+    console.log("Updated content to");
+    console.log(newMarkdown);
     e.target.value = newMarkdown;
     e.target.selectionStart = newCursorStart;
     e.target.selectionEnd = newCursorEnd;
