@@ -19,7 +19,8 @@ class ComposeOverlay extends React.Component {
       To: null,
       CC: null,
       BCC: null,
-      Subject: null
+      Subject: null,
+      showRequest: false
     };
     this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
   }
@@ -99,28 +100,14 @@ class ComposeOverlay extends React.Component {
     this.setState({...this.state, Subject: e.target.value});
   }
 
+  toggleRequest = () => {
+    this.setState({...this.state, showRequest: !this.state.showRequest})
+  }
+
   render() {
     return (
       <form className="compose-overlay" onSubmit={this.handleSubmit}>
-        <div className={this.state.showOldFrom ? "compose-from-old" : "compose-from-new"}>
-          <label className="radio">
-            <input
-              type="radio"
-              value="old"
-              id="address-select-old"
-              name="address-select"
-              checked={this.state.showOldFrom}
-              onChange={this.onRadioChange}
-            /><span className="radio-button"></span>Use an existing address</label>
-          <label className="radio">
-            <input
-              type="radio"
-              value="new"
-              id="address-select-new"
-              name="address-select"
-              checked={!this.state.showOldFrom}
-              onChange={this.onRadioChange}
-            /><span className="radio-button"></span>Create a new address</label>
+        <div className="compose-from-old">
           <label for="address-from-old" className="address-from-old">From</label>
           <select
             type="text"
@@ -131,7 +118,10 @@ class ComposeOverlay extends React.Component {
             onChange={this.onSelectChange}
             value={this.state.addressOld}
           ><option value="">Select an address</option>{this.getOptions()}</select>
-          <label for="address-from-new" className="address-from-new">From</label>
+          <button
+            onClick={this.toggleRequest}
+            className="toggleRequest"
+          >New Address {this.state.showRequest ? "∨" : ">"}</button>
           <Request
             token={this.props.token}
             domains={this.props.domains}
