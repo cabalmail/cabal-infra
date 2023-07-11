@@ -97,7 +97,7 @@ class Request extends React.Component {
       this.props.setMessage(`Successfully requested ${data.data.address}.`, false);
       console.log("Calling callback");
       this.props.callback(data.data.address);
-    }, reason => {
+    }).catch(reason => {
       this.props.setMessage("Request failed.", true);
       console.error("Promise rejected", reason.toJSON());
     });
