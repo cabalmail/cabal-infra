@@ -71,8 +71,7 @@ class Composer extends React.Component {
     var newIndex = this.state.history_index - 1;
     this.setState({
       ...this.state,
-      history_index: newIndex,
-      markdown: this.state.history[newIndex].markdown
+      history_index: newIndex
     });
     return this.state.history[newIndex];
   }
@@ -84,8 +83,7 @@ class Composer extends React.Component {
     var newIndex = this.state.history_index + 1;
     this.setState({
       ...this.state,
-      history_index: newIndex,
-      markdown: this.state.history[newIndex].markdown
+      history_index: newIndex
     });
     return this.state.history[newIndex];
   }
