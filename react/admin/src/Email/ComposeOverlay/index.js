@@ -100,15 +100,20 @@ class ComposeOverlay extends React.Component {
 
   requestCallback(address) {
     console.log(`requestCallback got ${address}`);
-    var addressList = this.state.addresses;
-    addressList.push(address);
-    console.log(addressList);
-    this.setState({
-      ...this.state,
-      addresses: addressList,
-      address: address,
-      showRequest: false
-    });
+    try {
+      var addressList = this.state.addresses;
+      console.log(addressList);
+      addressList.push(address);
+      console.log(addressList);
+      this.setState({
+        ...this.state,
+        addresses: addressList,
+        address: address,
+        showRequest: false
+      });
+    } catch (e) {
+      console.log(e);
+    }
   }
 
   render() {
