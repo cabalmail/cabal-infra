@@ -35,8 +35,6 @@ class Composer extends React.Component {
   }
 
   setState(state) {
-    console.log("Setting state");
-    console.log(state.markdown);
     try {
       localStorage.setItem(STATE_KEY, JSON.stringify(state));
     } catch (e) {
@@ -111,11 +109,10 @@ class Composer extends React.Component {
         || (e.keyCode === 91)
         || (e.keyCode === 92)) {
       // These keys don't alter the content
-      console.log(e.keyCode);
       setTimeout(() => {
         var start = e.target.selectionStart;
         this.setStyle(markdown, start);
-      }, 50);
+      }, 500);
       return;
     } else if (e.keyCode === 8) { // backspace
       e.preventDefault();
