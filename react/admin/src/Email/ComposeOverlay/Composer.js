@@ -104,15 +104,18 @@ class Composer extends React.Component {
     var end = e.target.selectionEnd;
     var newCursorStart = start + 1;
     var newCursorEnd = end + 1;
-    if ((e.keyCode >= 37 && e.keyCode <= 40)
-        || (e.keyCode >= 16 && e.keyCode <= 18)
-        || (e.keyCode === 91)
-        || (e.keyCode === 92)) {
-      // These keys don't alter the content
+    if (e.keyCode >= 37 && e.keyCode <= 40) {
+      // Arrow keys don't alter the content but do move cursor
       setTimeout(() => {
         var start = e.target.selectionStart;
         this.setStyle(markdown, start);
       }, 500);
+      return;
+    }
+    if ((e.keyCode >= 16 && e.keyCode <= 18)
+        || (e.keyCode === 91)
+        || (e.keyCode === 92)) {
+      // These keys don't matter unless used in combination with others
       return;
     } else if (e.keyCode === 8) { // backspace
       e.preventDefault();
@@ -192,11 +195,13 @@ class Composer extends React.Component {
   }
 
   setStyle(md, cs) {
+    if (md === "" || md === null) {
+      this.setState({...this.state,style:BODY_TEXT});
+      return;
+    }
     var paragraphs = md.substring(0, cs).split("\n");
     var lastParagraph = paragraphs[paragraphs.length - 1];
-    if (lastParagraph === "" || lastParagraph === null) {
-      this.setState({...this.state,style:BODY_TEXT});
-    } else if (lastParagraph.match(/^###### /)) {
+    if (lastParagraph.match(/^###### /)) {
       this.setState({...this.state,style:H6});
     } else if (lastParagraph.match(/^##### /)) {
       this.setState({...this.state,style:H5});
