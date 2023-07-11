@@ -13,6 +13,13 @@ Parameters: state (null)
 
 Returns: null
 
+### getAddresses
+Modifiers: none
+
+Parameters:  ()
+
+Returns: null
+
 ### getOptions
 Modifiers: none
 
@@ -101,6 +108,13 @@ Returns: null
 Modifiers: none
 
 Parameters:  ()
+
+Returns: null
+
+### requestCallback
+Modifiers: none
+
+Parameters: _address (null)
 
 Returns: null
 

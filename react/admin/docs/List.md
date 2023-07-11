@@ -51,7 +51,7 @@ Returns: null
 ### getList
 Modifiers: none
 
-Parameters: e (null)
+Parameters:  ()
 
 Returns: null
 
