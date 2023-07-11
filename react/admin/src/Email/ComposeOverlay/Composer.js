@@ -2,7 +2,15 @@ import React from 'react';
 import './ComposeOverlay.css';
 import Preview from './Preview';
 const STATE_KEY = 'composer-state';
-
+const BODY_TEXT = 'Body Text';
+const H1 = 'Header Level 1';
+const H2 = 'Header Level 2';
+const H3 = 'Header Level 3';
+const H4 = 'Header Level 4';
+const H5 = 'Header Level 5';
+const H6 = 'Header Level 6';
+const PRE = 'Monospace';
+const BLOCK_QUOTE = 'Block Quote';
 class Composer extends React.Component {
 
   // TODO:
@@ -21,9 +29,8 @@ class Composer extends React.Component {
       markdown: "",
       history: [""],
       history_index: 0,
-      preview: false,
-      cursorStart: 0,
-      cursorEnd: 0
+      style: BODY_TEXT,
+      preview: false
     };
   }
 
@@ -36,28 +43,24 @@ class Composer extends React.Component {
     super.setState(state);
   }
 
-  historyPush(md, cs, ce) {
+  historyPush(md) {
     var history = this.state.history.slice(0, this.state.history_index + 1);
     history.push(md);
     this.setState({
       ...this.state,
       markdown: md,
       history: history,
-      history_index: this.state.history_index + 1,
-      cursorStart: cs,
-      cursorEnd: ce
+      history_index: this.state.history_index + 1
     });
   }
 
-  historyReplace(md, cs, ce) {
+  historyReplace(md) {
     var history = this.state.history.slice(0, this.state.history_index + 1);
     history[this.state.history_index] = md;
     this.setState({
       ...this.state,
       markdown: md,
-      history: history,
-      cursorStart: cs,
-      cursorEnd: ce
+      history: history
     });
   }
 
@@ -95,57 +98,37 @@ class Composer extends React.Component {
     var newMarkdown = markdown;
     var start = e.target.selectionStart;
     var end = e.target.selectionEnd;
-    var newCursorStart = start;
-    var newCursorEnd = end;
+    var newCursorStart = start + 1;
+    var newCursorEnd = end + 1;
     switch (e.keyCode) {
       // TODO: 
       // - delete key
       // - delete and backspace with opt, ctl, and cmd
       // Update style dropdown as cursor lands in new line
+      //
+      // Deliberately omitted: arrows 37 38 39 40, modifier keys 16 17 18
       case 8: // backspace
         e.preventDefault();
         newMarkdown = markdown.substring(0, start - 1) + markdown.substring(end);
         newCursorStart = start - 1;
-        newCursorEnd = start - 1;
-        this.historyReplace(newMarkdown, newCursorStart, newCursorEnd);
+        newCursorEnd = end - 1;
+        this.historyReplace(newMarkdown);
         break;
       case 9: // tab
         e.preventDefault();
         newMarkdown = markdown.substring(0, start) + "\t" + markdown.substring(end);
-        newCursorStart = start + 1;
-        newCursorEnd = start + 1;
-        this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
+        this.historyReplace(newMarkdown);
         break;
       case 13: // enter
         e.preventDefault();
         newMarkdown = markdown.substring(0, start) + "\n" + markdown.substring(end);
-        newCursorStart = start + 1;
-        newCursorEnd = start + 1;
-        this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
-        break;
-      case 16: // shift
-        break;
-      case 17: // control
-        break;
-      case 18: // alt/option
+        this.historyReplace(newMarkdown);
         break;
       case 32: // space
         e.preventDefault();
         newMarkdown = markdown.substring(0, start) + " " + markdown.substring(end);
-        newCursorStart = start + 1;
-        newCursorEnd = start + 1;
-        this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
+        this.historyReplace(newMarkdown);
         break;
-      case 37: // left arrow
-        break;
-      case 38: // up arrow
-        break;
-      case 39: // right arrow
-        break;
-      case 40: // down arrow
-        break;
-      case 91: // meta/command
-        return;
       default: // normal letters, digits, and symbols
         if (e.metaKey) { // check for keyboard shortcuts
           switch (e.keyCode) {
@@ -155,22 +138,18 @@ class Composer extends React.Component {
               newMarkdown = markdown.substring(0, start) + '__' + markdown.substring(start, end) + '__' + markdown.substring(end);
               newCursorStart = start + 2;
               newCursorEnd = end + 2;
-              this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
+              this.historyPush(newMarkdown);
               break;
             case 73: // i
               // TODO: toggle on/off
               e.preventDefault();
               newMarkdown = markdown.substring(0, start) + '_' + markdown.substring(start, end) + '_' + markdown.substring(end);
-              newCursorStart = start + 1;
-              newCursorEnd = end + 1;
-              this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
+              this.historyPush(newMarkdown);
               break;
             case 75: // k
               e.preventDefault();
               newMarkdown = markdown.substring(0, start) + '[' + markdown.substring(start, end) + '](https://example.com)' + markdown.substring(end);
-              newCursorStart = start + 1;
-              newCursorEnd = end + 1;
-              this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
+              this.historyPush(newMarkdown);
               break;
             case 83: // s
               // TODO: toggle on/off
@@ -178,7 +157,7 @@ class Composer extends React.Component {
               newMarkdown = markdown.substring(0, start) + '~~' + markdown.substring(start, end) + '~~' + markdown.substring(end);
               newCursorStart = start + 2;
               newCursorEnd = end + 2;
-              this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
+              this.historyPush(newMarkdown);
               break;
             case 90: // z
               e.preventDefault();
@@ -194,15 +173,39 @@ class Composer extends React.Component {
         } else {
           e.preventDefault();
           newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
-          newCursorStart = start + 1;
-          newCursorEnd = start + 1;
-          this.historyReplace(newMarkdown, newCursorStart, newCursorEnd);
+          this.historyReplace(newMarkdown);
         }
         break;
     }
     e.target.value = newMarkdown;
     e.target.selectionStart = newCursorStart;
     e.target.selectionEnd = newCursorEnd;
+    setStyle(newMarkdown, newCursorStart);
+  }
+
+  setStyle(md, cs) {
+    var markdown = substring(0, cs);
+    var paragraphs = markdown.split("\n");
+    var lastParagraph = paragraphs[paragraphs.length - 1];
+    if (lastParagraph.match(/^###### /)) {
+      this.setState({...this.state,style:H6});
+    } else if (lastParagraph.match(/^##### /)) {
+      this.setState({...this.state,style:H5});
+    } else if (lastParagraph.match(/^#### /)) {
+      this.setState({...this.state,style:H4});
+    } else if (lastParagraph.match(/^### /)) {
+      this.setState({...this.state,style:H3});
+    } else if (lastParagraph.match(/^## /)) {
+      this.setState({...this.state,style:H2});
+    } else if (lastParagraph.match(/^# /)) {
+      this.setState({...this.state,style:H1});
+    } else if (lastParagraph.match(/^> /)) {
+      this.setState({...this.state,style:BLOCK_QUOTE});
+    } else if (lastParagraph.match(/^    /)) {
+      this.setState({...this.state,style:PRE});
+    } else {
+      this.setState({...this.state,style:BODY_TEXT});
+    }
   }
 
   fireBold = (e) => {
@@ -326,16 +329,20 @@ class Composer extends React.Component {
         <label htmlFor="composer-text">Message Body</label>
         <div id="composer-edit">
           <div className="composer-toolbar">
-            <select id="composer-toolbar-style-select" className="composer-toolbar-style-select">
-              <option value="body-text">Body Text</option>
-              <option value="h1">Header Level 1</option>
-              <option value="h2">Header Level 2</option>
-              <option value="h2">Header Level 3</option>
-              <option value="h2">Header Level 4</option>
-              <option value="h2">Header Level 5</option>
-              <option value="h2">Header Level 6</option>
-              <option value="block-quote">Block Quote</option>
-              <option value="pre">Monospace</option>
+            <select
+              id="composer-toolbar-style-select"
+              className="composer-toolbar-style-select"
+              value={this.state.style}
+            >
+              <option value={BODY_TEXT}>{BODY_TEXT}</option>
+              <option value={H1}>{H1}</option>
+              <option value={H2}>{H2}</option>
+              <option value={H3}>{H3}</option>
+              <option value={H4}>{H4}</option>
+              <option value={H5}>{H5}</option>
+              <option value={H6}>{H6}</option>
+              <option value={BLOCK_QUOTE}</option>
+              <option value={PRE}>{PRE}</option>
             </select>
             <button
               className="composer-toolbar-button composer-toolbar-bold"
