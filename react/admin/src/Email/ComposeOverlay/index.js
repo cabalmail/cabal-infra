@@ -109,6 +109,7 @@ class ComposeOverlay extends React.Component {
   }
 
   requestCallback(address) {
+    console.log(`requestCallback got ${address}`);
     this.setState({
       ...this.state,
       addresses:[...this.state.addresses, address],
