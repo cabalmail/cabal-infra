@@ -55,21 +55,7 @@ Parameters: editorState (null)
 
 Returns: null
 
-### onRadioChange
-Modifiers: none
-
-Parameters: e (null)
-
-Returns: null
-
 ### onSelectChange
-Modifiers: none
-
-Parameters: e (null)
-
-Returns: null
-
-### onAddressNewChange
 Modifiers: none
 
 Parameters: e (null)
