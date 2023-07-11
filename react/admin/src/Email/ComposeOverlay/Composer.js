@@ -98,7 +98,7 @@ class Composer extends React.Component {
     // if (e.keyCode < 48 || e.keyCode > 90) {
     //   console.log(e);
     // }
-    var markdown = this.state.markdown;
+    var markdown = e.target.value;
     var newMarkdown = markdown;
     var start = e.target.selectionStart;
     var end = e.target.selectionEnd;
@@ -177,7 +177,6 @@ class Composer extends React.Component {
       } else {
         e.preventDefault();
         newMarkdown = markdown.substring(0, start) + e.key + markdown.substring(end);
-        console.log(newMarkdown);
         this.historyReplace(newMarkdown);
       }
     }
