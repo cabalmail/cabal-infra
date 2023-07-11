@@ -16,22 +16,14 @@ Returns: null
 ### historyPush
 Modifiers: none
 
-Parameters: md
-cs
-ce (null
-null
-null)
+Parameters: md (null)
 
 Returns: null
 
 ### historyReplace
 Modifiers: none
 
-Parameters: md
-cs
-ce (null
-null
-null)
+Parameters: md (null)
 
 Returns: null
 
@@ -53,6 +45,15 @@ Returns: null
 Modifiers: none
 
 Parameters: e (null)
+
+Returns: null
+
+### setStyle
+Modifiers: none
+
+Parameters: md
+cs (null
+null)
 
 Returns: null
 
