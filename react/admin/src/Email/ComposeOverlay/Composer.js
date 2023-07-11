@@ -94,6 +94,9 @@ class Composer extends React.Component {
     // if (e.keyCode < 48 || e.keyCode > 90) {
     //   console.log(e);
     // }
+    if ((37 <= e.keyCode <= 40) || (16 <= e.keyCode <= 18)) {
+      return;
+    }
     var markdown = this.state.markdown;
     var newMarkdown = markdown;
     var start = e.target.selectionStart;
@@ -105,8 +108,6 @@ class Composer extends React.Component {
       // - delete key
       // - delete and backspace with opt, ctl, and cmd
       // Update style dropdown as cursor lands in new line
-      //
-      // Deliberately omitted: arrows 37 38 39 40, modifier keys 16 17 18
       case 8: // backspace
         e.preventDefault();
         newMarkdown = markdown.substring(0, start - 1) + markdown.substring(end);
