@@ -72,7 +72,7 @@ class Composer extends React.Component {
     this.setState({
       ...this.state,
       history_index: newIndex,
-      markdown: this.state.history[newIndex]
+      markdown: this.state.history[newIndex].markdown
     });
     return this.state.history[newIndex];
   }
@@ -85,7 +85,7 @@ class Composer extends React.Component {
     this.setState({
       ...this.state,
       history_index: newIndex,
-      markdown: this.state.history[newIndex]
+      markdown: this.state.history[newIndex].markdown
     });
     return this.state.history[newIndex];
   }
