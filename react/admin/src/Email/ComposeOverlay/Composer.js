@@ -200,7 +200,7 @@ class Composer extends React.Component {
       this.setState({...this.state,style:H1});
     } else if (lastParagraph.match(/^> /)) {
       this.setState({...this.state,style:BLOCK_QUOTE});
-    } else if (lastParagraph.match(/^    /)) {
+    } else if (lastParagraph.match(/^ {4}/)) {
       this.setState({...this.state,style:PRE});
     } else {
       this.setState({...this.state,style:BODY_TEXT});
