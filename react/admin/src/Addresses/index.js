@@ -17,7 +17,7 @@ class Addresses extends React.Component {
     this.setState({...this.state, showRequest: !this.state.showRequest})
   }
 
-  regenerateList(address) {
+  regenerateList = (address) => {
     this.setState({...this.state, trigger: address});
   }
 
