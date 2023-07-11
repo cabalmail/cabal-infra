@@ -1,6 +1,7 @@
 import React from 'react';
 import './ComposeOverlay.css';
 import ApiClient from '../../ApiClient';
+import Request from '../../Addresses/Request';
 import Composer from './Composer';
 import { ADDRESS_LIST } from '../../constants';
 const STATE_KEY = 'compose-state';
@@ -131,14 +132,7 @@ class ComposeOverlay extends React.Component {
             value={this.state.addressOld}
           ><option value="">Select an address</option>{this.getOptions()}</select>
           <label for="address-from-new" className="address-from-new">From</label>
-          <input
-            type="email"
-            id="address-from-new"
-            name="address-from-new"
-            className="address-from-new"
-            placeholder="Enter new address"
-            onChange={this.onAddressNewChange}
-          />
+          <Request />
         </div>
         <label for="address-to">To</label>
         <input
