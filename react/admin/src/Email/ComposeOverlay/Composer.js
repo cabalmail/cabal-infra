@@ -341,7 +341,7 @@ class Composer extends React.Component {
               <option value={H4}>{H4}</option>
               <option value={H5}>{H5}</option>
               <option value={H6}>{H6}</option>
-              <option value={BLOCK_QUOTE}</option>
+              <option value={BLOCK_QUOTE}>{BLOCK_QUOTE}</option>
               <option value={PRE}>{PRE}</option>
             </select>
             <button
