@@ -27,7 +27,7 @@ class Composer extends React.Component {
     super(props);
     this.state = JSON.parse(localStorage.getItem(STATE_KEY)) || {
       markdown: "",
-      history: [""],
+      history: [{markdown:"",cursor_start:0,cursor_end:0}],
       history_index: 0,
       style: BODY_TEXT,
       preview: false
@@ -43,10 +43,9 @@ class Composer extends React.Component {
     super.setState(state);
   }
 
-  historyPush(md) {
-    console.log("Push invoked");
+  historyPush(md,cs,ce) {
     var history = this.state.history.slice(0, this.state.history_index + 1);
-    history.push(md);
+    history.push({markdown:md,cursor_start:cs,cursor_end:ce});
     this.setState({
       ...this.state,
       markdown: md,
@@ -55,10 +54,9 @@ class Composer extends React.Component {
     });
   }
 
-  historyReplace(md) {
-    console.log("Replace invoked");
+  historyReplace(md,cs,ce) {
     var history = this.state.history.slice(0, this.state.history_index + 1);
-    history[this.state.history_index] = md;
+    history[this.state.history_index] = {markdown:md,cursor_start:cs,cursor_end:ce};
     this.setState({
       ...this.state,
       markdown: md,
@@ -67,7 +65,6 @@ class Composer extends React.Component {
   }
 
   historyUndo() {
-    console.log("Undo invoked");
     if (this.state.history_index <= 0) {
       return this.state.markdown;
     }
@@ -77,11 +74,10 @@ class Composer extends React.Component {
       history_index: newIndex,
       markdown: this.state.history[newIndex]
     });
-    return this.state.markdown;
+    return this.state.history[newIndex];
   }
 
   historyRedo() {
-    console.log("Redo invoked");
     if (this.state.history_index + 1 >= this.state.history.length) {
       return this.state.markdown;
     }
@@ -91,7 +87,7 @@ class Composer extends React.Component {
       history_index: newIndex,
       markdown: this.state.history[newIndex]
     });
-    return this.state.markdown;
+    return this.state.history[newIndex];
   }
 
   handleKeyDown = (e) => {
@@ -169,9 +165,17 @@ class Composer extends React.Component {
           case 90: // z
             e.preventDefault();
             if (e.shiftKey) {
-              newMarkdown = this.historyRedo();
+              {
+                markdown: newMarkdown,
+                cursor_start: newCursorStart,
+                cursor_end: newCursorEnd
+              } = this.historyRedo();
             } else {
-              newMarkdown = this.historyUndo();
+              {
+                markdown: newMarkdown,
+                cursor_start: newCursorStart,
+                cursor_end: newCursorEnd
+              } = this.historyUndo();
             }
             break;
           default:
@@ -384,7 +388,6 @@ class Composer extends React.Component {
             id="composer-text"
             name="composer-text"
             onKeyDown={this.handleKeyDown}
-            onFocus={this.setStyle}
           />
         </div>
         <div id="composer-preview">
