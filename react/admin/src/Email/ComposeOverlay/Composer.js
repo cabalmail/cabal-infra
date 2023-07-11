@@ -377,7 +377,7 @@ class Composer extends React.Component {
             id="composer-text"
             name="composer-text"
             onKeyDown={this.handleKeyDown}
-            onChange={this.handleChange}
+            onFocus={this.setStyle}
           />
         </div>
         <div id="composer-preview">
