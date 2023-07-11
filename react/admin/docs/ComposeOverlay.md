@@ -97,4 +97,11 @@ Parameters: e (null)
 
 Returns: null
 
+### toggleRequest
+Modifiers: none
+
+Parameters:  ()
+
+Returns: null
+
 </div>
