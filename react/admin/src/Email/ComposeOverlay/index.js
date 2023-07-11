@@ -34,6 +34,10 @@ class ComposeOverlay extends React.Component {
     super.setState(state);
   }
 
+  componentDidUpdate(prevProps, prevState) {
+    if ((prevState.addresses.length !== this.state.address.length))
+  }
+
   componentDidMount() {
     this.getAddresses();
   }
@@ -109,9 +113,12 @@ class ComposeOverlay extends React.Component {
   }
 
   requestCallback(address) {
-    this.getAddresses();
-    this.toggleRequest();
-    this.setState({...this.state, addressOld: address})
+    this.setState({
+      ...this.state,
+      addresses:[...this.state.addresses, address],
+      addressOld: address,
+      showRequest: false
+    });
   }
 
   render() {
