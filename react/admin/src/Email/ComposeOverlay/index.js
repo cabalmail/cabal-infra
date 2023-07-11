@@ -132,7 +132,14 @@ class ComposeOverlay extends React.Component {
             value={this.state.addressOld}
           ><option value="">Select an address</option>{this.getOptions()}</select>
           <label for="address-from-new" className="address-from-new">From</label>
-          <Request />
+          <Request
+            token={this.props.token}
+            domains={this.props.domains}
+            api_url={this.props.api_url}
+            setMessage={this.props.setMessage}
+            showRequest={this.state.showRequest}
+            host={this.props.host}
+          />
         </div>
         <label for="address-to">To</label>
         <input
