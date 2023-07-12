@@ -71,7 +71,8 @@ class Composer extends React.Component {
     var newIndex = this.state.history_index - 1;
     this.setState({
       ...this.state,
-      history_index: newIndex
+      history_index: newIndex,
+      markdown: this.state.history[newIndes].markdown
     });
     return this.state.history[newIndex];
   }
@@ -83,7 +84,8 @@ class Composer extends React.Component {
     var newIndex = this.state.history_index + 1;
     this.setState({
       ...this.state,
-      history_index: newIndex
+      history_index: newIndex,
+      markdown: this.state.history[newIndes].markdown
     });
     return this.state.history[newIndex];
   }
@@ -107,7 +109,7 @@ class Composer extends React.Component {
     // if (e.keyCode < 48 || e.keyCode > 90) {
     //   console.log(e);
     // }
-    var markdown = this.state.markdown;
+    var markdown = e.target.value;
     var newMarkdown = markdown;
     var start = e.target.selectionStart;
     var end = e.target.selectionEnd;
@@ -404,6 +406,7 @@ class Composer extends React.Component {
             id="composer-text"
             name="composer-text"
             onKeyDown={this.handleKeyDown}
+            onFocus={this.handle}
           />
         </div>
         <div id="composer-preview">
