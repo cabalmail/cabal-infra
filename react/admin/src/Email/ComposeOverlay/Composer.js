@@ -163,6 +163,11 @@ class Composer extends React.Component {
             newCursorEnd = end + 2;
             this.historyPush(newMarkdown, newCursorStart, newCursorEnd);
             break;
+          case 86: // v
+            newMarkdown = e.target.value;
+            newCursorStart = start;
+            newCursorEnd = end;
+            break;
           case 90: // z
             e.preventDefault();
             const { markdown: md, cursor_start: cs, cursor_end: ce } =
