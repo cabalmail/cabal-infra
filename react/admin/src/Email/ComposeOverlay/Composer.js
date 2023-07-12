@@ -217,7 +217,7 @@ class Composer extends React.Component {
       return;
     }
     var paragraphs = md.substring(0, cs).split("\n");
-    var lastParagraph = paragraphs[paragraphs.length - 1];
+    var lastParagraph = paragraphs[paragraphs.length - 1] + md.substring(cs).split("\n")[0];
     if (lastParagraph.match(/^###### /)) {
       this.setState({...this.state,style:H6});
     } else if (lastParagraph.match(/^##### /)) {
