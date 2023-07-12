@@ -88,6 +88,17 @@ class Composer extends React.Component {
     return this.state.history[newIndex];
   }
 
+  handleFocus = (e) => {
+    var markdown = this.state.markdown;
+    var start = e.target.selectionStart;
+    var end = e.target.selectionEnd;
+    this.historyReplace(markdown, start, end);
+    setTimeout(() => {
+      var start = e.target.selectionStart;
+      this.setStyle(markdown, start);
+    }, 500);
+  }
+
   handleKeyDown = (e) => {
     // TODO: 
     // - delete key
@@ -108,6 +119,7 @@ class Composer extends React.Component {
         var start = e.target.selectionStart;
         this.setStyle(markdown, start);
       }, 500);
+      this.historyReplace(newMarkdown, newCursorStart, newCursorEnd);
       return;
     }
     if ((e.keyCode >= 16 && e.keyCode <= 18)
