@@ -60,7 +60,7 @@ jobs:
         echo "imap_scale = ${{ vars.TF_VAR_IMAP_SCALE }}" >> terraform.tfvars
         echo "mail_domains = ${{ vars.TF_VAR_MAIL_DOMAINS }}" >> terraform.tfvars
         echo "smtpin_scale = ${{ vars.TF_VAR_SMTPIN_SCALE }}" >> terraform.tfvars
-        echo "chef_license = \"${{ vars.TF_VAR_CHEF_LICSENE}}\"" >> terraform.tfvars
+        echo "chef_license = \"${{ vars.TF_VAR_CHEF_LICENSE}}\"" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
     - name: plan-terraform
