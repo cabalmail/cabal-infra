@@ -41,16 +41,16 @@ jobs:
     - tflint
     env:
       TF_API_TOKEN: ${{ secrets.TF_TOKEN }}
-      TF_VARS_smtpout_scale: TF_VARS_SMTPOUT_SCALE
-      TF_VARS_availability_zones: TF_VAR_AVAILABILITY_ZONES
-      TF_VARS_region: TF_VAR_AWS_REGION
-      TF_VARS_cidr_block: TF_VAR_CIDR_BLOCK
-      TF_VARS_control_domain: TF_VAR_CONTROL_DOMAIN
-      TF_VARS_email: TF_VAR_EMAIL
-      TF_VARS_environment: TF_VAR_ENVIRONMENT
-      TF_VARS_imap_scale: TF_VAR_IMAP_SCALE
-      TF_VARS_mail_domains: TF_VAR_MAIL_DOMAINS
-      TF_VARS_smtpin_scale: TF_VAR_SMTPIN_SCALE
+      TF_VAR_smtpout_scale: TF_VARS_SMTPOUT_SCALE
+      TF_VAR_availability_zones: TF_VAR_AVAILABILITY_ZONES
+      TF_VAR_region: TF_VAR_AWS_REGION
+      TF_VAR_cidr_block: TF_VAR_CIDR_BLOCK
+      TF_VAR_control_domain: TF_VAR_CONTROL_DOMAIN
+      TF_VAR_email: TF_VAR_EMAIL
+      TF_VAR_environment: TF_VAR_ENVIRONMENT
+      TF_VAR_imap_scale: TF_VAR_IMAP_SCALE
+      TF_VAR_mail_domains: TF_VAR_MAIL_DOMAINS
+      TF_VAR_smtpin_scale: TF_VAR_SMTPIN_SCALE
     steps:
     - name: checkout
       uses: actions/checkout@v2
