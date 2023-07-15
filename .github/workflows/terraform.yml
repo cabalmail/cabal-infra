@@ -52,7 +52,7 @@ jobs:
       run: |
         echo "smtpout_scale = ${{ vars.TF_VAR_SMTPOUT_SCALE }}" > terraform.tfvars
         echo "availability_zones = ${{ vars.TF_VAR_AVAILABILITY_ZONES}}" >> terraform.tfvars
-        echo "region = \"${{ vars.TF_VAR_AWS_REGION}}\"" >> terraform.tfvars
+        echo "aws_region = \"${{ vars.TF_VAR_AWS_REGION}}\"" >> terraform.tfvars
         echo "cidr_block = \"${{ vars.TF_VAR_CIDR_BLOCK}}\"" >> terraform.tfvars
         echo "control_domain = \"${{ vars.TF_VAR_CONTROL_DOMAIN}}\"" >> terraform.tfvars
         echo "email = \"${{ vars.TF_VAR_EMAIL }}\"" >> terraform.tfvars
