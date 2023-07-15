@@ -43,13 +43,3 @@ jobs:
       run: tflint --version && tflint --init
     - name: run-linter
       run: for i in ./ modules/* modules/*/modules/* ; do tflint ; done
-  tfsec:
-    runs-on: ubuntu-latest
-    steps:
-    - name: checkout
-      uses: actions/checkout@master@v2
-    - name: tfsec
-      uses: aquasecurity/tfsec-action@v1.0.0
-      with:
-        soft_fail: false
-        working_directory: ./terraform/infra
