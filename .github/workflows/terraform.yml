@@ -53,30 +53,3 @@ jobs:
       with:
         soft_fail: false
         working_directory: ./terraform/infra
-  plan:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./terraform/infra
-    environment: ${{ github.ref_name == 'refs/heads/main' && 'prod' || ( github.ref_name == 'refs/heads/stage' && 'stage' || 'development' ) }}
-    needs:
-    - checkov
-    - tflint
-    - tfsec
-    steps:
-    - name: checkout
-      uses: actions/checkout@v2
-    - name: install-terraform
-      uses: hashicorp/setup-terraform@v2
-      with:
-        cli_config_credentials_token: ${{ secrets.TF_TOKEN }}
-    - name: init-terraform
-      run: terraform init -backend-config="token=${{ secrets.TF_TOKEN }}" -backend-config="organization=${{ vars.TF_ORG }}" -backend-config="workspaces=[${{ vars.TF_WORKSPACE }}]"
-    - name: plan-terraform
-      run: cd terraform/infra && terraform plan -no-color
-    - name: plan-stdout
-      run: echo ${{ steps.plan-terraform.outputs.stdout }}
-    - name: plan-stderr
-      run: echo ${{ steps.plan-terraform.outputs.stderr }}
-    - name: plan-exitcode
-      run: echo ${{ steps.plan-terraform.outputs.exitcode }}
