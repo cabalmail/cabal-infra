@@ -55,6 +55,7 @@ jobs:
         working_directory: ./terraform/infra
   plan:
     runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'refs/heads/main' && 'prod' || ( github.ref_name == 'refs/heads/stage' && 'stage' || 'development' ) }}
     needs:
     - checkov
     - tflint
