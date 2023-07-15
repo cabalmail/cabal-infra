@@ -56,7 +56,7 @@ jobs:
       with:
         soft_fail: false
         working_directory: ./terraform/infra
-  plan:
+  terraform-plan:
     runs-on: ubuntu-latest
     defaults:
       run:
