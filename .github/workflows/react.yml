@@ -19,6 +19,7 @@ on:
       - 'react/admin/src/*/**'
       - 'react/admin/package.json'
       - '.github/workflows/react.yml'
+      - '.github/scripts/react-documentation.sh'
 
 jobs:
   build:
