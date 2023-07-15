@@ -19,8 +19,9 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'refs/heads/main' && 'prod' || ( github.ref_name == 'refs/heads/stage' && 'stage' || 'development' ) }}
     steps:
-    - name: package
+    - name: checkout
       uses: actions/checkout@main
+    - name: package
       run: cd chef && tar -czf cabal.tar.gz cabal/
     - name: store-artifact
       uses: actions/upload-artifact@v3
@@ -33,7 +34,6 @@ jobs:
     needs: build
     steps:
     - name: configure-aws-cli
-      uses: actions/checkout@main
       run: |
         aws configure --profile deploy_cookbook <<-EOF > /dev/null 2>&1
         ${{ secrets.AWS_ACCESS_KEY_ID }}
