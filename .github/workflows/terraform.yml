@@ -1,0 +1,65 @@
+---
+name: Build and Deploy Terraform Infrastructure
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [trigger_build_dev]
+  push:
+    branches:
+      - '0.3.0'
+      - main
+      - stage
+    paths:
+      - 'terraform/infra'
+      - 'terraform/infra/*'
+      - 'terraform/infra/*/**'
+      - '.github/workflows/terraform.yml'
+jobs:
+  checkov:
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@master@v2
+    - name: chekov
+      id: checkov
+      uses: bridgecrewio/checkov-action@master
+      with:
+        directory: terraform/infra/
+        quiet: true
+        soft_fail: false
+        framework: terraform
+        download_external_modules: false
+  tflint:
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@v2
+      with:
+        ref: ${{ github.event.pull_request.head.ref }}
+    - name: install-linters
+      run: curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+    - name: initialize-linter
+      run: cd terraform/infra && tflint --version && tflint --init
+    - name: run-linter
+      run: for i in dns infra {dns,infra}/modules/* infra/modules/*/modules/* ; do tflint ; done
+  tfsec:
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@master@v2
+    - name: tfsec
+      uses: aquasecurity/tfsec-action@v1.0.0
+      with:
+        soft_fail: false
+        working_directory: ./terraform/infra
+  plan:
+    runs-on: ubuntu-latest
+    needs:
+    - checkov
+    - tflint
+    - tfsec
+    steps:
+      -name: install-terraform
+      -name: init-terraform
+        run: terraform init -backend-config="token=${{ secrets.TF_TOKEN }}" -backend-config="organization=${{ vars.TF_ORG }}" -backend-config="workspaces=[${{ vars.TF_WORKSPACE }}]"
