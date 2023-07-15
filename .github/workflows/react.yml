@@ -65,3 +65,19 @@ jobs:
         --distribution-id "$(aws ssm get-parameter --name "/cabal/react-config/cf-distribution" --profile deploy_react | jq -r '.Parameter.Value')" \
         --paths '/*' \
         --profile deploy_react
+  document:
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@main
+    - name: install
+      run: ./.github/scripts/react-documentation.sh
+    - name: Push
+      run: |
+        MYNAME="${{github.event.pusher.name}} (automated)"
+        MYEMAIL="${{github.event.pusher.email}}"
+        git config --global user.name "${MYNAME}"
+        git config --global user.email "${MYEMAIL}"
+        git add . || true
+        git commit -m "Generated documentation for React" || true
+        git push || true
