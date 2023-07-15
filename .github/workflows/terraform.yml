@@ -58,7 +58,7 @@ jobs:
         echo "email = \"${{ vars.TF_VAR_EMAIL }}\"" >> terraform.tfvars
         echo "environment = \"${{ vars.TF_VAR_ENVIRONMENT }}\"" >> terraform.tfvars
         echo "imap_scale = ${{ vars.TF_VAR_IMAP_SCALE }}" >> terraform.tfvars
-        echo "domains = ${{ vars.TF_VAR_MAIL_DOMAINS }}" >> terraform.tfvars
+        echo "mail_domains = ${{ vars.TF_VAR_MAIL_DOMAINS }}" >> terraform.tfvars
         echo "smtpin_scale = ${{ vars.TF_VAR_SMTPIN_SCALE }}" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
