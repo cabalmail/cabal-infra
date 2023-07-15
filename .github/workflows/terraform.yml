@@ -15,6 +15,7 @@ on:
       - 'terraform/infra/*'
       - 'terraform/infra/*/**'
       - '.github/workflows/terraform.yml'
+
 jobs:
   tflint:
     runs-on: ubuntu-latest
@@ -38,6 +39,9 @@ jobs:
     environment: ${{ github.ref_name == 'refs/heads/main' && 'prod' || ( github.ref_name == 'refs/heads/stage' && 'stage' || 'development' ) }}
     needs:
     - tflint
+    env:
+      TF_API_TOKEN: ${{ secrets.TF_TOKEN }}
+      TF_WORKSPACE: ${{ vars.TF_WORKSPACE }}
     steps:
     - name: checkout
       uses: actions/checkout@v2
@@ -46,7 +50,7 @@ jobs:
       with:
         cli_config_credentials_token: ${{ secrets.TF_TOKEN }}
     - name: init-terraform
-      run: terraform init -backend-config="token=${{ secrets.TF_TOKEN }}" -backend-config="organization=${{ vars.TF_ORG }}" -backend-config="workspaces=[${{ vars.TF_WORKSPACE }}]"
+      run: terraform init
     - name: plan-terraform
       run: terraform plan -no-color
     - name: plan-stdout
