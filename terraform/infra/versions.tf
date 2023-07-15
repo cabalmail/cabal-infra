@@ -1,6 +1,6 @@
 terraform {
   cloud {
-    organization: cabal
+    organization = cabal
   }
   required_providers {
     aws = {
