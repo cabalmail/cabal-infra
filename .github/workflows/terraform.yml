@@ -41,16 +41,6 @@ jobs:
     - tflint
     env:
       TF_API_TOKEN: ${{ secrets.TF_TOKEN }}
-      TF_VAR_smtpout_scale: TF_VARS_SMTPOUT_SCALE
-      TF_VAR_availability_zones: TF_VAR_AVAILABILITY_ZONES
-      TF_VAR_region: TF_VAR_AWS_REGION
-      TF_VAR_cidr_block: TF_VAR_CIDR_BLOCK
-      TF_VAR_control_domain: TF_VAR_CONTROL_DOMAIN
-      TF_VAR_email: TF_VAR_EMAIL
-      TF_VAR_environment: TF_VAR_ENVIRONMENT
-      TF_VAR_imap_scale: TF_VAR_IMAP_SCALE
-      TF_VAR_mail_domains: TF_VAR_MAIL_DOMAINS
-      TF_VAR_smtpin_scale: TF_VAR_SMTPIN_SCALE
     steps:
     - name: checkout
       uses: actions/checkout@v2
@@ -58,6 +48,18 @@ jobs:
       uses: hashicorp/setup-terraform@v2
       with:
         cli_config_credentials_token: ${{ secrets.TF_TOKEN }}
+    - name: tfvars-terraform
+      run: |
+        echo "smtpout_scale = ${{ vars.TF_VAR_SMTPOUT_SCALE }}" > terraform.tfvars
+        echo "availability_zones = ${{ vars.TF_VAR_AVAILABILITY_ZONES}}" >> terraform.tfvars
+        echo "region = \"${{ vars.TF_VAR_AWS_REGION}}\"" >> terraform.tfvars
+        echo "cidr_block = \"${{ vars.TF_VAR_CIDR_BLOCK}}\"" >> terraform.tfvars
+        echo "control_domain = \"${{ vars.TF_VAR_CONTROL_DOMAIN}}\"" >> terraform.tfvars
+        echo "email = \"${{ vars.TF_VAR_EMAIL }}\"" >> terraform.tfvars
+        echo "environment = \"${{ vars.TF_VAR_ENVIRONMENT }}\"" >> terraform.tfvars
+        echo "imap_scale = ${{ vars.TF_VAR_IMAP_SCALE }}" >> terraform.tfvars
+        echo "domains = ${{ vars.TF_VAR_MAIL_DOMAINS }}" >> terraform.tfvars
+        echo "smtpin_scale = ${{ vars.TF_VAR_SMTPIN_SCALE }}" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
     - name: plan-terraform
