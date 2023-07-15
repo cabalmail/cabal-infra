@@ -1,5 +1,7 @@
 terraform {
-  cloud {}
+  cloud {
+    organization: cabal
+  }
   required_providers {
     aws = {
       source  = "hashicorp/aws"
