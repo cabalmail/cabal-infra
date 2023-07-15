@@ -41,7 +41,6 @@ jobs:
     - tflint
     env:
       TF_API_TOKEN: ${{ secrets.TF_TOKEN }}
-      TF_WORKSPACE: ${{ vars.TF_WORKSPACE }}
     steps:
     - name: checkout
       uses: actions/checkout@v2
