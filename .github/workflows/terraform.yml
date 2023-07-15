@@ -17,7 +17,7 @@ on:
       - '.github/workflows/terraform.yml'
 
 jobs:
-  checkov:
+  chekov:
     runs-on: ubuntu-latest
     steps:
     - name: checkout
@@ -61,6 +61,7 @@ jobs:
         working-directory: ./terraform/infra
     environment: ${{ github.ref_name == 'refs/heads/main' && 'prod' || ( github.ref_name == 'refs/heads/stage' && 'stage' || 'development' ) }}
     needs:
+    - chekov
     - tflint
     - tfsec
     env:
