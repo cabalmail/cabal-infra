@@ -31,6 +31,16 @@ jobs:
       run: tflint --version && tflint --init
     - name: run-linter
       run: for i in ./ modules/* modules/*/modules/* ; do tflint ; done
+  tfsec:
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@master@v2
+    - name: tfsec
+      uses: aquasecurity/tfsec-action@v1.0.0
+      with:
+        soft_fail: false
+        working_directory: ./terraform/infra
   plan:
     runs-on: ubuntu-latest
     defaults:
@@ -39,6 +49,7 @@ jobs:
     environment: ${{ github.ref_name == 'refs/heads/main' && 'prod' || ( github.ref_name == 'refs/heads/stage' && 'stage' || 'development' ) }}
     needs:
     - tflint
+    - tfsec
     env:
       TF_API_TOKEN: ${{ secrets.TF_TOKEN }}
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
