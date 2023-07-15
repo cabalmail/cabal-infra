@@ -31,7 +31,10 @@ jobs:
         framework: terraform
         download_external_modules: false
   tflint:
-    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./terraform/infra
+        runs-on: ubuntu-latest
     steps:
     - name: checkout
       uses: actions/checkout@v2
@@ -40,9 +43,9 @@ jobs:
     - name: install-linters
       run: curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
     - name: initialize-linter
-      run: cd terraform/infra && tflint --version && tflint --init
+      run: tflint --version && tflint --init
     - name: run-linter
-      run: cd terraform/infra && for i in ./ modules/* modules/*/modules/* ; do tflint ; done
+      run: for i in ./ modules/* modules/*/modules/* ; do tflint ; done
   tfsec:
     runs-on: ubuntu-latest
     steps:
@@ -55,6 +58,9 @@ jobs:
         working_directory: ./terraform/infra
   plan:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./terraform/infra
     environment: ${{ github.ref_name == 'refs/heads/main' && 'prod' || ( github.ref_name == 'refs/heads/stage' && 'stage' || 'development' ) }}
     needs:
     - checkov
@@ -68,6 +74,9 @@ jobs:
       with:
         cli_config_credentials_token: ${{ secrets.TF_TOKEN }}
     - name: init-terraform
-      run: cd terraform/infra && terraform init -backend-config="token=${{ secrets.TF_TOKEN }}" -backend-config="organization=${{ vars.TF_ORG }}" -backend-config="workspaces=[${{ vars.TF_WORKSPACE }}]"
+      run: terraform init -backend-config="token=${{ secrets.TF_TOKEN }}" -backend-config="organization=${{ vars.TF_ORG }}" -backend-config="workspaces=[${{ vars.TF_WORKSPACE }}]"
     - name: plan-terraform
-      run: cd terraform/infra && terraform plan
+      run: cd terraform/infra && terraform plan -no-color
+    - run: echo ${{ steps.plan-terraform.outputs.stdout }}
+    - run: echo ${{ steps.plan-terraform.outputs.stderr }}
+    - run: echo ${{ steps.plan-terraform.outputs.exitcode }}
