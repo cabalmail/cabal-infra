@@ -16,7 +16,19 @@ on:
       - 'terraform/infra/*/**'
       - '.github/workflows/terraform.yml'
 jobs:
-
+  checkov:
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@master@v2
+    - name: chekov
+      uses: bridgecrewio/checkov-action@master
+      with:
+        directory: terraform/infra/
+        quiet: true
+        soft_fail: false
+        framework: terraform
+        download_external_modules: false
   tflint:
     defaults:
       run:
@@ -32,7 +44,7 @@ jobs:
     - name: initialize-linter
       run: tflint --version && tflint --init
     - name: run-linter
-    run: for i in ./ modules/* modules/*/modules/* ; do tflint ; done
+      run: for i in ./ modules/* modules/*/modules/* ; do tflint ; done
   tfsec:
     runs-on: ubuntu-latest
     steps:
