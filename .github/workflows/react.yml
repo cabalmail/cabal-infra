@@ -56,7 +56,7 @@ jobs:
       with:
         name: react-app
     - name: unpack
-      run: tar tzvf react_app.tar.gz
+      run: tar xzvf react_app.tar.gz
     - name: upload
       run: aws s3 sync build "s3://admin.$(aws ssm get-parameter --name '/cabal/control_domain_zone_name' --profile deploy_react | jq -r '.Parameter.Value')" --profile deploy_react --no-progress
     - name: invalidate-cache
