@@ -64,7 +64,7 @@ jobs:
     - name: checkout
       uses: actions/checkout@v2
     - name: install-terraform
-      uses: hashicorp/setup-terraform@v1
+      uses: hashicorp/setup-terraform@v2
       with:
         cli_config_credentials_token: ${{ secrets.TF_TOKEN }}
     - name: init-terraform
