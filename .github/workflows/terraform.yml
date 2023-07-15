@@ -42,7 +42,7 @@ jobs:
     - name: initialize-linter
       run: cd terraform/infra && tflint --version && tflint --init
     - name: run-linter
-      run: for i in dns infra {dns,infra}/modules/* infra/modules/*/modules/* ; do tflint ; done
+      run: cd terraform/infra && for i in ./ modules/* modules/*/modules/* ; do tflint ; done
   tfsec:
     runs-on: ubuntu-latest
     steps:
