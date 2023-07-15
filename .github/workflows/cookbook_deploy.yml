@@ -1,5 +1,5 @@
 ---
-name: Upload Cookbook Dev
+name: Build and Deploy Cookbook
 
 on:
   workflow_dispatch:
@@ -22,7 +22,7 @@ jobs:
     - name: checkout
       uses: actions/checkout@main
     - name: package
-      run: cd chef && tar -czf cabal.tar.gz cabal/
+      run: cd chef && tar -czf ../cabal.tar.gz cabal/
     - name: store-artifact
       uses: actions/upload-artifact@v3
       with:
