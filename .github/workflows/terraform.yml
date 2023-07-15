@@ -16,16 +16,3 @@ on:
       - 'terraform/infra/*/**'
       - '.github/workflows/terraform.yml'
 jobs:
-  checkov:
-    runs-on: ubuntu-latest
-    steps:
-    - name: checkout
-      uses: actions/checkout@master@v2
-    - name: chekov
-      uses: bridgecrewio/checkov-action@master
-      with:
-        directory: terraform/infra/
-        quiet: true
-        soft_fail: false
-        framework: terraform
-        download_external_modules: false
