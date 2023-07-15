@@ -29,7 +29,7 @@ jobs:
       uses: actions/checkout@main
     - name: build
       env:
-        NODE_ENV=${{ github.ref_name == 'refs/heads/main' && 'prod' || ( github.ref_name == 'refs/heads/stage' && 'stage' || 'development' ) }}
+        NODE_ENV: ${{ github.ref_name == 'refs/heads/main' && 'prod' || ( github.ref_name == 'refs/heads/stage' && 'stage' || 'development' ) }}
       run: cd react/admin && yarn install && yarn build --profile
     - name: package
       run: cd react/admin && tar czvf ../../react_app.tar.gz build/
