@@ -23,10 +23,21 @@ jobs:
         working-directory: ./terraform/infra
     steps:
     - name: checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
     - name: install-linters
       run: curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
     - name: initialize-linter
       run: tflint --version && tflint --init
     - name: run-linter
       run: for i in ./ modules/* modules/*/modules/* ; do tflint ; done
+  tfsec:
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@master@v2
+    - name: tfsec
+      uses: aquasecurity/tfsec-action@v1.0.0
+      with:
+        soft_fail: false
+        working_directory: ./terraform/infra
+    
