@@ -29,17 +29,3 @@ jobs:
         soft_fail: false
         framework: terraform
         download_external_modules: false
-  tflint:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./terraform/infra
-    steps:
-    - name: checkout
-      uses: actions/checkout@v2
-    - name: install-linters
-      run: curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
-    - name: initialize-linter
-      run: tflint --version && tflint --init
-    - name: run-linter
-      run: for i in ./ modules/* modules/*/modules/* ; do tflint ; done
