@@ -18,4 +18,4 @@ def handler(event, _context):
         "body": json.dumps({
             "message_ids": response
         })
-    }
+    } # pylint: disable=duplicate-code

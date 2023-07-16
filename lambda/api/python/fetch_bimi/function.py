@@ -26,7 +26,7 @@ def handler(event, _context):
     return {
         "statusCode": 200,
         "body": json.dumps({
-            "url": f'https://www.{".".join(sender_domain_parts[l-2:])}/favicon.ico'
+            "url": f'https://www.{".".join(sender_domain_parts[length-2:])}/favicon.ico'
         })
     }
     
