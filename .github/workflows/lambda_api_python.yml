@@ -35,6 +35,11 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'refs/heads/main' && 'prod' || ( github.ref_name == 'refs/heads/stage' && 'stage' || 'development' ) }}
     needs: build
+    env:
+      TF_API_TOKEN: ${{ secrets.TF_TOKEN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
       uses: actions/checkout@main
