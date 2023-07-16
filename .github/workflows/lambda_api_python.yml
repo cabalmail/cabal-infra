@@ -23,7 +23,7 @@ jobs:
       uses: actions/checkout@main
     - name: pylint
       shell: bash
-      run: pip install pylint && cd ./lambda/api/python && pylint --rcfile .åpylintrc */function.py
+      run: pip install pylint && cd ./lambda/api/python && pylint --rcfile .pylintrc */function.py
     - name: configure-aws
       run: |
         aws configure --profile deploy_lambda <<-EOF > /dev/null 2>&1
