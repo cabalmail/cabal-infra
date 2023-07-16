@@ -137,7 +137,7 @@ jobs:
     - name: init-terraform
       run: terraform init
     - name: apply-terraform
-      run: terraform apply -no-color
+      run: terraform apply -no-color -auto-approve
     - name: plan-stdout
       run: echo ${{ steps.plan-terraform.outputs.stdout }}
     - name: plan-stderr
