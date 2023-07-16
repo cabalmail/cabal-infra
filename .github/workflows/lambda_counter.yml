@@ -64,10 +64,6 @@ jobs:
         echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
     - name: init-terraform
       run: cd ./terraform/infra && terraform init
-    - name: taint-layer-terraform
-      run: cd ./terraform/infra && terraform taint module.lambda_layers.aws_lambda_layer_version.layer[\"nodejs\"]
-    - name: apply-layer-terraform
-      run: cd ./terraform/infra && terraform apply -no-color -auto-approve -target=module.lambda_layers.aws_lambda_layer_version.layer[\"nodejs\"]
     - name: taint-terraform
       run: cd ./terraform/infra && terraform taint module.pool.aws_lambda_function.assign_osid
     - name: apply-terraform
