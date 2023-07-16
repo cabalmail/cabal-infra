@@ -44,6 +44,7 @@ jobs:
         cli_config_credentials_token: ${{ secrets.TF_TOKEN }}
     - name: tfvars-terraform
       run: |
+        cd ./terraform/infra
         echo "smtpout_scale = ${{ vars.TF_VAR_SMTPOUT_SCALE }}" > terraform.tfvars
         echo "availability_zones = ${{ vars.TF_VAR_AVAILABILITY_ZONES}}" >> terraform.tfvars
         echo "aws_region = \"${{ vars.TF_VAR_AWS_REGION}}\"" >> terraform.tfvars
