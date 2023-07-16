@@ -7,7 +7,8 @@ def handler(event, _context):
     '''Retrieves IMAP message given a folder and ID'''
     query_string = event['queryStringParameters']
     user = event['requestContext']['authorizer']['claims']['cognito:username']
-    message = get_message(query_string['host'], user, query_string['folder'], int(query_string['id']))
+    message = get_message(
+              query_string['host'], user, query_string['folder'], int(query_string['id']))
     body_plain = ""
     body_html = ""
     body_html_charset = "utf8"
@@ -35,14 +36,14 @@ def handler(event, _context):
 
     try:
         body_html_decoded = body_html.decode(body_html_charset)
-    except: # pylint: disable=bare-exception
+    except: # pylint: disable=bare-except
         print("Woopsy")
-        body_html_decoded = body_html.__str__()
+        body_html_decoded = str(body_html)
 
     try:
         body_plain_decoded = body_plain.decode(body_plain_charset)
-    except: # pylint: disable=bare-exception
-        body_plain_decoded = body_plain.__str__()
+    except: # pylint: disable=bare-except
+        body_plain_decoded = str(body_plain)
 
     return {
         "statusCode": 200,

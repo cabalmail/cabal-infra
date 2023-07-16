@@ -12,15 +12,16 @@ def handler(event, _context):
     query_string = event['queryStringParameters']
     user = event['requestContext']['authorizer']['claims']['cognito:username']
     bucket = query_string['host'].replace("imap", "cache")
+    key_prefix = f"{user}/{query_string['folder']}/{query_string['id']}/{query_string['index']}"
     key = ""
     message = get_message(query_string['host'], user, query_string['folder'], query_string['id'])
     for part in message.walk():
         content_type = part.get_content_type()
         if part.get('Content-ID'):
             if part.get('Content-ID') == query_string['index']:
-                key = f"{user}/{query_string['folder']}/{query_string['id']}/{query_string['index']}/{part.get_filename()}"
+                key = f"{key_prefix}/{part.get_filename()}"
                 if not key_exists(bucket, key):
-                    upload_objecontent_type(bucket, key, content_type, part.get_payload(decode=True))
+                    upload_object(bucket, key, content_type, part.get_payload(decode=True))
 
     return {
         "statusCode": 200,

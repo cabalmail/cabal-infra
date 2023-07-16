@@ -6,16 +6,16 @@ def handler(event, _context):
     query_string = event['queryStringParameters']
     sender_domain = query_string['sender_domain']
     sender_domain_parts = sender_domain.split(".")
-    l = len(sender_domain_parts)
-    for x in range(l):
-        domain = ".".join(sender_domain_parts[x:])
+    length = len(sender_domain_parts)
+    for part in range(length):
+        domain = ".".join(sender_domain_parts[part:])
         print(domain)
         try:
             answer = dns.resolver.query(f'default._bimi.{domain}', 'TXT')
             return {
                 "statusCode": 200,
                 "body": json.dumps({
-                    "url": answer[0].__str__().split(";")[1].split("=")[1]
+                    "url": str(answer[0]).split(";")[1].split("=")[1]
                 })
             }
         except dns.resolver.NXDOMAIN:

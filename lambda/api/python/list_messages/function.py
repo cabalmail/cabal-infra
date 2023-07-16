@@ -7,7 +7,8 @@ def handler(event, _context):
     query_string = event['queryStringParameters']
     user = event['requestContext']['authorizer']['claims']['cognito:username']
     client = get_imap_client(query_string['host'], user, query_string['folder'])
-    response = client.sort(f"{query_string['sort_order']}{query_string['sort_field']}", [b'NOT', b'DELETED'])
+    flags = [b'NOT', b'DELETED']
+    response = client.sort(f"{query_string['sort_order']}{query_string['sort_field']}", flags)
     client.logout()
     return {
         "statusCode": 200,
@@ -15,4 +16,3 @@ def handler(event, _context):
             "message_ids": response
         })
     }
-

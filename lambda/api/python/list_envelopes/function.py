@@ -1,6 +1,5 @@
 '''Retrieves IMAP envelopes for a user given a folder and list of message ids'''
 import json
-from datetime import datetime
 from email.header import decode_header
 from helper import get_imap_client # pylint: disable=import-error
 
@@ -11,12 +10,13 @@ def handler(event, _context):
     user = event['requestContext']['authorizer']['claims']['cognito:username']
     client = get_imap_client(query_string['host'], user, query_string['folder'], True)
     envelopes = {}
-    for msgid, data in client.fetch(ids, ['ENVELOPE', 'FLAGS', 'BODYSTRUCTURE', 'BODY[HEADER.FIELDS (X-PRIORITY)]']).items():
+    flags = ['ENVELOPE', 'FLAGS', 'BODYSTRUCTURE', 'BODY[HEADER.FIELDS (X-PRIORITY)]']
+    for msgid, data in client.fetch(ids, flags).items():
         envelope = data[b'ENVELOPE']
         priority_header = data[b'BODY[HEADER.FIELDS (X-PRIORITY)]'].decode()
         envelopes[msgid] = {
             "id": msgid,
-            "date": envelope.date.__str__(),
+            "date": str(envelope.date),
             "subject": decode_subject(envelope.subject),
             "from": decode_address(envelope.from_),
             "to": decode_address(envelope.to),
@@ -41,12 +41,12 @@ def decode_subject(data):
     except UnicodeDecodeError:
         return "[[¿?]]"
     subject_strings = []
-    for p in subject_parts:
+    for part in subject_parts:
         try:
-            if isinstance(p[0], bytes):
-                subject_strings.append(str(p[0], p[1] or 'utf-8'))
-            if isinstance(p[0], str):
-                subject_strings.append(p[0])
+            if isinstance(part[0], bytes):
+                subject_strings.append(str(part[0], part[1] or 'utf-8'))
+            if isinstance(part[0], str):
+                subject_strings.append(part[0])
         except UnicodeDecodeError:
             subject_strings.append("[¿?]")
 
@@ -58,7 +58,7 @@ def decode_address(data):
     for fragment in data:
         try:
             return_value.append(f"{fragment.mailbox.decode()}@{fragment.host.decode()}")
-        except:
+        except: # pylint: disable=bare-except
             return_value.append("undisclosed-recipients")
     return return_value
 
@@ -80,5 +80,5 @@ def decode_body_structure(data):
         elif isinstance(obj, bytes):
             return_value.append(obj.decode())
         else:
-          return_value.append(obj)
+            return_value.append(obj)
     return return_value
