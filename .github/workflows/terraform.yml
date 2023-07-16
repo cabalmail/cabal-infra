@@ -4,7 +4,7 @@ name: Build and Deploy Terraform Infrastructure
 on:
   workflow_dispatch:
   repository_dispatch:
-    types: [trigger_build_dev]
+    types: [trigger_build]
   push:
     branches:
       - '0.3.0'
