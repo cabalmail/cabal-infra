@@ -23,7 +23,14 @@ jobs:
       uses: actions/checkout@main
     - name: lint
       shell: bash
-      run: pip install pylint && shopt -s extglob && cd ./lambda/api/python && for F in !(python) ; do pylint $F/function.py ; done
+      run: |
+        pip install pylint
+        cd ./lambda/api/python
+        for F in * ; do
+          if [ "$F" != "python" ] # skip layer
+            pylint $F/function.py
+          fi
+        done
     - name: configure-aws
       run: |
         aws configure --profile deploy_lambda <<-EOF > /dev/null 2>&1
