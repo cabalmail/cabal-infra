@@ -1,4 +1,5 @@
 #!/bin/bash
+cd ./lambda/api/node
 FUNCTIONS=$(echo *)
 AWS_S3_BUCKET="admin.$(aws ssm get-parameter --name '/cabal/control_domain_zone_name' --profile deploy_lambda | jq -r '.Parameter.Value')"
 for FUNC in $FUNCTIONS ; do
