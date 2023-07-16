@@ -66,8 +66,22 @@ form.compose-overlay div.composer-wrapper div#composer-preview {
   overflow: scroll;
 }
 
+.wysiwyg-editor {
+  border: 1px solid #222;
+  background-color: #ee9;
+  color: #000;
+  height: 30em;
+  overflow: scroll;
+}
+
+.wysiwyg-toolbar {
+  border: 1px solid #222;
+  background-color: #ee9;
+  margin-top: 1em;
+}
+
 /* toolbar */
-form.compose-overlay div.composer-toolbar {
+/*form.compose-overlay div.composer-toolbar {
   width: 100%;
   padding: 0;
   border: 1px solid;
@@ -103,11 +117,11 @@ form.compose-overlay div.composer-toolbar button.composer-toolbar-italic {
 
 form.compose-overlay div.composer-toolbar button.composer-toolbar-strikethrough {
   text-decoration: line-through;
-}
+}*/
 
 /* preview/edit */
 
-div.composer-preview-toggle button {
+/*div.composer-preview-toggle button {
   display: inline-block;
   padding: 1em;
   border-top-left-radius: 0;
@@ -128,4 +142,4 @@ div.composer-preview-edit div#composer-preview {
 div#composer-preview p {
   margin: 0;
   min-height: 1.5em;
-}
+}*/

@@ -182,9 +182,9 @@ class ComposeOverlay extends React.Component {
         />
         <Editor
           editorState={editorState}
-          toolbarClassName="toolbarClassName"
-          wrapperClassName="wrapperClassName"
-          editorClassName="editorClassName"
+          toolbarClassName="wysiwyg-toolbar"
+          wrapperClassName="wysiwyg-wrapper"
+          editorClassName="wysiwyg-editor"
           onEditorStateChange={this.onEditorStateChange}
         />
         <button onClick={this.handleSend} className="default" id="compose-send">Send</button>
