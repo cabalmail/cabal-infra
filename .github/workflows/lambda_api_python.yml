@@ -59,10 +59,10 @@ jobs:
     - name: init-terraform
       run: cd ./terraform/infra && terraform init
     - name: taint-layer-terraform
-      run: cd ./terraform/infra && terraform taint module.lambda_layers.aws_lambda_layer_version.layer["python"]
+      run: cd ./terraform/infra && terraform taint module.lambda_layers.aws_lambda_layer_version.layer[\"python\"]
     - name: apply-layer-terraform
-      run: cd ./terraform/infra && terraform apply -no-color -auto-approve -target=module.lambda_layers.aws_lambda_layer_version.layer["python"]
+      run: cd ./terraform/infra && terraform apply -no-color -auto-approve -target=module.lambda_layers.aws_lambda_layer_version.layer[\"python\"]
     - name: taint-terraform
-      run: cd ./lambda/api/python && for FUNC in * ; do pushd ../../../terraform/infra ; terraform taint module.admin.module.cabal_method["$FUNC"] ; popd ; done
+      run: cd ./lambda/api/python && for FUNC in * ; do pushd ../../../terraform/infra ; terraform taint module.admin.module.cabal_method[\"$FUNC\"] ; popd ; done
     - name: apply-terraform
-      run: cd ./lambda/api/python && for FUNC in * ; do pushd ../../../terraform/infra ; terraform apply -no-color -auto-approve -target=module.admin.module.cabal_method["$FUNC"] ; popd ; done
+      run: cd ./lambda/api/python && for FUNC in * ; do pushd ../../../terraform/infra ; terraform apply -no-color -auto-approve -target=module.admin.module.cabal_method[\"$FUNC\"] ; popd ; done
