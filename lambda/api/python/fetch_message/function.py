@@ -5,51 +5,51 @@ from helper import sign_url # pylint: disable=import-error
 
 def handler(event, _context):
     '''Retrieves IMAP message given a folder and ID'''
-    qs = event['queryStringParameters']
+    query_string = event['queryStringParameters']
     user = event['requestContext']['authorizer']['claims']['cognito:username']
-    message = get_message(qs['host'], user, qs['folder'], int(qs['id']))
+    message = get_message(query_string['host'], user, query_string['folder'], int(query_string['id']))
     body_plain = ""
     body_html = ""
     body_html_charset = "utf8"
     body_plain_charset = "utf8"
     if message.is_multipart():
         for part in message.walk():
-            ct = part.get_content_type()
-            ch = part.get_content_charset()
-            cd = str(part.get('Content-Disposition'))
-            if ct == 'text/plain' and 'attachment' not in cd:
+            content_type = part.get_content_type()
+            content_charset = part.get_content_charset()
+            content_disposition = str(part.get('Content-Disposition'))
+            if content_type == 'text/plain' and 'attachment' not in content_disposition:
                 body_plain = part.get_payload(decode=True)
-                body_plain_charset = ch
-            if ct == 'text/html' and 'attachment' not in cd:
+                body_plain_charset = content_charset
+            if content_type == 'text/html' and 'attachment' not in content_disposition:
                 body_html = part.get_payload(decode=True)
-                body_html_charset = ch
+                body_html_charset = content_charset
     else:
-        ct = message.get_content_type()
-        ch = message.get_content_charset()
-        if ct == 'text/plain':
+        content_type = message.get_content_type()
+        content_charset = message.get_content_charset()
+        if content_type == 'text/plain':
             body_plain = message.get_payload(decode=True)
-            body_plain_charset = ch
-        if ct == 'text/html':
+            body_plain_charset = content_charset
+        if content_type == 'text/html':
             body_html = message.get_payload(decode=True)
-            body_html_charset = ch
+            body_html_charset = content_charset
 
     try:
         body_html_decoded = body_html.decode(body_html_charset)
-    except:
+    except: # pylint: disable=bare-exception
         print("Woopsy")
         body_html_decoded = body_html.__str__()
 
     try:
         body_plain_decoded = body_plain.decode(body_plain_charset)
-    except:
+    except: # pylint: disable=bare-exception
         body_plain_decoded = body_plain.__str__()
 
     return {
         "statusCode": 200,
         "body": json.dumps({
             "message_raw": sign_url(
-                                    qs['host'].replace("imap", "cache"),
-                                    f"{user}/{qs['folder']}/{qs['id']}/raw"),
+                                    query_string['host'].replace("imap", "cache"),
+                                    f"{user}/{query_string['folder']}/{query_string['id']}/raw"),
             "message_body_plain": body_plain_decoded,
             "message_body_html": body_html_decoded
         })

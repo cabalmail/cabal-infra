@@ -6,10 +6,10 @@ from helper import get_imap_client # pylint: disable=import-error
 
 def handler(event, _context):
     '''Retrieves IMAP envelopes for a user given a folder and list of message ids'''
-    qs = event['queryStringParameters']
-    ids = json.loads(qs['ids'])
+    query_string = event['queryStringParameters']
+    ids = json.loads(query_string['ids'])
     user = event['requestContext']['authorizer']['claims']['cognito:username']
-    client = get_imap_client(qs['host'], user, qs['folder'], True)
+    client = get_imap_client(query_string['host'], user, query_string['folder'], True)
     envelopes = {}
     for msgid, data in client.fetch(ids, ['ENVELOPE', 'FLAGS', 'BODYSTRUCTURE', 'BODY[HEADER.FIELDS (X-PRIORITY)]']).items():
         envelope = data[b'ENVELOPE']
@@ -54,31 +54,31 @@ def decode_subject(data):
 
 def decode_address(data):
     '''Converts a tuple of Address objects to a simple list of strings'''
-    r = []
-    for f in data:
+    return_value = []
+    for fragment in data:
         try:
-            r.append(f"{f.mailbox.decode()}@{f.host.decode()}")
+            return_value.append(f"{fragment.mailbox.decode()}@{fragment.host.decode()}")
         except:
-            r.append("undisclosed-recipients")
-    return r
+            return_value.append("undisclosed-recipients")
+    return return_value
 
 def decode_flags(data):
     '''Converts array of bytes to array of strings'''
-    s = []
-    for b in data:
-        s.append(b.decode())
-    return s
+    return_value = []
+    for flag in data:
+        return_value.append(flag.decode())
+    return return_value
 
 def decode_body_structure(data):
     '''Converts bytes to strings in body structure'''
-    s = []
-    for i in data:
-        if isinstance(i, list):
-            s.append(decode_body_structure(i))
-        elif isinstance(i, tuple):
-            s.append(decode_body_structure(i))
-        elif isinstance(i, bytes):
-            s.append(i.decode())
+    return_value = []
+    for obj in data:
+        if isinstance(obj, list):
+            return_value.append(decode_body_structure(obj))
+        elif isinstance(obj, tuple):
+            return_value.append(decode_body_structure(obj))
+        elif isinstance(obj, bytes):
+            return_value.append(obj.decode())
         else:
-          s.append(i)
-    return s
+          return_value.append(obj)
+    return return_value

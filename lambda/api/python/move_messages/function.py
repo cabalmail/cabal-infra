@@ -10,11 +10,11 @@ def handler(event, _context):
     if body['destination'] == "Deleted Messages":
         try:
             client.create_folder(body['destination'])
-        except:
+        except: # pylint: disable=bare-exception
             pass
     try:
         client.move(body['ids'], body['destination'])
-    except:
+    except: # pylint: disable=bare-exception
         client.logout()
         return {
             "statusCode": 500,
