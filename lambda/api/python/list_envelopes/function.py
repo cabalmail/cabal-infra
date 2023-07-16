@@ -2,13 +2,13 @@
 import json
 from datetime import datetime
 from email.header import decode_header
-from helper import get_imap_client
+from helper import get_imap_client # pylint: disable=import-error
 
 def handler(event, _context):
     '''Retrieves IMAP envelopes for a user given a folder and list of message ids'''
     qs = event['queryStringParameters']
     ids = json.loads(qs['ids'])
-    user = event['requestContext']['authorizer']['claims']['cognito:username'];
+    user = event['requestContext']['authorizer']['claims']['cognito:username']
     client = get_imap_client(qs['host'], user, qs['folder'], True)
     envelopes = {}
     for msgid, data in client.fetch(ids, ['ENVELOPE', 'FLAGS', 'BODYSTRUCTURE', 'BODY[HEADER.FIELDS (X-PRIORITY)]']).items():

@@ -1,12 +1,12 @@
 '''Retrieves IMAP message given a folder and ID'''
 import json
-from helper import get_message
-from helper import sign_url
+from helper import get_message # pylint: disable=import-error
+from helper import sign_url # pylint: disable=import-error
 
 def handler(event, _context):
     '''Retrieves IMAP message given a folder and ID'''
     qs = event['queryStringParameters']
-    user = event['requestContext']['authorizer']['claims']['cognito:username'];
+    user = event['requestContext']['authorizer']['claims']['cognito:username']
     message = get_message(qs['host'], user, qs['folder'], int(qs['id']))
     body_plain = ""
     body_html = ""

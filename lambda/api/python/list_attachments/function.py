@@ -1,11 +1,11 @@
 '''Retrieves list of attachments from a message given a folder and ID'''
 import json
-from helper import get_message
+from helper import get_message # pylint: disable=import-error
 
 def handler(event, _context):
     '''Retrieves list of attachments from a message given a folder and ID'''
     qs = event['queryStringParameters']
-    user = event['requestContext']['authorizer']['claims']['cognito:username'];
+    user = event['requestContext']['authorizer']['claims']['cognito:username']
     message = get_message(qs['host'], user, qs['folder'], int(qs['id']))
     attachments = []
     i = 0;

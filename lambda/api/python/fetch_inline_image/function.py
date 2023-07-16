@@ -1,15 +1,15 @@
 '''Preps an inline image attachment for download from S3 given a folder, message ID, and attachment uuid'''
 import json
-from helper import upload_object
-from helper import sign_url
-from helper import key_exists
-from helper import get_object
-from helper import get_message
+from helper import upload_object # pylint: disable=import-error
+from helper import sign_url # pylint: disable=import-error
+from helper import key_exists # pylint: disable=import-error
+from helper import get_object # pylint: disable=import-error
+from helper import get_message # pylint: disable=import-error
 
 def handler(event, _context):
     '''Preps an inline image attachment for download from S3 given a folder, message ID, and attachment uuid'''
     qs = event['queryStringParameters']
-    user = event['requestContext']['authorizer']['claims']['cognito:username'];
+    user = event['requestContext']['authorizer']['claims']['cognito:username']
     bucket = qs['host'].replace("imap", "cache")
     key = ""
     message = get_message(qs['host'], user, qs['folder'], qs['id'])
