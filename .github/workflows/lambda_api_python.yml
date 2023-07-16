@@ -22,6 +22,7 @@ jobs:
     - name: checkout
       uses: actions/checkout@main
     - name: lint
+      shell: bash
       run: pip install pylint && shopt -s extglob && cd ./lambda/api/python && for F in !(python) ; do pylint $F/function.py ; done
     - name: configure-aws
       run: |
