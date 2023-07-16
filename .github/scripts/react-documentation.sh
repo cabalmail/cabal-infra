@@ -1,3 +1,4 @@
+#!/bin/bash
 cd react/admin && yarn install
 mkdir -p docs
 ./node_modules/.bin/react-docgen . -o rdout.json
