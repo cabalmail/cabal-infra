@@ -27,7 +27,7 @@ jobs:
         pip install pylint
         cd ./lambda/api/python
         for F in * ; do
-          if [ "$F" != "python" ] # skip layer
+          if [ "$F" != "python" ] ; then # skip layer
             pylint $F/function.py
           fi
         done
