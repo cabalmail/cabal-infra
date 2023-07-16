@@ -13,6 +13,7 @@ on:
     paths:
       - 'lambda/api/python/**'
       - '.github/workflows/lambda_api_python.yml'
+      - '.github/scripts/build-api-python.sh'
 jobs:
   build:
     runs-on: ubuntu-latest
