@@ -89,6 +89,7 @@ jobs:
         echo "mail_domains = ${{ vars.TF_VAR_MAIL_DOMAINS }}" >> terraform.tfvars
         echo "smtpin_scale = ${{ vars.TF_VAR_SMTPIN_SCALE }}" >> terraform.tfvars
         echo "chef_license = \"${{ vars.TF_VAR_CHEF_LICENSE}}\"" >> terraform.tfvars
+        echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
     - name: plan-terraform
@@ -99,3 +100,49 @@ jobs:
       run: echo ${{ steps.plan-terraform.outputs.stderr }}
     - name: plan-exitcode
       run: echo ${{ steps.plan-terraform.outputs.exitcode }}
+  # deploy:
+  #   runs-on: ubuntu-latest
+  #   defaults:
+  #     run:
+  #       working-directory: ./terraform/infra
+  #   environment: ${{ github.ref_name == 'refs/heads/main' && 'prod' || ( github.ref_name == 'refs/heads/stage' && 'stage' || 'development' ) }}
+  #   needs:
+  #   - chekov
+  #   - tflint
+  #   - tfsec
+  #   env:
+  #     TF_API_TOKEN: ${{ secrets.TF_TOKEN }}
+  #     AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  #     AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  #     AWS_REGION: ${{ secrets.AWS_REGION }}
+  #   steps:
+  #   - name: checkout
+  #     uses: actions/checkout@v2
+  #   - name: install-terraform
+  #     uses: hashicorp/setup-terraform@v2
+  #     with:
+  #       cli_config_credentials_token: ${{ secrets.TF_TOKEN }}
+  #   - name: tfvars-terraform
+  #     run: |
+  #       echo "smtpout_scale = ${{ vars.TF_VAR_SMTPOUT_SCALE }}" > terraform.tfvars
+  #       echo "availability_zones = ${{ vars.TF_VAR_AVAILABILITY_ZONES}}" >> terraform.tfvars
+  #       echo "aws_region = \"${{ vars.TF_VAR_AWS_REGION}}\"" >> terraform.tfvars
+  #       echo "cidr_block = \"${{ vars.TF_VAR_CIDR_BLOCK}}\"" >> terraform.tfvars
+  #       echo "control_domain = \"${{ vars.TF_VAR_CONTROL_DOMAIN}}\"" >> terraform.tfvars
+  #       echo "email = \"${{ vars.TF_VAR_EMAIL }}\"" >> terraform.tfvars
+  #       echo "environment = \"${{ vars.TF_VAR_ENVIRONMENT }}\"" >> terraform.tfvars
+  #       echo "imap_scale = ${{ vars.TF_VAR_IMAP_SCALE }}" >> terraform.tfvars
+  #       echo "mail_domains = ${{ vars.TF_VAR_MAIL_DOMAINS }}" >> terraform.tfvars
+  #       echo "smtpin_scale = ${{ vars.TF_VAR_SMTPIN_SCALE }}" >> terraform.tfvars
+  #       echo "chef_license = \"${{ vars.TF_VAR_CHEF_LICENSE}}\"" >> terraform.tfvars
+  #       echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
+  #   - name: init-terraform
+  #     run: terraform init
+  #   - name: apply-terraform
+  #     run: terraform apply -no-color
+  #   - name: plan-stdout
+  #     run: echo ${{ steps.plan-terraform.outputs.stdout }}
+  #   - name: plan-stderr
+  #     run: echo ${{ steps.plan-terraform.outputs.stderr }}
+  #   - name: plan-exitcode
+  #    run: echo ${{ steps.plan-terraform.outputs.exitcode }}
