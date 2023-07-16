@@ -66,16 +66,21 @@ form.compose-overlay div.composer-wrapper div#composer-preview {
   overflow: scroll;
 }
 
-.wysiwyg-editor, .wysiwyg-editor * {
-  border: 1px solid #222;
-  background-color: #fff !important;
-  color: #000 !important;
+.wysiwyg-editor {
   height: 30em;
   overflow: scroll;
 }
 
-.wysiwyg-toolbar, .wysiwyg-toolbar * {
+.wysiwyg-editor, .wysiwyg-editor * {
+  background-color: #fff !important;
+  color: #000 !important;
+}
+
+.wysiwyg-editor, .wysiwyg-toolbar {
   border: 1px solid #222;
+}
+
+.wysiwyg-toolbar, .wysiwyg-toolbar * {
   background-color: #fff !important;
   margin-top: 1em;
 }
