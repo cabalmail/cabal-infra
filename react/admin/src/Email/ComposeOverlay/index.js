@@ -2,8 +2,12 @@ import React from 'react';
 import './ComposeOverlay.css';
 import ApiClient from '../../ApiClient';
 import Request from '../../Addresses/Request';
-import Composer from './Composer';
+// import Composer from './Composer';
 import { ADDRESS_LIST } from '../../constants';
+import { EditorState } from 'draft-js';
+import { Editor } from "react-draft-wysiwyg";
+import "react-draft-wysiwyg/dist/react-draft-wysiwyg.css";
+
 const STATE_KEY = 'compose-state';
 
 class ComposeOverlay extends React.Component {
@@ -11,7 +15,7 @@ class ComposeOverlay extends React.Component {
   constructor(props) {
     super(props);
     this.state = JSON.parse(localStorage.getItem(STATE_KEY)) || {
-      editorState: null,
+      editorState: EditorState.createEmpty(),
       addresses: [],
       address: "",
       To: null,
@@ -109,7 +113,15 @@ class ComposeOverlay extends React.Component {
     });
   }
 
+  onEditorStateChange = (editorState) => {
+    this.setState({
+      ...this.state,
+      editorState,
+    });
+  };
+
   render() {
+    const { editorState } = this.state;
     return (
       <form className="compose-overlay" onSubmit={this.handleSubmit}>
         <div className="compose-from-old">
@@ -169,7 +181,13 @@ class ComposeOverlay extends React.Component {
           onChange={this.onSubjectChange}
           value={this.state.Subject}
         />
-        <Composer editorState={this.state.editorState} onChange={this.onMessageChange} />
+        <Editor
+          editorState={editorState}
+          toolbarClassName="toolbarClassName"
+          wrapperClassName="wrapperClassName"
+          editorClassName="editorClassName"
+          onEditorStateChange={this.onEditorStateChange}
+        />
         <button onClick={this.handleSend} className="default" id="compose-send">Send</button>
         <button onClick={this.handleCancel} id="compose-cancel">Cancel</button>
       </form>
