@@ -21,16 +21,9 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@main
-    - name: lint
+    - name: pylint
       shell: bash
-      run: |
-        pip install pylint
-        cd ./lambda/api/python
-        for F in * ; do
-          if [ "$F" != "python" ] ; then # skip layer
-            pylint $F/function.py
-          fi
-        done
+      run: pip install pylint && cd ./lambda/api/python && pylint */function.py
     - name: configure-aws
       run: |
         aws configure --profile deploy_lambda <<-EOF > /dev/null 2>&1
