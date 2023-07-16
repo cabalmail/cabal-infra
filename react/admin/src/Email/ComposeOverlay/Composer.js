@@ -11,6 +11,51 @@ const H5 = 'Header Level 5';
 const H6 = 'Header Level 6';
 const PRE = 'Monospace';
 const BLOCK_QUOTE = 'Block Quote';
+const BLOCK_STYLES_H = {
+  H1: "#",
+  H2: "##",
+  H3: "###",
+  H4: "####",
+  H5: "#####",
+  H6: "######",
+  BLOCK_QUOTE: ">",
+  PRE: "   ",
+}
+const BLOCK_STYLES_A = [
+  {
+    name: H1,
+    prefix: "#"
+  },
+  {
+    name: H2,
+    prefix: "##"
+  },
+  {
+    name: H3,
+    prefix: "###"
+  },
+  {
+    name: H4,
+    prefix: "####"
+  },
+  {
+    name: H5,
+    prefix: "#####"
+  },
+  {
+    name: H6,
+    prefix: "######"
+  },
+  {
+    name: PRE,
+    prefix: "   "
+  },
+  {
+    name: BLOCK_QUOTE,
+    prefix: ">"
+  },
+  
+];
 class Composer extends React.Component {
 
   // TODO:
@@ -211,32 +256,43 @@ class Composer extends React.Component {
     }, 500);
   }
 
-  setStyle(md, cs) {
+  newlineCount(str, pos) {
+    return (str.substring(0, pos).match(/\n/) || []).length
+  }
+
+  handleChangeStyle = (e) => {
+    var ta = document.getElementById("composet-text");
+    const markdown = this.state.markdown;
+    const newStyle = e.target.value;
+    const pos = this.state.history[this.state.history_index].cursor_start;
+    const line_count = this.newlineCount(markdown, pos);
+    const style = this.getStyle(markdown, pos);
+    const stylePattern = style === BODY_TEXT ? "" : BLOCK_STYLES_H[style] + " ";
+    const regex = new RegExp(`(.*\n){${line_count}}(${stylePattern})(.*)`);
+    // md cs ce?
+    this.historyPush(md, cs, ce);
+  }
+
+  getStyle(md, cs) {
     if (md === "" || md === null) {
-      this.setState({...this.state,style:BODY_TEXT});
-      return;
+      return BODY_TEXT;
     }
     var paragraphs = md.substring(0, cs).split("\n");
-    var lastParagraph = paragraphs[paragraphs.length - 1] + md.substring(cs).split("\n")[0];
-    if (lastParagraph.match(/^###### /)) {
-      this.setState({...this.state,style:H6});
-    } else if (lastParagraph.match(/^##### /)) {
-      this.setState({...this.state,style:H5});
-    } else if (lastParagraph.match(/^#### /)) {
-      this.setState({...this.state,markdown:md,style:H4});
-    } else if (lastParagraph.match(/^### /)) {
-      this.setState({...this.state,style:H3});
-    } else if (lastParagraph.match(/^## /)) {
-      this.setState({...this.state,style:H2});
-    } else if (lastParagraph.match(/^# /)) {
-      this.setState({...this.state,style:H1});
-    } else if (lastParagraph.match(/^> /)) {
-      this.setState({...this.state,style:BLOCK_QUOTE});
-    } else if (lastParagraph.match(/^ {4}/)) {
-      this.setState({...this.state,style:PRE});
-    } else {
-      this.setState({...this.state,style:BODY_TEXT});
+    var currentParagraph = paragraphs[paragraphs.length - 1] + md.substring(cs).split("\n")[0];
+    for (var i = 0; i < BLOCK_STYLES_A.length; i++) {
+      var regex = new RegExp(`^${BLOCK_STYLES_A[i].pattern} `);
+      if (currentParagraph.match(regex)) {
+        return BLOCK_STYLES_A[$i].name;
+      }
     }
+    return BODY_TEXT;
+  }
+
+  setStyle(md, cs) {
+    this.setState({
+      ...this.state,
+      style: this.getStyle(md, cs)
+    });
   }
 
   fireBold = (e) => {
