@@ -4,7 +4,7 @@ import ApiClient from '../../ApiClient';
 import Request from '../../Addresses/Request';
 // import Composer from './Composer';
 import { ADDRESS_LIST } from '../../constants';
-import { EditorState, ConvertToRaw, ConvertFromRaw } from 'draft-js';
+import { EditorState, convertToRaw, convertFromRaw } from 'draft-js';
 import { Editor } from "react-draft-wysiwyg";
 import "react-draft-wysiwyg/dist/react-draft-wysiwyg.css";
 
@@ -21,7 +21,7 @@ class ComposeOverlay extends React.Component {
     const raw_from_store = localStorage.getItem(DRAFT_KEY);
     
     if (raw_from_store) {
-    	const raw = ConvertFromRaw(JSON.parse(raw_from_store));
+    	const raw = convertFromRaw(JSON.parse(raw_from_store));
     	init_ed_state = EditorState.createWithContent(raw);
     } else {
     	init_ed_state = EditorState.createEmpty();
@@ -48,7 +48,7 @@ class ComposeOverlay extends React.Component {
   }
 
   setState(state) {
-  	var raw = ConvertToRaw(state.editorState.getCurrentContent());
+  	var raw = convertToRaw(state.editorState.getCurrentContent());
   	localStorage.setItem(DRAFT_KEY, JSON.stringify(raw));
     var other_state = JSON.parse(JSON.stringify(state));
     delete other_state.editorState;
