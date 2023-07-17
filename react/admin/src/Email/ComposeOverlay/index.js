@@ -4,32 +4,56 @@ import ApiClient from '../../ApiClient';
 import Request from '../../Addresses/Request';
 // import Composer from './Composer';
 import { ADDRESS_LIST } from '../../constants';
-import { EditorState } from 'draft-js';
+import { EditorState, ConvertToRaw, ConvertFromRaw } from 'draft-js';
 import { Editor } from "react-draft-wysiwyg";
 import "react-draft-wysiwyg/dist/react-draft-wysiwyg.css";
 
 const STATE_KEY = 'compose-state';
+const DRAFT_KEY = 'draft-js'
 
 class ComposeOverlay extends React.Component {
 
   constructor(props) {
     super(props);
-    this.state = JSON.parse(localStorage.getItem(STATE_KEY)) || {
-      editorState: EditorState.createEmpty(),
-      addresses: [],
-      address: "",
-      To: null,
-      CC: null,
-      BCC: null,
-      Subject: null,
-      showRequest: false
-    };
+
+    let init_ed_state = null;
+    let init_state = null;
+    const raw_from_store = localStorage.getItem(DRAFT_KEY);
+    
+    if (raw_from_store) {
+    	const raw = convertFromRaw(JSON.parse(raw_from_store));
+    	init_ed_state = EditorState.createWithContent(raw);
+    } else {
+    	init_ed_state = EditorState.createEmpty();
+    }
+
+    let state_from_store = JSON.parse(localStorage.getItem(STATE_KEY));
+    if (state_from_store) {
+      init_state = state_from_store;
+      init_state.editorState = init_ed_state;
+    } else {
+      init_state = {
+        editorState: init_ed_state,
+        addresses: [],
+        address: "",
+        To: null,
+        CC: null,
+        BCC: null,
+        Subject: null,
+        showRequest: false
+      };
+    }
+    this.state = init_state;
     this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
   }
 
   setState(state) {
+  	var raw = convertToRaw(state.editorState.getCurrentContent());
+  	localStorage.setItem(DRAFT_KEY, JSON.stringify(raw));
+    var other_state = JSON.parse(JSON.stringify(state));
+    delete other_state.editorState;
     try {
-      localStorage.setItem(STATE_KEY, JSON.stringify(state));
+      localStorage.setItem(STATE_KEY, JSON.stringify(other_state));
     } catch (e) {
       console.log(e);
     }
