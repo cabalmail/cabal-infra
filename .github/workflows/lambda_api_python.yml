@@ -69,25 +69,4 @@ jobs:
       run: cd ./terraform/infra && terraform init
     - name: apply-terraform
       run: cd ./terraform/infra && terraform apply -no-color -auto-approve
-    # - name: taint-layer-terraform
-    #   run: cd ./terraform/infra && terraform taint module.lambda_layers.aws_lambda_layer_version.layer[\"python\"]
-    # - name: apply-layer-terraform
-    #   run: cd ./terraform/infra && terraform apply -no-color -auto-approve -target=module.lambda_layers.aws_lambda_layer_version.layer[\"python\"]
-    # - name: taint-terraform
-    #   run: |
-    #     cd ./lambda/api/python && for FUNC in * ; do
-    #       if [ "$FUNC" != "python" ] ; then # skip layer
-    #         pushd ../../../terraform/infra
-    #         terraform taint module.admin.module.cabal_method[\"$FUNC\"].aws_lambda_function.api_call
-    #         popd
-    #       fi
-    #     done
-    # - name: apply-terraform
-    #   run: |
-    #     cd ./lambda/api/python && for FUNC in * ; do
-    #       if [ "$FUNC" != "python" ] ; then # skip layer
-    #         pushd ../../../terraform/infra
-    #         terraform apply -no-color -auto-approve -target=module.admin.module.cabal_method[\"$FUNC\"].aws_lambda_function.api_call
-    #         popd
-    #       fi
-    #     done
+

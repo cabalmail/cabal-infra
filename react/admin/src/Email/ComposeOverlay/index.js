@@ -21,8 +21,8 @@ class ComposeOverlay extends React.Component {
     const raw_from_store = localStorage.getItem(DRAFT_KEY);
     
     if (raw_from_store) {
-    	const raw = convertFromRaw(JSON.parse(raw_from_store));
-    	init_ed_state = EditorState.createWithContent(raw);
+    	const raw_content = convertFromRaw(JSON.parse(raw_from_store));
+    	init_ed_state = EditorState.createWithContent(raw_content);
     } else {
     	init_ed_state = EditorState.createEmpty();
     }
@@ -36,10 +36,10 @@ class ComposeOverlay extends React.Component {
         editorState: init_ed_state,
         addresses: [],
         address: "",
-        To: null,
-        CC: null,
-        BCC: null,
-        Subject: null,
+        To: "",
+        CC: "",
+        BCC: "",
+        Subject: "",
         showRequest: false
       };
     }
@@ -48,7 +48,7 @@ class ComposeOverlay extends React.Component {
   }
 
   setState(state) {
-  	var raw = convertToRaw(state.editorState.getCurrentContent());
+  	var raw_content = convertToRaw(state.editorState.getCurrentContent());
     var other_state = JSON.stringify({
       // editorState omitted intentionally
       addresses: state.addresses,
@@ -60,7 +60,7 @@ class ComposeOverlay extends React.Component {
       showRequest: state.showRequest
     });
     try {
-    	localStorage.setItem(DRAFT_KEY, JSON.stringify(raw));
+    	localStorage.setItem(DRAFT_KEY, JSON.stringify(raw_content));
       localStorage.setItem(STATE_KEY, JSON.stringify(other_state));
     } catch (e) {
       console.log(e);
