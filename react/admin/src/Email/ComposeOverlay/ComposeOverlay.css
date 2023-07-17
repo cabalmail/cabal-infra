@@ -97,6 +97,10 @@ form.compose-overlay div.wysiwyg-toolbar {
   color: inherit !important;
 }
 
+.rdw-option-active, .rdw-option-wrapper:active {
+  box-shadow: none !important;
+}
+
 /* toolbar */
 /*form.compose-overlay div.composer-toolbar {
   width: 100%;
