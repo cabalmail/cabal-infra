@@ -49,10 +49,18 @@ class ComposeOverlay extends React.Component {
 
   setState(state) {
   	var raw = convertToRaw(state.editorState.getCurrentContent());
-  	localStorage.setItem(DRAFT_KEY, JSON.stringify(raw));
-    var other_state = JSON.parse(JSON.stringify(state));
-    delete other_state.editorState;
+    var other_state = JSON.stringify({
+      // editorState omitted intentionally
+      addresses: state.addresses,
+      address: state.address,
+      To: state.To,
+      CC: state.CC,
+      BCC: state.BCC,
+      Subject: state.Subject,
+      showRequest: state.showRequest
+    });
     try {
+    	localStorage.setItem(DRAFT_KEY, JSON.stringify(raw));
       localStorage.setItem(STATE_KEY, JSON.stringify(other_state));
     } catch (e) {
       console.log(e);
