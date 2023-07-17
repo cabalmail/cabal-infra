@@ -51,9 +51,9 @@
   body ul.message-list li.selected *,
   body div.compose-wrapper form.compose-overlay div.wysiwyg-toolbar div.rdw-option-active,
   body div.compose-wrapper form.compose-overlay div.wysiwyg-toolbar div.rdw-option-wrapper:active {
-    color: #dda;
-    background-color: #300;
-    border-color: #800;
+    color: #dda !important;
+    background-color: #300 !important;
+    border-color: #800 !important;
   }
   ul.message-list li.Seen.selected div.message-subject {
     color: #fff
@@ -145,9 +145,9 @@
   body ul.message-list li.selected *,
   body div.compose-wrapper form.compose-overlay div.wysiwyg-toolbar div.rdw-option-active,
   body div.compose-wrapper form.compose-overlay div.wysiwyg-toolbar div.rdw-option-wrapper:active {
-    color: #000;
-    background-color: #a33;
-    border-color: #d00;
+    color: #000 !important;
+    background-color: #a33 !important;
+    border-color: #d00 !important;
   }
   ul.message-list li.Seen.selected div.message-subject {
     color: #000
