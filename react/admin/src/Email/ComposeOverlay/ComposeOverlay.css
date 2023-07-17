@@ -80,6 +80,7 @@ form.compose-overlay div.composer-wrapper div#composer-preview {
   border-top-left-radius: 0;
   border-top-right-radius: 0;
   border-top-width: 0;
+  padding: 0 1em;
 }
 
 .wysiwyg-toolbar {
