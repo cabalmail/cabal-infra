@@ -162,7 +162,8 @@ class ComposeOverlay extends React.Component {
 
   onEditorStateChange = (editorState) => {
     this.setState({
-      editorState,
+      ...this.state,
+      editorState: editorState
     });
   };
 
