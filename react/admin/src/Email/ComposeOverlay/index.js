@@ -69,6 +69,10 @@ class ComposeOverlay extends React.Component {
     };
     try {
     	localStorage.setItem(DRAFT_KEY, JSON.stringify(raw_content));
+    } catch (e) {
+      console.log(e);
+    }
+    try {
       localStorage.setItem(STATE_KEY, JSON.stringify(other_state));
     } catch (e) {
       console.log(e);
