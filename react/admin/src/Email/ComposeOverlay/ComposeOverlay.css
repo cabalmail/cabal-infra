@@ -39,7 +39,7 @@ form.compose-overlay select, {
   box-sizing: border-box;
 }
 
-form.compose-overlay label.radio {
+/*form.compose-overlay label.radio {
   display: inline-block;
   margin-right: 3em;
 }
@@ -64,7 +64,7 @@ form.compose-overlay div.composer-wrapper div#composer-preview {
   border: 1px solid;
   border-color: inherit;
   overflow: scroll;
-}
+}*/
 
 .wysiwyg-editor, .wysiwyg-editor * {
   background-color: inherit !important;
@@ -76,8 +76,17 @@ form.compose-overlay div.composer-wrapper div#composer-preview {
   border-color: inherit;
 }
 
+.wysiwyg-editor {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  border-top-width: 0;
+}
+
 .wysiwyg-toolbar {
   margin-top: 1em;
+  margin-bottom: 0;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
 }
 
 .wysiwyg-toolbar, .wysiwyg-toolbar div, .wysiwyg-toolbar span {
