@@ -58,8 +58,8 @@ class ComposeOverlay extends React.Component {
   }
 
   setState(state) {
-  	var raw_content = JSON.stringify(convertToRaw(state.editorState.getCurrentContent()));
-    var other_state = JSON.stringify({
+  	var raw_content = convertToRaw(state.editorState.getCurrentContent());
+    var other_state = {
       // editorState omitted intentionally
       addresses: state.addresses,
       address: state.address,
@@ -68,7 +68,7 @@ class ComposeOverlay extends React.Component {
       BCC: state.BCC,
       Subject: state.Subject,
       showRequest: state.showRequest
-    });
+    };
     console.log(raw_content);
     console.log(other_state);
     try {
