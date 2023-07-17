@@ -30,8 +30,6 @@ class ComposeOverlay extends React.Component {
     let state_from_store = localStorage.getItem(STATE_KEY);
     if (state_from_store) {
       init_state = JSON.parse(state_from_store);
-      console.log("init_state...");
-      console.log(init_state);
       this.state = {
         editorState: init_ed_state,
         addresses: init_state.addresses,
@@ -69,15 +67,10 @@ class ComposeOverlay extends React.Component {
       Subject: state.Subject,
       showRequest: state.showRequest
     };
-    console.log("raw_content...");
-    console.log(raw_content);
-    console.log("other_state...");
-    console.log(other_state);
     try {
     	localStorage.setItem(DRAFT_KEY, JSON.stringify(raw_content));
       localStorage.setItem(STATE_KEY, JSON.stringify(other_state));
     } catch (e) {
-      console.log("Error recording state to local storage...");
       console.log(e);
     }
     super.setState(state);
@@ -92,7 +85,6 @@ class ComposeOverlay extends React.Component {
       try {
         localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
       } catch (e) {
-        console.log("Error getting addresses from API library...");
         console.log(e);
       }
       this.setState({...this.state, addresses: data.data.Items.map(a => a.address).sort()});
@@ -100,8 +92,6 @@ class ComposeOverlay extends React.Component {
   }
 
   getOptions() {
-    console.log("this.state.addresses...");
-    console.log(this.state.addresses);
     return this.state.addresses.map((a) => {
       return <option value={a}>{a}</option>;
     });
