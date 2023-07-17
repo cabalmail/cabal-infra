@@ -59,13 +59,13 @@ class ComposeOverlay extends React.Component {
   	var raw_content = convertToRaw(state.editorState.getCurrentContent());
     var other_state = {
       // editorState omitted intentionally
-      addresses: state.addresses,
-      address: state.address,
-      To: state.To,
-      CC: state.CC,
-      BCC: state.BCC,
-      Subject: state.Subject,
-      showRequest: state.showRequest
+      addresses: state.addresses || this.state.addresses,
+      address: state.address || this.state.address,
+      To: state.To || this.state.To,
+      CC: state.CC || this.state.CC,
+      BCC: state.BCC || this.state.BCC,
+      Subject: state.Subject || this.state.Subject,
+      showRequest: state.showRequest || this.state.showRequest
     };
     try {
     	localStorage.setItem(DRAFT_KEY, JSON.stringify(raw_content));
