@@ -30,9 +30,18 @@ class ComposeOverlay extends React.Component {
     let state_from_store = localStorage.getItem(STATE_KEY);
     if (state_from_store) {
       init_state = JSON.parse(state_from_store);
-      init_state.editorState = init_ed_state;
+      this.state = {
+        editorState: init_ed_state,
+        addresses: init_state.addresses,
+        address: init_state.address,
+        To: init_state.To,
+        CC: init_state.CC,
+        BCC: init_state.BCC,
+        Subject: init_state.Subject,
+        showRequest: init_state.showRequest
+      };
     } else {
-      init_state = {
+      this.state = {
         editorState: init_ed_state,
         addresses: [],
         address: "",
@@ -43,7 +52,6 @@ class ComposeOverlay extends React.Component {
         showRequest: false
       };
     }
-    this.state = init_state;
     this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
   }
 
