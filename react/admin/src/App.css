@@ -21,7 +21,7 @@
     filter: invert(0.8);
   }
   .rdw-option-active, .rdw-option-wrapper:active {
-    box-shadow: #000 1px 1px 0px inset !important;
+    box-shadow: none !important;
   }
   body, a, button, select, div, label, form, textarea {
     color: #aaa;
@@ -51,7 +51,8 @@
   }
   body .highlight, body .active, body .default,
   body .nav .active, body ul.message-list li.selected,
-  body ul.message-list li.selected * {
+  body ul.message-list li.selected *,
+ .rdw-option-active, .rdw-option-wrapper:active {
     color: #dda;
     background-color: #300;
     border-color: #800;
