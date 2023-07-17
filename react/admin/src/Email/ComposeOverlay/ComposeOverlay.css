@@ -85,10 +85,6 @@ form.compose-overlay div.composer-wrapper div#composer-preview {
   border-color: inherit !important;
 }
 
-.wysiwyg-toolbar img {
-  filter: invert(1);
-}
-
 /* toolbar */
 /*form.compose-overlay div.composer-toolbar {
   width: 100%;

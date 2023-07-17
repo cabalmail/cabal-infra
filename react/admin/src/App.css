@@ -17,6 +17,9 @@
 }
 
 @media (prefers-color-scheme: dark) {
+  .wysiwyg-toolbar img {
+    filter: invert(1);
+  }
   body, a, button, select, div, label, form, textarea {
     color: #aaa;
     background-color: #200;
