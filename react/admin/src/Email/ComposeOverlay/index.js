@@ -59,12 +59,12 @@ class ComposeOverlay extends React.Component {
       Subject: state.Subject,
       showRequest: state.showRequest
     });
+    console.log(raw_content);
+    console.log(other_state);
     try {
     	localStorage.setItem(DRAFT_KEY, JSON.stringify(raw_content));
       localStorage.setItem(STATE_KEY, JSON.stringify(other_state));
     } catch (e) {
-      console.log(raw_content);
-      console.log(other_state);
       console.log(e);
     }
     super.setState(state);
