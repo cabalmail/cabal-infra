@@ -20,6 +20,9 @@
   .wysiwyg-toolbar img {
     filter: invert(0.8);
   }
+  .rdw-option-active, .rdw-option-wrapper:active {
+    box-shadow: #000 1px 1px 0px inset !important;
+  };
   body, a, button, select, div, label, form, textarea {
     color: #aaa;
     background-color: #200;
