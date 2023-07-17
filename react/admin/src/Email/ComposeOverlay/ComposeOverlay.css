@@ -90,9 +90,11 @@ form.compose-overlay div.wysiwyg-toolbar {
   border-bottom-right-radius: 0;
 }
 
-.wysiwyg-toolbar, .wysiwyg-toolbar div, .wysiwyg-toolbar span {
+.wysiwyg-toolbar, .wysiwyg-toolbar div, .wysiwyg-toolbar span,
+.wysiwyg-toolbar ul, .wysiwyg-toolbar li {
   background-color: inherit !important;
   border-color: inherit !important;
+  color: inherit !important;
 }
 
 /* toolbar */
