@@ -234,6 +234,10 @@ input, select, option {
   width: 30em;
 }
 
+body form div.wysiwyg-toolbar input {
+  width: auto;
+}
+
 select {
   -webkit-appearance: none;
   -moz-appearance: none;
