@@ -18,7 +18,7 @@
 
 @media (prefers-color-scheme: dark) {
   .wysiwyg-toolbar img {
-    filter: invert(1);
+    filter: invert(0.8);
   }
   body, a, button, select, div, label, form, textarea {
     color: #aaa;
