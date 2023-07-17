@@ -27,9 +27,9 @@ class ComposeOverlay extends React.Component {
     	init_ed_state = EditorState.createEmpty();
     }
 
-    let state_from_store = JSON.parse(localStorage.getItem(STATE_KEY));
+    let state_from_store = localStorage.getItem(STATE_KEY);
     if (state_from_store) {
-      init_state = state_from_store;
+      init_state = JSON.parse(state_from_store);
       init_state.editorState = init_ed_state;
     } else {
       init_state = {
