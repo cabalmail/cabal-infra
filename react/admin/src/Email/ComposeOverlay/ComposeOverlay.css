@@ -56,7 +56,7 @@ button.recipient {
   display: inline-block;
 }
 
-div.recipients label.hide {
+div.recipients label.hide, div.recipients ul.hide {
   display: none;
 }
 

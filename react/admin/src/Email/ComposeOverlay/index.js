@@ -321,11 +321,20 @@ class ComposeOverlay extends React.Component {
         </div>
         <div className="recipients">
           <label className={this.state.To.length ? "show" : "hide"}>To</label>
-          <ul className="recipient-list" id="to-list">{to_list}</ul>
+          <ul
+            className={`recipient-list${this.state.To.length ? " show" : " hide"}`}
+            id="to-list"
+          >{to_list}</ul>
           <label className={this.state.CC.length ? "show" : "hide"}>CC</label>
-          <ul className="recipient-list" id="cc-list">{cc_list}</ul>
+          <ul
+            className={`recipient-list${this.state.CC.length ? " show" : " hide"}`}
+            id="cc-list"
+          >{cc_list}</ul>
           <label className={this.state.BCC.length ? "show" : "hide"}>BCC</label>
-          <ul className="recipient-list" id="bcc-list">{bcc_list}</ul>
+          <ul
+            className={`recipient-list${this.state.BCC.length ? " show" : " hide"}`}
+            id="bcc-list"
+          >{bcc_list}</ul>
         </div>
         <label htmlFor="subject">Subject</label>
         <input
