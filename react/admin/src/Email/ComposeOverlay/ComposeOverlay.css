@@ -41,6 +41,10 @@ form.compose-overlay select, {
 
 /* recipient lists */
 
+button.recipient {
+  display: inline-block;
+}
+
 ul.recipient-list {
 /*  list-style-type: "\2709";*/
   list-style: none;
