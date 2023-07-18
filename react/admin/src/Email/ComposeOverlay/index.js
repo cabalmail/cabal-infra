@@ -218,10 +218,8 @@ class ComposeOverlay extends React.Component {
             switch (c) {
               case '.':
                 return <span className="dot"></span>
-                break;
               case '@':
                 return <span className="amphora"></span>
-                break;
               default:
                 return <span>{c}</span>
             }
