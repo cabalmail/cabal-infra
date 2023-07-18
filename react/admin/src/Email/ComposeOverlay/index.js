@@ -147,6 +147,7 @@ class ComposeOverlay extends React.Component {
   }
 
   addRecipient = (e) => {
+    const address = this.state.recipient;
     if (this.validateAddress(address)) {
       let to_list = this.state.To.slice();
       let cc_list = this.state.CC.slice();
