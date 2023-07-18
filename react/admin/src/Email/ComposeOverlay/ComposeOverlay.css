@@ -56,6 +56,10 @@ button.recipient {
   display: inline-block;
 }
 
+div.recipients label.hide {
+  display: none;
+}
+
 ul.recipient-list {
 /*  list-style-type: "\2709";*/
   list-style: none;
