@@ -39,32 +39,32 @@ form.compose-overlay select, {
   box-sizing: border-box;
 }
 
-/*form.compose-overlay label.radio {
+/* recipient lists */
+
+ul.recipeint-list {
+  list-style-type: "\2709";
+}
+
+ul.recipient-list li div {
   display: inline-block;
-  margin-right: 3em;
-}
-
-form.compose-overlay textarea.composer-text,
-form.compose-overlay div#composer-preview {
-  width: 100%;
-  border-top-width: 0;
-  border-top-left-radius: 0;
-  border-top-right-radius: 0;
-  padding: 0.5em;
-  box-sizing: border-box;
-}
-
-form.compose-overlay textarea.composer-text {
-  height: 20em;
-  display: block;
-}
-
-form.compose-overlay div.composer-wrapper div#composer-preview {
-  height: 24.5em;
+  height: 1.5em;
+  border-radius: 0.75em;
   border: 1px solid;
-  border-color: inherit;
-  overflow: scroll;
-}*/
+}
+
+ul#to-list li div {
+  background-color: #696;
+}
+
+ul#cc-list li div {
+  background-color: #996;
+}
+
+ul#bcc-list li div {
+  background-color: #966;
+}
+
+/* WYSIWYG editor */
 
 .wysiwyg-editor, .wysiwyg-editor * {
   background-color: inherit !important;
@@ -101,8 +101,34 @@ form.compose-overlay div.wysiwyg-toolbar {
   box-shadow: none !important;
 }
 
-/* toolbar */
-/*form.compose-overlay div.composer-toolbar {
+/*
+form.compose-overlay label.radio {
+  display: inline-block;
+  margin-right: 3em;
+}
+
+form.compose-overlay textarea.composer-text,
+form.compose-overlay div#composer-preview {
+  width: 100%;
+  border-top-width: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  padding: 0.5em;
+  box-sizing: border-box;
+}
+
+form.compose-overlay textarea.composer-text {
+  height: 20em;
+  display: block;
+}
+
+form.compose-overlay div.composer-wrapper div#composer-preview {
+  height: 24.5em;
+  border: 1px solid;
+  border-color: inherit;
+  overflow: scroll;
+}
+form.compose-overlay div.composer-toolbar {
   width: 100%;
   padding: 0;
   border: 1px solid;

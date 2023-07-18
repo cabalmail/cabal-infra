@@ -34,6 +34,8 @@ class ComposeOverlay extends React.Component {
         editorState: init_ed_state,
         addresses: init_state.addresses,
         address: init_state.address,
+        recipient: init_state.recipient,
+        validation_fail: init_state.validation_fail,
         To: init_state.To,
         CC: init_state.CC,
         BCC: init_state.BCC,
@@ -45,9 +47,11 @@ class ComposeOverlay extends React.Component {
         editorState: init_ed_state,
         addresses: [],
         address: "",
-        To: "",
-        CC: "",
-        BCC: "",
+        recipient: "",
+        validation_fail: false,
+        To: [],
+        CC: [],
+        BCC: [],
         Subject: "",
         showRequest: false
       };
@@ -61,6 +65,8 @@ class ComposeOverlay extends React.Component {
       // editorState omitted intentionally
       addresses: state.addresses || this.state.addresses,
       address: state.address || this.state.address,
+      recipient: state.recipient || this.state.recipient,
+      validation_fail: state.validation_fail || this.state.validation_fail,
       To: state.To || this.state.To,
       CC: state.CC || this.state.CC,
       BCC: state.BCC || this.state.BCC,
@@ -91,7 +97,10 @@ class ComposeOverlay extends React.Component {
       } catch (e) {
         console.log(e);
       }
-      this.setState({...this.state, addresses: data.data.Items.map(a => a.address).sort()});
+      this.setState({
+        ...this.state,
+        addresses: data.data.Items.map(a => a.address).sort()
+      });
     });
   }
 
@@ -111,7 +120,7 @@ class ComposeOverlay extends React.Component {
 
   handleSend = (e) => {
     e.preventDefault();
-    this.props.hide();
+    alert("Not implemented");
     return false;
   }
 
@@ -121,24 +130,57 @@ class ComposeOverlay extends React.Component {
     this.props.hide();
   }
 
-  onMessageChange = (editorState) => {
-    this.setState({...this.state, editorState});
+  validateAddress(address) {
+    // Not going to allow IP addresses; domains only
+    let re = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+
+    return re.test(address);
+  }
+
+  validateRecipient = (e) => {
+    if (!this.validateAddress(e.target.value)) {
+      this.setState({...this.state, validation_fail: true});
+    } else {
+      this.setState({...this.state, validation_fail: false});
+    }
+  }
+
+  addRecipient = (e) => {
+    const address = document.getElementById("recipient-address").value;
+    if (this.validateAddress(address)) {
+      let to_list = this.state.To.slice();
+      let cc_list = this.state.CC.slice();
+      let bcc_list = this.state.BCC.clice();
+      switch (e.target.id) {
+        case "recipient-to":
+          to_list.push(address);
+          break;
+        case "recipient-cc":
+          cc_list.push(address);
+          break;
+        case "recipient-bcc":
+          bcc_list.push(address);
+          break;
+        default:
+          to_list.push(address);
+      }
+      this.setState({
+        ...this.state,
+        To: to_list,
+        CC: cc_list,
+        BCC: bcc_list
+      })
+    } else {
+      // Show validation failure
+    }
   }
 
   onSelectChange = (e) => {
     this.setState({...this.state, address: e.target.value});
   }
 
-  onToChange = (e) => {
-    this.setState({...this.state, To: e.target.value});
-  }
-
-  onCcChange = (e) => {
-    this.setState({...this.state, CC: e.target.value});
-  }
-
-  onBccChange = (e) => {
-    this.setState({...this.state, BCC: e.target.value});
+  onRecipientChange = (e) => {
+    this.setState({...this.state, recipient: e.target.value});
   }
 
   onSubjectChange = (e) => {
@@ -169,6 +211,15 @@ class ComposeOverlay extends React.Component {
 
   render() {
     const { editorState } = this.state;
+    const to_list = this.state.To.map((a) => {
+      return <li key={a}><div>To:{a}</div></li>;
+    });
+    const cc_list = this.state.CC.map((a) => {
+      return <li key={a}><div>CC:{a}</div></li>;
+    });
+    const bcc_list = this.state.BCC.map((a) => {
+      return <li key={a}><div>BCC:{a}</div></li>;
+    });
     return (
       <form className="compose-overlay" onSubmit={this.handleSubmit}>
         <div className="compose-from-old">
@@ -196,30 +247,36 @@ class ComposeOverlay extends React.Component {
             callback={this.requestCallback}
           />
         </div>
-        <label for="address-to">To</label>
+        <label htmlFor="recipient-address">Recipients</label>
         <input
           type="email"
-          id="address-to"
+          id="recipient-address"
           name="address-to"
           onChange={this.onToChange}
+          onBlur={this.validateRecipient}
           value={this.state.To}
+          className={`recipient-address${this.state.validation_fail ? " invalid" : ""}`}
         />
-        <label htmlFor="address-cc">CC</label>
-        <input
-          type="email"
-          id="address-cc"
-          name="address-cc"
-          onChange={this.onCcChange}
-          value={this.state.CC}
-        />
-        <label htmlFor="address-bcc">BCC</label>
-        <input
-          type="email"
-          id="address-bcc"
-          name="address-cc"
-          onChange={this.onBccChange}
-          value={this.state.BCC}
-        />
+        <button
+          onClick={this.addRecipient}
+          className="default recipient"
+          id="recipient-to"
+        >+ To</button>
+        <button
+          onClick={this.addRecipient}
+          className="recipient"
+          id="recipient-cc"
+        >+ CC</button>
+        <button
+          onClick={this.addRecipient}
+          className="recipient"
+          id="recipient-bcc"
+        >+ BCC</button>
+        <div className="recipients">
+          <ul className="recipeint-list" id="to-list"></ul>
+          <ul className="recipient-list" id="cc-list"></ul>
+          <ul className="recipient-list" id="bcc-list"></ul>
+        </div>
         <label htmlFor="subject">Subject</label>
         <input
           type="text"
