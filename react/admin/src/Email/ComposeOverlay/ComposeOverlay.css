@@ -42,7 +42,14 @@ form.compose-overlay select, {
 /* recipient lists */
 
 ul.recipient-list {
-  list-style-type: "\2709";
+/*  list-style-type: "\2709";*/
+  list-style: none;
+}
+
+
+ul.recipient-list li {
+  display: inline-block;
+  margin: 0 .5em;
 }
 
 ul.recipient-list li div {
