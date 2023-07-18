@@ -132,7 +132,7 @@ class ComposeOverlay extends React.Component {
 
   validateAddress(address) {
     // Not going to allow IP addresses; domains only
-    let re = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()[]\\.,;:\s@"]+)*)|(".+"))@((([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+    let re = /^(([^<>()[]\\.,;:\s@"]+(\.[^<>()[]\\.,;:\s@"]+)*)|(".+"))@((([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
 
     return re.test(address);
   }
