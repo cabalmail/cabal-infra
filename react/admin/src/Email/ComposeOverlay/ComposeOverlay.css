@@ -41,6 +41,17 @@ form.compose-overlay select, {
 
 /* recipient lists */
 
+div#recipient-buttons-grid {
+  display: grid;
+  grid-template-columns: 30% 30% 30%;
+  grid-column-gap: 5%;
+  align-items: baseline;
+}
+
+div#recipient-buttons-grid button {
+  width: 100%;
+}
+
 button.recipient {
   display: inline-block;
 }
@@ -48,7 +59,7 @@ button.recipient {
 ul.recipient-list {
 /*  list-style-type: "\2709";*/
   list-style: none;
-  padding: none;
+  padding-left: 0;
 }
 
 
