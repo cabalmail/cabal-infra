@@ -46,21 +46,23 @@ ul.recipeint-list {
 }
 
 ul.recipient-list li div {
-  display: inline-block;
+  display: inline-block !important;
+  width: auto !important;
   height: 1.5em;
   border-radius: 0.75em;
   border: 1px solid;
+  color: #000;
 }
 
-ul#to-list li div {
+ul#to-list li div, ul#to-list li div {
   background-color: #696;
 }
 
-ul#cc-list li div {
+ul#cc-list li div, ul#cc-list li div {
   background-color: #996;
 }
 
-ul#bcc-list li div {
+ul#bcc-list li div, ul#bcc-list li div {
   background-color: #966;
 }
 
