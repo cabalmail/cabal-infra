@@ -225,21 +225,13 @@ class ComposeOverlay extends React.Component {
   render() {
     const { editorState } = this.state;
     const to_list = this.state.To.map((a) => {
-      return (
-        <li key={a}>
-          <div>To:{this.obscureEmail(a)}</div>
-        </li>
-      );
+      return <li key={a}><div>To|{this.obscureEmail(a)}</div></li>;
     });
     const cc_list = this.state.CC.map((a) => {
-      return (
-        <li key={a}><div>CC:{this.obscureEmail(a)}</div></li>
-      );
+      return <li key={a}><div>CC|{this.obscureEmail(a)}</div></li>;
     });
     const bcc_list = this.state.BCC.map((a) => {
-      return (
-        <li key={a}><div>BCC:{this.obscureEmail(a)}</div></li>
-      );
+      return <li key={a}><div>BCC|{this.obscureEmail(a)}</div></li>;
     });
     return (
       <form className="compose-overlay" onSubmit={this.handleSubmit}>
