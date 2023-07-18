@@ -281,7 +281,7 @@ class ComposeOverlay extends React.Component {
           id="recipient-bcc"
         >+ BCC</button>
         <div className="recipients">
-          <ul className="recipeint-list" id="to-list">{to_list}</ul>
+          <ul className="recipient-list" id="to-list">{to_list}</ul>
           <ul className="recipient-list" id="cc-list">{cc_list}</ul>
           <ul className="recipient-list" id="bcc-list">{bcc_list}</ul>
         </div>
