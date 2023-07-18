@@ -66,12 +66,12 @@ class ComposeOverlay extends React.Component {
       addresses: state.addresses || this.state.addresses,
       address: state.address || this.state.address,
       recipient: state.recipient || this.state.recipient,
-      validation_fail: state.validation_fail || this.state.validation_fail,
+      validation_fail: state.hasOwnProperty('validation_fail') ? state.validation_fail || this.state.validation_fail,
       To: state.To || this.state.To,
       CC: state.CC || this.state.CC,
       BCC: state.BCC || this.state.BCC,
       Subject: state.Subject || this.state.Subject,
-      showRequest: state.showRequest || this.state.showRequest
+      showRequest: state.hasOwnProperty('showRequest') ? state.showRequest : this.state.showRequest
     };
     try {
     	localStorage.setItem(DRAFT_KEY, JSON.stringify(raw_content));
