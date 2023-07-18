@@ -58,6 +58,10 @@ ul.recipient-list li div button {
   margin: 0;
   background-color: transparent;
   border: none;
+  width: auto;
+  height: auto;
+  color: #000;
+  font-size: 125%;
 }
 
 ul.recipient-list li div {
