@@ -67,8 +67,8 @@ ul.recipient-list li div button {
 ul.recipient-list li div {
   display: inline-block !important;
   width: auto !important;
-  height: 1.5em;
-  border-radius: 0.75em;
+  height: 2em;
+  border-radius: 1em;
   border: 1px solid;
   padding: 0 .5em;
 }

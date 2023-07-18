@@ -138,15 +138,17 @@ class ComposeOverlay extends React.Component {
   }
 
   validateRecipient = (e) => {
-    if (!this.validateAddress(e.target.value)) {
-      this.setState({...this.state, validation_fail: true});
-    } else {
+    if (this.validateAddress(e.target.value)) {
       this.setState({...this.state, validation_fail: false});
+      return true;
+    } else {
+      this.setState({...this.state, validation_fail: true});
+      return false;
     }
   }
 
   addRecipient = (e) => {
-    const address = document.getElementById("recipient-address").value;
+    const address = this.state.recipient;
     if (this.validateAddress(address)) {
       let to_list = this.state.To.slice();
       let cc_list = this.state.CC.slice();
@@ -169,9 +171,9 @@ class ComposeOverlay extends React.Component {
         To: to_list,
         CC: cc_list,
         BCC: bcc_list
-      })
+      });
     } else {
-      // Show validation failure
+      this.setState({...this.state, validation_fail: true});
     }
   }
 
@@ -227,7 +229,7 @@ class ComposeOverlay extends React.Component {
     const i = to_list.indexOf(e.target.value);
     if (i > -1) {
       to_list.splice(i, 1);
-      this.setState({...this.state, To: to_list});
+      this.setState({...this.state, To: to_list, recipient: e.target.value});
     }
   }
 
@@ -236,7 +238,7 @@ class ComposeOverlay extends React.Component {
     const i = cc_list.indexOf(e.target.value);
     if (i > -1) {
       cc_list.splice(i, 1);
-      this.setState({...this.state, CC: cc_list});
+      this.setState({...this.state, CC: cc_list, recipient: e.target.value});
     }
   }
 
@@ -245,7 +247,7 @@ class ComposeOverlay extends React.Component {
     const i = bcc_list.indexOf(e.target.value);
     if (i > -1) {
       bcc_list.splice(i, 1);
-      this.setState({...this.state, BCC: bcc_list});
+      this.setState({...this.state, BCC: bcc_list, recipient: e.target.value});
     }
   }
 
