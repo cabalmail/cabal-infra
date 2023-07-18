@@ -231,16 +231,34 @@ class ComposeOverlay extends React.Component {
     }
   }
 
+  removeCC = (e) => {
+    let cc_list = this.state.CC.slice();
+    const i = cc_list.indexOf(e.target.value);
+    if (i > -1) {
+      cc_list.splice(i, 1);
+      this.setState({...this.state, CC: cc_list});
+    }
+  }
+
+  removeBCC = (e) => {
+    let bcc_list = this.state.BCC.slice();
+    const i = bcc_list.indexOf(e.target.value);
+    if (i > -1) {
+      bcc_list.splice(i, 1);
+      this.setState({...this.state, BCC: bcc_list});
+    }
+  }
+
   render() {
     const { editorState } = this.state;
     const to_list = this.state.To.map((a) => {
       return <li key={a}><div>To:{this.obscureEmail(a)}<button onClick={this.removeTo} value={a}>☒</button></div></li>;
     });
     const cc_list = this.state.CC.map((a) => {
-      return <li key={a}><div>CC:{this.obscureEmail(a)}</div></li>;
+      return <li key={a}><div>CC:{this.obscureEmail(a)}<button onClick={this.removeCC} value={a}>☒</button></div></li>;
     });
     const bcc_list = this.state.BCC.map((a) => {
-      return <li key={a}><div>BCC:{this.obscureEmail(a)}</div></li>;
+      return <li key={a}><div>BCC:{this.obscureEmail(a)}<button onClick={this.removeBCC} value={a}>☒</button></div></li>;
     });
     return (
       <form className="compose-overlay" onSubmit={this.handleSubmit}>

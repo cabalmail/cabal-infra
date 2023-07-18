@@ -52,6 +52,14 @@ ul.recipient-list li {
   margin: 0 .5em;
 }
 
+ul.recipient-list li div button {
+  display: inline;
+  padding: 0;
+  margin: 0;
+  background-color: transparent;
+  border: none;
+}
+
 ul.recipient-list li div {
   display: inline-block !important;
   width: auto !important;
