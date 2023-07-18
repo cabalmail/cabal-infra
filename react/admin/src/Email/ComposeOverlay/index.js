@@ -252,7 +252,7 @@ class ComposeOverlay extends React.Component {
           type="email"
           id="recipient-address"
           name="address-to"
-          onChange={this.onToChange}
+          onChange={this.onRecipientChange}
           onBlur={this.validateRecipient}
           value={this.state.recipient}
           className={`recipient-address${this.state.validation_fail ? " invalid" : ""}`}
