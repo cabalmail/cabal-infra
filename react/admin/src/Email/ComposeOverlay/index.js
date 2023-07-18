@@ -210,7 +210,7 @@ class ComposeOverlay extends React.Component {
   };
 
   obscureEmail(address) {
-    return a.split('').map((c) => {
+    return address.split('').map((c) => {
       switch (c) {
         case '.':
           return <span className="dot"></span>
