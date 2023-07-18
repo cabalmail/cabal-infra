@@ -172,7 +172,7 @@ class ComposeOverlay extends React.Component {
     return (
       <form className="compose-overlay" onSubmit={this.handleSubmit}>
         <div className="compose-from-old">
-          <label for="address-from-old" className="address-from-old">From</label>
+          <label htmlFor="address-from-old" className="address-from-old">From</label>
           <select
             type="text"
             id="address-from-old"
@@ -196,7 +196,7 @@ class ComposeOverlay extends React.Component {
             callback={this.requestCallback}
           />
         </div>
-        <label for="address-to">To</label>
+        <label htmlFor="address-to">To</label>
         <input
           type="email"
           id="address-to"
