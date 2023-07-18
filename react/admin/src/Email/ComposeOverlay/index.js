@@ -214,7 +214,18 @@ class ComposeOverlay extends React.Component {
     const to_list = this.state.To.map((a) => {
       return (
         <li key={a}>
-          <div>To:<span className="usr">{a.split('@')[0]}</span><span className="host">{a.split('@')[1]}</span></div>
+          <div>To:{a.split('').map((c) => {
+            switch (c) {
+              case '.':
+                return <span className="dot"></span>
+                break;
+              case '@':
+                return <span className="amphora"></span>
+                break;
+              default:
+                return <span>{c}</span>
+            }
+          })}</div>
         </li>
       );
     });

@@ -54,8 +54,12 @@ ul.recipient-list li div {
   padding: 0 .5em;
 }
 
-ul.recipient-list li div span.host::before {
+ul.recipient-list li div span.amphora::before {
   content: '@';
+}
+
+ul.recipient-list li div span.dot::before {
+  content: '.';
 }
 
 ul#to-list li div, ul#to-list li div {
