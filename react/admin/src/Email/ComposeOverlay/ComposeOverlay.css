@@ -53,6 +53,10 @@ ul.recipient-list li div {
   border: 1px solid;
 }
 
+ul.recipient-list li div span.host:before {
+  content: '@';
+}
+
 ul#to-list li div, ul#to-list li div {
   background-color: #696;
   color: #000;

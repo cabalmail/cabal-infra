@@ -213,7 +213,9 @@ class ComposeOverlay extends React.Component {
     const { editorState } = this.state;
     const to_list = this.state.To.map((a) => {
       return (
-        <li key={a}><div>To:<a name="dontlinkmebroh" href="#">{a}</a></div></li>
+        <li key={a}>
+          <div>To:<span className="usr">{a.split('@')[0]}</span><span className="host">{a.split('@')[1]}</span></div>
+        </li>
       );
     });
     const cc_list = this.state.CC.map((a) => {
