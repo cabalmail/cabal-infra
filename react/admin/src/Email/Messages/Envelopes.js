@@ -51,7 +51,7 @@ class Envelopes extends React.Component {
         var selected = this.state.selected === id.toString() ? " selected" : "";
         var classes = flags + attachment + priority + selected;
         return (
-          <li className={`message-row ${classes}`}>
+          <li className={`message-row ${classes}`} key={id}>
             <div className="message-line-1">
               <div className="message-field message-from">{message.from[0]}</div>
               <div className="message-field message-date">{message.date}</div>
@@ -74,7 +74,7 @@ class Envelopes extends React.Component {
         );
       }
       return (
-        <li className="message-row loading">
+        <li className="message-row loading" key={id}>
           <div className="message-line-1">
             <div className="message-field message-from">&nbsp;</div>
             <div className="message-field message-date">&nbsp;</div>

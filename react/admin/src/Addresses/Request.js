@@ -118,9 +118,9 @@ class Request extends React.Component {
           <legend>Address</legend>
           <input
             type="text"
-            autocomplete="off"
-            autocorrect="off"
-            autocapitalize="none"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="none"
             value={this.state.username}
             onChange={this.doInputChange}
             id="username"
@@ -128,9 +128,9 @@ class Request extends React.Component {
             placeholder="username"
           /><span id="amphora">@</span><input
             type="text"
-            autocomplete="off"
-            autocorrect="off"
-            autocapitalize="none"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="none"
             value={this.state.subdomain}
             onChange={this.doInputChange}
             id="subdomain"
@@ -149,9 +149,9 @@ class Request extends React.Component {
           <legend>Comment</legend>
           <input
             type="text"
-            autocomplete="off"
-            autocorrect="off"
-            autocapitalize="none"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="none"
             value={this.state.comment}
             onChange={this.doInputChange}
             id="comment"
