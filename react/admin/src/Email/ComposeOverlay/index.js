@@ -214,21 +214,21 @@ class ComposeOverlay extends React.Component {
     const to_list = this.state.To.map((a) => {
       return (
         <li key={a}><div>To:{a.split('').map((c) => {
-          return <span>c</span>;
+          return <span>{c}</span>;
         })}</div></li>
       );
     });
     const cc_list = this.state.CC.map((a) => {
       return (
         <li key={a}><div>CC:{a.split('').map((c) => {
-          return <span>c</span>;
+          return <span>{c}</span>;
         })}</div></li>
       );
     });
     const bcc_list = this.state.BCC.map((a) => {
       return (
         <li key={a}><div>BCC:{a.split('').map((c) => {
-          return <span>c</span>;
+          return <span>{c}</span>;
         })}</div></li>
       );
     });
