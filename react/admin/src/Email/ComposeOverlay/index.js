@@ -254,7 +254,7 @@ class ComposeOverlay extends React.Component {
           name="address-to"
           onChange={this.onToChange}
           onBlur={this.validateRecipient}
-          value={this.state.To}
+          value={this.state.recipient}
           className={`recipient-address${this.state.validation_fail ? " invalid" : ""}`}
         />
         <button
