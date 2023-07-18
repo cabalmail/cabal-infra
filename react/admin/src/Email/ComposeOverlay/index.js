@@ -220,12 +220,12 @@ class ComposeOverlay extends React.Component {
     });
     const cc_list = this.state.CC.map((a) => {
       return (
-        <li key={a}><div>CC:<a name="dontlinkmebroh" href="#">{a}</a></div></li>
+        <li key={a}><div>CC:<span className="usr">{a.split('@')[0]}</span><span className="host">{a.split('@')[1]}</span></div></li>
       );
     });
     const bcc_list = this.state.BCC.map((a) => {
       return (
-        <li key={a}><div>BCC:<a name="dontlinkmebroh" href="#">{a}</a></div></li>
+        <li key={a}><div>BCC:<span className="usr">{a.split('@')[0]}</span><span className="host">{a.split('@')[1]}</span></div></li>
       );
     });
     return (
