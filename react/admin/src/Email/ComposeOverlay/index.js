@@ -209,32 +209,36 @@ class ComposeOverlay extends React.Component {
     });
   };
 
+  obscureEmail(address) {
+    return a.split('').map((c) => {
+      switch (c) {
+        case '.':
+          return <span className="dot"></span>
+        case '@':
+          return <span className="amphora"></span>
+        default:
+          return <span>{c}</span>
+      }
+    });
+  }
+
   render() {
     const { editorState } = this.state;
     const to_list = this.state.To.map((a) => {
       return (
         <li key={a}>
-          <div>To:{a.split('').map((c) => {
-            switch (c) {
-              case '.':
-                return <span className="dot"></span>
-              case '@':
-                return <span className="amphora"></span>
-              default:
-                return <span>{c}</span>
-            }
-          })}</div>
+          <div>To:{this.obscureEmail(a)}</div>
         </li>
       );
     });
     const cc_list = this.state.CC.map((a) => {
       return (
-        <li key={a}><div>CC:<span className="usr">{a.split('@')[0]}</span><span className="host">{a.split('@')[1]}</span></div></li>
+        <li key={a}><div>CC:{this.obscureEmail(a)}</div></li>
       );
     });
     const bcc_list = this.state.BCC.map((a) => {
       return (
-        <li key={a}><div>BCC:<span className="usr">{a.split('@')[0]}</span><span className="host">{a.split('@')[1]}</span></div></li>
+        <li key={a}><div>BCC:{this.obscureEmail(a)}</div></li>
       );
     });
     return (
