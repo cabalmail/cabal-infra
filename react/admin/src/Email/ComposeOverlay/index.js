@@ -310,17 +310,17 @@ class ComposeOverlay extends React.Component {
               onClick={this.addRecipient}
               className="default recipient"
               id="recipient-to"
-            >+ To</button>
+            >⊕ To</button>
             <button
               onClick={this.addRecipient}
               className="recipient"
               id="recipient-cc"
-            >+ CC</button>
+            >⊕ CC</button>
             <button
               onClick={this.addRecipient}
               className="recipient"
               id="recipient-bcc"
-            >+ BCC</button>
+            >⊕ BCC</button>
           </div>
         </div>
         <div className="recipients">
