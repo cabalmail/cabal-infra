@@ -61,17 +61,17 @@ button.recipient {
   display: inline-block;
 }
 
-button.recipient-to {
+button#recipient-to {
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
-  border-right-width: 0;
 }
 
-button.recipient-cc {
+button#recipient-cc {
   border-radius: 0;
+  border-left-width: 0;
 }
 
-button.recipient-bcc {
+button#recipient-bcc {
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
   border-left-width: 0;
