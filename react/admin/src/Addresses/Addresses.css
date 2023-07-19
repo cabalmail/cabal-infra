@@ -43,6 +43,7 @@ div#root div.Addresses div.content {
 .requestHidden, .requestVisible {
   display: block;
   overflow: hidden;
+  margin-top: 1em;
 }
 
 .requestHidden {
