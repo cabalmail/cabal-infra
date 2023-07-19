@@ -282,6 +282,7 @@ class ComposeOverlay extends React.Component {
     const bcc_list = this.state.BCC.map((a) => {
       return <li key={a}><div>{this.obscureEmail(a)}<button onClick={this.removeBCC} value={a}>☒</button></div></li>;
     });
+    const warning = (to_list.length + cc_list.length + bcc_list.length) === 0 ? "No recipients specified yet." : "";
     return (
       <form className="compose-overlay" onSubmit={this.handleSubmit}>
         <div className="compose-from-old">
@@ -341,6 +342,7 @@ class ComposeOverlay extends React.Component {
             >+ BCC</button>
           </div>
         </div>
+        <div className="warning">{warning}</div>
         <div className="recipients">
           <label className={this.state.To.length ? "show" : "hide"}>To</label>
           <ul
