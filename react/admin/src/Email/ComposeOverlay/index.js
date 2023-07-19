@@ -173,7 +173,8 @@ class ComposeOverlay extends React.Component {
         ...this.state,
         To: to_list,
         CC: cc_list,
-        BCC: bcc_list
+        BCC: bcc_list,
+        recipient: ""
       });
     } else {
       this.setState({...this.state, validation_fail: true});
@@ -189,7 +190,7 @@ class ComposeOverlay extends React.Component {
   }
 
   handleKeyDown = (e) => {
-    if (e.key === "Enter") {
+    if (e.key === "Enter" || e.key === "Space") {
       e.preventDefault();
       const message = {
         target: {
@@ -198,6 +199,15 @@ class ComposeOverlay extends React.Component {
       };
       this.addRecipient(message);
     }
+  }
+
+  handleBlur = (e) => {
+    const message = {
+      target: {
+        id: "recipient-to"
+      }
+    };
+    this.addRecipient(message);
   }
 
   onSubjectChange = (e) => {
@@ -314,6 +324,7 @@ class ComposeOverlay extends React.Component {
             name="address-to"
             onChange={this.onRecipientChange}
             onKeyDown={this.handleKeyDown}
+            onBlur={this.handleBlur}
             value={this.state.recipient}
             className={`recipient-address${this.state.validation_fail ? " invalid" : ""}`}
           />
