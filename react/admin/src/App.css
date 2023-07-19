@@ -20,7 +20,7 @@
   .wysiwyg-toolbar img {
     filter: invert(0.8);
   }
-  body, a, button, select, div, label, form, textarea {
+  body, a, button, select, div, label, form, textarea, .wysiwyg-editor, .wysiwyg-editor * {
     color: #aaa;
     background-color: #200;
   }
@@ -32,6 +32,10 @@
   input, select, option, textarea, ul.recipient-list {
     color: #ccc;
     background-color: #000;
+  }
+  textarea.wysiwyg-editor, .wysiwyg-editor * {
+    color: #ccc !important;
+    background-color: #000 !important;
   }
   button {
     color: #ccc;
@@ -118,7 +122,7 @@
 }
 
 @media (prefers-color-scheme: light) {
-  body, a, button, select, div, label, form, textarea {
+  body, a, button, select, div, label, form {
     color: #222;
     background-color: #ffe;
   }
@@ -128,6 +132,10 @@
   input, select, option, textarea, ul.recipient-list {
     color: #000;
     background-color: #ffd;
+  }
+  textarea.wysiwyg-editor, .wysiwyg-editor * {
+    color: #000 !important;
+    background-color: #ffd !important;
   }
   button {
     color: #333;
