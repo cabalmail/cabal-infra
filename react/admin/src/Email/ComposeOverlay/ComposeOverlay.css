@@ -45,9 +45,14 @@ form.compose-overlay select, {
   }
 }
 
+@media (min-width: 900px) {
+  div#sender-grid, div#recipient-grid {
+    grid-template-columns: 70% 25%;
+  }
+}
+
 div#sender-grid, div#recipient-grid {
   display: grid;
-  grid-template-columns: 70% 25%;
   grid-column-gap: 5%;
   align-items: baseline;
 }
