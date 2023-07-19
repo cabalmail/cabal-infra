@@ -63,14 +63,14 @@ class ComposeOverlay extends React.Component {
   	var raw_content = convertToRaw(state.editorState.getCurrentContent());
     var other_state = {
       // editorState omitted intentionally
-      addresses: state.addresses || this.state.addresses,
-      address: state.address || this.state.address,
-      recipient: state.recipient || this.state.recipient,
+      addresses: state.hasOwnProperty('addresses') ? state.addresses : this.state.addresses,
+      address: state.hasOwnProperty('address') ? state.address : this.state.address,
+      recipient: state.hasOwnProperty('recipient') ? state.recipient : this.state.recipient,
       validation_fail: state.hasOwnProperty('validation_fail') ? state.validation_fail : this.state.validation_fail,
-      To: state.To || this.state.To,
-      CC: state.CC || this.state.CC,
-      BCC: state.BCC || this.state.BCC,
-      Subject: state.Subject || this.state.Subject,
+      To: state.hasOwnProperty('To') ? state.To : this.state.To,
+      CC: state.hasOwnProperty('CC') ? state.CC : this.state.CC,
+      BCC: state.hasOwnProperty('BCC') ? state.BCC : this.state.BCC,
+      Subject: state.hasOwnProperty('Subject') ? state.Subject : this.state.Subject,
       showRequest: state.hasOwnProperty('showRequest') ? state.showRequest : this.state.showRequest
     };
     try {
