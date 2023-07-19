@@ -64,7 +64,7 @@ ul.recipient-list {
 /*  list-style-type: "\2709";*/
   list-style: none;
   padding-left: 0;
-  margin: none;
+  margin: 0;
 }
 
 
