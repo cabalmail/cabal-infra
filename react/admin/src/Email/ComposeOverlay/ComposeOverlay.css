@@ -46,11 +46,11 @@ div#sender-grid, div#recipient-grid {
 }
 
 div#sender-grid {
-  grid-template-columns: 70% 25%;
+  grid-template-columns: 61% 34%;
 }
 
 div#recipient-grid {
-  grid-template-columns: 70% 5% 5% 5%;
+  grid-template-columns: 61% 8% 8% 8%;
 }
 
 div#recipient-grid button, button.toggleRequest {
