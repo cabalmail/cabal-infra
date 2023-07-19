@@ -175,6 +175,10 @@ form.compose-overlay div.wysiwyg-toolbar {
   box-shadow: none !important;
 }
 
+.public-DraftStyleDefault-block {
+  margin: 0 !important;
+}
+
 /*
 form.compose-overlay label.radio {
   display: inline-block;
