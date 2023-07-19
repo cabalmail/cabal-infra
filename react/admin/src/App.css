@@ -33,7 +33,7 @@
     color: #ccc;
     background-color: #000;
   }
-  button {
+  button, .rdw-option-wrapper {
     color: #ccc;
     background-color: #111;
   }
@@ -126,7 +126,7 @@
     color: #000;
     background-color: #ffd;
   }
-  button {
+  button, div.rdw-option-wrapper {
     color: #333;
     background-color: #ddd;
   }
