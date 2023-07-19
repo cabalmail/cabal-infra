@@ -191,7 +191,9 @@ class ComposeOverlay extends React.Component {
 
   handleKeyDown = (e) => {
     if (e.key === "Enter" || e.key === "Space") {
-      e.preventDefault();
+      if (e.key === "Enter") {
+        e.preventDefault();
+      }
       const message = {
         target: {
           id: "recipient-to"
