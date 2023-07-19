@@ -54,14 +54,14 @@ form.compose-overlay select, {
 div#sender-grid, div#recipient-grid {
   display: grid;
   grid-column-gap: 5%;
-  align-items: baseline;
+  align-items: top;
 }
 
 div#recipient-grid-buttons {
   display: grid;
   grid-template-columns: 33% 34% 33%;
   grid-column-gap: 0;
-  align-items: baseline;
+  align-items: top;
 }
 
 div#recipient-grid button, button.toggleRequest {
