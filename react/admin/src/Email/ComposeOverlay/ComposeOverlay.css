@@ -39,6 +39,12 @@ form.compose-overlay select, {
   box-sizing: border-box;
 }
 
+@media (max-width: 899px) {
+  div#sender-grid, div#recipient-grid {
+    grid-template-columns: 55% 40%;
+  }
+}
+
 div#sender-grid, div#recipient-grid {
   display: grid;
   grid-template-columns: 70% 25%;
