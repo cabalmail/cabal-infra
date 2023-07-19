@@ -46,8 +46,10 @@ div#root div.Addresses div.content {
 }
 
 .requestHidden {
+  padding-top: 0;
   max-height: 0;
   transition: max-height 1s ease-out;
+  transition: padding-top 1s ease-out;
 }
 
 .requestVisible {
@@ -55,6 +57,7 @@ div#root div.Addresses div.content {
   height: auto;
   max-height: 999px;
   transition: max-height 1s ease-in;
+  transition: padding-top 1s ease-in;
 }
 
 /* List Addresses */
