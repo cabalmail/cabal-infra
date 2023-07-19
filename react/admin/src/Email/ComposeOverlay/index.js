@@ -188,6 +188,18 @@ class ComposeOverlay extends React.Component {
     this.setState({...this.state, recipient: e.target.value});
   }
 
+  handleKeyDown = (e) => {
+    e.preventDefault();
+    if (e.key === "Enter") {
+      const message = {
+        target: {
+          id: "recipient-to"
+        }
+      };
+      this.addRecipient(message);
+    }
+  }
+
   onSubjectChange = (e) => {
     this.setState({...this.state, Subject: e.target.value});
   }
@@ -301,7 +313,7 @@ class ComposeOverlay extends React.Component {
             id="recipient-address"
             name="address-to"
             onChange={this.onRecipientChange}
-            onBlur={this.validateRecipient}
+            onKeyDown={this.handleKeyDown}
             value={this.state.recipient}
             className={`recipient-address${this.state.validation_fail ? " invalid" : ""}`}
           />
