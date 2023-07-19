@@ -10,6 +10,11 @@ import "react-draft-wysiwyg/dist/react-draft-wysiwyg.css";
 
 const STATE_KEY = 'compose-state';
 const DRAFT_KEY = 'draft-js'
+const MESSAGE = {
+  target: {
+    id: "recipient-to"
+  }
+};
 
 class ComposeOverlay extends React.Component {
 
@@ -190,26 +195,16 @@ class ComposeOverlay extends React.Component {
   }
 
   handleKeyDown = (e) => {
-    if (e.key === "Enter" || e.key === "Space") {
+    if (e.key === "Enter" || e.key === " ") {
       if (e.key === "Enter") {
         e.preventDefault();
       }
-      const message = {
-        target: {
-          id: "recipient-to"
-        }
-      };
-      this.addRecipient(message);
+      this.addRecipient(MESSAGE);
     }
   }
 
   handleBlur = (e) => {
-    const message = {
-      target: {
-        id: "recipient-to"
-      }
-    };
-    this.addRecipient(message);
+    this.addRecipient(MESSAGE);
   }
 
   onSubjectChange = (e) => {
