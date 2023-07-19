@@ -151,6 +151,22 @@ ul#bcc-list li div, ul#bcc-list li div {
 
 /* WYSIWYG editor */
 
+body .wysiwyg-editor .rdw-dropdown-carettoopen {
+  height: 0px !important;
+  width: 0px !important;
+  position: absolute !important;
+  top: 35% !important;
+  right: 10% !important;
+  border-top-width: 6px !important;
+  border-top-style: solid !important;
+  border-left-width: 5px !important;
+  border-left-style: solid !important;
+  border-left-color: transparent !important;
+  border-right-width: 5px !important;
+  border-right-style: solid !important;
+  border-right-color: transparent !important;
+}
+
 .wysiwyg-editor, .wysiwyg-toolbar {
   border: 1px solid;
   border-color: inherit;
