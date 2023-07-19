@@ -161,6 +161,8 @@ class ComposeOverlay extends React.Component {
       if (union_list.indexOf(address) > -1) {
         return;
       }
+      console.log(e.target.id);
+      console.log(e);
       switch (e.target.id) {
         case "recipient-to":
           to_list.push(address);
