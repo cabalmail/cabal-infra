@@ -33,9 +33,12 @@
     color: #ccc;
     background-color: #000;
   }
-  button, .rdw-option-wrapper {
+  button {
     color: #ccc;
     background-color: #111;
+  }
+  div.rdw-option-wrapper {
+    background-color: #111 !important;
   }
   ul.message-list div.message-subject {
     color: #ccc;
@@ -126,9 +129,12 @@
     color: #000;
     background-color: #ffd;
   }
-  button, div.rdw-option-wrapper {
+  button {
     color: #333;
     background-color: #ddd;
+  }
+  div.rdw-option-wrapper {
+    background-color: #ddd !important;
   }
   ul.message-list div.message-subject {
     color: #222;

@@ -167,7 +167,7 @@ form.compose-overlay div.wysiwyg-toolbar {
 .wysiwyg-toolbar, .wysiwyg-toolbar span,
 .wysiwyg-toolbar div,
 .wysiwyg-toolbar ul, .wysiwyg-toolbar li {
-  background-color: inherit;
+  background-color: inherit !important;
   border-color: inherit !important;
   color: inherit !important;
 }
