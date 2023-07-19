@@ -43,7 +43,6 @@ div#root div.Addresses div.content {
 .requestHidden, .requestVisible {
   display: block;
   overflow: hidden;
-  padding-top: 1em;
 }
 
 .requestHidden {
@@ -52,6 +51,7 @@ div#root div.Addresses div.content {
 }
 
 .requestVisible {
+  padding-top: 1em;
   height: auto;
   max-height: 999px;
   transition: max-height 1s ease-in;
