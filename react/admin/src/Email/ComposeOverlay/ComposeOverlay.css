@@ -165,9 +165,9 @@ form.compose-overlay div.wysiwyg-toolbar {
 }
 
 .wysiwyg-toolbar, .wysiwyg-toolbar span,
-.wysiwyg-toolbar :not(.rdw-option-wrapper),
+.wysiwyg-toolbar div,
 .wysiwyg-toolbar ul, .wysiwyg-toolbar li {
-  background-color: inherit !important;
+  background-color: inherit;
   border-color: inherit !important;
   color: inherit !important;
 }
