@@ -194,6 +194,10 @@ body .wysiwyg-toolbar div.rdw-dropdown-carettoclose {
   border-top-width: 0;
 }
 
+.wysiwyg-editor .DraftEditor-root {
+  min-height: 20em;
+}
+
 .wysiwyg-editor div.DraftEditor-root {
   padding: 0 1em;
 }
