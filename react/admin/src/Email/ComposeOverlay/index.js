@@ -294,7 +294,7 @@ class ComposeOverlay extends React.Component {
             callback={this.requestCallback}
           />
         </div>
-        <label htmlFor="recipient-address">Recipients</label>
+        <label htmlFor="recipient-address">Enter Recipients Here</label>
         <div id="recipient-grid">
           <input
             type="email"
