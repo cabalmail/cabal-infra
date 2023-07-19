@@ -295,16 +295,16 @@ class ComposeOverlay extends React.Component {
           />
         </div>
         <label htmlFor="recipient-address">Recipients</label>
-        <input
-          type="email"
-          id="recipient-address"
-          name="address-to"
-          onChange={this.onRecipientChange}
-          onBlur={this.validateRecipient}
-          value={this.state.recipient}
-          className={`recipient-address${this.state.validation_fail ? " invalid" : ""}`}
-        />
-        <div id="recipient-buttons-grid">
+        <div id="recipient-grid">
+          <input
+            type="email"
+            id="recipient-address"
+            name="address-to"
+            onChange={this.onRecipientChange}
+            onBlur={this.validateRecipient}
+            value={this.state.recipient}
+            className={`recipient-address${this.state.validation_fail ? " invalid" : ""}`}
+          />
           <button
             onClick={this.addRecipient}
             className="default recipient"

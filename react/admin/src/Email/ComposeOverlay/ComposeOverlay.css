@@ -46,14 +46,14 @@ div#sender-grid, div#recipient-buttons-grid {
 }
 
 div#sender-grid {
-  grid-template-columns: 65% 30%;
+  grid-template-columns: 70% 25%;
 }
 
-div#recipient-buttons-grid {
-  grid-template-columns: 30% 30% 30%;
+div#recipient-grid {
+  grid-template-columns: 70% 5% 5% 5%;
 }
 
-div#recipient-buttons-grid button, button.toggleRequest {
+div#recipient-grid button, button.toggleRequest {
   width: 100%;
 }
 
