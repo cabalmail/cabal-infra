@@ -160,6 +160,9 @@ ul#bcc-list li div, ul#bcc-list li div {
   border-top-left-radius: 0;
   border-top-right-radius: 0;
   border-top-width: 0;
+}
+
+.wysiwyg-editor div.DraftEditor-root {
   padding: 0 1em;
 }
 
