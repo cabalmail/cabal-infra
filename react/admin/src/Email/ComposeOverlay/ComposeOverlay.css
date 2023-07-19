@@ -41,16 +41,16 @@ form.compose-overlay select, {
 
 div#sender-grid, div#recipient-grid {
   display: grid;
+  grid-template-columns: 70% 25%;
   grid-column-gap: 5%;
   align-items: baseline;
 }
 
-div#sender-grid {
-  grid-template-columns: 61% 34%;
-}
-
-div#recipient-grid {
-  grid-template-columns: 61% 8% 8% 8%;
+div#recipient-grid-buttons {
+  display: grid;
+  grid-template-columns: 33% 34% 33%;
+  grid-column-gap: 0;
+  align-items: baseline;
 }
 
 div#recipient-grid button, button.toggleRequest {

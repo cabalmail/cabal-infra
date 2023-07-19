@@ -305,21 +305,23 @@ class ComposeOverlay extends React.Component {
             value={this.state.recipient}
             className={`recipient-address${this.state.validation_fail ? " invalid" : ""}`}
           />
-          <button
-            onClick={this.addRecipient}
-            className="default recipient"
-            id="recipient-to"
-          >+ To</button>
-          <button
-            onClick={this.addRecipient}
-            className="recipient"
-            id="recipient-cc"
-          >+ CC</button>
-          <button
-            onClick={this.addRecipient}
-            className="recipient"
-            id="recipient-bcc"
-          >+ BCC</button>
+          <div id="recipient-grid-buttons">
+            <button
+              onClick={this.addRecipient}
+              className="default recipient"
+              id="recipient-to"
+            >+ To</button>
+            <button
+              onClick={this.addRecipient}
+              className="recipient"
+              id="recipient-cc"
+            >+ CC</button>
+            <button
+              onClick={this.addRecipient}
+              className="recipient"
+              id="recipient-bcc"
+            >+ BCC</button>
+          </div>
         </div>
         <div className="recipients">
           <label className={this.state.To.length ? "show" : "hide"}>To</label>
