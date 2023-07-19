@@ -37,7 +37,7 @@
     color: #ccc;
     background-color: #111;
   }
-  div.rdw-option-wrapper {
+  a.rdw-dropdown-selectedtext, div.rdw-option-wrapper {
     background-color: #111 !important;
   }
   ul.message-list div.message-subject {
@@ -133,7 +133,7 @@
     color: #333;
     background-color: #ddd;
   }
-  div.rdw-option-wrapper {
+  a.rdw-dropdown-selectedtext, div.rdw-option-wrapper {
     background-color: #ddd !important;
   }
   ul.message-list div.message-subject {
