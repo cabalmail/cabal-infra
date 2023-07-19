@@ -39,7 +39,7 @@ form.compose-overlay select, {
   box-sizing: border-box;
 }
 
-div#sender-grid, div#recipient-buttons-grid {
+div#sender-grid, div#recipient-grid {
   display: grid;
   grid-column-gap: 5%;
   align-items: baseline;
