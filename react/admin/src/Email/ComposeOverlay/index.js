@@ -269,19 +269,21 @@ class ComposeOverlay extends React.Component {
       <form className="compose-overlay" onSubmit={this.handleSubmit}>
         <div className="compose-from-old">
           <label htmlFor="address-from-old" className="address-from-old">From</label>
-          <select
-            type="text"
-            id="address-from-old"
-            name="address-from-old"
-            className="address-from-old"
-            placeholder="Find existing address"
-            onChange={this.onSelectChange}
-            value={this.state.address}
-          ><option value="">Select an address</option>{this.getOptions()}</select>
-          <button
-            onClick={this.toggleRequest}
-            className="toggleRequest"
-          >New Address {this.state.showRequest ? "▼" : "▶︎"}</button>
+          <div id="sender-grid">
+            <select
+              type="text"
+              id="address-from-old"
+              name="address-from-old"
+              className="address-from-old"
+              placeholder="Find existing address"
+              onChange={this.onSelectChange}
+              value={this.state.address}
+            ><option value="">Select an address</option>{this.getOptions()}</select>
+            <button
+              onClick={this.toggleRequest}
+              className="toggleRequest"
+            >New Address {this.state.showRequest ? "▼" : "▶︎"}</button>
+          </div>
           <Request
             token={this.props.token}
             domains={this.props.domains}

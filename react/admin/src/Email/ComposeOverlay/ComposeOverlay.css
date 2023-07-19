@@ -39,16 +39,21 @@ form.compose-overlay select, {
   box-sizing: border-box;
 }
 
-/* recipient lists */
-
-div#recipient-buttons-grid {
+div#sender-grid, div#recipient-buttons-grid {
   display: grid;
-  grid-template-columns: 30% 30% 30%;
   grid-column-gap: 5%;
   align-items: baseline;
 }
 
-div#recipient-buttons-grid button {
+div#sender-grid {
+  grid-template-columns: 65% 30%;
+}
+
+div#recipient-buttons-grid {
+  grid-template-columns: 30% 30% 30%;
+}
+
+div#recipient-buttons-grid button, button.toggleRequest {
   width: 100%;
 }
 
