@@ -267,16 +267,77 @@ class ComposeOverlay extends React.Component {
     }
   }
 
+  moveAddress = (e) => {
+    const address = e.target.getAttribute('data-address');
+    const list = e.target.value;
+    const message = {
+      target: {
+        value: address
+      }
+    };
+    this.removeTo(message);
+    this.removeCC(message);
+    this.removeBCC(message);
+
+    let to_list = this.state.To.slice();
+    let cc_list = this.state.CC.slice();
+    let bcc_list = this.state.BCC.slice();
+    switch (list) {
+      case "To":
+        to_list.push(address);
+        break;
+      case "CC":
+        cc_list.push(address);
+        break;
+      case "BCC":
+        bcc_list.push(address);
+        break;
+      default:
+        to_list.push(address);
+    }
+    this.setState({
+      ...this.state,
+      To: to_list,
+      CC: cc_list,
+      BCC: bcc_list,
+      recipient: ""
+    });
+  }
+
   render() {
     const { editorState } = this.state;
-    const to_list = this.state.To.map((a) => {
-      return <li key={a} className="To"><div>To:{this.obscureEmail(a)}<button onClick={this.removeTo} value={a}>☒</button></div></li>;
+    const to_list = this.state.To.sort.map((a) => {
+      return (
+        <li key={a} className="To">
+          <div><select value="To" data-address={a} onChange={this.moveAddress}>
+            <option>To</option>
+            <option>CC</option>
+            <option>BCC</option>
+          </select>:{this.obscureEmail(a)}<button onClick={this.removeTo} value={a}>☒</button></div>
+        </li>
+        );
     });
-    const cc_list = this.state.CC.map((a) => {
-      return <li key={a} className="CC"><div>CC:{this.obscureEmail(a)}<button onClick={this.removeCC} value={a}>☒</button></div></li>;
+    const to_list = this.state.CC.sort.map((a) => {
+      return (
+        <li key={a} className="CC">
+          <div><select value="CC" data-address={a} onChange={this.moveAddress}>
+            <option>To</option>
+            <option>CC</option>
+            <option>BCC</option>
+          </select>:{this.obscureEmail(a)}<button onClick={this.removeTo} value={a}>☒</button></div>
+        </li>
+        );
     });
-    const bcc_list = this.state.BCC.map((a) => {
-      return <li key={a} className="BCC"><div>BCC:{this.obscureEmail(a)}<button onClick={this.removeBCC} value={a}>☒</button></div></li>;
+    const to_list = this.state.BCC.sort.map((a) => {
+      return (
+        <li key={a} className="BCC">
+          <div><select value="BCC" data-address={a} onChange={this.moveAddress}>
+            <option>To</option>
+            <option>CC</option>
+            <option>BCC</option>
+          </select>:{this.obscureEmail(a)}<button onClick={this.removeTo} value={a}>☒</button></div>
+        </li>
+        );
     });
     return (
       <form className="compose-overlay" onSubmit={this.handleSubmit}>

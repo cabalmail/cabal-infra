@@ -111,7 +111,7 @@ ul.recipient-list li {
   margin: 0 .5em;
 }
 
-ul.recipient-list li div button {
+ul.recipient-list li div button, ul.recipient-list li div select {
   display: inline !important;
   padding: 0 !important;
   margin: 0 !important;
@@ -120,6 +120,9 @@ ul.recipient-list li div button {
   width: auto !important;
   height: auto !important;
   color: #000 !important;
+}
+
+ul.recipient-list li div button {
   font-size: 125% !important;
 }
 

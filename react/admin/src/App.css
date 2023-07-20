@@ -210,7 +210,7 @@ body {
 * {
   font-family: 'Tahoma', 'Verdana', 'Trebuchet MS', 'Arial';
   font-size: small;
-  outline-color: #66a;
+  outline-color: #66a !important;
 }
 
 a {
