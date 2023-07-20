@@ -212,7 +212,7 @@ body {
   font-size: small;
 }
 
-input:focus, select:focus {
+input:focus, select:focus, ul.recipient-list:has(input#recipient-address:focus) {
   outline-color: #68a !important;
 }
 
