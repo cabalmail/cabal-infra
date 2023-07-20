@@ -61,7 +61,7 @@ button.toggleRequest {
   width: 100%;
 }
 
-input#recipient-address, li > input#recipient-address {
+input#recipient-address, li.recipient-entry {
   border-width: 0;
   margin: 0;
   padding: 0;

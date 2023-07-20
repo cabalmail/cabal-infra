@@ -384,7 +384,7 @@ class ComposeOverlay extends React.Component {
             {to_list}
             {cc_list}
             {bcc_list}
-            <li>
+            <li class="recipient-entry">
               <input
                 type="email"
                 id="recipient-address"
