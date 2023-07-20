@@ -311,33 +311,33 @@ class ComposeOverlay extends React.Component {
     const to_list = this.state.To.sort().map((a) => {
       return (
         <li key={a} className="To">
-          <div><select value="To" data-address={a} onChange={this.moveAddress}>
+          <div><label><select value="To" data-address={a} onChange={this.moveAddress}>
             <option>To</option>
             <option>CC</option>
             <option>BCC</option>
-          </select>{this.obscureEmail(a)}<button onClick={this.removeTo} value={a}>☒</button></div>
+          </select>▼</label>{this.obscureEmail(a)}<button onClick={this.removeTo} value={a}>☒</button></div>
         </li>
         );
     });
     const cc_list = this.state.CC.sort().map((a) => {
       return (
         <li key={a} className="CC">
-          <div><select value="CC" data-address={a} onChange={this.moveAddress}>
+          <div><label><select value="CC" data-address={a} onChange={this.moveAddress}>
             <option>To</option>
             <option>CC</option>
             <option>BCC</option>
-          </select>{this.obscureEmail(a)}<button onClick={this.removeCC} value={a}>☒</button></div>
+          </select>▼</label>{this.obscureEmail(a)}<button onClick={this.removeCC} value={a}>☒</button></div>
         </li>
         );
     });
     const bcc_list = this.state.BCC.sort().map((a) => {
       return (
         <li key={a} className="BCC">
-          <div><select value="BCC" data-address={a} onChange={this.moveAddress}>
+          <div><label><select value="BCC" data-address={a} onChange={this.moveAddress}>
             <option>To</option>
             <option>CC</option>
             <option>BCC</option>
-          </select>{this.obscureEmail(a)}<button onClick={this.removeBCC} value={a}>☒</button></div>
+          </select>▼</label>{this.obscureEmail(a)}<button onClick={this.removeBCC} value={a}>☒</button></div>
         </li>
         );
     });

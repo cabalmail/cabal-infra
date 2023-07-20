@@ -99,10 +99,6 @@ ul.recipient-list li div button, ul.recipient-list li div select {
   color: #000 !important;
 }
 
-ul.recipient-list li div button, ul.recipient-list li div select::after {
-  content: "▼";
-}
-
 ul.recipient-list li div button {
   font-size: 125% !important;
 }
