@@ -218,6 +218,7 @@ select:focus, select:focus-visible,
 ul.recipient-list:focus-within {
   outline-color: Highlight !important;
   outline-color: -webkit-focus-ring-color !important;
+  outline-style: auto;
 }
 
 a {
