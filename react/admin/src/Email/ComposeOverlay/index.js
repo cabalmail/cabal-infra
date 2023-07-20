@@ -2,7 +2,6 @@ import React from 'react';
 import './ComposeOverlay.css';
 import ApiClient from '../../ApiClient';
 import Request from '../../Addresses/Request';
-// import Composer from './Composer';
 import { ADDRESS_LIST } from '../../constants';
 import { EditorState, convertToRaw, convertFromRaw } from 'draft-js';
 import { Editor } from "react-draft-wysiwyg";
@@ -141,16 +140,6 @@ class ComposeOverlay extends React.Component {
     return address.match(re);
   }
 
-  validateRecipient = (e) => {
-    if (this.validateAddress(e.target.value)) {
-      this.setState({...this.state, validation_fail: false});
-      return true;
-    } else {
-      this.setState({...this.state, validation_fail: true});
-      return false;
-    }
-  }
-
   addRecipient = (e) => {
     const address = this.state.recipient;
     if (this.validateAddress(address)) {
@@ -207,10 +196,6 @@ class ComposeOverlay extends React.Component {
 
   onSubjectChange = (e) => {
     this.setState({...this.state, Subject: e.target.value});
-  }
-
-  toggleRequest = () => {
-    this.setState({...this.state, showRequest: !this.state.showRequest})
   }
 
   requestCallback = (address) => {
