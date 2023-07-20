@@ -317,6 +317,9 @@ class ComposeOverlay extends React.Component {
               className={`recipient-list${this.state.To.length ? " show" : " hide"}`}
               id="recipient-list"
             >
+              {to_list}
+              {cc_list}
+              {bcc_list}
               <li>
                 <input
                   type="email"
@@ -328,9 +331,6 @@ class ComposeOverlay extends React.Component {
                   className={`recipient-address${this.state.validation_fail ? " invalid" : ""}`}
                 />
               </li>
-              {to_list}
-              {cc_list}
-              {bcc_list}
             </ul>
           </div>
           <div id="recipient-grid-buttons">

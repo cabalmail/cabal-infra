@@ -140,17 +140,17 @@ ul.recipient-list li div span.dot::before {
   content: '.';
 }
 
-ul#to-list li div, ul#to-list li div {
+ul li.To div {
   background-color: #696;
   color: #000;
 }
 
-ul#cc-list li div, ul#cc-list li div {
+ul li.CC div {
   background-color: #996;
   color: #000;
 }
 
-ul#bcc-list li div, ul#bcc-list li div {
+ul li.BCC div {
   background-color: #966;
   color: #000;
 }
