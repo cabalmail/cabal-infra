@@ -216,7 +216,6 @@ body {
 input:focus, input:focus-visible,
 select:focus, select:focus-visible,
 ul.recipient-list:focus-within {
-  outline-color: #26a !important;
   outline-color: Highlight !important;
   outline-color: -webkit-focus-ring-color !important;
 }
