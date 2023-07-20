@@ -70,6 +70,8 @@ div#recipient-grid button, button.toggleRequest {
 
 input#recipient-address {
   border-width: 0;
+  margin: 0;
+  padding: 0;
 }
 
 button.recipient {
@@ -126,9 +128,11 @@ ul.recipient-list li input#recipient-address:focus {
 }
 
 ul.recipient-list:has(input#recipient-address:focus) {
-  outline-color: currentcolor;
-  outline-color: invert;
   outline-style: solid;
+}
+
+ul.recipient-list li {
+  margin: 0 0.2em;
 }
 
 ul.recipient-list li div {
