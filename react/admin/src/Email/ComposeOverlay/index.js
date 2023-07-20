@@ -370,49 +370,30 @@ class ComposeOverlay extends React.Component {
             callback={this.requestCallback}
           />
         </div>
-        <label htmlFor="recipient-address">Enter recipients and press &quot;+To&quot;, &quot;+CC&quot;, or &quot;+BCC&quot;</label>
-        <div id="recipient-grid">
-          <div
-            className="recipients"
-            onClick={e => document.getElementById('recipient-address').focus()}
+        <label htmlFor="recipient-address">Recipients</label>
+        <div
+          className="recipients"
+          onClick={e => document.getElementById('recipient-address').focus()}
+        >
+          <ul
+            className={`recipient-list${this.state.To.length ? " show" : " hide"}`}
+            id="recipient-list"
           >
-            <ul
-              className={`recipient-list${this.state.To.length ? " show" : " hide"}`}
-              id="recipient-list"
-            >
-              {to_list}
-              {cc_list}
-              {bcc_list}
-              <li>
-                <input
-                  type="email"
-                  id="recipient-address"
-                  name="address-to"
-                  onChange={this.onRecipientChange}
-                  onKeyDown={this.handleKeyDown}
-                  value={this.state.recipient}
-                  className={`recipient-address${this.state.validation_fail ? " invalid" : ""}`}
-                />
-              </li>
-            </ul>
-          </div>
-          <div id="recipient-grid-buttons">
-            <button
-              onClick={this.addRecipient}
-              className="default recipient"
-              id="recipient-to"
-            >+ To</button>
-            <button
-              onClick={this.addRecipient}
-              className="recipient"
-              id="recipient-cc"
-            >+ CC</button>
-            <button
-              onClick={this.addRecipient}
-              className="recipient"
-              id="recipient-bcc"
-            >+ BCC</button>
-          </div>
+            {to_list}
+            {cc_list}
+            {bcc_list}
+            <li>
+              <input
+                type="email"
+                id="recipient-address"
+                name="address-to"
+                onChange={this.onRecipientChange}
+                onKeyDown={this.handleKeyDown}
+                value={this.state.recipient}
+                className={`recipient-address${this.state.validation_fail ? " invalid" : ""}`}
+              />
+            </li>
+          </ul>
         </div>
         <label htmlFor="subject">Subject</label>
         <input
