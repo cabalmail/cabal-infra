@@ -187,6 +187,10 @@ class ComposeOverlay extends React.Component {
   }
 
   onSelectChange = (e) => {
+    if (e.target.value === "new") {
+      this.setState({...this.state, showRequest: true});
+      return;
+    }
     this.setState({...this.state, address: e.target.value});
   }
 
@@ -346,21 +350,19 @@ class ComposeOverlay extends React.Component {
       <form className="compose-overlay" onSubmit={this.handleSubmit}>
         <div className="compose-from-old">
           <label htmlFor="address-from-old" className="address-from-old">From</label>
-          <div id="sender-grid">
-            <select
-              type="text"
-              id="address-from-old"
-              name="address-from-old"
-              className="address-from-old"
-              placeholder="Find existing address"
-              onChange={this.onSelectChange}
-              value={this.state.address}
-            ><option value="">Select an address</option>{this.getOptions()}</select>
-            <button
-              onClick={this.toggleRequest}
-              className="toggleRequest"
-            >New Address {this.state.showRequest ? "▼" : "▶︎"}</button>
-          </div>
+          <select
+            type="text"
+            id="address-from-old"
+            name="address-from-old"
+            className="address-from-old"
+            placeholder="Find existing address"
+            onChange={this.onSelectChange}
+            value={this.state.address}
+          >
+            <option value="">Select an address</option>
+            <option value="new">Create a new address</option>
+            {this.getOptions()}
+          </select>
           <Request
             token={this.props.token}
             domains={this.props.domains}

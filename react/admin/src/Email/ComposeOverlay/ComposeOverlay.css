@@ -39,24 +39,6 @@ form.compose-overlay select, {
   box-sizing: border-box;
 }
 
-@media (max-width: 899px) {
-  div#sender-grid, div#recipient-grid {
-    grid-template-columns: 55% 40%;
-  }
-}
-
-@media (min-width: 900px) {
-  div#sender-grid {
-    grid-template-columns: 70% 25%;
-  }
-}
-
-div#sender-grid {
-  display: grid;
-  grid-column-gap: 5%;
-  align-items: top;
-}
-
 button.toggleRequest {
   width: 100%;
 }
