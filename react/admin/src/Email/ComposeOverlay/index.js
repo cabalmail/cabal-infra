@@ -210,7 +210,7 @@ class ComposeOverlay extends React.Component {
   }
 
   onEditorStateChange = (editorState) => {
-    console.log(editorState.getSelection());
+    window.getSelection().getRangeAt(0).commonAncestorContainer.parentNode.scrollIntoView();
     this.setState({
       ...this.state,
       editorState: editorState
