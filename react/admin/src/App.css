@@ -212,10 +212,14 @@ body {
   font-size: small;
 }
 
-/*input:focus, select:focus, ul.recipient-list:has(input#recipient-address:focus) {
+/* Thank you https://css-tricks.com/copy-the-browsers-native-focus-styles/ */
+input:focus, input:focus-visible,
+select:focus, select:focus-visible,
+ul.recipient-list:focus-within {
   outline-color: #26a !important;
-  outline-color: invert !important;
-}*/
+  outline-color: Highlight !important;
+  outline-color: -webkit-focus-ring-color !important;
+}
 
 a {
   text-decoration: none;

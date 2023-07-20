@@ -115,9 +115,9 @@ ul.recipient-list li input#recipient-address:focus {
   outline: none;
 }
 
-/*ul.recipient-list:has(input#recipient-address:focus) {
+ul.recipient-list:focus-within {
   outline-style: solid;
-}*/
+}
 
 ul.recipient-list li {
   margin: 0 0.2em;
