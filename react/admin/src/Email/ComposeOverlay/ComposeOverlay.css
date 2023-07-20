@@ -193,6 +193,7 @@ body .wysiwyg-toolbar div.rdw-dropdown-carettoclose {
   border-top-left-radius: 0;
   border-top-right-radius: 0;
   border-top-width: 0;
+  z-index: 1;
 }
 
 .wysiwyg-editor .DraftEditor-root {
@@ -211,6 +212,7 @@ form.compose-overlay div.wysiwyg-toolbar {
   position: -webkit-sticky;
   position: sticky;
   top: 0;
+  z-index: 10;
 }
 
 .wysiwyg-toolbar, .wysiwyg-toolbar span,
