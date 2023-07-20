@@ -113,8 +113,13 @@ ul.recipient-list li div button {
   font-size: 125% !important;
 }
 
+ul.recipient-list li input#recipient-address {
+  height: 0;
+}
+
 ul.recipient-list li input#recipient-address:focus {
   outline: none;
+  height: auto;
 }
 
 ul.recipient-list:focus-within {
