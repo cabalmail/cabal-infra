@@ -369,9 +369,7 @@ class ComposeOverlay extends React.Component {
             tabindex="0"
           >
             {to_list}
-            &nbsp;
             {cc_list}
-            &nbsp;
             {bcc_list}
             <li class="recipient-entry">
               <input
