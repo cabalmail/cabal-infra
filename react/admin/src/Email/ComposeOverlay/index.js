@@ -270,18 +270,21 @@ class ComposeOverlay extends React.Component {
   moveAddress = (e) => {
     const address = e.target.getAttribute('data-address');
     const list = e.target.value;
-    const message = {
-      target: {
-        value: address
-      }
-    };
-    this.removeTo(message);
-    this.removeCC(message);
-    this.removeBCC(message);
-
     let to_list = this.state.To.slice();
     let cc_list = this.state.CC.slice();
     let bcc_list = this.state.BCC.slice();
+    const to_i = to_list.indexOf(address);
+    if (to_i > -1) {
+      to_list.splice(to_i, 1);
+    }
+    const cc_i = cc_list.indexOf(address);
+    if (cc_i > -1) {
+      cc_list.splice(cc_i, 1);
+    }
+    const bcc_i = bcc_list.indexOf(address);
+    if (bcc_i > -1) {
+      bcc_list.splice(bcc_i, 1);
+    }
     switch (list) {
       case "To":
         to_list.push(address);
@@ -299,8 +302,7 @@ class ComposeOverlay extends React.Component {
       ...this.state,
       To: to_list,
       CC: cc_list,
-      BCC: bcc_list,
-      recipient: ""
+      BCC: bcc_list
     });
   }
 
