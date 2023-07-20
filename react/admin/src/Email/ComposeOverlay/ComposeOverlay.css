@@ -211,7 +211,7 @@ form.compose-overlay div.wysiwyg-toolbar {
   border-bottom-right-radius: 0;
   position: -webkit-sticky;
   position: sticky;
-  top: 0;
+  top: -1px;
   z-index: 10;
 }
 
