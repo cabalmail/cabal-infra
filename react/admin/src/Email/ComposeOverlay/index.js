@@ -411,6 +411,10 @@ class ComposeOverlay extends React.Component {
           wrapperClassName="wysiwyg-wrapper"
           editorClassName="wysiwyg-editor"
           onEditorStateChange={this.onEditorStateChange}
+          toolbar={{
+            options: ['inline', 'blockType', 'fontSize', 'fontFamily', 'list', 'textAlign', 'colorPicker', 'link', 'embedded', 'emoji', 'remove', 'history'],
+            
+          }}
         />
         <button onClick={this.handleSend} className="default" id="compose-send">Send</button>
         <button onClick={this.handleCancel} id="compose-cancel">Cancel</button>
