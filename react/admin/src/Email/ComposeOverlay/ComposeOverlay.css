@@ -70,7 +70,6 @@ div#recipient-grid button, button.toggleRequest {
 
 input#recipient-address {
   border-width: 0;
-  
 }
 
 button.recipient {
@@ -99,7 +98,6 @@ div.recipients label.hide, div.recipients ul.hide {
 }
 
 ul.recipient-list {
-/*  list-style-type: "\2709";*/
   list-style: none;
   padding-left: 0;
   margin: 0;
@@ -121,6 +119,16 @@ ul.recipient-list li div button {
   height: auto !important;
   color: #000 !important;
   font-size: 125% !important;
+}
+
+ul.recipient-list li input#recipient-address:focus {
+  outline: none;
+}
+
+ul.recipient-list:has(input#recipient-address:focus) {
+  outline-color: currentcolor;
+  outline-color: invert;
+  outline-style: solid;
 }
 
 ul.recipient-list li div {
