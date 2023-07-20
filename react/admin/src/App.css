@@ -212,10 +212,10 @@ body {
   font-size: small;
 }
 
-input:focus, select:focus, ul.recipient-list:has(input#recipient-address:focus) {
+/*input:focus, select:focus, ul.recipient-list:has(input#recipient-address:focus) {
   outline-color: #26a !important;
   outline-color: invert !important;
-}
+}*/
 
 a {
   text-decoration: none;

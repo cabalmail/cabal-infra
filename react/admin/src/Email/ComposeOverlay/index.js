@@ -379,6 +379,7 @@ class ComposeOverlay extends React.Component {
           <ul
             className={`recipient-list${this.state.To.length ? " show" : " hide"}`}
             id="recipient-list"
+            tabindex="0"
           >
             {to_list}
             {cc_list}
