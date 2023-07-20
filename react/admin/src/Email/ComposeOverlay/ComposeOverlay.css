@@ -100,6 +100,14 @@ ul.recipient-list li div button, ul.recipient-list li div label {
   color: #000 !important;
 }
 
+ul.recipient-list li div button, ul.recipient-list li div select {
+  text-align-last: right;
+}
+
+ul.recipient-list li div button, ul.recipient-list li div option {
+  direction: rtl;
+}
+
 ul.recipient-list li div button {
   font-size: 125% !important;
 }
