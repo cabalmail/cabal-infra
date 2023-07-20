@@ -210,7 +210,10 @@ body {
 * {
   font-family: 'Tahoma', 'Verdana', 'Trebuchet MS', 'Arial';
   font-size: small;
-  outline-color: #66a !important;
+}
+
+input:focus, select:focus {
+  outline-color: #68a !important;
 }
 
 a {
