@@ -317,7 +317,7 @@ class ComposeOverlay extends React.Component {
         </li>
         );
     });
-    const to_list = this.state.CC.sort.map((a) => {
+    const cc_list = this.state.CC.sort.map((a) => {
       return (
         <li key={a} className="CC">
           <div><select value="CC" data-address={a} onChange={this.moveAddress}>
@@ -328,7 +328,7 @@ class ComposeOverlay extends React.Component {
         </li>
         );
     });
-    const to_list = this.state.BCC.sort.map((a) => {
+    const bcc_list = this.state.BCC.sort.map((a) => {
       return (
         <li key={a} className="BCC">
           <div><select value="BCC" data-address={a} onChange={this.moveAddress}>
