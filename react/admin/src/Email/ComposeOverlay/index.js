@@ -377,7 +377,7 @@ class ComposeOverlay extends React.Component {
           onClick={e => document.getElementById('recipient-address').focus()}
         >
           <ul
-            className={`recipient-list${this.state.To.length ? " show" : " hide"}`}
+            className={"recipient-list"}
             id="recipient-list"
             tabindex="0"
           >
