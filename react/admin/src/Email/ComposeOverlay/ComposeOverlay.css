@@ -184,7 +184,8 @@ body .wysiwyg-toolbar div.rdw-dropdown-carettoclose {
 }
 
 .wysiwyg-toolbar div.rdw-option-wrapper:hover,
-.wysiwyg-toolbar div.rdw-block-wrapper:hover {
+.wysiwyg-toolbar div.rdw-block-wrapper:hover,
+.wysiwyg-toolbar div.rdw-block-dropdown:hover {
   box-shadow: none !important;
 }
 
