@@ -95,6 +95,10 @@ class ComposeOverlay extends React.Component {
     this.getAddresses();
   }
 
+  onEditorStateChange = (editorState) => {
+    console.log(editorState);
+  }
+
   getAddresses() {
     this.api.getAddresses().then(data => {
       try {
