@@ -315,7 +315,7 @@ class ComposeOverlay extends React.Component {
             <option>To</option>
             <option>CC</option>
             <option>BCC</option>
-          </select>:{this.obscureEmail(a)}<button onClick={this.removeTo} value={a}>☒</button></div>
+          </select>{this.obscureEmail(a)}<button onClick={this.removeTo} value={a}>☒</button></div>
         </li>
         );
     });
@@ -326,7 +326,7 @@ class ComposeOverlay extends React.Component {
             <option>To</option>
             <option>CC</option>
             <option>BCC</option>
-          </select>:{this.obscureEmail(a)}<button onClick={this.removeCC} value={a}>☒</button></div>
+          </select>{this.obscureEmail(a)}<button onClick={this.removeCC} value={a}>☒</button></div>
         </li>
         );
     });
@@ -337,7 +337,7 @@ class ComposeOverlay extends React.Component {
             <option>To</option>
             <option>CC</option>
             <option>BCC</option>
-          </select>:{this.obscureEmail(a)}<button onClick={this.removeBCC} value={a}>☒</button></div>
+          </select>{this.obscureEmail(a)}<button onClick={this.removeBCC} value={a}>☒</button></div>
         </li>
         );
     });
