@@ -213,7 +213,8 @@ body {
 }
 
 input:focus, select:focus, ul.recipient-list:has(input#recipient-address:focus) {
-  outline-color: #68a !important;
+  outline-color: #26a !important;
+  outline-color: invert !important;
 }
 
 a {
