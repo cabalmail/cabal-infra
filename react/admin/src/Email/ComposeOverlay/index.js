@@ -270,15 +270,14 @@ class ComposeOverlay extends React.Component {
   render() {
     const { editorState } = this.state;
     const to_list = this.state.To.map((a) => {
-      return <li key={a}><div>{this.obscureEmail(a)}<button onClick={this.removeTo} value={a}>☒</button></div></li>;
+      return <li key={a} className="To"><div>To:{this.obscureEmail(a)}<button onClick={this.removeTo} value={a}>☒</button></div></li>;
     });
     const cc_list = this.state.CC.map((a) => {
-      return <li key={a}><div>{this.obscureEmail(a)}<button onClick={this.removeCC} value={a}>☒</button></div></li>;
+      return <li key={a} className="CC"><div>CC:{this.obscureEmail(a)}<button onClick={this.removeCC} value={a}>☒</button></div></li>;
     });
     const bcc_list = this.state.BCC.map((a) => {
-      return <li key={a}><div>{this.obscureEmail(a)}<button onClick={this.removeBCC} value={a}>☒</button></div></li>;
+      return <li key={a} className="BCC"><div>BCC:{this.obscureEmail(a)}<button onClick={this.removeBCC} value={a}>☒</button></div></li>;
     });
-    const warning = (to_list.length + cc_list.length + bcc_list.length) === 0 ? "No recipients specified yet." : "";
     return (
       <form className="compose-overlay" onSubmit={this.handleSubmit}>
         <div className="compose-from-old">
@@ -310,15 +309,30 @@ class ComposeOverlay extends React.Component {
         </div>
         <label htmlFor="recipient-address">Enter recipients and press &quot;+To&quot;, &quot;+CC&quot;, or &quot;+BCC&quot;</label>
         <div id="recipient-grid">
-          <input
-            type="email"
-            id="recipient-address"
-            name="address-to"
-            onChange={this.onRecipientChange}
-            onKeyDown={this.handleKeyDown}
-            value={this.state.recipient}
-            className={`recipient-address${this.state.validation_fail ? " invalid" : ""}`}
-          />
+          <div
+            className="recipients"
+            onClick={e => document.getElementById('recipient-address').focus()}
+          >
+            <ul
+              className={`recipient-list${this.state.To.length ? " show" : " hide"}`}
+              id="recipient-list"
+            >
+              <li>
+                <input
+                  type="email"
+                  id="recipient-address"
+                  name="address-to"
+                  onChange={this.onRecipientChange}
+                  onKeyDown={this.handleKeyDown}
+                  value={this.state.recipient}
+                  className={`recipient-address${this.state.validation_fail ? " invalid" : ""}`}
+                />
+              </li>
+              {to_list}
+              {cc_list}
+              {bcc_list}
+            </ul>
+          </div>
           <div id="recipient-grid-buttons">
             <button
               onClick={this.addRecipient}
@@ -336,24 +350,6 @@ class ComposeOverlay extends React.Component {
               id="recipient-bcc"
             >+ BCC</button>
           </div>
-        </div>
-        <div className="warning">{warning}</div>
-        <div className="recipients">
-          <label className={this.state.To.length ? "show" : "hide"}>To</label>
-          <ul
-            className={`recipient-list${this.state.To.length ? " show" : " hide"}`}
-            id="to-list"
-          >{to_list}</ul>
-          <label className={this.state.CC.length ? "show" : "hide"}>CC</label>
-          <ul
-            className={`recipient-list${this.state.CC.length ? " show" : " hide"}`}
-            id="cc-list"
-          >{cc_list}</ul>
-          <label className={this.state.BCC.length ? "show" : "hide"}>BCC</label>
-          <ul
-            className={`recipient-list${this.state.BCC.length ? " show" : " hide"}`}
-            id="bcc-list"
-          >{bcc_list}</ul>
         </div>
         <label htmlFor="subject">Subject</label>
         <input

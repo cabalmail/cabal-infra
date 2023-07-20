@@ -68,6 +68,11 @@ div#recipient-grid button, button.toggleRequest {
   width: 100%;
 }
 
+input#recipient-address {
+  border-width: 0;
+  
+}
+
 button.recipient {
   display: inline-block;
   margin: 0;
