@@ -24,7 +24,7 @@ def handler(event, _context):
         client.create_folder('Outbox')
     except: # pylint: disable=bare-except
         pass
-    client.append('Outbox',msg)
+    client.append('Outbox',msg.as_string().encode())
     client.logout()
     return {
         "statusCode": 200,
