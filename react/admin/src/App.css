@@ -20,11 +20,7 @@
   .wysiwyg-toolbar img {
     filter: invert(0.8);
   }
-  body, a, button, select, div:not(.rdw-colorpicker-option), label, form, textarea,
-  .wysiwyg-editor, .wysiwyg-editor div.DraftEditor-root,
-  .wysiwyg-editor div.DraftEditor-root div.DraftEditor-editorContainer,
-  .wysiwyg-editor div.DraftEditor-root div.DraftEditor-editorContainer div.public-DraftEditor-content,
-  .wysiwyg-editor div.DraftEditor-root div.DraftEditor-editorContainer div.public-DraftEditor-content {
+  body, a, button, select, div:not(.rdw-colorpicker-option), label, form, textarea {
     color: #aaa;
     background-color: #200;
   }
@@ -34,6 +30,13 @@
   input, select, option, textarea, ul.recipient-list {
     color: #ccc;
     background-color: #000;
+  }
+  .wysiwyg-editor, .wysiwyg-editor div.DraftEditor-root,
+  .wysiwyg-editor div.DraftEditor-root div.DraftEditor-editorContainer,
+  .wysiwyg-editor div.DraftEditor-root div.DraftEditor-editorContainer div.public-DraftEditor-content,
+  .wysiwyg-editor div.DraftEditor-root div.DraftEditor-editorContainer div.public-DraftEditor-content {
+    color: #ccc !important;
+    background-color: #000 !important;
   }
   button {
     color: #ccc;
