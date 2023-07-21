@@ -153,6 +153,37 @@ export default class ApiClient {
     return response;
   }
 
+  // Send
+
+  sendMessage(sender, to_list, cc_list, bcc_list, subject, body, draft) {
+    // TODO:
+    // - attachments
+    // Flow:
+    // - place in outbox
+    // - send via SMTP
+    // - on succes, move from outbox to Sent
+    const response = axios.put('/send',
+      JSON.stringify({
+        host: this.host,
+        sender: sender,
+        to_list: to_list,
+        cc_list: cc_list,
+        bcc_list: bcc_list,
+        subject: subject,
+        body: body,
+        draft: draft // false == outbox, true == drafts
+      }),
+      {
+        baseURL: this.baseURL,
+        headers: {
+          'Authorization': this.token
+        },
+        timeout: TIMEOUT
+      }
+    );
+    return response;
+  }
+
   // IMAP Messages
 
   moveMessages(source, destination, ids, order, field) {
@@ -202,20 +233,6 @@ export default class ApiClient {
   }
 
   getMessages(folder, order, field) {
-    // if (folder === "INBOX") {
-    //   if (localStorage.getItem("INBOX") !== null) {
-    //     console.log("Returning address list from local storage.")
-    //     let p = new Promise(function(resolve, reject) {
-    //       let d = localStorage.getItem("INBOX");
-    //       if (d !== null) {
-    //         resolve(JSON.parse(d));
-    //       } else {
-    //         reject("Storage error");
-    //       }
-    //     });
-    //     return p;
-    //   }
-    // }
     const response = axios.get('/list_messages',
       {
         params: {

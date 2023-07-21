@@ -14,6 +14,17 @@ const MESSAGE = {
     id: "recipient-to"
   }
 };
+const EMPTY_STATE = {
+  addresses: [],
+  address: "",
+  recipient: "",
+  validation_fail: false,
+  To: [],
+  CC: [],
+  BCC: [],
+  Subject: "",
+  showRequest: false
+};
 
 class ComposeOverlay extends React.Component {
 
@@ -48,16 +59,8 @@ class ComposeOverlay extends React.Component {
       };
     } else {
       this.state = {
-        editorState: init_ed_state,
-        addresses: [],
-        address: "",
-        recipient: "",
-        validation_fail: false,
-        To: [],
-        CC: [],
-        BCC: [],
-        Subject: "",
-        showRequest: false
+        ...EMPTY_STATE,
+        editorState: init_ed_state
       };
     }
     this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
@@ -80,21 +83,17 @@ class ComposeOverlay extends React.Component {
     try {
     	localStorage.setItem(DRAFT_KEY, JSON.stringify(raw_content));
     } catch (e) {
-      console.log(e);
+      console.error(e);
     }
     try {
       localStorage.setItem(STATE_KEY, JSON.stringify(other_state));
     } catch (e) {
-      console.log(e);
+      console.error(e);
     }
     super.setState(state);
   }
 
   componentDidMount() {
-    this.getAddresses();
-  }
-
-  getAddresses() {
     this.api.getAddresses().then(data => {
       try {
         localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
@@ -108,15 +107,6 @@ class ComposeOverlay extends React.Component {
     });
   }
 
-  getOptions() {
-    if (! this.state.addresses) {
-      return <option>Loading...</option>;
-    }
-    return this.state.addresses.map((a) => {
-      return <option value={a}>{a}</option>;
-    });
-  }
-
   handleSubmit = (e) => {
     e.preventDefault();
     return false;
@@ -124,15 +114,59 @@ class ComposeOverlay extends React.Component {
 
   handleSend = (e) => {
     e.preventDefault();
-    alert("Not implemented");
-    return false;
+    if (this.state.address) {
+      this.addRecipient(MESSAGE);
+    }
+    if (this.state.To.length + this.state.CC.length + this.state.BCC.length === 0) {
+      this.props.setMessage("Please specify at least one recipient.", true);
+      return;
+    }
+    if (this.state.subject === "") {
+      this.props.setMessage("Please provide a subject.", true);
+      return;
+    }
+    if (this.state.addresses.indexOf(this.state.address) === -1) {
+      this.props.setMessage("Please select an address from which to send.", true);
+      return;
+    }
+    this.api.send(
+      this.address,
+      this.To,
+      this.CC,
+      this.BCC,
+      this.subject,
+      draftToHtml(convertToRaw(this.editorState.getCurrentContent())),
+      false
+    ).then(() => {
+      this.props.setMessage("Email sent", false);
+      this.setState({
+        ...EMPTY_STATE,
+        editorState: EditorState.createEmpty()
+      });
+      this.props.hide();
+    }).catch((e) => {
+      this.props.setMessage("Error sending email", true);
+      console.log(e);
+    });
   }
 
   handleCancel = (e) => {
     e.preventDefault();
-    // TODO: clear all inputs
     this.props.hide();
   }
+
+  onEditorStateChange = (editorState) => {
+    this.setState({
+      ...this.state,
+      editorState: editorState
+    });
+    try {
+      window.getSelection().getRangeAt(0).commonAncestorContainer.parentNode
+        .scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   validateAddress(address) {
     // Not going to allow IP addresses; domains only
@@ -209,32 +243,6 @@ class ComposeOverlay extends React.Component {
     });
   }
 
-  onEditorStateChange = (editorState) => {
-    this.setState({
-      ...this.state,
-      editorState: editorState
-    });
-    try {
-      window.getSelection().getRangeAt(0).commonAncestorContainer.parentNode
-        .scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  obscureEmail(address) {
-    return address.split('').map((c) => {
-      switch (c) {
-        case '.':
-          return <span className="dot"></span>
-        case '@':
-          return <span className="amphora"></span>
-        default:
-          return <span>{c}</span>
-      }
-    });
-  }
-
   removeTo = (e) => {
     let to_list = this.state.To.slice();
     const i = to_list.indexOf(e.target.value);
@@ -298,6 +306,28 @@ class ComposeOverlay extends React.Component {
       To: to_list,
       CC: cc_list,
       BCC: bcc_list
+    });
+  }
+
+  getOptions() {
+    if (! this.state.addresses) {
+      return <option>Loading...</option>;
+    }
+    return this.state.addresses.map((a) => {
+      return <option value={a}>{a}</option>;
+    });
+  }
+
+  obscureEmail(address) {
+    return address.split('').map((c) => {
+      switch (c) {
+        case '.':
+          return <span className="dot"></span>
+        case '@':
+          return <span className="amphora"></span>
+        default:
+          return <span>{c}</span>
+      }
     });
   }
 
