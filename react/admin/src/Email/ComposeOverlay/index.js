@@ -4,6 +4,7 @@ import ApiClient from '../../ApiClient';
 import Request from '../../Addresses/Request';
 import { ADDRESS_LIST } from '../../constants';
 import { EditorState, convertToRaw, convertFromRaw } from 'draft-js';
+import draftToHtml from 'draftjs-to-html';
 import { Editor } from "react-draft-wysiwyg";
 import "react-draft-wysiwyg/dist/react-draft-wysiwyg.css";
 
@@ -114,7 +115,7 @@ class ComposeOverlay extends React.Component {
 
   handleSend = (e) => {
     e.preventDefault();
-    console.log(this.state.editorState.getCurrentContent().getPlainText());
+    console.log(draftToHtml(convertToRaw(this.state.editorState.getCurrentContent())));
     return;
     // if (this.state.address) {
     //   this.addRecipient(MESSAGE);
@@ -137,7 +138,7 @@ class ComposeOverlay extends React.Component {
     //   this.CC,
     //   this.BCC,
     //   this.subject,
-    //   this.state.editorState.getCurrentContent(),
+    //   draftToHtml(convertToRaw(this.state.editorState.getCurrentContent())),
     //   false
     // ).then(() => {
     //   this.props.setMessage("Email sent", false);
