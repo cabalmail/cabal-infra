@@ -20,11 +20,11 @@
   .wysiwyg-toolbar img {
     filter: invert(0.8);
   }
-  body, a, button, select, div, label, form, textarea, .wysiwyg-editor, .wysiwyg-editor * {
+  body, a, button, select, div:not(.rdw-colorpicker-option), label, form, textarea, .wysiwyg-editor, .wysiwyg-editor * {
     color: #aaa;
     background-color: #200;
   }
-  * {
+  *:not(.rdw-colorpicker-option) {
     border-color: #333;
     text-size-adjust: none !important;
     -webkit-text-size-adjust: none !important;
@@ -41,7 +41,7 @@
     color: #ccc;
     background-color: #111;
   }
-  a.rdw-dropdown-selectedtext, div.rdw-option-wrapper {
+  a.rdw-dropdown-selectedtext, div.rdw-option-wrapper:not(.rdw-colorpicker-option) {
     background-color: #111 !important;
   }
   ul.message-list div.message-subject {
@@ -59,8 +59,14 @@
   body div.compose-wrapper form.compose-overlay div.wysiwyg-toolbar div.rdw-option-active,
   body div.compose-wrapper form.compose-overlay div.wysiwyg-toolbar div.rdw-option-wrapper:active {
     color: #dda !important;
-    background-color: #300 !important;
     border-color: #800 !important;
+  }
+  body .highlight, body .active, body .default,
+  body .nav .active, body ul.message-list li.selected,
+  body ul.message-list li.selected *,
+  body div.compose-wrapper form.compose-overlay div.wysiwyg-toolbar div.rdw-option-active:not(.rdw-colorpicker-option),
+  body div.compose-wrapper form.compose-overlay div.wysiwyg-toolbar div.rdw-option-wrapper:active:not(.rdw-colorpicker-option) {
+    background-color: #300 !important;
   }
   ul.message-list li.Seen.selected div.message-subject {
     color: #fff
@@ -122,7 +128,7 @@
 }
 
 @media (prefers-color-scheme: light) {
-  body, a, button, select, div, label, form {
+  body, a, button, select, div:not(.rdw-colorpicker-option), label, form {
     color: #222;
     background-color: #ffe;
   }
@@ -133,7 +139,7 @@
     color: #000;
     background-color: #ffd;
   }
-  textarea.wysiwyg-editor, .wysiwyg-editor * {
+  textarea.wysiwyg-editor, .wysiwyg-editor *:not(.rdw-colorpicker-option) {
     color: #000 !important;
     background-color: #ffd !important;
   }
@@ -141,7 +147,7 @@
     color: #333;
     background-color: #ddd;
   }
-  a.rdw-dropdown-selectedtext, div.rdw-option-wrapper {
+  a.rdw-dropdown-selectedtext, div.rdw-option-wrapper:not(.rdw-colorpicker-option) {
     background-color: #ddd !important;
   }
   ul.message-list div.message-subject {
@@ -160,8 +166,14 @@
   body div.compose-wrapper form.compose-overlay div.wysiwyg-toolbar div.rdw-option-active,
   body div.compose-wrapper form.compose-overlay div.wysiwyg-toolbar div.rdw-option-wrapper:active {
     color: #000 !important;
-    background-color: #a33 !important;
     border-color: #d00 !important;
+  }
+  body .highlight, body .active, body .default,
+  body .nav .active, body ul.message-list li.selected,
+  body ul.message-list li.selected *,
+  body div.compose-wrapper form.compose-overlay div.wysiwyg-toolbar div.rdw-option-active:not(.rdw-colorpicker-option),
+  body div.compose-wrapper form.compose-overlay div.wysiwyg-toolbar div.rdw-option-wrapper:active:not(.rdw-colorpicker-option) {
+    background-color: #a33 !important;
   }
   ul.message-list li.Seen.selected div.message-subject {
     color: #000
