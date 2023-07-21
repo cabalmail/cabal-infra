@@ -130,7 +130,7 @@ class ComposeOverlay extends React.Component {
       this.props.setMessage("Please select an address from which to send.", true);
       return;
     }
-    this.api.send(
+    this.api.sendMessage(
       this.address,
       this.To,
       this.CC,
