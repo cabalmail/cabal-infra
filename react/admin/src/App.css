@@ -253,6 +253,10 @@ button, button * {
   border-radius: 0.2em;
 }
 
+img {
+  border-radius: 0;
+}
+
 input, select, option {
   width: 30em;
 }
