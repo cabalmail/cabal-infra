@@ -115,42 +115,40 @@ class ComposeOverlay extends React.Component {
 
   handleSend = (e) => {
     e.preventDefault();
-    console.log(draftToHtml(convertToRaw(this.state.editorState.getCurrentContent())));
-    return;
-    // if (this.state.address) {
-    //   this.addRecipient(MESSAGE);
-    // }
-    // if (this.state.To.length + this.state.CC.length + this.state.BCC.length === 0) {
-    //   this.props.setMessage("Please specify at least one recipient.", true);
-    //   return;
-    // }
-    // if (this.state.subject === "") {
-    //   this.props.setMessage("Please provide a subject.", true);
-    //   return;
-    // }
-    // if (this.state.addresses.indexOf(this.state.address) === -1) {
-    //   this.props.setMessage("Please select an address from which to send.", true);
-    //   return;
-    // }
-    // this.api.send(
-    //   this.address,
-    //   this.To,
-    //   this.CC,
-    //   this.BCC,
-    //   this.subject,
-    //   draftToHtml(convertToRaw(this.state.editorState.getCurrentContent())),
-    //   false
-    // ).then(() => {
-    //   this.props.setMessage("Email sent", false);
-    //   this.setState({
-    //     ...EMPTY_STATE,
-    //     editorState: EditorState.createEmpty()
-    //   });
-    //   this.props.hide();
-    // }).catch((e) => {
-    //   this.props.setMessage("Error sending email", true);
-    //   console.log(e);
-    // });
+    if (this.state.address) {
+      this.addRecipient(MESSAGE);
+    }
+    if (this.state.To.length + this.state.CC.length + this.state.BCC.length === 0) {
+      this.props.setMessage("Please specify at least one recipient.", true);
+      return;
+    }
+    if (this.state.subject === "") {
+      this.props.setMessage("Please provide a subject.", true);
+      return;
+    }
+    if (this.state.addresses.indexOf(this.state.address) === -1) {
+      this.props.setMessage("Please select an address from which to send.", true);
+      return;
+    }
+    this.api.send(
+      this.address,
+      this.To,
+      this.CC,
+      this.BCC,
+      this.subject,
+      draftToHtml(convertToRaw(this.state.editorState.getCurrentContent())),
+      false
+    ).then(() => {
+      this.props.setMessage("Email sent", false);
+      this.setState({
+        ...EMPTY_STATE,
+        editorState: EditorState.createEmpty()
+      });
+      this.props.hide();
+    }).catch((e) => {
+      this.props.setMessage("Error sending email", true);
+      console.log(e);
+    });
   }
 
   handleCancel = (e) => {
