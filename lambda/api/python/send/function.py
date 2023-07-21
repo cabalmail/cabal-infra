@@ -1,12 +1,12 @@
 '''Sends an email message'''
 import json
-from helper import get_imap_client # pylint: disable=import-error
 from email.message import EmailMessage # pylint: disable=import-error
-     # Flow:
+from helper import get_imap_client # pylint: disable=import-error
+# Flow:
      # - place in outbox
      # - send via SMTP
      # - on succes, move from outbox to Sent
-    
+
 def handler(event, _context):
     '''Sends an email message'''
     body = json.loads(event['body'])
@@ -19,7 +19,7 @@ def handler(event, _context):
     msg['Cc'] = ','.join(body['cc_list'])
     msg['Bcc'] = ','.join(body['bcc_list'])
     msg.set_content("This is a Multi-part message.")
-    msg.set_alternative(body['body'], subtype='html')
+    msg.add_alternative(body['body'], subtype='html')
     try:
         client.create_folder('Outbox')
     except: # pylint: disable=bare-except
