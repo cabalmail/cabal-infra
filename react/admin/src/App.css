@@ -35,10 +35,6 @@
     color: #ccc;
     background-color: #000;
   }
-  textarea.wysiwyg-editor, .wysiwyg-editor *:not(.public-DraftStyleDefault-block .public-DraftStyleDefault-block span) {
-    color: #ccc !important;
-    background-color: #000 !important;
-  }
   button {
     color: #ccc;
     background-color: #111;
