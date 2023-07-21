@@ -215,9 +215,10 @@ form.compose-overlay div.wysiwyg-toolbar {
   z-index: 10;
 }
 
-.wysiwyg-toolbar, .wysiwyg-toolbar span,
+.wysiwyg-toolbar, .wysiwyg-toolbar li
+.wysiwyg-toolbar span:not(.rdw-colorpicker-cube),
 .wysiwyg-toolbar div:not(.rdw-colorpicker-option),
-.wysiwyg-toolbar ul, .wysiwyg-toolbar li {
+.wysiwyg-toolbar ul {
   background-color: inherit !important;
   border-color: inherit !important;
   color: inherit !important;
