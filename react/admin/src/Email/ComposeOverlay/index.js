@@ -180,7 +180,7 @@ class ComposeOverlay extends React.Component {
       this.setState({...this.state, showRequest: true});
       return;
     }
-    this.setState({...this.state, address: e.target.value});
+    this.setState({...this.state, address: e.target.value, showRequest: false});
   }
 
   onRecipientChange = (e) => {
