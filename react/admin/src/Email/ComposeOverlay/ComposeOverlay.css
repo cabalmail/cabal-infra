@@ -216,7 +216,7 @@ form.compose-overlay div.wysiwyg-toolbar {
 }
 
 .wysiwyg-toolbar, .wysiwyg-toolbar span,
-.wysiwyg-toolbar div :not(.rdw-colorpicker-option),
+.wysiwyg-toolbar div:not(.rdw-colorpicker-option),
 .wysiwyg-toolbar ul, .wysiwyg-toolbar li {
   background-color: inherit !important;
   border-color: inherit !important;
