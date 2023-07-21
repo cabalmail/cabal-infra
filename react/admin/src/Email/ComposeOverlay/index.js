@@ -131,11 +131,11 @@ class ComposeOverlay extends React.Component {
       return;
     }
     this.api.sendMessage(
-      this.address,
-      this.To,
-      this.CC,
-      this.BCC,
-      this.subject,
+      this.state.address,
+      this.state.To,
+      this.state.CC,
+      this.state.BCC,
+      this.state.subject,
       draftToHtml(convertToRaw(this.state.editorState.getCurrentContent())),
       false
     ).then(() => {
