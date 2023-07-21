@@ -216,8 +216,8 @@ form.compose-overlay div.wysiwyg-toolbar {
 }
 
 .wysiwyg-toolbar, .wysiwyg-toolbar li
-.wysiwyg-toolbar span:not(.rdw-colorpicker-cube),
-.wysiwyg-toolbar div:not(.rdw-colorpicker-option),
+.wysiwyg-toolbar span:not(.rdw-colorpicker-cube, div.public-DraftStyleDefault-block span),
+.wysiwyg-toolbar div:not(.rdw-colorpicker-option, .public-DraftStyleDefault-block),
 .wysiwyg-toolbar ul {
   background-color: inherit !important;
   border-color: inherit !important;
