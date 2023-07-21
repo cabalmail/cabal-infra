@@ -137,7 +137,7 @@ class ComposeOverlay extends React.Component {
     //   this.CC,
     //   this.BCC,
     //   this.subject,
-    //   this.editorState.getCurrentContent(),
+    //   this.state.editorState.getCurrentContent(),
     //   false
     // ).then(() => {
     //   this.props.setMessage("Email sent", false);
