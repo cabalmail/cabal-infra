@@ -140,7 +140,10 @@
     color: #000;
     background-color: #ffd;
   }
-  textarea.wysiwyg-editor, .wysiwyg-editor *:not(.rdw-colorpicker-option, .public-DraftStyleDefault-block, .public-DraftStyleDefault-block span) {
+.wysiwyg-editor, .wysiwyg-editor div.DraftEditor-root,
+.wysiwyg-editor div.DraftEditor-root div.DraftEditor-editorContainer,
+.wysiwyg-editor div.DraftEditor-root div.DraftEditor-editorContainer div.public-DraftEditor-content,
+.wysiwyg-editor div.DraftEditor-root div.DraftEditor-editorContainer div.public-DraftEditor-content div {
     color: #000 !important;
     background-color: #ffd !important;
   }
