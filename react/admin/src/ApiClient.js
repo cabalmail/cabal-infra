@@ -158,10 +158,6 @@ export default class ApiClient {
   sendMessage(sender, to_list, cc_list, bcc_list, subject, body, draft) {
     // TODO:
     // - attachments
-    // Flow:
-    // - place in outbox
-    // - send via SMTP
-    // - on succes, move from outbox to Sent
     const response = axios.put('/send',
       JSON.stringify({
         host: this.host,

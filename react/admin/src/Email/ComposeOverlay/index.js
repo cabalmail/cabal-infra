@@ -140,10 +140,11 @@ class ComposeOverlay extends React.Component {
       false
     ).then(() => {
       this.props.setMessage("Email sent", false);
-      this.setState({
-        ...EMPTY_STATE,
-        editorState: EditorState.createEmpty()
-      });
+      // temporarily disable for testing
+      // this.setState({
+      //   ...EMPTY_STATE,
+      //   editorState: EditorState.createEmpty()
+      // });
       this.props.hide();
     }).catch((e) => {
       this.props.setMessage("Error sending email", true);
