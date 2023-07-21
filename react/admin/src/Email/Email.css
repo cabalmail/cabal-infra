@@ -64,7 +64,7 @@ ul.message_list {
   right: 1em;
 }
 
-.compose-blackout {
+body div.compose-blackout {
   position: absolute;
   top: 0;
   bottom: 0;

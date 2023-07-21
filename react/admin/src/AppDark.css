@@ -1,0 +1,110 @@
+@media (min-width: 900px) and (prefers-color-scheme: dark) {
+  .email_list,
+  .email_list :not(.highlight *,
+                   .active *,
+                   .default *,
+                   .selected *,
+                   .highlight *,
+                   .active *,
+                   .default *,
+                   .selected *,
+                   button,
+                   select,
+                   span.checked,
+                   span.unchecked) {
+    background-color: #181818 !important;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  body, a, button, select, div, label, form {
+    color: #aaa;
+    background-color: #200;
+  }
+  * {
+    border-color: #333;
+  }
+  input, select, option, textarea, ul.recipient-list {
+    color: #ccc;
+    background-color: #000;
+  }
+  .wysiwyg-editor, .wysiwyg-editor div.DraftEditor-root,
+  .wysiwyg-editor div.DraftEditor-root div.DraftEditor-editorContainer,
+  .wysiwyg-editor div.DraftEditor-root div.DraftEditor-editorContainer div.public-DraftEditor-content,
+  .wysiwyg-editor div.DraftEditor-root div.DraftEditor-editorContainer div.public-DraftEditor-content div {
+    color: #ccc;
+    background-color: #000;
+  }
+  button {
+    color: #ccc;
+    background-color: #111;
+  }
+  a.rdw-dropdown-selectedtext, div.rdw-option-wrapper:not(.rdw-colorpicker-option) {
+    background-color: #111 !important;
+  }
+  ul.message-list div.message-subject {
+    color: #ccc;
+  }
+  ul.message-list li.Seen div.message-subject {
+    color: #aaa;
+  }
+  .nav, .nav .item {
+    background-color: #000;
+  }
+  body .highlight, body .active, body .default,
+  body .nav .active, body ul.message-list li.selected,
+  body ul.message-list li.selected *,
+  body div.compose-wrapper form.compose-overlay div.wysiwyg-toolbar div.rdw-option-active,
+  body div.compose-wrapper form.compose-overlay div.wysiwyg-toolbar div.rdw-option-wrapper:active {
+    color: #dda !important;
+    border-color: #800 !important;
+  }
+  body .highlight, body .active, body .default,
+  body .nav .active, body ul.message-list li.selected,
+  body ul.message-list li.selected *,
+  body div.compose-wrapper form.compose-overlay div.wysiwyg-toolbar div.rdw-option-active:not(.rdw-colorpicker-option),
+  body div.compose-wrapper form.compose-overlay div.wysiwyg-toolbar div.rdw-option-wrapper:active:not(.rdw-colorpicker-option) {
+    background-color: #300 !important;
+  }
+  ul.message-list li.Seen.selected div.message-subject {
+    color: #fff
+  }
+  ul.message-list div.message-subject input[type=checkbox]:not(:checked) ~ label .unchecked,
+  ul.message-list div.message-subject input[type=checkbox]:checked ~ label .checked {
+    box-shadow: inset 0 0 0.35em #200;
+    background-color: #400;
+    border-color: #aaa;
+  }
+  /* forced */
+  .forced * {
+    color: #aaa !important;
+  }
+  /* inverted */
+  body.inverted, a.inverted, button.inverted, select.inverted, div.inverted,
+  .inverted a, .inverted button, .inverted select, .inverted div {
+    color: #222;
+    background-color: #ffe;
+    border-color: #999;
+  }
+  input.inverted, select.inverted, option.inverted,
+  .inverted input, .inverted select, .inverted option {
+    color: #000;
+    background-color: #ffd;
+  }
+  button.inverted, .inverted button {
+    color: #333;
+    background-color: #ddd;
+  }
+  .inverted .nav, .inverted .nav .item {
+    background-color: #000;
+  }
+  body .inverted .highlight, body .inverted .active, body .inverted .default,
+  body .inverted .nav .active {
+    color: #000;
+    background-color: #a33;
+    border-color: #d00;
+  }
+  .wysiwyg-toolbar img {
+    filter: invert(0.8);
+  }
+}

@@ -23,6 +23,8 @@ import AppMessage from './AppMessage';
 import Nav from './Nav';
 
 // Site-wide and Theme-specific style
+import './AppDark.css';
+import './AppLight.css';
 import './App.css';
 
 // Globals
