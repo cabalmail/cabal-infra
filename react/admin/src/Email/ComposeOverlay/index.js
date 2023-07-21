@@ -135,7 +135,7 @@ class ComposeOverlay extends React.Component {
       this.state.To,
       this.state.CC,
       this.state.BCC,
-      this.state.subject,
+      this.state.Subject,
       draftToHtml(convertToRaw(this.state.editorState.getCurrentContent())),
       false
     ).then(() => {
