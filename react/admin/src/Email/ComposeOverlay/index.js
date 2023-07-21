@@ -114,7 +114,7 @@ class ComposeOverlay extends React.Component {
 
   handleSend = (e) => {
     e.preventDefault();
-    console.log(this.state.editorState.getCurrentContent());
+    console.log(this.state.editorState.getCurrentContent().getPlainText());
     return;
     // if (this.state.address) {
     //   this.addRecipient(MESSAGE);
