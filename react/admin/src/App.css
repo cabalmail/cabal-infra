@@ -34,9 +34,9 @@
   .wysiwyg-editor, .wysiwyg-editor div.DraftEditor-root,
   .wysiwyg-editor div.DraftEditor-root div.DraftEditor-editorContainer,
   .wysiwyg-editor div.DraftEditor-root div.DraftEditor-editorContainer div.public-DraftEditor-content,
-  .wysiwyg-editor div.DraftEditor-root div.DraftEditor-editorContainer div.public-DraftEditor-content {
-    color: #ccc !important;
-    background-color: #000 !important;
+  .wysiwyg-editor div.DraftEditor-root div.DraftEditor-editorContainer div.public-DraftEditor-content div {
+    color: #ccc;
+    background-color: #000;
   }
   button {
     color: #ccc;
