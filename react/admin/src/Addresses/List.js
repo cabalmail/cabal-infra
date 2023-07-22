@@ -62,7 +62,7 @@ class List extends React.Component {
       localStorage.removeItem(ADDRESS_LIST);
       this.reload({preventDefault: () => {
         return true;
-      });
+      }});
     }
     if ((this.state.filter !== prevState.filter) || (this.props.trigger !== prevProps.trigger)) {
       const response = this.getList();
