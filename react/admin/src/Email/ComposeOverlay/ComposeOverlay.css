@@ -5,6 +5,7 @@
 
 button, button * {
   font-size: x-small !important;
+  white-space: nowrap;
 }
 
 form.compose-overlay {
