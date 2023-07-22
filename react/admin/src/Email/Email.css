@@ -104,7 +104,7 @@ div.compose-from-new select.address-from-old  {
   display: none;
 }
 
-* {
+*:not(.wysiwyg-editor *, .wysiwyg-toolbar *) {
   font-family: 'Tahoma', 'Verdana', 'Trebuchet MS', 'Arial';
   font-size: small;
 }
