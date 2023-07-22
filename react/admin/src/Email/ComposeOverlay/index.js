@@ -5,6 +5,7 @@ import Request from '../../Addresses/Request';
 import { ADDRESS_LIST } from '../../constants';
 import { EditorState, convertToRaw, convertFromRaw } from 'draft-js';
 import draftToHtml from 'draftjs-to-html';
+import { draftToMarkdown } from 'markdown-draft-js';
 import { Editor } from "react-draft-wysiwyg";
 import "react-draft-wysiwyg/dist/react-draft-wysiwyg.css";
 
@@ -137,6 +138,7 @@ class ComposeOverlay extends React.Component {
       this.state.BCC,
       this.state.Subject,
       draftToHtml(convertToRaw(this.state.editorState.getCurrentContent())),
+      draftToMarkdown(convertToRaw(this.state.editorState.getCurrentContent())),
       false
     ).then(() => {
       this.props.setMessage("Email sent", false);

@@ -18,8 +18,8 @@ def handler(event, _context):
     msg['To'] = ','.join(body['to_list'])
     msg['Cc'] = ','.join(body['cc_list'])
     msg['Bcc'] = ','.join(body['bcc_list'])
-    msg.set_content("This is a Multi-part message.")
-    msg.add_alternative(body['body'], subtype='html')
+    msg.set_content(body['text'], subtype='plain')
+    msg.add_alternative(body['html'], subtype='html')
     try:
         client.create_folder('Outbox')
     except: # pylint: disable=bare-except

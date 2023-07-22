@@ -49,6 +49,7 @@
     color: #444;
   }
   .nav, .nav .item {
+    color: #aaa;
     background-color: #000;
   }
   body .highlight, body .active, body .default,
