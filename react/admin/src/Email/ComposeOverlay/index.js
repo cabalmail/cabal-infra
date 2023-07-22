@@ -116,7 +116,7 @@ class ComposeOverlay extends React.Component {
 
   handleSend = (e) => {
     e.preventDefault();
-    if (this.state.address) {
+    if (this.state.recipient) {
       this.addRecipient(MESSAGE);
     }
     if (this.state.To.length + this.state.CC.length + this.state.BCC.length === 0) {
@@ -215,7 +215,7 @@ class ComposeOverlay extends React.Component {
 
   onSelectChange = (e) => {
     if (e.target.value === "new") {
-      this.setState({...this.state, showRequest: true});
+      this.setState({...this.state, address: e.target.value, showRequest: true});
       return;
     }
     this.setState({...this.state, address: e.target.value, showRequest: false});
