@@ -4,7 +4,7 @@
 }
 
 button, button * {
-  font-size: x-small !important;
+  font-size: x-small;
   white-space: nowrap;
 }
 
