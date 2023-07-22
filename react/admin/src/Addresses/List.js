@@ -58,7 +58,7 @@ class List extends React.Component {
   }
 
   componentDidUpdate(prevProps, prevState) {
-    if (this.props.trigger !== this.prevProps.trigger) {
+    if (this.props.regenerate !== this.prevProps.regenerate) {
       localStorage.removeItem(ADDRESS_LIST);
       this.reload({preventDefault: () => {
         return true;
