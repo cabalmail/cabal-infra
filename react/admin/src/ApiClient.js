@@ -155,7 +155,7 @@ export default class ApiClient {
 
   // Send
 
-  sendMessage(sender, to_list, cc_list, bcc_list, subject, html_body, text_ draft) {
+  sendMessage(sender, to_list, cc_list, bcc_list, subject, html_body, text_body, draft) {
     // TODO:
     // - attachments
     const response = axios.put('/send',
