@@ -2,7 +2,7 @@ body {
   margin: 0;
 }
 
-* {
+*:not(.wysiwyg-editor *, .wysiwyg-toolbar *) {
   font-family: 'Tahoma', 'Verdana', 'Trebuchet MS', 'Arial';
   font-size: small;
   text-size-adjust: none !important;
