@@ -18,6 +18,10 @@ ssm = boto3.client('ssm')
 mpw = ssm.get_parameter(Name='/cabal/master_password',
                         WithDecryption=True)["Parameter"]["Value"]
 
+def get_mpw():
+    """Returns the master password"""
+    return mpw
+
 def get_imap_client(host, user, folder, read_only=False):
     '''Returns an IMAP client for host/user with folder selected'''
     client = IMAPClient(host=host, use_uid=True, ssl=True)
