@@ -60,9 +60,11 @@ class List extends React.Component {
   componentDidUpdate(prevProps, prevState) {
     if (this.props.regenerate !== this.prevProps.regenerate) {
       localStorage.removeItem(ADDRESS_LIST);
-      this.reload({preventDefault: () => {
-        return true;
-      }});
+      this.reload({
+        preventDefault: function () {
+          return true;
+        }
+      });
     }
     if (this.state.filter !== prevState.filter) {
       const response = this.getList();
