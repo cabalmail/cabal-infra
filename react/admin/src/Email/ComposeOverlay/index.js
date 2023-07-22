@@ -132,6 +132,7 @@ class ComposeOverlay extends React.Component {
       return;
     }
     this.api.sendMessage(
+      this.props.smtp_host,
       this.state.address,
       this.state.To,
       this.state.CC,

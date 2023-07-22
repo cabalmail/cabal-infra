@@ -94,6 +94,7 @@ class Email extends React.Component {
               token={this.props.token}
               api_url={this.props.api_url}
               host={this.props.host}
+              smtp_host={this.props.smtp_host}
               hide={this.hideCompose}
               domains={this.props.domains}
               setMessage={this.props.setMessage}
