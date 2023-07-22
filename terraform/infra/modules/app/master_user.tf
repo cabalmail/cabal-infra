@@ -3,7 +3,7 @@ resource "aws_cognito_user" "master" {
   username     = "master"
   enabled      = true
   password     = random_password.password.result
-  attributes {
+  attributes   = {
     osid = 999
   }
 }
