@@ -58,13 +58,9 @@ class List extends React.Component {
   }
 
   componentDidUpdate(prevProps, prevState) {
-    if (this.props.regenerate !== this.prevProps.regenerate) {
+    if ((this.state.filter !== prevState.filter)
+        || (this.props.regenerate !== prevProps.regenerate)) {
       localStorage.removeItem(ADDRESS_LIST);
-      this.reload({preventDefault: () => {
-        return true;
-      }});
-    }
-    if ((this.state.filter !== prevState.filter) || (this.props.trigger !== prevProps.trigger)) {
       const response = this.getList();
       response.then(data => {
         try {
