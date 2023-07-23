@@ -33,82 +33,72 @@ def handler(event, _context):
     client.append('Outbox',msg.as_string().encode())
 
     # Send
-    smtpClient = smtplib.SMTP_SSL(body['smtp_host'])
-    statusCode = 200
+    smtp_client = smtplib.SMTP_SSL(body['smtp_host'])
+    status_code = 200
     body = {
         "status": "submitted"
     }
     try:
-        smtpClient.login("master", get_mpw())
+        smtp_client.login("master", get_mpw())
     except smtplib.SMTPHeloError:
-        statusCode = 500
+        status_code = 500
         body = {
             "status": "SMTP server did not respond correctly to Helo"
         }
     except smtplib.SMTPAuthenticationError:
-        statusCode = 401
+        status_code = 401
         body = {
             "status": "SMTP server did not accept our credentials"
         }
     except smtplib.SMTPNotSupportedError:
         # The AUTH command is not supported by the server.
-        statusCode = 501
+        status_code = 501
         body = {
             "status": "Server does not support our auth type"
         }
     except smtplib.SMTPException:
-        statusCode = 500
+        status_code = 500
         body = {
             "status": "Other SMTP exception while authenticating"
         }
-    except:
-        statusCode = 500
-        body = {
-            "status": "Unknown error trying to authenticate to SMTP server"
-        }
-    if statusCode != 200:
-        smtpClient.quit()
+    if status_code != 200:
+        smtp_client.quit()
         return {
-            "statusCode": statusCode,
+            "statusCode": status_code,
             "body": json.dumps(body)
         }
     try:
-        smtpClient.send_message(msg)
+        smtp_client.send_message(msg)
     except smtplib.SMTPRecipientsRefused:
-        statusCode = 401
+        status_code = 401
         body = {
             "status": "SMTP server rejected recipient list; mail not sent",
             "additionalInfo": smtplib.SMTPRecipientsRefused
         }
     except smtplib.SMTPHeloError:
-        statusCode = 500
+        status_code = 500
         body = {
             "status": "SMTP server did not respond correctly to Helo"
         }
     except smtplib.SMTPSenderRefused:
-        statusCode = 401
+        status_code = 401
         body = {
             "status": "SMTP server rejected the sender"
         }
     except smtplib.SMTPDataError:
-        statusCode = 500
+        status_code = 500
         body = {
             "status": "SMTP server rejected us after accepting our sender and recipients"
         }
     except smtplib.SMTPNotSupportedError:
-        statusCode = 500
+        status_code = 500
         body = {
             "status": "Other SMTP exception while sending"
         }
-    except:
-        statusCode = 500
-        body = {
-            "status": "Unknown error trying to send the message"
-        }
-    smtpClient.quit()
-    if statusCode != 200:
+    smtp_client.quit()
+    if status_code != 200:
         return {
-            "statusCode": statusCode,
+            "statusCode": status_code,
             "body": json.dumps(body)
         }
 
