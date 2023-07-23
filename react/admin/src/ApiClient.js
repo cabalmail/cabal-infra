@@ -160,7 +160,7 @@ export default class ApiClient {
     // - attachments
     const response = axios.put('/send',
       JSON.stringify({
-        smtp_host: this.smtp_host,
+        smtp_host: smtp_host,
         host: this.host,
         sender: sender,
         to_list: to_list,

@@ -46,9 +46,9 @@ def compose_message(subject, sender, recipients, text, html):
     msg = EmailMessage()
     msg['Subject'] = subject
     msg['From'] = sender
-    msg['To'] = recipients.to
-    msg['Cc'] = recipients.cc
-    msg['Bcc'] = recipients.bcc
+    msg['To'] = recipients['to']
+    msg['Cc'] = recipients['cc']
+    msg['Bcc'] = recipients['bcc']
     msg.set_content(text, subtype='plain')
     msg.add_alternative(html, subtype='html')
     return msg
