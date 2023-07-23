@@ -29,7 +29,7 @@ def handler(event, _context):
 
     # Send
     return_from_send = send(msg)
-    if return_from_send.status != 200:
+    if return_from_send.statusCode != 200:
         return return_from_send
 
     # Move to Sent box
@@ -42,6 +42,7 @@ def handler(event, _context):
     }
 
 def compose_message(subject, sender, to_list, cc_list, bcc_list, text, html):
+    """Create a message object"""
     msg = EmailMessage()
     msg['Subject'] = subject
     msg['From'] = sender
@@ -53,6 +54,7 @@ def compose_message(subject, sender, to_list, cc_list, bcc_list, text, html):
     return msg
 
 def send(msg):
+    """Send the message"""
     smtp_client = smtplib.SMTP_SSL(body['smtp_host'])
     status_code = 200
     body = {
