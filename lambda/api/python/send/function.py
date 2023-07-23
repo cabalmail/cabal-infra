@@ -16,8 +16,8 @@ def handler(event, _context):
     body = json.loads(event['body'])
     user = event['requestContext']['authorizer']['claims']['cognito:username']
 
-    msg = compose_message(body['subject'], body['sender'], ','.join(body['to_list']),
-                          ','.join(body['cc_list']), ','.join(body['bcc_list']),
+    msg = compose_message(body['subject'], body['sender'], {"to": ','.join(body['to_list']),
+                          "cc": ','.join(body['cc_list']), "bcc": ','.join(body['bcc_list']) },
                           body['text'], body['html'])
     # Place in Outbox
     client = get_imap_client(body['host'], user, 'INBOX')
@@ -28,8 +28,8 @@ def handler(event, _context):
     client.append('Outbox',msg.as_string().encode())
 
     # Send
-    return_from_send = send(msg)
-    if return_from_send.statusCode != 200:
+    return_from_send = send(msg, body['smtp_host'])
+    if return_from_send['statusCode'] != 200:
         return return_from_send
 
     # Move to Sent box
@@ -41,21 +41,21 @@ def handler(event, _context):
         })
     }
 
-def compose_message(subject, sender, to_list, cc_list, bcc_list, text, html):
+def compose_message(subject, sender, recipients, text, html):
     """Create a message object"""
     msg = EmailMessage()
     msg['Subject'] = subject
     msg['From'] = sender
-    msg['To'] = to_list
-    msg['Cc'] = cc_list
-    msg['Bcc'] = bcc_list
+    msg['To'] = recipients.to
+    msg['Cc'] = recipients.cc
+    msg['Bcc'] = recipients.bcc
     msg.set_content(text, subtype='plain')
     msg.add_alternative(html, subtype='html')
     return msg
 
-def send(msg):
+def send(msg, smtp_host):
     """Send the message"""
-    smtp_client = smtplib.SMTP_SSL(body['smtp_host'])
+    smtp_client = smtplib.SMTP_SSL(smtp_host)
     status_code = 200
     body = {
         "status": "submitted"
@@ -123,3 +123,7 @@ def send(msg):
             "statusCode": status_code,
             "body": json.dumps(body)
         }
+    return {
+        "statusCode": status_code,
+        "body": json.dumps(body)
+    }
