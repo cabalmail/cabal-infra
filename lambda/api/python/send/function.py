@@ -26,7 +26,7 @@ def handler(event, _context):
         client.create_folder('Outbox')
     except: # pylint: disable=bare-except
         pass
-    return_from_append = client.append('Outbox',msg.as_string().encode())
+    msg_id = int(client.append('Outbox',msg.as_string().encode()).split(']')[0].split(' ')[2])
     print(return_from_append)
 
     # Send
@@ -35,21 +35,13 @@ def handler(event, _context):
         return return_from_send
 
     # Move to Sent box
-    # try:
-    #     client.create_folder('Sent')
-    # except: # pylint: disable=bare-except
-    #     pass
-    # client.select_folder('Outbox')
-    # try:
-    #     client.move(???, 'Sent')
-    # except: # pylint: disable=bare-except
-    #     client.logout()
-    #     return {
-    #         "statusCode": 500,
-    #         "body": json.dumps({
-    #             "status": "unable"
-    #         })
-    #     }
+    if not move(msg_id, client):
+        return {
+            "statusCode": 500,
+            "body": json.dumps({
+                "status": "Send succeeded, but failed to move message from Outbox to Sent"
+            })
+        }
     client.logout()
     return {
         "statusCode": 200,
@@ -143,3 +135,15 @@ def send(msg, smtp_host):
         "statusCode": status_code,
         "body": json.dumps(body)
     }
+
+def move(msg_id, client):
+    try:
+        client.create_folder('Sent')
+    except: # pylint: disable=bare-except
+        pass
+    client.select_folder('Outbox')
+    try:
+        client.move([msg_id], 'Sent')
+    except: # pylint: disable=bare-except
+    return false
+        
