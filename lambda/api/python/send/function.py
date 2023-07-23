@@ -2,6 +2,7 @@
 import json
 import smtplib
 from email.message import EmailMessage
+from email.utils import formatdate
 from helper import get_imap_client # pylint: disable=import-error
 from helper import get_mpw # pylint: disable=import-error
 # Flow:
@@ -62,14 +63,13 @@ def compose_message(subject, sender, recipients, text, html):
     msg = EmailMessage()
     msg['Subject'] = subject
     msg['From'] = sender
-    # TODO: only append if non-empty
     if len(recipients['to']):
         msg['To'] = recipients['to']
     if len(recipients['cc']):
         msg['Cc'] = recipients['cc']
     if len(recipients['bcc']):
         msg['Bcc'] = recipients['bcc']
-    msg['Date'] = email.utils.formatdate(localtime=True)
+    msg['Date'] = formatdate(localtime=True)
     msg.set_content(text, subtype='plain')
     msg.add_alternative(html, subtype='html')
     return msg
