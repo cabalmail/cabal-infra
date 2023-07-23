@@ -145,5 +145,5 @@ def move(msg_id, client):
     try:
         client.move([msg_id], 'Sent')
     except: # pylint: disable=bare-except
-    return false
-        
+        return False
+    return True
