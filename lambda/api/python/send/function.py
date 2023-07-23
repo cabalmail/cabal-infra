@@ -25,7 +25,8 @@ def handler(event, _context):
         client.create_folder('Outbox')
     except: # pylint: disable=bare-except
         pass
-    client.append('Outbox',msg.as_string().encode())
+    return_from_append = client.append('Outbox',msg.as_string().encode())
+    print(return_from_append)
 
     # Send
     return_from_send = send(msg, body['smtp_host'])
@@ -33,6 +34,21 @@ def handler(event, _context):
         return return_from_send
 
     # Move to Sent box
+    # try:
+    #     client.create_folder('Sent')
+    # except: # pylint: disable=bare-except
+    #     pass
+    # client.select_folder('Outbox')
+    # try:
+    #     client.move(???, 'Sent')
+    # except: # pylint: disable=bare-except
+    #     client.logout()
+    #     return {
+    #         "statusCode": 500,
+    #         "body": json.dumps({
+    #             "status": "unable"
+    #         })
+    #     }
     client.logout()
     return {
         "statusCode": 200,
@@ -46,9 +62,14 @@ def compose_message(subject, sender, recipients, text, html):
     msg = EmailMessage()
     msg['Subject'] = subject
     msg['From'] = sender
-    msg['To'] = recipients['to']
-    msg['Cc'] = recipients['cc']
-    msg['Bcc'] = recipients['bcc']
+    # TODO: only append if non-empty
+    if len(recipients['to']):
+        msg['To'] = recipients['to']
+    if len(recipients['cc']):
+        msg['Cc'] = recipients['cc']
+    if len(recipients['bcc']):
+        msg['Bcc'] = recipients['bcc']
+    msg['Date'] = email.utils.formatdate(localtime=True)
     msg.set_content(text, subtype='plain')
     msg.add_alternative(html, subtype='html')
     return msg
@@ -118,11 +139,6 @@ def send(msg, smtp_host):
             "status": "Other SMTP exception while sending"
         }
     smtp_client.quit()
-    if status_code != 200:
-        return {
-            "statusCode": status_code,
-            "body": json.dumps(body)
-        }
     return {
         "statusCode": status_code,
         "body": json.dumps(body)
