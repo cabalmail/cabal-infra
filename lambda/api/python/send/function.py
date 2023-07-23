@@ -79,7 +79,7 @@ def handler(event, _context):
             "statusCode": 401,
             "body": json.dumps({
                 "status": "SMTP server rejected recipient list; mail not sent",
-                "additionalInfo": SMTPRecipientsRefused
+                "additionalInfo": smtplib.SMTPRecipientsRefused
             })
         }
     except smtplib.SMTPHeloError:
