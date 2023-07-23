@@ -27,7 +27,6 @@ def handler(event, _context):
     except: # pylint: disable=bare-except
         pass
     msg_id = int(client.append('Outbox',msg.as_string().encode()).split(']')[0].split(' ')[2])
-    print(return_from_append)
 
     # Send
     return_from_send = send(msg, body['smtp_host'])
@@ -137,6 +136,7 @@ def send(msg, smtp_host):
     }
 
 def move(msg_id, client):
+    """Moves message identified by msg_id from Outbox to Sent"""
     try:
         client.create_folder('Sent')
     except: # pylint: disable=bare-except
