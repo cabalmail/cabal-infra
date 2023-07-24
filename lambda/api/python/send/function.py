@@ -26,7 +26,11 @@ def handler(event, _context):
         client.create_folder('Outbox')
     except: # pylint: disable=bare-except
         pass
-    msg_id = int(str(client.append('Outbox',msg.as_string().encode())).split(']')[0].split(' ')[2])
+    msg_id = int(
+                  str(
+                      client.append('Outbox',msg.as_string().encode())
+                  ).split(']', maxsplit=1)[0].split(' ', maxsplit=1)[-1]
+              )
 
     # Send
     return_from_send = send(msg, body['smtp_host'])
