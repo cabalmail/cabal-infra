@@ -140,7 +140,7 @@ class List extends React.Component {
     const addressList = this.state.addresses.map(a => {
       let className = "address"
       if (a.address === this.props.trigger) {
-        class = "address active";
+        className = "address active";
       }
       return (
         <li key={a.address} className={className} id={a.address}>
