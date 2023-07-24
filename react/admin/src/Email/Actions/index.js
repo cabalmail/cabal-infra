@@ -98,7 +98,7 @@ class Actions extends React.Component {
         this.props.replyAll();
         break;
       case FORWARD.css:
-        this.props.forward;
+        this.props.forward();
         break;
       default:
         console.log(`"${action}" clicked`);
