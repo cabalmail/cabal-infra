@@ -29,7 +29,7 @@ def handler(event, _context):
     msg_id = int(
                   str(
                       client.append('Outbox',msg.as_string().encode())
-                  ).split(']', maxsplit=1)[0].split(' ', maxsplit=1)[-1]
+                  ).split(']', maxsplit=1)[0].rsplit(' ', maxsplit=1)[-1]
               )
 
     # Send
