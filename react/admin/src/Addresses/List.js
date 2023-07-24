@@ -38,10 +38,6 @@ class List extends React.Component {
 
   componentDidMount() {
     const response = this.getList();
-    const newAddress = document.getElementById(this.props.trigger);
-    if (newAddress) {
-      newAddress.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
-    }
     response.then(data => {
       try {
         localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
@@ -62,6 +58,10 @@ class List extends React.Component {
   }
 
   componentDidUpdate(prevProps, prevState) {
+    const newAddress = document.getElementById(this.props.regenerate);
+    if (newAddress) {
+      newAddress.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+    }
     if (this.props.regenerate !== prevProps.regenerate) {
       localStorage.removeItem(ADDRESS_LIST);
       this.reload({
@@ -139,7 +139,7 @@ class List extends React.Component {
   render() {
     const addressList = this.state.addresses.map(a => {
       let className = "address"
-      if (a.address === this.props.trigger) {
+      if (a.address === this.props.regenerate) {
         className = "address active";
       }
       return (
