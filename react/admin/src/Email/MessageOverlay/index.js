@@ -130,7 +130,7 @@ class MessageOverlay extends React.Component {
   }
 
   reply = (e) => {
-    this.props.reply(recipient, message_body_html, this.props.envelope);
+    this.props.reply(this.state.recipient, this.state.message_body, this.props.envelope);
   }
 
   replyAll = (e) => {
