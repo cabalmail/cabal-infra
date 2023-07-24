@@ -55,7 +55,10 @@ def handler(event, _context):
                                     f"{user}/{query_string['folder']}/{query_string['id']}/raw"),
             "message_body_plain": body_plain_decoded,
             "message_body_html": body_html_decoded,
-            "recipient": recipient
+            "recipient": recipient,
+            "message_id": message.get_all('Message-ID'),
+            "in_reply_to": message.get_all('In-Reply-To'),
+            "references": message.get_all('References')
         })
     }
 

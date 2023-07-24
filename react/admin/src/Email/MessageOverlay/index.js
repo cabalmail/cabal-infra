@@ -17,7 +17,10 @@ class MessageOverlay extends React.Component {
       loading: true,
       top_state: "expanded",
       bimi_url: "/mask.png",
-      recipient: ""
+      recipient: "",
+      message_id: [],
+      in_reply_to: [],
+      references: []
     }
     this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
   }
@@ -41,6 +44,9 @@ class MessageOverlay extends React.Component {
           message_body_plain: data.data.message_body_plain,
           message_body_html: data.data.message_body_html,
           recipient: data.data.recipient,
+          message_id: data.data.message_id,
+          in_reply_to: data.data.in_reply_to,
+          references: data.data.references,
           loading: false,
           view: view
         });
@@ -130,7 +136,16 @@ class MessageOverlay extends React.Component {
   }
 
   reply = () => {
-    this.props.reply(this.state.recipient, this.state.message_body, this.props.envelope);
+    this.props.reply(
+      this.state.recipient,
+      this.state.message_body,
+      this.props.envelope,
+      {
+        message_id: ,
+        in_reply_to: ,
+        references:
+      }
+    );
   }
 
   replyAll = () => {

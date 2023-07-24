@@ -15,6 +15,7 @@ class Email extends React.Component {
       recipient: "",
       envelope: {},
       body: "",
+      other_headers: {},
       flags: [],
       reply: false
     };
@@ -45,13 +46,14 @@ class Email extends React.Component {
     this.setState({...this.state, composeVisible: false});
   }
 
-  reply = (recipient, body, envelope) => {
+  reply = (recipient, body, envelope, other_headers) => {
     this.setState({
       ...this.state,
       envelope: envelope,
       recipient: recipient,
       body: body,
       reply: true,
+      other_headers: other_headers,
       composeVisible: true
     });
   }
@@ -101,7 +103,8 @@ class Email extends React.Component {
               quotedMessage={this.state.body}
               recipient={this.state.recipient}
               envelope={this.state.envelope}
-              reply={this.state.reply}
+              reply={this.state.reply},
+              other_headers={this.state.other_headers}
             />
           </div>
         </div>
