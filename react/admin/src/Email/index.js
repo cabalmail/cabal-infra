@@ -103,7 +103,7 @@ class Email extends React.Component {
               quotedMessage={this.state.body}
               recipient={this.state.recipient}
               envelope={this.state.envelope}
-              reply={this.state.reply},
+              reply={this.state.reply}
               other_headers={this.state.other_headers}
             />
           </div>
