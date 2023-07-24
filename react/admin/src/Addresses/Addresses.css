@@ -62,6 +62,12 @@ div#root div.Addresses div.content {
   transition-timing-function: ease-in;
 }
 
+button.sending {
+  animation-name: ripple;
+  animation-duration: 0.5s;
+  animation-iteration-count: infinite;
+}
+
 /* List Addresses */
 
 #filter {

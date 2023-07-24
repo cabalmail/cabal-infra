@@ -85,7 +85,10 @@ class Request extends React.Component {
     });
   }
 
-  handleSubmit = () => {
+  handleSubmit = (e) => {
+    e.preventDefault();
+    const request_button = e.target;
+    request_button.classList.add('sending');
     this.setState({
       ...this.state,
       username: "",
@@ -101,6 +104,7 @@ class Request extends React.Component {
       this.state.comment,
       this.state.username + '@' + this.state.subdomain + '.' + this.state.domain
     ).then(data => {
+      request_button.classList.remove('sending');
       this.props.setMessage(`Successfully requested ${data.data.address}.`, false);
       this.props.callback(data.data.address);
     });
