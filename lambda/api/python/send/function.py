@@ -20,17 +20,12 @@ def handler(event, _context):
     msg = compose_message(body['subject'], body['sender'], {"to": ','.join(body['to_list']),
                           "cc": ','.join(body['cc_list']), "bcc": ','.join(body['bcc_list']) },
                           body['text'], body['html'])
-    # Place in Outbox
+
+    # Establish IMAP connection
     client = get_imap_client(body['host'], user, 'INBOX')
-    try:
-        client.create_folder('Outbox')
-    except: # pylint: disable=bare-except
-        pass
-    msg_id = int(
-                  str(
-                      client.append('Outbox',msg.as_string().encode())
-                  ).split(']', maxsplit=1)[0].rsplit(' ', maxsplit=1)[-1]
-              )
+
+    # Place in Outbox
+    msg_id = append_outbox(msg, client)
 
     # Send
     return_from_send = send(msg, body['smtp_host'])
@@ -68,6 +63,20 @@ def compose_message(subject, sender, recipients, text, html):
     msg.set_content(text, subtype='plain')
     msg.add_alternative(html, subtype='html')
     return msg
+
+def append_outbox(msg, client):
+    try:
+        client.create_folder('Outbox')
+    except: # pylint: disable=bare-except
+        pass
+    msg_id = int(
+                  str(
+                      client.append('Outbox',msg.as_string().encode())
+                  ).split(']', maxsplit=1)[0].rsplit(' ', maxsplit=1)[-1]
+              )
+    client.select_folder('Outbox')
+    client.add_flags([msg_id], [rb"\Seen"], True)
+    return msg_id
 
 def send(msg, smtp_host):
     """Send the message"""
