@@ -141,9 +141,9 @@ class MessageOverlay extends React.Component {
       this.state.message_body,
       this.props.envelope,
       {
-        message_id: ,
-        in_reply_to: ,
-        references:
+        message_id: this.state.message_id,
+        in_reply_to: this.state.in_reply_to,
+        references: this.state.references
       }
     );
   }
