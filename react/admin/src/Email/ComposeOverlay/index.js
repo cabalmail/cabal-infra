@@ -118,24 +118,26 @@ class ComposeOverlay extends React.Component {
     });
   }
 
-  componentDidUpdate(_prevProps, _prevState) {
-    console.log(this.props.envelope);
-    if (this.props.reply) {
-      if (this.state.addresses.indexOf(this.props.recipient) > -1) {
-        this.setState({...this.state, address: this.props.recipient});
-      }
-      if (this.props.envelope) {
-        if (this.props.envelope.from.length) {
-          this.setState({...this.state, To: this.props.envelope.from});
+  componentDidUpdate(prevProps, _prevState) {
+    if (!prevProps.reply && this.props.reply) {
+      console.log(this.props.envelope);
+      if (this.props.reply) {
+        if (this.state.addresses.indexOf(this.props.recipient) > -1) {
+          this.setState({...this.state, address: this.props.recipient});
         }
-        if (this.props.envelope.subject) {
-          this.setState({...this.state, Subject: `Re: ${this.props.envelope.subject}`});
+        if (this.props.envelope) {
+          if (this.props.envelope.from.length) {
+            this.setState({...this.state, To: this.props.envelope.from});
+          }
+          if (this.props.envelope.subject) {
+            this.setState({...this.state, Subject: `Re: ${this.props.envelope.subject}`});
+          }
+          // TODO: pass message_id
+          // In-Reply-To: message_id
+          // References: message1_id message2_id
         }
-        // TODO: pass message_id
-        // In-Reply-To: message_id
-        // References: message1_id message2_id
       }
-    }
+  }
   }
 
   handleSubmit = (e) => {
