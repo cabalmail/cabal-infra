@@ -116,6 +116,8 @@ class ComposeOverlay extends React.Component {
 
   handleSend = (e) => {
     e.preventDefault();
+    const send_button = e.target;
+    send_button.classList.add('sending');
     if (this.state.recipient) {
       this.addRecipient(MESSAGE);
     }
@@ -149,8 +151,10 @@ class ComposeOverlay extends React.Component {
       //   editorState: EditorState.createEmpty()
       // });
       this.props.hide();
+      send_button.classList.remove('sending');
     }).catch((e) => {
       this.props.setMessage("Error sending email", true);
+      send_button.classList.remove('sending');
       console.log(e);
     });
   }

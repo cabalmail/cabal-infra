@@ -8,6 +8,12 @@ button, button * {
   white-space: nowrap;
 }
 
+button.sending {
+  animation-name: ripple;
+  animation-duration: 0.5s;
+  animation-iteration-count: infinite;
+}
+
 form.compose-overlay {
   padding: 1em;
   padding-top: 3em;
