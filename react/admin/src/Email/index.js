@@ -21,7 +21,7 @@ class Email extends React.Component {
   componentDidMount() {
     // hide the overlay when switching to this component,
     // even if saved state wants to show it
-    this.setState({...this.state, overlayVisible: false, composeVisible: false, this.envelope: {}});
+    this.setState({...this.state, overlayVisible: false, composeVisible: false, envelope: {}});
   }
   setState(state) {
     try {
