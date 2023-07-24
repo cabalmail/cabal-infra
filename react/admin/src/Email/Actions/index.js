@@ -2,7 +2,7 @@ import React from 'react';
 import ApiClient from '../../ApiClient';
 import Folders from '../Messages/Folders';
 import './Actions.css';
-import { READ, UNREAD, FLAGGED, UNFLAGGED } from '../../constants';
+import { READ, UNREAD, FLAGGED, UNFLAGGED, REPLY, REPLYALL, FORWARD } from '../../constants';
 
 class Actions extends React.Component {
 
