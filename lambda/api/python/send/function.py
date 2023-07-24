@@ -65,6 +65,7 @@ def compose_message(subject, sender, recipients, text, html):
     return msg
 
 def append_outbox(msg, client):
+    """Appends an email message to Outbox"""
     try:
         client.create_folder('Outbox')
     except: # pylint: disable=bare-except
