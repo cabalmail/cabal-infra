@@ -59,7 +59,7 @@
     color: #dda !important;
     border-color: #800 !important;
   }
-  body ul.message-list li + li.selected, body ul.message-list li + li.active {
+  body ul li + li.selected, body ul li + li.active {
     border-color: #800 !important;
   }
   body .highlight, body .active, body .default,
