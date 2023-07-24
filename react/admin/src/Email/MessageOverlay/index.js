@@ -227,6 +227,18 @@ class MessageOverlay extends React.Component {
     this.setState({...this.state, view: e.target.value});
   }
 
+  reply = (e) => {
+    console.log("Not implemented yet")
+  }
+
+  replyAll = (e) => {
+    console.log("Not implemented yet")
+  }
+
+  forward = (e) => {
+    console.log("Not implemented yet")
+  }
+
   render() {
     const flags = this.props.flags.map(d => {return d.replace("\\","")}).join(" ");
     if (this.props.visible) {
@@ -254,6 +266,9 @@ class MessageOverlay extends React.Component {
               field="ARRIVAL"
               callback={this.callback}
               catchback={this.catchback}
+              reply={this.reply}
+              replyAll={this.replyAll}
+              forward={this.forward}
               setMessage={this.props.setMessage}
             />
             <button

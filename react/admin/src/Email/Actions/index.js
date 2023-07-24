@@ -91,6 +91,15 @@ class Actions extends React.Component {
           this.props.field
         ).then(this.props.callback).catch(this.props.catchback);
         break;
+      case REPLY.css:
+        this.props.reply();
+        break;
+      case REPLYALL.css:
+        this.props.replyAll();
+        break;
+      case FORWARD.css:
+        this.props.forward;
+        break;
       default:
         console.log(`"${action}" clicked`);
     }
@@ -158,7 +167,7 @@ class Actions extends React.Component {
             title={FLAGGED.description}
             onClick={this.handleActionButtonClick}
           >{FLAGGED.icon}<span className="wide-screen"> {FLAGGED.description}</span></button>
-            <button
+          <button
             value={UNFLAGGED.css}
             id={UNFLAGGED.css}
             name={UNFLAGGED.css}
@@ -166,6 +175,30 @@ class Actions extends React.Component {
             title={UNFLAGGED.description}
             onClick={this.handleActionButtonClick}
           >{UNFLAGGED.icon}<span className="wide-screen"> {UNFLAGGED.description}</span></button>
+          <button
+            value={REPLY.css}
+            id={REPLY.css}
+            name={REPLY.css}
+            className={`action ${REPLY.css}`}
+            title={REPLY.description}
+            onClick={this.handleActionButtonClick}
+          >{REPLY.icon}<span className="wide-screen"> {REPLY.description}</span></button>
+          <button
+            value={REPLYALL.css}
+            id={REPLYALL.css}
+            name={REPLYALL.css}
+            className={`action ${REPLYALL.css}`}
+            title={REPLYALL.description}
+            onClick={this.handleActionButtonClick}
+          >{REPLYALL.icon}<span className="wide-screen"> {REPLYALL.description}</span></button>
+          <button
+            value={FORWARD.css}
+            id={FORWARD.css}
+            name={FORWARD.css}
+            className={`action ${FORWARD.css}`}
+            title={FORWARD.description}
+            onClick={this.handleActionButtonClick}
+          >{FORWARD.icon}<span className="wide-screen"> {FORWARD.description}</span></button>
         </span>
       </div>
     );
