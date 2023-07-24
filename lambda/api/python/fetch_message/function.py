@@ -13,6 +13,11 @@ def handler(event, _context):
     body_html = ""
     body_html_charset = "utf8"
     body_plain_charset = "utf8"
+    headers = message.get_all('Received')
+    match = re.search("for <([^>]*)>;", headers[0])
+    recipient = ""
+    if match:
+        recipient = match.group(1)
     if message.is_multipart():
         for part in message.walk():
             content_type = part.get_content_type()
@@ -52,6 +57,7 @@ def handler(event, _context):
                                     query_string['host'].replace("imap", "cache"),
                                     f"{user}/{query_string['folder']}/{query_string['id']}/raw"),
             "message_body_plain": body_plain_decoded,
-            "message_body_html": body_html_decoded
+            "message_body_html": body_html_decoded,
+            "recipient": recipient
         })
     }
