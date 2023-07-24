@@ -16,7 +16,8 @@ class MessageOverlay extends React.Component {
       attachments: [],
       loading: true,
       top_state: "expanded",
-      bimi_url: "/mask.png"
+      bimi_url: "/mask.png",
+      recipient: ""
     }
     this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
   }
@@ -39,6 +40,7 @@ class MessageOverlay extends React.Component {
           message_raw_url: data.data.message_raw,
           message_body_plain: data.data.message_body_plain,
           message_body_html: data.data.message_body_html,
+          recipient: data.data.recipient,
           loading: false,
           view: view
         });
@@ -111,6 +113,33 @@ class MessageOverlay extends React.Component {
     console.log(`Unable to set flag on message.`);
     console.log(err);
   };
+
+  collapse = (e) => {
+    e.preventDefault();
+    this.setState({...this.state, top_state: "collapsed"});
+  }
+
+  expand = (e) => {
+    e.preventDefault();
+    this.setState({...this.state, top_state: "expanded"});
+  }
+
+  handleNav = (e) => {
+    e.preventDefault();
+    this.setState({...this.state, view: e.target.value});
+  }
+
+  reply = (e) => {
+    this.props.reply(recipient, message_body_html, this.props.envelope);
+  }
+
+  replyAll = (e) => {
+    console.log("Not implemented yet");
+  }
+
+  forward = (e) => {
+    console.log("Not implemented yet");
+  }
 
   renderView() {
     if (this.state.loading) {
@@ -210,33 +239,6 @@ class MessageOverlay extends React.Component {
         >&lt;/&gt;</button>
       </div>
     );
-  }
-
-  collapse = (e) => {
-    e.preventDefault();
-    this.setState({...this.state, top_state: "collapsed"});
-  }
-
-  expand = (e) => {
-    e.preventDefault();
-    this.setState({...this.state, top_state: "expanded"});
-  }
-
-  handleNav = (e) => {
-    e.preventDefault();
-    this.setState({...this.state, view: e.target.value});
-  }
-
-  reply = (e) => {
-    console.log("Not implemented yet")
-  }
-
-  replyAll = (e) => {
-    console.log("Not implemented yet")
-  }
-
-  forward = (e) => {
-    console.log("Not implemented yet")
   }
 
   render() {

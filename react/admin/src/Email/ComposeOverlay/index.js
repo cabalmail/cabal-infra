@@ -94,8 +94,18 @@ class ComposeOverlay extends React.Component {
     }
     super.setState(state);
   }
-
+      // <dl>
+      //   <dt className="collapsable">To</dt>
+      //   <dd className="collapsable">{this.props.envelope.to.join("; ")}</dd>
+      //   <dt className="collapsable">From</dt>
+      //   <dd className="collapsable">{this.props.envelope.from.join("; ")}</dd>
+      //   <dt className="collapsable">Received</dt>
+      //   <dd className="collapsable">{this.props.envelope.date}</dd>
+      //   <dt className="collapsable">Subject</dt>
+      //   <dd>{this.props.envelope.subject}</dd>
+      // </dl>
   componentDidMount() {
+    console.log(this.props.envelope);
     this.api.getAddresses().then(data => {
       try {
         localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
@@ -106,6 +116,22 @@ class ComposeOverlay extends React.Component {
         ...this.state,
         addresses: data.data.Items.map(a => a.address).sort()
       });
+      if (this.props.reply) {
+        if (this.state.addresses.indexOf(this.props.recipient) > -1) {
+          this.setState({...this.state, address: this.props.recipient});
+        }
+        if (this.props.envelope) {
+          if (this.props.envelope.from.length) {
+            this.setState({...this.state, To: this.props.envelope.from});
+          }
+          if (this.props.envelope.subject) {
+            this.setState({...this.state, Subject: `Re: ${this.props.envelope.subject}`});
+          }
+          // TODO: pass message_id
+          // In-Reply-To: message_id
+          // References: message1_id message2_id
+        }
+      }
     });
   }
 
@@ -145,11 +171,11 @@ class ComposeOverlay extends React.Component {
       false
     ).then(() => {
       this.props.setMessage("Email sent", false);
-      // temporarily disable for testing
-      // this.setState({
-      //   ...EMPTY_STATE,
-      //   editorState: EditorState.createEmpty()
-      // });
+      temporarily disable for testing
+      this.setState({
+        ...EMPTY_STATE,
+        editorState: EditorState.createEmpty()
+      });
       this.props.hide();
       send_button.classList.remove('sending');
     }).catch((e) => {

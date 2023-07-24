@@ -12,8 +12,11 @@ class Email extends React.Component {
       folder: "INBOX",
       overlayVisible: false,
       composeVisible: false,
+      recipient,
       envelope: {},
-      flags: []
+      body: "",
+      flags: [],
+      reply: false
     };
   }
 
@@ -40,6 +43,17 @@ class Email extends React.Component {
 
   hideCompose = (envelope) => {
     this.setState({...this.state, composeVisible: false});
+  }
+
+  reply = (recipient, body, envelope) => {
+    this.setState({
+      ...this.state,
+      envelope: envelope,
+      recipient: recipient,
+      body: body,
+      reply: true,
+      composeVisible: true
+    });
   }
 
   render() {
@@ -75,7 +89,7 @@ class Email extends React.Component {
             className={`compose-wrapper ${this.state.composeVisible ? 'show-compose' : 'hide-compose'}`}
             id="compose-wrapper"
           >
-          <ComposeOverlay
+            <ComposeOverlay
               token={this.props.token}
               api_url={this.props.api_url}
               host={this.props.host}
@@ -83,7 +97,10 @@ class Email extends React.Component {
               hide={this.hideCompose}
               domains={this.props.domains}
               setMessage={this.props.setMessage}
-              quotedMessage=""
+              quotedMessage={this.state.body}
+              recipient={this.state.recipient}
+              envelope={this.state.envelope}
+              reply={this.state.reply}
             />
           </div>
         </div>
