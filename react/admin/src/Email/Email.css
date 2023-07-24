@@ -110,7 +110,7 @@ div.compose-from-new select.address-from-old  {
 }
 
 button, button * {
-  font-size: x-small;
+  font-size: x-small !important;
 }
 
 @media (max-width: 899px) {
