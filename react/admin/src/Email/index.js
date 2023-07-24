@@ -9,7 +9,8 @@ class Email extends React.Component {
 
   constructor(props) {
     super(props);
-    this.state = JSON.parse(localStorage.getItem(STATE_KEY)) || {
+    // this.state = JSON.parse(localStorage.getItem(STATE_KEY)) || {
+    this.state = {
       folder: "INBOX",
       overlayVisible: false,
       composeVisible: false,
