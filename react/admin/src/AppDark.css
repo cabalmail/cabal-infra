@@ -59,6 +59,9 @@
     color: #dda !important;
     border-color: #800 !important;
   }
+  body ul.message-list li + li.selected {
+    border-color: #800 !important;
+  }
   body .highlight, body .active, body .default,
   body .nav .active, body ul.message-list li.selected,
   body ul.message-list li.selected *,
