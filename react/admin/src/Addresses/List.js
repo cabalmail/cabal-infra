@@ -134,8 +134,12 @@ class List extends React.Component {
 
   render() {
     const addressList = this.state.addresses.map(a => {
+      let class = "address"
+      if (a.address === this.props.trigger) {
+        class = "address active";
+      }
       return (
-        <li key={a.address} className="address">
+        <li key={a.address} className={class} id={a.address}>
           <span>{a.address.replace(/([.@])/g, "$&\u200B")}</span>
           <span>{a.comment}</span>
           <button
