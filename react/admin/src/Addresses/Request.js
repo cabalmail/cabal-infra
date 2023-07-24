@@ -86,6 +86,14 @@ class Request extends React.Component {
   }
 
   handleSubmit = () => {
+    this.setState({
+      ...this.state,
+      username: "",
+      subdomain: "",
+      domain: "",
+      comment: "",
+      address: ""
+    });
     this.api.newAddress(
       this.state.username,
       this.state.subdomain,
