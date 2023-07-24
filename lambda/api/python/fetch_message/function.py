@@ -1,5 +1,6 @@
 '''Retrieves IMAP message given a folder and ID'''
 import json
+import re
 from helper import get_message # pylint: disable=import-error
 from helper import sign_url # pylint: disable=import-error
 
@@ -13,11 +14,7 @@ def handler(event, _context):
     body_html = ""
     body_html_charset = "utf8"
     body_plain_charset = "utf8"
-    headers = message.get_all('Received')
-    match = re.search("for <([^>]*)>;", headers[0])
-    recipient = ""
-    if match:
-        recipient = match.group(1)
+    recipient = get_recipient(message)
     if message.is_multipart():
         for part in message.walk():
             content_type = part.get_content_type()
@@ -61,3 +58,11 @@ def handler(event, _context):
             "recipient": recipient
         })
     }
+
+def get_recipient(message):
+    headers = message.get_all('Received')
+    match = re.search("for <([^>]*)>;", headers[0])
+    recipient = ""
+    if match:
+        recipient = match.group(1)
+    return recipient
