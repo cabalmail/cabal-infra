@@ -129,15 +129,15 @@ class MessageOverlay extends React.Component {
     this.setState({...this.state, view: e.target.value});
   }
 
-  reply = (e) => {
+  reply = () => {
     this.props.reply(this.state.recipient, this.state.message_body, this.props.envelope);
   }
 
-  replyAll = (e) => {
+  replyAll = () => {
     console.log("Not implemented yet");
   }
 
-  forward = (e) => {
+  forward = () => {
     console.log("Not implemented yet");
   }
 

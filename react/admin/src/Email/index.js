@@ -79,6 +79,7 @@ class Email extends React.Component {
           hide={this.hideOverlay}
           updateOverlay={this.showOverlay}
           setMessage={this.props.setMessage}
+          reply={this.state.reply}
         />
         <button className="compose-button" onClick={this.showCompose}>New Email</button>
         <div
@@ -100,7 +101,6 @@ class Email extends React.Component {
               quotedMessage={this.state.body}
               recipient={this.state.recipient}
               envelope={this.state.envelope}
-              reply={this.state.reply}
             />
           </div>
         </div>
