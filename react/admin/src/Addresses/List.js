@@ -38,6 +38,10 @@ class List extends React.Component {
 
   componentDidMount() {
     const response = this.getList();
+    const newAddress = document.getElementById(this.props.trigger);
+    if (newAddress) {
+      newAddress.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+    }
     response.then(data => {
       try {
         localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
@@ -134,12 +138,12 @@ class List extends React.Component {
 
   render() {
     const addressList = this.state.addresses.map(a => {
-      let class = "address"
+      let className = "address"
       if (a.address === this.props.trigger) {
         class = "address active";
       }
       return (
-        <li key={a.address} className={class} id={a.address}>
+        <li key={a.address} className={className} id={a.address}>
           <span>{a.address.replace(/([.@])/g, "$&\u200B")}</span>
           <span>{a.comment}</span>
           <button
