@@ -3,6 +3,7 @@ span.filter button {
   width: auto;
   padding: 0.5em;
   font-size: 9pt;
+  margin-left: 1px;
 }
 span.filter button.cancel {
   border-radius: 4px;
@@ -14,20 +15,7 @@ span.filter button.read,
 span.filter button.flagged,
 span.filter button.unread {
   border-radius: 0;
-  border-width: 1px 0px 1px 1px;
-}
-
-button.unflagged {
-  border-radius: 0 4px 4px 0;
   border-width: 1px;
-  width: auto;
-  padding: 0.5em;
-}
-
-span.filter button.delete {
-  border-radius: 4px 0 0 4px;
-  border-width: 1px 0 1px 1px;
-  border-style: solid;
 }
 
 div.none_selected span.filter-actions button {
