@@ -3,13 +3,11 @@ import './Email.css';
 import Messages from './Messages';
 import MessageOverlay from './MessageOverlay';
 import ComposeOverlay from './ComposeOverlay';
-// const STATE_KEY = 'email-state';
 
 class Email extends React.Component {
 
   constructor(props) {
     super(props);
-    // this.state = JSON.parse(localStorage.getItem(STATE_KEY)) || {
     this.state = {
       folder: "INBOX",
       overlayVisible: false,
@@ -18,20 +16,6 @@ class Email extends React.Component {
       flags: []
     };
   }
-
-  // componentWillUnmount() {
-  //   // hide the overlay when switching to this component,
-  //   // even if saved state wants to show it
-  //   this.setState({...this.state, overlayVisible: false, composeVisible: false, envelope: {}});
-  // }
-  // setState(state) {
-  //   try {
-  //     localStorage.setItem(STATE_KEY, JSON.stringify(state));
-  //   } catch (e) {
-  //     console.log(e);
-  //   }
-  //   super.setState(state);
-  // }
 
   selectFolder = (folder) => {
     this.setState({...this.state, folder: folder});
