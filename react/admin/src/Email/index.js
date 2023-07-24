@@ -12,7 +12,7 @@ class Email extends React.Component {
       folder: "INBOX",
       overlayVisible: false,
       composeVisible: false,
-      recipient,
+      recipient: "",
       envelope: {},
       body: "",
       flags: [],
