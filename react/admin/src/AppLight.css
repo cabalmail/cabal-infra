@@ -60,7 +60,7 @@
     color: #000 !important;
     border-color: #d00 !important;
   }
-  body ul.message-list li + li.selected {
+  body ul.message-list li + li.selected, body ul.message-list li + li.active {
     border-color: #d00 !important;
   }
   body .highlight, body .active, body .default,
