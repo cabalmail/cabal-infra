@@ -41,7 +41,7 @@ class ComposeOverlay extends React.Component {
     	const raw_content = convertFromRaw(JSON.parse(raw_from_store));
     	init_ed_state = EditorState.createWithContent(raw_content);
     } else if (this.props.body) {
-      init_ed_state - EditorState.createWithContent(
+      init_ed_state = EditorState.createWithContent(
         ContentState.createFromBlockArray(
           convertFromHTML(this.props.body)
         )
