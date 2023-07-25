@@ -59,7 +59,7 @@ class Email extends React.Component {
   }
 
   render() {
-    const compose_overlay = this.showCompose ? (
+    const compose_overlay = this.composeVisible ? (
       <ComposeOverlay
         token={this.props.token}
         api_url={this.props.api_url}
