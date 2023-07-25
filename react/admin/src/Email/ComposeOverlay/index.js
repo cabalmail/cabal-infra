@@ -3,7 +3,7 @@ import './ComposeOverlay.css';
 import ApiClient from '../../ApiClient';
 import Request from '../../Addresses/Request';
 import { ADDRESS_LIST } from '../../constants';
-import { EditorState, convertToRaw, convertFromRaw } from 'draft-js';
+import { EditorState, ContentState, convertToRaw, convertFromRaw } from 'draft-js';
 import draftToHtml from 'draftjs-to-html';
 import { draftToMarkdown } from 'markdown-draft-js';
 import { Editor } from "react-draft-wysiwyg";
@@ -40,6 +40,12 @@ class ComposeOverlay extends React.Component {
     if (raw_from_store) {
     	const raw_content = convertFromRaw(JSON.parse(raw_from_store));
     	init_ed_state = EditorState.createWithContent(raw_content);
+    } else if (this.props.body) {
+      init_ed_state - EditorState.createWithContent(
+        ContentState.createFromBlockArray(
+          convertFromHTML(this.props.body)
+        )
+      );
     } else {
     	init_ed_state = EditorState.createEmpty();
     }

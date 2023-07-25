@@ -45,6 +45,10 @@ class Email extends React.Component {
     this.setState({...this.state, overlayVisible: false});
   }
 
+  hideCompose = (envelope) => {
+    this.setState({...this.state, composeVisible: false});
+  }
+
   newEmail = () => {
     this.setState(
       {...this.state,
@@ -58,22 +62,28 @@ class Email extends React.Component {
       );
   }
 
-  hideCompose = (envelope) => {
-    this.setState({...this.state, composeVisible: false});
-  }
-
   reply = (recipient, body, envelope, other_headers) => {
     const subject = envelope.subject.replace(/^(re:?\s|fwd:?\s)?(.*)$/i, "Re: $2");
+    const extended_body = "<p></p><p></p><hr><dl>" +
+      `<dt>From</dt><dd>${envelope.from[0]}</dd>` +
+      `<dt>To</dt><dd>${envelope.to.join("; ")}</dd>` +
+      `<dt>Date</dt><dd>${envelope.date}</dd>` +
+      `<dt>Subject</dt><dd>${envelope.subject}</dd>` +
+      "</dl>" + body;
     this.setState({
       ...this.state,
       new_envelope: envelope,
       subject: subject,
       recipient: recipient,
-      body: body,
+      body: extended_body,
       type: "reply",
       other_headers: other_headers,
       composeVisible: true
     });
+  }
+
+  forward = (recipient, body, envelope, other_headers) => {
+    const subject = envelope.subject.replace(/^(re:?\s|fwd:?\s)?(.*)$/i, "Fwd: $2");
   }
 
   render() {
