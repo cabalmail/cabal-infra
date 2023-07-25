@@ -59,6 +59,23 @@ class Email extends React.Component {
   }
 
   render() {
+    const compose_jsx = (
+      <ComposeOverlay
+        token={this.props.token}
+        api_url={this.props.api_url}
+        host={this.props.host}
+        smtp_host={this.props.smtp_host}
+        hide={this.hideCompose}
+        domains={this.props.domains}
+        setMessage={this.props.setMessage}
+        quotedMessage={this.state.body}
+        recipient={this.state.recipient}
+        envelope={this.state.envelope}
+        reply={this.state.reply}
+        other_headers={this.state.other_headers}
+      />
+    );
+    const compose_overlay = this.showCompose ? compose_jsx : "";
     return (
       <div className="email">
         <Messages 
@@ -92,20 +109,7 @@ class Email extends React.Component {
             className={`compose-wrapper ${this.state.composeVisible ? 'show-compose' : 'hide-compose'}`}
             id="compose-wrapper"
           >
-            <ComposeOverlay
-              token={this.props.token}
-              api_url={this.props.api_url}
-              host={this.props.host}
-              smtp_host={this.props.smtp_host}
-              hide={this.hideCompose}
-              domains={this.props.domains}
-              setMessage={this.props.setMessage}
-              quotedMessage={this.state.body}
-              recipient={this.state.recipient}
-              envelope={this.state.envelope}
-              reply={this.state.reply}
-              other_headers={this.state.other_headers}
-            />
+            {compose_overlay}
           </div>
         </div>
       </div>
