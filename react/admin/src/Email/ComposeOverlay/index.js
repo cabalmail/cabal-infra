@@ -94,16 +94,6 @@ class ComposeOverlay extends React.Component {
     }
     super.setState(state);
   }
-      // <dl>
-      //   <dt>To</dt>
-      //     <dd>{this.props.envelope.to.join("; ")}</dd>
-      //   <dt>From</dt>
-      //     <dd>{this.props.envelope.from.join("; ")}</dd>
-      //   <dt>Received</dt>
-      //     <dd>{this.props.envelope.date}</dd>
-      //   <dt>Subject</dt>
-      //     <dd>{this.props.envelope.subject}</dd>
-      // </dl>
   componentDidMount() {
     if (this.props.reply){
       this.setState({
@@ -123,26 +113,6 @@ class ComposeOverlay extends React.Component {
         ...this.state,
         addresses: data.data.Items.map(a => a.address).sort()
       });
-      // console.log(this.props.reply);
-      // if (this.props.reply) {
-      //   console.log(this.props.envelope);
-      //   console.log(this.props.other_headers);
-      //   console.log(this.props.recipient);
-      //   this.setState({...this.state, address: this.props.recipient});
-      //   if (this.props.envelope) {
-      //     console.log(this.props.envelope.from.length);
-      //     if (this.props.envelope.from.length) {
-      //       this.setState({...this.state, To: this.props.envelope.from});
-      //     }
-      //     if (this.props.envelope.subject) {
-      //       this.setState({...this.state, Subject: `Re: ${this.props.envelope.subject}`});
-      //     }
-      //     // TODO: pass message_id
-      //     // In-Reply-To: message_id
-      //     // References: message1_id message2_id
-      //   }
-      //   // TODO: populate editor body
-      // }
     });
   }
 

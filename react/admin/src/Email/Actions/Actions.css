@@ -54,3 +54,7 @@ div.message_overlay div.Seen span.filter button.read,
 div.message_overlay div.Flagged span.filter button.flagged {
   display: none;
 }
+
+span.nowrap {
+  white-space: nowrap;
+}
