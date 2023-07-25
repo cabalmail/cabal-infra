@@ -16,6 +16,7 @@ def handler(event, _context):
     # Compose message
     body = json.loads(event['body'])
     user = event['requestContext']['authorizer']['claims']['cognito:username']
+    # TODO: Check if user is authorized to send on behalf of body['sender']
 
     msg = compose_message(body['subject'], body['sender'], {"to": ','.join(body['to_list']),
                           "cc": ','.join(body['cc_list']), "bcc": ','.join(body['bcc_list']) },
