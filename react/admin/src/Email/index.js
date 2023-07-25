@@ -69,7 +69,7 @@ class Email extends React.Component {
       `<div>To: ${envelope.to.join("; ")}</div>` +
       `<div>Date: ${envelope.date}</div>` +
       `<div>Subject: ${envelope.subject}</div><div><p>&nbsp;</p></div>` +
-      body.replace(/<!--.*?-->/g, "").replace(/&lt;!--.*?--&gt;/g, "");
+      body.replace(/<!--.*?-->/gm, "");
     this.setState({
       ...this.state,
       new_envelope: envelope,
