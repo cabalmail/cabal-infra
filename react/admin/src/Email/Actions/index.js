@@ -177,7 +177,7 @@ class Actions extends React.Component {
               onClick={this.handleActionButtonClick}
             >{UNFLAGGED.icon}<span className="wide-screen"> {UNFLAGGED.description}</span></button>
           </span>
-          <span className="wrap_point"></span>
+          <span className="wrap_point"> </span>
           <span className="nowrap">
             <button
               value={REPLY.css}
