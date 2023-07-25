@@ -99,7 +99,7 @@ class Email extends React.Component {
             hide={this.hideCompose}
             domains={this.props.domains}
             setMessage={this.props.setMessage}
-            quotedMessage={this.state.body}
+            body={this.state.body}
             recipient={this.state.recipient}
             envelope={this.state.new_envelope}
             subject={this.state.subject}
