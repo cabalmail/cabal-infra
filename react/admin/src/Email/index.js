@@ -63,20 +63,24 @@ class Email extends React.Component {
 
   render() {
     const compose_overlay = this.composeVisible ? (
-      <ComposeOverlay
-        token={this.props.token}
-        api_url={this.props.api_url}
-        host={this.props.host}
-        smtp_host={this.props.smtp_host}
-        hide={this.hideCompose}
-        domains={this.props.domains}
-        setMessage={this.props.setMessage}
-        quotedMessage={this.state.body}
-        recipient={this.state.recipient}
-        envelope={this.state.envelope}
-        reply={this.state.reply}
-        other_headers={this.state.other_headers}
-      />
+      <div className="compose-blackout" id="compose-blackout">
+        <div className="compose-wrapper show-compose" id="compose-wrapper">
+          <ComposeOverlay
+            token={this.props.token}
+            api_url={this.props.api_url}
+            host={this.props.host}
+            smtp_host={this.props.smtp_host}
+            hide={this.hideCompose}
+            domains={this.props.domains}
+            setMessage={this.props.setMessage}
+            quotedMessage={this.state.body}
+            recipient={this.state.recipient}
+            envelope={this.state.envelope}
+            reply={this.state.reply}
+            other_headers={this.state.other_headers}
+          />
+        </div>
+      </div>
     ) : "";
     return (
       <div className="email">
@@ -103,17 +107,7 @@ class Email extends React.Component {
           reply={this.reply}
         />
         <button className="compose-button" onClick={this.showCompose}>New Email</button>
-        <div
-          className={`compose-blackout ${this.state.composeVisible ? 'show-compose' : 'hide-compose'}`}
-          id="compose-blackout"
-        >
-          <div
-            className={`compose-wrapper ${this.state.composeVisible ? 'show-compose' : 'hide-compose'}`}
-            id="compose-wrapper"
-          >
-            {compose_overlay}
-          </div>
-        </div>
+        {compose_overlay}
       </div>
     );
   }
