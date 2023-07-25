@@ -62,7 +62,7 @@ class Email extends React.Component {
   }
 
   render() {
-    const compose_overlay = this.composeVisible ? (
+    const compose_overlay = this.state.composeVisible ? (
       <div className="compose-blackout" id="compose-blackout">
         <div className="compose-wrapper show-compose" id="compose-wrapper">
           <ComposeOverlay
