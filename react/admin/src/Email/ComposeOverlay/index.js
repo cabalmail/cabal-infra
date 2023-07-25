@@ -138,6 +138,7 @@ class ComposeOverlay extends React.Component {
       }
       // TODO: populate editor body
     }
+    setTimeout(() => { console.log(this.state) }, 1000);
   }
 
   handleSubmit = (e) => {
