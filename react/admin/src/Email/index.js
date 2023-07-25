@@ -84,7 +84,7 @@ class Email extends React.Component {
 
   forward = (recipient, body, envelope, other_headers) => {
     // const subject = envelope.subject.replace(/^(re:?\s|fwd:?\s)?(.*)$/i, "Fwd: $2");
-    return "not implemented yet;
+    return "not implemented yet";
   }
 
   render() {
