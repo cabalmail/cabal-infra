@@ -58,3 +58,7 @@ div.message_overlay div.Flagged span.filter button.flagged {
 span.nowrap {
   white-space: nowrap;
 }
+
+span.wrap_point {
+  white-space: wrap;
+}

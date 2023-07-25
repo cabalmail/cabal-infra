@@ -95,14 +95,12 @@ class ComposeOverlay extends React.Component {
     super.setState(state);
   }
   componentDidMount() {
-    if (this.props.reply){
-      this.setState({
-        ...this.state,
-        address: this.props.recipient,
-        To: this.props.envelope.from,
-        Subject: this.props.envelope.subject
-      });
-    }
+    this.setState({
+      ...this.state,
+      address: this.props.recipient,
+      To: this.props.envelope.from,
+      Subject: this.props.subject
+    });
     this.api.getAddresses().then(data => {
       try {
         localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));

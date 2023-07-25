@@ -20,7 +20,7 @@ class Email extends React.Component {
       body: "",
       other_headers: {},
       flags: [],
-      reply: false
+      type: "new"
     };
   }
 
@@ -41,8 +41,19 @@ class Email extends React.Component {
     this.setState({...this.state, overlayVisible: false});
   }
 
-  showCompose = () => {
-    this.setState({...this.state, composeVisible: true});
+  newEmail = () => {
+    this.setState(
+      {...this.state,
+      envelope: {
+        from: [],
+      },
+      subject: "",
+      recipient: "",
+      body: "",
+      type: "new",
+      other_headers: {},
+      composeVisible: true}
+      );
   }
 
   hideCompose = (envelope) => {
@@ -50,12 +61,14 @@ class Email extends React.Component {
   }
 
   reply = (recipient, body, envelope, other_headers) => {
+    const subject = envelope.subject.replace(/^(re|fwd):?\s(.$)$/i, "Re: $2");
     this.setState({
       ...this.state,
       envelope: envelope,
+      subject: subject
       recipient: recipient,
       body: body,
-      reply: true,
+      type: "reply",
       other_headers: other_headers,
       composeVisible: true
     });
@@ -76,7 +89,8 @@ class Email extends React.Component {
             quotedMessage={this.state.body}
             recipient={this.state.recipient}
             envelope={this.state.envelope}
-            reply={this.state.reply}
+            subject={this.state.subject}
+            type={this.state.type}
             other_headers={this.state.other_headers}
           />
         </div>
@@ -106,7 +120,7 @@ class Email extends React.Component {
           setMessage={this.props.setMessage}
           reply={this.reply}
         />
-        <button className="compose-button" onClick={this.showCompose}>New Email</button>
+        <button className="compose-button" onClick={this.newEmail}>New Email</button>
         {compose_overlay}
       </div>
     );
