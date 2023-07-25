@@ -15,6 +15,7 @@ class Email extends React.Component {
       recipient: "",
       envelope: {
         from: [],
+        to: [],
         subject: ""
       },
       body: "",
@@ -46,6 +47,7 @@ class Email extends React.Component {
       {...this.state,
       envelope: {
         from: [],
+        to: []
       },
       subject: "",
       recipient: "",
