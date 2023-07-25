@@ -64,12 +64,11 @@ class Email extends React.Component {
 
   reply = (recipient, body, envelope, other_headers) => {
     const subject = envelope.subject.replace(/^(re:?\s|fwd:?\s)?(.*)$/i, "Re: $2");
-    const extended_body = "<p></p><p></p><hr><dl>" +
-      `<dt>From</dt><dd>${envelope.from[0]}</dd>` +
-      `<dt>To</dt><dd>${envelope.to.join("; ")}</dd>` +
-      `<dt>Date</dt><dd>${envelope.date}</dd>` +
-      `<dt>Subject</dt><dd>${envelope.subject}</dd>` +
-      "</dl>" + body;
+    const extended_body = "<div><p></p></div><div><p></p></div>" +
+      `<div>From: ${envelope.from[0]}</div>` +
+      `<div>To: ${envelope.to.join("; ")}</div>` +
+      `<div>Date: ${envelope.date}</div>` +
+      `<div>Subject: ${envelope.subject}</div>` + body;
     this.setState({
       ...this.state,
       new_envelope: envelope,
