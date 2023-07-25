@@ -122,6 +122,7 @@ class ComposeOverlay extends React.Component {
     if (!prevProps.reply && this.props.reply) {
       console.log(this.props.envelope);
       console.log(this.props.other_headers);
+      console.log(this.props.recipient);
       if (this.props.reply) {
         if (this.state.addresses.indexOf(this.props.recipient) > -1) {
           this.setState({...this.state, address: this.props.recipient});
