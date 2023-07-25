@@ -11,7 +11,8 @@ class MessageOverlay extends React.Component {
     this.state = {
       message_raw: "",
       message_raw_url: "",
-      message_body: "",
+      message_body_plain: "",
+      message_body_html: "",
       view: "rich",
       attachments: [],
       loading: true,
@@ -138,7 +139,7 @@ class MessageOverlay extends React.Component {
   reply = () => {
     this.props.reply(
       this.state.recipient,
-      this.state.message_body,
+      this.state.message_body_html || this.stage.message_body_plain,
       this.props.envelope,
       {
         message_id: this.state.message_id,
