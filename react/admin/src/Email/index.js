@@ -63,7 +63,7 @@ class Email extends React.Component {
   }
 
   reply = (recipient, body, envelope, other_headers) => {
-    const subject = envelope.subject.replace(/^(re|fwd):?\s(.$)$/i, "Re: $2");
+    const subject = envelope.subject.replace(/^(re:?\s|fwd:?\s)?(.$)$/i, "Re: $2");
     console.log(`Converting ${envelope.subject} to ${subject}`);
     this.setState({
       ...this.state,
