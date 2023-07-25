@@ -65,7 +65,7 @@ class Email extends React.Component {
     this.setState({
       ...this.state,
       envelope: envelope,
-      subject: subject
+      subject: subject,
       recipient: recipient,
       body: body,
       type: "reply",
