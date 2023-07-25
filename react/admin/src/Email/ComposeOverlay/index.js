@@ -115,6 +115,7 @@ class ComposeOverlay extends React.Component {
         ...this.state,
         addresses: data.data.Items.map(a => a.address).sort()
       });
+      console.log(this.props.reply);
       if (this.props.reply) {
         console.log(this.props.envelope);
         console.log(this.props.other_headers);

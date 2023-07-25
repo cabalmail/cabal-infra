@@ -59,7 +59,7 @@ class Email extends React.Component {
   }
 
   render() {
-    const compose_jsx = (
+    const compose_overlay = this.showCompose ? (
       <ComposeOverlay
         token={this.props.token}
         api_url={this.props.api_url}
@@ -74,8 +74,7 @@ class Email extends React.Component {
         reply={this.state.reply}
         other_headers={this.state.other_headers}
       />
-    );
-    const compose_overlay = this.showCompose ? compose_jsx : "";
+    ) : "";
     return (
       <div className="email">
         <Messages 
