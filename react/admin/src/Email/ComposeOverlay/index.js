@@ -3,14 +3,12 @@ import './ComposeOverlay.css';
 import ApiClient from '../../ApiClient';
 import Request from '../../Addresses/Request';
 import { ADDRESS_LIST } from '../../constants';
-import { EditorState, ContentState, convertToRaw, convertFromRaw, convertFromHTML } from 'draft-js';
+import { EditorState, ContentState, convertToRaw, convertFromHTML } from 'draft-js';
 import draftToHtml from 'draftjs-to-html';
 import { draftToMarkdown } from 'markdown-draft-js';
 import { Editor } from "react-draft-wysiwyg";
 import "react-draft-wysiwyg/dist/react-draft-wysiwyg.css";
 
-const STATE_KEY = 'compose-state';
-const DRAFT_KEY = 'draft-js'
 const MESSAGE = {
   target: {
     id: "recipient-to"
@@ -35,7 +33,6 @@ class ComposeOverlay extends React.Component {
 
     let init_ed_state = null;
     let init_state = null;
-    const raw_from_store = localStorage.getItem(DRAFT_KEY);
     
     if (this.props.body) {
       init_ed_state = EditorState.createWithContent(
@@ -47,56 +44,35 @@ class ComposeOverlay extends React.Component {
     	init_ed_state = EditorState.createEmpty();
     }
 
-    let state_from_store = localStorage.getItem(STATE_KEY);
-    if (state_from_store) {
-      init_state = JSON.parse(state_from_store);
-      this.state = {
-        editorState: init_ed_state,
-        addresses: init_state.addresses,
-        address: init_state.address,
-        recipient: init_state.recipient,
-        validation_fail: init_state.validation_fail,
-        To: init_state.To,
-        CC: init_state.CC,
-        BCC: init_state.BCC,
-        Subject: init_state.Subject,
-        showRequest: init_state.showRequest
-      };
-    } else {
-      this.state = {
-        ...EMPTY_STATE,
-        editorState: init_ed_state
-      };
-    }
+    this.state = {
+      ...EMPTY_STATE,
+      editorState: init_ed_state
+    };
     this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
   }
 
-  setState(state) {
-  	var raw_content = convertToRaw(state.editorState.getCurrentContent());
-    var other_state = {
-      // editorState omitted intentionally
-      addresses: state.hasOwnProperty('addresses') ? state.addresses : this.state.addresses,
-      address: state.hasOwnProperty('address') ? state.address : this.state.address,
-      recipient: state.hasOwnProperty('recipient') ? state.recipient : this.state.recipient,
-      validation_fail: state.hasOwnProperty('validation_fail') ? state.validation_fail : this.state.validation_fail,
-      To: state.hasOwnProperty('To') ? state.To : this.state.To,
-      CC: state.hasOwnProperty('CC') ? state.CC : this.state.CC,
-      BCC: state.hasOwnProperty('BCC') ? state.BCC : this.state.BCC,
-      Subject: state.hasOwnProperty('Subject') ? state.Subject : this.state.Subject,
-      showRequest: state.hasOwnProperty('showRequest') ? state.showRequest : this.state.showRequest
-    };
-    try {
-    	localStorage.setItem(DRAFT_KEY, JSON.stringify(raw_content));
-    } catch (e) {
-      console.error(e);
-    }
-    try {
-      localStorage.setItem(STATE_KEY, JSON.stringify(other_state));
-    } catch (e) {
-      console.error(e);
-    }
-    super.setState(state);
-  }
+  // setState(state) {
+  // 	var raw_content = convertToRaw(state.editorState.getCurrentContent());
+  //   var other_state = {
+  //     // editorState omitted intentionally
+  //     addresses: state.hasOwnProperty('addresses') ? state.addresses : this.state.addresses,
+  //     address: state.hasOwnProperty('address') ? state.address : this.state.address,
+  //     recipient: state.hasOwnProperty('recipient') ? state.recipient : this.state.recipient,
+  //     validation_fail: state.hasOwnProperty('validation_fail') ? state.validation_fail : this.state.validation_fail,
+  //     To: state.hasOwnProperty('To') ? state.To : this.state.To,
+  //     CC: state.hasOwnProperty('CC') ? state.CC : this.state.CC,
+  //     BCC: state.hasOwnProperty('BCC') ? state.BCC : this.state.BCC,
+  //     Subject: state.hasOwnProperty('Subject') ? state.Subject : this.state.Subject,
+  //     showRequest: state.hasOwnProperty('showRequest') ? state.showRequest : this.state.showRequest
+  //   };
+  //   try {
+  //     localStorage.setItem(STATE_KEY, JSON.stringify(other_state));
+  //   } catch (e) {
+  //     console.error(e);
+  //   }
+  //   super.setState(state);
+  // }
+
   componentDidMount() {
     this.setState({
       ...this.state,
