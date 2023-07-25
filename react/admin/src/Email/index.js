@@ -7,10 +7,7 @@ import ComposeOverlay from './ComposeOverlay';
 const EMPTY_ENVELOPE = {
   from: [],
   to: [],
-  subject: "",
-  flags: {
-    includes: null
-  }
+  subject: ""
 };
 
 class Email extends React.Component {
@@ -22,7 +19,8 @@ class Email extends React.Component {
       overlayVisible: false,
       composeVisible: false,
       recipient: "",
-      envelope: EMPTY_ENVELOPE,
+      envelope: {},
+      new_envelope: EMPTY_ENVELOPE,
       body: "",
       other_headers: {},
       flags: [],
@@ -50,7 +48,7 @@ class Email extends React.Component {
   newEmail = () => {
     this.setState(
       {...this.state,
-      envelope: EMPTY_ENVELOPE,
+      new_envelope: EMPTY_ENVELOPE,
       subject: "",
       recipient: "",
       body: "",
@@ -68,7 +66,7 @@ class Email extends React.Component {
     const subject = envelope.subject.replace(/^(re|fwd):?\s(.$)$/i, "Re: $2");
     this.setState({
       ...this.state,
-      envelope: envelope,
+      new_envelope: envelope,
       subject: subject,
       recipient: recipient,
       body: body,
@@ -92,7 +90,7 @@ class Email extends React.Component {
             setMessage={this.props.setMessage}
             quotedMessage={this.state.body}
             recipient={this.state.recipient}
-            envelope={this.state.envelope}
+            envelope={this.state.new_envelope}
             subject={this.state.subject}
             type={this.state.type}
             other_headers={this.state.other_headers}
