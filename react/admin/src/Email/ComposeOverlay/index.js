@@ -95,14 +95,14 @@ class ComposeOverlay extends React.Component {
     super.setState(state);
   }
       // <dl>
-      //   <dt className="collapsable">To</dt>
-      //   <dd className="collapsable">{this.props.envelope.to.join("; ")}</dd>
-      //   <dt className="collapsable">From</dt>
-      //   <dd className="collapsable">{this.props.envelope.from.join("; ")}</dd>
-      //   <dt className="collapsable">Received</dt>
-      //   <dd className="collapsable">{this.props.envelope.date}</dd>
-      //   <dt className="collapsable">Subject</dt>
-      //   <dd>{this.props.envelope.subject}</dd>
+      //   <dt>To</dt>
+      //     <dd>{this.props.envelope.to.join("; ")}</dd>
+      //   <dt>From</dt>
+      //     <dd>{this.props.envelope.from.join("; ")}</dd>
+      //   <dt>Received</dt>
+      //     <dd>{this.props.envelope.date}</dd>
+      //   <dt>Subject</dt>
+      //     <dd>{this.props.envelope.subject}</dd>
       // </dl>
   componentDidMount() {
     this.api.getAddresses().then(data => {
@@ -123,23 +123,21 @@ class ComposeOverlay extends React.Component {
       console.log(this.props.envelope);
       console.log(this.props.other_headers);
       console.log(this.props.recipient);
-      if (this.props.reply) {
-        if (this.state.addresses.indexOf(this.props.recipient) > -1) {
-          this.setState({...this.state, address: this.props.recipient});
+      this.setState({...this.state, address: this.props.recipient});
+      if (this.props.envelope) {
+        console.log(this.props.envelope.from.length);
+        if (this.props.envelope.from.length) {
+          this.setState({...this.state, To: this.props.envelope.from});
         }
-        if (this.props.envelope) {
-          if (this.props.envelope.from.length) {
-            this.setState({...this.state, To: this.props.envelope.from});
-          }
-          if (this.props.envelope.subject) {
-            this.setState({...this.state, Subject: `Re: ${this.props.envelope.subject}`});
-          }
-          // TODO: pass message_id
-          // In-Reply-To: message_id
-          // References: message1_id message2_id
+        if (this.props.envelope.subject) {
+          this.setState({...this.state, Subject: `Re: ${this.props.envelope.subject}`});
         }
+        // TODO: pass message_id
+        // In-Reply-To: message_id
+        // References: message1_id message2_id
       }
-  }
+      // TODO: populate editor body
+    }
   }
 
   handleSubmit = (e) => {
