@@ -13,7 +13,10 @@ class Email extends React.Component {
       overlayVisible: false,
       composeVisible: false,
       recipient: "",
-      envelope: {},
+      envelope: {
+        from: [],
+        subject: ""
+      },
       body: "",
       other_headers: {},
       flags: [],

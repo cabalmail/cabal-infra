@@ -105,6 +105,12 @@ class ComposeOverlay extends React.Component {
       //     <dd>{this.props.envelope.subject}</dd>
       // </dl>
   componentDidMount() {
+    this.setState({
+      ...this.state,
+      address: this.props.recipient,
+      To: this.props.envelope.from,
+      Subject: this.props.envelope.subject
+    });
     this.api.getAddresses().then(data => {
       try {
         localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
@@ -115,26 +121,26 @@ class ComposeOverlay extends React.Component {
         ...this.state,
         addresses: data.data.Items.map(a => a.address).sort()
       });
-      console.log(this.props.reply);
-      if (this.props.reply) {
-        console.log(this.props.envelope);
-        console.log(this.props.other_headers);
-        console.log(this.props.recipient);
-        this.setState({...this.state, address: this.props.recipient});
-        if (this.props.envelope) {
-          console.log(this.props.envelope.from.length);
-          if (this.props.envelope.from.length) {
-            this.setState({...this.state, To: this.props.envelope.from});
-          }
-          if (this.props.envelope.subject) {
-            this.setState({...this.state, Subject: `Re: ${this.props.envelope.subject}`});
-          }
-          // TODO: pass message_id
-          // In-Reply-To: message_id
-          // References: message1_id message2_id
-        }
-        // TODO: populate editor body
-      }
+      // console.log(this.props.reply);
+      // if (this.props.reply) {
+      //   console.log(this.props.envelope);
+      //   console.log(this.props.other_headers);
+      //   console.log(this.props.recipient);
+      //   this.setState({...this.state, address: this.props.recipient});
+      //   if (this.props.envelope) {
+      //     console.log(this.props.envelope.from.length);
+      //     if (this.props.envelope.from.length) {
+      //       this.setState({...this.state, To: this.props.envelope.from});
+      //     }
+      //     if (this.props.envelope.subject) {
+      //       this.setState({...this.state, Subject: `Re: ${this.props.envelope.subject}`});
+      //     }
+      //     // TODO: pass message_id
+      //     // In-Reply-To: message_id
+      //     // References: message1_id message2_id
+      //   }
+      //   // TODO: populate editor body
+      // }
     });
   }
 
