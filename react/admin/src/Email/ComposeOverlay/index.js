@@ -30,10 +30,7 @@ class ComposeOverlay extends React.Component {
 
   constructor(props) {
     super(props);
-
     let init_ed_state = null;
-    let init_state = null;
-    
     if (this.props.body) {
       init_ed_state = EditorState.createWithContent(
         ContentState.createFromBlockArray(
