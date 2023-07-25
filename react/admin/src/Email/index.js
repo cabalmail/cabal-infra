@@ -4,6 +4,15 @@ import Messages from './Messages';
 import MessageOverlay from './MessageOverlay';
 import ComposeOverlay from './ComposeOverlay';
 
+const EMPTY_ENVELOPE = {
+  from: [],
+  to: [],
+  subject: "",
+  flags: {
+    includes: null
+  }
+};
+
 class Email extends React.Component {
 
   constructor(props) {
@@ -13,11 +22,7 @@ class Email extends React.Component {
       overlayVisible: false,
       composeVisible: false,
       recipient: "",
-      envelope: {
-        from: [],
-        to: [],
-        subject: ""
-      },
+      envelope: EMPTY_ENVELOPE,
       body: "",
       other_headers: {},
       flags: [],
@@ -45,10 +50,7 @@ class Email extends React.Component {
   newEmail = () => {
     this.setState(
       {...this.state,
-      envelope: {
-        from: [],
-        to: []
-      },
+      envelope: EMPTY_ENVELOPE,
       subject: "",
       recipient: "",
       body: "",
