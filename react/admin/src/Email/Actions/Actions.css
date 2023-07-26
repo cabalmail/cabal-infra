@@ -23,7 +23,6 @@ div.filters-buttons {
   position: relative;
 }
 
-span.filter button,
 div.show_folders div.filter-folder,
 div.hide_folders button.move,
 div.show_folders button.cancel,
@@ -32,8 +31,8 @@ div.hide_folders span.filter button.read,
 div.hide_folders span.filter button.flagged,
 div.hide_folders span.filter button.unread,
 div.hide_folders span.filter button.unflagged,
-div.message_overlay div.Seen button.unread,
-div.message_overlay div.Flagged button.unflagged,
+div.message_overlay div.Seen span.filter button.unread,
+div.message_overlay div.Flagged span.filter button.unflagged,
 div.message_overlay span.filter button.read,
 div.message_overlay span.filter button.flagged {
   display: inline-block;
@@ -53,6 +52,11 @@ div.message_overlay span.filter button.unflagged,
 div.message_overlay div.Seen span.filter button.read,
 div.message_overlay div.Flagged span.filter button.flagged {
   display: none;
+}
+
+div.show_folders div.Seen span.filter button.unread,
+div.show_folders div.Flagged span.filter button.unflagged {
+  display: none !important;
 }
 
 span.nowrap {
