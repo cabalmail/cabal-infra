@@ -54,8 +54,8 @@ div.message_overlay div.Flagged span.filter button.flagged {
   display: none;
 }
 
-div.show_folders div.Seen span.filter button.unread,
-div.show_folders div.Flagged span.filter button.unflagged {
+div.Seen div.show_folders span.filter button.unread,
+div.Flagged div.show_folders span.filter button.unflagged {
   display: none !important;
 }
 
