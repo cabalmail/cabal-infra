@@ -3,8 +3,7 @@ import './ComposeOverlay.css';
 import ApiClient from '../../ApiClient';
 import Request from '../../Addresses/Request';
 import { ADDRESS_LIST } from '../../constants';
-// import { EditorState, ContentState, convertToRaw, convertFromHTML } from 'draft-js';
-import { EditorState, convertToRaw } from 'draft-js';
+import { EditorState, ContentState, convertToRaw, convertFromHTML } from 'draft-js';
 import draftToHtml from 'draftjs-to-html';
 import { draftToMarkdown } from 'markdown-draft-js';
 import { Editor } from "react-draft-wysiwyg";
@@ -32,19 +31,18 @@ class ComposeOverlay extends React.Component {
   constructor(props) {
     super(props);
     let init_ed_state = null;
-    // if (this.props.body) {
-    //   console.log("Appending");
-    //   console.log(this.props.body);
-    //   init_ed_state = EditorState.createWithContent(
-    //     ContentState.createFromBlockArray(
-    //       convertFromHTML(this.props.body)
-    //     )
-    //   );
-    // } else {
-    // 	init_ed_state = EditorState.createEmpty();
-    // }
+    if (this.props.body) {
+      console.log("Appending");
+      console.log(this.props.body);
+      init_ed_state = EditorState.createWithContent(
+        ContentState.createFromBlockArray(
+          convertFromHTML(this.props.body)
+        )
+      );
+    } else {
+    	init_ed_state = EditorState.createEmpty();
+    }
 
-    init_ed_state = EditorState.createEmpty();
     this.state = {
       ...EMPTY_STATE,
       editorState: init_ed_state
@@ -77,7 +75,6 @@ class ComposeOverlay extends React.Component {
   componentDidMount() {
     this.setState({
       ...this.state,
-      editorState: this.insertText(this.props.body, this.state.editorState),
       address: this.props.recipient,
       To: this.props.envelope.from,
       Subject: this.props.subject
