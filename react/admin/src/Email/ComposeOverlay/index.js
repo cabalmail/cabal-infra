@@ -3,7 +3,7 @@ import './ComposeOverlay.css';
 import ApiClient from '../../ApiClient';
 import Request from '../../Addresses/Request';
 import { ADDRESS_LIST } from '../../constants';
-import { EditorState, ContentState, convertToRaw, convertFromHTML } from 'draft-js';
+import { EditorState, ContentState, convertToRaw } from 'draft-js';
 import draftToHtml from 'draftjs-to-html';
 import htmlToDraft from 'html-to-draftjs';
 import { draftToMarkdown } from 'markdown-draft-js';
@@ -39,7 +39,7 @@ class ComposeOverlay extends React.Component {
       // const editorState = EditorState.createWithContent(contentState);
       const block_array = htmlToDraft(this.props.body);
       const content_state = ContentState.createFromBlockArray(block_array);
-      const init_ed_state = EditorState.createWithContent(content_state);
+      init_ed_state = EditorState.createWithContent(content_state);
 
       // const block_array = convertFromHTML(this.props.body);
       // console.log("Block array...");
