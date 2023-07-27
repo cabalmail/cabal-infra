@@ -48,7 +48,7 @@ class ComposeOverlay extends React.Component {
   }
 
   // setState(state) {
-  // 	var raw_content = convertToRaw(state.editorState.getCurrentContent());
+  //  var raw_content = convertToRaw(state.editorState.getCurrentContent());
   //   var other_state = {
   //     // editorState omitted intentionally
   //     addresses: state.hasOwnProperty('addresses') ? state.addresses : this.state.addresses,
