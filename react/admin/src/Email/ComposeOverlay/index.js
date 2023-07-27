@@ -23,11 +23,7 @@ const EMPTY_STATE = {
   To: [],
   CC: [],
   BCC: [],
-  Subject: "",
-  other_headers: {
-    message_id: [],
-    in_reply_to: [],
-    references: []
+  Subject: ""
   },
   showRequest: false
 };
@@ -105,7 +101,7 @@ class ComposeOverlay extends React.Component {
   handleSend = (e) => {
     e.preventDefault();
     const send_button = e.target;
-    const oh = this.state.other_headers;
+    const oh = this.props.other_headers;
     send_button.classList.add('sending');
     if (this.state.recipient) {
       this.addRecipient(MESSAGE);
