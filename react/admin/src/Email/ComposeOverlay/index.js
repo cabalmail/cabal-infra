@@ -23,8 +23,7 @@ const EMPTY_STATE = {
   To: [],
   CC: [],
   BCC: [],
-  Subject: ""
-  },
+  Subject: "",
   showRequest: false
 };
 
