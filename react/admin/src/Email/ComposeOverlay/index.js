@@ -76,6 +76,9 @@ class ComposeOverlay extends React.Component {
       To: this.props.envelope.from,
       Subject: this.props.subject
     });
+    if (this.props.type === "reply") {
+      this.refs.editor.focus();
+    }
     this.api.getAddresses().then(data => {
       try {
         localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
@@ -419,6 +422,7 @@ class ComposeOverlay extends React.Component {
           value={this.state.Subject}
         />
         <Editor
+          ref="editor"
           editorState={editorState}
           toolbarClassName="wysiwyg-toolbar"
           wrapperClassName="wysiwyg-wrapper"
