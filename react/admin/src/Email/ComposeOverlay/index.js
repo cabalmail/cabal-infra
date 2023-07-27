@@ -100,6 +100,7 @@ class ComposeOverlay extends React.Component {
   handleSend = (e) => {
     e.preventDefault();
     const send_button = e.target;
+    const oh = this.state.other_headers;
     send_button.classList.add('sending');
     if (this.state.recipient) {
       this.addRecipient(MESSAGE);
@@ -123,7 +124,11 @@ class ComposeOverlay extends React.Component {
       this.state.CC,
       this.state.BCC,
       this.state.Subject,
-      this.props.other_headers || {},
+      {
+        in_reply_to: oh.hasOwnProperty("in_reply_to") ? oh.in_reply_to : [],
+        references: oh.hasOwnProperty("references") ? oh.references : [],
+        message_id: oh.hasOwnProperty("message_id") ? oh.message_id : []
+      },
       draftToHtml(convertToRaw(this.state.editorState.getCurrentContent())),
       draftToMarkdown(convertToRaw(this.state.editorState.getCurrentContent())),
       false

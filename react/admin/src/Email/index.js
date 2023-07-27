@@ -57,7 +57,11 @@ class Email extends React.Component {
       recipient: "",
       body: "",
       type: "new",
-      other_headers: {},
+      other_headers: {
+        in_reply_to: [],
+        references: [],
+        message_id: []
+      },
       composeVisible: true}
       );
   }
