@@ -28,7 +28,7 @@ const EMPTY_STATE = {
     message_id: [],
     in_reply_to: [],
     references: []
-  }
+  },
   showRequest: false
 };
 
