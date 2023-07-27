@@ -5,6 +5,7 @@ import Request from '../../Addresses/Request';
 import { ADDRESS_LIST } from '../../constants';
 import { EditorState, ContentState, convertToRaw, convertFromHTML } from 'draft-js';
 import draftToHtml from 'draftjs-to-html';
+import htmlToDraft from 'html-to-draftjs';
 import { draftToMarkdown } from 'markdown-draft-js';
 import { Editor } from "react-draft-wysiwyg";
 import "react-draft-wysiwyg/dist/react-draft-wysiwyg.css";
@@ -32,13 +33,22 @@ class ComposeOverlay extends React.Component {
     super(props);
     let init_ed_state = null;
     if (this.props.body) {
-      const block_array = convertFromHTML(this.props.body);
-      console.log("Block array...");
-      console.log(block_array);
+      // import htmlToDraft from 'html-to-draftjs';
+      // const contentBlock = htmlToDraft(htmlString);
+      // const contentState = ContentState.createFromBlockArray(contentBlock.contentBlocks);
+      // const editorState = EditorState.createWithContent(contentState);
+      const block_array = htmlToDraft(this.props.body);
       const content_state = ContentState.createFromBlockArray(block_array);
-      console.log("Content state...");
-      console.log(content_state);
-      init_ed_state = EditorState.createWithContent(content_state);
+      const init_ed_state = EditorState.createWithContent(content_state);
+
+      // const block_array = convertFromHTML(this.props.body);
+      // console.log("Block array...");
+      // console.log(block_array);
+      // const content_state = ContentState.createFromBlockArray(block_array);
+      // console.log("Content state...");
+      // console.log(content_state);
+      // init_ed_state = EditorState.createWithContent(content_state);
+
       // init_ed_state = EditorState.createWithContent(
       //   ContentState.createFromBlockArray(
       //     convertFromHTML(this.props.body)
