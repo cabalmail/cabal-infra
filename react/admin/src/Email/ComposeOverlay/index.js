@@ -24,6 +24,11 @@ const EMPTY_STATE = {
   CC: [],
   BCC: [],
   Subject: "",
+  other_headers: {
+    message_id: [],
+    in_reply_to: [],
+    references: []
+  }
   showRequest: false
 };
 
