@@ -32,13 +32,18 @@ class ComposeOverlay extends React.Component {
     super(props);
     let init_ed_state = null;
     if (this.props.body) {
-      console.log("Appending");
-      console.log(this.props.body);
-      init_ed_state = EditorState.createWithContent(
-        ContentState.createFromBlockArray(
-          convertFromHTML(this.props.body)
-        )
-      );
+      const block_array = convertFromHTML(this.props.body);
+      console.log("Block array...");
+      console.log(block_array);
+      const content_state = ContentState.CreateFromBlockArray(block_array);
+      console.log("Content state...");
+      console.log(content_state);
+      init_ed_state = EditorState.createWithContent(content_state);
+      // init_ed_state = EditorState.createWithContent(
+      //   ContentState.createFromBlockArray(
+      //     convertFromHTML(this.props.body)
+      //   )
+      // );
     } else {
     	init_ed_state = EditorState.createEmpty();
     }
