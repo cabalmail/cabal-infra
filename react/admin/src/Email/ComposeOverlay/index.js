@@ -125,9 +125,9 @@ class ComposeOverlay extends React.Component {
       this.state.BCC,
       this.state.Subject,
       {
-        in_reply_to: oh.hasOwnProperty("in_reply_to") ? oh.in_reply_to : [],
-        references: oh.hasOwnProperty("references") ? oh.references : [],
-        message_id: oh.hasOwnProperty("message_id") ? oh.message_id : []
+        in_reply_to: oh.hasOwnProperty("in_reply_to") && Array.isArray(oh.in_reply_to) ? oh.in_reply_to : [],
+        references: oh.hasOwnProperty("references") && Array.isArray(oh.references) ? oh.references : [],
+        message_id: oh.hasOwnProperty("message_id") && Array.isArray(oh.message_id) ? oh.message_id : []
       },
       draftToHtml(convertToRaw(this.state.editorState.getCurrentContent())),
       draftToMarkdown(convertToRaw(this.state.editorState.getCurrentContent())),
