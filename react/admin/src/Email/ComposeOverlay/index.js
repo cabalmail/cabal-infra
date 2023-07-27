@@ -123,6 +123,7 @@ class ComposeOverlay extends React.Component {
       this.state.CC,
       this.state.BCC,
       this.state.Subject,
+      this.props.other_headers || {},
       draftToHtml(convertToRaw(this.state.editorState.getCurrentContent())),
       draftToMarkdown(convertToRaw(this.state.editorState.getCurrentContent())),
       false

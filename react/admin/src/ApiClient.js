@@ -155,7 +155,7 @@ export default class ApiClient {
 
   // Send
 
-  sendMessage(smtp_host, sender, to_list, cc_list, bcc_list, subject, html_body, text_body, draft) {
+  sendMessage(smtp_host, sender, to_list, cc_list, bcc_list, subject, other_headers, html_body, text_body, draft) {
     // TODO:
     // - attachments
     const response = axios.put('/send',
@@ -167,6 +167,7 @@ export default class ApiClient {
         cc_list: cc_list,
         bcc_list: bcc_list,
         subject: subject,
+        other_headers: other_headers,
         html: html_body,
         text: text_body,
         draft: draft // false == outbox, true == drafts
