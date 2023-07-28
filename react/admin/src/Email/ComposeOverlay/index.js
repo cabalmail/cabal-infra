@@ -24,6 +24,7 @@ const EMPTY_STATE = {
   CC: [],
   BCC: [],
   Subject: "",
+  message_id: "",
   showRequest: false
 };
 
@@ -101,7 +102,14 @@ class ComposeOverlay extends React.Component {
     e.preventDefault();
     const send_button = e.target;
     const oh = this.props.other_headers;
-    send_button.classList.add('sending');
+    const irt = oh.message_id;
+    const msgid = [ randomString(30) + '@' + this.props.smtp_host ];
+    const ref = [...new Set([...oh.references, ...oh.message_id, ...oh.in_reply_to])];
+    const headers = {
+      in_reply_to: irt,
+      message_id: msgid,
+      references: ref
+    }
     if (this.state.recipient) {
       this.addRecipient(MESSAGE);
     }
@@ -117,6 +125,7 @@ class ComposeOverlay extends React.Component {
       this.props.setMessage("Please select an address from which to send.", true);
       return;
     }
+    send_button.classList.add('sending');
     this.api.sendMessage(
       this.props.smtp_host,
       this.state.address,
@@ -124,11 +133,7 @@ class ComposeOverlay extends React.Component {
       this.state.CC,
       this.state.BCC,
       this.state.Subject,
-      {
-        in_reply_to: oh.hasOwnProperty("in_reply_to") && Array.isArray(oh.in_reply_to) ? oh.in_reply_to : [],
-        references: oh.hasOwnProperty("references") && Array.isArray(oh.references) ? oh.references : [],
-        message_id: oh.hasOwnProperty("message_id") && Array.isArray(oh.message_id) ? oh.message_id : []
-      },
+      headers,
       draftToHtml(convertToRaw(this.state.editorState.getCurrentContent())),
       draftToMarkdown(convertToRaw(this.state.editorState.getCurrentContent())),
       false
@@ -164,6 +169,18 @@ class ComposeOverlay extends React.Component {
       console.error(e);
     }
   };
+
+  randomString(length) {
+    let result = '';
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    const charactersLength = characters.length;
+    let counter = 0;
+    while (counter < length) {
+      result += characters.charAt(Math.floor(Math.random() * charactersLength));
+      counter += 1;
+    }
+    return result;
+  }
 
   validateAddress(address) {
     // Not going to allow IP addresses; domains only
