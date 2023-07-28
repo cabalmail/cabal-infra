@@ -179,7 +179,7 @@ class ComposeOverlay extends React.Component {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     const len = chars.length;
     for (var i = 0; i < len; i++) {
-      str += characters.charAt(Math.floor(Math.random() * len));
+      str += chars.charAt(Math.floor(Math.random() * len));
     }
     return str;
   }
