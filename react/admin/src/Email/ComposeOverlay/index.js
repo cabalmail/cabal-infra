@@ -102,9 +102,13 @@ class ComposeOverlay extends React.Component {
     e.preventDefault();
     const send_button = e.target;
     const oh = this.props.other_headers;
-    const irt = oh.message_id;
+    const irt = oh.message_id || [];
     const msgid = [ this.randomString(30) + '@' + this.props.smtp_host ];
-    const ref = [...new Set([...oh.references, ...oh.message_id, ...oh.in_reply_to])];
+    const ref = [...new Set([
+                              ...(oh.references || []),
+                              ...(oh.message_id || []),
+                              ...(oh.in_reply_to || [])
+                            ])];
     const headers = {
       in_reply_to: irt,
       message_id: msgid,
@@ -171,15 +175,13 @@ class ComposeOverlay extends React.Component {
   };
 
   randomString(length) {
-    let result = '';
-    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    const charactersLength = characters.length;
-    let counter = 0;
-    while (counter < length) {
-      result += characters.charAt(Math.floor(Math.random() * charactersLength));
-      counter += 1;
+    let str = '';
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    const len = chars.length;
+    for (var i = 0; i < len; i++) {
+      str += characters.charAt(Math.floor(Math.random() * len));
     }
-    return result;
+    return str;
   }
 
   validateAddress(address) {
