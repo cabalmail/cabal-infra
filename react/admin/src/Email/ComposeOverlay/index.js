@@ -110,9 +110,9 @@ class ComposeOverlay extends React.Component {
                               ...(oh.in_reply_to || [])
                             ])];
     const headers = {
-      in_reply_to: irt,
-      message_id: msgid,
-      references: ref
+      in_reply_to: irt.map(s => s.trim()),
+      message_id: msgid.map(s => s.trim()),
+      references: ref.map(s => s.trim())
     }
     if (this.state.recipient) {
       this.addRecipient(MESSAGE);
