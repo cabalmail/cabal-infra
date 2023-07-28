@@ -103,7 +103,7 @@ class ComposeOverlay extends React.Component {
     const send_button = e.target;
     const oh = this.props.other_headers;
     const irt = oh.message_id;
-    const msgid = [ randomString(30) + '@' + this.props.smtp_host ];
+    const msgid = [ this.randomString(30) + '@' + this.props.smtp_host ];
     const ref = [...new Set([...oh.references, ...oh.message_id, ...oh.in_reply_to])];
     const headers = {
       in_reply_to: irt,
