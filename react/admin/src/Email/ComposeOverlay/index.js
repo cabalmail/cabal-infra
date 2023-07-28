@@ -103,7 +103,7 @@ class ComposeOverlay extends React.Component {
     const send_button = e.target;
     const oh = this.props.other_headers;
     const irt = oh.message_id || [];
-    const msgid = [ this.randomString(30) + '@' + this.props.smtp_host ];
+    const msgid = [ '<' + this.randomString(30) + '@' + this.props.smtp_host + '>' ];
     const ref = [...new Set([
                               ...(oh.references || []),
                               ...(oh.message_id || []),
@@ -178,7 +178,7 @@ class ComposeOverlay extends React.Component {
     let str = '';
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     const len = chars.length;
-    for (var i = 0; i < len; i++) {
+    for (var i = 0; i < length; i++) {
       str += chars.charAt(Math.floor(Math.random() * len));
     }
     return str;
