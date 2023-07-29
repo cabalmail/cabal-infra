@@ -67,7 +67,7 @@ def compose_message(subject, sender, headers, text, html):
     if len(headers['in_reply_to']):
         msg['In-Reply-To'] = headers['in_reply_to'][0]
     if len(headers['references']):
-        msg['references'] = ' '.join(headers['references'])
+        msg['References'] = ' '.join(headers['references'])
     msg['Date'] = formatdate(localtime=True)
     msg.set_content(text, subtype='plain')
     msg.add_alternative(html, subtype='html')
