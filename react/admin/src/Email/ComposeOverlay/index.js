@@ -64,11 +64,12 @@ class ComposeOverlay extends React.Component {
                         ...(this.props.envelope.from),
                         ...(this.props.envelope.to || [])
                       ])];
-        const final_to_list = to_list.indexOf(this.props.recipient);
+        const i = to_list.indexOf(this.props.recipient);
+        to_list.splice(i, 1)
         this.setState({
           ...this.state,
           address: this.props.recipient,
-          To: final_to_list,
+          To: to_list,
           CC: this.props.envelope.cc,
           Subject: this.props.subject
         });
