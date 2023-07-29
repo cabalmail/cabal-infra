@@ -60,13 +60,15 @@ class ComposeOverlay extends React.Component {
         });
         break;
       case "replyAll":
+        let to_list = [...new Set([
+                        ...(this.props.envelope.from),
+                        ...(this.props.envelope.to || [])
+                      ])];
+        const final_to_list = to_list.indexOf(this.props.recipient);
         this.setState({
           ...this.state,
           address: this.props.recipient,
-          To: [...new Set([
-                ...(this.props.envelope.from),
-                ...(this.props.envelope.to || []) // TODO: Remove this.props.recipient from to
-              ])],
+          To: final_to_list,
           CC: this.props.envelope.cc,
           Subject: this.props.subject
         });
