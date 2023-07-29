@@ -150,11 +150,9 @@ class MessageOverlay extends React.Component {
   }
 
   replyAll = () => {
-    console.log("Not implemented yet");
   }
 
   forward = () => {
-    console.log("Not implemented yet");
   }
 
   renderView() {
@@ -212,15 +210,17 @@ class MessageOverlay extends React.Component {
   }
 
   renderHeader() {
-    console.log(this.props.envelope);
+    const cc = this.props.cc.length ? (
+      <dt className="collapsable">CC</dt>
+      <dd className="collapsable">{this.props.envelope.cc.join("; ")}</dd>
+    ) : ""
     return (
       <dl>
         <dt className="collapsable">From</dt>
         <dd className="collapsable">{this.props.envelope.from.join("; ")}</dd>
         <dt className="collapsable">To</dt>
         <dd className="collapsable">{this.props.envelope.to.join("; ")}</dd>
-        <dt className="collapsable">CC</dt>
-        <dd className="collapsable">{this.props.envelope.cc.join("; ")}</dd>
+        {cc}
         <dt className="collapsable">Received</dt>
         <dd className="collapsable">{this.props.envelope.date}</dd>
         <dt className="collapsable">Subject</dt>
