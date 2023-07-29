@@ -3,7 +3,7 @@ import RichMessage from './RichMessage';
 import Actions from '../Actions';
 import ApiClient from '../../ApiClient';
 import './MessageOverlay.css';
-import { ADDRESS_LIST } from '../constants';
+import { ADDRESS_LIST } from '../../constants';
 
 class MessageOverlay extends React.Component {
 
