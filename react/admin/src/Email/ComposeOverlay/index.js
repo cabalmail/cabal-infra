@@ -67,13 +67,14 @@ class ComposeOverlay extends React.Component {
         const i = to_list.indexOf(this.props.recipient);
         if (i > -1) {
           to_list.splice(i, 1);
-        } else {
-          this.props.setMessage("Warning: You are replying to a blind copy.", true);
         }
         let cc_list = this.props.envelope.cc.slice();
         const j = cc_list.indexOf(this.props.recipient);
         if (j > -1) {
           cc_list.splice(j, 1);
+        }
+        if (i === -1 && j === -1) {
+          this.props.setMessage("Warning: You are replying to a blind copy.", true);
         }
         this.setState({
           ...this.state,
