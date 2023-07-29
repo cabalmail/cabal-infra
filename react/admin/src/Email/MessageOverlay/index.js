@@ -211,8 +211,10 @@ class MessageOverlay extends React.Component {
 
   renderHeader() {
     const cc = this.props.cc.length ? (
-      <dt className="collapsable">CC</dt>
-      <dd className="collapsable">{this.props.envelope.cc.join("; ")}</dd>
+      <>
+        <dt className="collapsable">CC</dt>
+        <dd className="collapsable">{this.props.envelope.cc.join("; ")}</dd>
+      </>
     ) : ""
     return (
       <dl>
