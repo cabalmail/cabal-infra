@@ -136,8 +136,8 @@ class MessageOverlay extends React.Component {
     this.setState({...this.state, view: e.target.value});
   }
 
-  reply = () => {
-    this.props.reply(
+  createPayload() {
+    return [
       this.state.recipient,
       this.state.message_body_html || this.stage.message_body_plain,
       this.props.envelope,
@@ -146,13 +146,22 @@ class MessageOverlay extends React.Component {
         in_reply_to: this.state.in_reply_to,
         references: this.state.references
       }
-    );
+    ]
+  }
+
+  reply = () => {
+    const params = this.createPayload();
+    this.props.reply(params[0], params[1], params[2], params[3]);
   }
 
   replyAll = () => {
+    const params = this.createPayload();
+    this.props.replyAll(params[0], params[1], params[2], params[3]);
   }
 
   forward = () => {
+    const params = this.createPayload();
+    this.props.forward(params[0], params[1], params[2], params[3]);
   }
 
   renderView() {

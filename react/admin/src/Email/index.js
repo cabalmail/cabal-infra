@@ -66,30 +66,42 @@ class Email extends React.Component {
       );
   }
 
-  reply = (recipient, body, envelope, other_headers) => {
-    const subject = envelope.subject.replace(/^(re:?\s|fwd:?\s)?(.*)$/i, "Re: $2");
-    const extended_body = '<div><p>&#160;</p></div><div><hr /></div>' +
+  prepBody(body, envelope) {
+    return '<div><p>&#160;</p></div><div><hr /></div>' +
       `<div style="font-weight: bold;">From: ${envelope.from[0]}</div>` +
       `<div style="font-weight: bold;">To: ${envelope.to.join("; ")}</div>` +
       `<div style="font-weight: bold;">Date: ${envelope.date}</div>` +
       `<div style="font-weight: bold;">Subject: ${envelope.subject}</div><div><p>&#160;</p></div>` +
       body.replace(/<!--[\s\S]*?-->/gm, "").replace(/&lt;!--[\s\S]*?--&gt;/gm, "")
-        .replace(/[\s\S]*<body>/m, "").replace(/<\/body>[\s\S]*/m, "");
+      .replace(/[\s\S]*<body>/m, "").replace(/<\/body>[\s\S]*/m, "");
+  }
+
+  launchComposer(recipient, body, envelope, other_headers, type) {
+    const prefix = type === "forward" ? "Fwd: " : "Re: ";
+    const subject = prefix + envelope.subject.replace(/^(re:?\s|fwd?:?\s)?/i, "");
+    const extended_body = this.prepBody(body, envelope);
     this.setState({
       ...this.state,
       new_envelope: envelope,
       subject: subject,
       recipient: recipient,
       body: extended_body,
-      type: "reply",
+      type: type,
       other_headers: other_headers,
       composeVisible: true
     });
   }
 
+  reply = (recipient, body, envelope, other_headers) => {
+    this.launchComposer(recipient, body, envelope, other_headers, "reply");
+  }
+
+  replyAll = (recipient, body, envelope, other_headers) => {
+    this.launchComposer(recipient, body, envelope, other_headers, "replyAll");
+  }
+
   forward = (recipient, body, envelope, other_headers) => {
-    // const subject = envelope.subject.replace(/^(re:?\s|fwd:?\s)?(.*)$/i, "Fwd: $2");
-    return "not implemented yet";
+    this.launchComposer(recipient, body, envelope, other_headers, "forward");
   }
 
   render() {
@@ -137,6 +149,8 @@ class Email extends React.Component {
           updateOverlay={this.showOverlay}
           setMessage={this.props.setMessage}
           reply={this.reply}
+          replyAll={this.replyAll}
+          forward={this.forward}
         />
         <button className="compose-button" onClick={this.newEmail}>New Email</button>
         {compose_overlay}

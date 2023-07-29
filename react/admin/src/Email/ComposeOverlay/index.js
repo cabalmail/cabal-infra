@@ -48,35 +48,46 @@ class ComposeOverlay extends React.Component {
     this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
   }
 
-  // setState(state) {
-  //   var raw_content = convertToRaw(state.editorState.getCurrentContent());
-  //   var other_state = {
-  //     // editorState omitted intentionally
-  //     addresses: state.hasOwnProperty('addresses') ? state.addresses : this.state.addresses,
-  //     address: state.hasOwnProperty('address') ? state.address : this.state.address,
-  //     recipient: state.hasOwnProperty('recipient') ? state.recipient : this.state.recipient,
-  //     validation_fail: state.hasOwnProperty('validation_fail') ? state.validation_fail : this.state.validation_fail,
-  //     To: state.hasOwnProperty('To') ? state.To : this.state.To,
-  //     CC: state.hasOwnProperty('CC') ? state.CC : this.state.CC,
-  //     BCC: state.hasOwnProperty('BCC') ? state.BCC : this.state.BCC,
-  //     Subject: state.hasOwnProperty('Subject') ? state.Subject : this.state.Subject,
-  //     showRequest: state.hasOwnProperty('showRequest') ? state.showRequest : this.state.showRequest
-  //   };
-  //   try {
-  //     localStorage.setItem(STATE_KEY, JSON.stringify(other_state));
-  //   } catch (e) {
-  //     console.error(e);
-  //   }
-  //   super.setState(state);
-  // }
+  // [...new Set([
+  //                             ...(oh.references || []),
+  //                             ...(oh.message_id || []),
+  //                             ...(oh.in_reply_to || [])
+  //                             ])]
 
   componentDidMount() {
-    this.setState({
-      ...this.state,
-      address: this.props.recipient,
-      To: this.props.envelope.from,
-      Subject: this.props.subject
-    });
+    switch (this.props.type) {
+      case "reply":
+        this.setState({
+          ...this.state,
+          address: this.props.recipient,
+          To: this.props.envelope.from,
+          CC: [],
+          Subject: this.props.subject
+        });
+        break;
+      case "replyAll":
+        this.setState({
+          ...this.state,
+          address: this.props.recipient,
+          To: this.props.envelope.from,
+          CC: this.props.envelope.cc,
+          Subject: this.props.subject
+        });
+        break;
+      case "forward":
+        this.setState({
+          ...this.state,
+          address: this.props.recipient,
+          To: [],
+          CC: [],
+          Subject: this.props.subject
+        });
+        break;
+      default:
+        // This must be a new message
+        this.setState({...this.state, EMPTY_STATE});
+        break;
+    }
     this.api.getAddresses().then(data => {
       try {
         localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
@@ -88,9 +99,6 @@ class ComposeOverlay extends React.Component {
         addresses: data.data.Items.map(a => a.address).sort()
       });
     });
-  }
-
-  componentDidUpdate(prevProps, _prevState) {
   }
 
   handleSubmit = (e) => {
@@ -170,7 +178,10 @@ class ComposeOverlay extends React.Component {
       window.getSelection().getRangeAt(0).commonAncestorContainer.parentNode
         .scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
     } catch (e) {
-      console.error(e);
+      if (e.name !== "IndexSizeError") {
+        // OK to ignore IndexSizeError
+        console.error(e);
+      }
     }
   };
 
