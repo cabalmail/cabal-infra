@@ -275,8 +275,8 @@ class MessageOverlay extends React.Component {
         <dd className="collapsable bcc">{this.state.recipient}</dd>
       </>
     ) : ""
-    const revoke = this.state.addresses.indexOf(this.state.recipient) !== -1 ? (
-      <dt><button
+    const revoke = this.state.addresses.map(a => a.address).indexOf(this.state.recipient) !== -1 ? (
+      <dt className="collapsable"><button
         className="revoke collapsable"
         onClick={this.revoke}
         value={this.state.recipient}
