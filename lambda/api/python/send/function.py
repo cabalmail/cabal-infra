@@ -5,10 +5,6 @@ from email.message import EmailMessage
 from email.utils import formatdate
 from helper import get_imap_client # pylint: disable=import-error
 from helper import get_mpw # pylint: disable=import-error
-# Flow:
-     # - place in outbox
-     # - send via SMTP
-     # - on succes, move from outbox to Sent
 
 def handler(event, _context):
     '''Sends an email message'''
@@ -16,11 +12,14 @@ def handler(event, _context):
     # Compose message
     body = json.loads(event['body'])
     user = event['requestContext']['authorizer']['claims']['cognito:username']
-    # TODO: Check if user is authorized to send on behalf of body['sender']
+    # TODO: Check if user is authorized to send on behalf of body['sender'] # pylint: disable=fixme
 
-    msg = compose_message(body['subject'], body['sender'], {"to": ','.join(body['to_list']),
-                          "cc": ','.join(body['cc_list']), "bcc": ','.join(body['bcc_list']) },
-                          body['text'], body['html'])
+    msg = compose_message(body['subject'], body['sender'], {
+                            "to": ','.join(body['to_list']),
+                            "cc": ','.join(body['cc_list']),
+                            "bcc": ','.join(body['bcc_list'])
+                          },
+                          body['other_headers'], body['text'], body['html'])
 
     # Establish IMAP connection
     client = get_imap_client(body['host'], user, 'INBOX')
@@ -49,7 +48,7 @@ def handler(event, _context):
         })
     }
 
-def compose_message(subject, sender, recipients, text, html):
+def compose_message(subject, sender, recipients, headers, text, html):
     """Create a message object"""
     msg = EmailMessage()
     msg['Subject'] = subject
@@ -60,6 +59,12 @@ def compose_message(subject, sender, recipients, text, html):
         msg['Cc'] = recipients['cc']
     if len(recipients['bcc']):
         msg['Bcc'] = recipients['bcc']
+    if len(headers['message_id']):
+        msg['Message-Id'] = headers['message_id'][0]
+    if len(headers['in_reply_to']):
+        msg['In-Reply-To'] = headers['in_reply_to'][0]
+    if len(headers['references']):
+        msg['references'] = ' '.join(headers['references'])
     msg['Date'] = formatdate(localtime=True)
     msg.set_content(text, subtype='plain')
     msg.add_alternative(html, subtype='html')
