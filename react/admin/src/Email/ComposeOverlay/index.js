@@ -48,12 +48,6 @@ class ComposeOverlay extends React.Component {
     this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
   }
 
-  // [...new Set([
-  //                             ...(oh.references || []),
-  //                             ...(oh.message_id || []),
-  //                             ...(oh.in_reply_to || [])
-  //                             ])]
-
   componentDidMount() {
     switch (this.props.type) {
       case "reply":
@@ -71,7 +65,7 @@ class ComposeOverlay extends React.Component {
           address: this.props.recipient,
           To: [...new Set([
                 this.props.envelope.from,
-                this.props.envelope.to || []
+                this.props.envelope.to || [] // TODO: Remove this.props.recipient from to
               ])],
           CC: this.props.envelope.cc,
           Subject: this.props.subject
@@ -349,6 +343,7 @@ class ComposeOverlay extends React.Component {
   }
 
   obscureEmail(address) {
+    console.log(address);
     return address.split('').map((c) => {
       switch (c) {
         case '.':
