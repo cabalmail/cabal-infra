@@ -286,6 +286,12 @@ class MessageOverlay extends React.Component {
         <dd className="collapsable">{this.props.envelope.date}</dd>
         <dt className="collapsable">Subject</dt>
         <dd>{this.props.envelope.subject}</dd>
+        <dt><button
+              className="revoke collapsable"
+              onClick={this.revoke}
+              value={this.state.recipient}
+              title={`Revoke ${this.state.recipient}`}
+              >🗑️ Revoke {this.state.recipient}</button></dt>
       </dl>
     );
   }
@@ -353,8 +359,6 @@ class MessageOverlay extends React.Component {
               forward={this.forward}
               setMessage={this.props.setMessage}
             />
-            <button onClick={this.revoke} value={this.state.recipient} title={`Revoke ${this.state.recipient}`}
-            >🗑️ Revoke {this.state.recipient}</button>
             <button
               onClick={this.hide}
               className="close_overlay"

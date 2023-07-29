@@ -137,6 +137,10 @@ div.message_overlay .message_attachments button.attachment span.attachment_type 
   color: #f00;
 }
 
+.revoke {
+  width: auto;
+}
+
 div.message_overlay div.message_raw {
   background-color: #ffe !important;
 }
