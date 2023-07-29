@@ -17,9 +17,12 @@ def handler(event, _context):
     msg = compose_message(body['subject'], body['sender'], {
                             "to": ','.join(body['to_list']),
                             "cc": ','.join(body['cc_list']),
-                            "bcc": ','.join(body['bcc_list'])
+                            "bcc": ','.join(body['bcc_list']),
+                            "message_id": body['other_headers']['message_id'],
+                            "in_reply_to": body['other_headers']['in_reply_to'],
+                            "references": body['other_headers']['references']
                           },
-                          body['other_headers'], body['text'], body['html'])
+                          body['text'], body['html'])
 
     # Establish IMAP connection
     client = get_imap_client(body['host'], user, 'INBOX')
@@ -48,17 +51,17 @@ def handler(event, _context):
         })
     }
 
-def compose_message(subject, sender, recipients, headers, text, html):
+def compose_message(subject, sender, headers, text, html):
     """Create a message object"""
     msg = EmailMessage()
     msg['Subject'] = subject
     msg['From'] = sender
-    if len(recipients['to']):
-        msg['To'] = recipients['to']
-    if len(recipients['cc']):
-        msg['Cc'] = recipients['cc']
-    if len(recipients['bcc']):
-        msg['Bcc'] = recipients['bcc']
+    if len(headers['to']):
+        msg['To'] = headers['to']
+    if len(headers['cc']):
+        msg['Cc'] = headers['cc']
+    if len(headers['bcc']):
+        msg['Bcc'] = headers['bcc']
     if len(headers['message_id']):
         msg['Message-Id'] = headers['message_id'][0]
     if len(headers['in_reply_to']):
