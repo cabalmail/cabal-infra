@@ -69,7 +69,10 @@ class ComposeOverlay extends React.Component {
         this.setState({
           ...this.state,
           address: this.props.recipient,
-          To: this.props.envelope.from,
+          To: [...new Set([
+                this.props.envelope.from,
+                this.props.envelope.to || []
+              ])],
           CC: this.props.envelope.cc,
           Subject: this.props.subject
         });
