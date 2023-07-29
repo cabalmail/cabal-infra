@@ -3,6 +3,7 @@ import RichMessage from './RichMessage';
 import Actions from '../Actions';
 import ApiClient from '../../ApiClient';
 import './MessageOverlay.css';
+import { ADDRESS_LIST } from '../constants';
 
 class MessageOverlay extends React.Component {
 
@@ -21,9 +22,21 @@ class MessageOverlay extends React.Component {
       recipient: "",
       message_id: [],
       in_reply_to: [],
-      references: []
+      references: [],
+      addresses: []
     }
     this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
+  }
+
+  componentDidMount() {
+    this.api.getAddresses().then(data => {
+      try {
+        localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
+      } catch (e) {
+        console.log(e);
+      }
+      this.setState({ ...this.state, addresses: data.data.Items });
+    });
   }
 
   componentDidUpdate(prevProps, prevState) {
@@ -162,6 +175,26 @@ class MessageOverlay extends React.Component {
   forward = () => {
     const params = this.createPayload();
     this.props.forward(params[0], params[1], params[2], params[3]);
+  }
+
+  revokeAddress = (a) => {
+    return this.api.deleteAddress(a.address, a.subdomain, a.tld, a.public_key);
+  }
+
+  revoke = (e) => {
+    e.preventDefault();
+    const address = e.target.value;
+    this.revokeAddress(this.state.addresses.find(a => {
+      return a.address === address;
+    })).then(data => {
+      this.props.setMessage("Successfully revoked address.", false);
+      this.setState({...this.state, addresses: this.state.addresses.filter(a => {
+        return a.address !== address;
+      })});
+    }, reason => {
+      this.props.setMessage("Request to revoke address failed.", true);
+      console.error("Promise rejected", reason);
+    });
   }
 
   renderView() {
@@ -320,6 +353,8 @@ class MessageOverlay extends React.Component {
               forward={this.forward}
               setMessage={this.props.setMessage}
             />
+            <button onClick={this.revoke} value={this.state.recipient} title={`Revoke ${this.state.recipient}`}
+            >🗑️ Revoke {this.state.recipient}</button>
             <button
               onClick={this.hide}
               className="close_overlay"
