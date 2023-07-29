@@ -225,19 +225,19 @@ class MessageOverlay extends React.Component {
         <dd className="collapsable">{this.props.envelope.cc.join("; ")}</dd>
       </>
     ) : ""
-    const bcc = this.props.envelope.to.indexOf(this.props.envelope.recipient) === -1 ? (
+    const bcc = this.props.envelope.to.indexOf(this.state.recipient) === -1 ? (
       <>
-        <dt className="collapsable">BCC</dt>
-        <dd className="collapsable">{this.props.envelope.recipient}</dd>
+        <dt className="collapsable bcc">BCC</dt>
+        <dd className="collapsable bcc">{this.state.recipient}</dd>
       </>
     ) : ""
     return (
       <dl>
-        {bcc}
         <dt className="collapsable">From</dt>
         <dd className="collapsable">{this.props.envelope.from.join("; ")}</dd>
         <dt className="collapsable">To</dt>
         <dd className="collapsable">{this.props.envelope.to.join("; ")}</dd>
+        {bcc}
         {cc}
         <dt className="collapsable">Received</dt>
         <dd className="collapsable">{this.props.envelope.date}</dd>

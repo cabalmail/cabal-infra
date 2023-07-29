@@ -133,6 +133,10 @@ div.message_overlay .message_attachments button.attachment span.attachment_type 
   display: none;
 }
 
+.bcc {
+  font-color: #f00;
+}
+
 div.message_overlay div.message_raw {
   background-color: #ffe !important;
 }
