@@ -212,6 +212,7 @@ class MessageOverlay extends React.Component {
   }
 
   renderHeader() {
+    console.log(this.props.envelope);
     return (
       <dl>
         <dt className="collapsable">To</dt>
