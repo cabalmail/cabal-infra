@@ -222,7 +222,7 @@ class MessageOverlay extends React.Component {
     const to = this.props.envelope.to.length ? (
       <>
         <dt className="collapsable">To</dt>
-        <dd className="collapsable">{this.props.envelope.cc.join("; ")}</dd>
+        <dd className="collapsable">{this.props.envelope.to.join("; ")}</dd>
       </>
     ) : (
       <>
