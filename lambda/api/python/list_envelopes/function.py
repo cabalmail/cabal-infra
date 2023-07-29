@@ -20,6 +20,7 @@ def handler(event, _context):
             "subject": decode_subject(envelope.subject),
             "from": decode_address(envelope.from_),
             "to": decode_address(envelope.to),
+            "cc": decode_address(envelope.cc),
             "flags": decode_flags(data[b'FLAGS']),
             "struct": decode_body_structure(data[b'BODYSTRUCTURE']),
             "priority": [f"priority-{s}" for s in priority_header.split() if s.isdigit()]
@@ -55,6 +56,8 @@ def decode_subject(data):
 def decode_address(data):
     '''Converts a tuple of Address objects to a simple list of strings'''
     return_value = []
+    if isinstance(data, type(None)):
+        return return_value
     for fragment in data:
         try:
             return_value.append(f"{fragment.mailbox.decode()}@{fragment.host.decode()}")
