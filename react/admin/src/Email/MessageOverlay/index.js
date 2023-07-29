@@ -215,10 +215,12 @@ class MessageOverlay extends React.Component {
     console.log(this.props.envelope);
     return (
       <dl>
-        <dt className="collapsable">To</dt>
-        <dd className="collapsable">{this.props.envelope.to.join("; ")}</dd>
         <dt className="collapsable">From</dt>
         <dd className="collapsable">{this.props.envelope.from.join("; ")}</dd>
+        <dt className="collapsable">To</dt>
+        <dd className="collapsable">{this.props.envelope.to.join("; ")}</dd>
+        <dt className="collapsable">CC</dt>
+        <dd className="collapsable">{this.props.envelope.cc.join("; ")}</dd>
         <dt className="collapsable">Received</dt>
         <dd className="collapsable">{this.props.envelope.date}</dd>
         <dt className="collapsable">Subject</dt>
