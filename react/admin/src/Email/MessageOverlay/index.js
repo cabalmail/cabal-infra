@@ -275,6 +275,14 @@ class MessageOverlay extends React.Component {
         <dd className="collapsable bcc">{this.state.recipient}</dd>
       </>
     ) : ""
+    const revoke = this.state.addresses.indexOf(this.state.recipient) !== -1 ? (
+      <dt><button
+        className="revoke collapsable"
+        onClick={this.revoke}
+        value={this.state.recipient}
+        title={`Revoke ${this.state.recipient}`}
+        >🗑️ Revoke {this.state.recipient}</button></dt>
+      ) :""
     return (
       <dl>
         <dt className="collapsable">From</dt>
@@ -286,12 +294,7 @@ class MessageOverlay extends React.Component {
         <dd className="collapsable">{this.props.envelope.date}</dd>
         <dt className="collapsable">Subject</dt>
         <dd>{this.props.envelope.subject}</dd>
-        <dt><button
-              className="revoke collapsable"
-              onClick={this.revoke}
-              value={this.state.recipient}
-              title={`Revoke ${this.state.recipient}`}
-              >🗑️ Revoke {this.state.recipient}</button></dt>
+        {revoke}
       </dl>
     );
   }
