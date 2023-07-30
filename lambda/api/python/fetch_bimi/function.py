@@ -1,21 +1,21 @@
 '''Checks for the presence of a BIMI record and returns the image URL if found'''
 import json
-import dns.resolver
+import dns.resolver # pylint: disable=import-error
 def handler(event, _context):
     '''Checks for the presence of a BIMI record and returns the image URL if found'''
-    qs = event['queryStringParameters']
-    sender_domain = qs['sender_domain']
+    query_string = event['queryStringParameters']
+    sender_domain = query_string['sender_domain']
     sender_domain_parts = sender_domain.split(".")
-    l = len(sender_domain_parts)
-    for x in range(l):
-        domain = ".".join(sender_domain_parts[x:])
+    length = len(sender_domain_parts)
+    for part in range(length):
+        domain = ".".join(sender_domain_parts[part:])
         print(domain)
         try:
             answer = dns.resolver.query(f'default._bimi.{domain}', 'TXT')
             return {
                 "statusCode": 200,
                 "body": json.dumps({
-                    "url": answer[0].__str__().split(";")[1].split("=")[1]
+                    "url": str(answer[0]).split(";")[1].split("=")[1]
                 })
             }
         except dns.resolver.NXDOMAIN:
@@ -26,7 +26,7 @@ def handler(event, _context):
     return {
         "statusCode": 200,
         "body": json.dumps({
-            "url": f'https://www.{".".join(sender_domain_parts[l-2:])}/favicon.ico'
+            "url": f'https://www.{".".join(sender_domain_parts[length-2:])}/favicon.ico'
         })
     }
     

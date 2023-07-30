@@ -1,6 +1,6 @@
 locals {
   lambdas = {
-    list_folders     = {
+    list_folders       = {
       runtime   = "python3.9"
       type      = "python"
       method    = "GET"
@@ -8,7 +8,7 @@ locals {
       cache     = true
       cache_ttl = 60
     },
-    list_messages    = {
+    list_messages      = {
       runtime   = "python3.9"
       type      = "python"
       method    = "GET"
@@ -16,7 +16,7 @@ locals {
       cache     = true
       cache_ttl = 15
     },
-    list_envelopes   = {
+    list_envelopes     = {
       runtime   = "python3.9"
       type      = "python"
       method    = "GET"
@@ -24,7 +24,7 @@ locals {
       cache     = true
       cache_ttl = 3600
     },
-    fetch_message    = {
+    fetch_message      = {
       runtime   = "python3.9"
       type      = "python"
       method    = "GET"
@@ -32,7 +32,7 @@ locals {
       cache     = true
       cache_ttl = 3600
     },
-    fetch_bimi    = {
+    fetch_bimi         = {
       runtime   = "python3.9"
       type      = "python"
       method    = "GET"
@@ -40,7 +40,7 @@ locals {
       cache     = true
       cache_ttl = 3600
     },
-    list_attachments = {
+    list_attachments   = {
       runtime   = "python3.9"
       type      = "python"
       method    = "GET"
@@ -48,7 +48,7 @@ locals {
       cache     = true
       cache_ttl = 3600
     },
-    fetch_attachment = {
+    fetch_attachment   = {
       runtime   = "python3.9"
       type      = "python"
       method    = "GET"
@@ -64,7 +64,7 @@ locals {
       cache     = true
       cache_ttl = 3600
     },
-    set_flag = {
+    set_flag           = {
       runtime   = "python3.9"
       type      = "python"
       method    = "PUT"
@@ -72,7 +72,7 @@ locals {
       cache     = true
       cache_ttl = 0
     },
-    new_folder = {
+    new_folder         = {
       runtime   = "python3.9"
       type      = "python"
       method    = "PUT"
@@ -80,7 +80,7 @@ locals {
       cache     = true
       cache_ttl = 0
     },
-    delete_folder = {
+    delete_folder      = {
       runtime   = "python3.9"
       type      = "python"
       method    = "DELETE"
@@ -88,7 +88,7 @@ locals {
       cache     = true
       cache_ttl = 0
     },
-    move_messages = {
+    move_messages      = {
       runtime   = "python3.9"
       type      = "python"
       method    = "PUT"
@@ -96,7 +96,15 @@ locals {
       cache     = true
       cache_ttl = 0
     },
-    list             = {
+    send               = {
+      runtime   = "python3.9"
+      type      = "python"
+      method    = "PUT"
+      memory    = 128
+      cache     = true
+      cache_ttl = 0
+    },
+    list               = {
       runtime   = "nodejs14.x"
       type      = "nodejs"
       method    = "GET"
@@ -104,7 +112,7 @@ locals {
       cache     = true
       cache_ttl = 60
     },
-    new              = {
+    new                = {
       runtime   = "nodejs14.x"
       type      = "nodejs"
       method    = "POST"
@@ -112,7 +120,7 @@ locals {
       cache     = false
       cache_ttl = 0
     },
-    revoke           = {
+    revoke             = {
       runtime   = "nodejs14.x"
       type      = "nodejs"
       method    = "DELETE"

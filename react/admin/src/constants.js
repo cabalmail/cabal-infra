@@ -76,3 +76,20 @@ export const UNFLAGGED = {
   action: "unflag",
   icon: "📪"
 };
+export const REPLY = {
+  css: "reply",
+  description: "Reply",
+  icon: "👈"
+}
+export const REPLYALL = {
+  css: "replyall",
+  description: "Reply All",
+  icon: "👈👈"
+}
+export const FORWARD = {
+  css: "forward",
+  description: "Forward",
+  icon: "👉"
+}
+export const FOLDER_LIST = "folder_list";
+export const ADDRESS_LIST = "address_list";

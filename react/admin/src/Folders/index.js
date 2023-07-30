@@ -1,6 +1,6 @@
 import React from 'react';
 import ApiClient from '../ApiClient';
-import { PERMANENT_FOLDERS } from '../constants';
+import { PERMANENT_FOLDERS, FOLDER_LIST } from '../constants';
 import './Folders.css';
 
 /**
@@ -21,6 +21,11 @@ class Folders extends React.Component {
   componentDidMount() {
     const response = this.api.getFolderList();
     response.then(data => {
+      try {
+        localStorage.setItem(FOLDER_LIST, JSON.stringify(data));
+      } catch (e) {
+        console.log(e);
+      }
       this.setState({ ...this.state, folders: data.data });
     }).catch(e => {
       console.log(e);

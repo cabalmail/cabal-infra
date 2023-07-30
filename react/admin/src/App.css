@@ -1,188 +1,21 @@
-@media (min-width: 900px) and (prefers-color-scheme: dark) {
-  .email_list,
-  .email_list :not(.highlight *,
-                   .active *,
-                   .default *,
-                   .selected *,
-                   .highlight *,
-                   .active *,
-                   .default *,
-                   .selected *,
-                   button,
-                   select,
-                   span.checked,
-                   span.unchecked) {
-    background-color: #181818 !important;
-  }
-}
-
-@media (prefers-color-scheme: dark) {
-  body, a, button, select, div, label {
-    color: #aaa;
-    background-color: #200;
-    border-color: #333;
-  }
-  input, select, option {
-    color: #ccc;
-    background-color: #000;
-  }
-  button {
-    color: #ccc;
-    background-color: #111;
-  }
-  ul.message-list div.message-subject {
-    color: #ccc;
-  }
-  ul.message-list li.Seen div.message-subject {
-    color: #aaa;
-  }
-  .nav, .nav .item {
-    background-color: #000;
-  }
-  body .highlight, body .active, body .default,
-  body .nav .active, body ul.message-list li.selected,
-  body ul.message-list li.selected * {
-    color: #dda;
-    background-color: #300;
-    border-color: #800;
-  }
-  ul.message-list li.Seen.selected div.message-subject {
-    color: #fff
-  }
-  ul.message-list div.message-subject input[type=checkbox]:not(:checked) ~ label .unchecked,
-  ul.message-list div.message-subject input[type=checkbox]:checked ~ label .checked {
-    box-shadow: inset 0 0 0.35em #200;
-    background-color: #400;
-    border-color: #aaa;
-  }
-  /* forced */
-  .forced * {
-    color: #aaa !important;
-  }
-  /* inverted */
-  body.inverted, a.inverted, button.inverted, select.inverted, div.inverted,
-  .inverted a, .inverted button, .inverted select, .inverted div {
-    color: #222;
-    background-color: #ffe;
-    border-color: #999;
-  }
-  input.inverted, select.inverted, option.inverted,
-  .inverted input, .inverted select, .inverted option {
-    color: #000;
-    background-color: #ffd;
-  }
-  button.inverted, .inverted button {
-    color: #333;
-    background-color: #ddd;
-  }
-  .inverted .nav, .inverted .nav .item {
-    color: #aaa;
-    background-color: #000;
-  }
-  body .inverted .highlight, body .inverted .active, body .inverted .default,
-  body .inverted .nav .active {
-    color: #000;
-    background-color: #a33;
-    border-color: #d00;
-  }
-}
-
-@media (min-width: 900px) and (prefers-color-scheme: light) {
-  .email_list,
-  .email_list :not(.highlight *,
-                   .active *,
-                   .default *,
-                   .selected *,
-                   .highlight *,
-                   .active *,
-                   .default *,
-                   .selected *,
-                   button,
-                   select,
-                   span.checked,
-                   span.unchecked) {
-    background-color: #e8e8e8 !important;
-  }
-}
-
-@media (prefers-color-scheme: light) {
-  body, a, button, select, div, label {
-    color: #222;
-    background-color: #ffe;
-    border-color: #999;
-  }
-  input, select, option {
-    color: #000;
-    background-color: #ffd;
-  }
-  button {
-    color: #333;
-    background-color: #ddd;
-  }
-  ul.message-list div.message-subject {
-    color: #222;
-  }
-  ul.message-list li.Seen div.message-subject {
-    color: #444;
-  }
-  .nav, .nav .item {
-    color: #aaa;
-    background-color: #000;
-  }
-  body .highlight, body .active, body .default,
-  body .nav .active, body ul.message-list li.selected,
-  body ul.message-list li.selected * {
-    color: #000;
-    background-color: #a33;
-    border-color: #d00;
-  }
-  ul.message-list li.Seen.selected div.message-subject {
-    color: #000
-  }
-  ul.message-list div.message-subject input[type=checkbox]:not(:checked) ~ label .unchecked,
-  ul.message-list div.message-subject input[type=checkbox]:checked ~ label .checked {
-    box-shadow: inset 0 0 0.35em #fff;
-    background-color: #ffe;
-    border-color: #222;
-  }
-  /* forced */
-  .forced * {
-    color: #222 !important;
-  }
-  /* inverted */
-  body.inverted, a.inverted, button.inverted, select.inverted, div.inverted,
-  .inverted a, .inverted button, .inverted select, .inverted div {
-    color: #aaa;
-    background-color: #200;
-    border-color: #333;
-  }
-  input.inverted, select.inverted, option.inverted,
-  .inverted input, .inverted select, .inverted option {
-    color: #ccc;
-    background-color: #000;
-  }
-  button.inverted, .inverted button {
-    color: #ccc;
-    background-color: #111;
-  }
-  .inverted .nav, .inverted .nav .item {
-    background-color: #000;
-  }
-  body .inverted .highlight, body .inverted .active, body .inverted .default,
-  body .inverted .nav .active {
-    color: #dda;
-    background-color: #300;
-    border-color: #800;
-  }
-}
-
 body {
   margin: 0;
 }
 
-* {
+*:not(.wysiwyg-editor *, .wysiwyg-toolbar *) {
   font-family: 'Tahoma', 'Verdana', 'Trebuchet MS', 'Arial';
   font-size: small;
+  text-size-adjust: none !important;
+  -webkit-text-size-adjust: none !important;
+}
+
+/* Thank you https://css-tricks.com/copy-the-browsers-native-focus-styles/ */
+input:focus, input:focus-visible,
+select:focus, select:focus-visible,
+ul.recipient-list:focus-within {
+  outline-color: Highlight !important;
+  outline-color: -webkit-focus-ring-color !important;
+  outline-style: auto;
 }
 
 a {
@@ -198,19 +31,35 @@ hr {
   overflow: scroll;
 }
 
-input, select, button, option {
+input, select, button, option, ul.recipient-list {
   padding: 0.5em;
   border-width: 1px;
   border-style: solid;
+}
+
+input::placeholder {
+  font-style: italic;
+  color: #888;
 }
 
 button, button * {
   font-size: x-small;
 }
 
-input, select, option {
+* {
   border-radius: 0.2em;
+}
+
+img {
+  border-radius: 0;
+}
+
+input, select, option {
   width: 30em;
+}
+
+body form div.wysiwyg-toolbar input, ul.recipient-list {
+  width: auto;
 }
 
 select {
@@ -233,4 +82,28 @@ button {
 
 fieldset {
   border: 0;
+}
+
+label input[type=radio] {
+  display: none;
+}
+
+label input[type=radio] ~ .radio-button:after {
+  content: " ";
+  height: 1em;
+  width: 1em;
+  border: 1px solid;
+  border-radius: 0.5em;
+  display: inline-block;
+  margin-right: 0.3em;
+  background-color: rgba(0,0,0,0);
+}
+
+label input[type=radio]:checked ~ .radio-button:after {
+  background-color: currentcolor;
+}
+
+input.invalid select.invalid {
+  border-color: #f00;
+  box-shadow: inset 0 0 0.5em #f00;
 }

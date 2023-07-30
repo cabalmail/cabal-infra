@@ -40,17 +40,10 @@ Parameters:  ()
 
 Returns: null
 
-### submitRequest
-Modifiers: none
-
-Parameters: e (null)
-
-Returns: null
-
 ### handleSubmit
 Modifiers: none
 
-Parameters: e (null)
+Parameters:  ()
 
 Returns: null
 

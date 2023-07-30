@@ -1,25 +1,26 @@
 '''Retrieves IMAP envelopes for a user given a folder and list of message ids'''
 import json
-from datetime import datetime
 from email.header import decode_header
-from helper import get_imap_client
+from helper import get_imap_client # pylint: disable=import-error
 
 def handler(event, _context):
     '''Retrieves IMAP envelopes for a user given a folder and list of message ids'''
-    qs = event['queryStringParameters']
-    ids = json.loads(qs['ids'])
-    user = event['requestContext']['authorizer']['claims']['cognito:username'];
-    client = get_imap_client(qs['host'], user, qs['folder'], True)
+    query_string = event['queryStringParameters']
+    ids = json.loads(query_string['ids'])
+    user = event['requestContext']['authorizer']['claims']['cognito:username']
+    client = get_imap_client(query_string['host'], user, query_string['folder'], True)
     envelopes = {}
-    for msgid, data in client.fetch(ids, ['ENVELOPE', 'FLAGS', 'BODYSTRUCTURE', 'BODY[HEADER.FIELDS (X-PRIORITY)]']).items():
+    flags = ['ENVELOPE', 'FLAGS', 'BODYSTRUCTURE', 'BODY[HEADER.FIELDS (X-PRIORITY)]']
+    for msgid, data in client.fetch(ids, flags).items():
         envelope = data[b'ENVELOPE']
         priority_header = data[b'BODY[HEADER.FIELDS (X-PRIORITY)]'].decode()
         envelopes[msgid] = {
             "id": msgid,
-            "date": envelope.date.__str__(),
+            "date": str(envelope.date),
             "subject": decode_subject(envelope.subject),
             "from": decode_address(envelope.from_),
             "to": decode_address(envelope.to),
+            "cc": decode_address(envelope.cc),
             "flags": decode_flags(data[b'FLAGS']),
             "struct": decode_body_structure(data[b'BODYSTRUCTURE']),
             "priority": [f"priority-{s}" for s in priority_header.split() if s.isdigit()]
@@ -41,12 +42,12 @@ def decode_subject(data):
     except UnicodeDecodeError:
         return "[[¿?]]"
     subject_strings = []
-    for p in subject_parts:
+    for part in subject_parts:
         try:
-            if isinstance(p[0], bytes):
-                subject_strings.append(str(p[0], p[1] or 'utf-8'))
-            if isinstance(p[0], str):
-                subject_strings.append(p[0])
+            if isinstance(part[0], bytes):
+                subject_strings.append(str(part[0], part[1] or 'utf-8'))
+            if isinstance(part[0], str):
+                subject_strings.append(part[0])
         except UnicodeDecodeError:
             subject_strings.append("[¿?]")
 
@@ -54,31 +55,33 @@ def decode_subject(data):
 
 def decode_address(data):
     '''Converts a tuple of Address objects to a simple list of strings'''
-    r = []
-    for f in data:
+    return_value = []
+    if isinstance(data, type(None)):
+        return return_value
+    for fragment in data:
         try:
-            r.append(f"{f.mailbox.decode()}@{f.host.decode()}")
-        except:
-            r.append("undisclosed-recipients")
-    return r
+            return_value.append(f"{fragment.mailbox.decode()}@{fragment.host.decode()}")
+        except: # pylint: disable=bare-except
+            return_value.append("undisclosed-recipients")
+    return return_value
 
 def decode_flags(data):
     '''Converts array of bytes to array of strings'''
-    s = []
-    for b in data:
-        s.append(b.decode())
-    return s
+    return_value = []
+    for flag in data:
+        return_value.append(flag.decode())
+    return return_value
 
 def decode_body_structure(data):
     '''Converts bytes to strings in body structure'''
-    s = []
-    for i in data:
-        if isinstance(i, list):
-            s.append(decode_body_structure(i))
-        elif isinstance(i, tuple):
-            s.append(decode_body_structure(i))
-        elif isinstance(i, bytes):
-            s.append(i.decode())
+    return_value = []
+    for obj in data:
+        if isinstance(obj, list):
+            return_value.append(decode_body_structure(obj))
+        elif isinstance(obj, tuple):
+            return_value.append(decode_body_structure(obj))
+        elif isinstance(obj, bytes):
+            return_value.append(obj.decode())
         else:
-          s.append(i)
-    return s
+            return_value.append(obj)
+    return return_value

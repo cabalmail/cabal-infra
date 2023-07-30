@@ -1,0 +1,84 @@
+---
+name: Build and Deploy React App
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [trigger_build_dev]
+  push:
+    branches:
+      - '0.3.0'
+      - main
+      - stage
+    paths:
+      - 'react/admin/public'
+      - 'react/admin/public/*'
+      - 'react/admin/public/*/**'
+      - 'react/admin/src'
+      - 'react/admin/src/*'
+      - 'react/admin/src/*/**'
+      - 'react/admin/package.json'
+      - '.github/workflows/react.yml'
+      - '.github/scripts/react-documentation.sh'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'refs/heads/main' && 'prod' || ( github.ref_name == 'refs/heads/stage' && 'stage' || 'development' ) }}
+    steps:
+    - name: checkout
+      uses: actions/checkout@main
+    - name: build
+      env:
+        NODE_ENV: ${{ github.ref_name == 'refs/heads/main' && 'prod' || ( github.ref_name == 'refs/heads/stage' && 'stage' || 'development' ) }}
+      run: cd react/admin && yarn install && yarn build --profile
+    - name: package
+      run: cd react/admin && tar czvf ../../react_app.tar.gz build/
+    - name: store-artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: react-app
+        path: react_app.tar.gz
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'refs/heads/main' && 'prod' || ( github.ref_name == 'refs/heads/stage' && 'stage' || 'development' ) }}
+    needs: build
+    steps:
+    - name: configure-aws-cli
+      run: |
+        aws configure --profile deploy_react <<-EOF > /dev/null 2>&1
+        ${{ secrets.AWS_ACCESS_KEY_ID }}
+        ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        ${{ secrets.AWS_REGION }}
+        json
+        EOF
+    - name: retrieve-artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: react-app
+    - name: unpack
+      run: tar xzvf react_app.tar.gz
+    - name: upload
+      run: aws s3 sync build "s3://admin.$(aws ssm get-parameter --name '/cabal/control_domain_zone_name' --profile deploy_react | jq -r '.Parameter.Value')" --profile deploy_react --no-progress
+    - name: invalidate-cache
+      run: |
+        aws cloudfront create-invalidation \
+        --distribution-id "$(aws ssm get-parameter --name "/cabal/react-config/cf-distribution" --profile deploy_react | jq -r '.Parameter.Value')" \
+        --paths '/*' \
+        --profile deploy_react
+  document:
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@main
+    - name: install
+      run: ./.github/scripts/react-documentation.sh
+    - name: Push
+      run: |
+        MYNAME="${{github.event.pusher.name}} (automated)"
+        MYEMAIL="${{github.event.pusher.email}}"
+        git config --global user.name "${MYNAME}"
+        git config --global user.email "${MYEMAIL}"
+        git add . || true
+        git commit -m "Generated documentation for React" || true
+        git push || true

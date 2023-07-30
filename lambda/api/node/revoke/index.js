@@ -13,6 +13,7 @@ exports.handler = (event, context, callback) => {
     const username = event.requestContext.authorizer.claims['cognito:username'];
     
     // TODO: Compare username to recorded username before allowing delete
+    // TODO: Handle cases where another address shares the same subdomain
 
     const requestBody = JSON.parse(event.body);
 

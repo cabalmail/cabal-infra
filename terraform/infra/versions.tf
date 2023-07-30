@@ -1,4 +1,10 @@
 terraform {
+  cloud {
+    organization = "cabal"
+    workspaces {
+      tags = ["infra","development"]
+    }
+  }
   required_providers {
     aws = {
       source  = "hashicorp/aws"

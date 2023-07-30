@@ -1,0 +1,134 @@
+---
+name: Build and Deploy Terraform Infrastructure
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [trigger_build]
+  push:
+    branches:
+      - '0.3.0'
+      - main
+      - stage
+    paths:
+      - 'terraform/infra'
+      - 'terraform/infra/*'
+      - 'terraform/infra/*/**'
+      - '.github/workflows/terraform.yml'
+
+jobs:
+  chekov:
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@v2
+    - name: chekov
+      uses: bridgecrewio/checkov-action@master
+      with:
+        directory: terraform/infra/
+        quiet: true
+        soft_fail: true
+        framework: terraform
+        download_external_modules: false
+  tflint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./terraform/infra
+    steps:
+    - name: checkout
+      uses: actions/checkout@v3
+    - name: install-linters
+      run: curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+    - name: initialize-linter
+      run: tflint --version && tflint --init
+    - name: run-linter
+      run: for i in ./ modules/* modules/*/modules/* ; do tflint ; done
+  tfsec:
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@v2
+    - name: tfsec
+      uses: aquasecurity/tfsec-action@v1.0.0
+      with:
+        soft_fail: false
+        working_directory: ./terraform/infra
+  plan:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./terraform/infra
+    environment: ${{ github.ref_name == 'refs/heads/main' && 'prod' || ( github.ref_name == 'refs/heads/stage' && 'stage' || 'development' ) }}
+    needs:
+    - chekov
+    - tflint
+    - tfsec
+    env:
+      TF_API_TOKEN: ${{ secrets.TF_TOKEN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+    steps:
+    - name: checkout
+      uses: actions/checkout@v2
+    - name: install-terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        cli_config_credentials_token: ${{ secrets.TF_TOKEN }}
+    - name: tfvars-terraform
+      run: |
+        echo "smtpout_scale = ${{ vars.TF_VAR_SMTPOUT_SCALE }}" > terraform.tfvars
+        echo "availability_zones = ${{ vars.TF_VAR_AVAILABILITY_ZONES}}" >> terraform.tfvars
+        echo "aws_region = \"${{ vars.TF_VAR_AWS_REGION}}\"" >> terraform.tfvars
+        echo "cidr_block = \"${{ vars.TF_VAR_CIDR_BLOCK}}\"" >> terraform.tfvars
+        echo "control_domain = \"${{ vars.TF_VAR_CONTROL_DOMAIN}}\"" >> terraform.tfvars
+        echo "email = \"${{ vars.TF_VAR_EMAIL }}\"" >> terraform.tfvars
+        echo "environment = \"${{ vars.TF_VAR_ENVIRONMENT }}\"" >> terraform.tfvars
+        echo "imap_scale = ${{ vars.TF_VAR_IMAP_SCALE }}" >> terraform.tfvars
+        echo "mail_domains = ${{ vars.TF_VAR_MAIL_DOMAINS }}" >> terraform.tfvars
+        echo "smtpin_scale = ${{ vars.TF_VAR_SMTPIN_SCALE }}" >> terraform.tfvars
+        echo "chef_license = \"${{ vars.TF_VAR_CHEF_LICENSE}}\"" >> terraform.tfvars
+        echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
+    - name: init-terraform
+      run: terraform init
+    - name: plan-terraform
+      run: terraform plan -no-color
+  apply:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./terraform/infra
+    environment: ${{ github.ref_name == 'refs/heads/main' && 'prod' || ( github.ref_name == 'refs/heads/stage' && 'stage' || 'development' ) }}
+    needs:
+    - plan
+    env:
+      TF_API_TOKEN: ${{ secrets.TF_TOKEN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+    steps:
+    - name: checkout
+      uses: actions/checkout@v2
+    - name: install-terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        cli_config_credentials_token: ${{ secrets.TF_TOKEN }}
+    - name: tfvars-terraform
+      run: |
+        echo "smtpout_scale = ${{ vars.TF_VAR_SMTPOUT_SCALE }}" > terraform.tfvars
+        echo "availability_zones = ${{ vars.TF_VAR_AVAILABILITY_ZONES}}" >> terraform.tfvars
+        echo "aws_region = \"${{ vars.TF_VAR_AWS_REGION}}\"" >> terraform.tfvars
+        echo "cidr_block = \"${{ vars.TF_VAR_CIDR_BLOCK}}\"" >> terraform.tfvars
+        echo "control_domain = \"${{ vars.TF_VAR_CONTROL_DOMAIN}}\"" >> terraform.tfvars
+        echo "email = \"${{ vars.TF_VAR_EMAIL }}\"" >> terraform.tfvars
+        echo "environment = \"${{ vars.TF_VAR_ENVIRONMENT }}\"" >> terraform.tfvars
+        echo "imap_scale = ${{ vars.TF_VAR_IMAP_SCALE }}" >> terraform.tfvars
+        echo "mail_domains = ${{ vars.TF_VAR_MAIL_DOMAINS }}" >> terraform.tfvars
+        echo "smtpin_scale = ${{ vars.TF_VAR_SMTPIN_SCALE }}" >> terraform.tfvars
+        echo "chef_license = \"${{ vars.TF_VAR_CHEF_LICENSE}}\"" >> terraform.tfvars
+        echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
+    - name: init-terraform
+      run: terraform init
+    - name: apply-terraform
+      run: terraform apply -no-color -auto-approve

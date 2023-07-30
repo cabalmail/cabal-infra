@@ -1,11 +1,11 @@
 '''Sets IMAP flags on messages for a user given a folder and list of message ids'''
 import json
-from helper import get_imap_client
+from helper import get_imap_client # pylint: disable=import-error
 
 def handler(event, _context):
     '''Sets IMAP flags on messages for a user given a folder and list of message ids'''
     body = json.loads(event['body'])
-    user = event['requestContext']['authorizer']['claims']['cognito:username'];
+    user = event['requestContext']['authorizer']['claims']['cognito:username']
     client = get_imap_client(body['host'], user, body['folder'])
     if body['op'] == 'set':
         client.add_flags(body['ids'], body['flag'], True)
@@ -18,4 +18,4 @@ def handler(event, _context):
         "body": json.dumps({
             "message_ids": response
         })
-    }
+    } # pylint: disable=duplicate-code

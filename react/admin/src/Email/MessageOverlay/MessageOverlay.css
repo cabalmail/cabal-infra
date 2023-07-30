@@ -21,7 +21,7 @@ div.message_overlay .message {
 
 div.message_overlay .message_top {
   position: relative;
-  padding: 0;
+  padding: 0 2.7em;
 }
 
 div.message_overlay .message_plain, pre {
@@ -39,12 +39,14 @@ div.message_overlay pre.message_plain {
 div.message_overlay button.invert {
   width: 3em;
   position: absolute;
-  top: 1em;
-  right: 1em;
+  top: 0;
+  right: 0;
+  margin-top: 0;
 }
 
 div.message_overlay button.close_overlay {
   width: 3em;
+  margin-top: 0;
   position: absolute;
   top: 0;
   right: 0;
@@ -57,14 +59,19 @@ div.message_overlay .message_html {
 div.message_overlay .buttons {
   position: -webkit-sticky;
   position: sticky;
-  top: 1em;
+  top: 0;
+}
+
+div.message_overlay div#message_html {
+  padding-top: 2em;
 }
 
 div.message_overlay button.load {
   width: 3em;
   position: absolute;
-  top: 1em;
-  left: 1em;
+  top: 0;
+  right: 3em;
+  margin-top: 0;
 }
 
 div.message_overlay .tabBar {
@@ -121,6 +128,7 @@ div.message_overlay .message_attachments button.attachment span.attachment_type 
 
 .expand_overlay_top {
   top: 0;
+  margin-top: 0;
 }
 
 .collapse_overlay_top {
@@ -131,6 +139,14 @@ div.message_overlay .message_attachments button.attachment span.attachment_type 
 .collapsed .tabBar, .collapsed .collapsable, .collapsed .filters-buttons,
 .collapsed .bimi {
   display: none;
+}
+
+.bcc {
+  color: #f00;
+}
+
+.revoke {
+  width: 100%;
 }
 
 div.message_overlay div.message_raw {
@@ -144,13 +160,6 @@ div.message_overlay div.message_raw iframe {
 }
 
 /* Action Button modifications */
-
-div.message_overlay button.unflagged, div.message_overlay button.flagged {
-  border-radius: 0 4px 4px 0;
-  border-width: 1px;
-  width: auto;
-  padding: 0.5em;
-}
 
 div.message_overlay .Seen button.read,
 div.message_overlay .Flagged button.flagged,
@@ -184,6 +193,16 @@ div.bimi img {
 }
 
 div.message_overlay div.message_top dl {
-  margin-left:100px;
+  margin-left:75px;
   padding-left: 1em;
+}
+
+@media (max-width: 899px) {
+  div.message_overlay div.message_top dl dt {
+    font-style: italic;
+  }
+  div.message_overlay div.message_top dl dd {
+    margin-left: 0;
+    margin-bottom: 0.75em;
+  }
 }

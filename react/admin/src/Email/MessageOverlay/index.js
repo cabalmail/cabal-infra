@@ -3,6 +3,7 @@ import RichMessage from './RichMessage';
 import Actions from '../Actions';
 import ApiClient from '../../ApiClient';
 import './MessageOverlay.css';
+import { ADDRESS_LIST } from '../../constants';
 
 class MessageOverlay extends React.Component {
 
@@ -11,14 +12,31 @@ class MessageOverlay extends React.Component {
     this.state = {
       message_raw: "",
       message_raw_url: "",
-      message_body: "",
+      message_body_plain: "",
+      message_body_html: "",
       view: "rich",
       attachments: [],
       loading: true,
       top_state: "expanded",
-      bimi_url: "/mask.png"
+      bimi_url: "/mask.png",
+      recipient: "",
+      message_id: [],
+      in_reply_to: [],
+      references: [],
+      addresses: []
     }
     this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
+  }
+
+  componentDidMount() {
+    this.api.getAddresses().then(data => {
+      try {
+        localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
+      } catch (e) {
+        console.log(e);
+      }
+      this.setState({ ...this.state, addresses: data.data.Items });
+    });
   }
 
   componentDidUpdate(prevProps, prevState) {
@@ -39,6 +57,10 @@ class MessageOverlay extends React.Component {
           message_raw_url: data.data.message_raw,
           message_body_plain: data.data.message_body_plain,
           message_body_html: data.data.message_body_html,
+          recipient: data.data.recipient,
+          message_id: data.data.message_id,
+          in_reply_to: data.data.in_reply_to,
+          references: data.data.references,
           loading: false,
           view: view
         });
@@ -112,6 +134,69 @@ class MessageOverlay extends React.Component {
     console.log(err);
   };
 
+  collapse = (e) => {
+    e.preventDefault();
+    this.setState({...this.state, top_state: "collapsed"});
+  }
+
+  expand = (e) => {
+    e.preventDefault();
+    this.setState({...this.state, top_state: "expanded"});
+  }
+
+  handleNav = (e) => {
+    e.preventDefault();
+    this.setState({...this.state, view: e.target.value});
+  }
+
+  createPayload() {
+    return [
+      this.state.recipient,
+      this.state.message_body_html || this.stage.message_body_plain,
+      this.props.envelope,
+      {
+        message_id: this.state.message_id,
+        in_reply_to: this.state.in_reply_to,
+        references: this.state.references
+      }
+    ]
+  }
+
+  reply = () => {
+    const params = this.createPayload();
+    this.props.reply(params[0], params[1], params[2], params[3]);
+  }
+
+  replyAll = () => {
+    const params = this.createPayload();
+    this.props.replyAll(params[0], params[1], params[2], params[3]);
+  }
+
+  forward = () => {
+    const params = this.createPayload();
+    this.props.forward(params[0], params[1], params[2], params[3]);
+  }
+
+  revokeAddress = (a) => {
+    return this.api.deleteAddress(a.address, a.subdomain, a.tld, a.public_key);
+  }
+
+  revoke = (e) => {
+    e.preventDefault();
+    const address = e.target.value;
+    this.revokeAddress(this.state.addresses.find(a => {
+      return a.address === address;
+    })).then(data => {
+      this.props.setMessage("Successfully revoked address.", false);
+      this.setState({...this.state, addresses: this.state.addresses.filter(a => {
+        return a.address !== address;
+      })});
+    }, reason => {
+      this.props.setMessage("Request to revoke address failed.", true);
+      console.error("Promise rejected", reason);
+    });
+  }
+
   renderView() {
     if (this.state.loading) {
       return (
@@ -167,16 +252,51 @@ class MessageOverlay extends React.Component {
   }
 
   renderHeader() {
-    return (
-      <dl>
+    const to = this.props.envelope.to.length ? (
+      <>
         <dt className="collapsable">To</dt>
         <dd className="collapsable">{this.props.envelope.to.join("; ")}</dd>
+      </>
+    ) : (
+      <>
+        <dt className="collapsable">To</dt>
+        <dd className="collapsable">Undisclosed recipients</dd>
+      </>
+    )
+    const cc = this.props.envelope.cc.length ? (
+      <>
+        <dt className="collapsable">CC</dt>
+        <dd className="collapsable">{this.props.envelope.cc.join("; ")}</dd>
+      </>
+    ) : ""
+    const bcc = (this.state.recipient &&
+                this.props.envelope.to.indexOf(this.state.recipient) === -1 &&
+                this.props.envelope.cc.indexOf(this.state.recipient) === -1) ? (
+      <>
+        <dt className="collapsable bcc">BCC</dt>
+        <dd className="collapsable bcc">{this.state.recipient}</dd>
+      </>
+    ) : ""
+    const revoke = this.state.addresses.map(a => a.address).indexOf(this.state.recipient) !== -1 ? (
+      <dt className="collapsable"><button
+        className="revoke collapsable"
+        onClick={this.revoke}
+        value={this.state.recipient}
+        title={`Revoke ${this.state.recipient}`}
+        >🗑️ Revoke {this.state.recipient}</button></dt>
+      ) :""
+    return (
+      <dl>
         <dt className="collapsable">From</dt>
         <dd className="collapsable">{this.props.envelope.from.join("; ")}</dd>
+        {to}
+        {bcc}
+        {cc}
         <dt className="collapsable">Received</dt>
         <dd className="collapsable">{this.props.envelope.date}</dd>
         <dt className="collapsable">Subject</dt>
         <dd>{this.props.envelope.subject}</dd>
+        {revoke}
       </dl>
     );
   }
@@ -212,21 +332,6 @@ class MessageOverlay extends React.Component {
     );
   }
 
-  collapse = (e) => {
-    e.preventDefault();
-    this.setState({...this.state, top_state: "collapsed"});
-  }
-
-  expand = (e) => {
-    e.preventDefault();
-    this.setState({...this.state, top_state: "expanded"});
-  }
-
-  handleNav = (e) => {
-    e.preventDefault();
-    this.setState({...this.state, view: e.target.value});
-  }
-
   render() {
     const flags = this.props.flags.map(d => {return d.replace("\\","")}).join(" ");
     if (this.props.visible) {
@@ -237,12 +342,12 @@ class MessageOverlay extends React.Component {
               onClick={this.collapse}
               className="overlay_expand_collapse collapse_overlay_top"
               title="Hide message header"
-            >⋀</button>
+            >▲</button>
             <button
               onClick={this.expand}
               className="overlay_expand_collapse expand_overlay_top"
               title="Show message header"
-            >⋁</button>
+            >▼</button>
             <Actions
               token={this.props.token}
               api_url={this.props.api_url}
@@ -254,6 +359,9 @@ class MessageOverlay extends React.Component {
               field="ARRIVAL"
               callback={this.callback}
               catchback={this.catchback}
+              reply={this.reply}
+              replyAll={this.replyAll}
+              forward={this.forward}
               setMessage={this.props.setMessage}
             />
             <button

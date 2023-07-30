@@ -1,5 +1,5 @@
 import React from 'react';
-import axios from 'axios';
+import ApiClient from '../ApiClient';
 
 /**
  * Renders a form for requesting a new address and handles
@@ -17,6 +17,7 @@ class Request extends React.Component {
       comment: '',
       address: ''
     }
+    this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
   }
 
   componentDidUpdate(prevProps, prevState) {
@@ -84,34 +85,28 @@ class Request extends React.Component {
     });
   }
 
-  submitRequest = (e) => {
-    return axios(
-      {
-        method: 'post',
-        url: '/new',
-        baseURL: this.props.api_url,
-        headers: {
-          'Authorization': this.props.token
-        },
-        timeout: 10000,
-        data: {
-          username: this.state.username,
-          subdomain: this.state.subdomain,
-          tld: this.state.domain,
-          comment: this.state.comment,
-          address: this.state.username + '@' + this.state.subdomain + '.' + this.state.domain
-        }
-      }
-    );
-  }
-
   handleSubmit = (e) => {
     e.preventDefault();
-    this.submitRequest().then(data => {
+    const request_button = e.target;
+    request_button.classList.add('sending');
+    this.setState({
+      ...this.state,
+      username: "",
+      subdomain: "",
+      domain: "",
+      comment: "",
+      address: ""
+    });
+    this.api.newAddress(
+      this.state.username,
+      this.state.subdomain,
+      this.state.domain,
+      this.state.comment,
+      this.state.username + '@' + this.state.subdomain + '.' + this.state.domain
+    ).then(data => {
+      request_button.classList.remove('sending');
       this.props.setMessage(`Successfully requested ${data.data.address}.`, false);
-    }, reason => {
-      this.props.setMessage("Request failed.", true);
-      console.error("Promise rejected", reason.toJSON());
+      this.props.callback(data.data.address);
     });
   }
 
@@ -131,11 +126,13 @@ class Request extends React.Component {
     // TODO: Wire up select field for TLD
     return (
       <div className={`request ${this.props.showRequest ? "requestVisible" : "requestHidden"}`}>
-        <form className="request-form" onSubmit={this.handleSubmit}>
         <fieldset className="address-fields">
           <legend>Address</legend>
           <input
             type="text"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="none"
             value={this.state.username}
             onChange={this.doInputChange}
             id="username"
@@ -143,6 +140,9 @@ class Request extends React.Component {
             placeholder="username"
           /><span id="amphora">@</span><input
             type="text"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="none"
             value={this.state.subdomain}
             onChange={this.doInputChange}
             id="subdomain"
@@ -161,6 +161,9 @@ class Request extends React.Component {
           <legend>Comment</legend>
           <input
             type="text"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="none"
             value={this.state.comment}
             onChange={this.doInputChange}
             id="comment"
@@ -169,11 +172,10 @@ class Request extends React.Component {
           />
         </fieldset>
         <fieldset className="button-fields">
-          <button id="request" type="submit" className="default">Request {this.state.address}</button>
+          <button id="request" className="default" onClick={this.handleSubmit}>Request {this.state.address}</button>
           <button onClick={this.generateRandom}>Random</button>
           <button onClick={this.doClear}>Clear</button>
         </fieldset>
-        </form>
       </div>
     );
   }

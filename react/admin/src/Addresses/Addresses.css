@@ -46,14 +46,26 @@ div#root div.Addresses div.content {
 }
 
 .requestHidden {
+  padding-top: 0;
   max-height: 0;
-  transition: max-height 1s ease-out;
+  transition-property: max-height, padding-top;
+  transition-duration: 1s;
+  transition-timing-function: ease-out;
 }
 
 .requestVisible {
+  padding-top: 1em;
   height: auto;
-  max-height: 999px;
-  transition: max-height 1s ease-in;
+  max-height: 20em;
+  transition-property: max-height, padding-top;
+  transition-duration: 1s;
+  transition-timing-function: ease-in;
+}
+
+button.sending {
+  animation-name: ripple;
+  animation-duration: 0.5s;
+  animation-iteration-count: infinite;
 }
 
 /* List Addresses */
@@ -86,6 +98,7 @@ ul.address-list li.address {
   grid-template-columns: 50% 30% 7% 7%;
   grid-column-gap: 2%;
   align-items: baseline;
+  min-height: 4em;
 }
 
 ul.address-list li.address span.address, ul.address-list button {

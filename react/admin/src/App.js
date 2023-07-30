@@ -23,6 +23,8 @@ import AppMessage from './AppMessage';
 import Nav from './Nav';
 
 // Site-wide and Theme-specific style
+import './AppDark.css';
+import './AppLight.css';
 import './App.css';
 
 // Globals
@@ -56,7 +58,11 @@ class App extends React.Component {
   }
 
   setState(state) {
-    window.localStorage.setItem('state', JSON.stringify(state));
+    try {
+      window.localStorage.setItem('state', JSON.stringify(state));
+    } catch (e) {
+      console.log(e);
+    }
     super.setState(state);
   }
 
@@ -223,6 +229,7 @@ class App extends React.Component {
           <Addresses
             token={this.state.token}
             api_url={this.state.api_url}
+            host={`imap.${this.state.control_domain}`}
             domains={this.state.domains}
             setMessage={this.setMessage}
           />
@@ -251,6 +258,8 @@ class App extends React.Component {
             token={this.state.token}
             api_url={this.state.api_url}
             host={`imap.${this.state.control_domain}`}
+            smtp_host={`smtp-out.${this.state.control_domain}`}
+            domains={this.state.domains}
             setMessage={this.setMessage}
           />
         );

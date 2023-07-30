@@ -83,12 +83,12 @@ class RichMessage extends React.Component {
             onClick={this.loadRemoteImages}
             title="Download remote images (could allow third parties to track your interactions with this message)"
           >⇩</button>
-          <div
-            id="message_html"
-            className={this.state.render}
-            dangerouslySetInnerHTML={{__html: DOMPurify.sanitize(this.state.body)}}
-          />
         </div>
+        <div
+          id="message_html"
+          className={this.state.render}
+          dangerouslySetInnerHTML={{__html: DOMPurify.sanitize(this.state.body)}}
+        />
       </div>
     );
   }

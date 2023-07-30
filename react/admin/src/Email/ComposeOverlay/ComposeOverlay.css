@@ -1,0 +1,240 @@
+*:not(.wysiwyg-editor *, .wysiwyg-toolbar *) {
+  font-family: 'Tahoma', 'Verdana', 'Trebuchet MS', 'Arial';
+  font-size: small;
+}
+
+button, button * {
+  font-size: x-small;
+  white-space: nowrap;
+}
+
+button.sending {
+  animation-name: ripple;
+  animation-duration: 0.5s;
+  animation-iteration-count: infinite;
+}
+
+form.compose-overlay {
+  padding: 1em;
+  padding-top: 3em;
+  border-color: inherit;
+  box-sizing: border-box;
+}
+
+form.compose-overlay div {
+  box-sizing: border-box;
+}
+
+button#compose-send {
+  margin: 0;
+  position: absolute;
+  top: 1em;
+  left: 1em;
+}
+
+button#compose-cancel {
+  margin: 0;
+  position: absolute;
+  top: 1em;
+  right: 1em;
+}
+
+form.compose-overlay input[type=text],
+form.compose-overlay input[type=email],
+form.compose-overlay select, {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+button.toggleRequest {
+  width: 100%;
+}
+
+input#recipient-address, li.recipient-entry {
+  border-width: 0;
+  margin: 0;
+  padding: 0;
+  display: block !important;
+  width: 100% !important;
+}
+
+button.recipient {
+  display: inline-block;
+  margin: 0;
+}
+
+div.recipients label.hide, div.recipients ul.hide {
+  display: none;
+}
+
+ul.recipient-list {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+  min-height: 1.3em;
+}
+
+ul.recipient-list li {
+  display: inline-block;
+  margin: 0 .5em;
+}
+
+ul.recipient-list li div button, ul.recipient-list li div select,
+ul.recipient-list li div button, ul.recipient-list li div label {
+  display: inline !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background-color: transparent !important;
+  border: none !important;
+  width: auto !important;
+  height: auto !important;
+  color: #000 !important;
+}
+
+ul.recipient-list li div button, ul.recipient-list li div select {
+  text-align-last: right;
+}
+
+ul.recipient-list li div button, ul.recipient-list li div option {
+  direction: rtl;
+}
+
+ul.recipient-list li div button {
+  font-size: 125% !important;
+}
+
+ul.recipient-list li input#recipient-address {
+  height: 0;
+}
+
+ul.recipient-list li input#recipient-address:focus {
+  outline: none;
+  height: auto;
+}
+
+ul.recipient-list:focus-within {
+  outline-style: solid;
+}
+
+ul.recipient-list li {
+  margin: 0 0.2em;
+}
+
+ul.recipient-list li div {
+  display: inline-block !important;
+  width: auto !important;
+  height: 2em;
+  border-radius: 1em;
+  border: 1px solid;
+  padding: 0 .5em;
+}
+
+ul.recipient-list li div span.amphora::before {
+  content: '@';
+}
+
+ul.recipient-list li div span.dot::before {
+  content: '.';
+}
+
+ul li.To div {
+  background-color: #696;
+  color: #000;
+}
+
+ul li.CC div {
+  background-color: #996;
+  color: #000;
+}
+
+ul li.BCC div {
+  background-color: #966;
+  color: #000;
+}
+
+/* WYSIWYG editor */
+
+body .wysiwyg-toolbar div.rdw-dropdown-carettoopen {
+  height: 0px !important;
+  width: 0px !important;
+  position: absolute !important;
+  top: 35% !important;
+  right: 10% !important;
+  border-top-width: 6px !important;
+  border-top-style: solid !important;
+  border-left-width: 5px !important;
+  border-left-style: solid !important;
+  border-left-color: transparent !important;
+  border-right-width: 5px !important;
+  border-right-style: solid !important;
+  border-right-color: transparent !important;
+}
+
+body .wysiwyg-toolbar div.rdw-dropdown-carettoclose {
+  height: 0px !important;
+  width: 0px !important;
+  position: absolute !important;
+  top: 35% !important;
+  right: 10% !important;
+  border-bottom-width: 6px !important;
+  border-bottom-style: solid !important;
+  border-left-width: 5px !important;
+  border-left-style: solid !important;
+  border-left-color: transparent !important;
+  border-right-width: 5px !important;
+  border-right-style: solid !important;
+  border-right-color: transparent !important;
+}
+
+.wysiwyg-editor, .wysiwyg-toolbar {
+  border: 1px solid;
+  border-color: inherit;
+}
+
+.wysiwyg-toolbar div.rdw-option-wrapper:hover,
+.wysiwyg-toolbar div.rdw-dropdown-wrapper:hover {
+  box-shadow: none !important;
+}
+
+.wysiwyg-editor {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  border-top-width: 0;
+  z-index: 1;
+}
+
+.wysiwyg-editor .DraftEditor-root {
+  min-height: 20em;
+}
+
+.wysiwyg-editor div.DraftEditor-root {
+  padding: 0 1em;
+}
+
+form.compose-overlay div.wysiwyg-toolbar {
+  margin-top: 1em;
+  margin-bottom: 0;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  position: -webkit-sticky;
+  position: sticky;
+  top: -1px;
+  z-index: 10;
+}
+
+.wysiwyg-toolbar, .wysiwyg-toolbar li
+.wysiwyg-toolbar span:not(.rdw-colorpicker-cube),
+.wysiwyg-toolbar div:not(.rdw-colorpicker-option),
+.wysiwyg-toolbar ul {
+  background-color: inherit !important;
+  border-color: inherit !important;
+  color: inherit !important;
+}
+
+.rdw-option-active, .rdw-option-wrapper:active {
+  box-shadow: none !important;
+}
+
+.public-DraftStyleDefault-block {
+  margin: 0 !important;
+}

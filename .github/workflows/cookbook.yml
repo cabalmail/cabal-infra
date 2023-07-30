@@ -1,0 +1,49 @@
+---
+name: Build and Deploy Cookbook
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [trigger_build]
+  push:
+    branches:
+      - '0.3.0'
+      - main
+      - stage
+    paths:
+      - 'chef/**'
+      - '.github/workflows/cookbook_deploy.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'refs/heads/main' && 'prod' || ( github.ref_name == 'refs/heads/stage' && 'stage' || 'development' ) }}
+    steps:
+    - name: checkout
+      uses: actions/checkout@main
+    - name: package
+      run: cd chef && tar -czf ../cabal.tar.gz cabal/
+    - name: store-artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: cookbook
+        path: cabal.tar.gz
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'refs/heads/main' && 'prod' || ( github.ref_name == 'refs/heads/stage' && 'stage' || 'development' ) }}
+    needs: build
+    steps:
+    - name: configure-aws-cli
+      run: |
+        aws configure --profile deploy_cookbook <<-EOF > /dev/null 2>&1
+        ${{ secrets.AWS_ACCESS_KEY_ID }}
+        ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        ${{ secrets.AWS_REGION }}
+        json
+        EOF
+    - name: retrieve-artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: cookbook
+    - name: upload
+      run: aws s3 cp cabal.tar.gz s3://admin.$(aws ssm get-parameter --name '/cabal/control_domain_zone_name' --profile deploy_cookbook | jq -r '.Parameter.Value')/cabal.tar.gz --profile deploy_cookbook --no-progress --acl private

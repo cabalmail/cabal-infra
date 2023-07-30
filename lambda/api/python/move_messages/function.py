@@ -1,20 +1,20 @@
-'''Sets IMAP flags on messages for a user given a folder and list of message ids'''
+'''Moves a message from source folder to destination folder'''
 import json
-from helper import get_imap_client
+from helper import get_imap_client # pylint: disable=import-error
 
 def handler(event, _context):
-    '''Sets IMAP flags on messages for a user given a folder and list of message ids'''
+    '''Moves a message from source folder to destination folder'''
     body = json.loads(event['body'])
-    user = event['requestContext']['authorizer']['claims']['cognito:username'];
+    user = event['requestContext']['authorizer']['claims']['cognito:username']
     client = get_imap_client(body['host'], user, body['source'])
     if body['destination'] == "Deleted Messages":
         try:
             client.create_folder(body['destination'])
-        except:
+        except: # pylint: disable=bare-except
             pass
     try:
         client.move(body['ids'], body['destination'])
-    except:
+    except: # pylint: disable=bare-except
         client.logout()
         return {
             "statusCode": 500,

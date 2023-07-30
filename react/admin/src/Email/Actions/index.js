@@ -2,7 +2,7 @@ import React from 'react';
 import ApiClient from '../../ApiClient';
 import Folders from '../Messages/Folders';
 import './Actions.css';
-import { READ, UNREAD, FLAGGED, UNFLAGGED } from '../../constants';
+import { READ, UNREAD, FLAGGED, UNFLAGGED, REPLY, REPLYALL, FORWARD } from '../../constants';
 
 class Actions extends React.Component {
 
@@ -91,6 +91,15 @@ class Actions extends React.Component {
           this.props.field
         ).then(this.props.callback).catch(this.props.catchback);
         break;
+      case REPLY.css:
+        this.props.reply();
+        break;
+      case REPLYALL.css:
+        this.props.replyAll();
+        break;
+      case FORWARD.css:
+        this.props.forward();
+        break;
       default:
         console.log(`"${action}" clicked`);
     }
@@ -101,71 +110,100 @@ class Actions extends React.Component {
     return (
       <div className={`filters filters-buttons ${this.props.selected} ${show}`}>
         <span className="filter filter-actions">
-          <Folders 
-            token={this.props.token}
-            api_url={this.props.api_url}
-            setFolder={this.setDestination}
-            host={this.props.host}
-            folder={this.props.folder}
-            setMessage={this.props.setMessage}
-            label="Destination"
-          />&nbsp;
-          <button
-            value="cancel"
-            id="cancel"
-            name="cancel"
-            className="action cancel"
-            title="Cancel move"
-            onClick={this.handleActionButtonClick}
-          >❌<span className="wide-screen"> Cancel move</span></button>
-          <button
-            value="delete"
-            id="delete"
-            name="delete"
-            className="action delete"
-            title="Delete"
-            onClick={this.handleActionButtonClick}
-          >🗑️<span className="wide-screen"> Delete</span></button>
-          <button
-            value="move"
-            id="move"
-            name="move"
-            className="action move"
-            title="Move to..."
-            onClick={this.handleActionButtonClick}
-          >📨<span className="wide-screen"> Move to...</span></button>
-          <button
-            value={READ.css}
-            id={READ.css}
-            name={READ.css}
-            className={`action ${READ.css}`}
-            title={READ.description}
-            onClick={this.handleActionButtonClick}
-          >{READ.icon}<span className="wide-screen"> {READ.description}</span></button>
-          <button
-            value={UNREAD.css}
-            id={UNREAD.css}
-            name={UNREAD.css}
-            className={`action ${UNREAD.css}`}
-            title={UNREAD.description}
-            onClick={this.handleActionButtonClick}
-          >{UNREAD.icon}<span className="wide-screen"> {UNREAD.description}</span></button>
-          <button
-            value={FLAGGED.css}
-            id={FLAGGED.css}
-            name={FLAGGED.css}
-            className={`action ${FLAGGED.css}`}
-            title={FLAGGED.description}
-            onClick={this.handleActionButtonClick}
-          >{FLAGGED.icon}<span className="wide-screen"> {FLAGGED.description}</span></button>
+          <span className="nowrap">
+            <Folders 
+              token={this.props.token}
+              api_url={this.props.api_url}
+              setFolder={this.setDestination}
+              host={this.props.host}
+              folder={this.props.folder}
+              setMessage={this.props.setMessage}
+              label="Destination"
+            />&nbsp;
             <button
-            value={UNFLAGGED.css}
-            id={UNFLAGGED.css}
-            name={UNFLAGGED.css}
-            className={`action ${UNFLAGGED.css}`}
-            title={UNFLAGGED.description}
-            onClick={this.handleActionButtonClick}
-          >{UNFLAGGED.icon}<span className="wide-screen"> {UNFLAGGED.description}</span></button>
+              value="cancel"
+              id="cancel"
+              name="cancel"
+              className="action cancel"
+              title="Cancel move"
+              onClick={this.handleActionButtonClick}
+            >❌<span className="wide-screen"> Cancel move</span></button>
+            <button
+              value="delete"
+              id="delete"
+              name="delete"
+              className="action delete"
+              title="Delete"
+              onClick={this.handleActionButtonClick}
+            >🗑️<span className="wide-screen"> Delete</span></button>
+            <button
+              value="move"
+              id="move"
+              name="move"
+              className="action move"
+              title="Move to..."
+              onClick={this.handleActionButtonClick}
+            >📨<span className="wide-screen"> Move to...</span></button>
+            <button
+              value={READ.css}
+              id={READ.css}
+              name={READ.css}
+              className={`action ${READ.css}`}
+              title={READ.description}
+              onClick={this.handleActionButtonClick}
+            >{READ.icon}<span className="wide-screen"> {READ.description}</span></button>
+            <button
+              value={UNREAD.css}
+              id={UNREAD.css}
+              name={UNREAD.css}
+              className={`action ${UNREAD.css}`}
+              title={UNREAD.description}
+              onClick={this.handleActionButtonClick}
+            >{UNREAD.icon}<span className="wide-screen"> {UNREAD.description}</span></button>
+            <button
+              value={FLAGGED.css}
+              id={FLAGGED.css}
+              name={FLAGGED.css}
+              className={`action ${FLAGGED.css}`}
+              title={FLAGGED.description}
+              onClick={this.handleActionButtonClick}
+            >{FLAGGED.icon}<span className="wide-screen"> {FLAGGED.description}</span></button>
+            <button
+              value={UNFLAGGED.css}
+              id={UNFLAGGED.css}
+              name={UNFLAGGED.css}
+              className={`action ${UNFLAGGED.css}`}
+              title={UNFLAGGED.description}
+              onClick={this.handleActionButtonClick}
+            >{UNFLAGGED.icon}<span className="wide-screen"> {UNFLAGGED.description}</span></button>
+          </span>
+          <span className="wrap_point"> </span>
+          <span className="nowrap">
+            <button
+              value={REPLY.css}
+              id={REPLY.css}
+              name={REPLY.css}
+              className={`action ${REPLY.css}`}
+              title={REPLY.description}
+              onClick={this.handleActionButtonClick}
+            >{REPLY.icon}<span className="wide-screen"> {REPLY.description}</span></button>
+            <button
+              value={REPLYALL.css}
+              id={REPLYALL.css}
+              name={REPLYALL.css}
+              className={`action ${REPLYALL.css}`}
+              title={REPLYALL.description}
+              onClick={this.handleActionButtonClick}
+            >{REPLYALL.icon}<span className="wide-screen"> {REPLYALL.description}</span></button>
+            <button
+              value={FORWARD.css}
+              id={FORWARD.css}
+              name={FORWARD.css}
+              className={`action ${FORWARD.css}`}
+              title={FORWARD.description}
+              onClick={this.handleActionButtonClick}
+            >{FORWARD.icon}<span className="wide-screen"> {FORWARD.description}</span></button>
+          </span>
         </span>
       </div>
     );

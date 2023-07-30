@@ -104,3 +104,8 @@ button.sort-order hr.long {
 button.sort-order hr.short {
   right: 1.2em;
 }
+
+div.email_list button.reply, div.email_list button.replyall,
+div.email_list button.forward {
+  display: none;
+}

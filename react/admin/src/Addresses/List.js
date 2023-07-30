@@ -1,5 +1,6 @@
 import React from 'react';
-import axios from 'axios';
+import ApiClient from '../ApiClient';
+import { ADDRESS_LIST } from '../constants';
 
 /**
  * Fetches addresses for current user and displays them
@@ -13,6 +14,7 @@ class List extends React.Component {
       filter: "",
       addresses: []
     };
+    this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
   }
 
   filter(data) {
@@ -37,6 +39,11 @@ class List extends React.Component {
   componentDidMount() {
     const response = this.getList();
     response.then(data => {
+      try {
+        localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
+      } catch (e) {
+        console.log(e);
+      }
       this.setState({ ...this.state, addresses: data.data.Items.sort(
         (a,b) => {
           if (a.address > b.address) {
@@ -51,29 +58,33 @@ class List extends React.Component {
   }
 
   componentDidUpdate(prevProps, prevState) {
+    const newAddress = document.getElementById(this.props.regenerate);
+    if (newAddress) {
+      newAddress.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+    }
+    if (this.props.regenerate !== prevProps.regenerate) {
+      localStorage.removeItem(ADDRESS_LIST);
+      this.reload({
+        preventDefault: function () {
+          return true;
+        }
+      });
+    }
     if (this.state.filter !== prevState.filter) {
       const response = this.getList();
       response.then(data => {
+        try {
+          localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
+        } catch (e) {
+          console.log(e);
+        }
         this.filter(data.data);
       });
     }
   }
 
   revokeAddress = (a) => {
-    const response = axios.delete('/revoke', {
-      baseURL: this.props.api_url,
-      data: JSON.stringify({
-        address: a.address,
-        subdomain: a.subdomain,
-        tld: a.tld,
-        public_key: a.public_key
-      }),
-      headers: {
-        'Authorization': this.props.token
-      },
-      timeout: 10000
-    });
-    return response;
+    return this.api.deleteAddress(a.address, a.subdomain, a.tld, a.public_key);
   }
 
   revoke = (e) => {
@@ -103,6 +114,11 @@ class List extends React.Component {
     e.preventDefault();
     const response = this.getList();
     response.then(data => {
+      try {
+        localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
+      } catch (e) {
+        console.log(e);
+      }
       this.filter(data.data);
     });
   }
@@ -111,15 +127,8 @@ class List extends React.Component {
     e.preventDefault();
   }
 
-  getList = (e) => {
-    const response = axios.get('/list', {
-      baseURL: this.props.api_url,
-      headers: {
-        'Authorization': this.props.token
-      },
-      timeout: 10000
-    });
-    return response;
+  getList = () => {
+    return this.api.getAddresses();
   }
 
   updateFilter = (e) => {
@@ -129,8 +138,12 @@ class List extends React.Component {
 
   render() {
     const addressList = this.state.addresses.map(a => {
+      let className = "address"
+      if (a.address === this.props.regenerate) {
+        className = "address active";
+      }
       return (
-        <li key={a.address} className="address">
+        <li key={a.address} className={className} id={a.address}>
           <span>{a.address.replace(/([.@])/g, "$&\u200B")}</span>
           <span>{a.comment}</span>
           <button

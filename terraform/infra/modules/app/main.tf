@@ -11,25 +11,12 @@
 *
 */
 
-# Password for IMAP admin
-resource "random_password" "password" {
-  length           = 16
-  special          = true
-  override_special = "()-_=+[]{}<>:"
-}
-
-# Save admin password in parameter store.
-resource "aws_ssm_parameter" "password" {
-  name        = "/cabal/master_password"
-  description = "Master IMAP password"
-  type        = "SecureString"
-  value       = random_password.password.result
-}
-
+# API gateway for admin application
 resource "aws_api_gateway_rest_api" "gateway" {
   name = "cabal_gateway"
 }
 
+# API calls must be authorized via Cognito
 resource "aws_api_gateway_authorizer" "api_auth" {
   name                   = "cabal_pool"
   rest_api_id            = aws_api_gateway_rest_api.gateway.id
@@ -44,6 +31,7 @@ resource "aws_api_gateway_authorizer" "api_auth" {
   ]) ]
 }
 
+#
 module "cabal_method" {
   for_each         = local.lambdas
   source           = "./modules/call"
