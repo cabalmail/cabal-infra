@@ -41,10 +41,7 @@ def user_authorized_for_sender(user, sender):
     except ClientError as err:
         print(err.response['Error']['Message'])
         return False
-    print (json.dumps(response))
     try:
-        print(user)
-        print(response['Item']['user'])
         return response['Item']['user'] == user
     except KeyError:
         return False
