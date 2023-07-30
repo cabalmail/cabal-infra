@@ -59,7 +59,7 @@ div.message_overlay .message_html {
 div.message_overlay .buttons {
   position: -webkit-sticky;
   position: sticky;
-  top: 1em;
+  top: 0;
 }
 
 div.message_overlay button.load {
