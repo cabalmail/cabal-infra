@@ -62,6 +62,10 @@ div.message_overlay .buttons {
   top: 0;
 }
 
+div.message_overlay div#message_html {
+  padding-top: 2em;
+}
+
 div.message_overlay button.load {
   width: 3em;
   position: absolute;
