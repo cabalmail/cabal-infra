@@ -42,7 +42,7 @@ def user_authorized_for_sender(user, sender):
         print(err.response['Error']['Message'])
         return False
     print (json.dumps(response))
-    return response['Item']['user'] === user
+    return response['Item']['user'] == user
 
 def get_folder_list(client):
     '''Retrieves IMAP folders'''
