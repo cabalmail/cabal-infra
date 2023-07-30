@@ -124,6 +124,7 @@ div.message_overlay .message_attachments button.attachment span.attachment_type 
 
 .expand_overlay_top {
   top: 0;
+  margin-top: 0;
 }
 
 .collapse_overlay_top {
