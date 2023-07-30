@@ -43,6 +43,8 @@ def user_authorized_for_sender(user, sender):
         return False
     print (json.dumps(response))
     if hasattr(response, 'Item'):
+        print(user)
+        pring(response['Item']['user'])
         return response['Item']['user'] == user
     return False
 
