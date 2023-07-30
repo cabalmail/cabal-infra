@@ -64,9 +64,10 @@ def handler(event, _context):
 
 def get_recipient(message):
     """Extract final recipient from headers"""
-    headers = message.get_all('Received')
-    match = re.search("for <([^>]*)>;", headers[0])
     recipient = ""
-    if match:
-        recipient = match.group(1)
+    headers = message.get_all('Received')
+    if headers:
+        match = re.search("for <([^>]*)>;", headers[0])
+        if match:
+            recipient = match.group(1)
     return recipient
