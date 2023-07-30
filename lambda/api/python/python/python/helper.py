@@ -46,7 +46,7 @@ def user_authorized_for_sender(user, sender):
         print(user)
         print(response['Item']['user'])
         return response['Item']['user'] == user
-    except AttributeError:
+    except KeyError:
         return False
 
 def get_folder_list(client):
