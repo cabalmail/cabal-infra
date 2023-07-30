@@ -142,7 +142,7 @@ div.message_overlay .message_attachments button.attachment span.attachment_type 
 }
 
 .revoke {
-  width: auto;
+  width: 100%;
 }
 
 div.message_overlay div.message_raw {
