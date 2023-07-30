@@ -1,3 +1,4 @@
+import json
 import boto3
 import botocore
 from botocore.exceptions import ClientError
@@ -36,12 +37,12 @@ def get_imap_client(host, user, folder, read_only=False):
 def user_authorized_for_sender(user, sender):
     """Checks whether the user is allowed to send from the specifed sender address"""
     try:
-        response = ddb_table.get_item(Key={'user': user, 'address': sender})
+        response = ddb_table.get_item(Key={'address': sender})
     except ClientError as err:
         print(err.response['Error']['Message'])
-        raise
-    else:
-        return True
+        return False
+    print (json.dumps(response))
+    return response['Item']['user'] === user
 
 def get_folder_list(client):
     '''Retrieves IMAP folders'''
