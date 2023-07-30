@@ -1,6 +1,7 @@
 import boto3
 import botocore
 from botocore.exceptions import ClientError
+from boto3.dynamodb.conditions import Key
 import io
 import email
 from imapclient import IMAPClient
@@ -8,7 +9,10 @@ from email.policy import default as default_policy
 import os
 import dns.resolver
 
+table = 'cabal-addresses'
 region = os.environ['AWS_REGION']
+ddb = boto3.resource('dynamodb')
+ddb_table = ddb.Table(table)
 s3r = boto3.resource("s3")
 s3c = boto3.client("s3",
                   region_name=region,
@@ -28,6 +32,19 @@ def get_imap_client(host, user, folder, read_only=False):
     client.login(f"{user}*admin", mpw)
     client.select_folder(folder, read_only)
     return client
+
+def user_authorized_for_sender(user, sender):
+    """Checks whether the user is allowed to send from the specifed sender address"""
+    try:
+        response = ddb_table.get_item(Key={'user': user, 'address': sender})
+    except ClientError as err:
+        logger.error(
+            "User %s cannot send from address %s.\n%s: %s",
+            user, sender,
+            err.response['Error']['Code'], err.response['Error']['Message'])
+        raise
+    else:
+        return True
 
 def get_folder_list(client):
     '''Retrieves IMAP folders'''

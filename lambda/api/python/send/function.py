@@ -13,6 +13,13 @@ def handler(event, _context):
     body = json.loads(event['body'])
     user = event['requestContext']['authorizer']['claims']['cognito:username']
     # TODO: Check if user is authorized to send on behalf of body['sender'] # pylint: disable=fixme
+    if not user_authorized_for_sender(user, body['sender']):
+        return {
+            "statusCode": 500,
+            "body": json.dumps({
+                "status": "Sender address not associated with authenticated user"
+            })
+        }
 
     msg = compose_message(body['subject'], body['sender'], {
                             "to": ','.join(body['to_list']),
