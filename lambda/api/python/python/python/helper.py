@@ -44,7 +44,7 @@ def user_authorized_for_sender(user, sender):
     print (json.dumps(response))
     try:
         print(user)
-        pring(response['Item']['user'])
+        print(response['Item']['user'])
         return response['Item']['user'] == user
     except AttributeError:
         return False
