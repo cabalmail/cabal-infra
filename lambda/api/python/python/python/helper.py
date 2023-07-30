@@ -38,10 +38,7 @@ def user_authorized_for_sender(user, sender):
     try:
         response = ddb_table.get_item(Key={'user': user, 'address': sender})
     except ClientError as err:
-        logger.error(
-            "User %s cannot send from address %s.\n%s: %s",
-            user, sender,
-            err.response['Error']['Code'], err.response['Error']['Message'])
+        print(err.response['Error']['Message'])
         raise
     else:
         return True
