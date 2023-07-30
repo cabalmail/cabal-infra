@@ -259,8 +259,11 @@ class ComposeOverlay extends React.Component {
   }
 
   handleKeyDown = (e) => {
-    if (e.key === "Enter" || e.key === "Tab" || e.key === " " || e.key === ";" || e.key === ",") {
+    if (e.key === "Enter" || e.key === " " || e.key === ";" || e.key === ",") {
       e.preventDefault();
+      this.addRecipient(MESSAGE);
+    }
+    if (e.key === "Tab") {
       this.addRecipient(MESSAGE);
     }
   }
