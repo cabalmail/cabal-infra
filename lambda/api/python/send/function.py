@@ -5,7 +5,7 @@ from email.message import EmailMessage
 from email.utils import formatdate
 from helper import get_imap_client # pylint: disable=import-error
 from helper import get_mpw # pylint: disable=import-error
-from helper import user_authorized_for_sender # pyling: disable=import-error
+from helper import user_authorized_for_sender # pylint: disable=import-error
 
 def handler(event, _context):
     '''Sends an email message'''
