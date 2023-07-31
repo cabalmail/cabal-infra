@@ -27,6 +27,11 @@ jobs:
       uses: actions/checkout@v2
     - name: generate-versions
       run: ./.github/scripts/make-terraform.sh
+    - name: store-artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: versions.tf
+        path: ./terraform/infra/versions.tf
   chekov:
     runs-on: ubuntu-latest
     needs:
@@ -34,6 +39,12 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@v2
+    - name: retrieve-artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: versions.tf
+    -name: move
+      run: mv versions.tf ./terraform/infra/versions.tf
     - name: chekov
       uses: bridgecrewio/checkov-action@master
       with:
@@ -52,6 +63,12 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@v3
+    - name: retrieve-artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: versions.tf
+    -name: move
+      run: mv versions.tf ./terraform/infra/versions.tf
     - name: install-linters
       run: curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
     - name: initialize-linter
@@ -65,6 +82,12 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@v2
+    - name: retrieve-artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: versions.tf
+    -name: move
+      run: mv versions.tf ./terraform/infra/versions.tf
     - name: tfsec
       uses: aquasecurity/tfsec-action@v1.0.0
       with:
@@ -88,6 +111,12 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@v2
+    - name: retrieve-artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: versions.tf
+    -name: move
+      run: mv versions.tf ./terraform/infra/versions.tf
     - name: install-terraform
       uses: hashicorp/setup-terraform@v2
       with:
