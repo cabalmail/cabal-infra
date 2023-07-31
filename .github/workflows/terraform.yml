@@ -138,6 +138,7 @@ jobs:
         echo "smtpin_scale = ${{ vars.TF_VAR_SMTPIN_SCALE }}" >> terraform.tfvars
         echo "chef_license = \"${{ vars.TF_VAR_CHEF_LICENSE}}\"" >> terraform.tfvars
         echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
+        echo "backup = ${{ vars.TF_VAR_BACKUP }}" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
     - name: plan-terraform
@@ -182,6 +183,7 @@ jobs:
         echo "smtpin_scale = ${{ vars.TF_VAR_SMTPIN_SCALE }}" >> terraform.tfvars
         echo "chef_license = \"${{ vars.TF_VAR_CHEF_LICENSE}}\"" >> terraform.tfvars
         echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
+        echo "backup = ${{ vars.TF_VAR_BACKUP }}" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
     - name: apply-terraform
