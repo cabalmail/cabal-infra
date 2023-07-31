@@ -17,7 +17,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    environment: ${{ github.ref_name == 'refs/heads/main' && 'prod' || ( github.ref_name == 'refs/heads/stage' && 'stage' || 'development' ) }}
+    environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     steps:
     - name: checkout
       uses: actions/checkout@main
@@ -36,7 +36,7 @@ jobs:
       run: ./.github/scripts/build-api-python.sh
   deploy:
     runs-on: ubuntu-latest
-    environment: ${{ github.ref_name == 'refs/heads/main' && 'prod' || ( github.ref_name == 'refs/heads/stage' && 'stage' || 'development' ) }}
+    environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     needs: build
     env:
       TF_API_TOKEN: ${{ secrets.TF_TOKEN }}
@@ -65,6 +65,7 @@ jobs:
         echo "smtpin_scale = ${{ vars.TF_VAR_SMTPIN_SCALE }}" >> terraform.tfvars
         echo "chef_license = \"${{ vars.TF_VAR_CHEF_LICENSE}}\"" >> terraform.tfvars
         echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
+        echo "backup = ${{ vars.TF_VAR_BACKUP }}" >> terraform.tfvars
     - name: init-terraform
       run: cd ./terraform/infra && terraform init
     - name: apply-terraform
