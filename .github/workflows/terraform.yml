@@ -43,7 +43,7 @@ jobs:
       uses: actions/download-artifact@v3
       with:
         name: versions.tf
-    -name: move
+    - name: move
       run: mv versions.tf ./terraform/infra/versions.tf
     - name: chekov
       uses: bridgecrewio/checkov-action@master
