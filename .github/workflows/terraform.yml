@@ -137,8 +137,6 @@ jobs:
         echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
-    - name: workspace-terraform
-      run: terraform workspace select ${{ vars.TF_WORKSPACE }}
     - name: plan-terraform
       run: terraform plan -no-color
   apply:
@@ -183,7 +181,5 @@ jobs:
         echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
-    - name: workspace-terraform
-      run: terraform workspace select ${{ vars.TF_WORKSPACE }}
     - name: apply-terraform
       run: terraform apply -no-color -auto-approve
