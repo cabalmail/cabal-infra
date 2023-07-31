@@ -59,7 +59,7 @@ jobs:
     defaults:
       run:
         working-directory: ./terraform/infra
-    environment: ${{ github.ref_name == 'refs/heads/main' && 'prod' || ( github.ref_name == 'refs/heads/stage' && 'stage' || 'development' ) }}
+    environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     needs:
     - chekov
     - tflint
@@ -99,7 +99,7 @@ jobs:
     defaults:
       run:
         working-directory: ./terraform/infra
-    environment: ${{ github.ref_name == 'refs/heads/main' && 'prod' || ( github.ref_name == 'refs/heads/stage' && 'stage' || 'development' ) }}
+    environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     needs:
     - plan
     env:
