@@ -20,8 +20,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      TF_ENVIRONMENT: ${{ vars.TF_VAR_ENVIRONMENT }}
     steps:
     - name: checkout
       uses: actions/checkout@v2
