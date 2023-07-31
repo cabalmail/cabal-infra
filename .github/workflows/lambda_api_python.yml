@@ -36,5 +36,6 @@ jobs:
       run: ./.github/scripts/build-api-python.sh
   deploy:
     uses: ./.github/workflows/terraform.yml
+    secrets: inherit
     needs:
     - build
