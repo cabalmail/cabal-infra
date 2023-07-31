@@ -15,6 +15,7 @@ on:
       - 'terraform/infra/*'
       - 'terraform/infra/*/**'
       - '.github/workflows/terraform.yml'
+      - '.github/scripts/make-terraform.sh'
 
 jobs:
   build:
