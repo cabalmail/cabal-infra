@@ -20,6 +20,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     steps:
     - name: checkout
       uses: actions/checkout@v2
