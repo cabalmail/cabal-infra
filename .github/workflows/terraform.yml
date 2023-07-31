@@ -116,7 +116,7 @@ jobs:
       with:
         name: versions.tf
     - name: move
-      run: mv versions.tf ./terraform/infra/versions.tf
+      run: mv ../../versions.tf versions.tf
     - name: install-terraform
       uses: hashicorp/setup-terraform@v2
       with:
@@ -157,6 +157,12 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@v2
+    - name: retrieve-artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: versions.tf
+    - name: move
+      run: mv ../../versions.tf versions.tf
     - name: install-terraform
       uses: hashicorp/setup-terraform@v2
       with:
