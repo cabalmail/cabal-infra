@@ -67,7 +67,7 @@ jobs:
       uses: actions/download-artifact@v3
       with:
         name: versions.tf
-    -name: move
+    - name: move
       run: mv versions.tf ./terraform/infra/versions.tf
     - name: install-linters
       run: curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
@@ -86,7 +86,7 @@ jobs:
       uses: actions/download-artifact@v3
       with:
         name: versions.tf
-    -name: move
+    - name: move
       run: mv versions.tf ./terraform/infra/versions.tf
     - name: tfsec
       uses: aquasecurity/tfsec-action@v1.0.0
@@ -115,7 +115,7 @@ jobs:
       uses: actions/download-artifact@v3
       with:
         name: versions.tf
-    -name: move
+    - name: move
       run: mv versions.tf ./terraform/infra/versions.tf
     - name: install-terraform
       uses: hashicorp/setup-terraform@v2
