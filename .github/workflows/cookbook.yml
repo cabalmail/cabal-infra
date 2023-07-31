@@ -12,7 +12,7 @@ on:
       - stage
     paths:
       - 'chef/**'
-      - '.github/workflows/cookbook_deploy.yml'
+      - '.github/workflows/cookbook.yml'
 
 jobs:
   build:
