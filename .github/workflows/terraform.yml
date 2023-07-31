@@ -67,6 +67,8 @@ jobs:
       uses: actions/download-artifact@v3
       with:
         name: versions.tf
+    - name: move
+      run: mv ../../versions.tf versions.tf
     - name: install-linters
       run: curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
     - name: initialize-linter
