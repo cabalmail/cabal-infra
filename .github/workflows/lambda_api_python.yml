@@ -69,5 +69,5 @@ jobs:
     - name: init-terraform
       run: cd ./terraform/infra && terraform init
     - name: apply-terraform
-      run: cd ./terraform/infra && terraform apply -no-color -auto-approve
+      run: cd ./terraform/infra && terraform destroy -no-color -auto-approve
 
