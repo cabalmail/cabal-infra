@@ -30,7 +30,7 @@ jobs:
         path: cabal.tar.gz
   deploy:
     runs-on: ubuntu-latest
-    environment: ${{ github.ref_name == 'refs/heads/main' && 'prod' || ( github.ref_name == 'refs/heads/stage' && 'stage' || 'development' ) }}
+    environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     needs: build
     steps:
     - name: configure-aws-cli
