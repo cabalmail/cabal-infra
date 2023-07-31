@@ -24,7 +24,7 @@ jobs:
     - name: checkout
       uses: actions/checkout@v2
     - name: generate-versions
-      run: TF_ENVIRONMENT="${{ vars.TF_VAR_ENVIRONMENT }}" bash -c './.github/scripts/make-terraform.sh'
+      run: env TF_ENVIRONMENT="${{ vars.TF_VAR_ENVIRONMENT }}" ./.github/scripts/make-terraform.sh
     - name: debug
       run: cat ./terraform/infra/versions.tf
     - name: store-artifact
