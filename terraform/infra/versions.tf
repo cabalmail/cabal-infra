@@ -2,7 +2,7 @@ terraform {
   cloud {
     organization = "cabal"
     workspaces {
-      tags = ["infra","development"]
+      tags = ["infra",var.environment]
     }
   }
   required_providers {
