@@ -1,8 +1,10 @@
+#!/bin/bash
+cat << EO_TF > terraform/infra/versions.tf
 terraform {
   cloud {
     organization = "cabal"
     workspaces {
-      tags = ["infra",var.environment]
+      tags = ["infra","$TF_ENVIRONMENT"]
     }
   }
   required_providers {
@@ -17,3 +19,4 @@ terraform {
   }
   required_version = ">= 1.1.2"
 }
+EO_TF

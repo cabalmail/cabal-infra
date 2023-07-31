@@ -17,8 +17,19 @@ on:
       - '.github/workflows/terraform.yml'
 
 jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      TF_ENVIRONMENT: ${{ vars.TF_ENVIRONMENT }}
+    steps:
+    - name: checkout
+      uses: actions/checkout@v2
+    - name: substitute-macro
+      run: ./.github/scripts/make-terraform.sh
   chekov:
     runs-on: ubuntu-latest
+    needs:
+    - build
     steps:
     - name: checkout
       uses: actions/checkout@v2
@@ -32,6 +43,8 @@ jobs:
         download_external_modules: false
   tflint:
     runs-on: ubuntu-latest
+    needs:
+    - build
     defaults:
       run:
         working-directory: ./terraform/infra
@@ -46,6 +59,8 @@ jobs:
       run: for i in ./ modules/* modules/*/modules/* ; do tflint ; done
   tfsec:
     runs-on: ubuntu-latest
+    needs:
+    - build
     steps:
     - name: checkout
       uses: actions/checkout@v2
