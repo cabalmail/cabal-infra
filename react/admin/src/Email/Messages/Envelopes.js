@@ -53,7 +53,7 @@ class Envelopes extends React.Component {
         return (
           <li className={`message-row ${classes}`} key={id}>
             <div className="message-line-1">
-              <div className="message-field message-from">{message.from[0]}</div>
+              <div className="message-field message-from" title={message.from[0]}>{message.from[0]}</div>
               <div className="message-field message-date">{message.date}</div>
             </div>
             <div className="message-field message-subject">
