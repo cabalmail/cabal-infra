@@ -3,6 +3,7 @@ name: Build and Deploy Terraform Infrastructure
 
 on:
   workflow_dispatch:
+  workflow_call:
   repository_dispatch:
     types: [trigger_build]
   push:
@@ -15,13 +16,39 @@ on:
       - 'terraform/infra/*'
       - 'terraform/infra/*/**'
       - '.github/workflows/terraform.yml'
+      - '.github/scripts/make-terraform.sh'
 
 jobs:
-  chekov:
+  build:
     runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     steps:
     - name: checkout
       uses: actions/checkout@v2
+    - name: generate-versions
+      run: env TF_ENVIRONMENT="${{ vars.TF_VAR_ENVIRONMENT }}" ./.github/scripts/make-terraform.sh
+    - name: debug-1
+      run: cat ./terraform/infra/versions.tf
+    - name: debug-2
+      run: echo "${{ vars.TF_VAR_ENVIRONMENT }}"
+    - name: store-artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: versions.tf
+        path: ./terraform/infra/versions.tf
+  chekov:
+    runs-on: ubuntu-latest
+    needs:
+    - build
+    steps:
+    - name: checkout
+      uses: actions/checkout@v2
+    - name: retrieve-artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: versions.tf
+    - name: move
+      run: mv versions.tf ./terraform/infra/versions.tf
     - name: chekov
       uses: bridgecrewio/checkov-action@master
       with:
@@ -32,12 +59,20 @@ jobs:
         download_external_modules: false
   tflint:
     runs-on: ubuntu-latest
+    needs:
+    - build
     defaults:
       run:
         working-directory: ./terraform/infra
     steps:
     - name: checkout
       uses: actions/checkout@v3
+    - name: retrieve-artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: versions.tf
+    - name: move
+      run: mv ../../versions.tf versions.tf
     - name: install-linters
       run: curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
     - name: initialize-linter
@@ -46,9 +81,17 @@ jobs:
       run: for i in ./ modules/* modules/*/modules/* ; do tflint ; done
   tfsec:
     runs-on: ubuntu-latest
+    needs:
+    - build
     steps:
     - name: checkout
       uses: actions/checkout@v2
+    - name: retrieve-artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: versions.tf
+    - name: move
+      run: mv versions.tf ./terraform/infra/versions.tf
     - name: tfsec
       uses: aquasecurity/tfsec-action@v1.0.0
       with:
@@ -59,7 +102,7 @@ jobs:
     defaults:
       run:
         working-directory: ./terraform/infra
-    environment: ${{ github.ref_name == 'refs/heads/main' && 'prod' || ( github.ref_name == 'refs/heads/stage' && 'stage' || 'development' ) }}
+    environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     needs:
     - chekov
     - tflint
@@ -72,6 +115,12 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@v2
+    - name: retrieve-artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: versions.tf
+    - name: move
+      run: mv ../../versions.tf versions.tf
     - name: install-terraform
       uses: hashicorp/setup-terraform@v2
       with:
@@ -90,6 +139,7 @@ jobs:
         echo "smtpin_scale = ${{ vars.TF_VAR_SMTPIN_SCALE }}" >> terraform.tfvars
         echo "chef_license = \"${{ vars.TF_VAR_CHEF_LICENSE}}\"" >> terraform.tfvars
         echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
+        echo "backup = ${{ vars.TF_VAR_BACKUP }}" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
     - name: plan-terraform
@@ -99,7 +149,7 @@ jobs:
     defaults:
       run:
         working-directory: ./terraform/infra
-    environment: ${{ github.ref_name == 'refs/heads/main' && 'prod' || ( github.ref_name == 'refs/heads/stage' && 'stage' || 'development' ) }}
+    environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     needs:
     - plan
     env:
@@ -110,6 +160,12 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@v2
+    - name: retrieve-artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: versions.tf
+    - name: move
+      run: mv ../../versions.tf versions.tf
     - name: install-terraform
       uses: hashicorp/setup-terraform@v2
       with:
@@ -128,6 +184,7 @@ jobs:
         echo "smtpin_scale = ${{ vars.TF_VAR_SMTPIN_SCALE }}" >> terraform.tfvars
         echo "chef_license = \"${{ vars.TF_VAR_CHEF_LICENSE}}\"" >> terraform.tfvars
         echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
+        echo "backup = ${{ vars.TF_VAR_BACKUP }}" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
     - name: apply-terraform

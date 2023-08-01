@@ -219,58 +219,60 @@ class Messages extends React.Component {
     const selected = this.state.selected_messages.length ? " selected" : " none_selected";
     return (
       <div className="email_list">
-        <div className={`filters filters-dropdowns ${this.state.sort_order.css}`}>
-          <Folders 
+        <div className="sticky">
+          <div className={`filters filters-dropdowns ${this.state.sort_order.css}`}>
+            <Folders 
+              token={this.props.token}
+              api_url={this.props.api_url}
+              setFolder={this.setFolder}
+              host={this.props.host}
+              folder={this.props.folder}
+              setMessage={this.props.setMessage}
+              label="Folder"
+            />&nbsp;
+            <div>
+              <span className="filter filter-sort">
+                <label htmlFor="sort-field">Sort by:</label>
+                <select id="sort-by" name="sort-by" className="sort-by" onChange={this.setSortField}>
+                  {options}
+                </select>
+                <button
+                  id={ASC.css}
+                  className="sort-order"
+                  title="Sort ascending"
+                  onClick={this.sortAscending}
+                >&nbsp;
+                  <hr className="long first" />
+                  <hr className="medium second" />
+                  <hr className="short third" />
+                </button>
+                <button
+                  id={DESC.css}
+                  className="sort-order"
+                  title="Sort descending"
+                  onClick={this.sortDescending}
+                >&nbsp;
+                  <hr className="short first" />
+                  <hr className="medium second" />
+                  <hr className="long third" />
+                </button>
+              </span>
+            </div>
+          </div>
+          <Actions
             token={this.props.token}
             api_url={this.props.api_url}
-            setFolder={this.setFolder}
             host={this.props.host}
             folder={this.props.folder}
+            selected_messages={this.state.selected_messages}
+            selected={selected}
+            order={this.state.sort_order.imap}
+            field={this.state.sort_field.imap}
+            callback={this.callback}
+            catchback={this.catchback}
             setMessage={this.props.setMessage}
-            label="Folder"
-          />&nbsp;
-          <div>
-            <span className="filter filter-sort">
-              <label htmlFor="sort-field">Sort by:</label>
-              <select id="sort-by" name="sort-by" className="sort-by" onChange={this.setSortField}>
-                {options}
-              </select>
-              <button
-                id={ASC.css}
-                className="sort-order"
-                title="Sort ascending"
-                onClick={this.sortAscending}
-              >&nbsp;
-                <hr className="long first" />
-                <hr className="medium second" />
-                <hr className="short third" />
-              </button>
-              <button
-                id={DESC.css}
-                className="sort-order"
-                title="Sort descending"
-                onClick={this.sortDescending}
-              >&nbsp;
-                <hr className="short first" />
-                <hr className="medium second" />
-                <hr className="long third" />
-              </button>
-            </span>
-          </div>
+          />
         </div>
-        <Actions
-          token={this.props.token}
-          api_url={this.props.api_url}
-          host={this.props.host}
-          folder={this.props.folder}
-          selected_messages={this.state.selected_messages}
-          selected={selected}
-          order={this.state.sort_order.imap}
-          field={this.state.sort_field.imap}
-          callback={this.callback}
-          catchback={this.catchback}
-          setMessage={this.props.setMessage}
-        />
         <ul className={`message-list ${this.state.loading ? "loading" : ""}`}>
           {list}
         </ul>
