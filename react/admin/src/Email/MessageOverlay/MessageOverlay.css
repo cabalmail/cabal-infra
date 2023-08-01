@@ -36,12 +36,21 @@ div.message_overlay pre.message_plain {
   word-wrap: break-word;
 }
 
-div.message_overlay button.invert {
+div.message_overlay button.invert, div.message_overlay button.load {
   width: 3em;
+  height: 3em;
   position: absolute;
-  top: 0;
-  right: 0;
   margin-top: 0;
+  top: 0;
+}
+
+div.message_overlay button.invert {
+  right: 0;
+}
+
+div.message_overlay button.load {
+  right: 3em;
+  text-decoration: underline;
 }
 
 div.message_overlay button.close_overlay {
@@ -64,14 +73,6 @@ div.message_overlay .buttons {
 
 div.message_overlay div#message_html {
   padding-top: 2em;
-}
-
-div.message_overlay button.load {
-  width: 3em;
-  position: absolute;
-  top: 0;
-  right: 3em;
-  margin-top: 0;
 }
 
 div.message_overlay .tabBar {
