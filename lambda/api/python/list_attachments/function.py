@@ -6,8 +6,8 @@ def handler(event, _context):
     '''Retrieves list of attachments from a message given a folder and ID'''
     query_string = event['queryStringParameters']
     user = event['requestContext']['authorizer']['claims']['cognito:username']
-    message = get_message(
-              query_string['host'], user, query_string['folder'].replace("/","."), int(query_string['id']))
+    message = get_message(query_string['host'], user,
+                          query_string['folder'].replace("/","."), int(query_string['id']))
     attachments = []
     i = 0
     if message.is_multipart():
