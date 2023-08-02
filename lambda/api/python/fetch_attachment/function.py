@@ -14,7 +14,8 @@ def handler(event, _context):
     bucket = query_string['host'].replace("imap", "cache")
     key = f"{user}/{query_string['folder']}/{query_string['id']}/{query_string['filename']}"
     index = int(query_string['index'])
-    message = get_message(query_string['host'], user, query_string['folder'], query_string['id'])
+    message = get_message(query_string['host'], user,
+                          query_string['folder'].replace("/","."), query_string['id'])
     i = 0
     if message.is_multipart():
         for part in message.walk():
