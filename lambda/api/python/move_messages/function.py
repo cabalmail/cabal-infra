@@ -6,14 +6,14 @@ def handler(event, _context):
     '''Moves a message from source folder to destination folder'''
     body = json.loads(event['body'])
     user = event['requestContext']['authorizer']['claims']['cognito:username']
-    client = get_imap_client(body['host'], user, body['source'])
+    client = get_imap_client(body['host'], user, body['source'].replace("/","."))
     if body['destination'] == "Deleted Messages":
         try:
-            client.create_folder(body['destination'])
+            client.create_folder(body['destination'].replace("/","."))
         except: # pylint: disable=bare-except
             pass
     try:
-        client.move(body['ids'], body['destination'])
+        client.move(body['ids'], body['destination'].replace("/","."))
     except: # pylint: disable=bare-except
         client.logout()
         return {

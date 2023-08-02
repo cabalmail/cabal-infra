@@ -9,7 +9,7 @@ def handler(event, _context):
     query_string = event['queryStringParameters']
     user = event['requestContext']['authorizer']['claims']['cognito:username']
     message = get_message(
-              query_string['host'], user, query_string['folder'], int(query_string['id']))
+              query_string['host'], user, query_string['folder'].replace("/","."), int(query_string['id']))
     body_plain = ""
     body_html = ""
     body_html_charset = "utf8"

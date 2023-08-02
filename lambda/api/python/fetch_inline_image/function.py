@@ -14,7 +14,7 @@ def handler(event, _context):
     bucket = query_string['host'].replace("imap", "cache")
     key_prefix = f"{user}/{query_string['folder']}/{query_string['id']}/{query_string['index']}"
     key = ""
-    message = get_message(query_string['host'], user, query_string['folder'], query_string['id'])
+    message = get_message(query_string['host'], user, query_string['folder'].replace("/","."), query_string['id'])
     for part in message.walk():
         content_type = part.get_content_type()
         if part.get('Content-ID'):
