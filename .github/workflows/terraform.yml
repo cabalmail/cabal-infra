@@ -8,7 +8,6 @@ on:
     types: [trigger_build]
   push:
     branches:
-      - '0.3.0'
       - main
       - stage
     paths:
