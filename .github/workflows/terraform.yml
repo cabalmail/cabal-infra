@@ -186,6 +186,6 @@ jobs:
         echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
         echo "backup = ${{ vars.TF_VAR_BACKUP }}" >> terraform.tfvars
     - name: init-terraform
-      run: terraform init -lock-timeout=1800
+      run: terraform init
     - name: apply-terraform
       run: terraform apply -auto-approve -lock-timeout=30m
