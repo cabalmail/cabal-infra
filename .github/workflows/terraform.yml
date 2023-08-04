@@ -151,7 +151,7 @@ jobs:
   apply:
     needs:
     - plan
-    if: needs.plan.outputs.exit_code == '2'
+    # if: needs.plan.outputs.exit_code == '2'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -163,6 +163,8 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
     steps:
+    - name: debug
+      run: echo ">${{ needs.plan.outputs.exit_code }}<"
     - name: checkout
       uses: actions/checkout@v2
     - name: retrieve-artifact
