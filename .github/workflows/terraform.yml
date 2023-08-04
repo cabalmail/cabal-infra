@@ -143,7 +143,7 @@ jobs:
     - name: init-terraform
       run: terraform init
     - name: plan-terraform
-      run: terraform plan -no-color
+      run: terraform plan -lock-timeout=30m
   apply:
     runs-on: ubuntu-latest
     defaults:
@@ -188,4 +188,4 @@ jobs:
     - name: init-terraform
       run: terraform init
     - name: apply-terraform
-      run: terraform apply -no-color -auto-approve
+      run: terraform apply -auto-approve -lock-timeout=30m
