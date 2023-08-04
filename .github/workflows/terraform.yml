@@ -143,7 +143,7 @@ jobs:
     - name: init-terraform
       run: terraform init
     - name: plan-terraform
-      run: terraform plan -lock-timeout=1800
+      run: terraform plan -lock-timeout=30m
   apply:
     runs-on: ubuntu-latest
     defaults:
@@ -188,4 +188,4 @@ jobs:
     - name: init-terraform
       run: terraform init -lock-timeout=1800
     - name: apply-terraform
-      run: terraform apply -auto-approve -lock-timeout=1800
+      run: terraform apply -auto-approve -lock-timeout=30m
