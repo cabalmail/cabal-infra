@@ -149,14 +149,14 @@ jobs:
         echo "exit_code=$?" >> "$GITHUB_OUTPUT"
         
   apply:
+    needs:
+    - plan
     if: needs.plan.outputs.exit_code == '2'
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: ./terraform/infra
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
-    needs:
-    - plan
     env:
       TF_API_TOKEN: ${{ secrets.TF_TOKEN }}
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
