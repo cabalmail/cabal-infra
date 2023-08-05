@@ -145,11 +145,11 @@ jobs:
       run: terraform init
     - name: plan-terraform
       id: plan-terraform
-      run: |
-        terraform plan -lock-timeout=30m -detailed-exitcode
-        EXIT_CODE=$?
-        echo "xit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
-        cat $GITHUB_OUTPUT
+      continue-on-error: true
+      run: terraform plan -lock-timeout=30m -detailed-exitcode
+        # EXIT_CODE=$?
+        # echo "xit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+        # cat $GITHUB_OUTPUT
         
   apply:
     needs:
@@ -169,7 +169,7 @@ jobs:
     - name: checkout
       uses: actions/checkout@v3
     - name: debug
-      run: echo ">${{ needs.plan.outputs.xit_code }}<"
+      run: echo ">${{ needs.plan.outputs.exitcode }}<"
     - name: retrieve-artifact
       uses: actions/download-artifact@v3
       with:
