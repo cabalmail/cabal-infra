@@ -51,8 +51,8 @@ def get_folder_list(client):
     all_folders = client.list_folders()
     sub_folders = client.list_sub_folders()
     return {
-      folders: decode_folder_list(all_folders),
-      sub_folders: decode_folder_list(sub_folders)
+      'folders': decode_folder_list(all_folders),
+      'sub_folders': decode_folder_list(sub_folders)
     }
 
 def decode_folder_list(data):
