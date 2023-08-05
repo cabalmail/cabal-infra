@@ -143,9 +143,8 @@ jobs:
       run: terraform init
     - name: plan-terraform
       id: plan-terraform
-      continue-on-error: true
       run: ../../.github/scripts/plan-terraform.sh
-        
+
   apply:
     needs:
     - plan
