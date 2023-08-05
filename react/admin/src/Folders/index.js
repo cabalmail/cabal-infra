@@ -74,9 +74,6 @@ class Folders extends React.Component {
   render() {
     // TODO: handle nexted arrays
     const folder_list = this.state.folders.map(item => {
-      if (item === "INBOX") {
-        return false;
-      }
       const deleteButton = PERMANENT_FOLDERS.includes(item) ? null : (
         <>
           <button
