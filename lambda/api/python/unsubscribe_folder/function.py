@@ -1,6 +1,6 @@
 '''Marks the specified folder as unsubscribed'''
 import json
-from helper import subscribe_folder # pylint: disable=import-error
+from helper import unsubscribe_folder # pylint: disable=import-error
 
 def handler(event, _context):
     '''Moves a message from source folder to destination folder'''
