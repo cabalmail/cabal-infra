@@ -67,6 +67,18 @@ def folder_sort(k):
         return k
     return k.lower()
 
+def subscribe_folder(folder, host, user):
+    client = get_imap_client(host, user, folder)
+    return_value = client.subscribe_folder(folder)
+    client.logout()
+    return return_value
+
+def unsubscribe_folder(folder, host, user):
+    client = get_imap_client(host, user, folder)
+    return_value = client.unsubscribe_folder(folder)
+    client.logout()
+    return return_value
+
 def get_message(host, user, folder, id):
     '''Gets a message from cache on s3 or from imap server'''
     bucket = host.replace("imap", "cache")

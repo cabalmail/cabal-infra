@@ -153,6 +153,38 @@ export default class ApiClient {
     return response;
   }
 
+  subscribeFolder(folder) {
+    const response = axios.put('/subscribe_folder',
+      JSON.stringify({
+        host: this.host,
+        folder: folder
+      }),
+      {
+        baseURL: this.baseURL,
+        headers: {
+          'Authorization': this.token
+        },
+        timeout: TIMEOUT
+      }
+    );
+  }
+
+  unsubscribeFolder(folder) {
+    const response = axios.put('/subscribe_folder',
+      JSON.stringify({
+        host: this.host,
+        folder: folder
+      }),
+      {
+        baseURL: this.baseURL,
+        headers: {
+          'Authorization': this.token
+        },
+        timeout: TIMEOUT
+      }
+    );
+  }
+
   // Send
 
   sendMessage(smtp_host, sender, to_list, cc_list, bcc_list, subject, other_headers, html_body, text_body, draft) {

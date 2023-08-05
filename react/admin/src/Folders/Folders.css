@@ -52,4 +52,5 @@ body div.Folders div.content div.folders ul.folder_list li.folder span.subscribe
 
 body div.Folders div.content div.folders ul.folder_list li.folder span.favorite {
   font-size: medium;
+  cursor: pointer;
 }

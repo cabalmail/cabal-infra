@@ -33,9 +33,37 @@ class Folders extends React.Component {
     });
   }
 
+  componentDidUpdate(prevProps, prefState) {
+    const response = this.api.getFolderList();
+    response.then(data => {
+      try {
+        localStorage.setItem(FOLDER_LIST, JSON.stringify(data));
+      } catch (e) {
+        console.log(e);
+      }
+      this.setState({ ...this.state, folders: data.data.folders, sub_folders: data.data.sub_folders });
+    }).catch(e => {
+      console.log(e);
+    });
+  }
+
   setFolder = (e) => {
     e.preventDefault();
     this.props.setFolder(e.target.value);
+  }
+
+  subscribe = (e) => {
+    const response = this.api.subscribeFolder(e.target.dataset.folder);
+    response.then(data => {
+      localStorage.removeItem(FOLDER_LIST);
+    });
+  }
+
+  unsubscribe = (e) => {
+    const response = this.api.subscribeFolder(e.target.dataset.folder);
+    response.then(data => {
+      localStorage.removeItem(FOLDER_LIST);
+    });
   }
 
   handleNewClick = (e) => {
@@ -88,8 +116,8 @@ class Folders extends React.Component {
       return (
         <li className="folder" id={item}>
           {this.state.sub_folders.indexOf(item) > -1 ?
-            <span className="favorite subscribed">★</span> :
-            <span className="favorite unsubscribed">☆</span>}
+            <span data-folder={item} className="favorite subscribed" onClick={this.unsubscribe}>★</span> :
+            <span data-folder={item} className="favorite unsubscribed" onClick={this.subscribe}>☆</span>}
           <span className="folder_name">{item}</span>
           <button
             className="folder_button new_subfolder"
