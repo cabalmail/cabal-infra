@@ -1,7 +1,7 @@
 #!/bin/bash
 
-terraform plan -lock-timeout=30m -detailed-exitcode -out tmp
-terraform show tmp -no-color -json >tmp.json 
+terraform plan -lock-timeout=30m -detailed-exitcode -out ./tfplan
+terraform show -no-color -json ./tfplan >tmp.json 
 EXIT_CODE=$?
 echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
 cat $GITHUB_OUTPUT
