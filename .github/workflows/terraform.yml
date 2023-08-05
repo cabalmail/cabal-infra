@@ -147,6 +147,7 @@ jobs:
       run: |
         terraform plan -lock-timeout=30m -detailed-exitcode
         echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+        cat $GITHUB_OUTPUT
         
   apply:
     needs:
