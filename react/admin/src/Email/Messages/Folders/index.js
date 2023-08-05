@@ -3,7 +3,7 @@ import ApiClient from '../../../ApiClient';
 import { FOLDER_LIST, SUBSCRIBED_FOLDER_LIST } from '../../../constants';
 
 /**
- * Fetches folders for current users and displays them
+ * Fetches folders for current users and displays them in the email filter context
  */
 
 class Folders extends React.Component {
