@@ -48,8 +48,12 @@ def user_authorized_for_sender(user, sender):
 
 def get_folder_list(client):
     '''Retrieves IMAP folders'''
-    response = client.list_folders()
-    return decode_folder_list(response)
+    all_folders = client.list_folders()
+    sub_folders = client.list_sub_folders()
+    return {
+      folders: decode_folder_list(all_folders),
+      sub_folders: decode_folder_list(sub_folders)
+    }
 
 def decode_folder_list(data):
     '''Converts folder list to simple list'''
