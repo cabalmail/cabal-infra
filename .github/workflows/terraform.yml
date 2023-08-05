@@ -153,7 +153,7 @@ jobs:
     - chekov
     - tflint
     - tfsec
-    # if: needs.plan.outputs.exit_code == '2'
+    if: needs.plan.outputs.exit_code == '2'
     runs-on: ubuntu-latest
     defaults:
       run:
