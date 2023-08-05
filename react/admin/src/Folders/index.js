@@ -23,6 +23,7 @@ class Folders extends React.Component {
     response.then(data => {
       try {
         localStorage.setItem(FOLDER_LIST, JSON.stringify(data.folders));
+        localStorage.setItem(SUBSCRIBED_FOLDER_LIST, JSON.stringify(data.sub_folders));
       } catch (e) {
         console.log(e);
       }
