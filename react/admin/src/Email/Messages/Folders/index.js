@@ -20,11 +20,11 @@ class Folders extends React.Component {
     const response = this.api.getFolderList();
     response.then(data => {
       try {
-        localStorage.setItem(FOLDER_LIST, JSON.stringify(data));
+        localStorage.setItem(FOLDER_LIST, JSON.stringify(data.folders));
       } catch (e) {
         console.log(e);
       }
-      this.setState({ ...this.state, folders: data.data });
+      this.setState({ ...this.state, folders: data.data.folders });
     }).catch(e => {
       this.props.setMessage("Unable to fetch folders.", true);
       console.log(e);
