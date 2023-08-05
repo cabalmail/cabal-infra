@@ -23,7 +23,7 @@ jobs:
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     steps:
     - name: checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
     - name: generate-versions
       run: env TF_ENVIRONMENT="${{ vars.TF_VAR_ENVIRONMENT }}" ./.github/scripts/make-terraform.sh
     - name: debug-1
@@ -41,7 +41,7 @@ jobs:
     - build
     steps:
     - name: checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
     - name: retrieve-artifact
       uses: actions/download-artifact@v3
       with:
@@ -84,7 +84,7 @@ jobs:
     - build
     steps:
     - name: checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
     - name: retrieve-artifact
       uses: actions/download-artifact@v3
       with:
@@ -115,7 +115,7 @@ jobs:
       AWS_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
     - name: retrieve-artifact
       uses: actions/download-artifact@v3
       with:
@@ -165,7 +165,7 @@ jobs:
       AWS_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
     - name: debug
       run: echo ">${{ needs.plan.outputs.exit_code }}<"
     - name: retrieve-artifact
