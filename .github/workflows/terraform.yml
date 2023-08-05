@@ -173,12 +173,15 @@ jobs:
       with:
         name: versions.tf
     - name: move
+      if: needs.plan.outputs.exit_code == '2'
       run: mv ../../versions.tf versions.tf
     - name: install-terraform
+      if: needs.plan.outputs.exit_code == '2'
       uses: hashicorp/setup-terraform@v2
       with:
         cli_config_credentials_token: ${{ secrets.TF_TOKEN }}
     - name: tfvars-terraform
+      if: needs.plan.outputs.exit_code == '2'
       run: |
         echo "smtpout_scale = ${{ vars.TF_VAR_SMTPOUT_SCALE }}" > terraform.tfvars
         echo "availability_zones = ${{ vars.TF_VAR_AVAILABILITY_ZONES}}" >> terraform.tfvars
@@ -194,6 +197,8 @@ jobs:
         echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
         echo "backup = ${{ vars.TF_VAR_BACKUP }}" >> terraform.tfvars
     - name: init-terraform
+      if: needs.plan.outputs.exit_code == '2'
       run: terraform init
     - name: apply-terraform
+      if: needs.plan.outputs.exit_code == '2'
       run: terraform apply -auto-approve -lock-timeout=30m
