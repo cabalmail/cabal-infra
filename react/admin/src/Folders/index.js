@@ -22,11 +22,11 @@ class Folders extends React.Component {
     const response = this.api.getFolderList();
     response.then(data => {
       try {
-        localStorage.setItem(FOLDER_LIST, JSON.stringify(data.all_folders));
+        localStorage.setItem(FOLDER_LIST, JSON.stringify(data));
       } catch (e) {
         console.log(e);
       }
-      this.setState({ ...this.state, folders: data.data.all_folders });
+      this.setState({ ...this.state, folders: data.data });
     }).catch(e => {
       console.log(e);
     });
