@@ -99,7 +99,7 @@ jobs:
   plan:
     runs-on: ubuntu-latest
     outputs:
-      exit_code: ${{ steps.plan-terraform.outputs.exit_code }}
+      xit_code: ${{ steps.plan-terraform.outputs.xit_code }}
     defaults:
       run:
         working-directory: ./terraform/infra
@@ -148,13 +148,13 @@ jobs:
       run: |
         terraform plan -lock-timeout=30m -detailed-exitcode
         EXIT_CODE=$?
-        echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+        echo "xit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
         cat $GITHUB_OUTPUT
         
   apply:
     needs:
     - plan
-    # if: needs.plan.outputs.exit_code == '2'
+    if: needs.plan.outputs.xit_code == '2'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -169,21 +169,21 @@ jobs:
     - name: checkout
       uses: actions/checkout@v3
     - name: debug
-      run: echo ">${{ needs.plan.outputs.exit_code }}<"
+      run: echo ">${{ needs.plan.outputs.xit_code }}<"
     - name: retrieve-artifact
       uses: actions/download-artifact@v3
       with:
         name: versions.tf
     - name: move
-      if: needs.plan.outputs.exit_code == '2'
+      if: needs.plan.outputs.xit_code == '2'
       run: mv ../../versions.tf versions.tf
     - name: install-terraform
-      if: needs.plan.outputs.exit_code == '2'
+      if: needs.plan.outputs.xit_code == '2'
       uses: hashicorp/setup-terraform@v2
       with:
         cli_config_credentials_token: ${{ secrets.TF_TOKEN }}
     - name: tfvars-terraform
-      if: needs.plan.outputs.exit_code == '2'
+      if: needs.plan.outputs.xit_code == '2'
       run: |
         echo "smtpout_scale = ${{ vars.TF_VAR_SMTPOUT_SCALE }}" > terraform.tfvars
         echo "availability_zones = ${{ vars.TF_VAR_AVAILABILITY_ZONES}}" >> terraform.tfvars
@@ -199,8 +199,8 @@ jobs:
         echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
         echo "backup = ${{ vars.TF_VAR_BACKUP }}" >> terraform.tfvars
     - name: init-terraform
-      if: needs.plan.outputs.exit_code == '2'
+      if: needs.plan.outputs.xit_code == '2'
       run: terraform init
     - name: apply-terraform
-      if: needs.plan.outputs.exit_code == '2'
+      if: needs.plan.outputs.xit_code == '2'
       run: terraform apply -auto-approve -lock-timeout=30m
