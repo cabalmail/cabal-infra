@@ -144,6 +144,7 @@ jobs:
     - name: init-terraform
       run: terraform init
     - name: plan-terraform
+      id: plan-terraform
       run: |
         terraform plan -lock-timeout=30m -detailed-exitcode
         echo "exit_code=$?" >> "$GITHUB_OUTPUT"
