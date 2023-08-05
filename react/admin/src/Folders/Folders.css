@@ -49,3 +49,7 @@ div.Folders div.content {
 body div.Folders div.content div.folders ul.folder_list li.folder span.subscribed {
   color: #fa0;
 }
+
+body div.Folders div.content div.folders ul.folder_list li.folder span.favorite {
+  font-size: medium;
+}
