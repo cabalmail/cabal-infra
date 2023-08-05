@@ -98,6 +98,8 @@ jobs:
         working_directory: ./terraform/infra
   plan:
     runs-on: ubuntu-latest
+    needs:
+    - build
     outputs:
       xit_code: ${{ steps.plan-terraform.outputs.xit_code }}
     defaults:
