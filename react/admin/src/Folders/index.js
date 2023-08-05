@@ -13,6 +13,7 @@ class Folders extends React.Component {
     super(props);
     this.state = {
       folders: [],
+      sub_folders: [],
       new_folder: ''
     };
     this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
@@ -26,7 +27,7 @@ class Folders extends React.Component {
       } catch (e) {
         console.log(e);
       }
-      this.setState({ ...this.state, folders: data.data.folders });
+      this.setState({ ...this.state, folders: data.data.folders, sub_folders: data.data.sub_folders });
     }).catch(e => {
       console.log(e);
     });
@@ -86,6 +87,7 @@ class Folders extends React.Component {
       );
       return (
         <li className="folder" id={item}>
+          <span className="favorite">{this.state.sub_folders.indexOf(item) > -1 ? '★' : '☆'}</span>
           <span className="folder_name">{item}</span>
           <button
             className="folder_button new_subfolder"
