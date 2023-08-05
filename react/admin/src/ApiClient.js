@@ -167,6 +167,7 @@ export default class ApiClient {
         timeout: TIMEOUT
       }
     );
+    return response;
   }
 
   unsubscribeFolder(folder) {
@@ -183,6 +184,7 @@ export default class ApiClient {
         timeout: TIMEOUT
       }
     );
+    return response;
   }
 
   // Send
