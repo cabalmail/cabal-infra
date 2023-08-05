@@ -11,7 +11,8 @@ class Folders extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      folders: []
+      folders: [],
+      subscribed_folders: []
     };
     this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
   }
@@ -20,11 +21,11 @@ class Folders extends React.Component {
     const response = this.api.getFolderList();
     response.then(data => {
       try {
-        localStorage.setItem(FOLDER_LIST, JSON.stringify(data.folders));
+        localStorage.setItem(FOLDER_LIST, JSON.stringify(data));
       } catch (e) {
         console.log(e);
       }
-      this.setState({ ...this.state, folders: data.data.folders });
+      this.setState({ ...this.state, folders: data.data.folders, subscribed_folders: data.data.sub_folders });
     }).catch(e => {
       this.props.setMessage("Unable to fetch folders.", true);
       console.log(e);
