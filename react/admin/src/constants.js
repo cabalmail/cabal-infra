@@ -92,5 +92,4 @@ export const FORWARD = {
   icon: "👉"
 }
 export const FOLDER_LIST = "folder_list";
-export const SUBSCRIBED_FOLDER_LIST = "sub_folder_list";
 export const ADDRESS_LIST = "address_list";

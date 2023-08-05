@@ -1,6 +1,6 @@
 import React from 'react';
 import ApiClient from '../../../ApiClient';
-import { FOLDER_LIST, SUBSCRIBED_FOLDER_LIST } from '../../../constants';
+import { FOLDER_LIST } from '../../../constants';
 
 /**
  * Fetches folders for current users and displays them in the email filter context
@@ -21,8 +21,7 @@ class Folders extends React.Component {
     const response = this.api.getFolderList();
     response.then(data => {
       try {
-        localStorage.setItem(FOLDER_LIST, JSON.stringify(data.folders));
-        localStorage.setItem(SUBSCRIBED_FOLDER_LIST, JSON.stringify(data.sub_folders));
+        localStorage.setItem(FOLDER_LIST, JSON.stringify(data));
       } catch (e) {
         console.log(e);
       }
