@@ -125,6 +125,7 @@ jobs:
       uses: hashicorp/setup-terraform@v2
       with:
         cli_config_credentials_token: ${{ secrets.TF_TOKEN }}
+        terraform_wrapper: false
     - name: tfvars-terraform
       run: |
         echo "smtpout_scale = ${{ vars.TF_VAR_SMTPOUT_SCALE }}" > terraform.tfvars
