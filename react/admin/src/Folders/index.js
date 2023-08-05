@@ -87,7 +87,9 @@ class Folders extends React.Component {
       );
       return (
         <li className="folder" id={item}>
-          <span className="favorite">{this.state.sub_folders.indexOf(item) > -1 ? '★' : '☆'}</span>
+          {this.state.sub_folders.indexOf(item) > -1 ?
+            <span className="favorite subscribed">★</span> :
+            <span className="favorite unsubscribed">☆</span>}
           <span className="folder_name">{item}</span>
           <button
             className="folder_button new_subfolder"
