@@ -58,7 +58,7 @@ class Envelopes extends React.Component {
       if (id.toString() in this.state.envelopes) {
         const leadingActions = () => (
           <LeadingActions>
-            <SwipeAction data-id={id} onClick={this.handleLeftSwipe}>Mark as read</SwipeAction>
+            <SwipeAction data-id={id} onClick={this.handleLeftSwipe}>Toggle read</SwipeAction>
           </LeadingActions>
         );
         const trailingActions = () => (

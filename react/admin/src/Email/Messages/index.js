@@ -282,7 +282,11 @@ class Messages extends React.Component {
             setMessage={this.props.setMessage}
           />
         </div>
-        <SwipeableList fullSwipe={true} className={`message-list ${this.state.loading ? "loading" : ""}`}>
+        <SwipeableList
+          fullSwipe={true}
+          type="IOS"
+          className={`message-list ${this.state.loading ? "loading" : ""}`}
+        >
           {list}
         </SwipeableList>
       </div>
