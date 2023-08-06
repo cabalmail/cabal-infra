@@ -8,6 +8,8 @@ div.message-list, div.message-list div.message-row {
   list-style: none;
   padding: 0;
   line-height: 1.75em;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 div.message-list div.message-row {
