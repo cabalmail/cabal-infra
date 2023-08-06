@@ -22,7 +22,7 @@ div.email_list, div.message_overlay {
   overflow: scroll;
 }
 
-ul.message_list {
+div.message_list {
   position: relative;
 }
 
