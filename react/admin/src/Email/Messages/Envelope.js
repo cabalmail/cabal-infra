@@ -30,13 +30,11 @@ class Envelope extends React.Component {
 
   handleRightSwipe = () => {
     console.log("Right swipe detected");
-    console.log(e);
     this.props.handlRightSwipe(this.props.id)
   }
 
-  handleLeftSwipe = (e) => {
+  handleLeftSwipe = () => {
     console.log("Left swipe detected");
-    console.log(e);
     this.props.handlLeftSwipe(this.props.id)
   }
 
@@ -65,7 +63,7 @@ class Envelope extends React.Component {
       <SwipeableListItem
         threshold={0.5}
         className={`message-row ${classes}`}
-        key={id}
+        key={this.props.id}
         leadingActions={leadingActions()}
         trailingActions={trailingActions()}
       >
@@ -77,19 +75,19 @@ class Envelope extends React.Component {
           <input
             type="checkbox"
             id={id}
-            checked={this.props.selected_messages.includes(id)}
+            checked={this.props.selected_messages.includes(this.props.id)}
             onChange={this.handleCheck}
           />
-          <label htmlFor={id}><span className="checked">✓</span><span className="unchecked">&nbsp;</span></label>&nbsp;
+          <label htmlFor={this.props.id}><span className="checked">✓</span><span className="unchecked">&nbsp;</span></label>&nbsp;
           {(priority !== " ") && (priority !== "") ? '❗️ ' : ''}
           {flags.match(/Flagged/) ? '🚩 ' : ''}
           {flags.match(/Answered/) ? '⤶ ' : ''}
           {message.struct[1] === "mixed" ? '📎 ' : ''}
-          <span className="subject" id={id} onClick={this.handleClick}>{message.subject}</span>
+          <span className="subject" id={this.props.id} onClick={this.handleClick}>{message.subject}</span>
         </div>
       </SwipeableListItem>
     );
   }
 }
 
-export default Envelopes;
+export default Envelope;

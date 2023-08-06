@@ -42,14 +42,14 @@ class Envelopes extends React.Component {
     this.props.handleCheck(e.target.id, e.target.checked);
   }
 
-  handleRightSwipe = (e) => {
+  handleRightSwipe = (id) => {
     console.log("Right swipe detected");
-    console.log(e);
+    console.log(id);
   }
 
-  handleLeftSwipe = (e) => {
+  handleLeftSwipe = (id) => {
     console.log("Left swipe detected");
-    console.log(e);
+    console.log(id);
   }
 
   render() {
