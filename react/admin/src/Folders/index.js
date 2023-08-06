@@ -51,7 +51,7 @@ class Folders extends React.Component {
   }
 
   unsubscribe = (e) => {
-    const response = this.api.subscribeFolder(e.target.dataset.favorite);
+    const response = this.api.unsubscribeFolder(e.target.dataset.favorite);
     response.then(data => {
       localStorage.removeItem(FOLDER_LIST);
       this.updateFolders();
