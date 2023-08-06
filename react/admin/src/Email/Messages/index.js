@@ -177,6 +177,8 @@ class Messages extends React.Component {
             handleCheck={this.handleCheck}
             handleSelect={this.handleSelect}
             setMessage={this.props.setMessage}
+            handleLeftSwipe={this.handleLeftSwipe}
+            handleRightSwipe={this.handleRightSwipe}
           />
         </LazyLoad>
       );

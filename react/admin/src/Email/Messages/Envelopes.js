@@ -1,13 +1,7 @@
 import React from 'react';
+import Envelope from './Envelope';
 import ApiClient from '../../ApiClient';
 import './Envelopes.css';
-import {
-  LeadingActions,
-  SwipeableListItem,
-  SwipeAction,
-  TrailingActions,
-} from 'react-swipeable-list';
-import 'react-swipeable-list/dist/styles.css';
 
 class Envelopes extends React.Component {
 
@@ -61,63 +55,31 @@ class Envelopes extends React.Component {
   render() {
     const message_list = this.props.message_ids.map(id => {
       if (id.toString() in this.state.envelopes) {
-        const leadingActions = () => {
-          return (
-            <LeadingActions>
-              <SwipeAction data-id={id} onClick={this.handleLeftSwipe}>Toggle read</SwipeAction>
-            </LeadingActions>
-          );
-        };
-        const trailingActions = () => {
-          return (
-            <TrailingActions>
-              <SwipeAction data-id={id} onClick={this.handleRightSwipe}>Archive</SwipeAction>
-            </TrailingActions>
-          );
-        };
-        var message = this.state.envelopes[id];
-        var flags = message.flags.map(d => {return d.replace("\\","")}).join(" ");
-        var attachment = (message.struct[1] === "mixed" ? " Attachment" : "");
-        var priority = message.priority !== "" ? ` ${message.priority}` : "";
-        var selected = this.state.selected === id.toString() ? " selected" : "";
-        var classes = flags + attachment + priority + selected;
         return (
-          <SwipeableListItem
-            threshold={0.5}
-            className={`message-row ${classes}`}
-            key={id}
-            leadingActions={leadingActions()}
-            trailingActions={trailingActions()}
-          >
-            <div className="message-line-1">
-              <div className="message-field message-from" title={message.from[0]}>{message.from[0]}</div>
-              <div className="message-field message-date">{message.date}</div>
-            </div>
-            <div className="message-field message-subject">
-              <input
-                type="checkbox"
-                id={id}
-                checked={this.props.selected_messages.includes(id)}
-                onChange={this.handleCheck}
-              />
-              <label htmlFor={id}><span className="checked">✓</span><span className="unchecked">&nbsp;</span></label>&nbsp;
-              {(priority !== " ") && (priority !== "") ? '❗️ ' : ''}
-              {flags.match(/Flagged/) ? '🚩 ' : ''}
-              {flags.match(/Answered/) ? '⤶ ' : ''}
-              {message.struct[1] === "mixed" ? '📎 ' : ''}
-              <span className="subject" id={id} onClick={this.handleClick}>{message.subject}</span>
-            </div>
-          </SwipeableListItem>
+          <Envelope
+            folder={this.props.folder}
+            host={this.props.host}
+            token={this.props.token}
+            api_url={this.props.api_url}
+            selected_messages={this.props.selected_messages}
+            showOverlay={this.props.showOverlay}
+            handleCheck={this.props.handleCheck}
+            handleSelect={this.props.handleSelect}
+            handleLeftSwipe={this.props.handleLeftSwipe}
+            handleRightSwipe={this.props.handleRightSwipe}
+            setMessage={this.props.setMessage}
+            envelope={this.state.envelops[id]}
+          />
         );
       }
       return (
-        <li className="message-row loading" key={id}>
+        <div className="message-row loading" key={id}>
           <div className="message-line-1">
             <div className="message-field message-from">&nbsp;</div>
             <div className="message-field message-date">&nbsp;</div>
           </div>
           <div className="message-field message-subject">&nbsp;</div>
-        </li>
+        </div>
       );
     });
     return (
