@@ -66,7 +66,7 @@
   body div.compose-wrapper form.compose-overlay div.wysiwyg-toolbar div.rdw-option-wrapper:active:not(.rdw-colorpicker-option) {
     background-color: #300 !important;
   }
-  div.message-list li.Seen.selected div.message-subject {
+  div.message-list div.Seen.selected div.message-subject {
     color: #fff
   }
   div.message-list div.message-subject input[type=checkbox]:not(:checked) ~ label .unchecked,
