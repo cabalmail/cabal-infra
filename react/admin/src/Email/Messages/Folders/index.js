@@ -67,7 +67,7 @@ class Folders extends React.Component {
               {sub_folder_list}
             </optiongroup>
             <optiongroup label="Other Folders">
-              {sub_folder_list}
+              {folder_list}
             </optiongroup>
           </select>
         </span>
