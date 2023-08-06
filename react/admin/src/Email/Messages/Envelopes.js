@@ -57,10 +57,10 @@ class Envelopes extends React.Component {
       if (id.toString() in this.state.envelopes) {
         return (
           <Envelope
-            handleClick={this.props.handleClick}
-            handleCheck={this.props.handleCheck}
-            handleLeftSwipe={this.props.handleLeftSwipe}
-            handleRightSwipe={this.props.handleRightSwipe}
+            handleClick={this.handleClick}
+            handleCheck={this.handleCheck}
+            handleLeftSwipe={this.handleLeftSwipe}
+            handleRightSwipe={this.handleRightSwipe}
             envelope={this.state.envelops[id]}
             id={id}
           />
