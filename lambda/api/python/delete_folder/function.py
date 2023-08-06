@@ -13,6 +13,6 @@ def handler(event, _context):
     response = get_folder_list(client)
     client.logout()
     return {
-        "statusCode": 201,
+        "statusCode": 200,
         "body": json.dumps(response)
     }
