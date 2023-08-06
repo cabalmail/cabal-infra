@@ -4,29 +4,29 @@ div.sticky {
   top: 0;
 }
 
-ul.message-list, ul.message-list li.message-row {
+div.message-list, div.message-list div.message-row {
   list-style: none;
   padding: 0;
   line-height: 1.75em;
 }
 
-ul.message-list li.message-row {
+div.message-list div.message-row {
   border-bottom: 1px solid #888;
   align-items: baseline;
 }
 
-ul.message-list li.message-row div.message-line-1 {
+div.message-list div.message-row div.message-line-1 {
   display: grid;
   grid-template-columns: auto max-content;
   height: 1.75em;
 }
 
-ul.message-list div {
+div.message-list div {
   display: block;
   padding: .25em;
 }
 
-ul.message-list div.message-subject {
+div.message-list div.message-subject {
   font-size: 115%;
   font-weight: 900;
   white-space: nowrap;
@@ -34,30 +34,30 @@ ul.message-list div.message-subject {
   text-overflow: ellipsis;
 }
 
-ul.message-list li.Seen div.message-subject {
+div.message-list div.Seen div.message-subject {
   font-weight: 400;
 }
 
-ul.message-list li.Recent div.message-subject {
+div.message-list div.Recent div.message-subject {
   font-style: italic;
 }
 
-ul.message-list div.message-subject span.subject:hover {
+div.message-list div.message-subject span.subject:hover {
   text-decoration: underline;
 }
 
-ul.message-list div.message-subject input[type=checkbox],
-ul.message-list div.message-subject input[type=checkbox]:not(:checked) ~ label .checked,
-ul.message-list div.message-subject input[type=checkbox]:checked ~ label .unchecked {
+div.message-list div.message-subject input[type=checkbox],
+div.message-list div.message-subject input[type=checkbox]:not(:checked) ~ label .checked,
+div.message-list div.message-subject input[type=checkbox]:checked ~ label .unchecked {
   display: none;
 }
 
-ul.message-list div.message-subject label {
+div.message-list div.message-subject label {
   display: inline;
 }
 
-ul.message-list div.message-subject input[type=checkbox]:not(:checked) ~ label .unchecked,
-ul.message-list div.message-subject input[type=checkbox]:checked ~ label .checked {
+div.message-list div.message-subject input[type=checkbox]:not(:checked) ~ label .unchecked,
+div.message-list div.message-subject input[type=checkbox]:checked ~ label .checked {
   display: inline-block;
   font-family: arial;
   font-size: 150%;
@@ -70,20 +70,20 @@ ul.message-list div.message-subject input[type=checkbox]:checked ~ label .checke
   overflow: visible;
 }
 
-ul.message-list div.message-from {
+div.message-list div.message-from {
   height: 1.75em;
   white-space: nowrap;
   text-overflow: ellipsis;
   overflow: hidden;
 }
 
-ul.message-list div.message-date {
+div.message-list div.message-date {
   font-style: italic;
   text-align: right;
   font-size: x-small;
 }
 
-ul.message-list li.loading {
+div.message-list div.loading {
   background: #000;
   width: 3em;
   height: 3em;
@@ -96,11 +96,11 @@ ul.message-list li.loading {
   border-bottom: 0;
 }
 
-ul.message-list li.loading div.message-subject::before {
+div.message-list div.loading div.message-subject::before {
   content: '';
   display: none;
 }
 
-div.message-list ul.loading {
+div.message-list div.loading {
   display: none;
 }
