@@ -74,7 +74,7 @@ class Envelope extends React.Component {
         <div className="message-field message-subject">
           <input
             type="checkbox"
-            id={id}
+            id={this.props.id}
             checked={this.props.selected_messages.includes(this.props.id)}
             onChange={this.handleCheck}
           />
