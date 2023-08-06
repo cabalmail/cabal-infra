@@ -284,7 +284,7 @@ class Messages extends React.Component {
         </div>
         <SwipeableList className={`message-list ${this.state.loading ? "loading" : ""}`}>
           {list}
-        </ul>
+        </SwipeableList>
       </div>
     );
   }
