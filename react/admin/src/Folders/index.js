@@ -101,9 +101,8 @@ class Folders extends React.Component {
   }
 
   render() {
-    // TODO: handle nexted arrays
     const folder_list = this.state.folders.map(item => {
-      const favorite = this.state.sub_folders.indexOf(item) > -1 ? (
+      const favorite = this.state.sub_folders.includes(item) ? (
         <span data-folder={item} className="favorite subscribed" onClick={this.unsubscribe}>★</span>
       ) : (
         <span data-folder={item} className="favorite unsubscribed" onClick={this.subscribe}>☆</span>
