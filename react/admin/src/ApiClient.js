@@ -171,7 +171,7 @@ export default class ApiClient {
   }
 
   unsubscribeFolder(folder) {
-    const response = axios.put('/subscribe_folder',
+    const response = axios.put('/unsubscribe_folder',
       JSON.stringify({
         host: this.host,
         folder: folder
