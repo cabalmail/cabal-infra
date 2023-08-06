@@ -61,8 +61,8 @@ class Envelopes extends React.Component {
             handleCheck={this.handleCheck}
             handleLeftSwipe={this.handleLeftSwipe}
             handleRightSwipe={this.handleRightSwipe}
-            envelope={this.state.envelops[id]}
-            id={id}
+            envelope={this.state.envelops[id.toString()]}
+            id={id.toString()}
           />
         );
       }
