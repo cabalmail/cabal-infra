@@ -53,19 +53,28 @@ class Envelopes extends React.Component {
     console.log(e);
   }
 
+  handleLeftSwipe = (e) => {
+    console.log("Left swipe detected");
+    console.log(e);
+  }
+
   render() {
     const message_list = this.props.message_ids.map(id => {
       if (id.toString() in this.state.envelopes) {
-        const leadingActions = () => (
-          <LeadingActions>
-            <SwipeAction data-id={id} onClick={this.handleLeftSwipe}>Toggle read</SwipeAction>
-          </LeadingActions>
-        );
-        const trailingActions = () => (
-          <TrailingActions>
-            <SwipeAction data-id={id} onClick={this.handleRightSwipe}>Archive</SwipeAction>
-          </TrailingActions>
-        );
+        const leadingActions = () => {
+          return (
+            <LeadingActions>
+              <SwipeAction data-id={id} onClick={this.handleLeftSwipe}>Toggle read</SwipeAction>
+            </LeadingActions>
+          );
+        };
+        const trailingActions = () => {
+          return (
+            <TrailingActions>
+              <SwipeAction data-id={id} onClick={this.handleRightSwipe}>Archive</SwipeAction>
+            </TrailingActions>
+          );
+        };
         var message = this.state.envelopes[id];
         var flags = message.flags.map(d => {return d.replace("\\","")}).join(" ");
         var attachment = (message.struct[1] === "mixed" ? " Attachment" : "");
