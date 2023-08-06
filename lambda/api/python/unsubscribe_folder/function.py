@@ -6,7 +6,7 @@ def handler(event, _context):
     '''Marks the specified folder as unsubscribedr'''
     body = json.loads(event['body'])
     user = event['requestContext']['authorizer']['claims']['cognito:username']
-    status = unsubscribe_folder(body['folder'], body['host'], user)
+    status = unsubscribe_folder(body['folder'].replace("/","."), body['host'], user)
     return {
         "statusCode": 200,
         "body": json.dumps({
