@@ -48,8 +48,12 @@ def user_authorized_for_sender(user, sender):
 
 def get_folder_list(client):
     '''Retrieves IMAP folders'''
-    response = client.list_folders()
-    return decode_folder_list(response)
+    all_folders = client.list_folders()
+    sub_folders = client.list_sub_folders()
+    return {
+      'folders': decode_folder_list(all_folders),
+      'sub_folders': decode_folder_list(sub_folders)
+    }
 
 def decode_folder_list(data):
     '''Converts folder list to simple list'''
@@ -62,6 +66,18 @@ def folder_sort(k):
     if k == 'INBOX':
         return k
     return k.lower()
+
+def subscribe_folder(folder, host, user):
+    client = get_imap_client(host, user, folder)
+    return_value = client.subscribe_folder(folder)
+    client.logout()
+    return return_value
+
+def unsubscribe_folder(folder, host, user):
+    client = get_imap_client(host, user, folder)
+    return_value = client.unsubscribe_folder(folder)
+    client.logout()
+    return return_value
 
 def get_message(host, user, folder, id):
     '''Gets a message from cache on s3 or from imap server'''

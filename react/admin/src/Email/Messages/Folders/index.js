@@ -3,7 +3,7 @@ import ApiClient from '../../../ApiClient';
 import { FOLDER_LIST } from '../../../constants';
 
 /**
- * Fetches folders for current users and displays them
+ * Fetches folders for current users and displays them in the email filter context
  */
 
 class Folders extends React.Component {
@@ -11,7 +11,8 @@ class Folders extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      folders: []
+      folders: [],
+      subscribed_folders: []
     };
     this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
   }
@@ -24,7 +25,7 @@ class Folders extends React.Component {
       } catch (e) {
         console.log(e);
       }
-      this.setState({ ...this.state, folders: data.data });
+      this.setState({ ...this.state, folders: data.data.folders, subscribed_folders: data.data.sub_folders });
     }).catch(e => {
       this.props.setMessage("Unable to fetch folders.", true);
       console.log(e);

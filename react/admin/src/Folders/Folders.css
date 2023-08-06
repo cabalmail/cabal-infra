@@ -31,7 +31,7 @@ div.folders ul.folder_list li.folder {
   list-style: none;
   margin: 0;
   display: grid;
-  grid-template-columns: auto 3em 3em;
+  grid-template-columns: 1.5em auto 3em 3em;
   border-bottom: 1px solid;
   align-items: baseline;
 }
@@ -44,4 +44,13 @@ div.Folders div.content {
   max-width: 60em;
   margin-left: auto;
   margin-right: auto;
+}
+
+body div.Folders div.content div.folders ul.folder_list li.folder span.subscribed {
+  color: #fa0;
+}
+
+body div.Folders div.content div.folders ul.folder_list li.folder span.favorite {
+  font-size: medium;
+  cursor: pointer;
 }
