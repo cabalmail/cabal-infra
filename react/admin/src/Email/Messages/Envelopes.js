@@ -83,6 +83,7 @@ class Envelopes extends React.Component {
         var classes = flags + attachment + priority + selected;
         return (
           <SwipeableListItem
+            onSwipeProgress={(d, _d) => console.log(d)}
             className={`message-row ${classes}`}
             key={id}
             leadingActions={leadingActions()}
