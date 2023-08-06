@@ -31,7 +31,11 @@ class Folders extends React.Component {
       } catch (e) {
         console.log(e);
       }
-      this.setState({ ...this.state, folders: data.data.folders, sub_folders: data.data.sub_folders });
+      const all_folders = [...new Set([
+                          ...(data.data.folders),
+                          ...(data.data.sub_folders)
+                          ])];
+      this.setState({ ...this.state, folders: all_folders, sub_folders: data.data.sub_folders });
     }).catch(e => {
       console.log(e);
     });
@@ -70,7 +74,11 @@ class Folders extends React.Component {
       e.target.dataset.parent,
       this.state.new_folder
     ).then(data => {
-      this.setState({ ...this.state, folders: data.data });
+      const all_folders = [...new Set([
+                          ...(data.data.folders),
+                          ...(data.data.sub_folders)
+                          ])];
+      this.setState({ ...this.state, folders: all_folders, sub_folders: data.data.sub_folders });
     }).catch(e => {
       this.props.setMessage("Unable to create folder.", true);
       console.log(e);
@@ -81,7 +89,11 @@ class Folders extends React.Component {
     this.api.deleteFolder(
       e.target.dataset.folder,
     ).then(data => {
-      this.setState({ ...this.state, folders: data.data });
+      const all_folders = [...new Set([
+                          ...(data.data.folders),
+                          ...(data.data.sub_folders)
+                          ])];
+      this.setState({ ...this.state, folders: all_folders, sub_folders: data.data.sub_folders });
     }).catch(e => {
       this.props.setMessage("Unable to delete folder.", true);
       console.log(e);

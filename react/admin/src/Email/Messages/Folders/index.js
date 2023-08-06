@@ -25,7 +25,11 @@ class Folders extends React.Component {
       } catch (e) {
         console.log(e);
       }
-      this.setState({ ...this.state, folders: data.data.folders, subscribed_folders: data.data.sub_folders });
+      const all_folders = [...new Set([
+                          ...(data.data.folders),
+                          ...(data.data.sub_folders)
+                          ])];
+      this.setState({ ...this.state, folders: all_folders, subscribed_folders: data.data.sub_folders });
     }).catch(e => {
       this.props.setMessage("Unable to fetch folders.", true);
       console.log(e);
