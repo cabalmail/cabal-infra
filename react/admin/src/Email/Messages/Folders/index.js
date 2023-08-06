@@ -39,7 +39,7 @@ class Folders extends React.Component {
 
   render() {
     // TODO: handle nexted arrays
-    const sub_folder_list = this.state.sub_folders.map(item => {
+    const sub_folder_list = this.state.subscribed_folders.map(item => {
       if (this.state.folders.indexOf(item) === -1) {
         return (
           <option value={item}>{item}</option>
