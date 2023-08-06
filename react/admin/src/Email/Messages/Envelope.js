@@ -1,5 +1,4 @@
 import React from 'react';
-import ApiClient from '../../ApiClient';
 import './Envelopes.css';
 import {
   LeadingActions,
