@@ -45,7 +45,7 @@ class Folders extends React.Component {
       );
     });
     const folder_list = this.state.folders.filter(item => {
-      return this.state.folders.indexOf(item) === -1;
+      return this.state.subscribed_folders.indexOf(item) === -1;
     }).map(item => {
       return (
         <option value={item}>{item}</option>
