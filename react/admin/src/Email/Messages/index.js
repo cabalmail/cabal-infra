@@ -9,7 +9,8 @@ import Envelopes from './Envelopes';
 import Folders from './Folders';
 import Actions from '../Actions';
 import { ASC, DESC, ARRIVAL, DATE, FROM, SUBJECT, PAGE_SIZE } from '../../constants';
-
+import { SwipeableList } from 'react-swipeable-list';
+import 'react-swipeable-list/dist/styles.css';
 import './Messages.css';
 
 class Messages extends React.Component {
@@ -151,6 +152,14 @@ class Messages extends React.Component {
     });
   }
 
+  handleLeftSwipe = (message_id) => {
+    console.log("Left swipe not implemented");
+  }
+
+  handleRightSwipe = (message_id) => {
+    console.log("Right swipe not implemented");
+  }
+
   loadList() {
     const num_ids = this.state.message_ids.length;
     var pages = [];
@@ -273,7 +282,7 @@ class Messages extends React.Component {
             setMessage={this.props.setMessage}
           />
         </div>
-        <ul className={`message-list ${this.state.loading ? "loading" : ""}`}>
+        <SwipeableList className={`message-list ${this.state.loading ? "loading" : ""}`}>
           {list}
         </ul>
       </div>

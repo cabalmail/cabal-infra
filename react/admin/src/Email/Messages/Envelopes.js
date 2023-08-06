@@ -1,6 +1,13 @@
 import React from 'react';
 import ApiClient from '../../ApiClient';
 import './Envelopes.css';
+import {
+  LeadingActions,
+  SwipeableListItem,
+  SwipeAction,
+  TrailingActions,
+} from 'react-swipeable-list';
+import 'react-swipeable-list/dist/styles.css';
 
 class Envelopes extends React.Component {
 
@@ -41,9 +48,24 @@ class Envelopes extends React.Component {
     this.props.handleCheck(e.target.id, e.target.checked);
   }
 
+  handleRightSwipe = (e) => {
+    console.log("Right swipe detected");
+    console.log(e);
+  }
+
   render() {
     const message_list = this.props.message_ids.map(id => {
       if (id.toString() in this.state.envelopes) {
+        const leadingActions = () => (
+          <LeadingActions>
+            <SwipeAction data-id={id} onClick={this.handleLeftSwipe}>Mark as read</SwipeAction>
+          </LeadingActions>
+        );
+        const trailingActions = () => (
+          <TrailingActions>
+            <SwipeAction data-id={id} onClick={this.handleRightSwipe}>Archive</SwipeAction>
+          </TrailingActions>
+        );
         var message = this.state.envelopes[id];
         var flags = message.flags.map(d => {return d.replace("\\","")}).join(" ");
         var attachment = (message.struct[1] === "mixed" ? " Attachment" : "");
@@ -51,7 +73,7 @@ class Envelopes extends React.Component {
         var selected = this.state.selected === id.toString() ? " selected" : "";
         var classes = flags + attachment + priority + selected;
         return (
-          <li className={`message-row ${classes}`} key={id}>
+          <SwipeableListItem className={`message-row ${classes}`} key={id} leadingActions={leadingActions()}>
             <div className="message-line-1">
               <div className="message-field message-from" title={message.from[0]}>{message.from[0]}</div>
               <div className="message-field message-date">{message.date}</div>
@@ -70,7 +92,7 @@ class Envelopes extends React.Component {
               {message.struct[1] === "mixed" ? '📎 ' : ''}
               <span className="subject" id={id} onClick={this.handleClick}>{message.subject}</span>
             </div>
-          </li>
+          </SwipeableListItem>
         );
       }
       return (
