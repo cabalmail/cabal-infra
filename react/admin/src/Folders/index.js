@@ -33,20 +33,6 @@ class Folders extends React.Component {
     });
   }
 
-  componentDidUpdate(prevProps, prefState) {
-    const response = this.api.getFolderList();
-    response.then(data => {
-      try {
-        localStorage.setItem(FOLDER_LIST, JSON.stringify(data));
-      } catch (e) {
-        console.log(e);
-      }
-      this.setState({ ...this.state, folders: data.data.folders, sub_folders: data.data.sub_folders });
-    }).catch(e => {
-      console.log(e);
-    });
-  }
-
   setFolder = (e) => {
     e.preventDefault();
     this.props.setFolder(e.target.value);
