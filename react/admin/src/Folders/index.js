@@ -95,15 +95,15 @@ class Folders extends React.Component {
   render() {
     const folder_list = this.state.folders.map(item => {
       const favorite = this.state.sub_folders.includes(item) ? (
-        <span data-folder={item} className="favorite subscribed" onClick={this.unsubscribe}>★</span>
+        <span data-favorite={item} className="favorite subscribed" onClick={this.unsubscribe}>★</span>
       ) : (
-        <span data-folder={item} className="favorite unsubscribed" onClick={this.subscribe}>☆</span>
+        <span data-favorite={item} className="favorite unsubscribed" onClick={this.subscribe}>☆</span>
       )
       const deleteButton = PERMANENT_FOLDERS.includes(item) ? null : (
         <>
           <button
             className="folder_button delete_folder"
-            data-favorite={item}
+            data-folder={item}
             onClick={this.handleDelClick}
             title={`Delete ${item}`}
           >🗑️</button>
