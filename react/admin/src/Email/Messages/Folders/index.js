@@ -39,6 +39,14 @@ class Folders extends React.Component {
 
   render() {
     // TODO: handle nexted arrays
+    const sub_folder_list = this.state.sub_folders.map(item => {
+      if (this.state.folders.indexOf(item) === -1) {
+        return (
+          <option value={item}>{item}</option>
+        );
+      }
+      return null;
+    });
     const folder_list = this.state.folders.map(item => {
       return (
         <option value={item}>{item}</option>
@@ -54,7 +62,13 @@ class Folders extends React.Component {
             value={this.props.folder}
             className="selectFolder"
           >
-          {folder_list}
+            <option value="INBOX">INBOX</option>
+            <optiongroup label="Subscribed Folders">
+              {sub_folder_list}
+            </optiongroup>
+            <optiongroup label="Other Folders">
+              {sub_folder_list}
+            </optiongroup>
           </select>
         </span>
       </div>
