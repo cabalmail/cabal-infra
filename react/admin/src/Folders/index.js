@@ -20,6 +20,10 @@ class Folders extends React.Component {
   }
 
   componentDidMount() {
+    this.updateFolders();
+  }
+
+  updateFolders() {
     const response = this.api.getFolderList();
     response.then(data => {
       try {
@@ -42,6 +46,7 @@ class Folders extends React.Component {
     const response = this.api.subscribeFolder(e.target.dataset.favorite);
     response.then(data => {
       localStorage.removeItem(FOLDER_LIST);
+      this.updateFolders();
     });
   }
 
@@ -49,6 +54,7 @@ class Folders extends React.Component {
     const response = this.api.subscribeFolder(e.target.dataset.favorite);
     response.then(data => {
       localStorage.removeItem(FOLDER_LIST);
+      this.updateFolders();
     });
   }
 
