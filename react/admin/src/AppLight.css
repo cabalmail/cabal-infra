@@ -66,6 +66,7 @@
   body div.compose-wrapper form.compose-overlay div.wysiwyg-toolbar div.rdw-option-active:not(.rdw-colorpicker-option),
   body div.compose-wrapper form.compose-overlay div.wysiwyg-toolbar div.rdw-option-wrapper:active:not(.rdw-colorpicker-option) {
     background-color: #a33 !important;
+    color: #ff9 !important;
   }
   ul.message-list li.Seen.selected div.message-subject {
     color: #000
