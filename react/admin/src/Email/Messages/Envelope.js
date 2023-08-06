@@ -74,7 +74,7 @@ class Envelope extends React.Component {
           <input
             type="checkbox"
             id={this.props.id}
-            checked={this.props.selected_messages.includes(this.props.id)}
+            checked={this.state.selected}
             onChange={this.handleCheck}
           />
           <label htmlFor={this.props.id}><span className="checked">✓</span><span className="unchecked">&nbsp;</span></label>&nbsp;
