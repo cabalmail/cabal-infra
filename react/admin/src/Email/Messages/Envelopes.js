@@ -63,12 +63,14 @@ class Envelopes extends React.Component {
             api_url={this.props.api_url}
             selected_messages={this.props.selected_messages}
             showOverlay={this.props.showOverlay}
+            handleClick={this.props.handleClick}
             handleCheck={this.props.handleCheck}
             handleSelect={this.props.handleSelect}
             handleLeftSwipe={this.props.handleLeftSwipe}
             handleRightSwipe={this.props.handleRightSwipe}
             setMessage={this.props.setMessage}
             envelope={this.state.envelops[id]}
+            id={id}
           />
         );
       }
