@@ -62,12 +62,12 @@ class Folders extends React.Component {
             className="selectFolder"
           >
             <option value="INBOX">INBOX</option>
-            <optiongroup label="Subscribed Folders">
+            <optgroup label="Subscribed Folders">
               {sub_folder_list}
-            </optiongroup>
-            <optiongroup label="Other Folders">
+            </optgroup>
+            <optgroup label="Other Folders">
               {folder_list}
-            </optiongroup>
+            </optgroup>
           </select>
         </span>
       </div>
