@@ -53,14 +53,14 @@ class Folders extends React.Component {
   }
 
   subscribe = (e) => {
-    const response = this.api.subscribeFolder(e.target.dataset.folder);
+    const response = this.api.subscribeFolder(e.target.dataset.favorite);
     response.then(data => {
       localStorage.removeItem(FOLDER_LIST);
     });
   }
 
   unsubscribe = (e) => {
-    const response = this.api.subscribeFolder(e.target.dataset.folder);
+    const response = this.api.subscribeFolder(e.target.dataset.favorite);
     response.then(data => {
       localStorage.removeItem(FOLDER_LIST);
     });
@@ -100,22 +100,19 @@ class Folders extends React.Component {
     this.setState({...this.state, new_folder: e.target.value});
   }
 
-  renderFavorite(item) {
-    const subscribed = this.state.sub_folders.indexOf(item) > -1;
-    if (subscribed) {
-      return <span data-folder={item} className="favorite subscribed" onClick={this.unsubscribe}>★</span>;
-    }
-    return <span data-folder={item} className="favorite unsubscribed" onClick={this.subscribe}>☆</span>;
-  }
-
   render() {
     // TODO: handle nexted arrays
     const folder_list = this.state.folders.map(item => {
+      const favorite = this.state.sub_folders.indexOf(item) > -1 ? (
+        <span data-folder={item} className="favorite subscribed" onClick={this.unsubscribe}>★</span>
+      ) : (
+        <span data-folder={item} className="favorite unsubscribed" onClick={this.subscribe}>☆</span>
+      )
       const deleteButton = PERMANENT_FOLDERS.includes(item) ? null : (
         <>
           <button
             className="folder_button delete_folder"
-            data-folder={item}
+            data-favorite={item}
             onClick={this.handleDelClick}
             title={`Delete ${item}`}
           >🗑️</button>
@@ -123,7 +120,7 @@ class Folders extends React.Component {
       );
       return (
         <li className="folder" id={item}>
-          {this.renderFavorite(item)}
+          {favorite}
           <span className="folder_name">{item}</span>
           <button
             className="folder_button new_subfolder"
