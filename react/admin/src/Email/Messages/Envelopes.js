@@ -73,7 +73,12 @@ class Envelopes extends React.Component {
         var selected = this.state.selected === id.toString() ? " selected" : "";
         var classes = flags + attachment + priority + selected;
         return (
-          <SwipeableListItem className={`message-row ${classes}`} key={id} leadingActions={leadingActions()}>
+          <SwipeableListItem
+            className={`message-row ${classes}`}
+            key={id}
+            leadingActions={leadingActions()}
+            trailingActions={trailingActions()}
+          >
             <div className="message-line-1">
               <div className="message-field message-from" title={message.from[0]}>{message.from[0]}</div>
               <div className="message-field message-date">{message.date}</div>
