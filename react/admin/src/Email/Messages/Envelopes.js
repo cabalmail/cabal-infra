@@ -45,11 +45,13 @@ class Envelopes extends React.Component {
   handleRightSwipe = (id) => {
     console.log("Right swipe detected");
     console.log(id);
+    this.props.handleRightSwipe(id);
   }
 
   handleLeftSwipe = (id) => {
     console.log("Left swipe detected");
     console.log(id);
+    this.props.handleLeftSwipt(id);
   }
 
   render() {
