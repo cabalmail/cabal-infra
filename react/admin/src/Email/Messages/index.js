@@ -158,16 +158,16 @@ class Messages extends React.Component {
       READ.imap,
       READ.op,
       [message_id],
-      this.state.sort_order,
-      this.state.sort_field
+      this.state.sort_order.imap,
+      this.state.sort_field.imap
     ).then(() => {
       this.callback();
       this.api.moveMessages(
         this.props.folder,
         'Archive',
         [message_id],
-        this.state.sort_order,
-        this.state.sort_field
+        this.state.sort_order.imap,
+        this.state.sort_field.imap
       );
     }).catch(this.catchback);
   }
@@ -178,8 +178,8 @@ class Messages extends React.Component {
       READ.imap,
       READ.op,
       [message_id],
-      this.state.sort_order,
-      this.state.sort_field
+      this.state.sort_order.imap,
+      this.state.sort_field.imap
     ).then(this.callback).catch(this.catchback);
   }
 
@@ -189,8 +189,8 @@ class Messages extends React.Component {
       UNREAD.imap,
       UNREAD.op,
       [message_id],
-      this.state.sort_order,
-      this.state.sort_field
+      this.state.sort_order.imap,
+      this.state.sort_field.imap
     ).then(this.callback).catch(this.catchback);
   }
 
