@@ -15,7 +15,6 @@ class Envelope extends React.Component {
     this.state = {
       archived: false
     };
-    this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
   }
 
   handleClick = (e) => {
