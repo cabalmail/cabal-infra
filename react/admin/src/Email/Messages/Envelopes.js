@@ -63,7 +63,7 @@ class Envelopes extends React.Component {
             handleLeftSwipe={this.handleLeftSwipe}
             handleRightSwipe={this.handleRightSwipe}
             envelope={this.state.envelopes[id]}
-            checked={}
+            checked={id.toString() in this.props.selected_messages}
             id={id}
           />
         );
