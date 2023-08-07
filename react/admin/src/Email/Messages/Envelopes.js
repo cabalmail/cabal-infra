@@ -50,12 +50,14 @@ class Envelopes extends React.Component {
   handleLeftSwipe = (id) => {
     console.log("Left swipe detected");
     console.log(id);
-    this.props.handleLeftSwipt(id);
+    this.props.handleLeftSwipe(id);
   }
 
   render() {
     const message_list = this.props.message_ids.map(id => {
       if (id.toString() in this.state.envelopes) {
+        console.log(id.toString());
+        console.log(this.props.selected_messages);
         return (
           <Envelope
             handleClick={this.handleClick}
