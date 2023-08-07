@@ -110,8 +110,10 @@ div.message-list div.loading {
 
 div.archived {
   opacity: 0;
-  transition-property: opacity;
-  transition-duration: 1s;
+  max-height: 0;
+  overflow: hidden;
+  transition-property: opacity, max-height;
+  transition-duration: 2s;
   transition-timing-function: ease-out;
 }
 
