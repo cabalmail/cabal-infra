@@ -56,9 +56,6 @@ class Envelopes extends React.Component {
   render() {
     const message_list = this.props.message_ids.map(id => {
       if (id.toString() in this.state.envelopes) {
-        console.log(id.toString());
-        console.log(this.props.selected_messages);
-        console.log(id.toString() in this.props.selected_messages);
         return (
           <Envelope
             handleClick={this.handleClick}
@@ -66,7 +63,7 @@ class Envelopes extends React.Component {
             handleLeftSwipe={this.handleLeftSwipe}
             handleRightSwipe={this.handleRightSwipe}
             envelope={this.state.envelopes[id]}
-            checked={id.toString() in this.props.selected_messages}
+            checked={this.props.selected_messages.includes(id)}
             id={id}
           />
         );
