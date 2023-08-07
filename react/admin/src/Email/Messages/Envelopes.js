@@ -58,6 +58,7 @@ class Envelopes extends React.Component {
       if (id.toString() in this.state.envelopes) {
         console.log(id.toString());
         console.log(this.props.selected_messages);
+        console.log(id.toString() in this.props.selected_messages);
         return (
           <Envelope
             handleClick={this.handleClick}
