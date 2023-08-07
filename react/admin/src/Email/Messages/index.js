@@ -160,15 +160,15 @@ class Messages extends React.Component {
       [message_id],
       this.state.sort_order.imap,
       this.state.sort_field.imap
-    ).then(() => {
-      this.callback();
+    ).then((d) => {
+      this.callback(d);
       this.api.moveMessages(
         this.props.folder,
         'Archive',
         [message_id],
         this.state.sort_order.imap,
         this.state.sort_field.imap
-      );
+      ).then(this.callback).catch(this.catchback);
     }).catch(this.catchback);
   }
 

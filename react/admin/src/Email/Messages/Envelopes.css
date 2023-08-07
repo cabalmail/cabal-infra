@@ -106,3 +106,19 @@ div.message-list div.loading div.message-subject::before {
 div.message-list div.loading {
   display: none;
 }
+
+/* Swipes */
+
+.swipeable-list-item__leading-actions {
+  background-color: #080;
+  color: #fff;
+}
+
+.swipeable-list-item__leading-actions span, .swipeable-list-item__trailing-actions span {
+  white-space: nowrap;
+}
+
+.swipeable-list-item__trailing-actions {
+  background-color: #800;
+  color: #ff9;
+}
