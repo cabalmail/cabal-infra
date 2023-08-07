@@ -10,6 +10,14 @@ import 'react-swipeable-list/dist/styles.css';
 
 class Envelope extends React.Component {
 
+  constructor(props) {
+    super(props);
+    this.state = {
+      archived: false
+    };
+    this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
+  }
+
   handleClick = (e) => {
     e.preventDefault();
     this.props.handleClick(this.props.envelope, this.props.id);
@@ -20,6 +28,7 @@ class Envelope extends React.Component {
   }
 
   archive = () => {
+    this.setState({...this.state, archived: true});
     this.props.archive(this.props.id);
   }
 
@@ -50,10 +59,11 @@ class Envelope extends React.Component {
         </TrailingActions>
       );
     };
-    const attachment = (message.struct[1] === "mixed" ? " Attachment" : "");
+    const archived = this.state.archived ? "archived" : "";
+    const attachment = (message.struct[1] === "mixed" ? "Attachment" : "");
     const priority = message.priority !== "" ? ` ${message.priority}` : "";
-    const selected = this.props.selected ? " selected" : "";
-    const classes = flags + attachment + priority + selected;
+    const selected = this.props.selected ? "selected" : "";
+    const classes = [flags, attachment, priority, selected archived].join(" ");
     return (
       <SwipeableListItem
         threshold={0.5}

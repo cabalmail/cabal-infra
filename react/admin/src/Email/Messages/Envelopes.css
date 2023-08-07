@@ -108,6 +108,13 @@ div.message-list div.loading {
   display: none;
 }
 
+div.archived {
+  opacity: 0;
+  transition-property: opacity;
+  transition-duration: 1s;
+  transition-timing-function: ease-out;
+}
+
 /* Swipes */
 
 .swipeable-list-item__leading-actions {
