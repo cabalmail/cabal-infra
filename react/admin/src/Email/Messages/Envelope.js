@@ -63,7 +63,7 @@ class Envelope extends React.Component {
     const attachment = (message.struct[1] === "mixed" ? "Attachment" : "");
     const priority = message.priority !== "" ? ` ${message.priority}` : "";
     const selected = this.props.selected ? "selected" : "";
-    const classes = [flags, attachment, priority, selected archived].join(" ");
+    const classes = [flags, attachment, priority, selected, archived].join(" ");
     return (
       <SwipeableListItem
         threshold={0.5}
