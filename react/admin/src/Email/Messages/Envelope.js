@@ -19,21 +19,26 @@ class Envelope extends React.Component {
     this.props.handleCheck(this.props.id, !this.props.checked);
   }
 
-  handleRightSwipe = () => {
-    console.log("Right swipe detected");
-    this.props.handleRightSwipe(this.props.id)
+  archive = () => {
+    this.props.archive(this.props.id);
   }
 
-  handleLeftSwipe = () => {
-    console.log("Left swipe detected");
-    this.props.handleLeftSwipe(this.props.id)
+  markUnread = () => {
+    this.props.markUnread(this.props.id);
+  }
+
+  markRead = () => {
+    this.props.markRead(this.props.id);
   }
 
   render() {
+    const flags = message.flags.map(d => {return d.replace("\\","")}).join(" ");
     const leadingActions = () => {
+      const text = flags.match(/Seen/) ? "Mark unread" : "Mark read";
+      const handler = flags.match(/Seen/) ? this.markUnread : this.markRead;
       return (
         <LeadingActions>
-          <SwipeAction onClick={this.handleLeftSwipe}>Toggle read</SwipeAction>
+          <SwipeAction onClick={handler}>{text}</SwipeAction>
         </LeadingActions>
       );
     };
@@ -45,7 +50,6 @@ class Envelope extends React.Component {
       );
     };
     const message = this.props.envelope;
-    const flags = message.flags.map(d => {return d.replace("\\","")}).join(" ");
     const attachment = (message.struct[1] === "mixed" ? " Attachment" : "");
     const priority = message.priority !== "" ? ` ${message.priority}` : "";
     const selected = this.props.selected ? " selected" : "";

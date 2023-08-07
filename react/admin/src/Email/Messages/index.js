@@ -8,7 +8,7 @@ import LazyLoad from 'react-lazyload';
 import Envelopes from './Envelopes';
 import Folders from './Folders';
 import Actions from '../Actions';
-import { ASC, DESC, ARRIVAL, DATE, FROM, SUBJECT, PAGE_SIZE } from '../../constants';
+import { READ, UNREAD, ASC, DESC, ARRIVAL, DATE, FROM, SUBJECT, PAGE_SIZE } from '../../constants';
 import { SwipeableList } from 'react-swipeable-list';
 import 'react-swipeable-list/dist/styles.css';
 import './Messages.css';
@@ -152,12 +152,46 @@ class Messages extends React.Component {
     });
   }
 
-  handleLeftSwipe = (message_id) => {
-    console.log("Left swipe not implemented");
+  archive = (message_id) => {
+    this.api.setFlag(
+      this.props.folder,
+      READ.imap,
+      READ.op,
+      this.state.selected_messages,
+      this.state.sort_order,
+      this.state.sort_field
+    ).then(() => {
+      this.callback();
+      this.api.moveMessages(
+        this.props.folder,
+        'Archive',
+        this.state.selected_messages,
+        this.state.sort_order,
+        this.state.sort_field
+      );
+    }).catch(this.catchback);
   }
 
-  handleRightSwipe = (message_id) => {
-    console.log("Right swipe not implemented");
+  markRead = (message_id) => {
+    this.api.setFlag(
+      this.props.folder,
+      READ.imap,
+      READ.op,
+      this.state.selected_messages,
+      this.state.sort_order,
+      this.state.sort_field
+    ).then(this.callback).catch(this.catchback);
+  }
+
+  markUnread = (message_id) => {
+    this.api.setFlag(
+      this.props.folder,
+      UNREAD.imap,
+      UNREAD.op,
+      this.state.selected_messages,
+      this.state.sort_order,
+      this.state.sort_field
+    ).then(this.callback).catch(this.catchback);
   }
 
   loadList() {
@@ -177,8 +211,9 @@ class Messages extends React.Component {
             handleCheck={this.handleCheck}
             handleSelect={this.handleSelect}
             setMessage={this.props.setMessage}
-            handleLeftSwipe={this.handleLeftSwipe}
-            handleRightSwipe={this.handleRightSwipe}
+            markUnread={this.markUnread}
+            markRead={this.markRead}
+            archive={this.archive}
           />
         </LazyLoad>
       );

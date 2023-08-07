@@ -41,16 +41,16 @@ class Envelopes extends React.Component {
     this.props.handleCheck(id, checked);
   }
 
-  handleRightSwipe = (id) => {
-    console.log("Right swipe detected");
-    console.log(id);
-    this.props.handleRightSwipe(id);
+  markRead = (id) => {
+    this.props.markRead(id);
   }
 
-  handleLeftSwipe = (id) => {
-    console.log("Left swipe detected");
-    console.log(id);
-    this.props.handleLeftSwipe(id);
+  markUnread = (id) => {
+    this.props.markUnread(id);
+  }
+
+  archive = (id) => {
+    this.props.archive(id);
   }
 
   render() {
@@ -60,8 +60,9 @@ class Envelopes extends React.Component {
           <Envelope
             handleClick={this.handleClick}
             handleCheck={this.handleCheck}
-            handleLeftSwipe={this.handleLeftSwipe}
-            handleRightSwipe={this.handleRightSwipe}
+            archive={this.archive}
+            markRead={this.markRead}
+            markUnread={this.markUnread}
             envelope={this.state.envelopes[id]}
             checked={this.props.selected_messages.includes(id)}
             id={id}
