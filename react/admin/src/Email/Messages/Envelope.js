@@ -46,7 +46,7 @@ class Envelope extends React.Component {
     const trailingActions = () => {
       return (
         <TrailingActions>
-          <SwipeAction onClick={this.handleRightSwipe}>Archive</SwipeAction>
+          <SwipeAction onClick={this.archive}>Archive</SwipeAction>
         </TrailingActions>
       );
     };
