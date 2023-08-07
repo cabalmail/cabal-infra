@@ -32,7 +32,6 @@ class Envelopes extends React.Component {
   }
 
   handleClick = (envelope, id) => {
-    e.preventDefault();
     this.props.showOverlay(envelope);
     this.props.handleSelect(id);
     this.setState({...this.state, selected:id});
