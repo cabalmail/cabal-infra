@@ -38,8 +38,8 @@ class Envelopes extends React.Component {
     this.setState({...this.state, selected:id});
   }
 
-  handleCheck = (e) => {
-    this.props.handleCheck(e.target.id, e.target.checked);
+  handleCheck = (id, checked) => {
+    this.props.handleCheck(id, checked);
   }
 
   handleRightSwipe = (id) => {
@@ -62,6 +62,7 @@ class Envelopes extends React.Component {
             handleLeftSwipe={this.handleLeftSwipe}
             handleRightSwipe={this.handleRightSwipe}
             envelope={this.state.envelopes[id]}
+            checked={}
             id={id}
           />
         );

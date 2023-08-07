@@ -10,21 +10,13 @@ import 'react-swipeable-list/dist/styles.css';
 
 class Envelope extends React.Component {
 
-  constructor(props) {
-    super(props);
-    this.state = {
-      selected: false
-    };
-  }
-
   handleClick = (e) => {
     e.preventDefault();
-    this.setState({...this.state, selected: true});
     this.props.handleClick(this.props.envelope, this.props.id);
   }
 
-  handleCheck = (e) => {
-    this.props.handleCheck(e);
+  handleCheck = () => {
+    this.props.handleCheck(this.props.checked, this.props.id);
   }
 
   handleRightSwipe = () => {
@@ -56,7 +48,7 @@ class Envelope extends React.Component {
     const flags = message.flags.map(d => {return d.replace("\\","")}).join(" ");
     const attachment = (message.struct[1] === "mixed" ? " Attachment" : "");
     const priority = message.priority !== "" ? ` ${message.priority}` : "";
-    const selected = this.state.selected ? " selected" : "";
+    const selected = this.props.selected ? " selected" : "";
     const classes = flags + attachment + priority + selected;
     return (
       <SwipeableListItem
@@ -74,7 +66,7 @@ class Envelope extends React.Component {
           <input
             type="checkbox"
             id={this.props.id}
-            checked={this.state.selected}
+            checked={this.props.checked}
             onChange={this.handleCheck}
           />
           <label htmlFor={this.props.id}><span className="checked">✓</span><span className="unchecked">&nbsp;</span></label>&nbsp;
