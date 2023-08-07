@@ -31,11 +31,11 @@ class Envelopes extends React.Component {
     }
   }
 
-  handleClick = (e) => {
+  handleClick = (envelope, id) => {
     e.preventDefault();
-    this.props.showOverlay(this.state.envelopes[e.target.id]);
-    this.props.handleSelect(e.target.id);
-    this.setState({...this.state, selected:e.target.id});
+    this.props.showOverlay(envelope);
+    this.props.handleSelect(id);
+    this.setState({...this.state, selected:id});
   }
 
   handleCheck = (e) => {
@@ -61,8 +61,8 @@ class Envelopes extends React.Component {
             handleCheck={this.handleCheck}
             handleLeftSwipe={this.handleLeftSwipe}
             handleRightSwipe={this.handleRightSwipe}
-            id={id.toString()}
             envelope={this.state.envelopes[id]}
+            id={id}
           />
         );
       }

@@ -20,7 +20,7 @@ class Envelope extends React.Component {
   handleClick = (e) => {
     e.preventDefault();
     this.setState({...this.state, selected: true});
-    this.props.handleClick(e);
+    this.props.handleClick(this.props.envelope, this.props.id);
   }
 
   handleCheck = (e) => {
