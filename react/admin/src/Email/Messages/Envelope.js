@@ -16,7 +16,6 @@ class Envelope extends React.Component {
   }
 
   handleCheck = () => {
-    console.log(`ID: ${this.props.id}; Checked: ${this.props.checked}`);
     this.props.handleCheck(this.props.id, this.props.checked);
   }
 
