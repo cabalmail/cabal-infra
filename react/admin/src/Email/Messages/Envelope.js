@@ -13,7 +13,7 @@ class Envelope extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      archived: false
+      archived: -1
     };
   }
 
@@ -27,7 +27,7 @@ class Envelope extends React.Component {
   }
 
   archive = () => {
-    this.setState({...this.state, archived: true});
+    this.setState({...this.state, archived: this.props.id});
     this.props.archive(this.props.id);
   }
 
@@ -58,7 +58,7 @@ class Envelope extends React.Component {
         </TrailingActions>
       );
     };
-    const archived = this.state.archived ? "archived" : "";
+    const archived = this.state.archived === this.props.id ? "archived" : "";
     const attachment = (message.struct[1] === "mixed" ? "Attachment" : "");
     const priority = message.priority !== "" ? ` ${message.priority}` : "";
     const selected = this.props.selected ? "selected" : "";
