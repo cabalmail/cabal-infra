@@ -157,7 +157,7 @@ class Messages extends React.Component {
       this.props.folder,
       READ.imap,
       READ.op,
-      this.state.selected_messages,
+      [message_id],
       this.state.sort_order,
       this.state.sort_field
     ).then(() => {
@@ -177,7 +177,7 @@ class Messages extends React.Component {
       this.props.folder,
       READ.imap,
       READ.op,
-      this.state.selected_messages,
+      [message_id],
       this.state.sort_order,
       this.state.sort_field
     ).then(this.callback).catch(this.catchback);
@@ -188,7 +188,7 @@ class Messages extends React.Component {
       this.props.folder,
       UNREAD.imap,
       UNREAD.op,
-      this.state.selected_messages,
+      [message_id],
       this.state.sort_order,
       this.state.sort_field
     ).then(this.callback).catch(this.catchback);
