@@ -16,7 +16,7 @@ class Envelope extends React.Component {
   }
 
   handleCheck = () => {
-    this.props.handleCheck(this.props.id, this.props.checked);
+    this.props.handleCheck(this.props.id, !this.props.checked);
   }
 
   handleRightSwipe = () => {
