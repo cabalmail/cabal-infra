@@ -160,7 +160,8 @@ class Messages extends React.Component {
       [message_id],
       this.state.sort_order.imap,
       this.state.sort_field.imap
-    ).then((d) => {
+    ).then(this.callback).catch(this.catchback);
+    setTimeout(() => {
       this.api.moveMessages(
         this.props.folder,
         'Archive',
@@ -168,8 +169,27 @@ class Messages extends React.Component {
         this.state.sort_order.imap,
         this.state.sort_field.imap
       ).then(this.callback).catch(this.catchback);
-    }).catch(this.catchback);
+    }, 500);
   }
+
+  // archive = (message_id) => {
+  //   this.api.setFlag(
+  //     this.props.folder,
+  //     READ.imap,
+  //     READ.op,
+  //     [message_id],
+  //     this.state.sort_order.imap,
+  //     this.state.sort_field.imap
+  //   ).then(() => {
+  //     this.api.moveMessages(
+  //       this.props.folder,
+  //       'Archive',
+  //       [message_id],
+  //       this.state.sort_order.imap,
+  //       this.state.sort_field.imap
+  //     ).then(this.callback).catch(this.catchback);
+  //   }).catch(this.catchback);
+  // }
 
   markRead = (message_id) => {
     this.api.setFlag(
