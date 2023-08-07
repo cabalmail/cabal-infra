@@ -94,6 +94,7 @@ class Messages extends React.Component {
   poller(api, folder, order, field, that) {
     const response = api.getMessages(folder, order, field);
     response.then(data => {
+      console.log(data.data.message_ids.length)
       that.setState({
         ...that.state,
         message_ids: data.data.message_ids,
