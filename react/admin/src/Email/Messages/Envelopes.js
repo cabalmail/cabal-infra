@@ -38,7 +38,6 @@ class Envelopes extends React.Component {
   }
 
   handleCheck = (id, checked) => {
-    console.log(`ID: ${id}; Checked: ${checked}`);
     this.props.handleCheck(id, checked);
   }
 
