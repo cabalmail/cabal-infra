@@ -9,6 +9,14 @@ body {
   -webkit-text-size-adjust: none !important;
 }
 
+* {
+  border-radius: 0.2em
+}
+
+img {
+  border-radius: 0;
+}
+
 /* Thank you https://css-tricks.com/copy-the-browsers-native-focus-styles/ */
 input:focus, input:focus-visible,
 select:focus, select:focus-visible,
@@ -44,10 +52,6 @@ input::placeholder {
 
 button, button * {
   font-size: x-small;
-}
-
-img {
-  border-radius: 0;
 }
 
 input, select, option {

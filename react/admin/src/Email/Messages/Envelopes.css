@@ -110,7 +110,7 @@ div.message-list div.loading {
 /* Swipes */
 
 .swipeable-list-item__leading-actions {
-  background-color: #080;
+  background-color: #080 !important;
   color: #fff;
 }
 
@@ -120,6 +120,6 @@ div.message-list div.loading {
 }
 
 .swipeable-list-item__trailing-actions {
-  background-color: #800;
+  background-color: #800 !important;
   color: #ff9;
 }
