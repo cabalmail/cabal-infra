@@ -46,10 +46,6 @@ button, button * {
   font-size: x-small;
 }
 
-* {
-  border-radius: 0.2em;
-}
-
 img {
   border-radius: 0;
 }
