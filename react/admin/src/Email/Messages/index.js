@@ -168,9 +168,9 @@ class Messages extends React.Component {
           [message_id],
           this.state.sort_order.imap,
           this.state.sort_field.imap
-        ).then(this.callback).catch(this.catchback);
+        );
       }, 500);
-    }).catch(this.catchback);
+    });
   }
 
   markRead = (message_id) => {
@@ -181,7 +181,7 @@ class Messages extends React.Component {
       [message_id],
       this.state.sort_order.imap,
       this.state.sort_field.imap
-    ).then(this.callback).catch(this.catchback);
+    );
   }
 
   markUnread = (message_id) => {
@@ -192,7 +192,7 @@ class Messages extends React.Component {
       [message_id],
       this.state.sort_order.imap,
       this.state.sort_field.imap
-    ).then(this.callback).catch(this.catchback);
+    );
   }
 
   loadList() {
