@@ -17,35 +17,23 @@ class Envelopes extends React.Component {
     this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
   }
 
-  componentDidMount(prevProps, prevState) {
-    if (this.props.message_ids !== prevProps.message_ids) {
-
-
-
-      const num_ids = this.props.message_ids.length;
-      for (var i = 0; i < num_ids; i+=PAGE_SIZE) {
-        let ids = this.props.message_ids.slice(i, i+PAGE_SIZE);
-
-        setInterval(() => {
-
-          const response = this.api.getEnvelopes(this.props.folder, ids);
-          response.then(data => {
-            let envelopes = this.state.envelopes.slice();
-            envelopes.concat(data.data.envelopes);
-            this.setState({
-              ...this.state,
-              envelopes: envelopes
-            });
-          }).catch( e => {
-            console.log(e);
+  componentDidMount() {
+    const num_ids = this.props.message_ids.length;
+    for (var i = 0; i < num_ids; i+=PAGE_SIZE) {
+      let ids = this.props.message_ids.slice(i, i+PAGE_SIZE);
+      setInterval(() => {
+        const response = this.api.getEnvelopes(this.props.folder, ids);
+        response.then(data => {
+          let envelopes = this.state.envelopes.slice();
+          envelopes.concat(data.data.envelopes);
+          this.setState({
+            ...this.state,
+            envelopes: envelopes
           });
-
-        }, 1000 * i);
-
-      }
-
-
-
+        }).catch( e => {
+          console.log(e);
+        });
+      }, 1000 * i);
     }
   }
 
