@@ -33,7 +33,7 @@ class Envelopes extends React.Component {
         }).catch( e => {
           console.log(e);
         });
-      }, 1000 * i);
+      }, 1000 * i + 10);
     }
   }
 
