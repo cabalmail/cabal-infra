@@ -32,6 +32,7 @@ class Envelope extends React.Component {
   }
 
   render() {
+    const message = this.props.envelope;
     const flags = message.flags.map(d => {return d.replace("\\","")}).join(" ");
     const leadingActions = () => {
       const text = flags.match(/Seen/) ? "Mark unread" : "Mark read";
@@ -49,7 +50,6 @@ class Envelope extends React.Component {
         </TrailingActions>
       );
     };
-    const message = this.props.envelope;
     const attachment = (message.struct[1] === "mixed" ? " Attachment" : "");
     const priority = message.priority !== "" ? ` ${message.priority}` : "";
     const selected = this.props.selected ? " selected" : "";
