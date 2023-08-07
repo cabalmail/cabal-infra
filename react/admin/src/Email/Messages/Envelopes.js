@@ -17,7 +17,7 @@ class Envelopes extends React.Component {
     this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
   }
 
-  componentDidUpdate(prevProps, prevState) {
+  componentDidMount(prevProps, prevState) {
     if (this.props.message_ids !== prevProps.message_ids) {
 
 
@@ -40,7 +40,7 @@ class Envelopes extends React.Component {
             console.log(e);
           });
 
-        }, 1000 * (i));
+        }, 1000 * i);
 
       }
 
