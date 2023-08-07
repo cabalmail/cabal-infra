@@ -65,6 +65,8 @@
                    .active *,
                    .default *,
                    .selected *,
+                   .swipeable-list-item__trailing-actions,
+                   .swipeable-list-item__leading-actions,
                    button,
                    select,
                    span.checked,
