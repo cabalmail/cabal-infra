@@ -1,21 +1,3 @@
-@media (min-width: 900px) and (prefers-color-scheme: light) {
-  .email_list,
-  .email_list :not(.highlight *,
-                   .active *,
-                   .default *,
-                   .selected *,
-                   .highlight *,
-                   .active *,
-                   .default *,
-                   .selected *,
-                   button,
-                   select,
-                   span.checked,
-                   span.unchecked) {
-    background-color: #e8e8e8 !important;
-  }
-}
-
 @media (prefers-color-scheme: light) {
   body, a, button, select, div, label, form {
     color: #222;
@@ -76,6 +58,21 @@
     box-shadow: inset 0 0 0.35em #fff;
     background-color: #ffe;
     border-color: #222;
+  }
+  .email_list,
+  .email_list :not(.highlight *,
+                   .active *,
+                   .default *,
+                   .selected *,
+                   .highlight *,
+                   .active *,
+                   .default *,
+                   .selected *,
+                   button,
+                   select,
+                   span.checked,
+                   span.unchecked) {
+    background-color: #e8e8e8 !important;
   }
   /* forced */
   .forced * {

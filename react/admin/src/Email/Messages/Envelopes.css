@@ -116,6 +116,7 @@ div.message-list div.loading {
 
 .swipeable-list-item__leading-actions span, .swipeable-list-item__trailing-actions span {
   white-space: nowrap;
+  text-align: center;
 }
 
 .swipeable-list-item__trailing-actions {
