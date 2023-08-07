@@ -21,11 +21,11 @@ div.message-list div.message-row div.message-line-1 {
   display: grid;
   grid-template-columns: auto max-content;
   height: 1.75em;
+  padding: .25em;
 }
 
 div.message-list div {
   display: block;
-  padding: .25em;
 }
 
 div.message-list div.message-subject {
@@ -34,6 +34,7 @@ div.message-list div.message-subject {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  padding: .25em;
 }
 
 div.message-list div.Seen div.message-subject {
