@@ -100,10 +100,10 @@ class Messages extends React.Component {
         ...that.state,
         message_ids: data.data.message_ids,
         loading: false
-      }).catch(e => {
-        that.props.setMessage("Unable to get list of messages.", true);
-        console.log(e);
       });
+    }).catch(e => {
+      that.props.setMessage("Unable to get list of messages.", true);
+      console.log(e);
     });
   }
 
