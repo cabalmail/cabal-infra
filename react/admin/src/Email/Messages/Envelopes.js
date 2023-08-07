@@ -19,9 +19,12 @@ class Envelopes extends React.Component {
 
   componentDidMount() {
     const num_ids = this.props.message_ids.length;
+    console.log("Mounted");
     for (var i = 0; i < num_ids; i+=PAGE_SIZE) {
+      console.log(i);
       let ids = this.props.message_ids.slice(i, i+PAGE_SIZE);
       setInterval(() => {
+        console.log(`Loading page ${i/PAGE_SIZE}`);
         const response = this.api.getEnvelopes(this.props.folder, ids);
         response.then(data => {
           let envelopes = this.state.envelopes.slice();
