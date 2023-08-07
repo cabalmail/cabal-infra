@@ -57,19 +57,7 @@
     border-color: #222;
   }
   .email_list,
-  .email_list div.swipeable-list-item__content,
-  .email_list :not(.highlight *,
-                   .active *,
-                   .default *,
-                   .selected *,
-                   .swipeable-list-item__trailing-actions,
-                   .swipeable-list-item__leading-actions,
-                   .swipeable-list-item__trailing-actions *,
-                   .swipeable-list-item__leading-actions *,
-                   button,
-                   select,
-                   span.checked,
-                   span.unchecked) {
+  .email_list div.swipeable-list-item__content {
     background-color: #e8e8e8 !important;
   }
   /* forced */
