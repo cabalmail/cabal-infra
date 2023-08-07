@@ -87,7 +87,6 @@ class Envelopes extends React.Component {
         type="IOS"
         className={`message-list ${this.state.loading ? "loading" : ""}`}
       >
-      
         {message_list}
       </SwipeableList>
     );

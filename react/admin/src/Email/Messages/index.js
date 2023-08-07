@@ -318,7 +318,7 @@ class Messages extends React.Component {
             setMessage={this.props.setMessage}
           />
         </div>
-        {list}>
+        {list}
       </div>
     );
   }
