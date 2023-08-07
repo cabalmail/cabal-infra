@@ -6,10 +6,7 @@
   * {
     border-color: #333;
   }
-  input, select, option, textarea, ul.recipient-list {
-    color: #ccc;
-    background-color: #000;
-  }
+  input, select, option, textarea, ul.recipient-list,
   .wysiwyg-editor, .wysiwyg-editor div.DraftEditor-root,
   .wysiwyg-editor div.DraftEditor-root div.DraftEditor-editorContainer,
   .wysiwyg-editor div.DraftEditor-root div.DraftEditor-editorContainer div.public-DraftEditor-content,

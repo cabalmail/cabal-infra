@@ -6,16 +6,13 @@
   * {
     border-color: #999;
   }
-  input, select, option, textarea, ul.recipient-list {
-    color: #000;
-    background-color: #ffd;
-  }
+  input, select, option, textarea, ul.recipient-list,
   .wysiwyg-editor, .wysiwyg-editor div.DraftEditor-root,
   .wysiwyg-editor div.DraftEditor-root div.DraftEditor-editorContainer,
   .wysiwyg-editor div.DraftEditor-root div.DraftEditor-editorContainer div.public-DraftEditor-content,
   .wysiwyg-editor div.DraftEditor-root div.DraftEditor-editorContainer div.public-DraftEditor-content div {
     color: #000;
-    background-color: #ffd;
+    background-color: #fff;
   }
   button {
     color: #333;
