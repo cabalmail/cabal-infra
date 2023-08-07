@@ -128,7 +128,6 @@ class Messages extends React.Component {
   };
 
   handleCheck = (message_id, checked) => {
-    console.log(`ID: ${message_id}; Checked: ${checked}`);
     var id = parseInt(message_id);
     if (checked) {
       this.setState({
