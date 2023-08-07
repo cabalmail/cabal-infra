@@ -9,8 +9,6 @@ import Envelopes from './Envelopes';
 import Folders from './Folders';
 import Actions from '../Actions';
 import { READ, UNREAD, ASC, DESC, ARRIVAL, DATE, FROM, SUBJECT, PAGE_SIZE } from '../../constants';
-import { SwipeableList } from 'react-swipeable-list';
-import 'react-swipeable-list/dist/styles.css';
 import './Messages.css';
 
 class Messages extends React.Component {
@@ -320,13 +318,7 @@ class Messages extends React.Component {
             setMessage={this.props.setMessage}
           />
         </div>
-        <SwipeableList
-          fullSwipe={true}
-          type="IOS"
-          className={`message-list ${this.state.loading ? "loading" : ""}`}
-        >
-          {list}
-        </SwipeableList>
+        {list}>
       </div>
     );
   }
