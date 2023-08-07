@@ -12,7 +12,7 @@ class Envelopes extends React.Component {
     super(props);
     this.state = {
       envelopes: [],
-      selected: null
+      selected: null // do we need this?
     };
     this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
   }
@@ -40,7 +40,7 @@ class Envelopes extends React.Component {
             console.log(e);
           });
 
-        }, 1000 * (i/PAGE_SIZE));
+        }, 1000 * (i));
 
       }
 
