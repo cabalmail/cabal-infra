@@ -35,6 +35,7 @@ class Envelope extends React.Component {
     const message = this.props.envelope;
     const flags = message.flags.map(d => {return d.replace("\\","")}).join(" ");
     const leadingActions = () => {
+      console.log(flags);
       const text = flags.match(/Seen/) ? "Mark unread" : "Mark read";
       const handler = flags.match(/Seen/) ? this.markUnread : this.markRead;
       return (
