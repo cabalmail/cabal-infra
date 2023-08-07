@@ -24,13 +24,11 @@ class Envelopes extends React.Component {
 
       const num_ids = this.state.message_ids.length;
       for (var i = 0; i < num_ids; i+=PAGE_SIZE) {
+        let ids = this.props.message_ids.slice(i, i+PAGE_SIZE);
 
         setInterval(() => {
 
-          const response = this.api.getEnvelopes(
-            this.props.folder,
-            this.props.message_ids.slice(i, i+PAGE_SIZE)
-          );
+          const response = this.api.getEnvelopes(this.props.folder, ids);
           response.then(data => {
             let envelopes = this.state.envelopes.slice();
             envelopes.concat(data.data.envelopes);
