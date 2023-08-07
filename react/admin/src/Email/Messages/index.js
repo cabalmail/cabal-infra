@@ -4,11 +4,11 @@
 
 import React from 'react';
 import ApiClient from '../../ApiClient';
-import LazyLoad from 'react-lazyload';
+// import LazyLoad from 'react-lazyload';
 import Envelopes from './Envelopes';
 import Folders from './Folders';
 import Actions from '../Actions';
-import { READ, UNREAD, ASC, DESC, ARRIVAL, DATE, FROM, SUBJECT, PAGE_SIZE } from '../../constants';
+import { READ, UNREAD, ASC, DESC, ARRIVAL, DATE, FROM, SUBJECT } from '../../constants';
 import './Messages.css';
 
 class Messages extends React.Component {
@@ -94,7 +94,6 @@ class Messages extends React.Component {
   poller(api, folder, order, field, that) {
     const response = api.getMessages(folder, order, field);
     response.then(data => {
-      console.log(data.data.message_ids.length)
       that.setState({
         ...that.state,
         message_ids: data.data.message_ids,
