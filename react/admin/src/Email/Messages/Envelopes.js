@@ -22,7 +22,7 @@ class Envelopes extends React.Component {
 
 
 
-      const num_ids = this.state.message_ids.length;
+      const num_ids = this.props.message_ids.length;
       for (var i = 0; i < num_ids; i+=PAGE_SIZE) {
         let ids = this.props.message_ids.slice(i, i+PAGE_SIZE);
 
