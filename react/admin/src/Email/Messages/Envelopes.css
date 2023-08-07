@@ -134,4 +134,5 @@ div.archived {
 .swipeable-list-item__trailing-actions {
   background-color: #800 !important;
   color: #ff9;
+  padding-left: 7%;
 }
