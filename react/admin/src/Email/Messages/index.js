@@ -165,7 +165,7 @@ class Messages extends React.Component {
       this.api.moveMessages(
         this.props.folder,
         'Archive',
-        this.state.selected_messages,
+        [message_id],
         this.state.sort_order,
         this.state.sort_field
       );
