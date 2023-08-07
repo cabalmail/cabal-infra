@@ -161,7 +161,7 @@ class Messages extends React.Component {
       this.state.sort_order.imap,
       this.state.sort_field.imap
     ).then(() => {
-      setTimeout(() => {}
+      setTimeout(() => {
         this.api.moveMessages(
           this.props.folder,
           'Archive',
