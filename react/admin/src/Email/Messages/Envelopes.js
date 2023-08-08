@@ -78,6 +78,7 @@ class Envelopes extends React.Component {
               ...this.state,
               envelopes: envelopes
             });
+            console.log(this.state.envelopes);
           }).catch( e => {
             console.log(e);
           });
