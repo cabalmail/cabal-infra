@@ -32,10 +32,9 @@ class Envelopes extends React.Component {
         const response = this.api.getEnvelopes(this.props.folder, ids);
         response.then(data => {
           let envelopes = this.state.envelopes.slice();
-          envelopes.concat(data.data.envelopes);
           this.setState({
             ...this.state,
-            envelopes: envelopes
+            envelopes: envelopes.concat(data.data.envelopes)
           });
         }).catch( e => {
           console.log(e);
@@ -73,10 +72,9 @@ class Envelopes extends React.Component {
           const response = this.api.getEnvelopes(this.props.folder, ids);
           response.then(data => {
             let envelopes = this.state.envelopes.slice();
-            envelopes.concat(data.data.envelopes);
             this.setState({
               ...this.state,
-              envelopes: envelopes
+              envelopes: envelopes.concat(data.data.envelopes)
             });
             console.log(this.state.envelopes);
           }).catch( e => {
