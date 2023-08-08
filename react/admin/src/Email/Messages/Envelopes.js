@@ -116,7 +116,7 @@ class Envelopes extends React.Component {
   }
 
   render() {
-    const message_list = buildList().map(e => {
+    const message_list = this.buildList().map(e => {
       return (
         <Envelope
           handleClick={this.handleClick}
