@@ -64,6 +64,12 @@ class Envelopes extends React.Component {
     }
   }
 
+  componentWillUnmount() {
+    for (var t in this.timeout) {
+      clearTimeout(t);
+    }
+  }
+
   handleClick = (envelope, id) => {
     this.props.showOverlay(envelope);
     this.props.handleSelect(id);
