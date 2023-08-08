@@ -108,7 +108,6 @@ class Envelopes extends React.Component {
   }
 
   render() {
-    var i = 0;
     const message_list = this.state.envelopes.map(e => {
       return (
         <Envelope
@@ -120,7 +119,6 @@ class Envelopes extends React.Component {
           envelope={e}
           checked={this.props.selected_messages.includes(e.id)}
           id={e.id}
-          index={i}
         />
       );
     });
