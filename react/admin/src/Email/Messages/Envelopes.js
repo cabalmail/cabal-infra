@@ -43,6 +43,47 @@ class Envelopes extends React.Component {
     }
   }
 
+  arrayCompare(array1, array2) {
+    const len = array1.length;
+    if (len !== array2.length) {
+      return false;
+    }
+    for (var i = 0; i < len; i++) {
+      if (array1[i] !== array2[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  componentDidUpdate(prevProps, prevState) {
+    if (!this.arrayCompare(prevProps.message_ids, this.props.message_ids)) {
+      const num_ids = this.props.message_ids.length;
+      console.log("Mounted");
+      console.log(`message_ids is ${this.props.message_ids.length} long`);
+      console.log(`PAGE_SIZE is ${PAGE_SIZE}`);
+      for (var i = 0; i < num_ids; i+=PAGE_SIZE) {
+        console.log(i);
+        let ids = this.props.message_ids.slice(i, i+PAGE_SIZE);
+        let page = i/PAGE_SIZE;
+        setInterval(() => {
+          console.log(`Loading page ${page}`);
+          const response = this.api.getEnvelopes(this.props.folder, ids);
+          response.then(data => {
+            let envelopes = this.state.envelopes.slice();
+            envelopes.concat(data.data.envelopes);
+            this.setState({
+              ...this.state,
+              envelopes: envelopes
+            });
+          }).catch( e => {
+            console.log(e);
+          });
+        }, 1000 * i + 10);
+      }
+    }
+  }
+
   handleClick = (envelope, id) => {
     this.props.showOverlay(envelope);
     this.props.handleSelect(id);
