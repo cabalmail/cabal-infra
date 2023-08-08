@@ -34,6 +34,9 @@ class Envelopes extends React.Component {
   componentDidUpdate(prevProps, prevState) {
     if (!this.arrayCompare(prevProps.message_ids, this.props.message_ids)) {
       const num_ids = this.props.message_ids.length;
+      for (var t in this.timeout) {
+        clearTimeout(t);
+      }
       this.setState({...this.state, envelopes: {}});
       console.log("Update");
       console.log(`message_ids is ${this.props.message_ids.length} long`);
