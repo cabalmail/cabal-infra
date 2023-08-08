@@ -193,26 +193,6 @@ class Messages extends React.Component {
     );
   }
 
-  loadList() {
-    return (
-      <Envelopes
-        message_ids={this.state.message_ids}
-        folder={this.props.folder}
-        host={this.props.host}
-        token={this.props.token}
-        api_url={this.props.api_url}
-        selected_messages={this.state.selected_messages}
-        showOverlay={this.props.showOverlay}
-        handleCheck={this.handleCheck}
-        handleSelect={this.handleSelect}
-        setMessage={this.props.setMessage}
-        markUnread={this.markUnread}
-        markRead={this.markRead}
-        archive={this.archive}
-      />
-    );
-  }
-
   // loadList() {
   //   const num_ids = this.state.message_ids.length;
   //   var pages = [];
@@ -338,7 +318,21 @@ class Messages extends React.Component {
             setMessage={this.props.setMessage}
           />
         </div>
-        {list}
+        <Envelopes
+          message_ids={this.state.message_ids}
+          folder={this.props.folder}
+          host={this.props.host}
+          token={this.props.token}
+          api_url={this.props.api_url}
+          selected_messages={this.state.selected_messages}
+          showOverlay={this.props.showOverlay}
+          handleCheck={this.handleCheck}
+          handleSelect={this.handleSelect}
+          setMessage={this.props.setMessage}
+          markUnread={this.markUnread}
+          markRead={this.markRead}
+          archive={this.archive}
+        />
       </div>
     );
   }
