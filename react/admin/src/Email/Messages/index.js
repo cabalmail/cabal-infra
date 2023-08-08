@@ -256,7 +256,6 @@ class Messages extends React.Component {
   }
 
   render() {
-    const list = this.loadList();
     // TO field omitted since it's not displayed
     const options = [DATE, ARRIVAL, SUBJECT, FROM].map(i => {
       return <option id={i.css} value={i.imap}>{i.description}</option>;
