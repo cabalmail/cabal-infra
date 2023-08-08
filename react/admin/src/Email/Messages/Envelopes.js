@@ -20,6 +20,8 @@ class Envelopes extends React.Component {
   componentDidMount() {
     const num_ids = this.props.message_ids.length;
     console.log("Mounted");
+    console.log(`message_ids is ${this.props.message_ids.length} long`);
+    console.log(`PAGE_SIZE is ${PAGE_SIZE}`);
     for (var i = 0; i < num_ids; i+=PAGE_SIZE) {
       console.log(i);
       let ids = this.props.message_ids.slice(i, i+PAGE_SIZE);
