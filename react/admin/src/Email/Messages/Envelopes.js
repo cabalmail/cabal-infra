@@ -34,7 +34,7 @@ class Envelopes extends React.Component {
   componentDidUpdate(prevProps, prevState) {
     if (!this.arrayCompare(prevProps.message_ids, this.props.message_ids)) {
       const num_ids = this.props.message_ids.length;
-      for (var t in this.timeout) {
+      for (const t of this.timeout) {
         clearTimeout(t);
       }
       this.setState({...this.state, envelopes: {}});
@@ -65,7 +65,7 @@ class Envelopes extends React.Component {
   }
 
   componentWillUnmount() {
-    for (var t in this.timeout) {
+    for (const t of this.timeout) {
       clearTimeout(t);
     }
   }
