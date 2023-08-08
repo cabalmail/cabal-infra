@@ -12,7 +12,7 @@ class Envelopes extends React.Component {
     super(props);
     this.timeout = [];
     this.state = {
-      envelopes: [],
+      envelopes: {},
       selected: null // do we need this?
     };
     this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
@@ -31,10 +31,10 @@ class Envelopes extends React.Component {
         console.log(`Loading page ${page}`);
         const response = this.api.getEnvelopes(this.props.folder, ids);
         response.then(data => {
-          let envelopes = this.state.envelopes.slice();
+          let envelopes = { ...this.state.envelopes, ...data.data.envelopes };
           this.setState({
             ...this.state,
-            envelopes: envelopes.concat(data.data.envelopes)
+            envelopes: envelopes
           });
         }).catch( e => {
           console.log(e);
@@ -71,10 +71,10 @@ class Envelopes extends React.Component {
           console.log(`Loading page ${page}`);
           const response = this.api.getEnvelopes(this.props.folder, ids);
           response.then(data => {
-            let envelopes = this.state.envelopes.slice();
-            this.setState({
+          let envelopes = { ...this.state.envelopes, ...data.data.envelopes };
+          this.setState({
               ...this.state,
-              envelopes: envelopes.concat(data.data.envelopes)
+              envelopes: envelopes
             });
             console.log(this.state.envelopes);
           }).catch( e => {
@@ -107,8 +107,16 @@ class Envelopes extends React.Component {
     this.props.archive(id);
   }
 
+  buildList() {
+    let list = [];
+    for (var k in this.state.envelopes) {
+      list.push(this.state.envelops[k]);
+    }
+    return list;
+  }
+
   render() {
-    const message_list = this.state.envelopes.map(e => {
+    const message_list = buildList().map(e => {
       return (
         <Envelope
           handleClick={this.handleClick}
