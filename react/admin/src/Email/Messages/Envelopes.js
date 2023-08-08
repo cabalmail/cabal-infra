@@ -18,31 +18,6 @@ class Envelopes extends React.Component {
     this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
   }
 
-  componentDidMount() {
-    const num_ids = this.props.message_ids.length;
-    console.log("Mounted");
-    console.log(`message_ids is ${this.props.message_ids.length} long`);
-    console.log(`PAGE_SIZE is ${PAGE_SIZE}`);
-    for (var i = 0; i < num_ids; i+=PAGE_SIZE) {
-      console.log(i);
-      let ids = this.props.message_ids.slice(i, i+PAGE_SIZE);
-      let page = i/PAGE_SIZE;
-      this.timeout[page] = setTimeout(() => {
-        console.log(`Loading page ${page}`);
-        const response = this.api.getEnvelopes(this.props.folder, ids);
-        response.then(data => {
-          let envelopes = { ...this.state.envelopes, ...data.data.envelopes };
-          this.setState({
-            ...this.state,
-            envelopes: envelopes
-          });
-        }).catch( e => {
-          console.log(e);
-        });
-      }, 1000 * page + 10);
-    }
-  }
-
   arrayCompare(array1, array2) {
     const len = array1.length;
     if (len !== array2.length) {
@@ -59,6 +34,7 @@ class Envelopes extends React.Component {
   componentDidUpdate(prevProps, prevState) {
     if (!this.arrayCompare(prevProps.message_ids, this.props.message_ids)) {
       const num_ids = this.props.message_ids.length;
+      this.setState({...this.state, envelopes: {}});
       console.log("Update");
       console.log(`message_ids is ${this.props.message_ids.length} long`);
       console.log(`PAGE_SIZE is ${PAGE_SIZE}`);
@@ -108,11 +84,11 @@ class Envelopes extends React.Component {
   }
 
   buildList() {
-    let list = [];
-    for (var k in this.state.envelopes) {
-      list.push(this.state.envelopes[k]);
-    }
-    return list;
+    return this.props.message_ids.filter(k => {
+      return this.state.envelopes.hasOwnProperty(k.toString());
+    }).map(k => {
+      return this.state.envelopes[k.toString()];
+    });
   }
 
   render() {
