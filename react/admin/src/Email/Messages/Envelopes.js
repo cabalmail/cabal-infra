@@ -10,6 +10,7 @@ class Envelopes extends React.Component {
 
   constructor(props) {
     super(props);
+    this.timeout = [];
     this.state = {
       envelopes: [],
       selected: null // do we need this?
@@ -26,7 +27,7 @@ class Envelopes extends React.Component {
       console.log(i);
       let ids = this.props.message_ids.slice(i, i+PAGE_SIZE);
       let page = i/PAGE_SIZE;
-      setInterval(() => {
+      this.timeout[page] = setTimeout(() => {
         console.log(`Loading page ${page}`);
         const response = this.api.getEnvelopes(this.props.folder, ids);
         response.then(data => {
@@ -59,14 +60,15 @@ class Envelopes extends React.Component {
   componentDidUpdate(prevProps, prevState) {
     if (!this.arrayCompare(prevProps.message_ids, this.props.message_ids)) {
       const num_ids = this.props.message_ids.length;
-      console.log("Mounted");
+      console.log("Update");
       console.log(`message_ids is ${this.props.message_ids.length} long`);
       console.log(`PAGE_SIZE is ${PAGE_SIZE}`);
       for (var i = 0; i < num_ids; i+=PAGE_SIZE) {
         console.log(i);
         let ids = this.props.message_ids.slice(i, i+PAGE_SIZE);
         let page = i/PAGE_SIZE;
-        setInterval(() => {
+        clearTimeout(this.timeout[page]);
+        this.timeout[page] = setTimeout(() => {
           console.log(`Loading page ${page}`);
           const response = this.api.getEnvelopes(this.props.folder, ids);
           response.then(data => {
