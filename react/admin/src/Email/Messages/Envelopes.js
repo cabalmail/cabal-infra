@@ -110,7 +110,7 @@ class Envelopes extends React.Component {
   buildList() {
     let list = [];
     for (var k in this.state.envelopes) {
-      list.push(this.state.envelops[k]);
+      list.push(this.state.envelopes[k]);
     }
     return list;
   }
