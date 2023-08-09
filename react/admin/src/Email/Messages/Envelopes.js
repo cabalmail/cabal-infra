@@ -106,7 +106,7 @@ class Envelopes extends React.Component {
       const page = i/PAGE_SIZE;
       if (i % PAGE_SIZE === 0) {
         if (page < this.page.length -1) {
-          setTimeout(() {
+          setTimeout(() => {
             const options = {
               root: null,
               rootMargin: "0px",
