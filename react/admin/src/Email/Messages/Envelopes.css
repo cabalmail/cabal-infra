@@ -131,6 +131,10 @@ div.archived {
   padding-top: 1.7em;
 }
 
+.swipeable-list-item__trailing-actions span {
+  padding-left: 1.5em;
+}
+
 .swipeable-list-item__trailing-actions {
   background-color: #800 !important;
   color: #ff9;
