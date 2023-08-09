@@ -68,6 +68,7 @@ class Envelopes extends React.Component {
           });
         };
       }
+      this.page[0]();
     }
   }
 
