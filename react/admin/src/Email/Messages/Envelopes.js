@@ -11,6 +11,7 @@ class Envelopes extends React.Component {
   constructor(props) {
     super(props);
     this.page = [];
+    this.observer =[];
     this.state = {
       envelopes: {},
       selected: null // do we need this?
@@ -65,7 +66,10 @@ class Envelopes extends React.Component {
 
   componentWillUnmount() {
     for (const p of this.page) {
-      page = null;
+      p = null;
+    }
+    for (const o of this.observer) {
+      o = null;
     }
   }
 
@@ -112,7 +116,7 @@ class Envelopes extends React.Component {
               rootMargin: "0px",
               theshold: 0.1
             };
-            let observer = new IntersectionObserver(this.page[page+1], options);
+            this.observer[page] = new IntersectionObserver(this.page[page+1], options);
             observer.observe(document.getElementById(e.id.toString()));
           }, 100);
         }
