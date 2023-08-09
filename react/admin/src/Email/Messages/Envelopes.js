@@ -55,6 +55,9 @@ class Envelopes extends React.Component {
         let page = i/PAGE_SIZE;
         this.page[page] = () => {
           console.log(`Loading page ${page}`);
+          if (page > 4) {
+            this.observer[page-5] = null;
+          }
           const response = this.api.getEnvelopes(this.props.folder, ids);
           response.then(data => {
           let envelopes = { ...this.state.envelopes, ...data.data.envelopes };
