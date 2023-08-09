@@ -117,7 +117,7 @@ class Envelopes extends React.Component {
               theshold: 0.1
             };
             this.observer[page] = new IntersectionObserver(this.page[page+1], options);
-            observer.observe(document.getElementById(e.id.toString()));
+            this.observer[page].observe(document.getElementById(e.id.toString()));
           }, 100);
         }
         return (
