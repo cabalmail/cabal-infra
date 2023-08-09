@@ -33,11 +33,11 @@ class Envelopes extends React.Component {
   }
 
   clearArrays() {
-    for (var i; i < this.page.length; i++) {
-      this.page[i] = null;
+    for (var p; p < this.page.length; i++) {
+      this.page[p] = null;
     }
-    for (var i; i < this.observer.length; i++) {
-      this.observer[i] = null;
+    for (var o; o < this.observer.length; i++) {
+      this.observer[o] = null;
     }
   }
 
