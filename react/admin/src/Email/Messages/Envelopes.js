@@ -10,7 +10,7 @@ class Envelopes extends React.Component {
 
   constructor(props) {
     super(props);
-    this.timeout = [];
+    this.page = [];
     this.state = {
       envelopes: {},
       selected: null // do we need this?
@@ -34,8 +34,8 @@ class Envelopes extends React.Component {
   componentDidUpdate(prevProps, prevState) {
     if (!this.arrayCompare(prevProps.message_ids, this.props.message_ids)) {
       const num_ids = this.props.message_ids.length;
-      for (const t of this.timeout) {
-        clearTimeout(t);
+      for (const p of this.page) {
+        p = null;
       }
       this.setState({...this.state, envelopes: {}});
       console.log("Update");
@@ -45,8 +45,7 @@ class Envelopes extends React.Component {
         console.log(i);
         let ids = this.props.message_ids.slice(i, i+PAGE_SIZE);
         let page = i/PAGE_SIZE;
-        clearTimeout(this.timeout[page]);
-        this.timeout[page] = setTimeout(() => {
+        this.page[page] = () => {
           console.log(`Loading page ${page}`);
           const response = this.api.getEnvelopes(this.props.folder, ids);
           response.then(data => {
@@ -65,8 +64,8 @@ class Envelopes extends React.Component {
   }
 
   componentWillUnmount() {
-    for (const t of this.timeout) {
-      clearTimeout(t);
+    for (const p of this.page) {
+      page = null;
     }
   }
 
@@ -101,7 +100,35 @@ class Envelopes extends React.Component {
   }
 
   render() {
+    let i = -1;
     const message_list = this.buildList().map(e => {
+      i++;
+      const page = i/PAGE_SIZE;
+      if (i % PAGE_SIZE === 0) {
+        if (page < this.page.length -1) {
+          setTimeout(() {
+            const options = {
+              root: null,
+              rootMargin: "0px",
+              theshold: 0.1
+            };
+            new IntersectionObserver(this.page[page+1], options);
+          }, 100);
+        }
+        return (
+          <Envelope
+            handleClick={this.handleClick}
+            handleCheck={this.handleCheck}
+            archive={this.archive}
+            markRead={this.markRead}
+            markUnread={this.markUnread}
+            envelope={e}
+            checked={this.props.selected_messages.includes(e.id)}
+            id={e.id}
+            key={e.id}
+          />
+        );
+      }
       return (
         <Envelope
           handleClick={this.handleClick}
@@ -111,7 +138,6 @@ class Envelopes extends React.Component {
           markUnread={this.markUnread}
           envelope={e}
           checked={this.props.selected_messages.includes(e.id)}
-          id={e.id}
           key={e.id}
         />
       );
