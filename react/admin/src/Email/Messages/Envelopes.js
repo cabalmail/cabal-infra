@@ -120,7 +120,7 @@ class Envelopes extends React.Component {
             };
             this.observer[page] = new IntersectionObserver(this.page[page+1], options);
             this.observer[page].observe(document.getElementById(e.id.toString()));
-          }, 100);
+          }, 1000);
         }
         return (
           <Envelope
