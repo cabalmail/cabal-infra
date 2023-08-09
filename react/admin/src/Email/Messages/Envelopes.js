@@ -157,7 +157,7 @@ class Envelopes extends React.Component {
             markUnread={this.markUnread}
             envelope={e}
             checked={this.props.selected_messages.includes(e.id)}
-            id={e.id}
+            dom_id={e.id}
             key={e.id}
           />
         );

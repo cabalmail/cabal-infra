@@ -72,7 +72,7 @@ class Envelope extends React.Component {
         leadingActions={leadingActions()}
         trailingActions={trailingActions()}
       >
-        <div className="message-line-1">
+        <div className="message-line-1" id={this.props.dom_id ? this.props.dom_id : "s"}>
           <div className="message-field message-from" title={message.from[0]}>{message.from[0]}</div>
           <div className="message-field message-date">{message.date}</div>
         </div>
