@@ -32,12 +32,19 @@ class Envelopes extends React.Component {
     return true;
   }
 
+  clearArrays() {
+    for (var i; i < this.page.length; i++) {
+      this.page[i] = null;
+    }
+    for (var i; i < this.observer.length; i++) {
+      this.observer[i] = null;
+    }
+  }
+
   componentDidUpdate(prevProps, prevState) {
     if (!this.arrayCompare(prevProps.message_ids, this.props.message_ids)) {
       const num_ids = this.props.message_ids.length;
-      for (let p of this.page) {
-        p = null;
-      }
+      this.clearArrays();
       this.setState({...this.state, envelopes: {}});
       console.log("Update");
       console.log(`message_ids is ${this.props.message_ids.length} long`);
@@ -65,12 +72,7 @@ class Envelopes extends React.Component {
   }
 
   componentWillUnmount() {
-    for (let p of this.page) {
-      p = null;
-    }
-    for (let o of this.observer) {
-      o = null;
-    }
+    this.clearArrays();
   }
 
   handleClick = (envelope, id) => {
