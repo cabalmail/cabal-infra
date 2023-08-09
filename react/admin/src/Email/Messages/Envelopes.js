@@ -68,7 +68,32 @@ class Envelopes extends React.Component {
           });
         };
       }
-      this.page[0]();
+      switch (this.page.length) {
+        case 1:
+          this.page[0]();
+          break;
+        case 2:
+          this.page[0]();
+          this.page[1]();
+          break;
+        case 3:
+          this.page[0]();
+          this.page[1]();
+          this.page[2]();
+          break;
+        case 4:
+          this.page[0]();
+          this.page[1]();
+          this.page[2]();
+          this.page[3]();
+          break;
+        default:
+          this.page[0]();
+          this.page[1]();
+          this.page[2]();
+          this.page[3]();
+          this.page[4]()
+      }
     }
   }
 
@@ -121,7 +146,7 @@ class Envelopes extends React.Component {
             };
             this.observer[page] = new IntersectionObserver(this.page[page+1], options);
             this.observer[page].observe(document.getElementById(e.id.toString()));
-          }, 1000);
+          }, 100);
         }
         return (
           <Envelope
