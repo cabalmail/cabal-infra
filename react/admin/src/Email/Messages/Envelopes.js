@@ -137,14 +137,14 @@ class Envelopes extends React.Component {
       i++;
       const page = i/PAGE_SIZE;
       if (i % PAGE_SIZE === 0) {
-        if (page < this.page.length -1) {
+        if (page < this.page.length -5) {
           setTimeout(() => {
             const options = {
               root: null,
               rootMargin: "0px",
               theshold: 0.1
             };
-            this.observer[page] = new IntersectionObserver(this.page[page+1], options);
+            this.observer[page] = new IntersectionObserver(this.page[page+5], options);
             this.observer[page].observe(document.getElementById(e.id.toString()));
           }, 1000);
         }
