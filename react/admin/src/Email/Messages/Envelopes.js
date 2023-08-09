@@ -58,7 +58,7 @@ class Envelopes extends React.Component {
           }).catch( e => {
             console.log(e);
           });
-        }, 1000 * page + 10);
+        };
       }
     }
   }
@@ -112,7 +112,8 @@ class Envelopes extends React.Component {
               rootMargin: "0px",
               theshold: 0.1
             };
-            new IntersectionObserver(this.page[page+1], options);
+            let observer = new IntersectionObserver(this.page[page+1], options);
+            observer.observe(document.getElementById(e.id.toString()));
           }, 100);
         }
         return (
