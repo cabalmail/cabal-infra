@@ -35,7 +35,7 @@ class Envelopes extends React.Component {
   componentDidUpdate(prevProps, prevState) {
     if (!this.arrayCompare(prevProps.message_ids, this.props.message_ids)) {
       const num_ids = this.props.message_ids.length;
-      for (const p of this.page) {
+      for (let p of this.page) {
         p = null;
       }
       this.setState({...this.state, envelopes: {}});
@@ -65,10 +65,10 @@ class Envelopes extends React.Component {
   }
 
   componentWillUnmount() {
-    for (const p of this.page) {
+    for (let p of this.page) {
       p = null;
     }
-    for (const o of this.observer) {
+    for (let o of this.observer) {
       o = null;
     }
   }
