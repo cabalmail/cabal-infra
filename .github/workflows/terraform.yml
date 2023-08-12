@@ -7,9 +7,6 @@ on:
   repository_dispatch:
     types: [trigger_build]
   push:
-    branches:
-      - main
-      - stage
     paths:
       - 'terraform/infra'
       - 'terraform/infra/*'

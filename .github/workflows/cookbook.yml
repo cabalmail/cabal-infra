@@ -6,10 +6,6 @@ on:
   repository_dispatch:
     types: [trigger_build]
   push:
-    branches:
-      - '0.3.0'
-      - main
-      - stage
     paths:
       - 'chef/**'
       - '.github/workflows/cookbook.yml'
