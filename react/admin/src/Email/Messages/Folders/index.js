@@ -45,14 +45,14 @@ class Folders extends React.Component {
     // TODO: handle nexted arrays
     const sub_folder_list = this.state.subscribed_folders.map(item => {
       return (
-        <option value={item}>{item}</option>
+        <option value={item} key={item}>{item}</option>
       );
     });
     const folder_list = this.state.folders.filter(item => {
       return this.state.subscribed_folders.indexOf(item) === -1;
     }).map(item => {
       return (
-        <option value={item}>{item}</option>
+        <option value={item} key={item}>{item}</option>
       );
     });
     return (

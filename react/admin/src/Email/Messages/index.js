@@ -258,7 +258,7 @@ class Messages extends React.Component {
   render() {
     // TO field omitted since it's not displayed
     const options = [DATE, ARRIVAL, SUBJECT, FROM].map(i => {
-      return <option id={i.css} value={i.imap}>{i.description}</option>;
+      return <option id={i.css} value={i.imap} key={i.imap}>{i.description}</option>;
     });
     const selected = this.state.selected_messages.length ? " selected" : " none_selected";
     return (
