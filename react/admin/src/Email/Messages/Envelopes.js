@@ -1,5 +1,5 @@
 import React from 'react';
-import { SwipeableList } from 'react-swipeable-list';
+import { SwipeableList, IOS } from 'react-swipeable-list';
 import 'react-swipeable-list/dist/styles.css';
 import Envelope from './Envelope';
 import ApiClient from '../../ApiClient';
@@ -181,7 +181,7 @@ class Envelopes extends React.Component {
     return (
       <SwipeableList
         fullSwipe={true}
-        type="IOS"
+        type={IOS}
         className={`message-list ${this.state.loading ? "loading" : ""}`}
       >
         {message_list}
