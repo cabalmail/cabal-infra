@@ -20,6 +20,7 @@ div.email_list, div.message_overlay {
   top: 0;
   bottom: 0;
   overflow: scroll;
+  z-index: 99999;
 }
 
 div.message_list {
@@ -71,6 +72,7 @@ body div.compose-blackout {
   left: 0;
   right: 0;
   background-color: rgba(0,0,0,0.7);
+  z-index: 99999;
 }
 .compose-wrapper {
   position: absolute;
