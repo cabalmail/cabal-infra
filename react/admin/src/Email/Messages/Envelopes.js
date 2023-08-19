@@ -46,26 +46,19 @@ class Envelopes extends React.Component {
       const num_ids = this.props.message_ids.length;
       this.clearArrays();
       this.setState({...this.state, envelopes: {}});
-      console.log("Update");
-      console.log(`message_ids is ${this.props.message_ids.length} long`);
-      console.log(`PAGE_SIZE is ${PAGE_SIZE}`);
       for (var i = 0; i < num_ids; i+=PAGE_SIZE) {
-        console.log(i);
         let ids = this.props.message_ids.slice(i, i+PAGE_SIZE);
-        let page = i/PAGE_SIZE;
+        let page = Math.floor(i/PAGE_SIZE);
         this.page[page] = () => {
-          console.log(`Loading page ${page}`);
           if (page > 4) {
             this.observer[page-5] = null;
           }
-          const response = this.api.getEnvelopes(this.props.folder, ids);
-          response.then(data => {
+          this.api.getEnvelopes(this.props.folder, ids).then(data => {
           let envelopes = { ...this.state.envelopes, ...data.data.envelopes };
           this.setState({
               ...this.state,
               envelopes: envelopes
             });
-            console.log(this.state.envelopes);
           }).catch( e => {
             console.log(e);
           });
@@ -110,16 +103,23 @@ class Envelopes extends React.Component {
     this.setState({...this.state, selected:id});
   }
 
-  handleCheck = (id, checked) => {
+  handleCheck = (id, checked, page) => {
+    console.log(`Checkbox clicked. Handler in Envelopes class invoked. New state: ${checked}`);
     this.props.handleCheck(id, checked);
+    console.log(`Reloading page ${page}`);
+    this.page[page]();
   }
 
-  markRead = (id) => {
-    this.props.markRead(id);
+  markRead = (id, page) => {
+    this.props.markRead(id).then(() => {
+      this.page[page]();
+    });
   }
 
-  markUnread = (id) => {
-    this.props.markUnread(id);
+  markUnread = (id, page) => {
+    this.props.markUnread(id).then(() => {
+      this.page[page]();
+    });
   }
 
   archive = (id) => {
@@ -138,7 +138,8 @@ class Envelopes extends React.Component {
     let i = -1;
     const message_list = this.buildList().map(e => {
       i++;
-      const page = i/PAGE_SIZE;
+      let first_of_page = false;
+      const page = Math.floor(i/PAGE_SIZE);
       if (i % PAGE_SIZE === 0) {
         if (page < this.page.length -5) {
           setTimeout(() => {
@@ -151,19 +152,7 @@ class Envelopes extends React.Component {
             this.observer[page].observe(document.getElementById(e.id.toString()));
           }, 1000);
         }
-        return (
-          <Envelope
-            handleClick={this.handleClick}
-            handleCheck={this.handleCheck}
-            archive={this.archive}
-            markRead={this.markRead}
-            markUnread={this.markUnread}
-            envelope={e}
-            checked={this.props.selected_messages.includes(e.id)}
-            dom_id={e.id}
-            key={e.id}
-          />
-        );
+        first_of_page = true;
       }
       return (
         <Envelope
@@ -173,7 +162,10 @@ class Envelopes extends React.Component {
           markRead={this.markRead}
           markUnread={this.markUnread}
           envelope={e}
-          checked={this.props.selected_messages.includes(e.id)}
+          is_checked={this.props.selected_messages.includes(parseInt(e.id))}
+          dom_id={e.id}
+          page={page}
+          first_of_page={first_of_page}
           key={e.id}
         />
       );

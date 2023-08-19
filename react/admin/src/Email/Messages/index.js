@@ -126,6 +126,7 @@ class Messages extends React.Component {
   };
 
   handleCheck = (message_id, checked) => {
+    console.log(`Checkbox clicked. Handler in Messages class invoked. New state: ${checked}`);
     var id = parseInt(message_id);
     if (checked) {
       this.setState({
@@ -172,7 +173,7 @@ class Messages extends React.Component {
   }
 
   markRead = (message_id) => {
-    this.api.setFlag(
+    return this.api.setFlag(
       this.props.folder,
       READ.imap,
       READ.op,
@@ -183,7 +184,7 @@ class Messages extends React.Component {
   }
 
   markUnread = (message_id) => {
-    this.api.setFlag(
+    return this.api.setFlag(
       this.props.folder,
       UNREAD.imap,
       UNREAD.op,

@@ -13,35 +13,40 @@ class Envelope extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      archived: -1
+      archived: -1,
+      checked: false
     };
   }
 
   handleClick = (e) => {
     e.preventDefault();
-    this.props.handleClick(this.props.envelope, this.props.id);
+    this.props.handleClick(this.props.envelope, this.props.dom_id);
+  }
+
+  handleCheckChange = (e) => {
+    this.setState({ ...this.state, checked: e.target.checked });
   }
 
   handleCheck = () => {
-    this.props.handleCheck(this.props.id, !this.props.checked);
+    console.log(`Checkbox clicked. Handler in Envelope class invoked. Current state: ${this.props.is_checked}`);
+    this.props.handleCheck(this.props.dom_id, !this.props.is_checked, this.props.page);
   }
 
   archive = () => {
-    this.setState({...this.state, archived: this.props.id});
-    this.props.archive(this.props.id);
+    this.setState({...this.state, archived: this.props.dom_id});
+    this.props.archive(this.props.dom_id);
   }
 
   markUnread = () => {
-    this.props.markUnread(this.props.id);
+    this.props.markUnread(this.props.dom_id, this.props.page);
   }
 
   markRead = () => {
-    this.props.markRead(this.props.id);
+    this.props.markRead(this.props.dom_id, this.props.page);
   }
 
   render() {
     const message = this.props.envelope;
-    console.log(this.props.envelope);
     const flags = message.flags.map(d => {return d.replace("\\","")}).join(" ");
     const leadingActions = () => {
       const text = flags.match(/Seen/) ? "Mark unread" : "Mark read";
@@ -59,7 +64,7 @@ class Envelope extends React.Component {
         </TrailingActions>
       );
     };
-    const archived = this.state.archived === this.props.id ? "archived" : "";
+    const archived = this.state.archived === this.props.dom_id ? "archived" : "";
     const attachment = (message.struct[1] === "mixed" ? "Attachment" : "");
     const priority = message.priority !== "" ? ` ${message.priority}` : "";
     const selected = this.props.selected ? "selected" : "";
@@ -68,7 +73,7 @@ class Envelope extends React.Component {
       <SwipeableListItem
         threshold={0.5}
         className={`message-row ${classes}`}
-        key={this.props.id}
+        key={this.props.dom_id}
         leadingActions={leadingActions()}
         trailingActions={trailingActions()}
       >
@@ -77,18 +82,21 @@ class Envelope extends React.Component {
           <div className="message-field message-date">{message.date}</div>
         </div>
         <div className="message-field message-subject">
-          <input
+        <input
             type="checkbox"
-            id={this.props.id}
-            checked={this.props.checked}
-            onChange={this.handleCheck}
+            name={this.props.dom_id}
+            id={this.props.dom_id}
+            onChange={this.handleCheckChange}
+            checked={this.props.is_checked}
           />
-          <label htmlFor={this.props.id}><span className="checked">✓</span><span className="unchecked">&nbsp;</span></label>&nbsp;
+          <label htmlFor={this.props.dom_id} onClick={this.handleCheck}>
+            <span className="checked">✓</span><span className="unchecked">&nbsp;</span>
+          </label>&nbsp;
           {(priority !== " ") && (priority !== "") ? '❗️ ' : ''}
           {flags.match(/Flagged/) ? '🚩 ' : ''}
           {flags.match(/Answered/) ? '⤶ ' : ''}
           {message.struct[1] === "mixed" ? '📎 ' : ''}
-          <span className="subject" id={this.props.id} onClick={this.handleClick}>{message.subject}</span>
+          <span className="subject" id={this.props.dom_id} onClick={this.handleClick}>{message.subject}</span>
         </div>
       </SwipeableListItem>
     );
