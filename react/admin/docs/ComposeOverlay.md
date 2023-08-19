@@ -6,27 +6,6 @@
 
 
 ## Methods
-### setState
-Modifiers: none
-
-Parameters: state (null)
-
-Returns: null
-
-### getAddresses
-Modifiers: none
-
-Parameters:  ()
-
-Returns: null
-
-### getOptions
-Modifiers: none
-
-Parameters:  ()
-
-Returns: null
-
 ### handleSubmit
 Modifiers: none
 
@@ -48,10 +27,31 @@ Parameters: e (null)
 
 Returns: null
 
-### onMessageChange
+### onEditorStateChange
 Modifiers: none
 
 Parameters: editorState (null)
+
+Returns: null
+
+### randomString
+Modifiers: none
+
+Parameters: length (null)
+
+Returns: null
+
+### validateAddress
+Modifiers: none
+
+Parameters: address (null)
+
+Returns: null
+
+### addRecipient
+Modifiers: none
+
+Parameters: e (null)
 
 Returns: null
 
@@ -62,21 +62,14 @@ Parameters: e (null)
 
 Returns: null
 
-### onToChange
+### onRecipientChange
 Modifiers: none
 
 Parameters: e (null)
 
 Returns: null
 
-### onCcChange
-Modifiers: none
-
-Parameters: e (null)
-
-Returns: null
-
-### onBccChange
+### handleKeyDown
 Modifiers: none
 
 Parameters: e (null)
@@ -90,14 +83,49 @@ Parameters: e (null)
 
 Returns: null
 
-### toggleRequest
+### requestCallback
+Modifiers: none
+
+Parameters: address (null)
+
+Returns: null
+
+### removeTo
+Modifiers: none
+
+Parameters: e (null)
+
+Returns: null
+
+### removeCC
+Modifiers: none
+
+Parameters: e (null)
+
+Returns: null
+
+### removeBCC
+Modifiers: none
+
+Parameters: e (null)
+
+Returns: null
+
+### moveAddress
+Modifiers: none
+
+Parameters: e (null)
+
+Returns: null
+
+### getOptions
 Modifiers: none
 
 Parameters:  ()
 
 Returns: null
 
-### requestCallback
+### obscureEmail
 Modifiers: none
 
 Parameters: address (null)

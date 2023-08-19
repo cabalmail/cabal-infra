@@ -58,10 +58,24 @@ Parameters: message_id (null)
 
 Returns: null
 
-### loadList
+### archive
 Modifiers: none
 
-Parameters:  ()
+Parameters: message_id (null)
+
+Returns: null
+
+### markRead
+Modifiers: none
+
+Parameters: message_id (null)
+
+Returns: null
+
+### markUnread
+Modifiers: none
+
+Parameters: message_id (null)
 
 Returns: null
 
