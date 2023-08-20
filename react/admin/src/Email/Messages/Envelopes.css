@@ -13,6 +13,10 @@ div.message-list, div.message-list div.message-row {
   user-select: none;
 }
 
+div.message-list {
+  padding-bottom: 5em;
+}
+
 div.message-list div.message-row {
   border-bottom: 1px solid #888;
   align-items: baseline;
