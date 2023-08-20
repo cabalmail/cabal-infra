@@ -43,7 +43,7 @@ Returns: null
 ### handleSubmit
 Modifiers: none
 
-Parameters:  ()
+Parameters: e (null)
 
 Returns: null
 
