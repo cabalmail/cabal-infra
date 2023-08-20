@@ -103,11 +103,8 @@ class Envelopes extends React.Component {
     this.setState({...this.state, selected:id});
   }
 
-  handleCheck = (id, checked, page) => {
-    console.log(`Checkbox clicked. Handler in Envelopes class invoked. New state: ${checked}`);
+  handleCheck = (id, checked) => {
     this.props.handleCheck(id, checked);
-    console.log(`Reloading page ${page}`);
-    this.page[page]();
   }
 
   markRead = (id, page) => {
@@ -162,6 +159,14 @@ class Envelopes extends React.Component {
           markRead={this.markRead}
           markUnread={this.markUnread}
           envelope={e}
+          subject={e.subject}
+          priority={e.priority}
+          date={e.date}
+          from={e.from}
+          to={e.to}
+          cc={e.cc}
+          flags={e.flags}
+          struct={e.struct}
           is_checked={this.props.selected_messages.includes(parseInt(e.id))}
           dom_id={e.id}
           page={page}

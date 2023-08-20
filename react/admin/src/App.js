@@ -79,7 +79,7 @@ class App extends React.Component {
         ...this.state,
         poolData: cognitoConfig.poolData,
         control_domain: control_domain,
-        imap_host: control_domain.match(/^dev\./) ? "imap." + control_domain.replace("dev.", "") : "imap" + control_domain,
+        imap_host: control_domain.match(/^dev\./) ? control_domain.replace("dev.", "imap.") : "imap." + control_domain,
         domains: domains,
         api_url: "https://admin." + control_domain + "/prod"
       });

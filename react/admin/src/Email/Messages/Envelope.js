@@ -28,8 +28,7 @@ class Envelope extends React.Component {
   }
 
   handleCheck = () => {
-    console.log(`Checkbox clicked. Handler in Envelope class invoked. Current state: ${this.props.is_checked}`);
-    this.props.handleCheck(this.props.dom_id, !this.props.is_checked, this.props.page);
+    this.props.handleCheck(this.props.dom_id, !this.props.is_checked);
   }
 
   archive = () => {
@@ -46,11 +45,11 @@ class Envelope extends React.Component {
   }
 
   render() {
-    const message = this.props.envelope;
-    const flags = message.flags.map(d => {return d.replace("\\","")}).join(" ");
+    const { flags, subject, date, struct, selected, priority, from, dom_id, is_checked } = this.props;
+    const flags_c = flags.map(d => {return d.replace("\\","")}).join(" ");
     const leadingActions = () => {
-      const text = flags.match(/Seen/) ? "Mark unread" : "Mark read";
-      const handler = flags.match(/Seen/) ? this.markUnread : this.markRead;
+      const text = flags_c.match(/Seen/) ? "Mark unread" : "Mark read";
+      const handler = flags_c.match(/Seen/) ? this.markUnread : this.markRead;
       return (
         <LeadingActions>
           <SwipeAction onClick={handler}>{text}</SwipeAction>
@@ -64,39 +63,39 @@ class Envelope extends React.Component {
         </TrailingActions>
       );
     };
-    const archived = this.state.archived === this.props.dom_id ? "archived" : "";
-    const attachment = (message.struct[1] === "mixed" ? "Attachment" : "");
-    const priority = message.priority !== "" ? ` ${message.priority}` : "";
-    const selected = this.props.selected ? "selected" : "";
-    const classes = [flags, attachment, priority, selected, archived].join(" ");
+    const archived = this.state.archived === dom_id ? "archived" : "";
+    const attachment_c = (struct[1] === "mixed" ? "Attachment" : "");
+    const priority_c = priority !== "" ? ` ${priority}` : "";
+    const selected_c = selected ? "selected" : "";
+    const classes = [flags_c, attachment_c, priority_c, selected_c, archived].join(" ");
     return (
       <SwipeableListItem
         threshold={0.5}
         className={`message-row ${classes}`}
-        key={this.props.dom_id}
+        key={dom_id}
         leadingActions={leadingActions()}
         trailingActions={trailingActions()}
       >
-        <div className="message-line-1" id={this.props.dom_id ? this.props.dom_id : "s"}>
-          <div className="message-field message-from" title={message.from[0]}>{message.from[0]}</div>
-          <div className="message-field message-date">{message.date}</div>
+        <div className="message-line-1" id={dom_id ? dom_id : "s"}>
+          <div className="message-field message-from" title={from[0]}>{from[0]}</div>
+          <div className="message-field message-date">{date}</div>
         </div>
         <div className="message-field message-subject">
         <input
             type="checkbox"
-            name={this.props.dom_id}
-            id={this.props.dom_id}
+            name={dom_id}
+            id={dom_id}
             onChange={this.handleCheckChange}
-            checked={this.props.is_checked}
+            checked={is_checked}
           />
-          <label htmlFor={this.props.dom_id} onClick={this.handleCheck}>
+          <label htmlFor={dom_id} onClick={this.handleCheck}>
             <span className="checked">✓</span><span className="unchecked">&nbsp;</span>
           </label>&nbsp;
-          {(priority !== " ") && (priority !== "") ? '❗️ ' : ''}
-          {flags.match(/Flagged/) ? '🚩 ' : ''}
-          {flags.match(/Answered/) ? '⤶ ' : ''}
-          {message.struct[1] === "mixed" ? '📎 ' : ''}
-          <span className="subject" id={this.props.dom_id} onClick={this.handleClick}>{message.subject}</span>
+          {(priority_c !== " ") && (priority !== "") ? '❗️ ' : ''}
+          {flags_c.match(/Flagged/) ? '🚩 ' : ''}
+          {flags_c.match(/Answered/) ? '⤶ ' : ''}
+          {struct[1] === "mixed" ? '📎 ' : ''}
+          <span className="subject" id={dom_id} onClick={this.handleClick}>{subject}</span>
         </div>
       </SwipeableListItem>
     );

@@ -113,20 +113,25 @@ class Messages extends React.Component {
   }
 
   callback = (data) => {
+    setTimeout(() => {
+      this.setState({
+        ...this.state,
+        message_ids: data.data.message_ids
+      });
+    }, 10);
     this.setState({
       ...this.state,
-      message_ids: data.data.message_ids
+      message_ids: []
     });
   }
 
   catchback = (err) => {
     this.props.setMessage(`Unable to set flag on selected messages.`, true);
     console.log(`Unable to set flag on selected messages.`);
-    console.log(err);
+    console.error(err);
   };
 
   handleCheck = (message_id, checked) => {
-    console.log(`Checkbox clicked. Handler in Messages class invoked. New state: ${checked}`);
     var id = parseInt(message_id);
     if (checked) {
       this.setState({
@@ -193,33 +198,6 @@ class Messages extends React.Component {
       this.state.sort_field.imap
     );
   }
-
-  // loadList() {
-  //   const num_ids = this.state.message_ids.length;
-  //   var pages = [];
-  //   for (var i = 0; i < num_ids; i+=PAGE_SIZE) {
-  //     pages.push(
-  //       <LazyLoad offset={150} overflow={true}>
-  //         <Envelopes
-  //           message_ids={this.state.message_ids.slice(i, i+PAGE_SIZE)}
-  //           folder={this.props.folder}
-  //           host={this.props.host}
-  //           token={this.props.token}
-  //           api_url={this.props.api_url}
-  //           selected_messages={this.state.selected_messages}
-  //           showOverlay={this.props.showOverlay}
-  //           handleCheck={this.handleCheck}
-  //           handleSelect={this.handleSelect}
-  //           setMessage={this.props.setMessage}
-  //           markUnread={this.markUnread}
-  //           markRead={this.markRead}
-  //           archive={this.archive}
-  //         />
-  //       </LazyLoad>
-  //     );
-  //   }
-  //   return pages;
-  // }
 
   sortAscending = (e) => {
     e.preventDefault();
