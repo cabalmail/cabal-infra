@@ -8,6 +8,15 @@ resource "aws_launch_template" "asg" {
   instance_type          = var.scale.size
   vpc_security_group_ids = [aws_security_group.sg.id]
   update_default_version = true
+  block_device_mappings {
+    device_name = tolist(data.aws_ami.myami.block_device_mappings)[0].device_name
+    ebs {
+      volume_size = 8
+      volume_type = "gp3"
+      iops        = 3000
+      throughput  = 125
+    }
+  }
   user_data             = base64encode(templatefile("${path.module}/templates/userdata", {
     control_domain  = var.control_domain,
     artifact_bucket = var.bucket,
