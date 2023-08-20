@@ -9,7 +9,7 @@ resource "aws_launch_template" "asg" {
   vpc_security_group_ids = [aws_security_group.sg.id]
   update_default_version = true
   block_device_mappings {
-    device_name = tolist(data.aws_ami.myami.block_device_mappings)[0].device_name
+    device_name = tolist(data.aws_ami.amazon_linux_2.block_device_mappings)[0].device_name
     ebs {
       volume_size = 8
       volume_type = "gp3"
