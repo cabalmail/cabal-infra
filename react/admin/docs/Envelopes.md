@@ -35,9 +35,7 @@ Returns: null
 Modifiers: none
 
 Parameters: id
-checked
-page (null
-null
+checked (null
 null)
 
 Returns: null
