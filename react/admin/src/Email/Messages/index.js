@@ -15,6 +15,11 @@ class Messages extends React.Component {
 
   constructor(props) {
     super(props);
+    this.callbackTimeout = null;
+    this.poller1Timeout = null;
+    this.poller2Timeout = null;
+    this.archiveTimeout = null;
+    this.interval = null;
     this.state = {
       message_ids: [],
       shown_message: null,
@@ -34,7 +39,7 @@ class Messages extends React.Component {
       this.state.sort_field.imap,
       this
     );
-    setTimeout(
+    this.poller1Timeout = setTimeout(
       this.poller,
       10, 
       this.api,
@@ -66,7 +71,7 @@ class Messages extends React.Component {
         this.state.sort_field.imap,
         this
       );
-      setTimeout(
+      this.poller2Timeout = setTimeout(
         this.poller,
         10, 
         this.api,
@@ -75,6 +80,7 @@ class Messages extends React.Component {
         this.state.sort_field.imap,
         this
       );
+      clearInterval(this.interval);
       this.interval = setInterval(
         this.poller,
         10000, 
@@ -89,6 +95,10 @@ class Messages extends React.Component {
 
   componentWillUnmount() {
     clearInterval(this.interval);
+    clearTimeout(this.callbackTimeout);
+    clearTimeout(this.poller1Timeout);
+    clearTimeout(this.poller2Timeout);
+    clearTimeout(this.archiveTimeout);
   }
 
   poller(api, folder, order, field, that) {
@@ -113,16 +123,16 @@ class Messages extends React.Component {
   }
 
   callback = (data) => {
-    setTimeout(() => {
-      this.setState({
-        ...this.state,
-        message_ids: data.data.message_ids
-      });
-    }, 10);
     this.setState({
       ...this.state,
       message_ids: []
     });
+    this.callbackTimeout = setTimeout(() => {
+      this.setState({
+        ...this.state,
+        message_ids: data.data.message_ids
+      });
+    }, 1);
   }
 
   catchback = (err) => {
@@ -165,7 +175,7 @@ class Messages extends React.Component {
       this.state.sort_order.imap,
       this.state.sort_field.imap
     ).then(() => {
-      setTimeout(() => {
+      this.archiveTimeout = setTimeout(() => {
         this.api.moveMessages(
           this.props.folder,
           'Archive',

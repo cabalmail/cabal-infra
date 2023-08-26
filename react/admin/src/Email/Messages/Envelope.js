@@ -45,7 +45,7 @@ class Envelope extends React.Component {
   }
 
   render() {
-    const { flags, subject, date, struct, selected, priority, from, dom_id, is_checked } = this.props;
+    const { flags, subject, date, struct, selected, priority, from, dom_id, is_checked, observer } = this.props;
     const flags_c = flags.map(d => {return d.replace("\\","")}).join(" ");
     const leadingActions = () => {
       const text = flags_c.match(/Seen/) ? "Mark unread" : "Mark read";
@@ -76,6 +76,7 @@ class Envelope extends React.Component {
         leadingActions={leadingActions()}
         trailingActions={trailingActions()}
       >
+        {observer}
         <div className="message-line-1" id={dom_id ? dom_id : "s"}>
           <div className="message-field message-from" title={from[0]}>{from[0]}</div>
           <div className="message-field message-date">{date}</div>

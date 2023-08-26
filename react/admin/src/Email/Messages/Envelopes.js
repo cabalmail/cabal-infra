@@ -1,4 +1,5 @@
 import React from 'react';
+import Observer from './Observer';
 import { SwipeableList, IOS } from 'react-swipeable-list';
 import 'react-swipeable-list/dist/styles.css';
 import Envelope from './Envelope';
@@ -10,13 +11,23 @@ class Envelopes extends React.Component {
 
   constructor(props) {
     super(props);
-    this.page = [];
-    this.observer =[];
+    this.pages = [];
     this.state = {
       envelopes: {},
+      pages: [],
       selected: null // do we need this?
     };
     this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
+  }
+
+  loadPage = (pages) => {
+    for(const page of pages) {
+      let envelopes = { ...this.state.envelopes, ...this.state.pages[page] };
+      this.setState({
+        ...this.state,
+        envelopes: envelopes
+      });
+    }
   }
 
   arrayCompare(array1, array2) {
@@ -32,70 +43,48 @@ class Envelopes extends React.Component {
     return true;
   }
 
-  clearArrays() {
-    for (var p; p < this.page.length; p++) {
-      this.page[p] = null;
-    }
-    for (var o; o < this.observer.length; o++) {
-      this.observer[o] = null;
+  clearPages() {
+    for (var p; p < this.pages.length; p++) {
+      this.pages[p] = null;
     }
   }
 
-  componentDidUpdate(prevProps, prevState) {
+  doUpdate() {
+    this.clearPages();
+    const num_ids = this.props.message_ids.length;
+    this.setState({...this.state, envelopes: {}});
+    for (var i = 0; i < num_ids; i+=PAGE_SIZE) {
+      let ids = this.props.message_ids.slice(i, i+PAGE_SIZE);
+      let page = Math.floor(i/PAGE_SIZE);
+      this.api.getEnvelopes(this.props.folder, ids).then(data => {
+        let pages = this.state.pages.slice();
+        pages[page] = data.data.envelopes;
+        this.setState({
+          ...this.state,
+          pages: pages
+        });
+        if (page < 4) {
+          this.loadPage([page]);
+        }
+      }).catch( e => {
+        console.log(e);
+      });
+    }
+  }
+
+  componentDidMount() {
+    this.doUpdate();
+  }
+
+  componentDidUpdate(prevProps, _prevState) {
     if (!this.arrayCompare(prevProps.message_ids, this.props.message_ids)) {
-      const num_ids = this.props.message_ids.length;
-      this.clearArrays();
-      this.setState({...this.state, envelopes: {}});
-      for (var i = 0; i < num_ids; i+=PAGE_SIZE) {
-        let ids = this.props.message_ids.slice(i, i+PAGE_SIZE);
-        let page = Math.floor(i/PAGE_SIZE);
-        this.page[page] = () => {
-          if (page > 4) {
-            this.observer[page-5] = null;
-          }
-          this.api.getEnvelopes(this.props.folder, ids).then(data => {
-          let envelopes = { ...this.state.envelopes, ...data.data.envelopes };
-          this.setState({
-              ...this.state,
-              envelopes: envelopes
-            });
-          }).catch( e => {
-            console.log(e);
-          });
-        };
-      }
-      switch (this.page.length) {
-        case 1:
-          this.page[0]();
-          break;
-        case 2:
-          this.page[0]();
-          this.page[1]();
-          break;
-        case 3:
-          this.page[0]();
-          this.page[1]();
-          this.page[2]();
-          break;
-        case 4:
-          this.page[0]();
-          this.page[1]();
-          this.page[2]();
-          this.page[3]();
-          break;
-        default:
-          this.page[0]();
-          this.page[1]();
-          this.page[2]();
-          this.page[3]();
-          this.page[4]()
-      }
+      this.doUpdate();
     }
   }
 
-  componentWillUnmount() {
-    this.clearArrays();
-  }
+  // componentWillUnmount() {
+  //   this.clearPages();
+  // }
 
   handleClick = (envelope, id) => {
     this.props.showOverlay(envelope);
@@ -109,13 +98,13 @@ class Envelopes extends React.Component {
 
   markRead = (id, page) => {
     this.props.markRead(id).then(() => {
-      this.page[page]();
+      this.loadPage([page]);
     });
   }
 
   markUnread = (id, page) => {
     this.props.markUnread(id).then(() => {
-      this.page[page]();
+      this.loadPage([page]);
     });
   }
 
@@ -123,34 +112,37 @@ class Envelopes extends React.Component {
     this.props.archive(id);
   }
 
-  buildList() {
-    return this.props.message_ids.filter(k => {
+  // buildList() {
+  //   return this.props.message_ids.filter(k => {
+  //     return this.state.envelopes.hasOwnProperty(k.toString());
+  //   }).map(k => {
+  //     return this.state.envelopes[k.toString()];
+  //   });
+  // }
+
+  render() {
+    let i = 0;
+    const message_list = this.props.message_ids.filter(k => {
       return this.state.envelopes.hasOwnProperty(k.toString());
     }).map(k => {
       return this.state.envelopes[k.toString()];
-    });
-  }
-
-  render() {
-    let i = -1;
-    const message_list = this.buildList().map(e => {
-      i++;
+    }).map(e => {
       let first_of_page = false;
+      let observer = <></>;
       const page = Math.floor(i/PAGE_SIZE);
       if (i % PAGE_SIZE === 0) {
-        if (page < this.page.length -5) {
-          setTimeout(() => {
-            const options = {
-              root: null,
-              rootMargin: "0px",
-              theshold: 0.1
-            };
-            this.observer[page] = new IntersectionObserver(this.page[page+5], options);
-            this.observer[page].observe(document.getElementById(e.id.toString()));
-          }, 1000);
-        }
         first_of_page = true;
+        observer = (
+          <Observer
+            pageLoader={this.loadPage}
+            page={page+2}
+            key={page+2}
+          ></Observer>
+        );
+      } else {
+        observer = null;
       }
+      i++;
       return (
         <Envelope
           handleClick={this.handleClick}
@@ -171,6 +163,7 @@ class Envelopes extends React.Component {
           dom_id={e.id}
           page={page}
           first_of_page={first_of_page}
+          observer={observer}
           key={e.id}
         />
       );

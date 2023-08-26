@@ -43,7 +43,7 @@ export const TO = {
   css: "to",
   description: "Recipient"
 };
-export const PAGE_SIZE = 50;
+export const PAGE_SIZE = 30;
 export const READ = {
   imap: '\\Seen',
   css: "read",
