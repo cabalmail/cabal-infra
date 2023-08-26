@@ -6,6 +6,13 @@
 
 
 ## Methods
+### loadPage
+Modifiers: none
+
+Parameters: pages (null)
+
+Returns: null
+
 ### arrayCompare
 Modifiers: none
 
@@ -15,7 +22,14 @@ null)
 
 Returns: null
 
-### clearArrays
+### clearPages
+Modifiers: none
+
+Parameters:  ()
+
+Returns: null
+
+### doUpdate
 Modifiers: none
 
 Parameters:  ()
@@ -62,13 +76,6 @@ Returns: null
 Modifiers: none
 
 Parameters: id (null)
-
-Returns: null
-
-### buildList
-Modifiers: none
-
-Parameters:  ()
 
 Returns: null
 
