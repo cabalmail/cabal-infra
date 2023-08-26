@@ -14,7 +14,8 @@ div.message-list, div.message-list div.message-row {
 }
 
 div.message-list {
-  padding-bottom: 5em;
+  box-sizing: border-box;
+  border-bottom: 5em solid transparent;
 }
 
 div.message-list div.message-row {
