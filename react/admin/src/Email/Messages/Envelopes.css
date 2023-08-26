@@ -118,7 +118,7 @@ div.archived {
   max-height: 0;
   overflow: hidden;
   transition-property: opacity, max-height;
-  transition-duration: 2s;
+  transition-duration: 1s;
   transition-timing-function: ease-out;
 }
 

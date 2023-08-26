@@ -6,7 +6,7 @@
 
 
 ## Methods
-### loadPage
+### loadPages
 Modifiers: none
 
 Parameters: pages (null)
