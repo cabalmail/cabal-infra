@@ -72,7 +72,7 @@ class RichMessage extends React.Component {
   render() {
     return (
       <div className={`message message_html ${this.state.render}`}>
-        <div class="buttons">
+        <div className="buttons">
           <button
             className="invert"
             onClick={this.rotateBackground}

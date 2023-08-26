@@ -351,10 +351,10 @@ class ComposeOverlay extends React.Component {
 
   getOptions() {
     if (! this.state.addresses) {
-      return <option>Loading...</option>;
+      return <option key="loading">Loading...</option>;
     }
     return this.state.addresses.map((a) => {
-      return <option value={a}>{a}</option>;
+      return <option value={a} key={a}>{a}</option>;
     });
   }
 
@@ -441,12 +441,12 @@ class ComposeOverlay extends React.Component {
           <ul
             className={"recipient-list"}
             id="recipient-list"
-            tabindex="0"
+            tabIndex="0"
           >
             {to_list}
             {cc_list}
             {bcc_list}
-            <li class="recipient-entry">
+            <li className="recipient-entry">
               <input
                 type="email"
                 id="recipient-address"

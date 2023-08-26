@@ -34,27 +34,6 @@ Parameters: err (null)
 
 Returns: null
 
-### renderView
-Modifiers: none
-
-Parameters:  ()
-
-Returns: null
-
-### renderHeader
-Modifiers: none
-
-Parameters:  ()
-
-Returns: null
-
-### renderTabBar
-Modifiers: none
-
-Parameters:  ()
-
-Returns: null
-
 ### collapse
 Modifiers: none
 
@@ -73,6 +52,69 @@ Returns: null
 Modifiers: none
 
 Parameters: e (null)
+
+Returns: null
+
+### createPayload
+Modifiers: none
+
+Parameters:  ()
+
+Returns: null
+
+### reply
+Modifiers: none
+
+Parameters:  ()
+
+Returns: null
+
+### replyAll
+Modifiers: none
+
+Parameters:  ()
+
+Returns: null
+
+### forward
+Modifiers: none
+
+Parameters:  ()
+
+Returns: null
+
+### revokeAddress
+Modifiers: none
+
+Parameters: a (null)
+
+Returns: null
+
+### revoke
+Modifiers: none
+
+Parameters: e (null)
+
+Returns: null
+
+### renderView
+Modifiers: none
+
+Parameters:  ()
+
+Returns: null
+
+### renderHeader
+Modifiers: none
+
+Parameters:  ()
+
+Returns: null
+
+### renderTabBar
+Modifiers: none
+
+Parameters:  ()
 
 Returns: null
 

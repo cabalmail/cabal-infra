@@ -4,7 +4,10 @@ from helper import get_imap_client # pylint: disable=import-error
 from helper import get_folder_list # pylint: disable=import-error
 
 def handler(event, _context):
-    '''Retrieves IMAP folders for a user'''
+    '''
+    Retrieves IMAP folders for a user returning separate lists for all folders
+    and subscribed folders
+    '''
     query_string = event['queryStringParameters']
     user = event['requestContext']['authorizer']['claims']['cognito:username']
     client = get_imap_client(query_string['host'], user, 'INBOX')

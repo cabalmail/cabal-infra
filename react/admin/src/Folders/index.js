@@ -122,7 +122,7 @@ class Folders extends React.Component {
         </>
       );
       return (
-        <li className="folder" id={item}>
+        <li className="folder" id={item} key={item}>
           {favorite}
           <span className="folder_name">{item}</span>
           <button

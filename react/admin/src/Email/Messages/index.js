@@ -15,6 +15,11 @@ class Messages extends React.Component {
 
   constructor(props) {
     super(props);
+    this.callbackTimeout = null;
+    this.poller1Timeout = null;
+    this.poller2Timeout = null;
+    this.archiveTimeout = null;
+    this.interval = null;
     this.state = {
       message_ids: [],
       shown_message: null,
@@ -34,7 +39,7 @@ class Messages extends React.Component {
       this.state.sort_field.imap,
       this
     );
-    setTimeout(
+    this.poller1Timeout = setTimeout(
       this.poller,
       10, 
       this.api,
@@ -66,7 +71,7 @@ class Messages extends React.Component {
         this.state.sort_field.imap,
         this
       );
-      setTimeout(
+      this.poller2Timeout = setTimeout(
         this.poller,
         10, 
         this.api,
@@ -75,6 +80,7 @@ class Messages extends React.Component {
         this.state.sort_field.imap,
         this
       );
+      clearInterval(this.interval);
       this.interval = setInterval(
         this.poller,
         10000, 
@@ -89,6 +95,10 @@ class Messages extends React.Component {
 
   componentWillUnmount() {
     clearInterval(this.interval);
+    clearTimeout(this.callbackTimeout);
+    clearTimeout(this.poller1Timeout);
+    clearTimeout(this.poller2Timeout);
+    clearTimeout(this.archiveTimeout);
   }
 
   poller(api, folder, order, field, that) {
@@ -115,14 +125,20 @@ class Messages extends React.Component {
   callback = (data) => {
     this.setState({
       ...this.state,
-      message_ids: data.data.message_ids
+      message_ids: []
     });
+    this.callbackTimeout = setTimeout(() => {
+      this.setState({
+        ...this.state,
+        message_ids: data.data.message_ids
+      });
+    }, 1);
   }
 
   catchback = (err) => {
     this.props.setMessage(`Unable to set flag on selected messages.`, true);
     console.log(`Unable to set flag on selected messages.`);
-    console.log(err);
+    console.error(err);
   };
 
   handleCheck = (message_id, checked) => {
@@ -159,7 +175,7 @@ class Messages extends React.Component {
       this.state.sort_order.imap,
       this.state.sort_field.imap
     ).then(() => {
-      setTimeout(() => {
+      this.archiveTimeout = setTimeout(() => {
         this.api.moveMessages(
           this.props.folder,
           'Archive',
@@ -172,7 +188,7 @@ class Messages extends React.Component {
   }
 
   markRead = (message_id) => {
-    this.api.setFlag(
+    return this.api.setFlag(
       this.props.folder,
       READ.imap,
       READ.op,
@@ -183,7 +199,7 @@ class Messages extends React.Component {
   }
 
   markUnread = (message_id) => {
-    this.api.setFlag(
+    return this.api.setFlag(
       this.props.folder,
       UNREAD.imap,
       UNREAD.op,
@@ -192,33 +208,6 @@ class Messages extends React.Component {
       this.state.sort_field.imap
     );
   }
-
-  // loadList() {
-  //   const num_ids = this.state.message_ids.length;
-  //   var pages = [];
-  //   for (var i = 0; i < num_ids; i+=PAGE_SIZE) {
-  //     pages.push(
-  //       <LazyLoad offset={150} overflow={true}>
-  //         <Envelopes
-  //           message_ids={this.state.message_ids.slice(i, i+PAGE_SIZE)}
-  //           folder={this.props.folder}
-  //           host={this.props.host}
-  //           token={this.props.token}
-  //           api_url={this.props.api_url}
-  //           selected_messages={this.state.selected_messages}
-  //           showOverlay={this.props.showOverlay}
-  //           handleCheck={this.handleCheck}
-  //           handleSelect={this.handleSelect}
-  //           setMessage={this.props.setMessage}
-  //           markUnread={this.markUnread}
-  //           markRead={this.markRead}
-  //           archive={this.archive}
-  //         />
-  //       </LazyLoad>
-  //     );
-  //   }
-  //   return pages;
-  // }
 
   sortAscending = (e) => {
     e.preventDefault();
@@ -258,7 +247,7 @@ class Messages extends React.Component {
   render() {
     // TO field omitted since it's not displayed
     const options = [DATE, ARRIVAL, SUBJECT, FROM].map(i => {
-      return <option id={i.css} value={i.imap}>{i.description}</option>;
+      return <option id={i.css} value={i.imap} key={i.imap}>{i.description}</option>;
     });
     const selected = this.state.selected_messages.length ? " selected" : " none_selected";
     return (
