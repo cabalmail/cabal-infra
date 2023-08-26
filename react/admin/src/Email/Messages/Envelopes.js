@@ -20,7 +20,7 @@ class Envelopes extends React.Component {
     this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
   }
 
-  loadPage = (pages) => {
+  loadPages = (pages) => {
     for(const page of pages) {
       let envelopes = { ...this.state.envelopes, ...this.state.pages[page] };
       this.setState({
@@ -64,7 +64,7 @@ class Envelopes extends React.Component {
           pages: pages
         });
         if (page < 4) {
-          this.loadPage([page]);
+          this.loadPages([page]);
         }
       }).catch( e => {
         console.log(e);
@@ -82,10 +82,6 @@ class Envelopes extends React.Component {
     }
   }
 
-  // componentWillUnmount() {
-  //   this.clearPages();
-  // }
-
   handleClick = (envelope, id) => {
     this.props.showOverlay(envelope);
     this.props.handleSelect(id);
@@ -97,28 +93,24 @@ class Envelopes extends React.Component {
   }
 
   markRead = (id, page) => {
-    this.props.markRead(id).then(() => {
-      this.loadPage([page]);
-    });
+    let envelopes = JSON.parse(JSON.stringify(this.state.envelopes));
+    envelopes[id.toString()].flags.push("\\Seen");
+    this.setState({ ...this.state, envelopes: envelopes });
+    this.props.markRead(id);
   }
 
   markUnread = (id, page) => {
-    this.props.markUnread(id).then(() => {
-      this.loadPage([page]);
-    });
+    let envelopes = JSON.parse(JSON.stringify(this.state.envelopes));
+    let envelope = envelopes[id.toString()]
+    envelope.flags.splice(envelope.flags.indexOf("\\Seen"),1);
+    envelopes[id.toString()] = envelope;
+    this.setState({ ...this.state, envelopes: envelopes });
+    this.props.markUnread(id);
   }
 
   archive = (id) => {
     this.props.archive(id);
   }
-
-  // buildList() {
-  //   return this.props.message_ids.filter(k => {
-  //     return this.state.envelopes.hasOwnProperty(k.toString());
-  //   }).map(k => {
-  //     return this.state.envelopes[k.toString()];
-  //   });
-  // }
 
   render() {
     let i = 0;
@@ -134,7 +126,7 @@ class Envelopes extends React.Component {
         first_of_page = true;
         observer = (
           <Observer
-            pageLoader={this.loadPage}
+            pageLoader={this.loadPages}
             page={page+2}
             key={page+2}
           ></Observer>
