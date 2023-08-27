@@ -15,13 +15,11 @@ As an end user, you must first establish an account. Once approved, you can use 
 ### Creating an Account
 1. Visit the login page at the admin URL.
 
-2. Click the "Or request an account" link on the login page.
+2. Click or tap "Sign up" in the main tab bar.
 
-    <img src="./app_screens/1_login.png" alt="Login Page" width="400" />
+    <img src="./app_screens/0_signup.png" alt="Login Page" width="400" />
 
-3. Fill out the form. All fields are mandatory. When done, tap or click the "Request Account" button.
-
-    <img src="./app_screens/0_signup.png" alt="Signup Page" width="400" />
+3. Fill out the form. All fields are mandatory. When done, tap or click the "Signup" button.
 
 4. Wait for an administrator to approve your account.
 
@@ -32,44 +30,72 @@ As an end user, you must first establish an account. Once approved, you can use 
 
     <img src="./app_screens/1_login.png" alt="Login Page" width="400" />
 
-3. Tap or click the "Sign in" button.
+3. Tap or click the "Login" button.
 
-### Requesting an Address
-After logging in, the default screen is the request address form.
+### Working with Addresses
 
-1. If you're not already on the request address form, tap the asterisk tab in the lower left (mobile) or click on the "New address" tab in the upper left (desktop).
+Click or tap on "Addresses" in the main tab bar to request a new address, list addresses, or revoke an address.
+
+#### Requesting an Address
+
+1. From the Addresses screen, click or tap on the "New Address" button to reveal a form.
 
     <img src="./app_screens/2_request_address.png" alt="Request Address Page" width="400" />
 
-2. Fill out the form. Optionally, click the "Generate Random" button to quickly create a unique address suitable for online contact forms. All fields are mandatory. (For "Comment", we recommend that you record the name of the person or company to whom you intend to give the address. This will help locate it later, especially if you used the "Generate Random" button.) When done, tap or click on the "Request Address" button.
+2. Fill out the form, or use the "Random" button to quickly create a unique address suitable for online contact forms. All fields are mandatory except the Comment field. (For "Comment", we recommend that you record the name of the person or company to whom you intend to give the address. This will help locate it later, especially if you used the "Random" button.) When done, tap or click on the "Request" button.
 
-    <img src="./app_screens/3_request_address.png" alt="Request Address Page" width="400" />
-
-    
-3. After a moment, a popup will appear informing you that the address has been requested, and that it should be ready for use within five minutes. As a convenience, the app pushes the new address into your clipboard so that you can easily paste it.
+3. After a moment, a popup will appear informing you that the address has been requested. It is generally safe to begin using the address within a minute or two. As a convenience, the app scrolls the new address into view.
 
     <img src="./app_screens/4_request_address.png" alt="Request Address Page" width="400" />
 
-### Listing Your Addresses
-A list of your addresses can be accessed by tapping the list tab in the lower center (mobile) or clicking on the "View addresses" tab in the upper left (desktop). At the top of this screen, you can filter by top level domain or other text.
+4. Optionally, tap the 📋 button to copy the address into your system clipboard.
+
+    <img src="./app_screens/4_request_address.png" alt="Request Address Page" width="400" />
+
+#### Listing Your Addresses
+A list of your addresses can be accessed by tapping or clicking the "Addresses" tab in the main tab bar. At the top of this screen, you can filter by arbitrary text.
 
 <img src="./app_screens/5_list_addresses.png" alt="Address List Page" width="400" />
 
-### Copying an Address
-You can copy an address to your clipboard by tapping or clicking on it from the list screen.
+#### Copying an Address
+You can copy an address to your clipboard by tapping or clicking the adjascent 📋 button from the list screen.
 
 <img src="./app_screens/6_copy_address.png" alt="Copying an Address" width="400" />
 
-### Revoking an Address
-1. Locate the offending address on the list screen, and tap the > icon (mobile) or click the "Details" link (desktop) associated with the address. This brings up a details screen.
+#### Revoking an Address
+1. Locate the offending address on the list screen. Use the filter to help narrow down the list.
 
-    <img src="./app_screens/7_view_address_details.png" alt="Address List Page" width="400" />
+    <img src="./app_screens/7_revoke_address.png" alt="Address List Page with filter applied" width="400" />
 
-2. On the details screen, verify that you have selected the correct address.
-
-3. Tap or click the "Revoke" button.
+2. Tap or click the 🗑️ button.
 
     <img src="./app_screens/8_revoke_address.png" alt="Revoking an Address" width="400" />
+
+### Working with Folders
+
+Click or tap on "Folders" in the main tab bar to create new folders, list folders, delete folders, and designate favorite folders.
+
+#### Creating a Folder
+
+#### Delete a Folder
+
+#### Designate a Folder as a Favorite
+
+#### Remove Favorite Designation
+
+### Working with Email
+
+Click or tap on "Email" in the main tab bar to access the webmail client. The webmail client provides all standard email operations, including reading and composing. While composing an email, you can create a new sender address on the fly. While reading an email, you can revoke the receiving address to prevent further abuse.
+
+#### Changing Folders
+
+#### Changing how Messages are Sorted
+
+#### Reading a Message
+
+#### Composing a New Message
+
+#### Replying to a Message
 
 ### Log Out
 When done, log out of the application by tapping the exit-door icon in the lower right (mobile) or clicking on the "Sign out" button in the upper right (desktop).
