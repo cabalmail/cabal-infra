@@ -63,6 +63,7 @@ div.message_list {
   position: absolute;
   bottom: 1em;
   right: 1em;
+  z-index: 99999;
 }
 
 body div.compose-blackout {
