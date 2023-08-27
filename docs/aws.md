@@ -8,7 +8,7 @@ After signing up, perform the following steps:
 2. [Create an IAM group](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_groups_create.html) called "console" and attach the Amazon-managed AdministratorAccess policy.
 3. [Create an IAM user](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users_create.html#id_users_create_console) called whatever you like for your own console access and attach the just-created "console" group. This user should be console-only with no programmatic access. Never use the root account again if you can help it.
 4. Log in with the IAM user.
-5. [Create an IAM policy](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_create-console.html) called "terraform" with the following permissions:
+5. [Create an IAM policy](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_create-console.html) called "cicd" with the following permissions:
 
     ```json
     {
@@ -62,57 +62,8 @@ After signing up, perform the following steps:
     }
     ```
     (If you don't intend to use this repo to configure AWS Backup, then you may omit the `backup:*` and `backup-storage:*` lines.)
-6. Create an IAM Group called "terraform" and assign the above policy.
-7. Create an IAM User called "terraform" and assign the above group. This user should be progamatic only -- *no console*. Save the API key ID and secret. You will need them when you set up Terraform. Note: you should rotate this key regularly!
-8. Create an IAM policy called "github" with the following permissions:
-
-    ```json
-    {
-        "Version": "2012-10-17",
-        "Statement": [
-            {
-                "Sid": "TheSloth",
-                "Effect": "Allow",
-                "Action": [
-                    "s3:DeleteObject",
-                    "s3:GetObject",
-                    "s3:GetObjectAcl",
-                    "s3:ListAllMyBuckets",
-                    "s3:ListBucket",
-                    "s3:PutObject",
-                    "s3:PutObjectAcl"
-                ],
-                "Resource": "*"
-            },
-            {
-                "Sid": "NeyOperaHouse",
-                "Effect": "Allow",
-                "Action": [
-                    "ssm:GetParameter*"
-                ],
-                "Resource": "arn:aws:ssm:*:*:parameter/cabal/*"
-            },
-            {
-                "Sid": "Hartha",
-                "Effect": "Allow",
-                "Action": [
-                    "cloudfront:GetDistribution",
-                    "cloudfront:GetStreamingDistribution",
-                    "cloudfront:GetDistributionConfig",
-                    "cloudfront:ListDistributions",
-                    "cloudfront:ListCloudFrontOriginAccessIdentities",
-                    "cloudfront:CreateInvalidation",
-                    "cloudfront:GetInvalidation",
-                    "cloudfront:ListInvalidations"
-                ],
-                "Resource": "*"
-            }
-        ]
-    }
-    ```
-
-9. Create an IAM Group called "github" and assign the above policy.
-10. Create an IAM User called "github" and assign the above group. This user should be progamatic only -- *no console*. Save the API key ID and secret. You will need them when you set up Github. Note: you should rotate this key regularly!
-11. Optional but recommended: delete the default VPC in all regions.
+6. Create an IAM Group called "cicd" and assign the above policy.
+7. Create an IAM User called "cicd" and assign the above group. This user should be progamatic only -- *no console*. Make a note of the API key ID and secret. You will need them when you set up Terraform and GitHub. Note: you should rotate this key regularly!
+8. Optional but recommended: delete the default VPC in all regions.
 
 If you have followed the recommendation to create a dedicated account, then the above steps should be the *only* manual steps required in this account. Everything else should be managed by Terraform.
