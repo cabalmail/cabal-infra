@@ -12,7 +12,7 @@ The included serverless app can be used to create and revoke email addresses.
 ## Working with the App (End User)<a name="user"></a>
 As an end user, you must first establish an account. Once approved, you can use the app to create and revoke addresses. All addresses that you create are aliased to a single inbox. You can reach the app at `https://admin.example.net/` (substituting your control domain for `example.net`).
 
-### Creating an Account
+### _Creating an Account_
 1. Visit the login page at the admin URL.
 
 2. Click or tap "Sign up" in the main tab bar.
@@ -23,7 +23,7 @@ As an end user, you must first establish an account. Once approved, you can use 
 
 4. Wait for an administrator to approve your account.
 
-### Loging in
+### _Loging in_
 1. Visit the login page at the admin URL.
 
 2. Enter your username and password.
@@ -32,7 +32,7 @@ As an end user, you must first establish an account. Once approved, you can use 
 
 3. Tap or click the "Login" button.
 
-### Working with Addresses
+### _Working with Addresses_
 
 Click or tap on "Addresses" in the main tab bar to request a new address, list addresses, or revoke an address.
 
@@ -71,19 +71,39 @@ You can copy an address to your clipboard by tapping or clicking the adjascent �
 
     <img src="./app_screens/8_revoke_address.png" alt="Revoking an Address" width="400" />
 
-### Working with Folders
+### _Working with Folders_
 
 Click or tap on "Folders" in the main tab bar to create new folders, list folders, delete folders, and designate favorite folders.
 
 #### Creating a Folder
 
+To create a top-level folder:
+
+<img src="./app_screens/9_create_folder.png" alt="Folder Page with text field filled out" width="400" />
+
+1. Enter the desired name in the text field.
+
+2. Tap or click the "New Top-level Folder" button.
+
+To create a subfolder:
+
+1. Enter the desired name in the text field.
+
+2. Tap or click the 📁 button of the desired parent folder.
+
 #### Delete a Folder
+
+To delete a folder, tap or click the 🗑️ button adjascent to the folder you want to delete. Note that deletion proceeds immediately without further warning, and that messages in the folder cannot be recovered.
 
 #### Designate a Folder as a Favorite
 
+To designate a folder as a favorite, tap or click the ☆ button adjacent to the deisred folder.
+
 #### Remove Favorite Designation
 
-### Working with Email
+To remove a folder from your favorites, tap or click the <span style="color:yellow">★</span> button adjacent to the deisred folder.
+
+### _Working with Email_
 
 Click or tap on "Email" in the main tab bar to access the webmail client. The webmail client provides all standard email operations, including reading and composing. While composing an email, you can create a new sender address on the fly. While reading an email, you can revoke the receiving address to prevent further abuse.
 
@@ -97,16 +117,14 @@ Click or tap on "Email" in the main tab bar to access the webmail client. The we
 
 #### Replying to a Message
 
-### Log Out
-When done, log out of the application by tapping the exit-door icon in the lower right (mobile) or clicking on the "Sign out" button in the upper right (desktop).
-
-<img src="./app_screens/9_logout.png" alt="Logged Out" width="400" />
+### _Log Out_
+When done, log out of the application by tapping or clicking the "Log out" button in the upper right.
 
 ## Managing Accounts (Administrator)<a name="admin"></a>
 
 Cabalmail does not create a custom user interface for administering end user accounts. Rather, this is done in the AWS Cognito console.
 
-### Approving Account Requests
+### _Approving Account Requests_
 1. Log in to your AWS account using the IAM user that you created during [AWS setup step 2](./aws.md).
 2. Make sure you are in the correct AWS region (as specified in your Terraform variables). Use the menu in the upper right of the AWS console if you need to change regions.
 3. Navigate to [Cognito](https://console.aws.amazon.com/cognito/home).
@@ -117,7 +135,7 @@ Cabalmail does not create a custom user interface for administering end user acc
 8. Examine the user's details to verify that you selected the right one.
 9. Click the "Enable user" button.
 
-### Disabling an Account<a name="disable"></a>
+### _Disabling an Account<a name="disable"></a>_
 1. Log in to your AWS account using the IAM user that you created during [AWS setup step 2](./aws.md).
 2. Make sure you are in the correct AWS region (as specified in your Terraform variables). Use the menu in the upper right of the AWS console if you need to change regions.
 3. Navigate to [Cognito](https://console.aws.amazon.com/cognito/home).
