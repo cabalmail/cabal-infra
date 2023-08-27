@@ -107,15 +107,100 @@ To remove a folder from your favorites, tap or click the <span style="color:yell
 
 Click or tap on "Email" in the main tab bar to access the webmail client. The webmail client provides all standard email operations, including reading and composing. While composing an email, you can create a new sender address on the fly. While reading an email, you can revoke the receiving address to prevent further abuse.
 
+<img src="./app_screens/10_email_list.jpeg" alt="Email Page" width="400" />
+
 #### Changing Folders
+
+The Email screen defaults to "INBOX". To view messages in another folder, tap or click the "Folder:" drop-down in the upper-left, and select the desired folder from the list. The drop-down places "INBOX" at the top, followed by a list of your favorite folders in alphabetical order, followed by a list of other folders in alphabetical order.
+
+<img src="./app_screens/11_email_change_folder.jpeg" alt="Email Page" width="400" />
 
 #### Changing how Messages are Sorted
 
+The Email screen defaults to sorting by descending Date Sent. Change the sort field to Date Received, Subject, or From address by tapping or clicking the Sort by drop-down in the upper-right, and select the desired sort field. Toggle between ascending/descending by tapping or clicking the button with three horizontal lines immediately to the right of the Sort by drop-down.
+
+<img src="./app_screens/12_email_change_sort.jpeg" alt="Email Page" width="400" />
+
+#### Using Swipe Gestures
+
+The message list supports two swipe gestures.
+
+1. Swipe from left to right to toggle between read and unread states.
+
+    <img src="./app_screens/13_email_swipe_read.jpeg" alt="Swipe gesture for toggling read/unread" width="400" />
+
+2. Swipe from right to left to archive a message. Archiving marks a message as read and moves it to an Archive folder
+
+    <img src="./app_screens/14_email_swipe_archive.jpeg" alt="Swipe gesture for toggling read/unread" width="400" />
+
+#### Bulk Operations on Messages
+
+By tapping or clicking the checkboxes to the left of each message, you can select them for bulk operations. The buttons along the top of the message list will perform the following operations on the checked messages:
+
+🗑️: Delete message (can't be undone).
+
+📨: Move message to another folder.
+
+🙈: Mark message as unread.
+
+🐵: Mark message as read.
+
+📭: Remove flag from message.
+
+📫: Add flag to message.
+
+
 #### Reading a Message
 
-#### Composing a New Message
+Tap or click the subject of an email in the message list to see the full email. Wide screen devices show the message to the right of the message list. Narrow screen devices show only the message; you can return to the message list by tapping the ❌ button in the upper right.
 
-#### Replying to a Message
+<img src="./app_screens/15_email_read.jpeg" alt="Email Page" width="400" />
+
+There are a number of options available while reading a message:
+
+🗑️: Delete message (can't be undone).
+
+📨: Move message to another folder.
+
+🙈: Mark message as unread.
+
+🐵: Mark message as read.
+
+📭: Remove flag from message.
+
+📫: Add flag to message.
+
+👈: Reply to sender.
+
+👈👈: Reply to all.
+
+👉: Forward message.
+
+🗑️ Revoke \_\_\_\_\_: Revoke the address that received the message.
+
+▲: Hide most header information in order to see more of the message body.
+
+▼: Show the full header information.
+
+Rich Text: Show the HTML version of the message if present (default view).
+
+Plain Text: Show the plain text version of the message if present.
+
+📎: Show list of attachments.
+
+\</\>: Show message source.
+
+The following options only pertain to the Rich Text view:
+
+<ins>⇩</ins>: Download external images (may allow sender to track you).
+
+◐: Rotate through different views. There are three states:
+
+- Default. Text and background color match system defaults. This means dark text and light background for systems with a bright default, and light text and dark background for systems with a dark default.
+- Message style. No styling is applied apart from what is embedded in the message.
+- Inverted. Oposite of default.
+
+#### Composing a Message
 
 ### _Log Out_
 When done, log out of the application by tapping or clicking the "Log out" button in the upper right.
@@ -126,7 +211,7 @@ Cabalmail does not create a custom user interface for administering end user acc
 
 ### _Approving Account Requests_
 1. Log in to your AWS account using the IAM user that you created during [AWS setup step 2](./aws.md).
-2. Make sure you are in the correct AWS region (as specified in your Terraform variables). Use the menu in the upper right of the AWS console if you need to change regions.
+2. Make sure you are in the correct AWS region (as specified in your GitHub environment variables). Use the menu in the upper right of the AWS console if you need to change regions.
 3. Navigate to [Cognito](https://console.aws.amazon.com/cognito/home).
 4. Click the "Manage User Pools" button.
 5. Click on the "cabal" user pool.
