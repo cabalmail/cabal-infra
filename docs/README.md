@@ -16,7 +16,7 @@ Cabalmail is a suite of infrastructure code ([Terraform](https://www.terraform.i
 * SMTP relay host
 * SMTP submission host
 * Webmail client
-* Administrative interface for managing addresses
+* Administrative interface for reading and composing mail, and for managing addresses
 * Private cloud network
 * DNS
 * Other supporting infrastructure
