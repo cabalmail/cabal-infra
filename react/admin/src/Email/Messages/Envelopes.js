@@ -42,8 +42,8 @@ class Envelopes extends React.Component {
     return true;
   }
 
-  shouldComponentUpdate(_next_props, next_state) {
-    return next_state.pages.length > 0;
+  shouldComponentUpdate(next_props, _next_state) {
+    return next_props.message_ids.length > 0;
   }
 
   doUpdate() {
