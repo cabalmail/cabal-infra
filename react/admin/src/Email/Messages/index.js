@@ -129,12 +129,14 @@ class Messages extends React.Component {
   callback = (data) => {
     this.setState({
       ...this.state,
-      message_ids: []
+      message_ids: [],
+      loading: true
     });
     this.callbackTimeout = setTimeout(() => {
       this.setState({
         ...this.state,
-        message_ids: data.data.message_ids
+        message_ids: data.data.message_ids,
+        loading: false
       });
     }, 1);
   }
