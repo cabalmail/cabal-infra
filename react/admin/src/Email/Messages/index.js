@@ -94,7 +94,7 @@ class Messages extends React.Component {
   }
 
   shouldComponentUpdate(_next_props, next_state) {
-    return next_state.loading;
+    return !next_state.loading;
   }
 
   componentWillUnmount() {
