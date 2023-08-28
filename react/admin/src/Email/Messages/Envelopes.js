@@ -42,7 +42,7 @@ class Envelopes extends React.Component {
     return true;
   }
 
-  shouldComponentUpdate(_next_props, next_state) {
+  shouldComponentUpdate(next_props, next_state) {
     console.log(next_state);
     return next_props.message_ids.length > 0;
   }
