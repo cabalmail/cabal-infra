@@ -14,6 +14,7 @@ class Envelopes extends React.Component {
     this.state = {
       envelopes: {},
       pages: [],
+      loading: false,
       selected: null // do we need this?
     };
     this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
@@ -24,7 +25,8 @@ class Envelopes extends React.Component {
       let envelopes = { ...this.state.envelopes, ...this.state.pages[page] };
       this.setState({
         ...this.state,
-        envelopes: envelopes
+        envelopes: envelopes,
+        loading: false
       });
     }
   }
@@ -43,12 +45,12 @@ class Envelopes extends React.Component {
   }
 
   shouldComponentUpdate(_next_props, next_state) {
-    return Object.keys(next_state.envelopes).length + next_state.pages.length > 0;
+    return !next_state.loading;
   }
 
   doUpdate() {
     const num_ids = this.props.message_ids.length;
-    this.setState({...this.state, envelopes: {}, pages: []});
+    this.setState({...this.state, envelopes: {}, pages: [], loading: true});
     for (var i = 0; i < num_ids; i+=PAGE_SIZE) {
       let ids = this.props.message_ids.slice(i, i+PAGE_SIZE);
       let page = Math.floor(i/PAGE_SIZE);
@@ -91,7 +93,7 @@ class Envelopes extends React.Component {
   markRead = (id, page) => {
     let envelopes = JSON.parse(JSON.stringify(this.state.envelopes));
     envelopes[id.toString()].flags.push("\\Seen");
-    this.setState({ ...this.state, envelopes: envelopes });
+    this.setState({ ...this.state, envelopes: envelopes, loading: false });
     this.props.markRead(id);
   }
 
@@ -100,7 +102,7 @@ class Envelopes extends React.Component {
     let envelope = envelopes[id.toString()]
     envelope.flags.splice(envelope.flags.indexOf("\\Seen"),1);
     envelopes[id.toString()] = envelope;
-    this.setState({ ...this.state, envelopes: envelopes });
+    this.setState({ ...this.state, envelopes: envelopes, loading: false });
     this.props.markUnread(id);
   }
 
