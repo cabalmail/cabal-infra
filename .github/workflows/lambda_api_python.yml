@@ -6,10 +6,6 @@ on:
   repository_dispatch:
     types: [trigger_build]
   push:
-    branches:
-      - '0.3.0'
-      - stage
-      - main
     paths:
       - 'lambda/api/python/**'
       - '.github/workflows/lambda_api_python.yml'

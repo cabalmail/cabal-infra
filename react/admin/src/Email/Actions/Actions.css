@@ -12,6 +12,7 @@ span.filter button {
 
 div.none_selected span.filter-actions button {
   opacity: 0.35;
+  filter: grayscale(100%);
 }
 
 div.filters {

@@ -47,7 +47,10 @@ def user_authorized_for_sender(user, sender):
         return False
 
 def get_folder_list(client):
-    '''Retrieves IMAP folders'''
+    '''
+    Retrieves IMAP folders returning separate lists for all folders
+    and subscribed folders
+    '''
     all_folders = client.list_folders()
     sub_folders = client.list_sub_folders()
     return {

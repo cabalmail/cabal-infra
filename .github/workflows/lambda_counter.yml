@@ -6,10 +6,6 @@ on:
   repository_dispatch:
     types: [trigger_build]
   push:
-    branches:
-      - '0.3.0'
-      - stage
-      - main
     paths:
       - 'lambda/counter/node/**'
       - '.github/workflows/lambda_counter.yml'

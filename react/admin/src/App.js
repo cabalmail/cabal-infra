@@ -51,6 +51,7 @@ class App extends React.Component {
       view: "Login",
       poolData: null,
       control_domain: null,
+      imap_host: null,
       domains: {},
       api_url: null,
       hideMessage: true
@@ -78,6 +79,7 @@ class App extends React.Component {
         ...this.state,
         poolData: cognitoConfig.poolData,
         control_domain: control_domain,
+        imap_host: control_domain.match(/^dev\./) ? control_domain.replace("dev.", "imap.") : "imap." + control_domain,
         domains: domains,
         api_url: "https://admin." + control_domain + "/prod"
       });
@@ -229,7 +231,7 @@ class App extends React.Component {
           <Addresses
             token={this.state.token}
             api_url={this.state.api_url}
-            host={`imap.${this.state.control_domain}`}
+            host={this.state.imap_host}
             domains={this.state.domains}
             setMessage={this.setMessage}
           />
@@ -239,7 +241,7 @@ class App extends React.Component {
           <Folders
             token={this.state.token}
             api_url={this.state.api_url}
-            host={`imap.${this.state.control_domain}`}
+            host={this.state.imap_host}
             setMessage={this.setMessage}
           />
         );
@@ -257,7 +259,7 @@ class App extends React.Component {
           <Email
             token={this.state.token}
             api_url={this.state.api_url}
-            host={`imap.${this.state.control_domain}`}
+            host={this.state.imap_host}
             smtp_host={`smtp-out.${this.state.control_domain}`}
             domains={this.state.domains}
             setMessage={this.setMessage}

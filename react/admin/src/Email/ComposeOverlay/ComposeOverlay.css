@@ -41,7 +41,7 @@ button#compose-cancel {
 
 form.compose-overlay input[type=text],
 form.compose-overlay input[type=email],
-form.compose-overlay select, {
+form.compose-overlay select {
   width: 100%;
   box-sizing: border-box;
 }

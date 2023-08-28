@@ -26,7 +26,7 @@ If you don't have a preference for registrars, you can use the [Route 53 Registr
 
 # Provisioning
 
-The developers have striven to make provisioning as automated as possible. However, there are some necessarily manual steps. Several of these steps are discussed above under [Prerequisites](#Prerequisites), and others are discussed below under [Post-Automation Steps](#PostAutomation). However, one step unavoidably must be attended to during the initial provsioning. This is why the terraform directoy has been subdivided into two subdirectories: The first performs the initial automation, and the second all the rest. The order is dns first and infra second. The overwhelming majority of resources are created by infra. In between, you will be instructed to update your domain registrations and add a secret to your Github repository settings.
+The developers have striven to make provisioning as automated as possible. However, there are some necessarily manual steps. Several of these steps are discussed above under [Prerequisites](#Prerequisites), and others are discussed below under [Post-Automation Steps](#PostAutomation). However, one step unavoidably must be attended to during the initial provsioning. This is why the terraform directory has been subdivided into two subdirectories: The first performs the initial automation, and the second all the rest. The order is dns first and infra second. The overwhelming majority of resources are created by infra. In between, you will be instructed to update your domain registrations and add a secret to your Github repository settings.
 
 1. Set up the [prerequisites](#Prerequisites) above.
 
@@ -40,28 +40,24 @@ The developers have striven to make provisioning as automated as possible. Howev
 
 4. *WHOA*. Verify that steps 2 and 3 were successful. Do not proceed to step 5 otherwise.
 
-    1. Several GitHub Actions will have been triggered. Make sure they finish successfully.
-    2. Make sure your registration change from step 3 is complete, and your registrar confirms that your nameservers match those in the output from Terraform. You can check whether your changes have been implemented by looking up your domain in [the whois database](https://lookup.icann.org/).
+5. Kick off the terraform/infra workflow.
 
-5. If step 2 was successful, Terraform Cloud will already have queued a plan, and you need only apply it. WARNING: Performing this step will result in charges on your credit card from Amazon Web Services.
-
-    1. Queue a plan in your Terraform Cloud terraform/infra workspace.
-    2. When it finishes the plan phase, confirm and apply.
-    3. Note the output. You will need it for the [post-automation tasks](#PostAutomation) below.
+    1. Navigate in your browser to your repository in GitHub.
+    2. Navigate to the Actions tab.
+    3. Navigate to "Build and Deploy Terraform Infrastructure".
+    4. Pull down the "Run workflow" menu.
+    5. Click on the green "Run workflow" button.
+    6. Note the output at the end of apply/apply-terraform. You will need it for the [post-automation tasks](#PostAutomation) below.
 
 6. Perform the [post-automation tasks](#PostAutomation) below.
 
 # Reprovisioning
 
-You can rerun the infra provisioning (step 5) any time. If you have not changed anything in the code or in the variables, the operation should be safe. If either of the above Terraform workspaces fail to provision, running them again may be sufficient.
-
 Theoretically, it should also be safe to change any of the variables except the AWS region. As long as the new values are sensible, Terraform should reestablish the infrastructure with the new parameters, and your mail should still be there. But we do not guarantee this, and we strongly recommend that you [perform backups](./operations.md) first.
 
 # Post-Automation Steps<a name="PostAutomation"></a>
 
-Look at the output from Terraform! If you are using Terraform Cloud, it is not shown by default; you have to expand it in the UI.
-
-It should look something like this:
+Look at the output from Terraform at the end of apply/apply-terraform in GitHub Actions. It should look something like this:
 
 ```json
 {

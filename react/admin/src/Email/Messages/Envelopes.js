@@ -1,92 +1,173 @@
 import React from 'react';
+import Observer from './Observer';
+import { SwipeableList, IOS } from 'react-swipeable-list';
+import 'react-swipeable-list/dist/styles.css';
+import Envelope from './Envelope';
 import ApiClient from '../../ApiClient';
+import { PAGE_SIZE } from '../../constants';
 import './Envelopes.css';
 
 class Envelopes extends React.Component {
 
   constructor(props) {
     super(props);
+    this.pages = [];
     this.state = {
-      envelopes: [],
-      selected: null
+      envelopes: {},
+      pages: [],
+      selected: null // do we need this?
     };
     this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
   }
 
-  componentDidUpdate(prevProps, prevState) {
-    if (this.props.message_ids !== prevProps.message_ids) {
-      const response = this.api.getEnvelopes(
-        this.props.folder,
-        this.props.message_ids
-      );
-      response.then(data => {
+  loadPages = (pages) => {
+    for(const page of pages) {
+      let envelopes = { ...this.state.envelopes, ...this.state.pages[page] };
+      this.setState({
+        ...this.state,
+        envelopes: envelopes
+      });
+    }
+  }
+
+  arrayCompare(array1, array2) {
+    const len = array1.length;
+    if (len !== array2.length) {
+      return false;
+    }
+    for (var i = 0; i < len; i++) {
+      if (array1[i] !== array2[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  clearPages() {
+    for (var p; p < this.pages.length; p++) {
+      this.pages[p] = null;
+    }
+  }
+
+  doUpdate() {
+    this.clearPages();
+    const num_ids = this.props.message_ids.length;
+    this.setState({...this.state, envelopes: {}});
+    for (var i = 0; i < num_ids; i+=PAGE_SIZE) {
+      let ids = this.props.message_ids.slice(i, i+PAGE_SIZE);
+      let page = Math.floor(i/PAGE_SIZE);
+      this.api.getEnvelopes(this.props.folder, ids).then(data => {
+        let pages = this.state.pages.slice();
+        pages[page] = data.data.envelopes;
         this.setState({
           ...this.state,
-          envelopes: data.data.envelopes
+          pages: pages
         });
+        if (page < 4) {
+          this.loadPages([page]);
+        }
       }).catch( e => {
         console.log(e);
       });
     }
   }
 
-  handleClick = (e) => {
-    e.preventDefault();
-    this.props.showOverlay(this.state.envelopes[e.target.id]);
-    this.props.handleSelect(e.target.id);
-    this.setState({...this.state, selected:e.target.id});
+  componentDidMount() {
+    this.doUpdate();
   }
 
-  handleCheck = (e) => {
-    this.props.handleCheck(e.target.id, e.target.checked);
+  componentDidUpdate(prevProps, _prevState) {
+    if (!this.arrayCompare(prevProps.message_ids, this.props.message_ids)) {
+      this.doUpdate();
+    }
+  }
+
+  handleClick = (envelope, id) => {
+    this.props.showOverlay(envelope);
+    this.props.handleSelect(id);
+    this.setState({...this.state, selected:id});
+  }
+
+  handleCheck = (id, checked) => {
+    this.props.handleCheck(id, checked);
+  }
+
+  markRead = (id, page) => {
+    let envelopes = JSON.parse(JSON.stringify(this.state.envelopes));
+    envelopes[id.toString()].flags.push("\\Seen");
+    this.setState({ ...this.state, envelopes: envelopes });
+    this.props.markRead(id);
+  }
+
+  markUnread = (id, page) => {
+    let envelopes = JSON.parse(JSON.stringify(this.state.envelopes));
+    let envelope = envelopes[id.toString()]
+    envelope.flags.splice(envelope.flags.indexOf("\\Seen"),1);
+    envelopes[id.toString()] = envelope;
+    this.setState({ ...this.state, envelopes: envelopes });
+    this.props.markUnread(id);
+  }
+
+  archive = (id) => {
+    this.props.archive(id);
   }
 
   render() {
-    const message_list = this.props.message_ids.map(id => {
-      if (id.toString() in this.state.envelopes) {
-        var message = this.state.envelopes[id];
-        var flags = message.flags.map(d => {return d.replace("\\","")}).join(" ");
-        var attachment = (message.struct[1] === "mixed" ? " Attachment" : "");
-        var priority = message.priority !== "" ? ` ${message.priority}` : "";
-        var selected = this.state.selected === id.toString() ? " selected" : "";
-        var classes = flags + attachment + priority + selected;
-        return (
-          <li className={`message-row ${classes}`} key={id}>
-            <div className="message-line-1">
-              <div className="message-field message-from" title={message.from[0]}>{message.from[0]}</div>
-              <div className="message-field message-date">{message.date}</div>
-            </div>
-            <div className="message-field message-subject">
-              <input
-                type="checkbox"
-                id={id}
-                checked={this.props.selected_messages.includes(id)}
-                onChange={this.handleCheck}
-              />
-              <label htmlFor={id}><span className="checked">✓</span><span className="unchecked">&nbsp;</span></label>&nbsp;
-              {(priority !== " ") && (priority !== "") ? '❗️ ' : ''}
-              {flags.match(/Flagged/) ? '🚩 ' : ''}
-              {flags.match(/Answered/) ? '⤶ ' : ''}
-              {message.struct[1] === "mixed" ? '📎 ' : ''}
-              <span className="subject" id={id} onClick={this.handleClick}>{message.subject}</span>
-            </div>
-          </li>
+    let i = 0;
+    const message_list = this.props.message_ids.filter(k => {
+      return this.state.envelopes.hasOwnProperty(k.toString());
+    }).map(k => {
+      return this.state.envelopes[k.toString()];
+    }).map(e => {
+      let first_of_page = false;
+      let observer = <></>;
+      const page = Math.floor(i/PAGE_SIZE);
+      if (i % PAGE_SIZE === 0) {
+        first_of_page = true;
+        observer = (
+          <Observer
+            pageLoader={this.loadPages}
+            page={page+2}
+            key={page+2}
+          ></Observer>
         );
+      } else {
+        observer = null;
       }
+      i++;
       return (
-        <li className="message-row loading" key={id}>
-          <div className="message-line-1">
-            <div className="message-field message-from">&nbsp;</div>
-            <div className="message-field message-date">&nbsp;</div>
-          </div>
-          <div className="message-field message-subject">&nbsp;</div>
-        </li>
+        <Envelope
+          handleClick={this.handleClick}
+          handleCheck={this.handleCheck}
+          archive={this.archive}
+          markRead={this.markRead}
+          markUnread={this.markUnread}
+          envelope={e}
+          subject={e.subject}
+          priority={e.priority}
+          date={e.date}
+          from={e.from}
+          to={e.to}
+          cc={e.cc}
+          flags={e.flags}
+          struct={e.struct}
+          is_checked={this.props.selected_messages.includes(parseInt(e.id))}
+          dom_id={e.id}
+          page={page}
+          first_of_page={first_of_page}
+          observer={observer}
+          key={e.id}
+        />
       );
     });
     return (
-      <>
+      <SwipeableList
+        fullSwipe={true}
+        type={IOS}
+        className={`message-list ${this.state.loading ? "loading" : ""}`}
+      >
         {message_list}
-      </>
+      </SwipeableList>
     );
   }
 }
