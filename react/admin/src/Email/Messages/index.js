@@ -93,6 +93,10 @@ class Messages extends React.Component {
     }
   }
 
+  shouldComponentUpdate(_next_props, next_state) {
+    return next_state.message_ids.length > 0;
+  }
+
   componentWillUnmount() {
     clearInterval(this.interval);
     clearTimeout(this.callbackTimeout);

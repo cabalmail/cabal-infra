@@ -49,10 +49,6 @@ class Envelopes extends React.Component {
     }
   }
 
-  shouldComponentUpdate(_next_props, next_state) {
-    return Object.keys(next_state.envelopes).length > 0;
-  }
-
   doUpdate() {
     this.clearPages();
     const num_ids = this.props.message_ids.length;
