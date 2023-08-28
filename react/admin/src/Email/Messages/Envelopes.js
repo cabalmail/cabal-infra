@@ -11,7 +11,6 @@ class Envelopes extends React.Component {
 
   constructor(props) {
     super(props);
-    this.pages = [];
     this.state = {
       envelopes: {},
       pages: [],
@@ -43,20 +42,13 @@ class Envelopes extends React.Component {
     return true;
   }
 
-  clearPages() {
-    for (var p; p < this.pages.length; p++) {
-      this.pages[p] = null;
-    }
-  }
-
   shouldComponentUpdate(_next_props, next_state) {
     return next_state.pages.length > 0;
   }
 
   doUpdate() {
-    this.clearPages();
     const num_ids = this.props.message_ids.length;
-    this.setState({...this.state, envelopes: {}});
+    this.setState({...this.state, envelopes: {}, pages: []});
     for (var i = 0; i < num_ids; i+=PAGE_SIZE) {
       let ids = this.props.message_ids.slice(i, i+PAGE_SIZE);
       let page = Math.floor(i/PAGE_SIZE);
