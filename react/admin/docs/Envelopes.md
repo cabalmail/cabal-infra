@@ -22,13 +22,6 @@ null)
 
 Returns: null
 
-### clearPages
-Modifiers: none
-
-Parameters:  ()
-
-Returns: null
-
 ### doUpdate
 Modifiers: none
 
