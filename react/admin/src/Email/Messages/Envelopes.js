@@ -50,7 +50,7 @@ class Envelopes extends React.Component {
   }
 
   shouldComponentUpdate(_next_props, next_state) {
-    return Object.keys(next_state.envelopes).length > 0;
+    return next_state.pages.length > 0;
   }
 
   doUpdate() {
