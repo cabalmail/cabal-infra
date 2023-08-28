@@ -14,7 +14,6 @@ class Envelopes extends React.Component {
     this.state = {
       envelopes: {},
       pages: [],
-      loading: false,
       selected: null // do we need this?
     };
     this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
@@ -25,8 +24,7 @@ class Envelopes extends React.Component {
       let envelopes = { ...this.state.envelopes, ...this.state.pages[page] };
       this.setState({
         ...this.state,
-        envelopes: envelopes,
-        loading: false
+        envelopes: envelopes
       });
     }
   }
@@ -44,13 +42,13 @@ class Envelopes extends React.Component {
     return true;
   }
 
-  shouldComponentUpdate(_next_props, next_state) {
-    return !next_state.loading;
-  }
+  // shouldComponentUpdate(_next_props, next_state) {
+  //   return !next_state.loading;
+  // }
 
   doUpdate() {
     const num_ids = this.props.message_ids.length;
-    this.setState({...this.state, envelopes: {}, pages: [], loading: true});
+    this.setState({...this.state, envelopes: {}, pages: []});
     for (var i = 0; i < num_ids; i+=PAGE_SIZE) {
       let ids = this.props.message_ids.slice(i, i+PAGE_SIZE);
       let page = Math.floor(i/PAGE_SIZE);
@@ -93,7 +91,7 @@ class Envelopes extends React.Component {
   markRead = (id, page) => {
     let envelopes = JSON.parse(JSON.stringify(this.state.envelopes));
     envelopes[id.toString()].flags.push("\\Seen");
-    this.setState({ ...this.state, envelopes: envelopes, loading: false });
+    this.setState({ ...this.state, envelopes: envelopes });
     this.props.markRead(id);
   }
 
@@ -102,7 +100,7 @@ class Envelopes extends React.Component {
     let envelope = envelopes[id.toString()]
     envelope.flags.splice(envelope.flags.indexOf("\\Seen"),1);
     envelopes[id.toString()] = envelope;
-    this.setState({ ...this.state, envelopes: envelopes, loading: false });
+    this.setState({ ...this.state, envelopes: envelopes });
     this.props.markUnread(id);
   }
 
@@ -162,7 +160,7 @@ class Envelopes extends React.Component {
       <SwipeableList
         fullSwipe={true}
         type={IOS}
-        className={`message-list ${this.state.loading ? "loading" : ""}`}
+        className="message-list"
       >
         {message_list}
       </SwipeableList>
