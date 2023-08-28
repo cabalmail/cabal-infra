@@ -137,18 +137,14 @@ The message list supports two swipe gestures.
 
 By tapping or clicking the checkboxes to the left of each message, you can select them for bulk operations. The buttons along the top of the message list will perform the following operations on the checked messages:
 
-🗑️: Delete messages (can't be undone).
-
-📨: Move messages to another folder.
-
-🙈: Mark messages as unread.
-
-🐵: Mark messages as read.
-
-📭: Remove flag from messages.
-
-📫: Add flag to messages.
-
+|         Button         | Function                                                                   |
+| ---------------------- | -------------------------------------------------------------------------- |
+|           🗑️           | Delete selected messages (can't be undone).                                |
+|           📨           | Move selected messages to another folder.                                  |
+|           🙈           | Mark selected messages as unread.                                          |
+|           🐵           | Mark selected messages as read.                                            |
+|           📭           | Remove flag from selected messages.                                        |
+|           📫           | Add flag to selected messages.                                             |
 
 #### Reading a Message
 
@@ -158,43 +154,34 @@ Tap or click the subject of an email in the message list to see the full email. 
 
 There are a number of options available while reading a message:
 
-🗑️: Delete message (can't be undone).
-
-📨: Move message to another folder.
-
-🙈: Mark message as unread.
-
-🐵: Mark message as read.
-
-📭: Remove flag from message.
-
-📫: Add flag to message.
-
-👈: Reply to sender.
-
-👈👈: Reply to all.
-
-👉: Forward message.
-
-🗑️ Revoke \_\_\_\_\_: Revoke the address that received the message.
-
-▲: Hide most header information in order to see more of the message body.
-
-▼: Show the full header information.
-
-Rich Text: Show the HTML version of the message if present (default view).
-
-Plain Text: Show the plain text version of the message if present.
-
-📎: Show list of attachments.
-
-\</\>: Show message source.
+|         Button         | Function                                                                   |
+| ---------------------- | -------------------------------------------------------------------------- |
+|           ❌           | Close the message and return to message list (narrow screen devices only). |
+|           🗑️           | Delete message (can't be undone).                                          |
+|           📨           | Move message to another folder.                                            |
+|           🙈           | Mark message as unread.                                                    |
+|           🐵           | Mark message as read.                                                      |
+|           📭           | Remove flag from message.                                                  |
+|           📫           | Add flag to message.                                                       |
+|           👈           | Reply to sender.                                                           |
+|         👈👈           | Reply to all.                                                              |
+|           👉           | Forward message.                                                           |
+|  🗑️ Revoke \_\_\_\_\_  | Revoke the address that received the message.                              |
+|           ▲            | Hide most header information in order to see more of the message body.     |
+|           ▼            | Show the full header information.                                          |
+|       Rich Text        | Show the HTML version of the message if present (default view).            |
+|      Plain Text        | Show the plain text version of the message if present.                     |
+|           📎           |Show list of attachments.                                                   |
+|         \</\>          | Show message source.                                                       |
 
 The following options only pertain to the Rich Text view:
 
-<ins>⇩</ins>: Download external images (may allow sender to track you).
+|         Button         | Function                                                                   |
+| ---------------------- | -------------------------------------------------------------------------- |
+|      <ins>⇩</ins>      | Download external images (may allow sender to track you).                  |
+|           ◐            | Rotate through different views.                                            |
 
-◐: Rotate through different views. There are three states:
+These are the three view states accessed from the ◐ button:
 
 - Default. Text and background color match system defaults. This means dark text and light background for systems with a bright default, and light text and dark background for systems with a dark default.
 - Message style. No styling is applied apart from what is embedded in the message.
