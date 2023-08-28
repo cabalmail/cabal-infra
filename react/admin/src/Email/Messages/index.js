@@ -254,6 +254,9 @@ class Messages extends React.Component {
       return <option id={i.css} value={i.imap} key={i.imap}>{i.description}</option>;
     });
     const selected = this.state.selected_messages.length ? " selected" : " none_selected";
+    if (this.state.loading) {
+      return <div className="email_list loading"></div>;
+    }
     return (
       <div className="email_list">
         <div className="sticky">
