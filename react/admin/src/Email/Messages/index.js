@@ -253,7 +253,7 @@ class Messages extends React.Component {
     });
     const selected = this.state.selected_messages.length ? " selected" : " none_selected";
     if (this.state.loading) {
-      return <div className="email_list loading"></div>;
+      return <div className="email_list loading">Loading...</div>;
     }
     return (
       <div className="email_list">
