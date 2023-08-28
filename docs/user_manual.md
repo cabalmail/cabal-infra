@@ -137,17 +137,17 @@ The message list supports two swipe gestures.
 
 By tapping or clicking the checkboxes to the left of each message, you can select them for bulk operations. The buttons along the top of the message list will perform the following operations on the checked messages:
 
-🗑️: Delete message (can't be undone).
+🗑️: Delete messages (can't be undone).
 
-📨: Move message to another folder.
+📨: Move messages to another folder.
 
-🙈: Mark message as unread.
+🙈: Mark messages as unread.
 
-🐵: Mark message as read.
+🐵: Mark messages as read.
 
-📭: Remove flag from message.
+📭: Remove flag from messages.
 
-📫: Add flag to message.
+📫: Add flag to messages.
 
 
 #### Reading a Message
@@ -202,6 +202,14 @@ The following options only pertain to the Rich Text view:
 
 #### Composing a Message
 
+<img src="./app_screens/16_email_compose.jpeg" alt="Email Page" width="400" />
+
+There are two ways to invoke the composition experience: the “New email” button in the lower right of the screen, or by replying or forwarding a message. When replying, all relevant fields will be filled out:
+- The From address will be selected based on what can be ascertained from the headers of the original message.
+- The Recipient list will include the sender of the original message. In a reply-all, it will also include all recipients of the original message.
+- The Subject will be the subject of the original message prefixed by “Re: “ or “Fwd: “ for replies or forwards respectively.
+- The message body will contain the body and partial header information from the original message.
+
 ### _Log Out_
 When done, log out of the application by tapping or clicking the "Log out" button in the upper right.
 
@@ -231,6 +239,6 @@ Cabalmail does not create a custom user interface for administering end user acc
 8. Examine the user's details to verify that you selected the right one.
 9. Click the "Disable user" button.
 
-### Deleting an Account
+### _Deleting an Account_
 1. Follow the steps in [Disabling an Account](#disable).
 2. Click the "Delete user" button.
