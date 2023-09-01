@@ -47,6 +47,13 @@ null)
 
 Returns: null
 
+### vibrate
+Modifiers: none
+
+Parameters:  ()
+
+Returns: null
+
 ### markRead
 Modifiers: none
 
