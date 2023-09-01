@@ -52,7 +52,6 @@ class Envelopes extends React.Component {
   doUpdate() {
     this.clearPages();
     const num_ids = this.props.message_ids.length;
-    this.setState({...this.state, envelopes: {}});
     for (var i = 0; i < num_ids; i+=PAGE_SIZE) {
       let ids = this.props.message_ids.slice(i, i+PAGE_SIZE);
       let page = Math.floor(i/PAGE_SIZE);
