@@ -87,12 +87,7 @@ class Envelopes extends React.Component {
     this.props.handleCheck(id, checked);
   }
 
-  vibrate() {
-    window.navigator.vibrate(100);
-  }
-
   markRead = (id, page) => {
-    this.vibrate();
     let envelopes = JSON.parse(JSON.stringify(this.state.envelopes));
     envelopes[id.toString()].flags.push("\\Seen");
     this.setState({ ...this.state, envelopes: envelopes });
@@ -100,7 +95,6 @@ class Envelopes extends React.Component {
   }
 
   markUnread = (id, page) => {
-    this.vibrate();
     let envelopes = JSON.parse(JSON.stringify(this.state.envelopes));
     let envelope = envelopes[id.toString()]
     envelope.flags.splice(envelope.flags.indexOf("\\Seen"),1);
@@ -110,7 +104,6 @@ class Envelopes extends React.Component {
   }
 
   archive = (id) => {
-    this.vibrate();
     this.props.archive(id);
   }
 
