@@ -100,11 +100,6 @@ resource "aws_iam_role_policy" "lambda" {
         },
         {
             "Effect": "Allow",
-            "Action": "logs:CreateLogGroup",
-            "Resource": "arn:aws:logs:${var.region}:${var.account}:${local.wildcard}"
-        },
-        {
-            "Effect": "Allow",
             "Action": [
                 "logs:CreateLogStream",
                 "logs:PutLogEvents"
@@ -137,6 +132,11 @@ resource "aws_iam_role_policy" "lambda" {
 RUNPOLICY
 }
 
+resource "aws_cloudwatch_log_group" "lambda_log" {
+  name              = "/cabal/lambda/${var.name}"
+  retention_in_days = 14
+}
+
 data "aws_s3_object" "lambda_function_hash" {
   bucket = var.bucket
   key    = "/lambda/${var.name}.zip.base64sha256"
@@ -155,10 +155,16 @@ resource "aws_lambda_function" "api_call" {
   architectures    = ["arm64"]
   timeout          = 30
   memory_size      = var.memory
+  logging_config {
+    log_group = aws_cloudwatch_log_group.lambda_log.name
+  }
   environment {
     variables = {
       DOMAINS        = jsonencode({ for r in var.domains : r.domain => r.zone_id })
       CONTROL_DOMAIN = var.control_domain
     }
   }
+  depends_on = [
+    aws_cloudwatch_log_group.lambda_log,
+  ]
 }
