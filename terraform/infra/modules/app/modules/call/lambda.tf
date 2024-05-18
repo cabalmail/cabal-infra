@@ -156,7 +156,8 @@ resource "aws_lambda_function" "api_call" {
   timeout          = 30
   memory_size      = var.memory
   logging_config {
-    log_group = aws_cloudwatch_log_group.lambda_log.name
+    log_format = "Text"
+    log_group  = aws_cloudwatch_log_group.lambda_log.name
   }
   environment {
     variables = {
