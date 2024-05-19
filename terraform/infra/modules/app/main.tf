@@ -81,7 +81,7 @@ resource "aws_api_gateway_stage" "api_stage" {
   cache_cluster_size    = "0.5"
   access_log_settings {
     destination_arn = aws_cloudwatch_log_group.api_logs.arn
-    format          = "Text"
+    format          = "{ \"requestId\":\"$context.requestId\", \"extendedRequestId\":\"$context.extendedRequestId\",\"ip\": \"$context.identity.sourceIp\", \"caller\":\"$context.identity.caller\", \"user\":\"$context.identity.user\", \"requestTime\":\"$context.requestTime\", \"httpMethod\":\"$context.httpMethod\", \"resourcePath\":\"$context.resourcePath\", \"status\":\"$context.status\", \"protocol\":\"$context.protocol\", \"responseLength\":\"$context.responseLength\" }"
   }
 }
 
