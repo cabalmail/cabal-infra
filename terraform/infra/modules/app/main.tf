@@ -66,6 +66,11 @@ resource "aws_api_gateway_deployment" "deployment" {
   }
 }
 
+resource "aws_cloudwatch_log_group" "api_logs" {
+  name              = "API-Gateway-Execution-Logs_${aws_api_gateway_rest_api.gateway.id}/${var.stage_name}"
+  retention_in_days = 14
+}
+
 #tfsec:ignore:aws-api-gateway-enable-access-logging
 #tfsec:ignore:aws-api-gateway-enable-tracing
 resource "aws_api_gateway_stage" "api_stage" {
@@ -74,6 +79,9 @@ resource "aws_api_gateway_stage" "api_stage" {
   stage_name            = var.stage_name
   cache_cluster_enabled = false
   cache_cluster_size    = "0.5"
+  access_log_settings {
+    destination_arn = aws_cloudwatch_log_group.api_logs.arn
+  }
 }
 
 resource "aws_iam_role" "cloudwatch" {
