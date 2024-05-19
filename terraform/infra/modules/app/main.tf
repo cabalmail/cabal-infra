@@ -71,7 +71,6 @@ resource "aws_cloudwatch_log_group" "api_logs" {
   retention_in_days = 14
 }
 
-#tfsec:ignore:aws-api-gateway-enable-access-logging
 #tfsec:ignore:aws-api-gateway-enable-tracing
 resource "aws_api_gateway_stage" "api_stage" {
   deployment_id         = aws_api_gateway_deployment.deployment.id
