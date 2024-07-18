@@ -6,6 +6,8 @@ on:
   workflow_call:
   repository_dispatch:
     types: [trigger_build]
+  schedule:
+    - cron: '0 * * * *'
   push:
     paths:
       - 'terraform/infra'
