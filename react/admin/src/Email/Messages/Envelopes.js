@@ -11,7 +11,6 @@ class Envelopes extends React.Component {
 
   constructor(props) {
     super(props);
-    this.pages = [];
     this.state = {
       envelopes: {},
       pages: [],
@@ -43,14 +42,11 @@ class Envelopes extends React.Component {
     return true;
   }
 
-  clearPages() {
-    for (var p; p < this.pages.length; p++) {
-      this.pages[p] = null;
-    }
-  }
+  // shouldComponentUpdate(_next_props, next_state) {
+  //   return !next_state.loading;
+  // }
 
   doUpdate() {
-    this.clearPages();
     const num_ids = this.props.message_ids.length;
     for (var i = 0; i < num_ids; i+=PAGE_SIZE) {
       let ids = this.props.message_ids.slice(i, i+PAGE_SIZE);
@@ -163,7 +159,7 @@ class Envelopes extends React.Component {
       <SwipeableList
         fullSwipe={true}
         type={IOS}
-        className={`message-list ${this.state.loading ? "loading" : ""}`}
+        className="message-list"
       >
         {message_list}
       </SwipeableList>

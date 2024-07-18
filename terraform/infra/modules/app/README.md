@@ -47,7 +47,7 @@ Stands up the following resources to implement a web application that allows use
 
 | Name | Version |
 |------|---------|
-| <a name="provider_aws"></a> [aws](#provider\_aws) | ~> 4.41 |
+| <a name="provider_aws"></a> [aws](#provider\_aws) | ~> 5.32 |
 | <a name="provider_random"></a> [random](#provider\_random) | ~> 3.0 |
 | <a name="provider_tls"></a> [tls](#provider\_tls) | n/a |
 ## Requirements
@@ -55,7 +55,7 @@ Stands up the following resources to implement a web application that allows use
 | Name | Version |
 |------|---------|
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.1.2 |
-| <a name="requirement_aws"></a> [aws](#requirement\_aws) | ~> 4.41 |
+| <a name="requirement_aws"></a> [aws](#requirement\_aws) | ~> 5.32 |
 | <a name="requirement_random"></a> [random](#requirement\_random) | ~> 3.0 |
 ## Resources
 
@@ -69,6 +69,8 @@ Stands up the following resources to implement a web application that allows use
 | [aws_api_gateway_rest_api.gateway](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/api_gateway_rest_api) | resource |
 | [aws_api_gateway_stage.api_stage](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/api_gateway_stage) | resource |
 | [aws_cloudfront_distribution.cdn](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudfront_distribution) | resource |
+| [aws_cloudwatch_log_group.api_logs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_log_group) | resource |
+| [aws_cognito_user.master](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cognito_user) | resource |
 | [aws_iam_role.cloudwatch](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role) | resource |
 | [aws_iam_role_policy.cloudwatch](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy) | resource |
 | [aws_route53_record.admin_cname](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route53_record) | resource |
