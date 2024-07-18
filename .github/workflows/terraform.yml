@@ -138,7 +138,6 @@ jobs:
         echo "chef_license = \"${{ vars.TF_VAR_CHEF_LICENSE}}\"" >> terraform.tfvars
         echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
         echo "backup = ${{ vars.TF_VAR_BACKUP }}" >> terraform.tfvars
-        echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
     - name: plan-terraform
@@ -190,7 +189,6 @@ jobs:
         echo "chef_license = \"${{ vars.TF_VAR_CHEF_LICENSE}}\"" >> terraform.tfvars
         echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
         echo "backup = ${{ vars.TF_VAR_BACKUP }}" >> terraform.tfvars
-        echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
     - name: apply-terraform
