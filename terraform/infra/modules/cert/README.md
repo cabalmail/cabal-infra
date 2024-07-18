@@ -27,7 +27,7 @@ No modules.
 | Name | Version |
 |------|---------|
 | <a name="provider_acme"></a> [acme](#provider\_acme) | 2.2.0 |
-| <a name="provider_aws"></a> [aws](#provider\_aws) | ~> 4.41 |
+| <a name="provider_aws"></a> [aws](#provider\_aws) | ~> 5.32 |
 | <a name="provider_tls"></a> [tls](#provider\_tls) | >= 4.0.0 |
 ## Requirements
 
@@ -35,7 +35,7 @@ No modules.
 |------|---------|
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.1.2 |
 | <a name="requirement_acme"></a> [acme](#requirement\_acme) | 2.2.0 |
-| <a name="requirement_aws"></a> [aws](#requirement\_aws) | ~> 4.41 |
+| <a name="requirement_aws"></a> [aws](#requirement\_aws) | ~> 5.32 |
 | <a name="requirement_tls"></a> [tls](#requirement\_tls) | >= 4.0.0 |
 ## Resources
 

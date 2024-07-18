@@ -66,7 +66,11 @@ resource "aws_api_gateway_deployment" "deployment" {
   }
 }
 
-#tfsec:ignore:aws-api-gateway-enable-access-logging
+resource "aws_cloudwatch_log_group" "api_logs" {
+  name              = "API-Gateway-Execution-Logs_${aws_api_gateway_rest_api.gateway.id}/${var.stage_name}"
+  retention_in_days = 14
+}
+
 #tfsec:ignore:aws-api-gateway-enable-tracing
 resource "aws_api_gateway_stage" "api_stage" {
   deployment_id         = aws_api_gateway_deployment.deployment.id
@@ -74,6 +78,10 @@ resource "aws_api_gateway_stage" "api_stage" {
   stage_name            = var.stage_name
   cache_cluster_enabled = false
   cache_cluster_size    = "0.5"
+  access_log_settings {
+    destination_arn = aws_cloudwatch_log_group.api_logs.arn
+    format          = "{ \"requestId\":\"$context.requestId\", \"extendedRequestId\":\"$context.extendedRequestId\",\"ip\": \"$context.identity.sourceIp\", \"caller\":\"$context.identity.caller\", \"user\":\"$context.identity.user\", \"requestTime\":\"$context.requestTime\", \"httpMethod\":\"$context.httpMethod\", \"resourcePath\":\"$context.resourcePath\", \"status\":\"$context.status\", \"protocol\":\"$context.protocol\", \"responseLength\":\"$context.responseLength\" }"
+  }
 }
 
 resource "aws_iam_role" "cloudwatch" {

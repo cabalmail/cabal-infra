@@ -125,12 +125,14 @@ class Messages extends React.Component {
   callback = (data) => {
     this.setState({
       ...this.state,
-      message_ids: []
+      message_ids: [],
+      loading: true
     });
     this.callbackTimeout = setTimeout(() => {
       this.setState({
         ...this.state,
-        message_ids: data.data.message_ids
+        message_ids: data.data.message_ids,
+        loading: false
       });
     }, 1);
   }
@@ -250,6 +252,9 @@ class Messages extends React.Component {
       return <option id={i.css} value={i.imap} key={i.imap}>{i.description}</option>;
     });
     const selected = this.state.selected_messages.length ? " selected" : " none_selected";
+    if (this.state.loading) {
+      return <div className="email_list loading">Loading...</div>;
+    }
     return (
       <div className="email_list">
         <div className="sticky">
