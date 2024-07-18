@@ -9,7 +9,6 @@ provider "acme" {
 
 resource "tls_private_key" "key" {
   algorithm = "RSA"
-  rsa_bits  = 4096
 }
 
 resource "acme_registration" "reg" {
@@ -19,7 +18,6 @@ resource "acme_registration" "reg" {
 
 resource "tls_private_key" "pk" {
   algorithm = "RSA"
-  rsa_bits  = 4096
 }
 
 resource "aws_ssm_parameter" "cabal_private_key" {
