@@ -54,7 +54,12 @@ After signing up, perform the following steps:
                     "s3:*",
                     "s3-object-lambda:*",
                     "ssm:*",
-                    "sts:GetCallerIdentity"
+                    "sts:GetCallerIdentity",
+                    "logs:CreateLogGroup",
+                    "logs:TagResource",
+                    "logs:PutRetentionPolicy",
+                    "logs:DescribeLogGroups",
+                    "logs:ListTagsForResource"
                 ],
                 "Resource": "*"
             }
