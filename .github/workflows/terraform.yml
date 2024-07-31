@@ -217,4 +217,4 @@ jobs:
     - name: init-terraform
       run: terraform init
     - name: apply-terraform
-      run: terraform apply -auto-approve -lock-timeout=30m
+      run: terraform apply -auto-approve -lock-timeout=30m -var-file="terraform.tfvars"
