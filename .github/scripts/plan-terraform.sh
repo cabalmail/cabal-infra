@@ -1,7 +1,7 @@
 #!/bin/bash
 
 set +e
-terraform plan -lock-timeout=30m -detailed-exitcode
+terraform plan -lock-timeout=30m -detailed-exitcode -var-file="terraform.tfvars"
 EXIT_CODE=$?
 echo ">$EXIT_CODE<"
 echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
