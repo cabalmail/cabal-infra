@@ -7,7 +7,7 @@ on:
   repository_dispatch:
     types: [trigger_build]
   schedule:
-    - cron: '41 1 * * *'
+    - cron: '41 1 9 * *'
   push:
     paths:
       - 'terraform/infra'
