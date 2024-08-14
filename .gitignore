@@ -1,3 +1,7 @@
+terraform/dns/terraform.tfvars
+terraform/infra/terraform.tfvars
+terraform/dns/.terraform/**
+terraform/infra/.terraform/**
 .terraform/**
 react/admin/public/config.js
 react/admin/package-lock.json
