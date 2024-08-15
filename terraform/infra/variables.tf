@@ -31,7 +31,7 @@ variable "email" {
 variable "availability_zones" {
   type        = list(string)
   description = "List of availability zones to use for the primary region."
-  default     = [
+  default = [
     "us-west-1a"
   ]
   validation {
@@ -70,8 +70,8 @@ variable "mail_domains" {
   type        = list(string)
   description = "List of domains from which you want to send mail, and to which you want to allow mail to be sent. Must have at least one."
   validation {
-    condition     = alltrue([
-    for str in var.mail_domains : can(regex("^(([[:alpha:]]|-|_|[[:digit:]])+\\.)+[[:alpha:]]+$", str))
+    condition = alltrue([
+      for str in var.mail_domains : can(regex("^(([[:alpha:]]|-|_|[[:digit:]])+\\.)+[[:alpha:]]+$", str))
     ])
     error_message = "One or more of the mail_domains does not appear to be a valid domain name."
   }
@@ -82,21 +82,21 @@ variable "mail_domains" {
 }
 
 variable "imap_scale" {
-  type        = object({
+  type = object({
     min  = number
     max  = number
     des  = number
     size = string
   })
   description = "Minimum, maximum, and desired number of IMAP servers; and size of IMAP servers. IMPORTANT: This stack uses open source Dovecot, which does not support multiple instances accessing the same mailstore over NFS. Since this stack also uses NFS for the mailstore, all three of these numbers should always be set to 1. Defaults to { min = 0, max = 0, des = 0, size = \"t2.micro\" } in order to prevent unexpected AWS charges."
-  default     = {
+  default = {
     min  = 0
     max  = 0
     des  = 0
     size = "t2.micro"
   }
   validation {
-    condition     = alltrue([
+    condition = alltrue([
       (floor(var.imap_scale.min) == var.imap_scale.min),
       (floor(var.imap_scale.max) == var.imap_scale.max),
       (floor(var.imap_scale.des) == var.imap_scale.des),
@@ -107,14 +107,14 @@ variable "imap_scale" {
     error_message = "The imap_scale attributes must be non-negative integers."
   }
   validation {
-    condition     = alltrue([
+    condition = alltrue([
       (var.imap_scale.min <= var.imap_scale.des),
       (var.imap_scale.des <= var.imap_scale.max),
     ])
     error_message = "The imap_scale attributes must satisfy the relationship min <= des <= max."
   }
   validation {
-    condition     = alltrue([
+    condition = alltrue([
       (var.imap_scale.min <= 1),
       (var.imap_scale.max <= 1),
       (var.imap_scale.des <= 1),
@@ -124,21 +124,21 @@ variable "imap_scale" {
 }
 
 variable "smtpin_scale" {
-  type        = object({
+  type = object({
     min  = number
     max  = number
     des  = number
     size = string
   })
   description = "Minimum, maximum, and desired number of incoming SMTP servers; and size of incoming SMTP servers. All three numbers should be at least 1, and must satisfy minimum <= desired <= maximum. Defaults to { min = 0, max = 0, des = 0, size = \"t2.micro\" } in order to prevent unexpected AWS charges."
-  default     = {
+  default = {
     min  = 0
     max  = 0
     des  = 0
     size = "t2.micro"
   }
   validation {
-    condition     = alltrue([
+    condition = alltrue([
       (floor(var.smtpin_scale.min) == var.smtpin_scale.min),
       (floor(var.smtpin_scale.max) == var.smtpin_scale.max),
       (floor(var.smtpin_scale.des) == var.smtpin_scale.des),
@@ -149,7 +149,7 @@ variable "smtpin_scale" {
     error_message = "The smtpin_scale attributes must be non-negative integers."
   }
   validation {
-    condition     = alltrue([
+    condition = alltrue([
       (var.smtpin_scale.min <= var.smtpin_scale.des),
       (var.smtpin_scale.des <= var.smtpin_scale.max),
     ])
@@ -158,21 +158,21 @@ variable "smtpin_scale" {
 }
 
 variable "smtpout_scale" {
-  type        = object({
+  type = object({
     min  = number
     max  = number
     des  = number
     size = string
   })
   description = "Minimum, maximum, and desired number of outgoing SMTP servers; and size of outgoing SMTP servers. All three numbers should be at least 1, and must satisfy minimum <= desired <= maximum. Defaults to { min = 0, max = 0, des = 0, size = \"t2.micro\" } in order to prevent unexpected AWS charges."
-  default     = {
+  default = {
     min  = 0
     max  = 0
     des  = 0
     size = "t2.micro"
   }
   validation {
-    condition     = alltrue([
+    condition = alltrue([
       (floor(var.smtpout_scale.min) == var.smtpout_scale.min),
       (floor(var.smtpout_scale.max) == var.smtpout_scale.max),
       (floor(var.smtpout_scale.des) == var.smtpout_scale.des),
@@ -183,7 +183,7 @@ variable "smtpout_scale" {
     error_message = "The smtpin_scale attributes must be non-negative integers."
   }
   validation {
-    condition     = alltrue([
+    condition = alltrue([
       (var.smtpout_scale.min <= var.smtpout_scale.des),
       (var.smtpout_scale.des <= var.smtpout_scale.max),
     ])
