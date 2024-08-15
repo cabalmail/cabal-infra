@@ -27,14 +27,14 @@ jobs:
     - name: generate-versions
       run: env TF_ENVIRONMENT="${{ vars.TF_VAR_ENVIRONMENT }}" ./.github/scripts/make-terraform.sh
     - name: debug-1
-      run: cat ./terraform/infra/versions.tf
+      run: cat ./terraform/infra/backend.tf
     - name: debug-2
       run: echo "${{ vars.TF_VAR_ENVIRONMENT }}"
     - name: store-artifact
       uses: actions/upload-artifact@v3
       with:
-        name: versions.tf
-        path: ./terraform/infra/versions.tf
+        name: backend.tf
+        path: ./terraform/infra/backend.tf
   docs:
     runs-on: ubuntu-latest
     steps:
@@ -66,9 +66,9 @@ jobs:
     - name: retrieve-artifact
       uses: actions/download-artifact@v3
       with:
-        name: versions.tf
+        name: backend.tf
     - name: move
-      run: mv versions.tf ./terraform/infra/versions.tf
+      run: mv backend.tf ./terraform/infra/backend.tf
     - name: chekov
       uses: bridgecrewio/checkov-action@master
       with:
@@ -90,9 +90,9 @@ jobs:
     - name: retrieve-artifact
       uses: actions/download-artifact@v3
       with:
-        name: versions.tf
+        name: backend.tf
     - name: move
-      run: mv ../../versions.tf versions.tf
+      run: mv ../../backend.tf backend.tf
     - name: install-linters
       run: curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
     - name: initialize-linter
@@ -109,9 +109,9 @@ jobs:
     - name: retrieve-artifact
       uses: actions/download-artifact@v3
       with:
-        name: versions.tf
+        name: backend.tf
     - name: move
-      run: mv versions.tf ./terraform/infra/versions.tf
+      run: mv backend.tf ./terraform/infra/backend.tf
     - name: tfsec
       uses: aquasecurity/tfsec-action@v1.0.0
       with:
@@ -138,9 +138,9 @@ jobs:
     - name: retrieve-artifact
       uses: actions/download-artifact@v3
       with:
-        name: versions.tf
+        name: backend.tf
     - name: move
-      run: mv ../../versions.tf versions.tf
+      run: mv ../../backend.tf backend.tf
     - name: install-terraform
       uses: hashicorp/setup-terraform@v2
       with:
@@ -191,9 +191,9 @@ jobs:
     - name: retrieve-artifact
       uses: actions/download-artifact@v3
       with:
-        name: versions.tf
+        name: backend.tf
     - name: move
-      run: mv ../../versions.tf versions.tf
+      run: mv ../../backend.tf backend.tf
     - name: install-terraform
       uses: hashicorp/setup-terraform@v2
       with:
