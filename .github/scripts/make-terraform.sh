@@ -1,22 +1,10 @@
 #!/bin/bash
 cat << EO_TF > terraform/infra/versions.tf
 terraform {
-  cloud {
-    organization = "cabal"
-    workspaces {
-      tags = ["infra","$TF_ENVIRONMENT"]
-    }
+  backend "s3" {
+    bucket = "cabal-tf-backend"
+    key    = "$TF_ENVIRONMENT"
+    region = "$TF_VAR_AWS_REGION"
   }
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.32"
-    }
-    acme = {
-      source  = "vancluever/acme"
-      version = "2.2.0"
-    }
-  }
-  required_version = ">= 1.1.2"
 }
 EO_TF

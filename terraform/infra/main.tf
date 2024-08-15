@@ -4,17 +4,6 @@
 * This terraform stack stands up AWS infrastructure needed for a Cabalmail system. See [README.md](../../README.md) at the root of this repository for general information.
 */
 
-provider "aws" {
-  region = var.aws_region
-  default_tags {
-    tags = {
-      environment           = var.environment
-      managed_by_terraform  = "y"
-      terraform_repo        = var.repo
-    }
-  }
-}
-
 # Create S3 bucket for React App
 module "bucket" {
   source         = "./modules/s3"
@@ -126,7 +115,7 @@ module "imap" {
   bucket           = module.bucket.bucket
   bucket_arn       = module.bucket.bucket_arn
   master_password  = module.admin.master_password
-  depends_on       = [ module.cert ]
+  depends_on       = [module.cert]
 }
 
 # Creates an auto-scale group for inbound SMTP servers
@@ -153,17 +142,17 @@ module "smtp_in" {
   bucket           = module.bucket.bucket
   bucket_arn       = module.bucket.bucket_arn
   master_password  = module.admin.master_password
-  depends_on       = [ module.cert ]
+  depends_on       = [module.cert]
 }
 
 # Creates an auto-scale group for outbound SMTP servers
 module "smtp_out" {
-  source           = "./modules/asg"
-  type             = "smtp-out"
-  private_subnets  = module.vpc.private_subnets
-  vpc_id           = module.vpc.vpc.id
-  control_domain   = var.control_domain
-  target_groups    = [
+  source          = "./modules/asg"
+  type            = "smtp-out"
+  private_subnets = module.vpc.private_subnets
+  vpc_id          = module.vpc.vpc.id
+  control_domain  = var.control_domain
+  target_groups = [
     module.load_balancer.submission_tg,
     module.load_balancer.starttls_tg
   ]
@@ -183,7 +172,7 @@ module "smtp_out" {
   bucket           = module.bucket.bucket
   bucket_arn       = module.bucket.bucket_arn
   master_password  = module.admin.master_password
-  depends_on       = [ module.cert ]
+  depends_on       = [module.cert]
 }
 
 # Establishes a daily backup schedule for mail and address data
