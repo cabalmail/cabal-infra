@@ -1,71 +1,70 @@
 ---
-    name: Destroy Terraform Infrastructure
-    
-    on:
-      workflow_dispatch:
-    
-    jobs:
-      build:
-        runs-on: ubuntu-latest
-        environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
-        steps:
-        - name: checkout
-          uses: actions/checkout@v3
-        - name: generate-versions
-          run: env TF_ENVIRONMENT="${{ vars.TF_VAR_ENVIRONMENT }}" ./.github/scripts/make-terraform.sh
-        - name: debug-1
-          run: cat ./terraform/infra/backend.tf
-        - name: debug-2
-          run: echo "${{ vars.TF_VAR_ENVIRONMENT }}"
-        - name: store-artifact
-          uses: actions/upload-artifact@v3
-          with:
-            name: backend.tf
-            path: ./terraform/infra/backend.tf
-      destroy:
-        needs:
-        - build
-        runs-on: ubuntu-latest
-        defaults:
-          run:
-            working-directory: ./terraform/infra
-        environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
-        env:
-          TF_API_TOKEN: ${{ secrets.TF_TOKEN }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
-        steps:
-        - name: checkout
-          uses: actions/checkout@v3
-        - name: retrieve-artifact
-          uses: actions/download-artifact@v3
-          with:
-            name: backend.tf
-        - name: move
-          run: mv ../../backend.tf backend.tf
-        - name: install-terraform
-          uses: hashicorp/setup-terraform@v2
-          with:
-            cli_config_credentials_token: ${{ secrets.TF_TOKEN }}
-        - name: tfvars-terraform
-          run: |
-            echo "smtpout_scale = ${{ vars.TF_VAR_SMTPOUT_SCALE }}" > terraform.tfvars
-            echo "availability_zones = ${{ vars.TF_VAR_AVAILABILITY_ZONES}}" >> terraform.tfvars
-            echo "aws_region = \"${{ vars.TF_VAR_AWS_REGION}}\"" >> terraform.tfvars
-            echo "cidr_block = \"${{ vars.TF_VAR_CIDR_BLOCK}}\"" >> terraform.tfvars
-            echo "control_domain = \"${{ vars.TF_VAR_CONTROL_DOMAIN}}\"" >> terraform.tfvars
-            echo "email = \"${{ vars.TF_VAR_EMAIL }}\"" >> terraform.tfvars
-            echo "environment = \"${{ vars.TF_VAR_ENVIRONMENT }}\"" >> terraform.tfvars
-            echo "imap_scale = ${{ vars.TF_VAR_IMAP_SCALE }}" >> terraform.tfvars
-            echo "mail_domains = ${{ vars.TF_VAR_MAIL_DOMAINS }}" >> terraform.tfvars
-            echo "smtpin_scale = ${{ vars.TF_VAR_SMTPIN_SCALE }}" >> terraform.tfvars
-            echo "chef_license = \"${{ vars.TF_VAR_CHEF_LICENSE}}\"" >> terraform.tfvars
-            echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
-            echo "backup = ${{ vars.TF_VAR_BACKUP }}" >> terraform.tfvars
-            echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
-        - name: init-terraform
-          run: terraform init
-        - name: destroy-terraform
-          run: terraform destroy -auto-approve -lock-timeout=30m -var-file="terraform.tfvars"
-    
+name: Destroy Terraform Infrastructure
+
+on:
+    workflow_dispatch:
+
+jobs:
+    build:
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
+    steps:
+    - name: checkout
+        uses: actions/checkout@v3
+    - name: generate-versions
+        run: env TF_ENVIRONMENT="${{ vars.TF_VAR_ENVIRONMENT }}" ./.github/scripts/make-terraform.sh
+    - name: debug-1
+        run: cat ./terraform/infra/backend.tf
+    - name: debug-2
+        run: echo "${{ vars.TF_VAR_ENVIRONMENT }}"
+    - name: store-artifact
+        uses: actions/upload-artifact@v3
+        with:
+        name: backend.tf
+        path: ./terraform/infra/backend.tf
+    destroy:
+    needs:
+    - build
+    runs-on: ubuntu-latest
+    defaults:
+        run:
+        working-directory: ./terraform/infra
+    environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
+    env:
+        TF_API_TOKEN: ${{ secrets.TF_TOKEN }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_REGION: ${{ secrets.AWS_REGION }}
+    steps:
+    - name: checkout
+        uses: actions/checkout@v3
+    - name: retrieve-artifact
+        uses: actions/download-artifact@v3
+        with:
+        name: backend.tf
+    - name: move
+        run: mv ../../backend.tf backend.tf
+    - name: install-terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+        cli_config_credentials_token: ${{ secrets.TF_TOKEN }}
+    - name: tfvars-terraform
+        run: |
+        echo "smtpout_scale = ${{ vars.TF_VAR_SMTPOUT_SCALE }}" > terraform.tfvars
+        echo "availability_zones = ${{ vars.TF_VAR_AVAILABILITY_ZONES}}" >> terraform.tfvars
+        echo "aws_region = \"${{ vars.TF_VAR_AWS_REGION}}\"" >> terraform.tfvars
+        echo "cidr_block = \"${{ vars.TF_VAR_CIDR_BLOCK}}\"" >> terraform.tfvars
+        echo "control_domain = \"${{ vars.TF_VAR_CONTROL_DOMAIN}}\"" >> terraform.tfvars
+        echo "email = \"${{ vars.TF_VAR_EMAIL }}\"" >> terraform.tfvars
+        echo "environment = \"${{ vars.TF_VAR_ENVIRONMENT }}\"" >> terraform.tfvars
+        echo "imap_scale = ${{ vars.TF_VAR_IMAP_SCALE }}" >> terraform.tfvars
+        echo "mail_domains = ${{ vars.TF_VAR_MAIL_DOMAINS }}" >> terraform.tfvars
+        echo "smtpin_scale = ${{ vars.TF_VAR_SMTPIN_SCALE }}" >> terraform.tfvars
+        echo "chef_license = \"${{ vars.TF_VAR_CHEF_LICENSE}}\"" >> terraform.tfvars
+        echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
+        echo "backup = ${{ vars.TF_VAR_BACKUP }}" >> terraform.tfvars
+        echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
+    - name: init-terraform
+        run: terraform init
+    - name: destroy-terraform
+        run: terraform destroy -auto-approve -lock-timeout=30m -var-file="terraform.tfvars"
