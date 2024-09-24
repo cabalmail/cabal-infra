@@ -41,7 +41,7 @@ jobs:
     - name: retrieve-artifact
       uses: actions/download-artifact@v3
       with:
-      name: backend.tf
+        name: backend.tf
     - name: move
       run: mv ../../backend.tf backend.tf
     - name: install-terraform
