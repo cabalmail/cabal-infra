@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-      working-directory: ./terraform/infra
+        working-directory: ./terraform/infra
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     env:
       TF_API_TOKEN: ${{ secrets.TF_TOKEN }}
