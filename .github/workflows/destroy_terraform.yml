@@ -1,5 +1,5 @@
 ---
-    name: Build and Deploy Terraform Infrastructure
+    name: Destroy Terraform Infrastructure
     
     on:
       workflow_dispatch:
