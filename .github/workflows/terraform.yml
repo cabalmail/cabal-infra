@@ -35,27 +35,27 @@ jobs:
       with:
         name: backend.tf
         path: ./terraform/infra/backend.tf
-  docs:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        ref: ${{ github.event.pull_request.head.ref }}
-    - name: Render terraform docs for infra and push changes back to PR
-      uses: terraform-docs/gh-actions@main
-      with:
-        working-dir: ./terraform/infra
-        output-file: README.md
-        output-method: replace
-        recursive: "true"
-        git-push: "true"
-    - name: Render terraform docs for dns and push changes back to PR
-      uses: terraform-docs/gh-actions@main
-      with:
-        working-dir: ./terraform/dns
-        output-file: README.md
-        output-method: inject
-        git-push: "true"
+  # docs:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - uses: actions/checkout@v2
+  #     with:
+  #       ref: ${{ github.event.pull_request.head.ref }}
+  #   - name: Render terraform docs for infra and push changes back to PR
+  #     uses: terraform-docs/gh-actions@main
+  #     with:
+  #       working-dir: ./terraform/infra
+  #       output-file: README.md
+  #       output-method: replace
+  #       recursive: "true"
+  #       git-push: "true"
+  #   - name: Render terraform docs for dns and push changes back to PR
+  #     uses: terraform-docs/gh-actions@main
+  #     with:
+  #       working-dir: ./terraform/dns
+  #       output-file: README.md
+  #       output-method: inject
+  #       git-push: "true"
   chekov:
     runs-on: ubuntu-latest
     needs:
