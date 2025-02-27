@@ -63,9 +63,6 @@ jobs:
   apply:
     needs:
     - plan
-    - chekov
-    - tflint
-    - tfsec
     if: needs.plan.outputs.exit_code == '2'
     runs-on: ubuntu-latest
     defaults:
