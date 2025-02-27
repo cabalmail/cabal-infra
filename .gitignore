@@ -8,4 +8,5 @@ react/admin/package-lock.json
 backend.hcl
 .terraform.lock.hcl
 react/admin/yarn.lock
+terraform/dns/backend.tf
 terraform/infra/backend.tf
