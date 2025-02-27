@@ -28,8 +28,3 @@ variable "prod" {
   default     = false
   description = "Set to true to treat this stack as a production workload."
 }
-
-variable "github_token" {
-  type        = string
-  description = "Personal access token for github. Used to trigger workflows from Terraform."
-}
