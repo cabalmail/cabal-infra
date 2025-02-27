@@ -45,19 +45,3 @@ resource "aws_ssm_parameter" "name" {
 resource "aws_s3_bucket" "this" {
   bucket = "admin.${var.control_domain}"
 }
-
-# Trigger builds.
-# Data source is ignored, but triggers Github actions as a side-effect.
-data "http" "trigger_builds" {
-  for_each     = toset(local.builds)
-  url          = "${local.base_url}/${each.key}_${var.prod ? "prod" : "stage"}.yml/dispatches"
-  method       = "POST"
-  request_headers = {
-    Accept               = "application/vnd.github+json"
-    Authorization        = "Bearer ${var.github_token}"
-    X-GitHub-Api-Version = "2022-11-28"
-    Content-Type         = "application/x-www-form-urlencoded"
-    X-Cabal-Bucket       = resource.aws_s3_bucket.this.bucket
-  }
-  request_body = "{\"inputs\":{},\"ref\":\"${var.prod ? "main" : "stage"}\"}"
-}
