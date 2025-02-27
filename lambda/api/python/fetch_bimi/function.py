@@ -29,4 +29,3 @@ def handler(event, _context):
             "url": f'https://www.{".".join(sender_domain_parts[length-2:])}/favicon.ico'
         })
     }
-
