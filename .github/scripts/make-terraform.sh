@@ -1,5 +1,5 @@
 #!/bin/bash
-cat << EO_TF > "backend.tf
+cat << EO_TF > backend.tf
 terraform {
   backend "s3" {
     bucket = "cabal-tf-backend"
