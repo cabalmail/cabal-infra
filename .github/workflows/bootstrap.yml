@@ -22,10 +22,6 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@v3
-    - name: retrieve-artifact
-      uses: actions/download-artifact@v4
-      with:
-        name: backend.tf
     - name: move
       run: mv ../../backend.tf backend.tf
     - name: install-terraform
@@ -62,10 +58,6 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@v3
-    - name: retrieve-artifact
-      uses: actions/download-artifact@v4
-      with:
-        name: backend.tf
     - name: move
       run: mv ../../backend.tf backend.tf
     - name: install-terraform
