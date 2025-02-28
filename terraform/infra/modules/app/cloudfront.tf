@@ -2,7 +2,7 @@
 #tfsec:ignore:aws-cloudfront-enable-waf
 resource "aws_cloudfront_distribution" "cdn" {
   origin {
-    domain_name = data.aws_s3_bucket.this.bucket_domain_name
+    domain_name = var.bucket_domain_name
     origin_id   = "cabal_admin_s3"
 
     s3_origin_config {
