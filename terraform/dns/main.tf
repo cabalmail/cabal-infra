@@ -40,8 +40,3 @@ resource "aws_ssm_parameter" "name" {
   type        = "String"
   value       = var.control_domain
 }
-
-# S3 bucket for hosting React app and artifacts.
-resource "aws_s3_bucket" "this" {
-  bucket = "admin.${var.control_domain}"
-}
