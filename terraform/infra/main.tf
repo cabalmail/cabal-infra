@@ -53,7 +53,6 @@ module "admin" {
   domains             = module.domains.domains
   layers              = module.lambda_layers.layers
   bucket              = module.bucket.domain
-  bucket_name         = module.bucket.domain_name
   relay_ips           = module.vpc.relay_ips
   origin              = module.bucket.origin
   repo                = var.repo
