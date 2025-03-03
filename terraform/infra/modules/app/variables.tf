@@ -2,10 +2,6 @@ data "aws_caller_identity" "current" {}
 
 data "aws_region" "current" {}
 
-data "aws_s3_bucket" "this" {
-  bucket = "admin.${var.control_domain}"
-}
-
 variable "layers" {
   type        = map
   description = "List of layer ARNs"
@@ -69,6 +65,11 @@ variable "stage_name" {
 variable "bucket" {
   type        = string
   description = "Name of s3 bucket"
+}
+
+variable "bucket_domain_name" {
+  type        = string
+  description = "Domain name of s3 bucket"
 }
 
 variable "origin" {

@@ -3,6 +3,10 @@ locals {
   bucket_arn = "arn:aws:s3:::admin.${var.control_domain}"
 }
 
+resource "aws_s3_bucket" "this" {
+  bucket = local.bucket
+}
+
 resource "aws_s3_bucket_website_configuration" "react_app_website" {
   bucket = local.bucket
   index_document {
