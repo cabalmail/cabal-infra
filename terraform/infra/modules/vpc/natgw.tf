@@ -33,7 +33,7 @@ resource "aws_route53_record" "smtp" {
   records = aws_eip.nat_eip[*].public_ip
 }
 
-resource "aws_eip_domain_name" {
+resource "aws_eip_domain_name" "smtp" {
   allocation_id = aws_eip.nat_eip.allocation_id
   domain_name   = aws_route53_record.smtp.fqdn
 }
