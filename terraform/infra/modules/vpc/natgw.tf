@@ -12,23 +12,6 @@ resource "aws_nat_gateway" "nat" {
   tags          = {
     Name = "cabal-nat-${count.index}"
   }
-  # No native way to do this in the aws terraform provider
-  # See https://github.com/hashicorp/terraform-provider-aws/issues/20876
-  provisioner "local-exec" { # Create reverse DNS
-    command = join(" ", [
-      "aws ec2 modify-address-attribute",
-      "--allocation-id ${self.allocation_id}",
-      "--domain-name smtp.${var.control_domain}"
-    ])
-  }
-  provisioner "local-exec" { # Remove reverse DNS
-    when    = destroy
-    command = join(" ", [
-      "aws ec2 reset-address-attribute",
-      "--allocation-id ${self.allocation_id}",
-      "--attribute domain-name"
-    ])
-  }
 }
 
 resource "aws_eip" "nat_eip" {
@@ -48,4 +31,9 @@ resource "aws_route53_record" "smtp" {
   type    = "A"
   ttl     = 360
   records = aws_eip.nat_eip[*].public_ip
+}
+
+resource "aws_eip_domain_name" {
+  allocation_id = aws_eip.nat_eip.allocation_id
+  domain_name   = aws_route53_record.smtp.fqdn
 }
