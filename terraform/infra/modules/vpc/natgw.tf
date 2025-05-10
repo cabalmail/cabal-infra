@@ -34,6 +34,7 @@ resource "aws_route53_record" "smtp" {
 }
 
 resource "aws_eip_domain_name" "smtp" {
-  allocation_id = aws_eip.nat_eip.allocation_id
+  count         = length(var.az_list)
+  allocation_id = aws_eip.nat_eip[count.index].allocation_id
   domain_name   = aws_route53_record.smtp.fqdn
 }
