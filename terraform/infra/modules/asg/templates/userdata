@@ -1,6 +1,6 @@
 #!/bin/bash -xev
 cd /tmp
-yum install -y awscli jq
+yum install -y awscli jq gcc
 amazon-linux-extras install epel -y
 yum install -y opendkim
 %{ if type == "imap" }
