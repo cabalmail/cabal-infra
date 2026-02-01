@@ -67,11 +67,12 @@ module "table" {
 
 # Creates the VPC and network infrastructure
 module "vpc" {
-  source         = "./modules/vpc"
-  cidr_block     = var.cidr_block
-  control_domain = var.control_domain
-  az_list        = var.availability_zones
-  zone_id        = data.aws_ssm_parameter.zone.value
+  source           = "./modules/vpc"
+  use_nat_instance = true
+  cidr_block       = var.cidr_block
+  control_domain   = var.control_domain
+  az_list          = var.availability_zones
+  zone_id          = data.aws_ssm_parameter.zone.value
 }
 
 # Creates a network load balancer shared by machines in the stack
