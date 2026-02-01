@@ -59,7 +59,8 @@ After signing up, perform the following steps:
                     "logs:TagResource",
                     "logs:PutRetentionPolicy",
                     "logs:DescribeLogGroups",
-                    "logs:ListTagsForResource"
+                    "logs:ListTagsForResource",
+                    "logs:ListTagsLogGroup"
                 ],
                 "Resource": "*"
             }
