@@ -1,7 +1,7 @@
 resource "aws_route_table" "private" {
-  count      = length(var.az_list)
-  vpc_id     = aws_vpc.network.id
-  tags       = {
+  count  = length(var.az_list)
+  vpc_id = aws_vpc.network.id
+  tags = {
     Name = "cabal-private-rt-${count.index}"
   }
 }
@@ -10,7 +10,8 @@ resource "aws_route" "private" {
   count                  = length(var.az_list)
   route_table_id         = aws_route_table.private[count.index].id
   destination_cidr_block = "0.0.0.0/0"
-  nat_gateway_id         = aws_nat_gateway.nat[count.index].id
+  nat_gateway_id         = var.use_nat_instance ? null : aws_nat_gateway.nat[count.index].id
+  network_interface_id   = var.use_nat_instance ? aws_instance.nat[count.index].primary_network_interface_id : null
 }
 
 resource "aws_route_table_association" "private" {
@@ -20,8 +21,8 @@ resource "aws_route_table_association" "private" {
 }
 
 resource "aws_route_table" "public" {
-  vpc_id   = aws_vpc.network.id
-  tags     = {
+  vpc_id = aws_vpc.network.id
+  tags = {
     Name = "cabal-public-rt"
   }
 }
