@@ -613,27 +613,47 @@ priority=40
 ### Goal
 
 Enable on-the-fly address changes without restarting or replacing containers.
-This replaces the current `assign_osid` Lambda → SSM SendCommand → chef-solo
-reconfiguration path.
+This replaces the SSM SendCommand → chef-solo reconfiguration path that is
+currently triggered by the `new` and `revoke` Lambdas when addresses are
+created or deleted.
 
-### Current reconfiguration flow (to be replaced)
+**Important distinction**: There are two separate reconfiguration concerns:
+
+1. **Address changes** (common — ~1000 addresses, changed often): The `new`
+   and `revoke` Lambdas write to the `cabal-addresses` DynamoDB table, then
+   trigger chef-solo via SSM. Only sendmail maps need to be regenerated.
+2. **User changes** (rare — ~4 users, changed infrequently): The
+   `assign_osid` Lambda runs as a Cognito post-confirmation trigger and
+   assigns a stable OS UID/GID so that file ownership is consistent across
+   EFS. This requires creating OS accounts, which is done at container
+   startup and does not need to happen on every address change.
+
+The sidecar in this phase handles only address changes (concern 1). User
+sync runs at container startup (Phase 2) and on the rare occasion a new
+user is created, it is handled separately (see Phase 5).
+
+### Current address reconfiguration flow (to be replaced)
 
 ```
-assign_osid Lambda
-  → SSM SendCommand (cabal_chef_document)
-    → Runs chef-solo on every EC2 instance
-      → Full recipe re-execution: DynamoDB scan, template render,
-        service restart
+POST /new or DELETE /revoke (API Gateway)
+  → new / revoke Lambda
+    → DynamoDB write (cabal-addresses)
+    → kickOffChef() → SSM SendCommand (cabal_chef_document)
+      → chef-solo on every EC2 instance
+        → Full recipe re-execution (overkill: re-syncs users,
+          regenerates all configs, restarts all services)
 ```
 
-### New reconfiguration flow
+### New address reconfiguration flow
 
 ```
-Address-change Lambda (new/update/delete)
-  → SNS publish to "cabal-config-changed" topic
-    → SQS queue (one per service)
-      → reconfigure.sh (running in each container)
-        → DynamoDB scan → regenerate maps → makemap → HUP sendmail
+POST /new or DELETE /revoke (API Gateway)
+  → new / revoke Lambda
+    → DynamoDB write (cabal-addresses)
+    → SNS publish to "cabal-address-changed" topic
+      → SQS queue (one per service tier)
+        → reconfigure.sh (running in each container)
+          → DynamoDB scan → regenerate maps → makemap → HUP sendmail
 ```
 
 ### reconfigure.sh — the sidecar loop
@@ -685,8 +705,9 @@ while true; do
       pkill -HUP opendkim || true
     fi
 
-    # Sync users (new Cognito users may have been added)
-    /usr/local/bin/sync-users.sh
+    # Note: user sync is NOT needed here. Address changes do not
+    # affect OS users. User creation is rare and handled separately
+    # (see Phase 5).
 
     # Delete the message from the queue
     aws sqs delete-message \
@@ -737,7 +758,7 @@ terraform/infra/modules/ecs/
 ├── task-definitions.tf  # Task definitions (3)
 ├── iam.tf               # Task execution role, task role
 ├── sqs.tf               # SQS queues for reconfiguration (3)
-├── sns.tf               # SNS topic for config change fan-out
+├── sns.tf               # SNS topic for address change fan-out
 ├── security_group.tf    # Retained from ASG module
 ├── variables.tf
 └── outputs.tf
@@ -875,8 +896,8 @@ resource "aws_ecs_task_definition" "imap" {
 ### SNS/SQS for reconfiguration fan-out
 
 ```hcl
-resource "aws_sns_topic" "config_changed" {
-  name = "cabal-config-changed"
+resource "aws_sns_topic" "address_changed" {
+  name = "cabal-address-changed"
 }
 
 resource "aws_sqs_queue" "imap" {
@@ -899,17 +920,17 @@ resource "aws_sqs_queue" "smtp_out" {
 
 # Fan-out: one SNS message → three SQS queues
 resource "aws_sns_topic_subscription" "imap" {
-  topic_arn = aws_sns_topic.config_changed.arn
+  topic_arn = aws_sns_topic.address_changed.arn
   protocol  = "sqs"
   endpoint  = aws_sqs_queue.imap.arn
 }
 resource "aws_sns_topic_subscription" "smtp_in" {
-  topic_arn = aws_sns_topic.config_changed.arn
+  topic_arn = aws_sns_topic.address_changed.arn
   protocol  = "sqs"
   endpoint  = aws_sqs_queue.smtp_in.arn
 }
 resource "aws_sns_topic_subscription" "smtp_out" {
-  topic_arn = aws_sns_topic.config_changed.arn
+  topic_arn = aws_sns_topic.address_changed.arn
   protocol  = "sqs"
   endpoint  = aws_sqs_queue.smtp_out.arn
 }
@@ -974,13 +995,14 @@ The NLB target groups must be changed from `target_type = "instance"` to
 
 ### Goal
 
-Replace SSM `SendCommand` with SNS publish. Remove the `cabal_chef_document`
-SSM document.
+Replace SSM `SendCommand` with SNS publish in the address Lambdas. Handle
+user creation separately. Remove the `cabal_chef_document` SSM document.
 
-### assign_osid Lambda change
+### Address Lambdas: `new` and `revoke`
 
-In `lambda/counter/node/assign_osid/index.js`, the `kickOffChef()` function
-currently does:
+These are the primary reconfiguration triggers — they fire every time an
+address is created or deleted. In both `lambda/api/node/new/index.js` and
+`lambda/api/node/revoke/index.js`, replace the `kickOffChef()` function:
 
 ```javascript
 // CURRENT — delete this
@@ -997,24 +1019,51 @@ ssm.sendCommand(command, callback);
 Replace with:
 
 ```javascript
-// NEW — publish to SNS topic
+// NEW — publish to SNS topic (picked up by container sidecars)
 const sns = new AWS.SNS();
 const params = {
-  TopicArn: process.env.CONFIG_CHANGED_TOPIC_ARN,
+  TopicArn: process.env.ADDRESS_CHANGED_TOPIC_ARN,
   Message: JSON.stringify({
-    event: "user_created",
+    event: "address_changed",
     timestamp: new Date().toISOString()
   })
 };
 sns.publish(params).promise();
 ```
 
-### new_address Lambda
+### assign_osid Lambda (user creation — rare, separate concern)
 
-The `new_address` Lambda (currently incomplete) should also publish to the same
-SNS topic after writing to DynamoDB. Any Lambda that modifies the
-`cabal-addresses` table or the Cognito user pool should publish a change
-notification.
+The `assign_osid` Lambda (`lambda/counter/node/assign_osid/index.js`) runs
+as a Cognito post-confirmation trigger when a new user signs up. It assigns
+a stable OS UID/GID via the `cabal-counter` DynamoDB table and then calls
+`kickOffChef()`.
+
+User creation is rare (~4 users total, changed infrequently), and the
+container sidecar is designed for address changes, not user provisioning.
+Two options for handling the rare new-user case:
+
+1. **Publish to a separate SNS topic** (`cabal-user-changed`), consumed by a
+   separate, lower-priority handler in the container that runs `sync-users.sh`.
+   This keeps the address and user paths cleanly separated.
+2. **Trigger an ECS service update** (force new deployment). Since user
+   creation is rare, the 2-5 minute deployment time is acceptable. The new
+   containers pick up the user at startup via `sync-users.sh`. This is the
+   simplest option and avoids adding user-sync logic to the running container.
+
+Option 2 is recommended for its simplicity. The `assign_osid` Lambda change:
+
+```javascript
+// Replace kickOffChef() with ECS service update
+const ecs = new AWS.ECS();
+const services = ['cabal-imap', 'cabal-smtp-in', 'cabal-smtp-out'];
+for (const service of services) {
+  await ecs.updateService({
+    cluster: process.env.ECS_CLUSTER_NAME,
+    service: service,
+    forceNewDeployment: true
+  }).promise();
+}
+```
 
 ### Route53 DNS registration
 
