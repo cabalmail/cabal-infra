@@ -766,6 +766,11 @@ terraform/infra/modules/ecs/
 
 ### ECS cluster with EC2 capacity
 
+Current production runs one `t2.small` per tier. All three containers can
+share a single EC2 instance at baseline, with the ASG scaling out additional
+instances only when ECS can't place tasks (e.g., if SMTP auto-scaling pushes
+resource demand beyond what one instance can handle).
+
 ```hcl
 resource "aws_ecs_cluster" "mail" {
   name = "cabal-mail"
@@ -776,24 +781,30 @@ resource "aws_ecs_cluster" "mail" {
   }
 }
 
-# EC2 capacity provider — manages the underlying instances
+# A single instance handles all three tiers at baseline. The ASG
+# exists for self-healing (replace unhealthy instances) and to scale
+# out if ECS needs more capacity for SMTP container scaling.
 resource "aws_autoscaling_group" "ecs" {
-  # Similar to current ASG but using ECS-optimized AMI
-  # and ECS agent userdata instead of Chef
   vpc_zone_identifier = var.private_subnets[*].id
-  desired_capacity    = var.capacity.desired
-  max_size            = var.capacity.max
-  min_size            = var.capacity.min
+  desired_capacity    = 1
+  max_size            = 3   # room for SMTP scaling
+  min_size            = 1   # always at least one instance
 
   launch_template {
     id      = aws_launch_template.ecs.id
     version = "$Latest"
   }
+
+  tag {
+    key                 = "AmazonECSManaged"
+    value               = true
+    propagate_at_launch = true
+  }
 }
 
 resource "aws_launch_template" "ecs" {
   image_id      = data.aws_ami.ecs_optimized.id
-  instance_type = var.instance_type
+  instance_type = "t3.small"   # 2 GiB RAM, burstable — fits 3 containers
 
   # Minimal userdata — just join the ECS cluster
   user_data = base64encode(<<-EOF
@@ -807,6 +818,8 @@ resource "aws_launch_template" "ecs" {
   }
 }
 
+# Capacity provider lets ECS request more instances from the ASG
+# when it can't place a task (e.g., SMTP scaling needs more memory).
 resource "aws_ecs_capacity_provider" "ec2" {
   name = "cabal-ec2"
 
@@ -824,6 +837,9 @@ resource "aws_ecs_capacity_provider" "ec2" {
 
 ### Task definitions (one per tier)
 
+Resource reservations are sized for the current workload. SMTP-OUT gets a
+larger share because OpenDKIM adds meaningful overhead.
+
 ```hcl
 resource "aws_ecs_task_definition" "imap" {
   family                   = "cabal-imap"
@@ -836,7 +852,11 @@ resource "aws_ecs_task_definition" "imap" {
     name      = "imap"
     image     = "${aws_ecr_repository.imap.repository_url}:${var.image_tag}"
     essential = true
-    memory    = 512
+
+    # Soft limit (memoryReservation) for placement; hard limit (memory)
+    # as a ceiling. Dovecot + sendmail + fail2ban sit well under 512 MiB.
+    memoryReservation = 384
+    memory            = 512
 
     portMappings = [
       { containerPort = 143, protocol = "tcp" },
@@ -891,6 +911,37 @@ resource "aws_ecs_task_definition" "imap" {
     }
   }
 }
+
+resource "aws_ecs_task_definition" "smtp_out" {
+  family                   = "cabal-smtp-out"
+  requires_compatibilities = ["EC2"]
+  network_mode             = "awsvpc"
+  execution_role_arn       = aws_iam_role.ecs_execution.arn
+  task_role_arn            = aws_iam_role.ecs_task.arn
+
+  container_definitions = jsonencode([{
+    name      = "smtp-out"
+    image     = "${aws_ecr_repository.smtp_out.repository_url}:${var.image_tag}"
+    essential = true
+
+    # OpenDKIM pushes memory consumption higher than other tiers.
+    memoryReservation = 448
+    memory            = 640
+
+    portMappings = [
+      { containerPort = 25,  protocol = "tcp" },
+      { containerPort = 465, protocol = "tcp" },
+      { containerPort = 587, protocol = "tcp" },
+    ]
+
+    # ... environment, secrets, linuxParameters, logConfiguration
+    # same pattern as IMAP (with TIER = "smtp-out", DKIM_PRIVATE_KEY
+    # added to secrets, no EFS mount)
+  }])
+}
+
+# SMTP-IN task definition follows the same pattern as SMTP-OUT
+# but without OpenDKIM — memoryReservation = 384, memory = 512.
 ```
 
 ### SNS/SQS for reconfiguration fan-out
@@ -949,18 +1000,27 @@ profile grants (see `terraform/infra/modules/asg/iam.tf`):
 | `route53:ChangeResourceRecordSets` | DNS registration (IMAP only, or moved to Lambda) |
 | `ssm:GetParameter` | Only if secrets are read at runtime vs. injected by ECS |
 
-### NLB target group changes
+### ECS services and scaling
 
-The existing NLB target groups currently point to EC2 instance IDs registered
-by the ASG. With ECS, they point to IP targets registered by the ECS service's
-`awsvpc` networking:
+**IMAP**: Hard-capped at one container. Dovecot has concurrency issues
+with shared Maildir over EFS, so there must never be more than one IMAP
+task running. ECS health checks still replace an unhealthy container
+automatically — the replacement starts after the old one stops.
+
+**SMTP-IN / SMTP-OUT**: Scale based on CPU/memory pressure. OpenDKIM on
+the SMTP-OUT tier is the most likely bottleneck.
 
 ```hcl
+# ── IMAP: exactly one, replaced if unhealthy ──────────────────
 resource "aws_ecs_service" "imap" {
   name            = "cabal-imap"
   cluster         = aws_ecs_cluster.mail.id
   task_definition = aws_ecs_task_definition.imap.arn
-  desired_count   = var.imap_scale.desired
+  desired_count   = 1
+
+  # No auto-scaling — hard cap at 1 (see deployment config below).
+  deployment_maximum_percent         = 100  # no extra task during deploy
+  deployment_minimum_healthy_percent = 0    # allow brief downtime on deploy
 
   capacity_provider_strategy {
     capacity_provider = aws_ecs_capacity_provider.ec2.name
@@ -972,22 +1032,145 @@ resource "aws_ecs_service" "imap" {
     security_groups = [aws_security_group.imap.id]
   }
 
-  # Wire to existing NLB target groups
   load_balancer {
-    target_group_arn = var.imap_target_group_143
+    target_group_arn = var.imap_target_group_arn
     container_name   = "imap"
     container_port   = 143
   }
+}
+
+# ── SMTP-IN: scales out under load ────────────────────────────
+resource "aws_ecs_service" "smtp_in" {
+  name            = "cabal-smtp-in"
+  cluster         = aws_ecs_cluster.mail.id
+  task_definition = aws_ecs_task_definition.smtp_in.arn
+  desired_count   = 1
+
+  deployment_maximum_percent         = 200
+  deployment_minimum_healthy_percent = 100
+
+  capacity_provider_strategy {
+    capacity_provider = aws_ecs_capacity_provider.ec2.name
+    weight            = 100
+  }
+
+  network_configuration {
+    subnets         = var.private_subnets[*].id
+    security_groups = [aws_security_group.smtp_in.id]
+  }
+
   load_balancer {
-    target_group_arn = var.imap_target_group_993
-    container_name   = "imap"
-    container_port   = 993
+    target_group_arn = var.relay_target_group_arn
+    container_name   = "smtp-in"
+    container_port   = 25
+  }
+}
+
+# ── SMTP-OUT: scales out under load ───────────────────────────
+resource "aws_ecs_service" "smtp_out" {
+  name            = "cabal-smtp-out"
+  cluster         = aws_ecs_cluster.mail.id
+  task_definition = aws_ecs_task_definition.smtp_out.arn
+  desired_count   = 1
+
+  deployment_maximum_percent         = 200
+  deployment_minimum_healthy_percent = 100
+
+  capacity_provider_strategy {
+    capacity_provider = aws_ecs_capacity_provider.ec2.name
+    weight            = 100
+  }
+
+  network_configuration {
+    subnets         = var.private_subnets[*].id
+    security_groups = [aws_security_group.smtp_out.id]
+  }
+
+  load_balancer {
+    target_group_arn = var.submission_target_group_arn
+    container_name   = "smtp-out"
+    container_port   = 465
+  }
+  load_balancer {
+    target_group_arn = var.starttls_target_group_arn
+    container_name   = "smtp-out"
+    container_port   = 587
+  }
+}
+
+# ── Auto-scaling for SMTP tiers ───────────────────────────────
+# When SMTP containers need more resources (especially SMTP-OUT
+# with OpenDKIM), ECS auto-scaling adds containers. The capacity
+# provider automatically adds EC2 instances if needed to place them.
+
+resource "aws_appautoscaling_target" "smtp_in" {
+  max_capacity       = 3
+  min_capacity       = 1
+  resource_id        = "service/${aws_ecs_cluster.mail.name}/${aws_ecs_service.smtp_in.name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+}
+
+resource "aws_appautoscaling_policy" "smtp_in_cpu" {
+  name               = "cabal-smtp-in-cpu"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.smtp_in.resource_id
+  scalable_dimension = aws_appautoscaling_target.smtp_in.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.smtp_in.service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
+    target_value = 70.0
+  }
+}
+
+resource "aws_appautoscaling_target" "smtp_out" {
+  max_capacity       = 3
+  min_capacity       = 1
+  resource_id        = "service/${aws_ecs_cluster.mail.name}/${aws_ecs_service.smtp_out.name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+}
+
+resource "aws_appautoscaling_policy" "smtp_out_cpu" {
+  name               = "cabal-smtp-out-cpu"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.smtp_out.resource_id
+  scalable_dimension = aws_appautoscaling_target.smtp_out.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.smtp_out.service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
+    target_value = 70.0
   }
 }
 ```
 
-The NLB target groups must be changed from `target_type = "instance"` to
-`target_type = "ip"` to work with `awsvpc` mode.
+**How unhealthy container replacement works**: ECS health checks (via
+the NLB TCP health checks on each service port) detect unresponsive
+containers. For SMTP tiers, ECS starts a replacement before stopping the
+old one (`deployment_minimum_healthy_percent = 100`). For IMAP, the old
+task must stop first (`deployment_maximum_percent = 100`) to ensure only
+one IMAP container accesses EFS at a time.
+
+**How instance scaling works**: At baseline, one EC2 instance runs all
+three containers. If SMTP auto-scaling adds containers that don't fit on
+the current instance, the ECS capacity provider asks the ASG to launch
+another instance (up to `max_size = 3`). When the SMTP load subsides and
+containers scale back in, the capacity provider terminates the idle
+instance.
+
+### NLB target group changes
+
+The existing NLB target groups must be changed from `target_type = "instance"`
+(the current implicit default) to `target_type = "ip"` to work with ECS
+`awsvpc` networking. This is a **destructive change** — Terraform will destroy
+and recreate the target groups. During the parallel-run phase (Phase 7), create
+new target groups for ECS alongside the existing ones to avoid downtime.
 
 ---
 
