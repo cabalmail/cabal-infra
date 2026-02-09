@@ -93,6 +93,11 @@ module "efs" {
   private_subnet_ids = module.vpc.private_subnets[*].id
 }
 
+# Creates ECR repositories for containerized mail services
+module "ecr" {
+  source = "./modules/ecr"
+}
+
 # Creates an auto-scale group for IMAP servers
 module "imap" {
   source           = "./modules/asg"
