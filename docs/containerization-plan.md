@@ -568,7 +568,6 @@ variables:
 | `AWS_REGION` | Task definition | `node['cognito']['region']` / `node['ec2']['region']` |
 | `COGNITO_CLIENT_ID` | Task definition | `node['cognito']['client_id']` |
 | `COGNITO_POOL_ID` | Task definition | `node['cognito']['pool_id']` |
-| `ROUTE53_ZONE_ID` | Task definition | `node['route53']['zone_id']` |
 | `NETWORK_CIDR` | Task definition | `node['network']['cidr']` |
 | `MASTER_PASSWORD` | Secrets Manager | `master_password` in userdata |
 | `TLS_CA_BUNDLE` | Secrets Manager | SSM `/cabal/control_domain_chain_cert` |
@@ -870,7 +869,6 @@ resource "aws_ecs_task_definition" "imap" {
       { name = "AWS_REGION",        value = var.region },
       { name = "COGNITO_CLIENT_ID", value = var.client_id },
       { name = "COGNITO_POOL_ID",   value = var.user_pool_id },
-      { name = "ROUTE53_ZONE_ID",   value = var.private_zone_id },
       { name = "NETWORK_CIDR",      value = var.cidr_block },
       { name = "SQS_QUEUE_URL",     value = aws_sqs_queue.imap.url },
     ]
@@ -997,7 +995,7 @@ profile grants (see `terraform/infra/modules/asg/iam.tf`):
 | `dynamodb:Scan` on `cabal-addresses` | `generate-config.sh` reads address data |
 | `cognito-idp:ListUsers` | `sync-users.sh` reads user list |
 | `sqs:ReceiveMessage`, `sqs:DeleteMessage` | `reconfigure.sh` reads change notifications |
-| `route53:ChangeResourceRecordSets` | DNS registration (IMAP only, or moved to Lambda) |
+| `route53:ChangeResourceRecordSets` | Not needed — infra DNS moves to Terraform; per-address DNS stays in Lambda |
 | `ssm:GetParameter` | Only if secrets are read at runtime vs. injected by ECS |
 
 ### ECS services and scaling
@@ -1250,16 +1248,18 @@ for (const service of services) {
 
 ### Route53 DNS registration
 
-The IMAP Chef recipe (`_imap_dns.rb`) creates a Route53 A record for
-`imap.<control_domain>` using the instance's IP. In ECS with `awsvpc`, each
-task gets its own ENI with a private IP. Two options:
+There are two distinct categories of DNS records:
 
-1. **Move to Terraform** — create the A record as a Terraform resource
-   pointing to the NLB DNS name (simpler, already load-balanced).
-2. **Move to Lambda** — a small Lambda triggered by ECS task state changes
-   updates the record (if direct-to-instance resolution is needed).
+1. **Infrastructure records** (e.g., `imap.<control_domain>` A record):
+   Created once, points to the NLB. The IMAP Chef recipe (`_imap_dns.rb`)
+   currently creates this using the instance IP. With ECS, this should move
+   to Terraform as an `aws_route53_record` pointing to the NLB DNS name,
+   since IMAP traffic already goes through the NLB.
 
-Option 1 is preferred since IMAP traffic already goes through the NLB.
+2. **Per-address records** (MX, SPF, DMARC, DKIM for each mail address):
+   Created and deleted by the `new` and `revoke` Lambdas respectively.
+   These stay in Lambda — there is no reason to manage them in Terraform,
+   and doing so would require a Terraform run for every address change.
 
 ---
 
@@ -1456,7 +1456,7 @@ Every Chef file and its container-world equivalent:
 | `recipes/_common_users.rb` | `sync-users.sh` |
 | `recipes/_imap_dovecot.rb` | `Dockerfile` COPY commands (static configs) |
 | `recipes/_imap_sendmail.rb` | `generate-config.sh` (DynamoDB scan + file gen) |
-| `recipes/_imap_dns.rb` | Terraform `aws_route53_record` resource (or Lambda) |
+| `recipes/_imap_dns.rb` | Terraform `aws_route53_record` (infra A record for NLB) |
 | `recipes/_smtp-common_sendmail.rb` | `generate-config.sh` |
 | `recipes/_smtp-in_sendmail.rb` | `generate-config.sh` |
 | `recipes/_smtp-out_sendmail.rb` | `Dockerfile` + `entrypoint.sh` |
@@ -1468,7 +1468,7 @@ Every Chef file and its container-world equivalent:
 |---|---|
 | `libraries/scan.rb` | `aws dynamodb scan` in `generate-config.sh` |
 | `libraries/users.rb` | `aws cognito-idp list-users` in `sync-users.sh` |
-| `libraries/route53.rb` | Terraform resource or Lambda |
+| `libraries/route53.rb` | Terraform `aws_route53_record` (infra A record only) |
 | `libraries/domain_helper.rb` | Python logic in `generate-config.sh` |
 
 ### Templates → Script output
