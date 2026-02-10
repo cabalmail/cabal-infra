@@ -1,7 +1,0 @@
-1. One process per container.
-  - dovecot (per user?)
-  - local delivery
-  - smtp in
-  - smtp out
-
-2. Each user gets their own control domain e.g. chris.cabal-mail.net.
