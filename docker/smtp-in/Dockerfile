@@ -16,7 +16,7 @@ RUN yum install -y \
 # Sendmail .mc template (placeholder for cert domain)
 COPY templates/in-sendmail.mc               /etc/mail/sendmail.mc.template
 
-# Shared scripts (Phase 2 will populate these)
+# Shared scripts
 COPY shared/entrypoint.sh                  /entrypoint.sh
 COPY shared/generate-config.sh             /usr/local/bin/generate-config.sh
 COPY shared/sync-users.sh                  /usr/local/bin/sync-users.sh
