@@ -7,6 +7,19 @@ running on AWS ECS (EC2 launch type). The migration preserves the existing
 three-tier mail architecture (IMAP, SMTP-IN, SMTP-OUT) while replacing the
 Chef-managed EC2 instances with container-based equivalents.
 
+### Parallel operation — read this first
+
+**The existing Chef/EC2 infrastructure must remain fully operational until
+the containerized stack is validated end-to-end and traffic has been cut
+over.** Throughout this document, "replace" means "build a container-based
+equivalent of" — not "delete the Chef version." Phases 1–6 build the new
+stack alongside the old one. Phase 7 is where the old stack is
+decommissioned, and only after all mail routing patterns have been verified.
+
+Do not modify or remove any existing Chef recipes, ASG modules, Lambda
+SSM integrations, or the `cabal_chef_document` SSM document until Phase 7
+cutover is complete.
+
 ### Why ECS EC2 (not Fargate)
 
 fail2ban requires `iptables` access, which means the `NET_ADMIN` Linux
