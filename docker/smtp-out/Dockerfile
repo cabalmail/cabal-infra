@@ -1,5 +1,8 @@
 FROM amazonlinux:2
 
+# Enable EPEL (for fail2ban, opendkim, supervisor) and install Python 3
+RUN amazon-linux-extras install epel python3.8 -y
+
 # System packages
 RUN yum install -y \
       sendmail sendmail-cf \
@@ -8,7 +11,7 @@ RUN yum install -y \
       fail2ban \
       procmail \
       awscli jq \
-      python3 \
+      python3-pip \
       supervisor \
     && yum clean all
 
