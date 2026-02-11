@@ -24,6 +24,7 @@ module "pool" {
   bucket_arn       = module.bucket.bucket_arn
   layers           = module.lambda_layers.layers
   ssm_document_arn = module.admin.ssm_document_arn
+  ecs_cluster_name = module.ecs.cluster_name
 }
 
 # Creates an AWS Certificate Manager certificate for use on load balancers and CloudFront and requests a Let's Encrypt certificate for use on EC2 instances
@@ -58,6 +59,8 @@ module "admin" {
   origin              = module.bucket.origin
   repo                = var.repo
   dev_mode            = var.prod ? false : true
+
+  address_changed_topic_arn = module.ecs.sns_topic_arn
 }
 
 # Creates a DynamoDB table for storing address data
