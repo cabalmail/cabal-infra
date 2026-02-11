@@ -3,6 +3,7 @@ const ddb = new AWS.DynamoDB.DocumentClient();
 const route53 = new AWS.Route53();
 const domains = JSON.parse(process.env.DOMAINS);
 const control_domain = process.env.CONTROL_DOMAIN;
+const addressChangedTopicArn = process.env.ADDRESS_CHANGED_TOPIC_ARN;
 
 exports.handler = (event, context, callback) => {
     if (!event.requestContext.authorizer) {
@@ -90,7 +91,9 @@ exports.handler = (event, context, callback) => {
       }
     }).promise();
     const ddb_req = revokeAddress(address);
-    Promise.all([ddb_req, r53_req]).then(values => {
+    const ssm_req = kickOffChef();
+    const sns_req = notifyContainers();
+    Promise.all([ddb_req, r53_req, ssm_req, sns_req]).then(values => {
       callback(null, {
         statusCode: 202,
         body: JSON.stringify({
@@ -117,6 +120,46 @@ function revokeAddress(address, zone_id, subdomain) {
             address: address,
         },
     }).promise();
+}
+
+function kickOffChef() {
+  const ssm = new AWS.SSM();
+  const command = {
+    DocumentName: 'cabal_chef_document',
+    Targets: [
+      {
+         "Key": "tag:managed_by_terraform",
+         "Values": [ "y" ]
+      }
+    ]
+  };
+  return ssm.sendCommand(command, (err, data) => {
+    if (err) {
+      console.error("ssm", err);
+      console.error("command", command)
+    }
+  }).promise();
+}
+
+function notifyContainers() {
+  if (!addressChangedTopicArn) {
+    console.log("ADDRESS_CHANGED_TOPIC_ARN not set, skipping SNS publish");
+    return Promise.resolve();
+  }
+  const sns = new AWS.SNS();
+  const params = {
+    TopicArn: addressChangedTopicArn,
+    Message: JSON.stringify({
+      event: "address_changed",
+      timestamp: new Date().toISOString()
+    })
+  };
+  return sns.publish(params, (err, data) => {
+    if (err) {
+      console.error("sns", err);
+      console.error("params", params);
+    }
+  }).promise();
 }
 
 function errorResponse(errorMessage, awsRequestId, callback) {
