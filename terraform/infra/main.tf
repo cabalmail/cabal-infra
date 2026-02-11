@@ -24,6 +24,7 @@ module "pool" {
   bucket_arn       = module.bucket.bucket_arn
   layers           = module.lambda_layers.layers
   ssm_document_arn = module.admin.ssm_document_arn
+  ecs_cluster_name = module.ecs.cluster_name
 }
 
 # Creates an AWS Certificate Manager certificate for use on load balancers and CloudFront and requests a Let's Encrypt certificate for use on EC2 instances
@@ -58,6 +59,8 @@ module "admin" {
   origin              = module.bucket.origin
   repo                = var.repo
   dev_mode            = var.prod ? false : true
+
+  address_changed_topic_arn = module.ecs.sns_topic_arn
 }
 
 # Creates a DynamoDB table for storing address data
@@ -180,6 +183,34 @@ module "smtp_out" {
   bucket_arn       = module.bucket.bucket_arn
   master_password  = module.admin.master_password
   depends_on       = [module.cert]
+}
+
+# ECS cluster, services, and task definitions for containerized mail tiers.
+# Creates its own ip-type target groups so the ASG modules above can continue
+# serving traffic through the existing instance-type target groups during the
+# parallel-run transition period (Phase 7).
+module "ecs" {
+  source = "./modules/ecs"
+
+  private_subnets = module.vpc.private_subnets
+  vpc_id          = module.vpc.vpc.id
+  cidr_block      = var.cidr_block
+  region          = var.aws_region
+  control_domain  = var.control_domain
+
+  table_arn = module.table.table_arn
+  efs_id    = module.efs.efs_id
+
+  user_pool_arn = module.pool.user_pool_arn
+  user_pool_id  = module.pool.user_pool_id
+  client_id     = module.pool.user_pool_client_id
+
+  ecr_repository_urls = module.ecr.repository_urls
+  image_tag           = var.image_tag
+
+  master_password = module.admin.master_password
+
+  depends_on = [module.cert]
 }
 
 # Establishes a daily backup schedule for mail and address data

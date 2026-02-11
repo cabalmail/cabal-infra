@@ -1,6 +1,7 @@
 const AWS = require('aws-sdk');
 const domains = JSON.parse(process.env.DOMAINS);
 const control_domain = process.env.CONTROL_DOMAIN;
+const addressChangedTopicArn = process.env.ADDRESS_CHANGED_TOPIC_ARN;
 
 exports.handler = (event, context, callback) => {
   if (!event.requestContext.authorizer) {
@@ -28,7 +29,8 @@ exports.handler = (event, context, callback) => {
   const r53_req = createDnsRecords(r53_params);
   const dyndb_req = recordAddress(dyndb_payload);
   const ssm_req = kickOffChef();
-  Promise.all([r53_req, dyndb_req, ssm_req])
+  const sns_req = notifyContainers();
+  Promise.all([r53_req, dyndb_req, ssm_req, sns_req])
   .then(values => {
     console.log("Success. Invoking callback.");
     callback(null, generateResponse(201, values, requestBody.address));
@@ -90,6 +92,27 @@ function kickOffChef() {
     if (err) {
       console.error("ssm", err);
       console.error("command", command)
+    }
+  }).promise();
+}
+
+function notifyContainers() {
+  if (!addressChangedTopicArn) {
+    console.log("ADDRESS_CHANGED_TOPIC_ARN not set, skipping SNS publish");
+    return Promise.resolve();
+  }
+  const sns = new AWS.SNS();
+  const params = {
+    TopicArn: addressChangedTopicArn,
+    Message: JSON.stringify({
+      event: "address_changed",
+      timestamp: new Date().toISOString()
+    })
+  };
+  return sns.publish(params, (err, data) => {
+    if (err) {
+      console.error("sns", err);
+      console.error("params", params);
     }
   }).promise();
 }
