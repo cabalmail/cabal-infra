@@ -36,7 +36,7 @@ resource "aws_ecs_task_definition" "imap" {
       { name = "COGNITO_CLIENT_ID", value = var.client_id },
       { name = "COGNITO_POOL_ID", value = var.user_pool_id },
       { name = "NETWORK_CIDR", value = var.cidr_block },
-      { name = "SQS_QUEUE_URL", value = aws_sqs_queue.imap.url },
+      { name = "SQS_QUEUE_URL", value = aws_sqs_queue.tier["imap"].url },
     ]
 
     secrets = [
@@ -60,7 +60,7 @@ resource "aws_ecs_task_definition" "imap" {
     logConfiguration = {
       logDriver = "awslogs"
       options = {
-        "awslogs-group"         = aws_cloudwatch_log_group.imap.name
+        "awslogs-group"         = aws_cloudwatch_log_group.tier["imap"].name
         "awslogs-region"        = var.region
         "awslogs-stream-prefix" = "imap"
       }
@@ -104,7 +104,7 @@ resource "aws_ecs_task_definition" "smtp_in" {
       { name = "COGNITO_CLIENT_ID", value = var.client_id },
       { name = "COGNITO_POOL_ID", value = var.user_pool_id },
       { name = "NETWORK_CIDR", value = var.cidr_block },
-      { name = "SQS_QUEUE_URL", value = aws_sqs_queue.smtp_in.url },
+      { name = "SQS_QUEUE_URL", value = aws_sqs_queue.tier["smtp-in"].url },
     ]
 
     secrets = [
@@ -122,7 +122,7 @@ resource "aws_ecs_task_definition" "smtp_in" {
     logConfiguration = {
       logDriver = "awslogs"
       options = {
-        "awslogs-group"         = aws_cloudwatch_log_group.smtp_in.name
+        "awslogs-group"         = aws_cloudwatch_log_group.tier["smtp-in"].name
         "awslogs-region"        = var.region
         "awslogs-stream-prefix" = "smtp-in"
       }
@@ -160,7 +160,7 @@ resource "aws_ecs_task_definition" "smtp_out" {
       { name = "COGNITO_CLIENT_ID", value = var.client_id },
       { name = "COGNITO_POOL_ID", value = var.user_pool_id },
       { name = "NETWORK_CIDR", value = var.cidr_block },
-      { name = "SQS_QUEUE_URL", value = aws_sqs_queue.smtp_out.url },
+      { name = "SQS_QUEUE_URL", value = aws_sqs_queue.tier["smtp-out"].url },
     ]
 
     secrets = [
@@ -179,7 +179,7 @@ resource "aws_ecs_task_definition" "smtp_out" {
     logConfiguration = {
       logDriver = "awslogs"
       options = {
-        "awslogs-group"         = aws_cloudwatch_log_group.smtp_out.name
+        "awslogs-group"         = aws_cloudwatch_log_group.tier["smtp-out"].name
         "awslogs-region"        = var.region
         "awslogs-stream-prefix" = "smtp-out"
       }

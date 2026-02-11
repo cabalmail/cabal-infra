@@ -166,17 +166,8 @@ resource "aws_security_group_rule" "ecs_instance_ingress_vpc" {
 
 # ── CloudWatch log groups ──────────────────────────────────────
 
-resource "aws_cloudwatch_log_group" "imap" {
-  name              = "/ecs/cabal-imap"
-  retention_in_days = 30
-}
-
-resource "aws_cloudwatch_log_group" "smtp_in" {
-  name              = "/ecs/cabal-smtp-in"
-  retention_in_days = 30
-}
-
-resource "aws_cloudwatch_log_group" "smtp_out" {
-  name              = "/ecs/cabal-smtp-out"
+resource "aws_cloudwatch_log_group" "tier" {
+  for_each          = local.tiers
+  name              = "/ecs/cabal-${each.key}"
   retention_in_days = 30
 }

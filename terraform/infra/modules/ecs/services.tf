@@ -27,11 +27,11 @@ resource "aws_ecs_service" "imap" {
 
   network_configuration {
     subnets         = var.private_subnets[*].id
-    security_groups = [aws_security_group.imap.id]
+    security_groups = [aws_security_group.tier["imap"].id]
   }
 
   load_balancer {
-    target_group_arn = aws_lb_target_group.imap.arn
+    target_group_arn = aws_lb_target_group.tier["imap"].arn
     container_name   = "imap"
     container_port   = 143
   }
@@ -57,11 +57,11 @@ resource "aws_ecs_service" "smtp_in" {
 
   network_configuration {
     subnets         = var.private_subnets[*].id
-    security_groups = [aws_security_group.smtp_in.id]
+    security_groups = [aws_security_group.tier["smtp-in"].id]
   }
 
   load_balancer {
-    target_group_arn = aws_lb_target_group.relay.arn
+    target_group_arn = aws_lb_target_group.tier["relay"].arn
     container_name   = "smtp-in"
     container_port   = 25
   }
@@ -87,17 +87,17 @@ resource "aws_ecs_service" "smtp_out" {
 
   network_configuration {
     subnets         = var.private_subnets[*].id
-    security_groups = [aws_security_group.smtp_out.id]
+    security_groups = [aws_security_group.tier["smtp-out"].id]
   }
 
   load_balancer {
-    target_group_arn = aws_lb_target_group.submission.arn
+    target_group_arn = aws_lb_target_group.tier["submission"].arn
     container_name   = "smtp-out"
     container_port   = 465
   }
 
   load_balancer {
-    target_group_arn = aws_lb_target_group.starttls.arn
+    target_group_arn = aws_lb_target_group.tier["starttls"].arn
     container_name   = "smtp-out"
     container_port   = 587
   }

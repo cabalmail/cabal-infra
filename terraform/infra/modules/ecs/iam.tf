@@ -108,11 +108,7 @@ resource "aws_iam_policy" "ecs_task" {
           "sqs:DeleteMessage",
           "sqs:GetQueueAttributes",
         ]
-        Resource = [
-          aws_sqs_queue.imap.arn,
-          aws_sqs_queue.smtp_in.arn,
-          aws_sqs_queue.smtp_out.arn,
-        ]
+        Resource = [for q in aws_sqs_queue.tier : q.arn]
       },
     ]
   })

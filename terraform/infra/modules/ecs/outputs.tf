@@ -31,21 +31,21 @@ output "smtp_out_service_name" {
 # Target group ARNs — used to switch NLB listeners during cutover (Phase 7).
 
 output "imap_target_group_arn" {
-  value       = aws_lb_target_group.imap.arn
+  value       = aws_lb_target_group.tier["imap"].arn
   description = "ARN of the ECS IMAP target group (ip-type)."
 }
 
 output "relay_target_group_arn" {
-  value       = aws_lb_target_group.relay.arn
+  value       = aws_lb_target_group.tier["relay"].arn
   description = "ARN of the ECS SMTP relay target group (ip-type)."
 }
 
 output "submission_target_group_arn" {
-  value       = aws_lb_target_group.submission.arn
+  value       = aws_lb_target_group.tier["submission"].arn
   description = "ARN of the ECS SMTP submission target group (ip-type)."
 }
 
 output "starttls_target_group_arn" {
-  value       = aws_lb_target_group.starttls.arn
+  value       = aws_lb_target_group.tier["starttls"].arn
   description = "ARN of the ECS SMTP STARTTLS target group (ip-type)."
 }
