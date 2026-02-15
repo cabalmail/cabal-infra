@@ -60,12 +60,6 @@ resource "aws_s3_bucket_lifecycle_configuration" "expire_attachments" {
   }
 }
 
-# Make the bucket private
-resource "aws_s3_bucket_acl" "this" {
-  bucket = aws_s3_bucket.cache.bucket
-  acl    = "private"
-}
-
 # Make the bucvket stay private
 resource "aws_s3_bucket_public_access_block" "this" {
   bucket = aws_s3_bucket.cache.bucket
