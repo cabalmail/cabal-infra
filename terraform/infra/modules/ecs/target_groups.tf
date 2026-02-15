@@ -39,3 +39,24 @@ resource "aws_lb_target_group" "tier" {
     create_before_destroy = true
   }
 }
+
+# ── Staging NLB listeners ──────────────────────────────────────
+#
+# ECS refuses to register tasks into a target group that is not
+# associated with a load balancer. These TCP listeners on high-
+# numbered ports associate the ECS target groups with the shared
+# NLB without disturbing the production listeners that still
+# serve the ASG tiers. Remove these once the production listeners
+# are switched to the ECS target groups in Phase 7.
+
+resource "aws_lb_listener" "ecs_staging" {
+  for_each          = local.target_groups
+  load_balancer_arn = var.nlb_arn
+  port              = each.value.staging_port
+  protocol          = "TCP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.tier[each.key].arn
+  }
+}

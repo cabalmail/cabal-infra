@@ -23,11 +23,15 @@ locals {
 
   # Target groups are keyed by function, not tier, because smtp-out
   # maps to two target groups (submission + starttls).
+  # staging_port: temporary NLB listener port that associates the
+  # target group with the NLB so ECS can register tasks. These
+  # staging listeners are removed during Phase 7 cutover when the
+  # production listeners are switched to the ECS target groups.
   target_groups = {
-    imap       = { port = 143 }
-    relay      = { port = 25 }
-    submission = { port = 465 }
-    starttls   = { port = 587 }
+    imap       = { port = 143, staging_port = 10143 }
+    relay      = { port = 25, staging_port = 10025 }
+    submission = { port = 465, staging_port = 10465 }
+    starttls   = { port = 587, staging_port = 10587 }
   }
 
   # Flatten per-tier port lists into a map keyed by "tier-port" for
