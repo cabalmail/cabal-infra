@@ -756,25 +756,31 @@ done
 
 ### Goal
 
-Replace the `modules/asg` Terraform module with a new `modules/ecs` module.
-Create an ECS cluster, ECR repositories, and three ECS services (one per
-tier). Rewire the existing NLB target groups.
+Create a new `modules/ecs` Terraform module alongside the existing
+`modules/asg` module. Stand up an ECS cluster, three ECS services (one per
+tier), and separate ip-type NLB target groups. The ASG modules remain in
+place to continue serving production traffic until Phase 7 cutover.
 
 ### New Terraform resources
 
 ```
 terraform/infra/modules/ecs/
-├── main.tf              # ECS cluster, capacity provider
-├── ecr.tf               # ECR repositories (3)
-├── services.tf          # ECS services (3)
-├── task-definitions.tf  # Task definitions (3)
-├── iam.tf               # Task execution role, task role
-├── sqs.tf               # SQS queues for reconfiguration (3)
+├── main.tf              # ECS cluster, capacity provider, log groups
+├── locals.tf            # Per-tier config maps (ports, target groups)
+├── services.tf          # ECS services (3, explicit)
+├── task-definitions.tf  # Task definitions (3, explicit)
+├── target_groups.tf     # ip-type NLB target groups + staging listeners
+├── iam.tf               # Task execution role, task role, instance role
+├── sqs.tf               # SQS queues + policies + SNS subscriptions (for_each)
 ├── sns.tf               # SNS topic for address change fan-out
-├── security_group.tf    # Retained from ASG module
+├── security_group.tf    # Per-tier security groups (for_each)
+├── versions.tf
 ├── variables.tf
 └── outputs.tf
 ```
+
+ECR repositories are managed by the existing `modules/ecr` module (which
+already uses `for_each` over tiers), not duplicated inside the ECS module.
 
 ### ECS cluster with EC2 capacity
 
@@ -797,10 +803,11 @@ resource "aws_ecs_cluster" "mail" {
 # exists for self-healing (replace unhealthy instances) and to scale
 # out if ECS needs more capacity for SMTP container scaling.
 resource "aws_autoscaling_group" "ecs" {
-  vpc_zone_identifier = var.private_subnets[*].id
-  desired_capacity    = 1
-  max_size            = 3   # room for SMTP scaling
-  min_size            = 1   # always at least one instance
+  vpc_zone_identifier   = var.private_subnets[*].id
+  desired_capacity      = 1
+  max_size              = 3   # room for SMTP scaling
+  min_size              = 1   # always at least one instance
+  protect_from_scale_in = true  # required by capacity provider managed termination protection
 
   launch_template {
     id      = aws_launch_template.ecs.id
@@ -1175,13 +1182,35 @@ another instance (up to `max_size = 3`). When the SMTP load subsides and
 containers scale back in, the capacity provider terminates the idle
 instance.
 
-### NLB target group changes
+### NLB target groups and staging listeners
 
-The existing NLB target groups must be changed from `target_type = "instance"`
-(the current implicit default) to `target_type = "ip"` to work with ECS
-`awsvpc` networking. This is a **destructive change** — Terraform will destroy
-and recreate the target groups. During the parallel-run phase (Phase 7), create
-new target groups for ECS alongside the existing ones to avoid downtime.
+ECS `awsvpc` networking requires `target_type = "ip"`, but the existing NLB
+target groups use `target_type = "instance"` for the ASG tiers. Changing the
+type in-place would destroy and recreate the target groups, breaking the ASGs.
+
+Instead, the ECS module creates its own ip-type target groups with distinct
+names (`cabal-ecs-*-tg`) alongside the existing instance-type target groups
+(`cabal-*-tg`). Both sets coexist during the parallel-run period. Per-tier
+plumbing resources (SQS, security groups, target groups, log groups) use
+`for_each` over a locals map; task definitions and services remain explicit
+due to significant per-tier differences (EFS mounts, secrets, deployment
+constraints, multiple load_balancer blocks on SMTP-OUT).
+
+**Staging listeners**: ECS refuses to register tasks into a target group
+that is not associated with a load balancer. Since the production NLB
+listeners (ports 993, 25, 465, 587) still point to the ASG target groups,
+temporary TCP listeners on high-numbered ports associate the ECS target
+groups with the NLB:
+
+| ECS Target Group | Staging Port | Production Port (ASG) |
+|---|---|---|
+| imap | 10143 | 993 (TLS → 143) |
+| relay | 10025 | 25 |
+| submission | 10465 | 465 |
+| starttls | 10587 | 587 |
+
+These staging listeners are removed during Phase 7 cutover when the
+production listeners are switched to the ECS target groups.
 
 ---
 
@@ -1364,9 +1393,11 @@ every address pattern, then cut over.
 
 ### Step 1: Deploy ECS alongside existing ASGs
 
-- Create the ECS cluster and services with `desired_count = 1` each.
-- Give them separate NLB target groups (not the production ones).
-- Both systems read from the same DynamoDB table and Cognito pool.
+The ECS cluster and services are already deployed (Phase 4) with
+`desired_count = 1` each. They register into their own ip-type target
+groups, which are associated with the NLB via staging listeners on
+high-numbered ports (10143, 10025, 10465, 10587). Both systems read
+from the same DynamoDB table and Cognito pool.
 
 ### Step 2: Validate with test addresses
 
@@ -1385,15 +1416,19 @@ For each tier, verify:
 | Send to deleted/rejected address | access db REJECT rules |
 | Verify fail2ban blocks after N failed logins | fail2ban + NET_ADMIN capability |
 
-### Step 3: Switch NLB target groups
+### Step 3: Switch NLB listeners
 
 Once all tests pass:
 
-1. Update Terraform to point NLB target groups at ECS services.
-2. Apply. NLB health checks will verify the containers are responding.
-3. Monitor for 24-48 hours.
-4. Scale down the EC2 ASGs to 0.
-5. After a further observation period, remove the ASG module from Terraform.
+1. Update the production NLB listeners (in `modules/elb`) to forward to
+   the ECS ip-type target groups instead of the ASG instance-type ones.
+2. Remove the staging listeners (ports 10143, 10025, 10465, 10587) from
+   `modules/ecs/target_groups.tf`.
+3. Apply. NLB health checks will verify the containers are responding.
+4. Monitor for 24-48 hours.
+5. Scale down the EC2 ASGs to 0.
+6. After a further observation period, remove the ASG modules and the old
+   instance-type target groups from Terraform.
 
 ### Step 4: Clean up
 

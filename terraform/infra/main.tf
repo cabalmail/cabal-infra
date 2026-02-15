@@ -197,6 +197,7 @@ module "ecs" {
   cidr_block      = var.cidr_block
   region          = var.aws_region
   control_domain  = var.control_domain
+  nlb_arn         = module.load_balancer.nlb_arn
 
   table_arn = module.table.table_arn
   efs_id    = module.efs.efs_id
