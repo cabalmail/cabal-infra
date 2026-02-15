@@ -3,7 +3,6 @@
 */
 
 resource "aws_cognito_user_pool" "users" {
-  count = length(data.aws_s3_objects.check.keys) > 0 ? 1 : 0
   name  = "cabal"
   schema {
     name                     = "osid"
@@ -21,9 +20,8 @@ resource "aws_cognito_user_pool" "users" {
 }
 
 resource "aws_cognito_user_pool_client" "users" {
-  count                 = length(data.aws_s3_objects.check.keys) > 0 ? 1 : 0
   name                  = "cabal_admin_client"
-  user_pool_id          = aws_cognito_user_pool.users[0].id
+  user_pool_id          = aws_cognito_user_pool.users.id
   explicit_auth_flows   = [ "USER_PASSWORD_AUTH" ]
   access_token_validity = 12
   id_token_validity     = 12
