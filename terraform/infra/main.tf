@@ -31,7 +31,7 @@ module "pool" {
 module "cert" {
   source         = "./modules/cert"
   control_domain = var.control_domain
-  zone_id        = data.aws_ssm_parameter.zone.value
+  zone_id        = data.terraform_remote_state.zone.outputs.control_domain_zone_id
   prod           = var.prod
   email          = var.email
 }
@@ -50,7 +50,7 @@ module "admin" {
   user_pool_client_id = module.pool.user_pool_client_id
   region              = var.aws_region
   cert_arn            = module.cert.cert_arn
-  zone_id             = data.aws_ssm_parameter.zone.value
+  zone_id             = data.terraform_remote_state.zone.outputs.control_domain_zone_id
   domains             = module.domains.domains
   layers              = module.lambda_layers.layers
   bucket              = module.bucket.bucket
@@ -75,7 +75,7 @@ module "vpc" {
   cidr_block       = var.cidr_block
   control_domain   = var.control_domain
   az_list          = var.availability_zones
-  zone_id          = data.aws_ssm_parameter.zone.value
+  zone_id          = data.terraform_remote_state.zone.outputs.control_domain_zone_id
 }
 
 # Creates a network load balancer shared by machines in the stack
@@ -83,7 +83,7 @@ module "load_balancer" {
   source            = "./modules/elb"
   public_subnet_ids = module.vpc.public_subnets[*].id
   vpc_id            = module.vpc.vpc.id
-  zone_id           = data.aws_ssm_parameter.zone.value
+  zone_id           = data.terraform_remote_state.zone.outputs.control_domain_zone_id
   control_domain    = var.control_domain
   cert_arn          = module.cert.cert_arn
 }

@@ -1,5 +1,5 @@
 locals {
-  lambdas = {
+  supported_lambdas = {
     list_folders       = {
       runtime   = "python3.13"
       type      = "python"
@@ -144,5 +144,19 @@ locals {
       cache     = false
       cache_ttl = 0
     }
+  }
+}
+
+data "aws_s3_objects" "check" {
+  for_each = local.supported_lambdas
+  bucket   = var.bucket
+  prefix   = "lambda/${each.key}.zip.base64sha256"
+}
+
+locals {
+  lambdas = {
+    for l in keys(local.supported_lambdas) :
+      l => local.supported_lambdas[l]
+      if length(data.aws_s3_objects.check[l].keys) > 0
   }
 }
