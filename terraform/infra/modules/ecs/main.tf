@@ -78,11 +78,12 @@ resource "aws_launch_template" "ecs" {
 # ── ASG for ECS instances ─────────────────────────────────────
 
 resource "aws_autoscaling_group" "ecs" {
-  name_prefix         = "cabal-ecs-"
-  vpc_zone_identifier = var.private_subnets[*].id
-  desired_capacity    = 1
-  max_size            = 3
-  min_size            = 1
+  name_prefix           = "cabal-ecs-"
+  vpc_zone_identifier   = var.private_subnets[*].id
+  desired_capacity      = 1
+  max_size              = 3
+  min_size              = 1
+  protect_from_scale_in = true
 
   launch_template {
     id      = aws_launch_template.ecs.id
