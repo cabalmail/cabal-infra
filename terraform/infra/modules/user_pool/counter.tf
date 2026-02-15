@@ -7,7 +7,13 @@ locals {
   wildcard = "*"
 }
 
+data "aws_s3_objects" "check" {
+  bucket = var.bucket
+  prefix = "/lambda/assign_osid.zip.base64sha256"
+}
+
 data "aws_s3_object" "lambda_function_hash" {
+  count = length(data.aws_s3_objects.check.keys) > 0 ? 1 : 0
   bucket = var.bucket
   key    = "/lambda/assign_osid.zip.base64sha256"
 }
@@ -87,9 +93,10 @@ RUNPOLICY
 }
 
 resource "aws_lambda_function" "assign_osid" {
+  count = length(data.aws_s3_objects.check.keys) > 0 ? 1 : 0
   s3_bucket        = var.bucket
   s3_key           = "lambda/assign_osid.zip"
-  source_code_hash = data.aws_s3_object.lambda_function_hash.body
+  source_code_hash = data.aws_s3_object.lambda_function_hash[0].body
   function_name    = "assign_osid"
   role             = aws_iam_role.for_lambda.arn
   handler          = "index.handler"
@@ -99,10 +106,11 @@ resource "aws_lambda_function" "assign_osid" {
 }
 
 resource "aws_lambda_permission" "allow_cognito" {
+  count = length(data.aws_s3_objects.check.keys) > 0 ? 1 : 0
   action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.assign_osid.function_name
+  function_name = aws_lambda_function.assign_osid[0].function_name
   principal     = "cognito-idp.amazonaws.com"
-  source_arn    = aws_cognito_user_pool.users.arn
+  source_arn    = aws_cognito_user_pool.users[0].arn
 }
 
 resource "aws_dynamodb_table" "counter" {

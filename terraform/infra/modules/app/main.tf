@@ -31,7 +31,6 @@ resource "aws_api_gateway_authorizer" "api_auth" {
   ]) ]
 }
 
-#
 module "cabal_method" {
   for_each         = local.lambdas
   source           = "./modules/call"

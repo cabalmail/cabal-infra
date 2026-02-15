@@ -139,7 +139,7 @@ resource "aws_cloudwatch_log_group" "lambda_log" {
 
 data "aws_s3_object" "lambda_function_hash" {
   bucket = var.bucket
-  key    = "/lambda/${var.name}.zip.base64sha256"
+  key    = "lambda/${var.name}.zip.base64sha256"
 }
 
 #tfsec:ignore:aws-lambda-enable-tracing
