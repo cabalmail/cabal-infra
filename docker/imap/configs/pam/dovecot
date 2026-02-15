@@ -1,0 +1,6 @@
+#%PAM-1.0
+auth       sufficient   pam_exec.so expose_authtok /usr/bin/cognito.bash
+auth       required     pam_nologin.so
+auth       include      password-auth
+account    include      password-auth
+session    include      password-auth

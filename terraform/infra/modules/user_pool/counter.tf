@@ -86,6 +86,11 @@ resource "aws_iam_role_policy" "lambda" {
       "Resource": [
         "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/assign_osid:${local.wildcard}"
       ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": "ecs:UpdateService",
+      "Resource": "arn:aws:ecs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:service/${var.ecs_cluster_name}/${local.wildcard}"
     }
   ]
 }
@@ -103,6 +108,12 @@ resource "aws_lambda_function" "assign_osid" {
   runtime          = "nodejs20.x"
   architectures    = ["arm64"]
   timeout          = 30
+
+  environment {
+    variables = {
+      ECS_CLUSTER_NAME = var.ecs_cluster_name
+    }
+  }
 }
 
 resource "aws_lambda_permission" "allow_cognito" {

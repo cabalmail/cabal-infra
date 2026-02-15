@@ -12,6 +12,7 @@ const client = new CognitoIdentityProviderClient({
 });
 
 const ssm = new AWS.SSM();
+const ecsClusterName = process.env.ECS_CLUSTER_NAME;
 
 exports.handler = (event, context, callback) => {
   getCounter(callback, event);
@@ -55,30 +56,58 @@ function updateUser(uid, callback, event) {
   client.send(UpdateCommand)
   .then(data => {
     console.log(data);
-    kickOffChef(callback, event);
+    onUserCreated(callback, event);
   })
   .catch(err => {
     console.error(err);
   });
 }
 
-function kickOffChef(callback, event) {
+function onUserCreated(callback, event) {
+  const chefPromise = kickOffChef();
+  const ecsPromise = refreshContainers();
+  Promise.all([chefPromise, ecsPromise])
+  .then(() => {
+    callback(null, event);
+  })
+  .catch(err => {
+    console.error("post-user-creation error", err);
+    callback(null, event);
+  });
+}
+
+function kickOffChef() {
   const command = {
     DocumentName: 'cabal_chef_document',
     Targets: [
-      { 
+      {
          "Key": "tag:managed_by_terraform",
          "Values": [ "y" ]
-       }
       }
     ]
   };
-  ssm.sendCommand(command, (err, data) => {
+  return ssm.sendCommand(command, (err, data) => {
     if (err) {
       console.error("ssm", err);
       console.error("command", command)
-    } else {
-      callback(null, event);
-    };
+    }
   }).promise();
+}
+
+function refreshContainers() {
+  if (!ecsClusterName) {
+    console.log("ECS_CLUSTER_NAME not set, skipping ECS service update");
+    return Promise.resolve();
+  }
+  const ecs = new AWS.ECS();
+  const services = ['cabal-imap', 'cabal-smtp-in', 'cabal-smtp-out'];
+  return Promise.all(services.map(service => {
+    return ecs.updateService({
+      cluster: ecsClusterName,
+      service: service,
+      forceNewDeployment: true
+    }).promise().catch(err => {
+      console.error("ecs updateService error for " + service, err);
+    });
+  }));
 }

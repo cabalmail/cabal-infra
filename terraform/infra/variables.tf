@@ -77,6 +77,12 @@ variable "mail_domains" {
   }
 }
 
+variable "image_tag" {
+  type        = string
+  description = "Docker image tag for the mail container images (git SHA or 'latest')."
+  default     = "latest"
+}
+
 variable "imap_scale" {
   type = object({
     min  = number
@@ -176,7 +182,7 @@ variable "smtpout_scale" {
       (var.smtpout_scale.max >= 0),
       (var.smtpout_scale.des >= 0),
     ])
-    error_message = "The smtpin_scale attributes must be non-negative integers."
+    error_message = "The smtpout_scale attributes must be non-negative integers."
   }
   validation {
     condition = alltrue([

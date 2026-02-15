@@ -126,6 +126,11 @@ resource "aws_iam_role_policy" "lambda" {
             "Resource": [
                 "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-addresses"
             ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": "sns:Publish",
+            "Resource": "${var.address_changed_topic_arn}"
         }
     ]
 }
@@ -161,8 +166,9 @@ resource "aws_lambda_function" "api_call" {
   }
   environment {
     variables = {
-      DOMAINS        = jsonencode({ for r in var.domains : r.domain => r.zone_id })
-      CONTROL_DOMAIN = var.control_domain
+      DOMAINS                    = jsonencode({ for r in var.domains : r.domain => r.zone_id })
+      CONTROL_DOMAIN             = var.control_domain
+      ADDRESS_CHANGED_TOPIC_ARN  = var.address_changed_topic_arn
     }
   }
   depends_on = [

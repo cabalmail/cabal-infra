@@ -63,3 +63,8 @@ variable "memory" {
   type    = number
   default = 128
 }
+
+variable "address_changed_topic_arn" {
+  type        = string
+  description = "ARN of the SNS topic for address change notifications to ECS containers."
+}

@@ -1,0 +1,56 @@
+---
+name: Build and Push Container Images
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [trigger_build]
+  push:
+    paths:
+      - 'docker/**'
+      - '.github/workflows/docker.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
+    strategy:
+      matrix:
+        tier: [imap, smtp-in, smtp-out]
+    steps:
+    - name: checkout
+      uses: actions/checkout@v4
+
+    - name: configure-aws-cli
+      run: |
+        aws configure --profile ecr_push <<-EOF > /dev/null 2>&1
+        ${{ secrets.AWS_ACCESS_KEY_ID }}
+        ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        ${{ secrets.AWS_REGION }}
+        json
+        EOF
+
+    - name: login-to-ecr
+      id: ecr
+      run: |
+        ACCOUNT_ID=$(aws sts get-caller-identity --profile ecr_push --query Account --output text)
+        REGION=${{ secrets.AWS_REGION }}
+        REGISTRY="${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com"
+        aws ecr get-login-password --profile ecr_push --region ${REGION} \
+          | docker login --username AWS --password-stdin ${REGISTRY}
+        echo "registry=${REGISTRY}" >> "$GITHUB_OUTPUT"
+
+    - name: build-and-push
+      run: |
+        IMAGE="${{ steps.ecr.outputs.registry }}/cabal-${{ matrix.tier }}"
+        TAG="sha-${GITHUB_SHA::8}"
+        docker build \
+          -f docker/${{ matrix.tier }}/Dockerfile \
+          -t ${IMAGE}:${TAG} \
+          -t ${IMAGE}:latest \
+          docker/
+        docker push ${IMAGE}:${TAG}
+        docker push ${IMAGE}:latest
