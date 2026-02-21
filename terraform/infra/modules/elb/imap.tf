@@ -16,7 +16,7 @@ resource "aws_lb_target_group" "imap" {
     healthy_threshold   = 2
     unhealthy_threshold = 2
   }
-  depends_on           = [
+  depends_on = [
     aws_lb.elb
   ]
 
@@ -32,6 +32,6 @@ resource "aws_lb_listener" "imap" {
   certificate_arn   = var.cert_arn
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.imap.arn
+    target_group_arn = var.ecs_imap_target_group_arn != "" ? var.ecs_imap_target_group_arn : aws_lb_target_group.imap.arn
   }
 }

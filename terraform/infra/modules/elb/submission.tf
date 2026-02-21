@@ -16,7 +16,7 @@ resource "aws_lb_target_group" "submission" {
     healthy_threshold   = 2
     unhealthy_threshold = 2
   }
-  depends_on           = [
+  depends_on = [
     aws_lb.elb
   ]
 
@@ -31,7 +31,7 @@ resource "aws_lb_listener" "submission" {
   port              = "465"
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.submission.arn
+    target_group_arn = var.ecs_submission_target_group_arn != "" ? var.ecs_submission_target_group_arn : aws_lb_target_group.submission.arn
   }
 }
 
@@ -53,7 +53,7 @@ resource "aws_lb_target_group" "starttls" {
     healthy_threshold   = 2
     unhealthy_threshold = 2
   }
-  depends_on           = [
+  depends_on = [
     aws_lb.elb
   ]
 
@@ -68,6 +68,6 @@ resource "aws_lb_listener" "starttls" {
   port              = "587"
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.starttls.arn
+    target_group_arn = var.ecs_starttls_target_group_arn != "" ? var.ecs_starttls_target_group_arn : aws_lb_target_group.starttls.arn
   }
 }

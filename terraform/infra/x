@@ -1,0 +1,7 @@
+chef-solo -c /etc/chef/solo.rb -z -j /var/lib/chef/attributes/node.json
+netstat -ltnp
+systemctl restart sendmail
+netstat -ltnp
+systemctl restart opendkim
+netstat -ltnp
+exit

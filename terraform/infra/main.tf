@@ -86,6 +86,12 @@ module "load_balancer" {
   zone_id           = data.terraform_remote_state.zone.outputs.control_domain_zone_id
   control_domain    = var.control_domain
   cert_arn          = module.cert.cert_arn
+
+  # Phase 7 cutover: forward production listeners to ECS target groups
+  ecs_imap_target_group_arn       = module.ecs.imap_target_group_arn
+  ecs_relay_target_group_arn      = module.ecs.relay_target_group_arn
+  ecs_submission_target_group_arn = module.ecs.submission_target_group_arn
+  ecs_starttls_target_group_arn   = module.ecs.starttls_target_group_arn
 }
 
 # Creates an elastic file system for the mailstore
@@ -197,7 +203,6 @@ module "ecs" {
   cidr_block      = var.cidr_block
   region          = var.aws_region
   control_domain  = var.control_domain
-  nlb_arn         = module.load_balancer.nlb_arn
 
   table_arn = module.table.table_arn
   efs_id    = module.efs.efs_id

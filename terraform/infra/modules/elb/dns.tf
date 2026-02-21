@@ -1,5 +1,5 @@
 resource "aws_route53_record" "cname" {
-  for_each = toset( ["imap", "smtp-out", "smtp-in"] )
+  for_each = toset(["imap", "smtp-out", "smtp-in"])
   zone_id  = var.zone_id
   name     = each.key
   type     = "A"
@@ -34,11 +34,11 @@ resource "aws_route53_record" "srv" {
       host = "."
     }
   }
-  zone_id  = var.zone_id
-  name     = each.key
-  type     = "SRV"
-  ttl      = 3600
-  records  = [
+  zone_id = var.zone_id
+  name    = each.key
+  type    = "SRV"
+  ttl     = 3600
+  records = [
     "0 1 ${each.value.port} ${each.value.host}"
   ]
 }

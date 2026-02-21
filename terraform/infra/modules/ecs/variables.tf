@@ -24,13 +24,6 @@ variable "region" {
   description = "AWS region."
 }
 
-# ── Load balancer ──────────────────────────────────────────────
-
-variable "nlb_arn" {
-  type        = string
-  description = "ARN of the shared NLB. Used to create staging listeners that associate ECS target groups with the load balancer."
-}
-
 # ── Domain / TLS ───────────────────────────────────────────────
 
 variable "control_domain" {
