@@ -4,14 +4,15 @@ const {
   AdminUpdateUserAttributesCommand
 } = require("@aws-sdk/client-cognito-identity-provider");
 
-const AWS = require('aws-sdk');
-const ddb = new AWS.DynamoDB();
+const { DynamoDBClient, UpdateItemCommand } = require("@aws-sdk/client-dynamodb");
+const { SSMClient, SendCommandCommand } = require("@aws-sdk/client-ssm");
+const { ECSClient, UpdateServiceCommand } = require("@aws-sdk/client-ecs");
 
-const client = new CognitoIdentityProviderClient({
-  region: process.env.AWS_REGION
-});
+const region = process.env.AWS_REGION;
 
-const ssm = new AWS.SSM();
+const client = new CognitoIdentityProviderClient({ region });
+const ddb = new DynamoDBClient({ region });
+const ssm = new SSMClient({ region });
 const ecsClusterName = process.env.ECS_CLUSTER_NAME;
 
 exports.handler = (event, context, callback) => {
@@ -33,13 +34,13 @@ function getCounter(callback, event) {
     UpdateExpression: "SET osid = osid + :val",
     ReturnValues: "UPDATED_NEW"
   };
-  ddb.updateItem(params, (err, data) => {
-    if (err) {
-      console.error("ddb", err);
-      console.error("params", params);
-    } else {
-      updateUser(data.Attributes.osid.N, callback, event);
-    }
+  ddb.send(new UpdateItemCommand(params))
+  .then(data => {
+    updateUser(data.Attributes.osid.N, callback, event);
+  })
+  .catch(err => {
+    console.error("ddb", err);
+    console.error("params", params);
   });
   return uid;
 }
@@ -86,12 +87,11 @@ function kickOffChef() {
       }
     ]
   };
-  return ssm.sendCommand(command, (err, data) => {
-    if (err) {
-      console.error("ssm", err);
-      console.error("command", command)
-    }
-  }).promise();
+  return ssm.send(new SendCommandCommand(command))
+  .catch(err => {
+    console.error("ssm", err);
+    console.error("command", command);
+  });
 }
 
 function refreshContainers() {
@@ -99,14 +99,14 @@ function refreshContainers() {
     console.log("ECS_CLUSTER_NAME not set, skipping ECS service update");
     return Promise.resolve();
   }
-  const ecs = new AWS.ECS();
+  const ecs = new ECSClient({ region });
   const services = ['cabal-imap', 'cabal-smtp-in', 'cabal-smtp-out'];
   return Promise.all(services.map(service => {
-    return ecs.updateService({
+    return ecs.send(new UpdateServiceCommand({
       cluster: ecsClusterName,
       service: service,
       forceNewDeployment: true
-    }).promise().catch(err => {
+    })).catch(err => {
       console.error("ecs updateService error for " + service, err);
     });
   }));

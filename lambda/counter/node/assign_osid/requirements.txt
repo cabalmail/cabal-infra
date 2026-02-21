@@ -1,2 +1,4 @@
 @aws-sdk/client-cognito-identity-provider
-aws-sdk
+@aws-sdk/client-dynamodb
+@aws-sdk/client-ssm
+@aws-sdk/client-ecs
