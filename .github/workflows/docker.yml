@@ -14,7 +14,17 @@ permissions:
   contents: read
 
 jobs:
+  set-tag:
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.tag.outputs.image_tag }}
+    steps:
+    - name: compute-tag
+      id: tag
+      run: echo "image_tag=sha-${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: set-tag
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     strategy:
@@ -46,9 +56,16 @@ jobs:
     - name: build-and-push
       run: |
         IMAGE="${{ steps.ecr.outputs.registry }}/cabal-${{ matrix.tier }}"
-        TAG="sha-${GITHUB_SHA::8}"
+        TAG="${{ needs.set-tag.outputs.image_tag }}"
         docker build \
           -f docker/${{ matrix.tier }}/Dockerfile \
           -t ${IMAGE}:${TAG} \
           docker/
         docker push ${IMAGE}:${TAG}
+
+  deploy:
+    needs: [set-tag, build]
+    uses: ./.github/workflows/terraform.yml
+    with:
+      image_tag: ${{ needs.set-tag.outputs.image_tag }}
+    secrets: inherit
