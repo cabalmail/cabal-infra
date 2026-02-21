@@ -5,7 +5,7 @@
 resource "aws_ecr_repository" "tier" {
   for_each             = toset(var.tiers)
   name                 = "cabal-${each.key}"
-  image_tag_mutability = "IMMUTABLE"
+  image_tag_mutability = "MUTABLE"
   force_delete         = false
 
   image_scanning_configuration {
