@@ -10,6 +10,7 @@ RUN yum install -y \
       fail2ban \
       procmail \
       httpd-tools \
+      make \
       awscli jq \
       python3-pip \
       supervisor \

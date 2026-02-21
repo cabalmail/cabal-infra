@@ -10,6 +10,7 @@ RUN yum install -y \
       opendkim \
       fail2ban \
       procmail \
+      make \
       awscli jq \
       python3-pip \
       supervisor \
