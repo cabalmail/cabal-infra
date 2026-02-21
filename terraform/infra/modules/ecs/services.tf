@@ -16,6 +16,8 @@ resource "aws_ecs_service" "imap" {
   task_definition = aws_ecs_task_definition.imap.arn
   desired_count   = 1
 
+  enable_execute_command = true
+
   # No extra task during deploy — only one IMAP container at a time.
   deployment_maximum_percent         = 100
   deployment_minimum_healthy_percent = 0
@@ -47,6 +49,8 @@ resource "aws_ecs_service" "smtp_in" {
   task_definition = aws_ecs_task_definition.smtp_in.arn
   desired_count   = 1
 
+  enable_execute_command = true
+
   deployment_maximum_percent         = 200
   deployment_minimum_healthy_percent = 100
 
@@ -76,6 +80,8 @@ resource "aws_ecs_service" "smtp_out" {
   cluster         = aws_ecs_cluster.mail.id
   task_definition = aws_ecs_task_definition.smtp_out.arn
   desired_count   = 1
+
+  enable_execute_command = true
 
   deployment_maximum_percent         = 200
   deployment_minimum_healthy_percent = 100

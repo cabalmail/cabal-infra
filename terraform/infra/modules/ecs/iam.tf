@@ -110,6 +110,16 @@ resource "aws_iam_policy" "ecs_task" {
         ]
         Resource = [for q in aws_sqs_queue.tier : q.arn]
       },
+      {
+        Effect = "Allow"
+        Action = [
+          "ssmmessages:CreateControlChannel",
+          "ssmmessages:CreateDataChannel",
+          "ssmmessages:OpenControlChannel",
+          "ssmmessages:OpenDataChannel",
+        ]
+        Resource = "*"
+      },
     ]
   })
 }
