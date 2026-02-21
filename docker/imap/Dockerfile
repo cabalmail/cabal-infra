@@ -1,20 +1,18 @@
-FROM amazonlinux:2
-
-# Enable EPEL (for fail2ban, supervisor) and install Python 3
-RUN amazon-linux-extras install epel python3.8 -y
+FROM amazonlinux:2023
 
 # System packages
-RUN yum install -y \
+RUN dnf install -y \
       sendmail sendmail-cf \
       dovecot \
       fail2ban \
       procmail \
       httpd-tools \
       make \
-      awscli jq \
-      python3-pip \
-      supervisor \
-    && yum clean all
+      awscli-2 jq \
+      pip \
+      net-tools \
+    && pip install supervisor \
+    && dnf clean all
 
 # Static dovecot configuration
 COPY imap/configs/dovecot/10-auth.conf       /etc/dovecot/conf.d/10-auth.conf

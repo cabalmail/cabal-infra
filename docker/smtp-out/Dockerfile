@@ -1,20 +1,18 @@
-FROM amazonlinux:2
-
-# Enable EPEL (for fail2ban, opendkim, supervisor) and install Python 3
-RUN amazon-linux-extras install epel python3.8 -y
+FROM amazonlinux:2023
 
 # System packages
-RUN yum install -y \
+RUN dnf install -y \
       sendmail sendmail-cf \
       sendmail-milter \
       opendkim \
       fail2ban \
       procmail \
       make \
-      awscli jq \
-      python3-pip \
-      supervisor \
-    && yum clean all
+      awscli-2 jq \
+      pip \
+      net-tools \
+    && pip install supervisor \
+    && dnf clean all
 
 # PAM for sendmail (Cognito auth)
 COPY smtp-out/configs/pam/smtp             /etc/pam.d/smtp

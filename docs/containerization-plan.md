@@ -84,11 +84,11 @@ work. Today this is spread across the recipes and `files/` directory:
 
 | Chef source | Dockerfile equivalent |
 |---|---|
-| `package 'sendmail'`, `package 'sendmail-cf'` | `RUN yum install -y sendmail sendmail-cf` |
-| `package 'dovecot'` | `RUN yum install -y dovecot` (IMAP image only) |
-| `package 'opendkim'` | `RUN yum install -y opendkim` (SMTP-OUT image only) |
-| `package 'fail2ban'` | `RUN yum install -y fail2ban` |
-| `package 'sendmail-milter'` | `RUN yum install -y sendmail-milter` (SMTP-OUT image only) |
+| `package 'sendmail'`, `package 'sendmail-cf'` | `RUN dnf install -y sendmail sendmail-cf` |
+| `package 'dovecot'` | `RUN dnf install -y dovecot` (IMAP image only) |
+| `package 'opendkim'` | `RUN dnf install -y opendkim` (SMTP-OUT image only) |
+| `package 'fail2ban'` | `RUN dnf install -y fail2ban` |
+| `package 'sendmail-milter'` | `RUN dnf install -y sendmail-milter` (SMTP-OUT image only) |
 | `cookbook_file` for dovecot configs | `COPY` into `/etc/dovecot/conf.d/` |
 | `cookbook_file` for PAM configs | `COPY` into `/etc/pam.d/` |
 | `cookbook_file 'procmailrc'` | `COPY` into `/etc/` |
@@ -173,18 +173,19 @@ docker/
 ### Example: IMAP Dockerfile
 
 ```dockerfile
-FROM amazonlinux:2
+FROM amazonlinux:2023
 
 # System packages
-RUN yum install -y \
+RUN dnf install -y \
       sendmail sendmail-cf \
       dovecot \
       fail2ban \
       procmail \
-      awscli jq \
-      python3 \
-      supervisor \
-    && yum clean all
+      awscli-2 jq \
+      pip \
+      net-tools \
+    && pip install supervisor \
+    && dnf clean all
 
 # Static dovecot configuration
 COPY configs/dovecot/10-auth.conf        /etc/dovecot/conf.d/10-auth.conf
@@ -293,9 +294,9 @@ newaliases
 
 # ── Step 7: IMAP-specific: dovecot master password ────────────
 if [ "$TIER" = "imap" ]; then
-  yum install -y httpd-tools 2>/dev/null || true
+  dnf install -y httpd-tools 2>/dev/null || true
   htpasswd -b -c -s /etc/dovecot/master-users admin "${MASTER_PASSWORD}"
-  yum remove -y httpd-tools 2>/dev/null || true
+  dnf remove -y httpd-tools 2>/dev/null || true
 fi
 
 # ── Step 8: Start services via supervisord ────────────────────
@@ -368,7 +369,7 @@ ITEMS=$(aws dynamodb scan \
   --output json)
 
 # ── Use Python to parse and generate all config files ─────────
-# Python is already on amazonlinux:2 and handles the nested
+# Python is already on amazonlinux:2023 and handles the nested
 # domain/subdomain/address structure more cleanly than bash+jq.
 
 python3 - "$TIER" "$IMAP_HOST" <<'PYEOF'

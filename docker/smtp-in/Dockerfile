@@ -1,18 +1,16 @@
-FROM amazonlinux:2
-
-# Enable EPEL (for fail2ban, supervisor) and install Python 3
-RUN amazon-linux-extras install epel python3.8 -y
+FROM amazonlinux:2023
 
 # System packages
-RUN yum install -y \
+RUN dnf install -y \
       sendmail sendmail-cf \
       fail2ban \
       procmail \
       make \
-      awscli jq \
-      python3-pip \
-      supervisor \
-    && yum clean all
+      awscli-2 jq \
+      pip \
+      net-tools \
+    && pip install supervisor \
+    && dnf clean all
 
 # Sendmail .mc template (placeholder for cert domain)
 COPY templates/in-sendmail.mc               /etc/mail/sendmail.mc.template

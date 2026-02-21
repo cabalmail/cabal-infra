@@ -104,4 +104,4 @@ fi
 
 # ── Step 10: Start services via supervisord ───────────────────
 echo "[entrypoint] Starting services via supervisord..."
-exec /usr/bin/supervisord -c /etc/supervisord.conf
+exec /usr/local/bin/supervisord -c /etc/supervisord.conf
