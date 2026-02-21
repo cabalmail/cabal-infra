@@ -50,7 +50,5 @@ jobs:
         docker build \
           -f docker/${{ matrix.tier }}/Dockerfile \
           -t ${IMAGE}:${TAG} \
-          -t ${IMAGE}:latest \
           docker/
         docker push ${IMAGE}:${TAG}
-        docker push ${IMAGE}:latest
