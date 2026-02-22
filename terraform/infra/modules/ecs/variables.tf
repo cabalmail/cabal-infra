@@ -69,8 +69,7 @@ variable "ecr_repository_urls" {
 
 variable "image_tag" {
   type        = string
-  description = "Docker image tag (git SHA or 'latest')."
-  default     = "latest"
+  description = "Docker image tag (e.g. sha-abc12345)."
 }
 
 # ── Secrets ────────────────────────────────────────────────────

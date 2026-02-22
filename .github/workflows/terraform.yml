@@ -6,16 +6,14 @@ on:
     inputs:
       image_tag:
         description: 'Docker image tag to deploy (e.g. sha-abc12345)'
-        required: false
-        default: 'latest'
+        required: true
         type: string
   workflow_call:
     inputs:
       image_tag:
         description: 'Docker image tag to deploy (e.g. sha-abc12345)'
-        required: false
+        required: true
         type: string
-        default: 'latest'
   repository_dispatch:
     types: [trigger_build]
   schedule:
@@ -174,7 +172,7 @@ jobs:
         echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
         echo "backup = ${{ vars.TF_VAR_BACKUP }}" >> terraform.tfvars
         echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
-        echo "image_tag = \"${{ inputs.image_tag || 'latest' }}\"" >> terraform.tfvars
+        echo "image_tag = \"${{ inputs.image_tag }}\"" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
     - name: plan-terraform
@@ -227,7 +225,7 @@ jobs:
         echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
         echo "backup = ${{ vars.TF_VAR_BACKUP }}" >> terraform.tfvars
         echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
-        echo "image_tag = \"${{ inputs.image_tag || 'latest' }}\"" >> terraform.tfvars
+        echo "image_tag = \"${{ inputs.image_tag }}\"" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
     - name: apply-terraform
