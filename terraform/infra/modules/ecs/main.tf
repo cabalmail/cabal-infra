@@ -83,7 +83,8 @@ resource "aws_autoscaling_group" "ecs" {
   desired_capacity      = 1
   max_size              = 3
   min_size              = 1
-  protect_from_scale_in = true
+  protect_from_scale_in     = true
+  wait_for_capacity_timeout = "0" # ECS capacity provider manages health
 
   launch_template {
     id      = aws_launch_template.ecs.id
