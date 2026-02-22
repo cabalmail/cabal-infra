@@ -77,11 +77,6 @@ variable "mail_domains" {
   }
 }
 
-variable "image_tag" {
-  type        = string
-  description = "Docker image tag for the mail container images (e.g. sha-abc12345)."
-}
-
 variable "imap_scale" {
   type = object({
     min  = number

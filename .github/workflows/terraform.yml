@@ -5,14 +5,14 @@ on:
   workflow_dispatch:
     inputs:
       image_tag:
-        description: 'Docker image tag to deploy (e.g. sha-abc12345)'
-        required: true
+        description: 'Docker image tag to deploy (e.g. sha-abc12345). Updates SSM parameter /cabal/deployed_image_tag.'
+        required: false
         type: string
   workflow_call:
     inputs:
       image_tag:
-        description: 'Docker image tag to deploy (e.g. sha-abc12345)'
-        required: true
+        description: 'Docker image tag to deploy (e.g. sha-abc12345). Updates SSM parameter /cabal/deployed_image_tag.'
+        required: false
         type: string
   repository_dispatch:
     types: [trigger_build]
@@ -156,6 +156,14 @@ jobs:
       with:
         cli_config_credentials_token: ${{ secrets.TF_TOKEN }}
         terraform_wrapper: false
+    - name: update-image-tag-in-ssm
+      if: inputs.image_tag != ''
+      run: |
+        aws ssm put-parameter \
+          --name "/cabal/deployed_image_tag" \
+          --value "${{ inputs.image_tag }}" \
+          --type String \
+          --overwrite
     - name: tfvars-terraform
       run: |
         echo "smtpout_scale = ${{ vars.TF_VAR_SMTPOUT_SCALE }}" > terraform.tfvars
@@ -172,7 +180,6 @@ jobs:
         echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
         echo "backup = ${{ vars.TF_VAR_BACKUP }}" >> terraform.tfvars
         echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
-        echo "image_tag = \"${{ inputs.image_tag }}\"" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
     - name: plan-terraform
@@ -225,7 +232,6 @@ jobs:
         echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
         echo "backup = ${{ vars.TF_VAR_BACKUP }}" >> terraform.tfvars
         echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
-        echo "image_tag = \"${{ inputs.image_tag }}\"" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
     - name: apply-terraform

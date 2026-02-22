@@ -4,6 +4,17 @@
 * This terraform stack stands up AWS infrastructure needed for a Cabalmail system. See [README.md](../../README.md) at the root of this repository for general information.
 */
 
+# ── Image tag resolution ────────────────────────────────────
+#
+# The Docker build and Terraform workflows write the active image tag to SSM
+# Parameter Store after a successful deployment.  Terraform always reads the
+# tag from SSM so that cron and push-triggered runs use the correct image
+# without requiring an explicit input.
+
+data "aws_ssm_parameter" "deployed_image_tag" {
+  name = "/cabal/deployed_image_tag"
+}
+
 # Create S3 bucket for React App
 module "bucket" {
   source         = "./modules/s3"
@@ -212,7 +223,7 @@ module "ecs" {
   client_id     = module.pool.user_pool_client_id
 
   ecr_repository_urls = module.ecr.repository_urls
-  image_tag           = var.image_tag
+  image_tag           = data.aws_ssm_parameter.deployed_image_tag.value
 
   master_password = module.admin.master_password
 
