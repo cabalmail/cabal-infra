@@ -102,6 +102,10 @@ if [ "$TIER" = "imap" ]; then
   htpasswd -b -c -s /etc/dovecot/master-users admin "${MASTER_PASSWORD}"
 fi
 
-# ── Step 10: Start services via supervisord ───────────────────
+# ── Step 10: Prepare rsyslog working directory ─────────────────
+echo "[entrypoint] Preparing rsyslog..."
+mkdir -p /var/lib/rsyslog
+
+# ── Step 11: Start services via supervisord ───────────────────
 echo "[entrypoint] Starting services via supervisord..."
 exec /usr/local/bin/supervisord -c /etc/supervisord.conf

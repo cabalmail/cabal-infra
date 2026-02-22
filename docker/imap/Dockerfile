@@ -6,6 +6,7 @@ RUN dnf install -y \
       dovecot \
       fail2ban \
       procmail \
+      rsyslog \
       httpd-tools \
       make \
       awscli-2 jq \
@@ -20,6 +21,7 @@ COPY imap/configs/dovecot/10-mail.conf       /etc/dovecot/conf.d/10-mail.conf
 COPY imap/configs/dovecot/15-mailboxes.conf  /etc/dovecot/conf.d/15-mailboxes.conf
 COPY imap/configs/dovecot/20-imap.conf       /etc/dovecot/conf.d/20-imap.conf
 COPY imap/configs/dovecot/auth-master.conf   /etc/dovecot/conf.d/auth-master.conf.ext
+COPY imap/configs/dovecot/10-logging.conf    /etc/dovecot/conf.d/10-logging.conf
 
 # PAM for dovecot (Cognito auth)
 COPY imap/configs/pam/dovecot               /etc/pam.d/dovecot
@@ -39,6 +41,9 @@ COPY shared/generate-config.sh             /usr/local/bin/generate-config.sh
 COPY shared/sync-users.sh                  /usr/local/bin/sync-users.sh
 COPY shared/reconfigure.sh                 /usr/local/bin/reconfigure.sh
 COPY shared/sendmail-wrapper.sh            /usr/local/bin/sendmail-wrapper.sh
+
+# Rsyslog config (ships sendmail logs to /var/log/maillog for CloudWatch)
+COPY shared/rsyslog-mail.conf              /etc/rsyslog.conf
 
 # Supervisord config
 COPY imap/supervisord.conf                 /etc/supervisord.conf

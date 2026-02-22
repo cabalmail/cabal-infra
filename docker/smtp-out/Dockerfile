@@ -7,6 +7,7 @@ RUN dnf install -y \
       opendkim \
       fail2ban \
       procmail \
+      rsyslog \
       make \
       awscli-2 jq \
       pip \
@@ -32,6 +33,9 @@ COPY shared/generate-config.sh             /usr/local/bin/generate-config.sh
 COPY shared/sync-users.sh                  /usr/local/bin/sync-users.sh
 COPY shared/reconfigure.sh                 /usr/local/bin/reconfigure.sh
 COPY shared/sendmail-wrapper.sh            /usr/local/bin/sendmail-wrapper.sh
+
+# Rsyslog config (ships sendmail logs to /var/log/maillog for CloudWatch)
+COPY shared/rsyslog-mail.conf              /etc/rsyslog.conf
 
 # Supervisord config
 COPY smtp-out/supervisord.conf             /etc/supervisord.conf
