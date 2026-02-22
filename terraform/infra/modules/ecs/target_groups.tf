@@ -16,7 +16,7 @@ resource "aws_lb_target_group" "tier" {
   protocol             = "TCP"
   target_type          = "ip"
   vpc_id               = var.vpc_id
-  deregistration_delay = 30
+  deregistration_delay = var.deregistration_delay
 
   stickiness {
     type    = "source_ip"
@@ -29,7 +29,7 @@ resource "aws_lb_target_group" "tier" {
     port                = each.value.port
     protocol            = "TCP"
     healthy_threshold   = 2
-    unhealthy_threshold = 2
+    unhealthy_threshold = var.unhealthy_threshold
   }
 
   lifecycle {

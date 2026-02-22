@@ -216,6 +216,11 @@ module "ecs" {
 
   master_password = module.admin.master_password
 
+  # Health-check tuning — raise these to keep containers alive for debugging.
+  health_check_grace_period = 600
+  deregistration_delay      = 120
+  unhealthy_threshold       = 10
+
   depends_on = [module.cert]
 }
 

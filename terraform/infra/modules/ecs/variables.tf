@@ -88,3 +88,23 @@ variable "instance_type" {
   description = "EC2 instance type for ECS container instances."
   default     = "t3.small"
 }
+
+# ── Health checks ────────────────────────────────────────────
+
+variable "health_check_grace_period" {
+  type        = number
+  description = "Seconds ECS ignores target-group health failures after a task starts."
+  default     = 300
+}
+
+variable "deregistration_delay" {
+  type        = number
+  description = "Seconds the NLB waits for in-flight requests before deregistering a target."
+  default     = 30
+}
+
+variable "unhealthy_threshold" {
+  type        = number
+  description = "Consecutive failed NLB health checks before a target is marked unhealthy."
+  default     = 2
+}

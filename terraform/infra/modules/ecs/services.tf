@@ -18,6 +18,8 @@ resource "aws_ecs_service" "imap" {
 
   enable_execute_command = true
 
+  health_check_grace_period_seconds = var.health_check_grace_period
+
   # No extra task during deploy — only one IMAP container at a time.
   deployment_maximum_percent         = 100
   deployment_minimum_healthy_percent = 0
