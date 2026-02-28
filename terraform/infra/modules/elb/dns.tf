@@ -11,6 +11,29 @@ resource "aws_route53_record" "cname" {
   }
 }
 
+# ── Private zone records ────────────────────────────────────────
+#
+# The VPC has a private Route 53 zone for the control domain.
+# When a query for e.g. imap.<control_domain> originates inside the
+# VPC, Route 53 Resolver checks the private zone first and returns
+# NXDOMAIN if the record is missing — it never falls through to the
+# public zone.  These records mirror the public aliases above so
+# that containers (and anything else in the VPC) can resolve the
+# tier hostnames.
+
+resource "aws_route53_record" "private" {
+  for_each = toset(["imap", "smtp-out", "smtp-in"])
+  zone_id  = var.private_zone_id
+  name     = each.key
+  type     = "A"
+
+  alias {
+    name                   = aws_lb.elb.dns_name
+    zone_id                = aws_lb.elb.zone_id
+    evaluate_target_health = false
+  }
+}
+
 resource "aws_route53_record" "srv" {
   for_each = {
     "_submission._tcp" = {

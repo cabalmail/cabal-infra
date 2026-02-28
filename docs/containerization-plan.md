@@ -1304,6 +1304,23 @@ There are two distinct categories of DNS records:
    These stay in Lambda — there is no reason to manage them in Terraform,
    and doing so would require a Terraform run for every address change.
 
+#### Private zone and split-horizon DNS
+
+The VPC has a private Route 53 hosted zone for the control domain
+(`modules/vpc/zone.tf`). When a DNS query for `imap.<control_domain>`
+originates from inside the VPC, Route 53 Resolver checks the private zone
+**first**. If the private zone has no matching record it returns NXDOMAIN —
+it does **not** fall through to the public hosted zone. This is standard
+AWS split-horizon behaviour.
+
+The Chef code worked around this because `_imap_dns.rb` upserted an A
+record for `imap.<control_domain>` directly into the private zone at
+startup. With ECS, these records are managed in Terraform instead: the ELB
+module creates alias records in both the public **and** private zones for
+`imap`, `smtp-in`, and `smtp-out` (`modules/elb/dns.tf`). This ensures
+containers can resolve tier hostnames via the default VPC resolver without
+any `/etc/resolv.conf` modifications.
+
 ---
 
 ## Phase 6 — CI/CD
