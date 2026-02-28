@@ -105,6 +105,7 @@ resource "aws_ecs_task_definition" "smtp_in" {
       { name = "COGNITO_POOL_ID", value = var.user_pool_id },
       { name = "NETWORK_CIDR", value = var.cidr_block },
       { name = "SQS_QUEUE_URL", value = aws_sqs_queue.tier["smtp-in"].url },
+      { name = "IMAP_INTERNAL_HOST", value = "${aws_service_discovery_service.imap.name}.${aws_service_discovery_private_dns_namespace.mail.name}" },
     ]
 
     secrets = [
@@ -161,6 +162,7 @@ resource "aws_ecs_task_definition" "smtp_out" {
       { name = "COGNITO_POOL_ID", value = var.user_pool_id },
       { name = "NETWORK_CIDR", value = var.cidr_block },
       { name = "SQS_QUEUE_URL", value = aws_sqs_queue.tier["smtp-out"].url },
+      { name = "IMAP_INTERNAL_HOST", value = "${aws_service_discovery_service.imap.name}.${aws_service_discovery_private_dns_namespace.mail.name}" },
     ]
 
     secrets = [
