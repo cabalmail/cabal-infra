@@ -1304,6 +1304,50 @@ There are two distinct categories of DNS records:
    These stay in Lambda — there is no reason to manage them in Terraform,
    and doing so would require a Terraform run for every address change.
 
+#### Private zone and split-horizon DNS
+
+The VPC has a private Route 53 hosted zone for the control domain
+(`modules/vpc/zone.tf`). When a DNS query for `imap.<control_domain>`
+originates from inside the VPC, Route 53 Resolver checks the private zone
+**first**. If the private zone has no matching record it returns NXDOMAIN —
+it does **not** fall through to the public hosted zone. This is standard
+AWS split-horizon behaviour.
+
+The Chef code worked around this because `_imap_dns.rb` upserted an A
+record for `imap.<control_domain>` directly into the private zone at
+startup. With ECS, the ELB module creates alias records in both the public
+**and** private zones for `imap`, `smtp-in`, and `smtp-out`
+(`modules/elb/dns.tf`). This ensures containers can resolve tier hostnames
+via the default VPC resolver without any `/etc/resolv.conf` modifications.
+
+However, the private-zone NLB aliases are **not sufficient for mail
+delivery**. The sendmail mailertable on smtp-in and smtp-out routes hosted
+domains to `smtp:[imap_host]` on port 25.  The NLB's port 25 listener
+forwards to the relay (smtp-in) target group, not imap — so using the NLB
+alias would create a mail loop.
+
+#### Cloud Map service discovery for inter-tier delivery
+
+To solve this, the IMAP ECS service registers with a **Cloud Map private
+DNS namespace** (`cabal.local`). ECS automatically manages an A record at
+`imap.cabal.local` that resolves to the IMAP task's ENI private IP.
+SMTP-IN and SMTP-OUT task definitions receive this hostname via the
+`IMAP_INTERNAL_HOST` environment variable, and `generate-config.sh` uses
+it in the mailertable instead of `imap.<control_domain>`. This routes
+mail directly to the IMAP container on port 25 without touching the NLB.
+
+```
+                  ┌──────────────────────────────────────────┐
+                  │  imap.<control_domain>  (private zone)   │
+                  │  → NLB alias  (ports 143/993 → IMAP OK) │
+                  └──────────────────────────────────────────┘
+
+                  ┌──────────────────────────────────────────┐
+                  │  imap.cabal.local  (Cloud Map)           │
+                  │  → IMAP task ENI IP  (port 25 → direct)  │
+                  └──────────────────────────────────────────┘
+```
+
 ---
 
 ## Phase 6 — CI/CD
