@@ -22,7 +22,11 @@ resource "aws_route53_record" "cname" {
 # tier hostnames.
 
 resource "aws_route53_record" "private" {
-  for_each = toset(["imap", "smtp-out", "smtp-in"])
+  # imap is intentionally excluded — its NLB port 25 listener routes to
+  # smtp-in, not imap, so an NLB alias here would misdirect mail delivery.
+  # Internal access to the IMAP container uses Cloud Map (imap.cabal.local)
+  # instead.  See modules/ecs/service_discovery.tf.
+  for_each = toset(["smtp-out", "smtp-in"])
   zone_id  = var.private_zone_id
   name     = each.key
   type     = "A"
