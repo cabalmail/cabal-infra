@@ -16,7 +16,7 @@ locals {
       private_ports = []
     }
     smtp-out = {
-      public_ports  = [25, 587]
+      public_ports  = [465, 587]
       private_ports = []
     }
   }
@@ -26,7 +26,7 @@ locals {
   target_groups = {
     imap       = { port = 143 }
     relay      = { port = 25 }
-    submission = { port = 465 }  # NLB terminates TLS; ECS registers targets on port 25 (container_port in services.tf)
+    submission = { port = 465 }  # Dovecot submission (implicit TLS); NLB passes through to container port 465
     starttls   = { port = 587 }
   }
 

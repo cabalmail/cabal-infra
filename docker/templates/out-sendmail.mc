@@ -23,15 +23,12 @@ define(`confTO_STARTTLS', `2m')dnl
 undefine(`UUCP_RELAY')dnl
 undefine(`BITNET_RELAY')dnl
 define(`PROCMAIL_MAILER_PATH',`/usr/bin/procmail')dnl
-define(`confAUTH_OPTIONS', `A')dnl
-TRUST_AUTH_MECH(`EXTERNAL DIGEST-MD5 CRAM-MD5 LOGIN PLAIN')dnl
-define(`confAUTH_MECHANISMS', `EXTERNAL GSSAPI DIGEST-MD5 CRAM-MD5 LOGIN PLAIN')dnl
 define(`confCACERT_PATH', `/etc/pki/tls/certs')dnl
 define(`confCACERT', `/etc/pki/tls/certs/__CERT_DOMAIN__.ca-bundle')dnl
 define(`confSERVER_CERT', `/etc/pki/tls/certs/__CERT_DOMAIN__.crt')dnl
 define(`confSERVER_KEY', `/etc/pki/tls/private/__CERT_DOMAIN__.key')dnl
 FEATURE(`no_default_msa')dnl
-DAEMON_OPTIONS(`Family=inet, Port=25, Name=MSA')dnl
+DAEMON_OPTIONS(`Family=inet, Port=25, Addr=127.0.0.1, Name=MSA')dnl
 FEATURE(`always_add_domain')dnl
 MASQUERADE_DOMAIN_FILE(`/etc/mail/masq-domains')dnl
 define(`confDOMAIN_NAME', `smtp-out.__CERT_DOMAIN__')dnl

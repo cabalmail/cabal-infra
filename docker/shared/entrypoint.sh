@@ -29,10 +29,6 @@ if [ "$TIER" = "smtp-out" ]; then
   chmod 600 /etc/opendkim/keys/cabal
   chown opendkim:opendkim /etc/opendkim/keys/cabal
 
-  echo "[entrypoint] Rendering stunnel STARTTLS config..."
-  mkdir -p /var/run/stunnel
-  sed "s/__CERT_DOMAIN__/${CERT_DOMAIN}/g" \
-    /etc/stunnel/stunnel.conf.template > /etc/stunnel/stunnel.conf
 fi
 
 # ── Step 2: Render sendmail.mc ────────────────────────────────
@@ -61,9 +57,9 @@ aws cognito-idp initiate-auth \\
 COGNITO
 chmod 100 /usr/bin/cognito.bash
 
-# ── Step 4: Dovecot SSL config (IMAP only) ───────────────────
+# ── Step 4: Dovecot SSL config (IMAP + SMTP-OUT) ─────────────
 # Replaces: chef/cabal/templates/default/dovecot-10-ssl.conf.erb
-if [ "$TIER" = "imap" ]; then
+if [ "$TIER" = "imap" ] || [ "$TIER" = "smtp-out" ]; then
   echo "[entrypoint] Generating dovecot SSL config..."
   cat > /etc/dovecot/conf.d/10-ssl.conf <<SSLCONF
 ssl_ca = </etc/pki/tls/certs/${CERT_DOMAIN}.ca-bundle

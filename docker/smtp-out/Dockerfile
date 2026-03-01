@@ -4,7 +4,7 @@ FROM amazonlinux:2023
 RUN dnf install -y \
       sendmail sendmail-cf \
       sendmail-milter \
-      cyrus-sasl-plain \
+      dovecot \
       opendkim \
       fail2ban \
       procmail \
@@ -12,16 +12,18 @@ RUN dnf install -y \
       make \
       awscli-2 jq \
       pip \
-      stunnel \
     && pip install supervisor \
     && dnf clean all
 
-# PAM for sendmail (Cognito auth)
-COPY smtp-out/configs/pam/smtp             /etc/pam.d/smtp
+# Dovecot submission configuration
+COPY smtp-out/configs/dovecot/00-protocols.conf   /etc/dovecot/conf.d/00-protocols.conf
+COPY smtp-out/configs/dovecot/10-auth.conf        /etc/dovecot/conf.d/10-auth.conf
+COPY smtp-out/configs/dovecot/10-mail.conf        /etc/dovecot/conf.d/10-mail.conf
+COPY smtp-out/configs/dovecot/10-logging.conf     /etc/dovecot/conf.d/10-logging.conf
+COPY smtp-out/configs/dovecot/20-submission.conf  /etc/dovecot/conf.d/20-submission.conf
 
-# Cyrus SASL config — tells sendmail's SASL to use PAM directly
-# (replaces saslauthd which ran on the old EC2/Chef instances)
-COPY smtp-out/configs/sasl2/Sendmail.conf  /etc/sasl2/Sendmail.conf
+# PAM for dovecot (Cognito auth)
+COPY smtp-out/configs/pam/dovecot                /etc/pam.d/dovecot
 
 # OpenDKIM static configuration
 COPY smtp-out/configs/opendkim.conf        /etc/opendkim.conf
@@ -31,9 +33,6 @@ COPY smtp-out/configs/out-access           /etc/mail/access
 
 # Sendmail .mc template (placeholder for cert domain)
 COPY templates/out-sendmail.mc             /etc/mail/sendmail.mc.template
-
-# stunnel config template for STARTTLS on port 587
-COPY templates/stunnel-starttls.conf       /etc/stunnel/stunnel.conf.template
 
 # Shared scripts
 COPY shared/entrypoint.sh                  /entrypoint.sh
@@ -50,6 +49,6 @@ COPY smtp-out/supervisord.conf             /etc/supervisord.conf
 
 RUN chmod +x /entrypoint.sh /usr/local/bin/*.sh
 
-EXPOSE 25 587
+EXPOSE 465 587
 
 ENTRYPOINT ["/entrypoint.sh"]

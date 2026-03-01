@@ -27,9 +27,8 @@ resource "aws_lb_target_group" "submission" {
 
 resource "aws_lb_listener" "submission" {
   load_balancer_arn = aws_lb.elb.arn
-  protocol          = "TLS"
+  protocol          = "TCP"
   port              = "465"
-  certificate_arn   = var.cert_arn
   default_action {
     type             = "forward"
     target_group_arn = var.ecs_submission_target_group_arn != "" ? var.ecs_submission_target_group_arn : aws_lb_target_group.submission.arn

@@ -149,7 +149,7 @@ resource "aws_ecs_task_definition" "smtp_out" {
     memory            = 640
 
     portMappings = [
-      { containerPort = 25, protocol = "tcp" },
+      { containerPort = 465, protocol = "tcp" },
       { containerPort = 587, protocol = "tcp" },
     ]
 
