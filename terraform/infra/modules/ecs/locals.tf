@@ -26,7 +26,7 @@ locals {
   target_groups = {
     imap       = { port = 143 }
     relay      = { port = 25 }
-    submission = { port = 25 }
+    submission = { port = 465 }  # NLB terminates TLS; ECS registers targets on port 25 (container_port in services.tf)
     starttls   = { port = 587 }
   }
 
