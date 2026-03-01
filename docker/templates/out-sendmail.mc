@@ -30,6 +30,7 @@ define(`confCACERT_PATH', `/etc/pki/tls/certs')dnl
 define(`confCACERT', `/etc/pki/tls/certs/__CERT_DOMAIN__.ca-bundle')dnl
 define(`confSERVER_CERT', `/etc/pki/tls/certs/__CERT_DOMAIN__.crt')dnl
 define(`confSERVER_KEY', `/etc/pki/tls/private/__CERT_DOMAIN__.key')dnl
+FEATURE(`no_default_msa')dnl
 DAEMON_OPTIONS(`Family=inet, Port=25, Name=MSA')dnl
 FEATURE(`always_add_domain')dnl
 MASQUERADE_DOMAIN_FILE(`/etc/mail/masq-domains')dnl
