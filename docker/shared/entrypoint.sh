@@ -28,6 +28,11 @@ if [ "$TIER" = "smtp-out" ]; then
   echo "$DKIM_PRIVATE_KEY" > /etc/opendkim/keys/cabal
   chmod 600 /etc/opendkim/keys/cabal
   chown opendkim:opendkim /etc/opendkim/keys/cabal
+
+  echo "[entrypoint] Rendering stunnel STARTTLS config..."
+  mkdir -p /var/run/stunnel
+  sed "s/__CERT_DOMAIN__/${CERT_DOMAIN}/g" \
+    /etc/stunnel/stunnel.conf.template > /etc/stunnel/stunnel.conf
 fi
 
 # ── Step 2: Render sendmail.mc ────────────────────────────────

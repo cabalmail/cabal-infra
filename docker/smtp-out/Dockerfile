@@ -12,7 +12,7 @@ RUN dnf install -y \
       make \
       awscli-2 jq \
       pip \
-      net-tools \
+      stunnel \
     && pip install supervisor \
     && dnf clean all
 
@@ -32,6 +32,9 @@ COPY smtp-out/configs/out-access           /etc/mail/access
 # Sendmail .mc template (placeholder for cert domain)
 COPY templates/out-sendmail.mc             /etc/mail/sendmail.mc.template
 
+# stunnel config template for STARTTLS on port 587
+COPY templates/stunnel-starttls.conf       /etc/stunnel/stunnel.conf.template
+
 # Shared scripts
 COPY shared/entrypoint.sh                  /entrypoint.sh
 COPY shared/generate-config.sh             /usr/local/bin/generate-config.sh
@@ -47,6 +50,6 @@ COPY smtp-out/supervisord.conf             /etc/supervisord.conf
 
 RUN chmod +x /entrypoint.sh /usr/local/bin/*.sh
 
-EXPOSE 25 465 587
+EXPOSE 25 587
 
 ENTRYPOINT ["/entrypoint.sh"]

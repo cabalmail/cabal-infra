@@ -11,7 +11,6 @@ RUN dnf install -y \
       make \
       awscli-2 jq \
       pip \
-      net-tools \
     && pip install supervisor \
     && dnf clean all
 
