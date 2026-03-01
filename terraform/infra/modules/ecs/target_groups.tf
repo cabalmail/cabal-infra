@@ -32,9 +32,8 @@ resource "aws_lb_target_group" "tier" {
     unhealthy_threshold = var.unhealthy_threshold
   }
 
-  lifecycle {
-    create_before_destroy = true
-  }
+  # Note: create_before_destroy is not used here because fixed target
+  # group names cause naming collisions during replacement.
 }
 
 # Staging NLB listeners removed — production listeners in the ELB module
