@@ -20,6 +20,7 @@ COPY smtp-out/configs/dovecot/00-protocols.conf   /etc/dovecot/conf.d/00-protoco
 COPY smtp-out/configs/dovecot/10-auth.conf        /etc/dovecot/conf.d/10-auth.conf
 COPY smtp-out/configs/dovecot/10-mail.conf        /etc/dovecot/conf.d/10-mail.conf
 COPY smtp-out/configs/dovecot/10-logging.conf     /etc/dovecot/conf.d/10-logging.conf
+COPY smtp-out/configs/dovecot/15-mailboxes.conf   /etc/dovecot/conf.d/15-mailboxes.conf
 COPY smtp-out/configs/dovecot/20-submission.conf  /etc/dovecot/conf.d/20-submission.conf
 
 # PAM for dovecot (Cognito auth)
