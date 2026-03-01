@@ -4,6 +4,7 @@ FROM amazonlinux:2023
 RUN dnf install -y \
       sendmail sendmail-cf \
       sendmail-milter \
+      cyrus-sasl-plain \
       opendkim \
       fail2ban \
       procmail \
@@ -17,6 +18,10 @@ RUN dnf install -y \
 
 # PAM for sendmail (Cognito auth)
 COPY smtp-out/configs/pam/smtp             /etc/pam.d/smtp
+
+# Cyrus SASL config — tells sendmail's SASL to use PAM directly
+# (replaces saslauthd which ran on the old EC2/Chef instances)
+COPY smtp-out/configs/sasl2/Sendmail.conf  /etc/sasl2/Sendmail.conf
 
 # OpenDKIM static configuration
 COPY smtp-out/configs/opendkim.conf        /etc/opendkim.conf
