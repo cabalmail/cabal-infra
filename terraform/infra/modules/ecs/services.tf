@@ -105,7 +105,7 @@ resource "aws_ecs_service" "smtp_out" {
   load_balancer {
     target_group_arn = aws_lb_target_group.tier["submission"].arn
     container_name   = "smtp-out"
-    container_port   = 465
+    container_port   = 25
   }
 
   load_balancer {

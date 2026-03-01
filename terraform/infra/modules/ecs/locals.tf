@@ -16,7 +16,7 @@ locals {
       private_ports = []
     }
     smtp-out = {
-      public_ports  = [25, 465, 587]
+      public_ports  = [25, 587]
       private_ports = []
     }
   }
@@ -26,7 +26,7 @@ locals {
   target_groups = {
     imap       = { port = 143 }
     relay      = { port = 25 }
-    submission = { port = 465 }
+    submission = { port = 25 }
     starttls   = { port = 587 }
   }
 
