@@ -95,6 +95,7 @@ module "load_balancer" {
   public_subnet_ids = module.vpc.public_subnets[*].id
   vpc_id            = module.vpc.vpc.id
   zone_id           = data.terraform_remote_state.zone.outputs.control_domain_zone_id
+  private_zone_id   = module.vpc.private_zone.zone_id
   control_domain    = var.control_domain
   cert_arn          = module.cert.cert_arn
 

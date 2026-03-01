@@ -50,3 +50,10 @@ variable "ecs_starttls_target_group_arn" {
   description = "ARN of the ECS STARTTLS target group. When set, the STARTTLS listener forwards here."
   default     = ""
 }
+
+# ── Private DNS ─────────────────────────────────────────────────
+
+variable "private_zone_id" {
+  type        = string
+  description = "Route 53 private zone ID for the control domain. Records here let containers inside the VPC resolve tier hostnames (imap, smtp-in, smtp-out) without hitting the public zone."
+}

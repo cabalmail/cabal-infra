@@ -40,6 +40,10 @@ resource "aws_ecs_service" "imap" {
     container_port   = 143
   }
 
+  service_registries {
+    registry_arn = aws_service_discovery_service.imap.arn
+  }
+
   depends_on = [aws_ecs_cluster_capacity_providers.mail]
 }
 
