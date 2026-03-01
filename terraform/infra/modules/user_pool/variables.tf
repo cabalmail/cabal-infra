@@ -58,11 +58,6 @@ variable "control_domain" {
   description = "Base for auth domain. E.g., if control_domain is example.com, then the autho domain will be auth.example.com."
 }
 
-variable "layers" {
-  type        = map
-  description = "Lambda layers ARNs indext by runtime 'python' or 'nodejs'"
-}
-
 variable "ssm_document_arn" {
   type        = string
   description = "ARN of SSM document for running chef on machines"

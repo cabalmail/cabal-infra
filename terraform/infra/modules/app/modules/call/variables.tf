@@ -10,10 +10,6 @@ variable "layer_arns" {
   type = list(string)
 }
 
-variable "type" {
-  type = string
-}
-
 variable "gateway_id" {
   type = string
 }

@@ -1,8 +1,7 @@
 /**
-* Creates Lambda layers for use by other modules: one for nodejs and another for python.
+* Creates a Lambda layer for use by other modules.
 * Zip files are built with Github actions; see
-* [lambda_node_build.yml](/.github/workflows/lambda_node_build.yml) and
-* [lambda_python_build.yml](/.github/workflows/lambda_python_build.yml).
+* [lambda_api_python.yml](/.github/workflows/lambda_api_python.yml).
 */
 
 # Get previously computed hash for zip file.

@@ -54,24 +54,6 @@ resource "aws_iam_role_policy" "lambda" {
       "Resource": "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:${local.wildcard}"
     },
     {
-        "Effect": "Allow",
-        "Action": "ssm:SendCommand",
-        "Resource": "arn:aws:ssm:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:document/cabal_chef_document"
-      },
-    {
-      "Effect": "Allow",
-      "Action": "ssm:SendCommand",
-      "Resource": "arn:aws:ssm:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:document/cabal_chef_document"
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-          "ssm:StartSession",
-          "ssm:SendCommand"
-      ],
-      "Resource": "arn:aws:ec2:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:instance/${local.wildcard}"
-    },
-    {
       "Effect": "Allow",
       "Action": [
         "logs:CreateLogStream",
@@ -97,8 +79,8 @@ resource "aws_lambda_function" "assign_osid" {
   source_code_hash = data.aws_s3_object.lambda_function_hash.body
   function_name    = "assign_osid"
   role             = aws_iam_role.for_lambda.arn
-  handler          = "index.handler"
-  runtime          = "nodejs20.x"
+  handler          = "function.handler"
+  runtime          = "python3.13"
   architectures    = ["arm64"]
   timeout          = 30
 

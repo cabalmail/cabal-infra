@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - React app build: `cd react/admin && npm run build`
 - React app tests: `cd react/admin && npm run test`
 - Run single test: `cd react/admin && npm run test -- -t "test name"`
-- Python linting: `pylint lambda/api/python/**/*.py`
+- Python linting: `cd lambda/api && pylint --rcfile .pylintrc */function.py`
 - Lambda function local testing: `cd lambda/api/[function_dir] && python -m function`
 
 ## Code Style Guidelines
@@ -32,7 +32,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Structure
 - `react/admin`: React frontend application
-- `lambda/api`: AWS Lambda functions (Python, Node.js)
+- `lambda/api`: AWS Lambda functions (Python)
+- `lambda/counter`: Cognito post-confirmation Lambda (Python)
 - `terraform`: Infrastructure as code
 - `chef`: Server configuration management
 - `docker`: Docker configuration files

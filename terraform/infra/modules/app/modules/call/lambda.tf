@@ -80,19 +80,6 @@ resource "aws_iam_role_policy" "lambda" {
         },
         {
             "Effect": "Allow",
-            "Action": [
-                "ssm:StartSession",
-                "ssm:SendCommand"
-            ],
-            "Resource": "arn:aws:ec2:${var.region}:${var.account}:instance/${local.wildcard}"
-        },
-        {
-            "Effect": "Allow",
-            "Action": "ssm:SendCommand",
-            "Resource": "arn:aws:ssm:${var.region}:${var.account}:document/cabal_chef_document"
-        },
-        {
-            "Effect": "Allow",
             "Action": "route53:ChangeResourceRecordSets",
             "Resource": [
               ${local.hosted_zone_arns}
@@ -155,7 +142,7 @@ resource "aws_lambda_function" "api_call" {
   layers           = var.layer_arns
   function_name    = var.name
   role             = aws_iam_role.lambda.arn
-  handler          = var.type == "python" ? "function.handler" : "index.handler"
+  handler          = "function.handler"
   runtime          = var.runtime
   architectures    = ["arm64"]
   timeout          = 30

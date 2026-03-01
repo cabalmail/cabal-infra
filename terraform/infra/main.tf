@@ -21,7 +21,7 @@ module "bucket" {
   control_domain = var.control_domain
 }
 
-# Create Lambda layers for other modules
+# Create Lambda layer for API functions
 module "lambda_layers" {
   source = "./modules/lambda_layers"
   bucket = module.bucket.bucket
@@ -33,7 +33,6 @@ module "pool" {
   control_domain   = var.control_domain
   bucket           = module.bucket.bucket
   bucket_arn       = module.bucket.bucket_arn
-  layers           = module.lambda_layers.layers
   ssm_document_arn = module.admin.ssm_document_arn
   ecs_cluster_name = module.ecs.cluster_name
 }
