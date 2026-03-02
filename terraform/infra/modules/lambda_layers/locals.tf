@@ -1,7 +1,7 @@
 locals {
   supported_lambda_layers = {
     python = {
-      runtime = "python3.14"
+      runtime = "python3.13"
     }
   }
 }
