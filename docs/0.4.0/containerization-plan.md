@@ -1547,7 +1547,7 @@ Removing it:
                          ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │  VPC Network ACL: cabal-block                                   │
-│  Associated with private subnets where ECS tasks run            │
+│  Associated with public subnets (blocks before NLB)             │
 │  Inbound rules 1–100: reserved for dynamic DENY entries         │
 │  Rule 32766: ALLOW ALL (default pass-through)                   │
 └─────────────────────────────────────────────────────────────────┘
@@ -1710,8 +1710,9 @@ resource "aws_dynamodb_table" "ip_blocks" {
 
 ### VPC Network ACL
 
-A dedicated NACL for dynamic IP blocks. It is associated with the private
-subnets where ECS tasks run. Rule numbers 1–100 are reserved for Lambda-managed
+A dedicated NACL for dynamic IP blocks. It is associated with the public
+subnets where the NLB resides, so deny rules drop attacker traffic before it
+reaches the load balancer. Rule numbers 1–100 are reserved for Lambda-managed
 deny entries. A permissive allow-all rule at 32766 ensures that traffic not
 matching any deny rule passes through normally. This NACL operates *in addition
 to* security groups — it is a coarse pre-filter, not a replacement for SG
@@ -1720,7 +1721,7 @@ rules.
 ```hcl
 resource "aws_network_acl" "ip_block" {
   vpc_id     = var.vpc_id
-  subnet_ids = var.private_subnets[*].id
+  subnet_ids = var.public_subnets[*].id
 
   # Default allow-all inbound (deny rules added dynamically by Lambda)
   ingress {
