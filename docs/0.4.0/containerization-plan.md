@@ -1962,20 +1962,59 @@ def handler(event, context):
 
 ### Terraform: Lambda resources and IAM
 
+The Lambda functions use the same S3-based deployment pattern as the existing
+API and counter Lambdas. Zip files and their base64-encoded SHA256 hashes are
+built by GitHub Actions (see [CI/CD](#cicd--github-actions-workflows) below)
+and uploaded to S3. Terraform reads the hash via `data "aws_s3_object"` and
+references the zip via `s3_bucket` + `s3_key` — no `data "archive_file"` or
+local `filename` needed.
+
 ```hcl
+# ── S3 artifact hashes ────────────────────────────────────────
+
+data "aws_s3_object" "ip_blocker_hash" {
+  bucket = var.bucket
+  key    = "lambda/ip_blocker.zip.base64sha256"
+}
+
+data "aws_s3_object" "ip_unblocker_hash" {
+  bucket = var.bucket
+  key    = "lambda/ip_unblocker.zip.base64sha256"
+}
+
+# ── CloudWatch log groups ─────────────────────────────────────
+
+resource "aws_cloudwatch_log_group" "ip_blocker" {
+  name              = "/cabal/lambda/ip_blocker"
+  retention_in_days = 14
+}
+
+resource "aws_cloudwatch_log_group" "ip_unblocker" {
+  name              = "/cabal/lambda/ip_unblocker"
+  retention_in_days = 14
+}
+
 # ── Lambda functions ──────────────────────────────────────────
 
+#tfsec:ignore:aws-lambda-enable-tracing
 resource "aws_lambda_function" "ip_blocker" {
-  function_name = "cabal-ip-blocker"
-  runtime       = "python3.12"
-  handler       = "function.handler"
-  timeout       = 60
-  memory_size   = 128
+  function_name    = "cabal-ip-blocker"
+  runtime          = "python3.13"
+  handler          = "function.handler"
+  architectures    = ["arm64"]
+  timeout          = 60
+  memory_size      = 128
 
-  filename         = data.archive_file.ip_blocker.output_path
-  source_code_hash = data.archive_file.ip_blocker.output_base64sha256
+  s3_bucket        = var.bucket
+  s3_key           = "lambda/ip_blocker.zip"
+  source_code_hash = data.aws_s3_object.ip_blocker_hash.body
 
   role = aws_iam_role.ip_block_lambda.arn
+
+  logging_config {
+    log_format = "Text"
+    log_group  = aws_cloudwatch_log_group.ip_blocker.name
+  }
 
   environment {
     variables = {
@@ -1985,19 +2024,29 @@ resource "aws_lambda_function" "ip_blocker" {
       FAILURE_THRESHOLD = "5"
     }
   }
+
+  depends_on = [aws_cloudwatch_log_group.ip_blocker]
 }
 
+#tfsec:ignore:aws-lambda-enable-tracing
 resource "aws_lambda_function" "ip_unblocker" {
-  function_name = "cabal-ip-unblock"
-  runtime       = "python3.12"
-  handler       = "function.handler"
-  timeout       = 60
-  memory_size   = 128
+  function_name    = "cabal-ip-unblock"
+  runtime          = "python3.13"
+  handler          = "function.handler"
+  architectures    = ["arm64"]
+  timeout          = 60
+  memory_size      = 128
 
-  filename         = data.archive_file.ip_unblocker.output_path
-  source_code_hash = data.archive_file.ip_unblocker.output_base64sha256
+  s3_bucket        = var.bucket
+  s3_key           = "lambda/ip_unblocker.zip"
+  source_code_hash = data.aws_s3_object.ip_unblocker_hash.body
 
   role = aws_iam_role.ip_block_lambda.arn
+
+  logging_config {
+    log_format = "Text"
+    log_group  = aws_cloudwatch_log_group.ip_unblocker.name
+  }
 
   environment {
     variables = {
@@ -2005,6 +2054,8 @@ resource "aws_lambda_function" "ip_unblocker" {
       TABLE_NAME = aws_dynamodb_table.ip_blocks.name
     }
   }
+
+  depends_on = [aws_cloudwatch_log_group.ip_unblocker]
 }
 
 # ── Permissions ───────────────────────────────────────────────
@@ -2183,14 +2234,101 @@ Remove the `NET_ADMIN` capability from all three task definitions in
     }
 ```
 
+### CI/CD — GitHub Actions workflows
+
+Both Lambdas follow the same build-then-deploy pattern used by the existing
+`lambda_counter.yml` workflow. Since these are pure-Python functions with no
+pip dependencies, the build scripts skip the `pip install` step.
+
+**`.github/workflows/lambda_ip_blocker.yml`** (ip_unblocker identical pattern):
+
+```yaml
+name: Build and Deploy Lambda IP Blocker
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [trigger_build]
+  push:
+    paths:
+      - 'lambda/ip_blocker/**'
+      - '.github/workflows/lambda_ip_blocker.yml'
+      - '.github/scripts/build-ip-blocker.sh'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
+    steps:
+    - name: checkout
+      uses: actions/checkout@main
+    - name: pylint
+      shell: bash
+      run: pip install pylint && pylint --rcfile ./lambda/api/.pylintrc ./lambda/ip_blocker/*/function.py
+    - name: configure-aws
+      run: |
+        aws configure --profile deploy_lambda <<-EOF > /dev/null 2>&1
+        ${{ secrets.AWS_ACCESS_KEY_ID }}
+        ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        ${{ secrets.AWS_REGION }}
+        json
+        EOF
+    - name: build
+      run: ./.github/scripts/build-ip-blocker.sh
+  deploy:
+    uses: ./.github/workflows/terraform.yml
+    secrets: inherit
+    needs:
+    - build
+```
+
+**`.github/scripts/build-ip-blocker.sh`** (ip_unblocker identical pattern):
+
+```bash
+#!/bin/bash
+cd ./lambda/ip_blocker
+AWS_S3_BUCKET="admin.$(aws ssm get-parameter \
+  --name '/cabal/control_domain_zone_name' \
+  --profile deploy_lambda | jq -r '.Parameter.Value')"
+FUNC=ip_blocker
+pushd $FUNC
+find . -exec touch -d "2004-02-29 16:21:42" \{\} \; -print \
+  | sort | zip -X -D ../$FUNC.zip -@
+popd
+openssl dgst -sha256 -binary "$FUNC.zip" \
+  | openssl enc -base64 | tr -d "\n" > "$FUNC.zip.base64sha256"
+aws s3 cp "$FUNC.zip.base64sha256" \
+  "s3://${AWS_S3_BUCKET}/lambda/$FUNC.zip.base64sha256" \
+  --profile deploy_lambda --no-progress --acl private --content-type text/plain
+aws s3 cp "${FUNC}.zip" \
+  "s3://${AWS_S3_BUCKET}/lambda/${FUNC}.zip" \
+  --profile deploy_lambda --no-progress --acl private
+```
+
+No `pip install` step is needed — both functions use only boto3 (bundled in
+the Lambda runtime).
+
 ### Proposed file layout
 
+The ip_blocker and ip_unblocker Lambdas live in their own top-level
+directories under `lambda/`, following the same convention as `lambda/counter/`.
+They are **not** under `lambda/api/` because they are not API Gateway-backed.
+
 ```
-lambda/api/
-├── ip_blocker/
-│   └── function.py          # cabal-ip-blocker Lambda
+lambda/ip_blocker/
+└── ip_blocker/
+    └── function.py          # cabal-ip-blocker Lambda
+
+lambda/ip_unblocker/
 └── ip_unblocker/
     └── function.py          # cabal-ip-unblock Lambda
+
+.github/workflows/
+├── lambda_ip_blocker.yml    # build + deploy workflow
+└── lambda_ip_unblocker.yml  # build + deploy workflow
+
+.github/scripts/
+├── build-ip-blocker.sh      # zip + hash + S3 upload
+└── build-ip-unblocker.sh    # zip + hash + S3 upload
 
 terraform/infra/modules/ecs/
 ├── ip-blocking.tf           # metric filters, alarm, SNS, NACL,
