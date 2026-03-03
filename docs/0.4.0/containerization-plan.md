@@ -2229,6 +2229,31 @@ too many false positives):
    adjust `FAILURE_THRESHOLD`, `BAN_DURATION`, and the alarm period before
    concluding the approach doesn't work.
 
+### Estimated cost
+
+All estimates assume us-east-1 pricing and the low traffic volume typical of a
+personal/small-org mail server (fewer than ~10 users, fewer than ~1,000
+messages/day). At this scale, most components fall within or near free-tier
+allowances.
+
+| Component | Pricing basis | Estimated monthly cost |
+|---|---|---|
+| CloudWatch metric filters | No charge (filtering is free) | $0 |
+| CloudWatch custom metric | $0.30/metric/month × 1 metric (`AuthFailure`) | ~$0.30 |
+| CloudWatch alarm | $0.10/alarm/month × 1 alarm | ~$0.10 |
+| CloudWatch Logs Insights | $0.0076/GB scanned; blocker Lambda queries ~10 min of logs per invocation | < $0.01 |
+| SNS topic | First 1M publishes free | $0 |
+| Lambda (blocker) | Fires only when alarm triggers; well under free-tier 1M requests/400K GB-s | $0 |
+| Lambda (unblock) | 4 invocations/hour × 730 hours = ~2,920 invocations/month at 128 MB, < 1s each | $0 |
+| DynamoDB (ip-blocks table) | On-demand; single-digit items, trivial read/write volume | < $0.01 |
+| VPC Network ACL | No charge (NACLs are free) | $0 |
+| **Total** | | **~$0.50/month** |
+
+For comparison, fail2ban costs nothing to run but requires `NET_ADMIN` and
+EC2 launch type. The CloudWatch + Lambda replacement adds roughly $0.50/month
+in exchange for removing that constraint and moving blocking to the
+infrastructure layer.
+
 ---
 
 ## Appendix A: File-by-File Migration Map
