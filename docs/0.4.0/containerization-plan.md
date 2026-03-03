@@ -1517,7 +1517,7 @@ Removing it:
 ┌─────────────────────────────────────────────────────────────────┐
 │  Container (IMAP / SMTP-IN / SMTP-OUT)                          │
 │  sendmail / dovecot write to /var/log/maillog                   │
-│  rsyslog + log-tailer → stdout → awslogs driver                │
+│  rsyslog + log-tailer → stdout → awslogs driver                 │
 └────────────────────────┬────────────────────────────────────────┘
                          │
                          ▼
