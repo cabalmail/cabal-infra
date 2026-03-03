@@ -20,13 +20,14 @@ Do not modify or remove any existing Chef recipes, ASG modules, Lambda
 SSM integrations, or the `cabal_chef_document` SSM document until Phase 7
 cutover is complete.
 
-### Why ECS EC2 (not Fargate)
+### Why ECS EC2
 
 fail2ban requires `iptables` access, which means the `NET_ADMIN` Linux
-capability. Fargate does not support `NET_ADMIN`. The plan is to start with
-ECS on EC2 launch type — which still provides container orchestration, rolling
-deploys, and service auto-scaling — and revisit Fargate in a later phase once
-an alternative to fail2ban is in place.
+capability. ECS on EC2 launch type provides container orchestration, rolling
+deploys, and service auto-scaling while preserving access to `NET_ADMIN`.
+Phase 8 replaces fail2ban with a CloudWatch + Lambda + NACL solution,
+after which `NET_ADMIN` is no longer needed and the EC2 capacity provider
+can be right-sized or replaced at the operator's discretion.
 
 ### Migration Progression
 
@@ -62,9 +63,11 @@ Phase 7 ─ Parallel run & cutover
          Run containers alongside EC2/Chef. Validate mail flow for
          every address pattern. Cut over DNS. Decommission Chef.
 
-Future  ─ Fargate migration
-         Replace fail2ban with CloudWatch + Lambda IP-blocking.
-         Switch ECS launch type from EC2 to Fargate.
+Phase 8 ─ CloudWatch + Lambda IP blocking
+         Replace fail2ban with CloudWatch metric filters, alarms,
+         and a Lambda that writes deny rules to a VPC Network ACL.
+         Remove fail2ban, NET_ADMIN, and related packages from the
+         container images.
 ```
 
 ---
@@ -1485,52 +1488,746 @@ Once all tests pass:
 
 ---
 
-## Future — Fargate Migration
+## Phase 8 — CloudWatch + Lambda IP Blocking
 
-Once the ECS EC2 setup is stable, migrate to Fargate to eliminate EC2 instance
-management entirely.
+### Goal
 
-### Prerequisites
+Replace in-container fail2ban with an infrastructure-level IP-blocking system
+built on CloudWatch metric filters, CloudWatch alarms, and a Lambda function
+that writes deny rules to a dedicated VPC Network ACL. Once validated, remove
+fail2ban, the `NET_ADMIN` capability, and the associated packages from the
+container images.
 
-Replace fail2ban with a CloudWatch + Lambda solution:
+### Why replace fail2ban
 
-1. Container logs go to CloudWatch (already configured via `awslogs` driver).
-2. A CloudWatch metric filter matches auth-failure patterns in sendmail/dovecot
-   logs.
-3. A CloudWatch alarm triggers a Lambda when failure count exceeds threshold.
-4. The Lambda adds the offending IP to a VPC Network ACL deny rule.
-5. A scheduled Lambda cleans up expired blocks after a cooldown period.
+fail2ban is the only reason the ECS task definitions require `NET_ADMIN`.
+Removing it:
 
-### Fargate task definition changes
+- Eliminates the `iptables` dependency and the need for elevated Linux
+  capabilities in every container.
+- Moves IP blocking to the VPC layer, where a single NACL rule blocks an
+  attacker before traffic reaches *any* container — not just the one that
+  detected the abuse.
+- Simplifies the container images (no fail2ban package, no supervisord
+  program block, no `/var/log/` coupling).
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Container (IMAP / SMTP-IN / SMTP-OUT)                          │
+│  sendmail / dovecot write to /var/log/maillog                   │
+│  rsyslog + log-tailer → stdout → awslogs driver                │
+└────────────────────────┬────────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  CloudWatch Log Groups                                          │
+│  /ecs/cabal-imap    /ecs/cabal-smtp-in    /ecs/cabal-smtp-out   │
+│                                                                 │
+│  Metric filters extract auth-failure IPs and publish to:        │
+│    cabal/auth-failures  (custom metric, dimension: SourceIP)    │
+└────────────────────────┬────────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  CloudWatch Alarm  (per-IP threshold)                           │
+│  Condition: cabal/auth-failures ≥ 5 within 10 minutes           │
+│  Action:  SNS topic → cabal-ip-block                            │
+└────────────────────────┬────────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Lambda: cabal-ip-blocker                                       │
+│  • Parses alarm payload, extracts SourceIP                      │
+│  • Writes a DENY rule to the cabal-block NACL                   │
+│  • Stores { ip, rule_number, expires_at } in DynamoDB           │
+└────────────────────────┬────────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  VPC Network ACL: cabal-block                                   │
+│  Associated with private subnets where ECS tasks run            │
+│  Inbound rules 1–100: reserved for dynamic DENY entries         │
+│  Rule 32766: ALLOW ALL (default pass-through)                   │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│  Scheduled Lambda: cabal-ip-unblock  (runs every 15 minutes)    │
+│  • Scans DynamoDB for entries where expires_at < now            │
+│  • Deletes the corresponding NACL rules                         │
+│  • Deletes the DynamoDB items                                   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### CloudWatch metric filters
+
+The containers already ship logs to CloudWatch via the `awslogs` driver
+(configured in `modules/ecs/task-definitions.tf`). The log-tailer supervisord
+program sends `/var/log/maillog` to stdout, so auth failures from both
+sendmail and dovecot appear in the CloudWatch log stream.
+
+fail2ban's default filters for sendmail and dovecot match these patterns. The
+equivalent CloudWatch metric filter patterns are:
+
+#### Dovecot auth failures (IMAP, SMTP-OUT)
+
+Dovecot logs authentication failures in this format:
+```
+auth-worker(<pid>): pam(<user>,<ip>): pam_authenticate() failed: ...
+```
 
 ```hcl
-resource "aws_ecs_task_definition" "imap" {
-  # Change these:
-  requires_compatibilities = ["FARGATE"]  # was ["EC2"]
-  cpu                      = 512
-  memory                   = 1024
+resource "aws_cloudwatch_log_metric_filter" "dovecot_auth_failure" {
+  for_each = toset(["imap", "smtp-out"])
 
-  container_definitions = jsonencode([{
-    # Remove this block:
-    # linuxParameters = {
-    #   capabilities = { add = ["NET_ADMIN"] }
-    # }
-    # ... rest stays the same
-  }])
+  name           = "cabal-dovecot-auth-failure-${each.key}"
+  log_group_name = "/ecs/cabal-${each.key}"
+  pattern        = "\"pam_authenticate() failed\""
+
+  metric_transformation {
+    name          = "AuthFailure"
+    namespace     = "cabal/auth-failures"
+    value         = "1"
+    default_value = "0"
+  }
 }
 ```
 
-### Cost comparison
+#### Sendmail relay denials (SMTP-IN)
 
-| Component | EC2 launch type | Fargate |
-|---|---|---|
-| Compute | EC2 instances (you manage capacity) | Per-task pricing (no idle capacity) |
-| fail2ban | Free (runs in container) | Replaced by CloudWatch+Lambda (~$5-10/mo) |
-| Management | ASG + capacity provider | Fully managed |
+Sendmail logs relay rejections like:
+```
+ruleset=check_rcpt, arg1=<user@domain>, relay=<ip> [...] reject=550 ...
+```
 
-Fargate is likely cheaper at low scale (fewer than ~3 instances) because there
-is no idle capacity. At higher scale, EC2 with reserved instances may be
-cheaper.
+```hcl
+resource "aws_cloudwatch_log_metric_filter" "sendmail_relay_reject" {
+  name           = "cabal-sendmail-relay-reject"
+  log_group_name = "/ecs/cabal-smtp-in"
+  pattern        = "\"reject=550\" \"check_rcpt\""
+
+  metric_transformation {
+    name          = "AuthFailure"
+    namespace     = "cabal/auth-failures"
+    value         = "1"
+    default_value = "0"
+  }
+}
+```
+
+#### Sendmail auth failures (SMTP-OUT)
+
+Sendmail logs SMTP AUTH failures like:
+```
+AUTH failure (LOGIN): [...] relay=<ip>
+```
+
+```hcl
+resource "aws_cloudwatch_log_metric_filter" "sendmail_auth_failure" {
+  name           = "cabal-sendmail-auth-failure"
+  log_group_name = "/ecs/cabal-smtp-out"
+  pattern        = "\"AUTH failure\""
+
+  metric_transformation {
+    name          = "AuthFailure"
+    namespace     = "cabal/auth-failures"
+    value         = "1"
+    default_value = "0"
+  }
+}
+```
+
+**Note on IP extraction:** CloudWatch metric filters can match log patterns but
+cannot extract arbitrary fields into metric dimensions. The metric filters
+above count failures per log group. The blocking Lambda (below) queries the
+actual log events from the alarm's evaluation window to extract the offending
+source IP(s) using a CloudWatch Logs Insights query. This two-step approach —
+metric filter for detection, Logs Insights for IP extraction — is the standard
+pattern for CloudWatch-based IP blocking.
+
+### CloudWatch alarm
+
+A single composite alarm is not needed here — each metric filter publishes to
+the same namespace/metric, and the alarm evaluates the aggregate count. At the
+scale of this system (a handful of users), a single alarm that fires when
+total auth failures across all tiers exceed the threshold is sufficient.
+
+```hcl
+resource "aws_cloudwatch_metric_alarm" "auth_failure_alarm" {
+  alarm_name          = "cabal-auth-failure-rate"
+  alarm_description   = "Auth failures exceeded threshold — trigger IP block"
+  namespace           = "cabal/auth-failures"
+  metric_name         = "AuthFailure"
+  statistic           = "Sum"
+  period              = 600          # 10 minutes
+  evaluation_periods  = 1
+  threshold           = 5
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+
+  alarm_actions = [aws_sns_topic.ip_block.arn]
+  ok_actions    = []
+}
+```
+
+### SNS topic
+
+```hcl
+resource "aws_sns_topic" "ip_block" {
+  name = "cabal-ip-block"
+}
+
+resource "aws_sns_topic_subscription" "ip_block_lambda" {
+  topic_arn = aws_sns_topic.ip_block.arn
+  protocol  = "lambda"
+  endpoint  = aws_lambda_function.ip_blocker.arn
+}
+```
+
+### DynamoDB table for block tracking
+
+A lightweight table to track which IPs are blocked, which NACL rule number
+each block occupies, and when the block expires.
+
+```hcl
+resource "aws_dynamodb_table" "ip_blocks" {
+  name         = "cabal-ip-blocks"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "ip"
+
+  attribute {
+    name = "ip"
+    type = "S"
+  }
+
+  ttl {
+    attribute_name = "expires_at"
+    enabled        = true
+  }
+}
+```
+
+### VPC Network ACL
+
+A dedicated NACL for dynamic IP blocks. It is associated with the private
+subnets where ECS tasks run. Rule numbers 1–100 are reserved for Lambda-managed
+deny entries. A permissive allow-all rule at 32766 ensures that traffic not
+matching any deny rule passes through normally. This NACL operates *in addition
+to* security groups — it is a coarse pre-filter, not a replacement for SG
+rules.
+
+```hcl
+resource "aws_network_acl" "ip_block" {
+  vpc_id     = var.vpc_id
+  subnet_ids = var.private_subnets[*].id
+
+  # Default allow-all inbound (deny rules added dynamically by Lambda)
+  ingress {
+    rule_no    = 32766
+    protocol   = "-1"
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 0
+    to_port    = 0
+  }
+
+  # Default allow-all outbound (not affected by IP blocking)
+  egress {
+    rule_no    = 32766
+    protocol   = "-1"
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 0
+    to_port    = 0
+  }
+
+  tags = {
+    Name = "cabal-ip-block"
+  }
+}
+```
+
+**Rule number allocation strategy:** The blocking Lambda allocates rule numbers
+starting at 1 and incrementing. It reads the current highest rule number from
+the NACL entries (via `describe_network_acls`) and uses `max + 1`. If the pool
+reaches 100, it force-expires the oldest block to free a slot. In practice,
+with a 1-hour default ban time and 15-minute cleanup interval, the pool will
+rarely exceed a handful of entries.
+
+### Lambda: cabal-ip-blocker
+
+Triggered by the SNS topic when the CloudWatch alarm fires. Queries
+CloudWatch Logs Insights to identify the offending IP(s), then creates NACL
+deny rules.
+
+```python
+"""
+cabal-ip-blocker — blocks source IPs that exceed the auth-failure threshold.
+
+Trigger: SNS notification from the cabal-auth-failure-rate CloudWatch alarm.
+Action:  Add a DENY rule to the cabal-block NACL for each offending IP.
+         Record the block in the cabal-ip-blocks DynamoDB table.
+"""
+import json
+import os
+import time
+import boto3
+
+ec2 = boto3.client("ec2")
+logs = boto3.client("logs")
+dynamodb = boto3.resource("dynamodb")
+
+NACL_ID = os.environ["NACL_ID"]
+TABLE_NAME = os.environ["TABLE_NAME"]
+BAN_DURATION = int(os.environ.get("BAN_DURATION", "3600"))  # seconds
+LOG_GROUPS = ["/ecs/cabal-imap", "/ecs/cabal-smtp-in", "/ecs/cabal-smtp-out"]
+FAILURE_THRESHOLD = int(os.environ.get("FAILURE_THRESHOLD", "5"))
+MAX_RULE_NUMBER = 100
+
+
+def handler(event, context):
+    """Entry point — receives SNS event from CloudWatch alarm."""
+    offending_ips = _query_offending_ips()
+    if not offending_ips:
+        print("Alarm fired but no offending IPs found in recent logs.")
+        return
+
+    table = dynamodb.Table(TABLE_NAME)
+    for ip in offending_ips:
+        # Skip if already blocked
+        existing = table.get_item(Key={"ip": ip}).get("Item")
+        if existing:
+            print(f"{ip} is already blocked (rule {existing['rule_number']})")
+            continue
+
+        rule_number = _next_rule_number()
+        if rule_number is None:
+            print("Rule number pool exhausted — forcing oldest expiry")
+            _force_expire_oldest(table)
+            rule_number = _next_rule_number()
+
+        expires_at = int(time.time()) + BAN_DURATION
+
+        # Add NACL deny rule
+        ec2.create_network_acl_entry(
+            NetworkAclId=NACL_ID,
+            RuleNumber=rule_number,
+            Protocol="-1",      # all protocols
+            RuleAction="deny",
+            Egress=False,
+            CidrBlock=f"{ip}/32",
+        )
+
+        # Record in DynamoDB
+        table.put_item(Item={
+            "ip": ip,
+            "rule_number": rule_number,
+            "expires_at": expires_at,
+            "blocked_at": int(time.time()),
+        })
+
+        print(f"Blocked {ip} — NACL rule {rule_number}, expires in {BAN_DURATION}s")
+
+
+def _query_offending_ips():
+    """Query CloudWatch Logs Insights for IPs with ≥ FAILURE_THRESHOLD
+    auth failures in the last 10 minutes."""
+    query = """
+        fields @timestamp, @message
+        | parse @message /relay=(?<relay_ip>[0-9.]+)/
+        | parse @message /rip=(?<rip>[0-9.]+)/
+        | parse @message /pam\\(.*,(?<pam_ip>[0-9.]+)\\)/
+        | stats count(*) as failures by coalesce(relay_ip, rip, pam_ip) as src_ip
+        | filter failures >= {threshold}
+        | filter src_ip != ""
+    """.replace("{threshold}", str(FAILURE_THRESHOLD))
+
+    start_query_ids = []
+    end_time = int(time.time())
+    start_time = end_time - 600  # 10 minutes
+
+    for log_group in LOG_GROUPS:
+        try:
+            resp = logs.start_query(
+                logGroupName=log_group,
+                startTime=start_time,
+                endTime=end_time,
+                queryString=query,
+            )
+            start_query_ids.append(resp["queryId"])
+        except logs.exceptions.ResourceNotFoundException:
+            continue
+
+    # Collect results
+    ips = set()
+    for query_id in start_query_ids:
+        while True:
+            result = logs.get_query_results(queryId=query_id)
+            if result["status"] == "Complete":
+                for row in result["results"]:
+                    for field in row:
+                        if field["field"] == "src_ip":
+                            ips.add(field["value"])
+                break
+            time.sleep(0.5)
+
+    return ips
+
+
+def _next_rule_number():
+    """Find the next available NACL rule number in the 1–100 range."""
+    resp = ec2.describe_network_acls(NetworkAclIds=[NACL_ID])
+    used = set()
+    for entry in resp["NetworkAcls"][0]["Entries"]:
+        if not entry["Egress"] and entry["RuleNumber"] <= MAX_RULE_NUMBER:
+            used.add(entry["RuleNumber"])
+
+    for n in range(1, MAX_RULE_NUMBER + 1):
+        if n not in used:
+            return n
+    return None
+
+
+def _force_expire_oldest(table):
+    """Delete the oldest block to free a rule number slot."""
+    resp = table.scan()
+    items = sorted(resp.get("Items", []), key=lambda x: x.get("blocked_at", 0))
+    if items:
+        oldest = items[0]
+        try:
+            ec2.delete_network_acl_entry(
+                NetworkAclId=NACL_ID,
+                RuleNumber=int(oldest["rule_number"]),
+                Egress=False,
+            )
+        except ec2.exceptions.ClientError:
+            pass
+        table.delete_item(Key={"ip": oldest["ip"]})
+        print(f"Force-expired block on {oldest['ip']} (rule {oldest['rule_number']})")
+```
+
+### Scheduled Lambda: cabal-ip-unblock
+
+Runs on a schedule to remove expired NACL deny rules and clean up the
+DynamoDB tracking table.
+
+```python
+"""
+cabal-ip-unblock — removes expired IP blocks from the NACL.
+
+Trigger: EventBridge schedule (every 15 minutes).
+Action:  Scan DynamoDB for expired entries, delete corresponding NACL rules.
+"""
+import os
+import time
+import boto3
+
+ec2 = boto3.client("ec2")
+dynamodb = boto3.resource("dynamodb")
+
+NACL_ID = os.environ["NACL_ID"]
+TABLE_NAME = os.environ["TABLE_NAME"]
+
+
+def handler(event, context):
+    """Entry point — scheduled invocation."""
+    table = dynamodb.Table(TABLE_NAME)
+    now = int(time.time())
+
+    # Scan for expired blocks
+    resp = table.scan()
+    for item in resp.get("Items", []):
+        if int(item["expires_at"]) < now:
+            ip = item["ip"]
+            rule_number = int(item["rule_number"])
+
+            # Remove NACL rule
+            try:
+                ec2.delete_network_acl_entry(
+                    NetworkAclId=NACL_ID,
+                    RuleNumber=rule_number,
+                    Egress=False,
+                )
+                print(f"Removed NACL rule {rule_number} for {ip}")
+            except ec2.exceptions.ClientError as e:
+                # Rule may already be gone — that's fine
+                print(f"Could not remove rule {rule_number} for {ip}: {e}")
+
+            # Remove DynamoDB entry
+            table.delete_item(Key={"ip": ip})
+            print(f"Unblocked {ip}")
+```
+
+### Terraform: Lambda resources and IAM
+
+```hcl
+# ── Lambda functions ──────────────────────────────────────────
+
+resource "aws_lambda_function" "ip_blocker" {
+  function_name = "cabal-ip-blocker"
+  runtime       = "python3.12"
+  handler       = "function.handler"
+  timeout       = 60
+  memory_size   = 128
+
+  filename         = data.archive_file.ip_blocker.output_path
+  source_code_hash = data.archive_file.ip_blocker.output_base64sha256
+
+  role = aws_iam_role.ip_block_lambda.arn
+
+  environment {
+    variables = {
+      NACL_ID           = aws_network_acl.ip_block.id
+      TABLE_NAME        = aws_dynamodb_table.ip_blocks.name
+      BAN_DURATION      = "3600"
+      FAILURE_THRESHOLD = "5"
+    }
+  }
+}
+
+resource "aws_lambda_function" "ip_unblocker" {
+  function_name = "cabal-ip-unblock"
+  runtime       = "python3.12"
+  handler       = "function.handler"
+  timeout       = 60
+  memory_size   = 128
+
+  filename         = data.archive_file.ip_unblocker.output_path
+  source_code_hash = data.archive_file.ip_unblocker.output_base64sha256
+
+  role = aws_iam_role.ip_block_lambda.arn
+
+  environment {
+    variables = {
+      NACL_ID    = aws_network_acl.ip_block.id
+      TABLE_NAME = aws_dynamodb_table.ip_blocks.name
+    }
+  }
+}
+
+# ── Permissions ───────────────────────────────────────────────
+
+resource "aws_lambda_permission" "sns_invoke_blocker" {
+  statement_id  = "AllowSNSInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.ip_blocker.function_name
+  principal     = "sns.amazonaws.com"
+  source_arn    = aws_sns_topic.ip_block.arn
+}
+
+resource "aws_scheduler_schedule" "ip_unblock" {
+  name       = "cabal-ip-unblock"
+  group_name = "default"
+
+  flexible_time_window {
+    mode = "OFF"
+  }
+
+  schedule_expression = "rate(15 minutes)"
+
+  target {
+    arn      = aws_lambda_function.ip_unblocker.arn
+    role_arn = aws_iam_role.scheduler_invoke.arn
+  }
+}
+
+# ── IAM role for both Lambdas ─────────────────────────────────
+
+resource "aws_iam_role" "ip_block_lambda" {
+  name = "cabal-ip-block-lambda"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "ip_block_lambda" {
+  name = "cabal-ip-block-lambda"
+  role = aws_iam_role.ip_block_lambda.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "NACLAccess"
+        Effect = "Allow"
+        Action = [
+          "ec2:CreateNetworkAclEntry",
+          "ec2:DeleteNetworkAclEntry",
+          "ec2:DescribeNetworkAcls"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "ec2:Vpc" = var.vpc_id
+          }
+        }
+      },
+      {
+        Sid    = "DynamoDBAccess"
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:Scan"
+        ]
+        Resource = aws_dynamodb_table.ip_blocks.arn
+      },
+      {
+        Sid    = "CloudWatchLogsInsights"
+        Effect = "Allow"
+        Action = [
+          "logs:StartQuery",
+          "logs:GetQueryResults"
+        ]
+        Resource = [for t in ["imap", "smtp-in", "smtp-out"] :
+          "arn:aws:logs:${var.region}:${data.aws_caller_identity.current.account_id}:log-group:/ecs/cabal-${t}:*"
+        ]
+      },
+      {
+        Sid    = "LambdaLogging"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:${var.region}:${data.aws_caller_identity.current.account_id}:*"
+      }
+    ]
+  })
+}
+
+# ── IAM role for EventBridge Scheduler ────────────────────────
+
+resource "aws_iam_role" "scheduler_invoke" {
+  name = "cabal-ip-unblock-scheduler"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = { Service = "scheduler.amazonaws.com" }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "scheduler_invoke" {
+  name = "invoke-unblock-lambda"
+  role = aws_iam_role.scheduler_invoke.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = "lambda:InvokeFunction"
+      Resource = aws_lambda_function.ip_unblocker.arn
+    }]
+  })
+}
+```
+
+### Container image changes — removing fail2ban
+
+Once the CloudWatch + Lambda system is validated, remove fail2ban from the
+container images. This is a straightforward removal across three Dockerfiles
+and three supervisord configs.
+
+#### Dockerfile changes (all three tiers)
+
+Remove `fail2ban` from the `dnf install` line in each Dockerfile:
+
+```dockerfile
+# Before (docker/imap/Dockerfile, docker/smtp-in/Dockerfile, docker/smtp-out/Dockerfile)
+RUN dnf install -y \
+      sendmail sendmail-cf \
+      fail2ban \
+      ...
+
+# After
+RUN dnf install -y \
+      sendmail sendmail-cf \
+      ...
+```
+
+#### supervisord.conf changes (all three tiers)
+
+Remove the `[program:fail2ban]` block from each `supervisord.conf`:
+
+```ini
+# Remove this block from imap/supervisord.conf, smtp-in/supervisord.conf,
+# smtp-out/supervisord.conf:
+
+[program:fail2ban]
+command=/usr/bin/fail2ban-server -xf
+autorestart=true
+priority=30
+```
+
+#### ECS task definition changes
+
+Remove the `NET_ADMIN` capability from all three task definitions in
+`modules/ecs/task-definitions.tf`:
+
+```hcl
+# Remove this block from each container_definitions:
+    linuxParameters = {
+      capabilities = {
+        add = ["NET_ADMIN"]
+      }
+    }
+```
+
+### Proposed file layout
+
+```
+lambda/api/
+├── ip_blocker/
+│   └── function.py          # cabal-ip-blocker Lambda
+└── ip_unblocker/
+    └── function.py          # cabal-ip-unblock Lambda
+
+terraform/infra/modules/ecs/
+├── ip-blocking.tf           # metric filters, alarm, SNS, NACL,
+│                            #   DynamoDB table, Lambdas, IAM, scheduler
+└── ...                      # existing files (task-definitions.tf updated)
+```
+
+### Validation
+
+Before removing fail2ban from the container images, validate the new system
+end-to-end:
+
+| Test | What it validates |
+|---|---|
+| Generate 5+ failed IMAP logins from a test IP within 10 minutes | Metric filter detects dovecot auth failures |
+| Verify CloudWatch alarm transitions to ALARM state | Alarm threshold and evaluation period |
+| Verify SNS notification delivered to Lambda | SNS→Lambda trigger wiring |
+| Verify NACL deny rule appears for the test IP | Lambda NACL write + rule number allocation |
+| Verify the test IP cannot reach any service port | NACL deny applied to correct subnets |
+| Wait for ban duration + cleanup interval, verify rule removed | Unblock Lambda + DynamoDB TTL |
+| Verify the test IP can reach services again after unblock | Rule removal is complete and effective |
+| Verify legitimate traffic is unaffected during and after a block | Allow-all fallback rule at 32766 |
+| Fill the rule pool to 100 entries, verify oldest is force-expired | Pool exhaustion handling |
+
+### Rollback
+
+If the CloudWatch-based system proves insufficient (e.g., too slow to react,
+too many false positives):
+
+1. **Re-add fail2ban** to the Dockerfiles and supervisord configs. The
+   `NET_ADMIN` capability removal and fail2ban removal should be a single
+   atomic commit, making revert straightforward via `git revert`.
+2. **Leave the NACL infrastructure in place.** The allow-all rule at 32766
+   means the NACL is a no-op when no deny rules are present. The Lambda and
+   metric filters can remain deployed with the alarm disabled.
+3. **Tune before reverting.** The most likely issue is threshold calibration —
+   adjust `FAILURE_THRESHOLD`, `BAN_DURATION`, and the alarm period before
+   concluding the approach doesn't work.
 
 ---
 
