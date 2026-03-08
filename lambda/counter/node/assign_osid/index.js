@@ -69,7 +69,6 @@ function kickOffChef(callback, event) {
       { 
          "Key": "tag:managed_by_terraform",
          "Values": [ "y" ]
-       }
       }
     ]
   };
