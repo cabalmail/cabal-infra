@@ -49,11 +49,19 @@ exports.handler = (event, context, callback) => {
   });
 };
 
-function createDnsRecords(params) {
-  return r53.send(new ChangeResourceRecordSetsCommand(params));
+async function createDnsRecords(params) {
+  console.log("R53 request params:", JSON.stringify(params, null, 2));
+  try {
+    const result = await r53.send(new ChangeResourceRecordSetsCommand(params));
+    console.log("R53 response:", JSON.stringify(result, null, 2));
+    return result;
+  } catch (err) {
+    console.error("R53 error:", err);
+    throw err;
+  }
 }
 
-function recordAddress(obj) {
+async function recordAddress(obj) {
   const params = {
     TableName: 'cabal-addresses',
     Item: {
@@ -67,10 +75,13 @@ function recordAddress(obj) {
       RequestTime: { S: new Date().toISOString() },
     },
   };
-  return ddb.send(new PutItemCommand(params));
+  console.log("DynamoDB request params:", JSON.stringify(params, null, 2));
+  const result = await ddb.send(new PutItemCommand(params));
+  console.log("DynamoDB response:", JSON.stringify(result, null, 2));
+  return result;
 }
 
-function kickOffChef() {
+async function kickOffChef() {
   const params = {
     DocumentName: 'cabal_chef_document',
     Targets: [
@@ -80,7 +91,10 @@ function kickOffChef() {
       }
     ]
   };
-  return ssm.send(new SendCommandCommand(params));
+  console.log("SSM request params:", JSON.stringify(params, null, 2));
+  const result = await ssm.send(new SendCommandCommand(params));
+  console.log("SSM response:", JSON.stringify(result, null, 2));
+  return result;
 }
 
 function changeItem(name, value, type) {
