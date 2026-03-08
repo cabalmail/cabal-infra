@@ -1,6 +1,7 @@
-const AWS = require('aws-sdk');
+const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
+const { DynamoDBDocumentClient, ScanCommand } = require("@aws-sdk/lib-dynamodb");
 
-const ddb = new AWS.DynamoDB.DocumentClient();
+const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 exports.handler = (event, context, callback) => {
     if (!event.requestContext.authorizer) {
@@ -38,7 +39,7 @@ function listAddresses(user) {
         },
         "ProjectionExpression": "subdomain, #c, tld, address, username, #user"
     };
-    return ddb.scan(parameters).promise();
+    return ddb.send(new ScanCommand(parameters));
 }
 
 function errorResponse(errorMessage, awsRequestId, callback) {

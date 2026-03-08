@@ -1,25 +1,21 @@
 const {
   CognitoIdentityProviderClient,
-  ListUsersCommand,
   AdminUpdateUserAttributesCommand
 } = require("@aws-sdk/client-cognito-identity-provider");
+const { DynamoDBClient, UpdateItemCommand } = require("@aws-sdk/client-dynamodb");
+const { SSMClient, SendCommandCommand } = require("@aws-sdk/client-ssm");
 
-const AWS = require('aws-sdk');
-const ddb = new AWS.DynamoDB();
+const region = process.env.AWS_REGION;
+const client = new CognitoIdentityProviderClient({ region });
+const ddb = new DynamoDBClient({ region });
+const ssm = new SSMClient({ region });
 
-const client = new CognitoIdentityProviderClient({
-  region: process.env.AWS_REGION
-});
-
-const ssm = new AWS.SSM();
-
-exports.handler = (event, context, callback) => {
-  getCounter(callback, event);
+exports.handler = async (event, context, callback) => {
+  await getCounter(callback, event);
 }
 
-function getCounter(callback, event) {
-  var uid;
-  var params = {
+async function getCounter(callback, event) {
+  const params = {
     TableName: 'cabal-counter',
     Key: {
       counter: {S: "counter"}
@@ -32,19 +28,18 @@ function getCounter(callback, event) {
     UpdateExpression: "SET osid = osid + :val",
     ReturnValues: "UPDATED_NEW"
   };
-  ddb.updateItem(params, (err, data) => {
-    if (err) {
-      console.error("ddb", err);
-      console.error("params", params);
-    } else {
-      updateUser(data.Attributes.osid.N, callback, event);
-    }
-  });
-  return uid;
+  try {
+    const data = await ddb.send(new UpdateItemCommand(params));
+    await updateUser(data.Attributes.osid.N, callback, event);
+  } catch (err) {
+    console.error("ddb", err);
+    console.error("params", params);
+    callback(err);
+  }
 }
 
-function updateUser(uid, callback, event) {
-  const UpdateCommand = new AdminUpdateUserAttributesCommand({
+async function updateUser(uid, callback, event) {
+  const command = new AdminUpdateUserAttributesCommand({
     UserPoolId: event.userPoolId,
     UserAttributes: [{
       Name: "custom:osid",
@@ -52,32 +47,27 @@ function updateUser(uid, callback, event) {
     }],
     Username: event.userName
   });
-  client.send(UpdateCommand)
-  .then(data => {
-    console.log(data);
-    kickOffChef(callback, event);
-  })
-  .catch(err => {
-    console.error(err);
-  });
+  const data = await client.send(command);
+  console.log(data);
+  await kickOffChef(callback, event);
 }
 
-function kickOffChef(callback, event) {
-  const command = {
+async function kickOffChef(callback, event) {
+  const params = {
     DocumentName: 'cabal_chef_document',
     Targets: [
-      { 
+      {
          "Key": "tag:managed_by_terraform",
          "Values": [ "y" ]
       }
     ]
   };
-  ssm.sendCommand(command, (err, data) => {
-    if (err) {
-      console.error("ssm", err);
-      console.error("command", command)
-    } else {
-      callback(null, event);
-    };
-  }).promise();
+  try {
+    await ssm.send(new SendCommandCommand(params));
+    callback(null, event);
+  } catch (err) {
+    console.error("ssm", err);
+    console.error("command", params);
+    callback(err);
+  }
 }

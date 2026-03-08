@@ -1,6 +1,9 @@
-const AWS = require('aws-sdk');
-const ddb = new AWS.DynamoDB.DocumentClient();
-const route53 = new AWS.Route53();
+const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
+const { DynamoDBDocumentClient, DeleteCommand } = require("@aws-sdk/lib-dynamodb");
+const { Route53Client, ChangeResourceRecordSetsCommand } = require("@aws-sdk/client-route-53");
+
+const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+const route53 = new Route53Client({});
 const domains = JSON.parse(process.env.DOMAINS);
 const control_domain = process.env.CONTROL_DOMAIN;
 
@@ -83,12 +86,7 @@ exports.handler = (event, context, callback) => {
       }
     };
 
-    const r53_req = route53.changeResourceRecordSets(params, function(err,data) {
-      if (err) {
-        console.error("r53 error", err);
-        errorResponse(err, context.awsRequestId, callback);
-      }
-    }).promise();
+    const r53_req = route53.send(new ChangeResourceRecordSetsCommand(params));
     const ddb_req = revokeAddress(address);
     Promise.all([ddb_req, r53_req]).then(values => {
       callback(null, {
@@ -111,12 +109,12 @@ exports.handler = (event, context, callback) => {
 };
 
 function revokeAddress(address, zone_id, subdomain) {
-    return ddb.delete({
+    return ddb.send(new DeleteCommand({
         TableName: 'cabal-addresses',
         Key: {
             address: address,
         },
-    }).promise();
+    }));
 }
 
 function errorResponse(errorMessage, awsRequestId, callback) {

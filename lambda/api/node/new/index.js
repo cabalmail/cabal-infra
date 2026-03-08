@@ -1,4 +1,11 @@
-const AWS = require('aws-sdk');
+const { Route53Client, ChangeResourceRecordSetsCommand } = require("@aws-sdk/client-route-53");
+const { DynamoDBClient, PutItemCommand } = require("@aws-sdk/client-dynamodb");
+const { SSMClient, SendCommandCommand } = require("@aws-sdk/client-ssm");
+
+const r53 = new Route53Client({});
+const ddb = new DynamoDBClient({});
+const ssm = new SSMClient({});
+
 const domains = JSON.parse(process.env.DOMAINS);
 const control_domain = process.env.CONTROL_DOMAIN;
 
@@ -43,17 +50,10 @@ exports.handler = (event, context, callback) => {
 };
 
 function createDnsRecords(params) {
-  const r53 = new AWS.Route53();
-  return r53.changeResourceRecordSets(params, (err, data) => {
-    if (err) {
-      console.error("r53", err);
-      console.error("params", params)
-    }
-  }).promise();
+  return r53.send(new ChangeResourceRecordSetsCommand(params));
 }
 
 function recordAddress(obj) {
-  const ddb = new AWS.DynamoDB();
   const params = {
     TableName: 'cabal-addresses',
     Item: {
@@ -67,17 +67,11 @@ function recordAddress(obj) {
       RequestTime: { S: new Date().toISOString() },
     },
   };
-  return ddb.putItem(params, (err, data) => {
-    if (err) {
-      console.error("ddb", err);
-      console.error("params", params);
-    }
-  }).promise();
+  return ddb.send(new PutItemCommand(params));
 }
 
 function kickOffChef() {
-  const ssm = new AWS.SSM();
-  const command = {
+  const params = {
     DocumentName: 'cabal_chef_document',
     Targets: [
       {
@@ -86,12 +80,7 @@ function kickOffChef() {
       }
     ]
   };
-  return ssm.sendCommand(command, (err, data) => {
-    if (err) {
-      console.error("ssm", err);
-      console.error("command", command)
-    }
-  }).promise();
+  return ssm.send(new SendCommandCommand(params));
 }
 
 function changeItem(name, value, type) {
