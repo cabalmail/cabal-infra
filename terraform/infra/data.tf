@@ -3,7 +3,7 @@ data "terraform_remote_state" "zone" {
   config = {
     bucket = "cabal-tf-backend"
     region = "us-east-1"
-    key    = "development-bootstrap"
+    key    = "${var.environment}-bootstrap"
   }
 }
 
