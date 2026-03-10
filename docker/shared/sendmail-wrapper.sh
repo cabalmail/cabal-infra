@@ -5,7 +5,7 @@
 # daemon, waits for its PID file, and stays alive as long as the daemon
 # process is running. When sendmail exits, the wrapper exits too, so
 # supervisord can detect the failure and restart.
-set -uo pipefail
+set -euo pipefail
 
 /usr/sbin/sendmail -bd -q15m
 
