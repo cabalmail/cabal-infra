@@ -55,16 +55,23 @@ def handler(event, _context):
 
 def other_addresses_on_subdomain(subdomain, tld, address):
     '''Checks if other addresses share the same subdomain and TLD'''
-    response = table.scan(
-        FilterExpression='subdomain = :sub AND tld = :tld AND address <> :addr',
-        ExpressionAttributeValues={
+    scan_kwargs = {
+        'FilterExpression': 'subdomain = :sub AND tld = :tld AND address <> :addr',
+        'ExpressionAttributeValues': {
             ':sub': subdomain,
             ':tld': tld,
             ':addr': address
         },
-        ProjectionExpression='address'
-    )
-    return len(response.get('Items', [])) > 0
+        'ProjectionExpression': 'address'
+    }
+    while True:
+        response = table.scan(**scan_kwargs)
+        if response.get('Items'):
+            return True
+        if 'LastEvaluatedKey' not in response:
+            break
+        scan_kwargs['ExclusiveStartKey'] = response['LastEvaluatedKey']
+    return False
 
 
 def change_item(name, value, record_type):

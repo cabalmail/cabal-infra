@@ -17,6 +17,8 @@ set -euo pipefail
 IMAP_HOST="${IMAP_INTERNAL_HOST:-imap.${CERT_DOMAIN}}"
 
 # ── Fetch address data from DynamoDB ──────────────────────────
+# The AWS CLI v2 auto-paginates dynamodb scan, merging all Items
+# across pages into a single response.  No manual loop needed.
 echo "[generate-config] Scanning DynamoDB cabal-addresses table..."
 ITEMS=$(aws dynamodb scan \
   --table-name cabal-addresses \
