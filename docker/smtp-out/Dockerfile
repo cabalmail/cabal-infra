@@ -52,4 +52,7 @@ RUN chmod +x /entrypoint.sh /usr/local/bin/*.sh
 
 EXPOSE 465 587
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+  CMD supervisorctl status | grep -v RUNNING && exit 1 || exit 0
+
 ENTRYPOINT ["/entrypoint.sh"]
