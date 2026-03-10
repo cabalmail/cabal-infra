@@ -4,6 +4,7 @@ import json
 import os
 from datetime import datetime, timezone
 import boto3  # pylint: disable=import-error
+from helper import user_authorized_for_sender  # pylint: disable=import-error
 
 domains = json.loads(os.environ['DOMAINS'])
 control_domain = os.environ['CONTROL_DOMAIN']
@@ -17,15 +18,22 @@ sns = boto3.client('sns')
 
 def handler(event, _context):
     '''Revokes an email address'''
-    # TODO: Compare username to recorded username before allowing delete  # pylint: disable=fixme
-    # TODO: Handle cases where another address shares the same subdomain  # pylint: disable=fixme
     body = json.loads(event['body'])
     address = body['address']
     subdomain = body['subdomain']
     tld = body['tld']
     zone_id = domains[tld]
+    user = event['requestContext']['authorizer']['claims']['cognito:username']
+    if not user_authorized_for_sender(user, address):
+        return {
+            'statusCode': 403,
+            'body': json.dumps({
+                'Error': 'Address not associated with authenticated user'
+            })
+        }
     try:
-        delete_dns_records(zone_id, subdomain, tld)
+        if not other_addresses_on_subdomain(subdomain, tld, address):
+            delete_dns_records(zone_id, subdomain, tld)
         revoke_address(address)
         notify_containers()
     except Exception as err:  # pylint: disable=broad-exception-caught
@@ -43,6 +51,20 @@ def handler(event, _context):
             'address': address
         })
     }
+
+
+def other_addresses_on_subdomain(subdomain, tld, address):
+    '''Checks if other addresses share the same subdomain and TLD'''
+    response = table.scan(
+        FilterExpression='subdomain = :sub AND tld = :tld AND address <> :addr',
+        ExpressionAttributeValues={
+            ':sub': subdomain,
+            ':tld': tld,
+            ':addr': address
+        },
+        ProjectionExpression='address'
+    )
+    return len(response.get('Items', [])) > 0
 
 
 def change_item(name, value, record_type):
