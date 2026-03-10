@@ -11,6 +11,31 @@
 # SMTP-OUT-only:     DKIM_PRIVATE_KEY
 set -euo pipefail
 
+# ── Validate required environment variables ─────────────────
+missing=()
+for var in TIER CERT_DOMAIN AWS_REGION COGNITO_CLIENT_ID COGNITO_POOL_ID \
+           TLS_CA_BUNDLE TLS_CERT TLS_KEY; do
+  if [ -z "${!var:-}" ]; then
+    missing+=("$var")
+  fi
+done
+
+if [ "${TIER:-}" = "imap" ] && [ -z "${MASTER_PASSWORD:-}" ]; then
+  missing+=("MASTER_PASSWORD (required for imap tier)")
+fi
+
+if [ "${TIER:-}" = "smtp-out" ] && [ -z "${DKIM_PRIVATE_KEY:-}" ]; then
+  missing+=("DKIM_PRIVATE_KEY (required for smtp-out tier)")
+fi
+
+if [ ${#missing[@]} -gt 0 ]; then
+  echo "[entrypoint] ERROR: Missing required environment variables:" >&2
+  for var in "${missing[@]}"; do
+    echo "  - $var" >&2
+  done
+  exit 1
+fi
+
 echo "[entrypoint] Starting $TIER tier configuration..."
 
 # ── Step 1: TLS certificates ──────────────────────────────────
