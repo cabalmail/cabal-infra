@@ -13,10 +13,7 @@ def handler(event, _context):
     '''Assigns an OS user ID to a newly created Cognito user'''
     osid = get_counter()
     update_user(event['userPoolId'], event['userName'], osid)
-    try:
-        refresh_containers()
-    except Exception as err:  # pylint: disable=broad-exception-caught
-        print(f'Post-user-creation error: {err}')
+    refresh_containers()
     return event
 
 
@@ -58,5 +55,5 @@ def refresh_containers():
                 service=service,
                 forceNewDeployment=True
             )
-        except Exception as err:  # pylint: disable=broad-exception-caught
-            print(f'ECS updateService error for {service}: {err}')
+        except Exception as err:
+            raise RuntimeError(f'ECS refresh failed for {service}') from err
