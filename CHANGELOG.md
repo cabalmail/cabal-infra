@@ -9,10 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Documentation `docs/0.4.0/containerization-plan.md` — detailed migration plan documenting the containerization strategy
 - Terraform module `terraform/infra/modules/ecs/` — ECS cluster with three services (IMAP, SMTP-IN, SMTP-OUT), task definitions, auto-scaling, capacity provider, Cloud Map service discovery, and all associated IAM roles
 - Terraform module `terraform/infra/modules/ecr/` — container image repositories for the three mail services
 - Docker images and scripts — three Dockerfiles (`imap`, `smtp-in`, `smtp-out`), shared entrypoint/reconfiguration/user-sync scripts, supervisord configs, Dovecot/sendmail/OpenDKIM configs, PAM auth integration, and sendmail `.mc` templates
-- Documentation `docs/0.4.0/containerization-plan.md` — detailed migration plan documenting the containerization strategy
 - SNS/SQS fan-out for notifying containers of address changes (replacing SSM `SendCommand`)
 - `address_changed_topic_arn` to all API Lambda functions
 - `sns:Publish` IAM permissions to Lambda execution roles
@@ -58,3 +58,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Deprecated
 
 - Chef will be removed in 0.4.1
+- ACME/Let's Encrypt certificate will be removed in 0.4.1

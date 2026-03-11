@@ -36,4 +36,4 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `lambda/counter`: Cognito post-confirmation Lambda (Python)
 - `terraform`: Infrastructure as code
 - `chef`: Server configuration management
-- `docker`: Docker configuration files
+- `docker`: Docker configuration files (replacing Chef)

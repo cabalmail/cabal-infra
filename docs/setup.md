@@ -38,9 +38,9 @@ The developers have striven to make provisioning as automated as possible. Howev
 
 3. The output from the Terraform run in step 2 will include name servers. [Update the domain registration](./registrar.md) for your control domain with these name servers. *Before proceeding to the terraform/infa workspace, make sure this change is complete*.
 
-4. *WHOA*. Verify that steps 2 and 3 were successful. Do not proceed to step 5 otherwise.
+4. **WHOA**. Verify that steps 2 and 3 were successful. Do not proceed to step 5 otherwise.
 
-5. Kick off the terraform/infra workflow.
+5. Kick off the "Build and Deploy Terraform Infrastructure" workflow.
 
     1. Navigate in your browser to your repository in GitHub.
     2. Navigate to the Actions tab.
@@ -49,7 +49,15 @@ The developers have striven to make provisioning as automated as possible. Howev
     5. Click on the green "Run workflow" button.
     6. Note the output at the end of apply/apply-terraform. You will need it for the [post-automation tasks](#PostAutomation) below.
 
-6. Perform the [post-automation tasks](#PostAutomation) below.
+6. Kick off the "Build and Push Docker Images" workflow
+
+    1. Navigate in your browser to your repository in GitHub.
+    2. Navigate to the Actions tab.
+    3. Navigate to "Build and Push Docker Images".
+    4. Pull down the "Run workflow" menu.
+    5. Click on the green "Run workflow" button.
+
+7. Perform the [post-automation tasks](#PostAutomation) below.
 
 # Reprovisioning
 
