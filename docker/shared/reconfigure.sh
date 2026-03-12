@@ -32,12 +32,14 @@ regenerate() {
   /usr/local/bin/generate-config.sh
 
   # Rebuild sendmail hash databases (tier-specific).
-  # Only the map files that exist for this tier need rebuilding.
+  # makemap output paths must include .db to match the files that
+  # make -C /etc/mail creates and that sendmail opens (sendmail
+  # appends .db to the path given in the hash map specification).
   # Flat files (relay-domains, masq-domains, local-host-names) are
-  # read directly by sendmail and don't need makemap.
+  # read directly by sendmail via Fw/Fr directives.
   if [ "$TIER" = "imap" ]; then
-    makemap hash /etc/mail/access       < /etc/mail/access
-    makemap hash /etc/mail/virtusertable < /etc/mail/virtusertable
+    makemap hash /etc/mail/access.db       < /etc/mail/access
+    makemap hash /etc/mail/virtusertable.db < /etc/mail/virtusertable
     # Reassemble aliases (static + dynamic) and rebuild the alias db
     cat /etc/aliases.static > /etc/aliases
     if [ -f /etc/aliases.dynamic ]; then
@@ -48,16 +50,18 @@ regenerate() {
     newaliases
 
   elif [ "$TIER" = "smtp-in" ]; then
-    makemap hash /etc/mail/access       < /etc/mail/access
-    makemap hash /etc/mail/mailertable  < /etc/mail/mailertable
-    makemap hash /etc/mail/virtusertable < /etc/mail/virtusertable
+    makemap hash /etc/mail/access.db       < /etc/mail/access
+    makemap hash /etc/mail/mailertable.db  < /etc/mail/mailertable
+    makemap hash /etc/mail/virtusertable.db < /etc/mail/virtusertable
 
   elif [ "$TIER" = "smtp-out" ]; then
-    makemap hash /etc/mail/mailertable  < /etc/mail/mailertable
+    makemap hash /etc/mail/mailertable.db  < /etc/mail/mailertable
   fi
 
-  # Signal sendmail to re-read .db map files (no restart needed)
-  pkill -HUP sendmail || true
+  # Restart sendmail to pick up all changes including Fw-referenced
+  # flat files (local-host-names, relay-domains) that SIGHUP may not
+  # re-read on all sendmail versions.  Supervisord will restart it.
+  pkill sendmail || true
 
   # For SMTP-OUT, also reload OpenDKIM tables
   if [ "$TIER" = "smtp-out" ]; then

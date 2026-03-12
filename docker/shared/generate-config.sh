@@ -22,6 +22,7 @@ IMAP_HOST="${IMAP_INTERNAL_HOST:-imap.${CERT_DOMAIN}}"
 echo "[generate-config] Scanning DynamoDB cabal-addresses table..."
 ITEMS=$(aws dynamodb scan \
   --table-name cabal-addresses \
+  --consistent-read \
   --region "$AWS_REGION" \
   --output json)
 
