@@ -33,14 +33,14 @@ define(`confSERVER_KEY', `/etc/pki/tls/private/__CERT_DOMAIN__.key')dnl
 define(`confTO_IDENT', `0')dnl
 FEATURE(`no_default_msa',`dnl')dnl
 FEATURE(`smrsh',`/usr/sbin/smrsh')dnl
-FEATURE(`mailertable',`hash -o /etc/mail/mailertable.db')dnl
-FEATURE(`virtusertable',`hash -o /etc/mail/virtusertable.db')dnl
+FEATURE(`mailertable',`hash -o /etc/mail/mailertable')dnl
+FEATURE(`virtusertable',`hash -o /etc/mail/virtusertable')dnl
 FEATURE(redirect)dnl
 FEATURE(always_add_domain)dnl
 FEATURE(use_cw_file)dnl
 FEATURE(use_ct_file)dnl
 FEATURE(local_procmail,`',`procmail -t -Y -a $h -d $u')dnl
-FEATURE(`access_db',`hash -T<TMPF> -o /etc/mail/access.db')dnl
+FEATURE(`access_db',`hash -T<TMPF> -o /etc/mail/access')dnl
 FEATURE(`blacklist_recipients')dnl
 EXPOSED_USER(`root')dnl
 LOCAL_DOMAIN(`localhost.localdomain')dnl
