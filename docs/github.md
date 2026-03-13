@@ -24,7 +24,7 @@ After signing up and logging in, [fork this repository](https://docs.github.com/
     | TF_VAR_AVAILABILITY_ZONES | [\"us-east-1a\",\"us-east-1b\"]                                  |
     | TF_VAR_AWS_REGION         | us-east-1                                                        |
     | TF_VAR_BACKUP             | true                                                             |
-    | TF_VAR_CHEF_LICENSE       | accept                                                           |
+    | TF_VAR_CHEF_LICENSE *     | accept                                                           |
     | TF_VAR_CIDR_BLOCK         | 10.0.0.0/16                                                      |
     | TF_VAR_CONTROL_DOMAIN     | example.net                                                      |
     | TF_VAR_EMAIL              | your_email@example.com                                           |
@@ -38,3 +38,4 @@ After signing up and logging in, [fork this repository](https://docs.github.com/
     
     Note that quotation marks must be escaped with a single back-slash. (If you're reading this document in raw markdown, you'll see double-back-slashes.)
 
+    \* Deprecated; will be removed in 0.4.1

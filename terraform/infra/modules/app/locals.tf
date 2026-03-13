@@ -1,8 +1,8 @@
 locals {
-  lambdas = {
+  supported_lambdas = {
     list_folders       = {
       runtime   = "python3.13"
-      type      = "python"
+
       method    = "GET"
       memory    = 128
       cache     = true
@@ -10,7 +10,7 @@ locals {
     },
     list_messages      = {
       runtime   = "python3.13"
-      type      = "python"
+
       method    = "GET"
       memory    = 128
       cache     = true
@@ -18,7 +18,7 @@ locals {
     },
     list_envelopes     = {
       runtime   = "python3.13"
-      type      = "python"
+
       method    = "GET"
       memory    = 128
       cache     = true
@@ -26,7 +26,7 @@ locals {
     },
     fetch_message      = {
       runtime   = "python3.13"
-      type      = "python"
+
       method    = "GET"
       memory    = 1024
       cache     = true
@@ -34,7 +34,7 @@ locals {
     },
     fetch_bimi         = {
       runtime   = "python3.13"
-      type      = "python"
+
       method    = "GET"
       memory    = 1024
       cache     = true
@@ -42,7 +42,7 @@ locals {
     },
     list_attachments   = {
       runtime   = "python3.13"
-      type      = "python"
+
       method    = "GET"
       memory    = 1024
       cache     = true
@@ -50,7 +50,7 @@ locals {
     },
     fetch_attachment   = {
       runtime   = "python3.13"
-      type      = "python"
+
       method    = "GET"
       memory    = 1024
       cache     = true
@@ -58,7 +58,7 @@ locals {
     },
     fetch_inline_image = {
       runtime   = "python3.13"
-      type      = "python"
+
       method    = "GET"
       memory    = 1024
       cache     = true
@@ -66,7 +66,7 @@ locals {
     },
     set_flag           = {
       runtime   = "python3.13"
-      type      = "python"
+
       method    = "PUT"
       memory    = 128
       cache     = true
@@ -74,7 +74,7 @@ locals {
     },
     new_folder         = {
       runtime   = "python3.13"
-      type      = "python"
+
       method    = "PUT"
       memory    = 128
       cache     = true
@@ -82,7 +82,7 @@ locals {
     },
     delete_folder      = {
       runtime   = "python3.13"
-      type      = "python"
+
       method    = "DELETE"
       memory    = 128
       cache     = true
@@ -90,7 +90,7 @@ locals {
     },
     subscribe_folder   = {
       runtime   = "python3.13"
-      type      = "python"
+
       method    = "PUT"
       memory    = 128
       cache     = true
@@ -98,7 +98,7 @@ locals {
     },
     unsubscribe_folder = {
       runtime   = "python3.13"
-      type      = "python"
+
       method    = "PUT"
       memory    = 128
       cache     = true
@@ -106,7 +106,7 @@ locals {
     },
     move_messages      = {
       runtime   = "python3.13"
-      type      = "python"
+
       method    = "PUT"
       memory    = 128
       cache     = true
@@ -114,35 +114,49 @@ locals {
     },
     send               = {
       runtime   = "python3.13"
-      type      = "python"
+
       method    = "PUT"
       memory    = 128
       cache     = true
       cache_ttl = 0
     },
     list               = {
-      runtime   = "nodejs20.x"
-      type      = "nodejs"
+      runtime   = "python3.13"
+
       method    = "GET"
       memory    = 128
       cache     = true
       cache_ttl = 60
     },
     new                = {
-      runtime   = "nodejs20.x"
-      type      = "nodejs"
+      runtime   = "python3.13"
+
       method    = "POST"
       memory    = 128
       cache     = false
       cache_ttl = 0
     },
     revoke             = {
-      runtime   = "nodejs20.x"
-      type      = "nodejs"
+      runtime   = "python3.13"
+
       method    = "DELETE"
       memory    = 128
       cache     = false
       cache_ttl = 0
     }
+  }
+}
+
+data "aws_s3_objects" "check" {
+  for_each = local.supported_lambdas
+  bucket   = var.bucket
+  prefix   = "lambda/${each.key}.zip.base64sha256"
+}
+
+locals {
+  lambdas = {
+    for l in keys(local.supported_lambdas) :
+      l => local.supported_lambdas[l]
+      if length(data.aws_s3_objects.check[l].keys) > 0
   }
 }

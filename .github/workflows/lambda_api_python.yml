@@ -1,5 +1,5 @@
 ---
-name: Build and Deploy Lambda API (Python Runtime)
+name: Build and Deploy Lambda API
 
 on:
   workflow_dispatch:
@@ -7,9 +7,9 @@ on:
     types: [trigger_build]
   push:
     paths:
-      - 'lambda/api/python/**'
+      - 'lambda/api/**'
       - '.github/workflows/lambda_api_python.yml'
-      - '.github/scripts/build-api-python.sh'
+      - '.github/scripts/build-api.sh'
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -19,7 +19,7 @@ jobs:
       uses: actions/checkout@main
     - name: pylint
       shell: bash
-      run: pip install pylint && cd ./lambda/api/python && pylint --rcfile .pylintrc */function.py
+      run: pip install pylint && cd ./lambda/api && pylint --rcfile .pylintrc */function.py
     - name: configure-aws
       run: |
         aws configure --profile deploy_lambda <<-EOF > /dev/null 2>&1
@@ -29,7 +29,7 @@ jobs:
         json
         EOF
     - name: build
-      run: ./.github/scripts/build-api-python.sh
+      run: ./.github/scripts/build-api.sh
   deploy:
     uses: ./.github/workflows/terraform.yml
     secrets: inherit

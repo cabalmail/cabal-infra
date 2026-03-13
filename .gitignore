@@ -10,3 +10,5 @@ backend.hcl
 react/admin/yarn.lock
 terraform/dns/backend.tf
 terraform/infra/backend.tf
+.claude/worktrees/
+.claude/memory/

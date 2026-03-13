@@ -24,19 +24,3 @@ resource "aws_route53_zone" "cabal_control_zone" {
     Name = "cabal-control-zone"
   }
 }
-
-# Save the zone ID in AWS SSM Parameter Store so that terraform/infra can read it.
-resource "aws_ssm_parameter" "zone" {
-  name        = "/cabal/control_domain_zone_id"
-  description = "Route 53 Zone ID"
-  type        = "String"
-  value       = aws_route53_zone.cabal_control_zone.zone_id
-}
-
-# Save the zone name in AWS SSM Parameter Store so that terraform/infra can read it.
-resource "aws_ssm_parameter" "name" {
-  name        = "/cabal/control_domain_zone_name"
-  description = "Route 53 Zone Name"
-  type        = "String"
-  value       = var.control_domain
-}

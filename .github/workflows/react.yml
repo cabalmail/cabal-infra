@@ -31,7 +31,7 @@ jobs:
     - name: package
       run: cd react/admin && tar czvf ../../react_app.tar.gz build/
     - name: store-artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: react-app
         path: react_app.tar.gz
@@ -49,7 +49,7 @@ jobs:
         json
         EOF
     - name: retrieve-artifact
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: react-app
     - name: unpack

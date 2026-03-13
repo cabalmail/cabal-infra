@@ -7,7 +7,7 @@ on:
     types: [trigger_build]
   push:
     paths:
-      - 'lambda/counter/node/**'
+      - 'lambda/counter/**'
       - '.github/workflows/lambda_counter.yml'
       - '.github/scripts/build-counter.sh'
 jobs:
@@ -17,6 +17,9 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@main
+    - name: pylint
+      shell: bash
+      run: pip install pylint && pylint --rcfile ./lambda/api/.pylintrc ./lambda/counter/*/function.py
     - name: configure-aws
       run: |
         aws configure --profile deploy_lambda <<-EOF > /dev/null 2>&1

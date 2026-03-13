@@ -60,7 +60,12 @@ After signing up, perform the following steps:
                     "logs:PutRetentionPolicy",
                     "logs:DescribeLogGroups",
                     "logs:ListTagsForResource",
-                    "logs:ListTagsLogGroup"
+                    "logs:ListTagsLogGroup",
+                    "ecs:*",
+                    "sns:*",
+                    "sqs:*",
+                    "application-autoscaling:*",
+                    "servicediscovery:*"
                 ],
                 "Resource": "*"
             }
