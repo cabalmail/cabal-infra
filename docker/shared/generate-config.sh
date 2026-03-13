@@ -155,8 +155,8 @@ def gen_imap_access():
             sd = d["subdomains"][subd]
             for addr in sorted(sd["addresses"]):
                 lines.append(f"To:{addr}@{subd}.{tld}\tOK")
-            lines.append(f"To:{subd}.{tld}\tREJECT")
-        lines.append(f"To:{tld}\tREJECT")
+            lines.append(f"To:{subd}.{tld}\tTEMPFAIL")
+        lines.append(f"To:{tld}\tTEMPFAIL")
     return "\n".join(lines) + "\n"
 
 
