@@ -20,7 +20,7 @@ jobs:
     - name: package
       run: cd chef && tar -czf ../cabal.tar.gz cabal/
     - name: store-artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: cookbook
         path: cabal.tar.gz
@@ -38,7 +38,7 @@ jobs:
         json
         EOF
     - name: retrieve-artifact
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: cookbook
     - name: upload

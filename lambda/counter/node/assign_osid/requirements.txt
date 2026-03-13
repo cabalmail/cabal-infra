@@ -1,0 +1,3 @@
+@aws-sdk/client-cognito-identity-provider
+@aws-sdk/client-dynamodb
+@aws-sdk/client-ssm
