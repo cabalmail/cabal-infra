@@ -55,7 +55,9 @@ jobs:
     - name: unpack
       run: tar xzvf react_app.tar.gz
     - name: upload
-      run: aws s3 sync build "s3://admin.$(aws ssm get-parameter --name '/cabal/control_domain_zone_name' --profile deploy_react | jq -r '.Parameter.Value')" --profile deploy_react --no-progress
+      env:
+        TF_VAR_CONTROL_DOMAIN: ${{ vars.TF_VAR_CONTROL_DOMAIN }}
+      run: aws s3 sync build "s3://admin.${TF_VAR_CONTROL_DOMAIN}" --profile deploy_react --no-progress
     - name: invalidate-cache
       run: |
         aws cloudfront create-invalidation \

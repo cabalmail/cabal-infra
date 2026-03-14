@@ -29,6 +29,8 @@ jobs:
         json
         EOF
     - name: build
+      env:
+        TF_VAR_CONTROL_DOMAIN: ${{ vars.TF_VAR_CONTROL_DOMAIN }}
       run: ./.github/scripts/build-counter.sh
   deploy:
     uses: ./.github/workflows/terraform.yml
