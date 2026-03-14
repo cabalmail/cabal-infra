@@ -1,6 +1,6 @@
 #!/bin/bash
 cd ./lambda/api
-AWS_S3_BUCKET="admin.$(aws ssm get-parameter --name '/cabal/control_domain_zone_name' --profile deploy_lambda | jq -r '.Parameter.Value')"
+AWS_S3_BUCKET="admin.${TF_VAR_CONTROL_DOMAIN}"
 for FUNC in * ; do
   pushd "${FUNC}"
   pip install -r requirements.txt -t ./python 2>/dev/null || true
