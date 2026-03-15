@@ -19,12 +19,17 @@ IMAP_HOST="${IMAP_INTERNAL_HOST:-imap.${CERT_DOMAIN}}"
 # ── Fetch address data from DynamoDB ──────────────────────────
 # The AWS CLI v2 auto-paginates dynamodb scan, merging all Items
 # across pages into a single response.  No manual loop needed.
+# The scan output goes to a temp file so it can be read by Python
+# without hitting Linux's ~2 MB arg+env size limit that the old
+# export-to-env-var approach was subject to.
 echo "[generate-config] Scanning DynamoDB cabal-addresses table..."
-ITEMS=$(aws dynamodb scan \
+ITEMS_FILE=$(mktemp)
+trap 'rm -f "$ITEMS_FILE"' EXIT
+aws dynamodb scan \
   --table-name cabal-addresses \
   --consistent-read \
   --region "$AWS_REGION" \
-  --output json)
+  --output json > "$ITEMS_FILE"
 
 # ── Use Python to parse and generate all config files ─────────
 # Python handles the nested domain/subdomain/address structure
