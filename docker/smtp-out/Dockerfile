@@ -10,6 +10,7 @@ RUN dnf install -y \
       procmail \
       rsyslog \
       make \
+      procps-ng \
       awscli-2 jq \
       pip \
     && pip install supervisor \

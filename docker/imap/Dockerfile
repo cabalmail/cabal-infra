@@ -9,6 +9,7 @@ RUN dnf install -y \
       rsyslog \
       httpd-tools \
       make \
+      procps-ng \
       awscli-2 jq \
       pip \
     && pip install supervisor \
