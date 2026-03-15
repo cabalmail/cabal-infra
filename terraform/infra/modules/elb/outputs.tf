@@ -1,3 +1,8 @@
+output "nlb_arn" {
+  value       = aws_lb.elb.arn
+  description = "ARN of the network load balancer."
+}
+
 output "imap_tg" {
   value       = aws_lb_target_group.imap.arn
   description = "ARN of IMAP target group."

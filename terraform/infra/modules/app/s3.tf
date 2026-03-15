@@ -49,18 +49,15 @@ resource "aws_s3_bucket" "cache" {
 resource "aws_s3_bucket_lifecycle_configuration" "expire_attachments" {
   bucket = aws_s3_bucket.cache.bucket
   rule {
-    id = "expire_attachments"
+    id     = "expire_attachments"
+    filter {
+      prefix = "/"
+    }
     expiration {
       days = 2
     }
     status = "Enabled"
   }
-}
-
-# Make the bucket private
-resource "aws_s3_bucket_acl" "this" {
-  bucket = aws_s3_bucket.cache.bucket
-  acl    = "private"
 }
 
 # Make the bucvket stay private

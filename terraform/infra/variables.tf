@@ -1,7 +1,3 @@
-data "aws_ssm_parameter" "zone" {
-  name = "/cabal/control_domain_zone_id"
-}
-
 variable "environment" {
   type        = string
   description = "A name for your environment such as 'production' or 'staging'."
@@ -180,7 +176,7 @@ variable "smtpout_scale" {
       (var.smtpout_scale.max >= 0),
       (var.smtpout_scale.des >= 0),
     ])
-    error_message = "The smtpin_scale attributes must be non-negative integers."
+    error_message = "The smtpout_scale attributes must be non-negative integers."
   }
   validation {
     condition = alltrue([

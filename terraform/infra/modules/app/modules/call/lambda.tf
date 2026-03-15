@@ -80,19 +80,6 @@ resource "aws_iam_role_policy" "lambda" {
         },
         {
             "Effect": "Allow",
-            "Action": [
-                "ssm:StartSession",
-                "ssm:SendCommand"
-            ],
-            "Resource": "arn:aws:ec2:${var.region}:${var.account}:instance/${local.wildcard}"
-        },
-        {
-            "Effect": "Allow",
-            "Action": "ssm:SendCommand",
-            "Resource": "arn:aws:ssm:${var.region}:${var.account}:document/cabal_chef_document"
-        },
-        {
-            "Effect": "Allow",
             "Action": "route53:ChangeResourceRecordSets",
             "Resource": [
               ${local.hosted_zone_arns}
@@ -126,6 +113,11 @@ resource "aws_iam_role_policy" "lambda" {
             "Resource": [
                 "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-addresses"
             ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": "sns:Publish",
+            "Resource": "${var.address_changed_topic_arn}"
         }
     ]
 }
@@ -139,7 +131,7 @@ resource "aws_cloudwatch_log_group" "lambda_log" {
 
 data "aws_s3_object" "lambda_function_hash" {
   bucket = var.bucket
-  key    = "/lambda/${var.name}.zip.base64sha256"
+  key    = "lambda/${var.name}.zip.base64sha256"
 }
 
 #tfsec:ignore:aws-lambda-enable-tracing
@@ -150,7 +142,7 @@ resource "aws_lambda_function" "api_call" {
   layers           = var.layer_arns
   function_name    = var.name
   role             = aws_iam_role.lambda.arn
-  handler          = var.type == "python" ? "function.handler" : "index.handler"
+  handler          = "function.handler"
   runtime          = var.runtime
   architectures    = ["arm64"]
   timeout          = 30
@@ -161,8 +153,9 @@ resource "aws_lambda_function" "api_call" {
   }
   environment {
     variables = {
-      DOMAINS        = jsonencode({ for r in var.domains : r.domain => r.zone_id })
-      CONTROL_DOMAIN = var.control_domain
+      DOMAINS                    = jsonencode({ for r in var.domains : r.domain => r.zone_id })
+      CONTROL_DOMAIN             = var.control_domain
+      ADDRESS_CHANGED_TOPIC_ARN  = var.address_changed_topic_arn
     }
   }
   depends_on = [

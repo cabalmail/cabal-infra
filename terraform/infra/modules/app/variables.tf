@@ -76,3 +76,8 @@ variable "origin" {
   type        = string
   description = "S3 Origin ID for CloudFront"
 }
+
+variable "address_changed_topic_arn" {
+  type        = string
+  description = "ARN of the SNS topic for address change notifications to ECS containers."
+}

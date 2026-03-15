@@ -5,7 +5,7 @@
 resource "aws_backup_vault" "backup" {
   name = "cabal-backup"
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false
   }
 }
 

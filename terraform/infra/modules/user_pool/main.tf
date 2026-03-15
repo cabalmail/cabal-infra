@@ -3,7 +3,7 @@
 */
 
 resource "aws_cognito_user_pool" "users" {
-  name = "cabal"
+  name  = "cabal"
   schema {
     name                     = "osid"
     attribute_data_type      = "Number"

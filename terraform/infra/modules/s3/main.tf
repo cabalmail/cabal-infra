@@ -17,11 +17,6 @@ resource "aws_s3_bucket_website_configuration" "react_app_website" {
   }
 }
 
-resource "aws_s3_bucket_acl" "react_app_acl" {
-  bucket = local.bucket
-  acl    = "private"
-}
-
 resource "aws_cloudfront_origin_access_identity" "origin" {
   comment = "Static admin website"
 }
