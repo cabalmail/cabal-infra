@@ -34,12 +34,17 @@ aws cognito-idp list-users \
     echo "[sync-users] Created user $username (uid=$osid)"
   fi
 
-  # Ensure home directory structure (idempotent)
-  mkdir -p "/home/${username}/Maildir" "/home/${username}/.procmail"
+  # Ensure home directory structure (idempotent).
+  # UIDs are constant (Cognito custom:osid), so ownership is correct from
+  # useradd — no recursive chown needed.  A recursive chown on EFS is
+  # extremely slow with large Maildirs and blocks startup long enough for
+  # ECS to kill the task.  install -d sets owner/mode atomically and only
+  # touches the named directories themselves.
+  install -d -o "$username" -g "$username" -m 700 \
+    "/home/${username}/Maildir"
+  install -d -o "$username" -g "$username" -m 755 \
+    "/home/${username}/.procmail"
   cp -n /etc/procmailrc "/home/${username}/.procmailrc" 2>/dev/null || true
-  chown -R "${username}:${username}" "/home/${username}"
-  chmod 700 "/home/${username}" "/home/${username}/Maildir"
-  chmod 755 "/home/${username}/.procmail"
 done
 
 echo "[sync-users] Done."
