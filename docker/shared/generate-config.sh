@@ -31,13 +31,18 @@ ITEMS=$(aws dynamodb scan \
 # more cleanly than bash+jq.
 echo "[generate-config] Generating config files for tier=$TIER..."
 
-export ITEMS
-python3 - "$TIER" "$IMAP_HOST" <<'PYEOF'
+ITEMS_FILE=$(mktemp)
+trap 'rm -f "$ITEMS_FILE"' EXIT
+echo "$ITEMS" > "$ITEMS_FILE"
+
+python3 - "$TIER" "$IMAP_HOST" "$ITEMS_FILE" <<'PYEOF'
 import json, sys, os
 
 tier = sys.argv[1]
 imap_host = sys.argv[2]
-items_json = os.environ.get("ITEMS", "{}")
+items_file = sys.argv[3]
+with open(items_file) as f:
+    items_json = f.read()
 items = json.loads(items_json).get("Items", [])
 
 # ── Build domain tree (mirrors Chef's DynamoDB scan logic) ────
