@@ -85,7 +85,7 @@ variable "master_password" {
 variable "instance_type" {
   type        = string
   description = "EC2 instance type for ECS container instances."
-  default     = "t3.small"
+  default     = "t3.medium"
 }
 
 # ── Health checks ────────────────────────────────────────────
