@@ -37,7 +37,7 @@ aws dynamodb scan \
 echo "[generate-config] Generating config files for tier=$TIER..."
 
 python3 - "$TIER" "$IMAP_HOST" "$ITEMS_FILE" <<'PYEOF'
-import json, sys
+import json, os, sys
 
 tier = sys.argv[1]
 imap_host = sys.argv[2]
