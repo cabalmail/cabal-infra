@@ -9,10 +9,13 @@ RUN dnf install -y \
       rsyslog \
       httpd-tools \
       make \
+      procps-ng \
       awscli-2 jq \
       pip \
     && pip install supervisor \
-    && dnf clean all
+    && dnf clean all \
+    && sed -i 's/^UID_MAX.*/UID_MAX                 2147483647/' /etc/login.defs \
+    && sed -i 's/^GID_MAX.*/GID_MAX                 2147483647/' /etc/login.defs
 
 # Static dovecot configuration
 COPY imap/configs/dovecot/10-auth.conf       /etc/dovecot/conf.d/10-auth.conf

@@ -7,10 +7,13 @@ RUN dnf install -y \
       procmail \
       rsyslog \
       make \
+      procps-ng \
       awscli-2 jq \
       pip \
     && pip install supervisor \
-    && dnf clean all
+    && dnf clean all \
+    && sed -i 's/^UID_MAX.*/UID_MAX                 2147483647/' /etc/login.defs \
+    && sed -i 's/^GID_MAX.*/GID_MAX                 2147483647/' /etc/login.defs
 
 # Sendmail .mc template (placeholder for cert domain)
 COPY templates/in-sendmail.mc               /etc/mail/sendmail.mc.template
