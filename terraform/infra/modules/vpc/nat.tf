@@ -122,14 +122,38 @@ resource "aws_instance" "nat" {
 
   user_data = base64encode(<<-EOF
     #!/bin/bash
-    echo "net.ipv4.ip_forward = 1" >> /etc/sysctl.d/nat.conf
+    # Enable IP forwarding (persists across reboots via sysctl.d)
+    echo "net.ipv4.ip_forward = 1" > /etc/sysctl.d/nat.conf
     sysctl -p /etc/sysctl.d/nat.conf
-    yum install -y iptables-services
+
+    # Set up iptables NAT rules
     iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
     iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
     iptables -A FORWARD -j ACCEPT
-    service iptables save
-    systemctl enable iptables
+
+    # Persist rules to disk (iptables-save is in the base AMI, no package needed)
+    mkdir -p /etc/sysconfig
+    iptables-save > /etc/sysconfig/iptables
+
+    # Create a systemd service to restore rules on boot (replaces iptables-services
+    # which requires yum and can't be installed during first boot — the instance has
+    # no public IP until the EIP is associated after creation)
+    cat > /etc/systemd/system/restore-iptables.service <<'UNIT'
+    [Unit]
+    Description=Restore iptables NAT rules
+    After=network.target
+
+    [Service]
+    Type=oneshot
+    ExecStart=/sbin/iptables-restore /etc/sysconfig/iptables
+    RemainAfterExit=yes
+
+    [Install]
+    WantedBy=multi-user.target
+    UNIT
+
+    systemctl daemon-reload
+    systemctl enable restore-iptables.service
   EOF
   )
 
