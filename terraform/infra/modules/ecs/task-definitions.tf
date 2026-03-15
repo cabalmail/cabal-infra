@@ -63,6 +63,7 @@ resource "aws_ecs_task_definition" "imap" {
         "awslogs-group"         = aws_cloudwatch_log_group.tier["imap"].name
         "awslogs-region"        = var.region
         "awslogs-stream-prefix" = "imap"
+        "mode"                  = "non-blocking"
       }
     }
   }])
@@ -126,6 +127,7 @@ resource "aws_ecs_task_definition" "smtp_in" {
         "awslogs-group"         = aws_cloudwatch_log_group.tier["smtp-in"].name
         "awslogs-region"        = var.region
         "awslogs-stream-prefix" = "smtp-in"
+        "mode"                  = "non-blocking"
       }
     }
   }])
@@ -183,6 +185,7 @@ resource "aws_ecs_task_definition" "smtp_out" {
         "awslogs-group"         = aws_cloudwatch_log_group.tier["smtp-out"].name
         "awslogs-region"        = var.region
         "awslogs-stream-prefix" = "smtp-out"
+        "mode"                  = "non-blocking"
       }
     }
   }])
