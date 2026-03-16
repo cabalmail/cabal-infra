@@ -100,6 +100,7 @@ jobs:
         TAG="${{ needs.set-tag.outputs.image_tag }}"
         docker buildx build \
           --platform linux/arm64 \
+          --provenance=false \
           -t ${IMAGE}:${TAG} \
           -t ${IMAGE}:latest \
           --push \
