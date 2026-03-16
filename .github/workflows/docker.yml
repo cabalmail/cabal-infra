@@ -91,14 +91,18 @@ jobs:
           | docker login --username AWS --password-stdin ${REGISTRY}
         echo "registry=${REGISTRY}" >> "$GITHUB_OUTPUT"
 
+    - name: set-up-buildx
+      uses: docker/setup-buildx-action@v3
+
     - name: build-and-push
       run: |
         IMAGE="${{ steps.ecr.outputs.registry }}/cabal/certbot-renewal"
         TAG="${{ needs.set-tag.outputs.image_tag }}"
-        docker build \
+        docker buildx build \
+          --platform linux/arm64 \
           -t ${IMAGE}:${TAG} \
+          --push \
           lambda/certbot-renewal/
-        docker push ${IMAGE}:${TAG}
 
   deploy:
     needs: [set-tag, build, build-certbot]
