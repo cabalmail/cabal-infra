@@ -54,4 +54,4 @@ See the linked docouments for information on:
 
 # Documentation
 
-This document refers to more detailed documentation in the [docs](.) directory. Automated code documentation is generated for the Terraform code by [terraform-docs](https://github.com/terraform-docs/terraform-docs). See e.g. [terraform/infra/README.md](./terraform/infra/README.md). Automated code documentation is generated for the React code by [react-docgen](https://github.com/reactjs/react-docgen). These can be found in [react/admin/docs](./react/admin/docs).
+This document refers to more detailed documentation in the [docs](.) directory. Automated code documentation is generated for the Terraform code by [terraform-docs](https://github.com/terraform-docs/terraform-docs). See e.g. [terraform/infra/README.md](./terraform/infra/README.md).
