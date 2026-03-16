@@ -91,8 +91,19 @@ if [ "$TIER" = "imap" ] || [ "$TIER" = "smtp-out" ]; then
       > "/etc/pki/tls/certs/${CERT_DOMAIN}.chain.crt"
 
   echo "[entrypoint] Generating dovecot SSL config..."
+  # IMAP tier: NLB terminates TLS (993→143), so Dovecot must accept
+  # plain-TCP connections from the NLB. Use "ssl = yes" (available but
+  # not required) so auth is allowed on the forwarded plain connection.
+  #
+  # SMTP-OUT tier: NLB does TCP passthrough for submission (587/465),
+  # so Dovecot handles TLS directly. Use "ssl = required".
+  if [ "$TIER" = "imap" ]; then
+    _ssl_mode="yes"
+  else
+    _ssl_mode="required"
+  fi
   cat > /etc/dovecot/conf.d/10-ssl.conf <<SSLCONF
-ssl = required
+ssl = ${_ssl_mode}
 ssl_cert = </etc/pki/tls/certs/${CERT_DOMAIN}.chain.crt
 ssl_key = </etc/pki/tls/private/${CERT_DOMAIN}.key
 ssl_min_protocol = TLSv1.2
