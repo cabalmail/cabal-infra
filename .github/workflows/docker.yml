@@ -101,6 +101,7 @@ jobs:
         docker buildx build \
           --platform linux/arm64 \
           -t ${IMAGE}:${TAG} \
+          -t ${IMAGE}:latest \
           --push \
           lambda/certbot-renewal/
 
