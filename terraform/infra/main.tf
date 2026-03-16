@@ -37,13 +37,11 @@ module "pool" {
   ecs_cluster_name = module.ecs.cluster_name
 }
 
-# Creates an AWS Certificate Manager certificate for use on load balancers and CloudFront and requests a Let's Encrypt certificate for use on EC2 instances
+# Creates an AWS Certificate Manager certificate for use on load balancers and CloudFront
 module "cert" {
   source         = "./modules/cert"
   control_domain = var.control_domain
   zone_id        = data.terraform_remote_state.zone.outputs.control_domain_zone_id
-  prod           = var.prod
-  email          = var.email
 }
 
 # Sets up Route 53 hosted zones for mail domains
@@ -233,6 +231,22 @@ module "ecs" {
   unhealthy_threshold       = 10
 
   depends_on = [module.cert]
+}
+
+# Runs certbot on a schedule to renew Let's Encrypt certificates and restart ECS services
+module "certbot_renewal" {
+  source         = "./modules/certbot_renewal"
+  control_domain = var.control_domain
+  zone_id        = data.terraform_remote_state.zone.outputs.control_domain_zone_id
+  email          = var.email
+  prod           = var.prod
+  region         = var.aws_region
+  ecs_cluster_name  = module.ecs.cluster_name
+  ecs_service_names = [
+    module.ecs.imap_service_name,
+    module.ecs.smtp_in_service_name,
+    module.ecs.smtp_out_service_name,
+  ]
 }
 
 # Establishes a daily backup schedule for mail and address data
