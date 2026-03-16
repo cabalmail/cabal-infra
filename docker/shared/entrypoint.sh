@@ -85,11 +85,17 @@ chmod 100 /usr/bin/cognito.bash
 # ── Step 4: Dovecot SSL config (IMAP + SMTP-OUT) ─────────────
 # Replaces: chef/cabal/templates/default/dovecot-10-ssl.conf.erb
 if [ "$TIER" = "imap" ] || [ "$TIER" = "smtp-out" ]; then
+  echo "[entrypoint] Building full certificate chain for Dovecot..."
+  cat "/etc/pki/tls/certs/${CERT_DOMAIN}.crt" \
+      "/etc/pki/tls/certs/${CERT_DOMAIN}.ca-bundle" \
+      > "/etc/pki/tls/certs/${CERT_DOMAIN}.chain.crt"
+
   echo "[entrypoint] Generating dovecot SSL config..."
   cat > /etc/dovecot/conf.d/10-ssl.conf <<SSLCONF
-ssl_ca = </etc/pki/tls/certs/${CERT_DOMAIN}.ca-bundle
-ssl_cert = </etc/pki/tls/certs/${CERT_DOMAIN}.crt
+ssl = required
+ssl_cert = </etc/pki/tls/certs/${CERT_DOMAIN}.chain.crt
 ssl_key = </etc/pki/tls/private/${CERT_DOMAIN}.key
+ssl_min_protocol = TLSv1.2
 SSLCONF
 fi
 
