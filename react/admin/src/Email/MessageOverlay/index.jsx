@@ -152,7 +152,7 @@ class MessageOverlay extends React.Component {
   createPayload() {
     return [
       this.state.recipient,
-      this.state.message_body_html || this.stage.message_body_plain,
+      this.state.message_body_html || this.state.message_body_plain,
       this.props.envelope,
       {
         message_id: this.state.message_id,

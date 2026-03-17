@@ -1,47 +1,41 @@
-import React from 'react';
-import './SignUp.css'
-/**
- * Renders a sign up form.
- */
+import './SignUp.css';
 
-class SignUp extends React.Component {
-  render() {
-    return (
-      <div className="sign-up">
-        <form className="login" onSubmit={this.props.onSubmit}>
-          <label for="userName">User Name</label>
-          <input
-            type="text"
-            className="login username"
-            id="userName"
-            name="userName"
-            onChange={this.props.onUsernameChange}
-            value={this.props.username}
-          />
-          <label for="phone">Phone</label>
-          <input
-            type="text"
-            className="login phone"
-            id="phone"
-            name="phone"
-            placeholder="+12125555555"
-            onChange={this.props.onPhoneChange}
-            value={this.props.phone}
-          />
-          <label for="password">Password</label>
-          <input
-            type="password"
-            className="login password"
-            id="password"
-            name="password"
-            onChange={this.props.onPasswordChange}
-            value={this.props.password}
-          />
-          <button type="submit" className="default">Signup</button>
-        </form>
-      </div>
-    );
-  }
+function SignUp({ onSubmit, onUsernameChange, onPasswordChange, onPhoneChange, username, password, phone }) {
+  return (
+    <div className="sign-up">
+      <form className="login" onSubmit={onSubmit}>
+        <label htmlFor="userName">User Name</label>
+        <input
+          type="text"
+          className="login username"
+          id="userName"
+          name="userName"
+          onChange={onUsernameChange}
+          value={username || ""}
+        />
+        <label htmlFor="phone">Phone</label>
+        <input
+          type="text"
+          className="login phone"
+          id="phone"
+          name="phone"
+          placeholder="+12125555555"
+          onChange={onPhoneChange}
+          value={phone || ""}
+        />
+        <label htmlFor="password">Password</label>
+        <input
+          type="password"
+          className="login password"
+          id="password"
+          name="password"
+          onChange={onPasswordChange}
+          value={password || ""}
+        />
+        <button type="submit" className="default">Signup</button>
+      </form>
+    </div>
+  );
 }
 
 export default SignUp;

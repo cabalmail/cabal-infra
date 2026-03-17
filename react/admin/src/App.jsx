@@ -22,6 +22,10 @@ import Login from './Login';
 import AppMessage from './AppMessage';
 import Nav from './Nav';
 
+// Contexts
+import AuthContext from './contexts/AuthContext';
+import AppMessageContext from './contexts/AppMessageContext';
+
 // Site-wide and Theme-specific style
 import './AppDark.css';
 import './AppLight.css';
@@ -39,7 +43,7 @@ class App extends React.Component {
 
   constructor(props) {
     super(props);
-    this.state = JSON.parse(window.localStorage.getItem('state')) || {
+    const defaults = {
       loggedIn: false,
       token: null,
       expires: Math.floor(new Date() / 1000) - 1,
@@ -56,14 +60,23 @@ class App extends React.Component {
       api_url: null,
       hideMessage: true
     };
+    const saved = JSON.parse(window.localStorage.getItem('state'));
+    this.state = saved
+      ? { ...defaults, ...saved, token: null, password: null }
+      : defaults;
   }
 
-  setState(state) {
+  persistState(state) {
+    const { password, token, ...safe } = { ...this.state, ...state };
     try {
-      window.localStorage.setItem('state', JSON.stringify(state));
+      window.localStorage.setItem('state', JSON.stringify(safe));
     } catch (e) {
       console.log(e);
     }
+  }
+
+  setState(state) {
+    this.persistState(state);
     super.setState(state);
   }
 
@@ -290,23 +303,33 @@ class App extends React.Component {
   }
 
   render() {
+    const authValue = {
+      token: this.state.token,
+      api_url: this.state.api_url,
+      host: this.state.imap_host,
+      domains: this.state.domains
+    };
     return (
-      <div className={`App ${this.state.view}`}>
-        <Nav
-          onClick={this.updateView}
-          loggedIn={this.state.loggedIn}
-          view={this.state.view}
-          doLogout={this.doLogout}
-        />
-        <div className="content">
-          {this.renderContent()}
-        </div>
-        <AppMessage
-          message={this.state.message}
-          hide={this.state.hideMessage}
-          error={this.state.error}
-        />
-      </div>
+      <AuthContext.Provider value={authValue}>
+        <AppMessageContext.Provider value={this.setMessage}>
+          <div className={`App ${this.state.view}`}>
+            <Nav
+              onClick={this.updateView}
+              loggedIn={this.state.loggedIn}
+              view={this.state.view}
+              doLogout={this.doLogout}
+            />
+            <div className="content">
+              {this.renderContent()}
+            </div>
+            <AppMessage
+              message={this.state.message}
+              hide={this.state.hideMessage}
+              error={this.state.error}
+            />
+          </div>
+        </AppMessageContext.Provider>
+      </AuthContext.Provider>
     );
   }
 
