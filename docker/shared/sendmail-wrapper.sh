@@ -7,12 +7,16 @@
 # supervisord can detect the failure and restart.
 set -euo pipefail
 
-/usr/sbin/sendmail -bd -q15m
-
 PIDFILE=/var/run/sendmail.pid
 
-# Wait for sendmail to create its PID file (up to 5 seconds)
-for i in $(seq 1 50); do
+# Remove stale PID file from a previous run so we don't read it
+# before sendmail has a chance to write a fresh one.
+rm -f "$PIDFILE"
+
+/usr/sbin/sendmail -bd -q15m
+
+# Wait for sendmail to create its PID file (up to 10 seconds)
+for i in $(seq 1 100); do
   [ -f "$PIDFILE" ] && break
   sleep 0.1
 done
@@ -23,6 +27,14 @@ if [ ! -f "$PIDFILE" ]; then
 fi
 
 PID=$(cat "$PIDFILE")
+
+# Verify the PID is actually alive (guards against a stale file
+# that was written and then the process immediately died).
+if ! kill -0 "$PID" 2>/dev/null; then
+  echo "[sendmail-wrapper] sendmail (pid $PID) exited immediately" >&2
+  rm -f "$PIDFILE"
+  exit 1
+fi
 echo "[sendmail-wrapper] sendmail started (pid $PID)"
 
 # Stay alive while the sendmail daemon is running
