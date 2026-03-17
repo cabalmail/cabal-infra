@@ -109,6 +109,16 @@ ssl_cert = </etc/pki/tls/certs/${CERT_DOMAIN}.chain.crt
 ssl_key = </etc/pki/tls/private/${CERT_DOMAIN}.key
 ssl_min_protocol = TLSv1.2
 SSLCONF
+
+  # Tell Dovecot that NLB health-check IPs are trusted. This suppresses
+  # the noisy "Disconnected (no auth attempts)" info logs from NLB TCP
+  # probes that connect and immediately close.
+  if [ -n "${NETWORK_CIDR:-}" ]; then
+    echo "[entrypoint] Setting Dovecot login_trusted_networks = ${NETWORK_CIDR}"
+    cat > /etc/dovecot/conf.d/05-login.conf <<LOGINCONF
+login_trusted_networks = ${NETWORK_CIDR}
+LOGINCONF
+  fi
 fi
 
 # ── Step 5: Create OS users from Cognito ──────────────────────
