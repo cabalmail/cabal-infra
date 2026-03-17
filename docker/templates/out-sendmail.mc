@@ -36,7 +36,6 @@ FEATURE(`nouucp',`reject')dnl
 FEATURE(`genericstable', `hash -o /etc/mail/genericstable')dnl
 FEATURE(`mailertable', `hash -o /etc/mail/mailertable')dnl
 FEATURE(`access_db', `hash -T<TMPF> /etc/mail/access')dnl
-FEATURE(`greet_pause', 5000)dnl
 FEATURE(`blacklist_recipients')dnl
 MAILER(procmail)dnl
 MAILER(smtp)dnl

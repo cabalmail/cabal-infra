@@ -1332,8 +1332,8 @@ alias would create a mail loop.
 #### Cloud Map service discovery for inter-tier delivery
 
 To solve this, the IMAP ECS service registers with a **Cloud Map private
-DNS namespace** (`cabal.local`). ECS automatically manages an A record at
-`imap.cabal.local` that resolves to the IMAP task's ENI private IP.
+DNS namespace** (`cabal.internal`). ECS automatically manages an A record at
+`imap.cabal.internal` that resolves to the IMAP task's ENI private IP.
 SMTP-IN and SMTP-OUT task definitions receive this hostname via the
 `IMAP_INTERNAL_HOST` environment variable, and `generate-config.sh` uses
 it in the mailertable instead of `imap.<control_domain>`. This routes
@@ -1346,7 +1346,7 @@ mail directly to the IMAP container on port 25 without touching the NLB.
                   └──────────────────────────────────────────┘
 
                   ┌──────────────────────────────────────────┐
-                  │  imap.cabal.local  (Cloud Map)           │
+                  │  imap.cabal.internal  (Cloud Map)        │
                   │  → IMAP task ENI IP  (port 25 → direct)  │
                   └──────────────────────────────────────────┘
 ```
