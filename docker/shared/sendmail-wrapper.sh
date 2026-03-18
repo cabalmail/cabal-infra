@@ -13,7 +13,11 @@ PIDFILE=/var/run/sendmail.pid
 # before sendmail has a chance to write a fresh one.
 rm -f "$PIDFILE"
 
-/usr/sbin/sendmail -bd -q15m
+echo "[sendmail-wrapper] Starting sendmail -bd -q15m ..."
+if ! /usr/sbin/sendmail -bd -q15m; then
+  echo "[sendmail-wrapper] sendmail failed to start (exit code $?)" >&2
+  exit 1
+fi
 
 # Wait for sendmail to create its PID file (up to 10 seconds)
 for i in $(seq 1 100); do
@@ -22,7 +26,13 @@ for i in $(seq 1 100); do
 done
 
 if [ ! -f "$PIDFILE" ]; then
-  echo "[sendmail-wrapper] sendmail failed to create PID file" >&2
+  echo "[sendmail-wrapper] sendmail failed to create PID file at $PIDFILE" >&2
+  # Check common alternative locations to aid debugging
+  for alt in /run/sendmail.pid /var/run/sendmail/sendmail.pid; do
+    if [ -f "$alt" ]; then
+      echo "[sendmail-wrapper] Found PID file at $alt instead — fix confPID_FILE" >&2
+    fi
+  done
   exit 1
 fi
 

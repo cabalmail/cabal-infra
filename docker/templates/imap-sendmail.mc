@@ -3,6 +3,7 @@ include(`/usr/share/sendmail-cf/m4/cf.m4')dnl
 VERSIONID(`setup for Red Hat Linux')dnl
 OSTYPE(`linux')dnl
 define(`confDEF_USER_ID',``8:12'')dnl
+define(`confPID_FILE', `/var/run/sendmail.pid')dnl
 define(`confTO_CONNECT', `1m')dnl
 define(`confTRY_NULL_MX_LIST',true)dnl
 define(`confDONT_PROBE_INTERFACES',true)dnl
