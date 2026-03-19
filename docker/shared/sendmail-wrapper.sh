@@ -36,15 +36,74 @@ cleanup() {
 }
 trap cleanup SIGTERM SIGINT EXIT
 
+# ── Pre-flight diagnostics ───────────────────────────────────
+# Log the state of key prerequisites so failures are easy to diagnose.
+preflight_ok=true
+
+# 1. sendmail.cf must exist
+if [ ! -f /etc/mail/sendmail.cf ]; then
+  echo "[sendmail-wrapper] PREFLIGHT FAIL: /etc/mail/sendmail.cf not found" >&2
+  preflight_ok=false
+else
+  echo "[sendmail-wrapper] OK: sendmail.cf exists"
+fi
+
+# 2. Queue directory
+if [ ! -d /var/spool/mqueue ]; then
+  echo "[sendmail-wrapper] PREFLIGHT FAIL: /var/spool/mqueue does not exist" >&2
+  preflight_ok=false
+else
+  echo "[sendmail-wrapper] OK: /var/spool/mqueue exists ($(ls -ld /var/spool/mqueue))"
+fi
+
+# 3. Mail user/group (confDEF_USER_ID = 8:12)
+if ! getent passwd 8 >/dev/null 2>&1; then
+  echo "[sendmail-wrapper] PREFLIGHT WARN: no user with UID 8 (mail)" >&2
+fi
+if ! getent group 12 >/dev/null 2>&1; then
+  echo "[sendmail-wrapper] PREFLIGHT WARN: no group with GID 12 (mail)" >&2
+fi
+
+# 4. PID file directory writable
+PIDDIR=$(dirname "$PIDFILE")
+if [ ! -d "$PIDDIR" ]; then
+  echo "[sendmail-wrapper] PREFLIGHT FAIL: $PIDDIR does not exist" >&2
+  preflight_ok=false
+elif [ ! -w "$PIDDIR" ]; then
+  echo "[sendmail-wrapper] PREFLIGHT FAIL: $PIDDIR not writable" >&2
+  preflight_ok=false
+else
+  echo "[sendmail-wrapper] OK: $PIDDIR is writable"
+fi
+
+# 5. Port 25 not already in use
+if ss -tlnp 2>/dev/null | grep -q ':25 '; then
+  echo "[sendmail-wrapper] PREFLIGHT WARN: port 25 already in use:" >&2
+  ss -tlnp 2>/dev/null | grep ':25 ' >&2
+fi
+
+if [ "$preflight_ok" = false ]; then
+  echo "[sendmail-wrapper] Pre-flight checks failed, aborting" >&2
+  exit 1
+fi
+
+# ── Start sendmail ───────────────────────────────────────────
 # Remove stale PID file from a previous run so we don't read it
 # before sendmail has a chance to write a fresh one.
 rm -f "$PIDFILE"
 
+# Capture stderr from the fork parent — it may print the reason
+# for the child's failure before exiting.
 echo "[sendmail-wrapper] Starting sendmail -bd -q15m ..."
-if ! /usr/sbin/sendmail -bd -q15m; then
+SM_ERR=$(mktemp)
+if ! /usr/sbin/sendmail -bd -q15m 2>"$SM_ERR"; then
   echo "[sendmail-wrapper] sendmail failed to start (exit code $?)" >&2
+  [ -s "$SM_ERR" ] && echo "[sendmail-wrapper] stderr: $(cat "$SM_ERR")" >&2
+  rm -f "$SM_ERR"
   exit 1
 fi
+[ -s "$SM_ERR" ] && echo "[sendmail-wrapper] sendmail stderr: $(cat "$SM_ERR")" >&2
+rm -f "$SM_ERR"
 
 # Wait for sendmail to create its PID file (up to 10 seconds)
 for i in $(seq 1 100); do
@@ -60,6 +119,11 @@ if [ ! -f "$PIDFILE" ]; then
       echo "[sendmail-wrapper] Found PID file at $alt instead — fix confPID_FILE" >&2
     fi
   done
+  # ── Post-mortem: dump recent maillog for the daemon's syslog output ──
+  if [ -f /var/log/maillog ]; then
+    echo "[sendmail-wrapper] Last 20 lines of /var/log/maillog:" >&2
+    tail -20 /var/log/maillog >&2
+  fi
   exit 1
 fi
 
@@ -69,6 +133,10 @@ PID=$(cat "$PIDFILE")
 # that was written and then the process immediately died).
 if ! kill -0 "$PID" 2>/dev/null; then
   echo "[sendmail-wrapper] sendmail (pid $PID) exited immediately" >&2
+  if [ -f /var/log/maillog ]; then
+    echo "[sendmail-wrapper] Last 20 lines of /var/log/maillog:" >&2
+    tail -20 /var/log/maillog >&2
+  fi
   rm -f "$PIDFILE"
   exit 1
 fi
@@ -83,4 +151,8 @@ while kill -0 "$PID" 2>/dev/null; do
 done
 
 echo "[sendmail-wrapper] sendmail (pid $PID) exited" >&2
+if [ -f /var/log/maillog ]; then
+  echo "[sendmail-wrapper] Last 20 lines of /var/log/maillog:" >&2
+  tail -20 /var/log/maillog >&2
+fi
 exit 1
