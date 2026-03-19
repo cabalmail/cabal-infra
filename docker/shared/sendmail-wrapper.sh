@@ -46,6 +46,9 @@ if [ ! -f /etc/mail/sendmail.cf ]; then
   preflight_ok=false
 else
   echo "[sendmail-wrapper] OK: sendmail.cf exists"
+  # Log the daemon options so we can verify sendmail will listen on port 25
+  DAEMON_OPTS=$(grep -i 'DaemonPortOptions' /etc/mail/sendmail.cf 2>/dev/null || echo "(none found)")
+  echo "[sendmail-wrapper] sendmail.cf DaemonPortOptions: $DAEMON_OPTS"
 fi
 
 # 2. Queue directory
@@ -167,12 +170,53 @@ if ! kill -0 "$PID" 2>/dev/null; then
 fi
 echo "[sendmail-wrapper] sendmail started (pid $PID)"
 
+# ── Post-startup diagnostics ─────────────────────────────────
+# Verify the daemon is actually what we think it is and is listening.
+echo "[sendmail-wrapper] Process details: $(ps -p "$PID" -o pid=,ppid=,comm=,args= 2>/dev/null || echo 'ps failed')"
+echo "[sendmail-wrapper] All listeners:"
+ss -tlnp 2>/dev/null | while IFS= read -r line; do
+  echo "[sendmail-wrapper]   $line"
+done
+
+# Give sendmail a moment to finish opening sockets (PID file is written
+# before daemon sockets are opened on some builds).
+sleep 2
+
+# Verify port 25 is actually accepting connections
+if ss -tlnp 2>/dev/null | grep -q ':25 '; then
+  echo "[sendmail-wrapper] HEALTH OK: port 25 is listening"
+else
+  echo "[sendmail-wrapper] HEALTH FAIL: port 25 is NOT listening after startup!" >&2
+  echo "[sendmail-wrapper] ss -tlnp output:"
+  ss -tlnp 2>/dev/null >&2
+  if [ -f /var/log/maillog ]; then
+    echo "[sendmail-wrapper] Last 30 lines of /var/log/maillog:" >&2
+    tail -30 /var/log/maillog >&2
+  fi
+  echo "[sendmail-wrapper] sendmail.cf DaemonPortOptions:"
+  grep -i 'DaemonPortOptions' /etc/mail/sendmail.cf 2>/dev/null >&2 || echo "(none)" >&2
+  # Don't exit — let the monitoring loop handle it; the daemon may
+  # recover or we'll get more diagnostic data on the next check.
+fi
+
 # Stay alive while the sendmail daemon is running.
 # Use wait-style sleep so SIGTERM interrupts immediately
 # instead of blocking until the sleep completes.
+# Also periodically verify port 25 is still listening.
+PORT_CHECK_COUNT=0
 while kill -0 "$PID" 2>/dev/null; do
   sleep 5 &
   wait $! 2>/dev/null || true
+  PORT_CHECK_COUNT=$((PORT_CHECK_COUNT + 1))
+  # Check port 25 every ~60 seconds (12 × 5s)
+  if [ $((PORT_CHECK_COUNT % 12)) -eq 0 ]; then
+    if ! ss -tlnp 2>/dev/null | grep -q ':25 '; then
+      echo "[sendmail-wrapper] HEALTH WARN: port 25 no longer listening (pid $PID still alive)!" >&2
+      echo "[sendmail-wrapper] ss -tlnp:" >&2
+      ss -tlnp 2>/dev/null >&2
+      echo "[sendmail-wrapper] Process: $(ps -p "$PID" -o pid=,ppid=,stat=,comm=,args= 2>/dev/null)" >&2
+    fi
+  fi
 done
 
 echo "[sendmail-wrapper] sendmail (pid $PID) exited" >&2
