@@ -101,12 +101,29 @@ if [ -f "$PIDFILE" ]; then
   rm -f "$PIDFILE"
 fi
 
-# Also kill any process on port 25 that we don't have a PID file for
-# (e.g., PID file was deleted but daemon survived, or a different
-# sendmail was started outside the wrapper).
-PORT25_PID=$(ss -tlnp 2>/dev/null | grep ':25 ' | grep -oP 'pid=\K\d+' | head -1 || true)
+# Also kill any process on port 25 that we don't have a PID file for.
+# IMPORTANT: Use ss -tanp (ALL socket states), not ss -tlnp (LISTEN only).
+# A bound-but-not-yet-listening socket still blocks bind() with EADDRINUSE
+# but is invisible to -l.  Also check /proc/net/tcp as a belt-and-suspenders
+# fallback (port 25 = hex 0019).
+echo "[sendmail-wrapper] Checking for anything on port 25..."
+echo "[sendmail-wrapper] /proc/net/tcp port 25 entries:"
+grep -i ':0019 ' /proc/net/tcp /proc/net/tcp6 2>/dev/null | while IFS= read -r line; do
+  echo "[sendmail-wrapper]   $line"
+done || true
+echo "[sendmail-wrapper] ss -tanp port 25:"
+ss -tanp 2>/dev/null | grep ':25 ' | while IFS= read -r line; do
+  echo "[sendmail-wrapper]   $line"
+done || true
+echo "[sendmail-wrapper] ss -tlnp port 25:"
+ss -tlnp 2>/dev/null | grep ':25 ' | while IFS= read -r line; do
+  echo "[sendmail-wrapper]   $line"
+done || true
+
+# Try to find the PID via ss -tanp (all states, not just LISTEN)
+PORT25_PID=$(ss -tanp 2>/dev/null | grep ':25 ' | grep -oP 'pid=\K\d+' | head -1 || true)
 if [ -n "$PORT25_PID" ]; then
-  echo "[sendmail-wrapper] Killing process $PORT25_PID holding port 25..."
+  echo "[sendmail-wrapper] Killing process $PORT25_PID holding port 25 (found via ss)..."
   kill "$PORT25_PID" 2>/dev/null || true
   sleep 1
   if kill -0 "$PORT25_PID" 2>/dev/null; then
@@ -114,6 +131,23 @@ if [ -n "$PORT25_PID" ]; then
     sleep 0.5
   fi
 fi
+
+# Fallback: try fuser if available (catches things ss might miss)
+if command -v fuser >/dev/null 2>&1; then
+  FUSER_OUT=$(fuser 25/tcp 2>&1 || true)
+  if [ -n "$FUSER_OUT" ]; then
+    echo "[sendmail-wrapper] fuser 25/tcp: $FUSER_OUT"
+    fuser -k 25/tcp 2>/dev/null || true
+    sleep 1
+  fi
+fi
+
+# Also list ALL sendmail processes — if make or the package started one,
+# we'll see it here.
+echo "[sendmail-wrapper] All sendmail processes:"
+ps aux 2>/dev/null | grep '[s]endmail' | while IFS= read -r line; do
+  echo "[sendmail-wrapper]   $line"
+done || true
 
 if [ "$preflight_ok" = false ]; then
   echo "[sendmail-wrapper] Pre-flight checks failed, aborting" >&2
