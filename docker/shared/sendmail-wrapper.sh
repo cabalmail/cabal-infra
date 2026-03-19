@@ -76,21 +76,46 @@ else
   echo "[sendmail-wrapper] OK: $PIDDIR is writable"
 fi
 
-# 5. Port 25 not already in use
-if ss -tlnp 2>/dev/null | grep -q ':25 '; then
-  echo "[sendmail-wrapper] PREFLIGHT WARN: port 25 already in use:" >&2
-  ss -tlnp 2>/dev/null | grep ':25 ' >&2
+# 5. Kill any orphaned sendmail daemon still holding the port.
+#    This handles the case where the previous wrapper was killed
+#    (SIGKILL, OOM, etc.) and its EXIT trap never ran, leaving the
+#    daemon alive on port 25 with no wrapper to manage it.
+if [ -f "$PIDFILE" ]; then
+  OLD_PID=$(cat "$PIDFILE")
+  if kill -0 "$OLD_PID" 2>/dev/null; then
+    echo "[sendmail-wrapper] Killing orphaned sendmail daemon (pid $OLD_PID) from stale PID file..."
+    kill "$OLD_PID" 2>/dev/null || true
+    for i in $(seq 1 10); do
+      kill -0 "$OLD_PID" 2>/dev/null || break
+      sleep 0.5
+    done
+    if kill -0 "$OLD_PID" 2>/dev/null; then
+      echo "[sendmail-wrapper] Force-killing orphaned daemon (pid $OLD_PID)" >&2
+      kill -9 "$OLD_PID" 2>/dev/null || true
+      sleep 0.5
+    fi
+  fi
+  rm -f "$PIDFILE"
+fi
+
+# Also kill any process on port 25 that we don't have a PID file for
+# (e.g., PID file was deleted but daemon survived, or a different
+# sendmail was started outside the wrapper).
+PORT25_PID=$(ss -tlnp 2>/dev/null | grep ':25 ' | grep -oP 'pid=\K\d+' | head -1)
+if [ -n "$PORT25_PID" ]; then
+  echo "[sendmail-wrapper] Killing process $PORT25_PID holding port 25..."
+  kill "$PORT25_PID" 2>/dev/null || true
+  sleep 1
+  if kill -0 "$PORT25_PID" 2>/dev/null; then
+    kill -9 "$PORT25_PID" 2>/dev/null || true
+    sleep 0.5
+  fi
 fi
 
 if [ "$preflight_ok" = false ]; then
   echo "[sendmail-wrapper] Pre-flight checks failed, aborting" >&2
   exit 1
 fi
-
-# ── Start sendmail ───────────────────────────────────────────
-# Remove stale PID file from a previous run so we don't read it
-# before sendmail has a chance to write a fresh one.
-rm -f "$PIDFILE"
 
 # Capture stderr from the fork parent — it may print the reason
 # for the child's failure before exiting.
