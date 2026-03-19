@@ -104,7 +104,7 @@ fi
 # Also kill any process on port 25 that we don't have a PID file for
 # (e.g., PID file was deleted but daemon survived, or a different
 # sendmail was started outside the wrapper).
-PORT25_PID=$(ss -tlnp 2>/dev/null | grep ':25 ' | grep -oP 'pid=\K\d+' | head -1)
+PORT25_PID=$(ss -tlnp 2>/dev/null | grep ':25 ' | grep -oP 'pid=\K\d+' | head -1 || true)
 if [ -n "$PORT25_PID" ]; then
   echo "[sendmail-wrapper] Killing process $PORT25_PID holding port 25..."
   kill "$PORT25_PID" 2>/dev/null || true
