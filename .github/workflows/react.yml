@@ -13,9 +13,10 @@ on:
       - 'react/admin/src'
       - 'react/admin/src/*'
       - 'react/admin/src/*/**'
+      - 'react/admin/index.html'
+      - 'react/admin/vite.config.js'
       - 'react/admin/package.json'
       - '.github/workflows/react.yml'
-      - '.github/scripts/react-documentation.sh'
 
 jobs:
   build:
@@ -23,13 +24,13 @@ jobs:
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     steps:
     - name: checkout
-      uses: actions/checkout@main
+      uses: actions/checkout@v4
     - name: build
       env:
         NODE_ENV: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
-      run: cd react/admin && yarn install && yarn build --profile
+      run: cd react/admin && npm ci && npm run build
     - name: package
-      run: cd react/admin && tar czvf ../../react_app.tar.gz build/
+      run: cd react/admin && tar czvf ../../react_app.tar.gz dist/
     - name: store-artifact
       uses: actions/upload-artifact@v4
       with:
@@ -57,26 +58,10 @@ jobs:
     - name: upload
       env:
         TF_VAR_CONTROL_DOMAIN: ${{ vars.TF_VAR_CONTROL_DOMAIN }}
-      run: aws s3 sync build "s3://admin.${TF_VAR_CONTROL_DOMAIN}" --profile deploy_react --no-progress
+      run: aws s3 sync dist "s3://admin.${TF_VAR_CONTROL_DOMAIN}" --profile deploy_react --no-progress
     - name: invalidate-cache
       run: |
         aws cloudfront create-invalidation \
         --distribution-id "$(aws ssm get-parameter --name "/cabal/react-config/cf-distribution" --profile deploy_react | jq -r '.Parameter.Value')" \
         --paths '/*' \
         --profile deploy_react
-  document:
-    runs-on: ubuntu-latest
-    steps:
-    - name: checkout
-      uses: actions/checkout@main
-    - name: install
-      run: ./.github/scripts/react-documentation.sh
-    - name: Push
-      run: |
-        MYNAME="${{github.event.pusher.name}} (automated)"
-        MYEMAIL="${{github.event.pusher.email}}"
-        git config --global user.name "${MYNAME}"
-        git config --global user.email "${MYEMAIL}"
-        git add . || true
-        git commit -m "Generated documentation for React" || true
-        git push || true

@@ -8,6 +8,7 @@ on:
   push:
     paths:
       - 'docker/**'
+      - 'lambda/certbot-renewal/**'
       - '.github/workflows/docker.yml'
 
 permissions:
@@ -63,8 +64,50 @@ jobs:
           docker/
         docker push ${IMAGE}:${TAG}
 
+  build-certbot:
+    needs: set-tag
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
+    steps:
+    - name: checkout
+      uses: actions/checkout@v4
+
+    - name: configure-aws-cli
+      run: |
+        aws configure --profile ecr_push <<-EOF > /dev/null 2>&1
+        ${{ secrets.AWS_ACCESS_KEY_ID }}
+        ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        ${{ secrets.AWS_REGION }}
+        json
+        EOF
+
+    - name: login-to-ecr
+      id: ecr
+      run: |
+        ACCOUNT_ID=$(aws sts get-caller-identity --profile ecr_push --query Account --output text)
+        REGION=${{ secrets.AWS_REGION }}
+        REGISTRY="${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com"
+        aws ecr get-login-password --profile ecr_push --region ${REGION} \
+          | docker login --username AWS --password-stdin ${REGISTRY}
+        echo "registry=${REGISTRY}" >> "$GITHUB_OUTPUT"
+
+    - name: set-up-buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: build-and-push
+      run: |
+        IMAGE="${{ steps.ecr.outputs.registry }}/cabal/certbot-renewal"
+        TAG="${{ needs.set-tag.outputs.image_tag }}"
+        docker buildx build \
+          --platform linux/arm64 \
+          --provenance=false \
+          -t ${IMAGE}:${TAG} \
+          -t ${IMAGE}:latest \
+          --push \
+          lambda/certbot-renewal/
+
   deploy:
-    needs: [set-tag, build]
+    needs: [set-tag, build, build-certbot]
     uses: ./.github/workflows/terraform.yml
     with:
       image_tag: ${{ needs.set-tag.outputs.image_tag }}

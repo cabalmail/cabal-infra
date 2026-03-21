@@ -10,7 +10,7 @@
 set -euo pipefail
 
 # IMAP_INTERNAL_HOST is a Cloud Map service discovery hostname
-# (imap.cabal.local) that resolves directly to the IMAP container's
+# (imap.cabal.internal) that resolves directly to the IMAP container's
 # ENI IP.  The mailertable uses this so that sendmail connects to the
 # IMAP container on port 25 without going through the NLB (whose
 # port 25 listener routes to smtp-in, not imap).

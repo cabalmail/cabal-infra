@@ -12,7 +12,7 @@
 */
 
 resource "aws_service_discovery_private_dns_namespace" "mail" {
-  name        = "cabal.local"
+  name        = "cabal.internal"
   description = "Internal service discovery for ECS mail tiers"
   vpc         = var.vpc_id
 }
