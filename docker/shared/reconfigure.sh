@@ -58,12 +58,23 @@ regenerate() {
     makemap hash /etc/mail/mailertable.db  < /etc/mail/mailertable
   fi
 
-  # Restart sendmail to pick up all changes including Fw-referenced
-  # flat files (local-host-names, relay-domains) that SIGHUP may not
-  # re-read on all sendmail versions.  Use supervisorctl so the
-  # wrapper script and daemon are stopped/started together cleanly,
-  # avoiding a window where port 25 is down.
-  supervisorctl restart sendmail
+  # Signal sendmail to re-read all configuration.  SIGHUP causes
+  # sendmail to re-exec itself — same PID, same listening socket,
+  # zero downtime.  It re-reads sendmail.cf, hash databases (.db),
+  # and Fw/Fr flat files (local-host-names, relay-domains, etc.).
+  #
+  # Previously this used `supervisorctl restart sendmail`, but the
+  # full restart tears down the daemon and creates a window where
+  # port 25 is down, causing Dovecot submission relays to fail with
+  # "Connection refused".
+  if [ -f /var/run/sendmail.pid ]; then
+    SM_PID=$(head -1 /var/run/sendmail.pid)
+    echo "[reconfigure] Sending SIGHUP to sendmail (pid $SM_PID)..."
+    kill -HUP "$SM_PID" 2>/dev/null || true
+  else
+    echo "[reconfigure] WARN: no sendmail PID file, falling back to restart" >&2
+    supervisorctl restart sendmail
+  fi
 
   # For SMTP-OUT, also reload OpenDKIM tables
   if [ "$TIER" = "smtp-out" ]; then

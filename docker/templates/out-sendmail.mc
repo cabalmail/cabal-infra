@@ -2,6 +2,7 @@ divert(-1)
 include(`/usr/share/sendmail-cf/m4/cf.m4')
 OSTYPE(`linux')dnl
 define(`confLOG_LEVEL', `2')dnl
+define(`confPID_FILE', `/var/run/sendmail.pid')dnl
 define(`confDEF_USER_ID',``8:12'')
 define(`ALIAS_FILE',`/etc/aliases')dnl
 define(`confPRIVACY_FLAGS', `authwarnings,needmailhelo,noexpn,novrfy')dnl
