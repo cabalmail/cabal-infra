@@ -14,7 +14,9 @@ RUN dnf install -y \
       awscli-2 jq \
       pip \
     && pip install supervisor \
-    && dnf clean all
+    && dnf clean all \
+    && sed -i 's/^UID_MAX.*/UID_MAX                 2147483647/' /etc/login.defs \
+    && sed -i 's/^GID_MAX.*/GID_MAX                 2147483647/' /etc/login.defs
 
 # Dovecot submission configuration
 COPY smtp-out/configs/dovecot/00-protocols.conf   /etc/dovecot/conf.d/00-protocols.conf

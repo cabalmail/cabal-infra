@@ -60,8 +60,10 @@ regenerate() {
 
   # Restart sendmail to pick up all changes including Fw-referenced
   # flat files (local-host-names, relay-domains) that SIGHUP may not
-  # re-read on all sendmail versions.  Supervisord will restart it.
-  pkill sendmail || true
+  # re-read on all sendmail versions.  Use supervisorctl so the
+  # wrapper script and daemon are stopped/started together cleanly,
+  # avoiding a window where port 25 is down.
+  supervisorctl restart sendmail
 
   # For SMTP-OUT, also reload OpenDKIM tables
   if [ "$TIER" = "smtp-out" ]; then

@@ -7,6 +7,7 @@
 #
 # Required env vars: TIER, CERT_DOMAIN, AWS_REGION, COGNITO_CLIENT_ID,
 #                    COGNITO_POOL_ID, TLS_CA_BUNDLE, TLS_CERT, TLS_KEY
+# Optional:          NETWORK_CIDR (VPC CIDR for fail2ban whitelist)
 # IMAP-only:         MASTER_PASSWORD
 # SMTP-OUT-only:     DKIM_PRIVATE_KEY
 set -euo pipefail
@@ -85,12 +86,39 @@ chmod 100 /usr/bin/cognito.bash
 # ── Step 4: Dovecot SSL config (IMAP + SMTP-OUT) ─────────────
 # Replaces: chef/cabal/templates/default/dovecot-10-ssl.conf.erb
 if [ "$TIER" = "imap" ] || [ "$TIER" = "smtp-out" ]; then
+  echo "[entrypoint] Building full certificate chain for Dovecot..."
+  cat "/etc/pki/tls/certs/${CERT_DOMAIN}.crt" \
+      "/etc/pki/tls/certs/${CERT_DOMAIN}.ca-bundle" \
+      > "/etc/pki/tls/certs/${CERT_DOMAIN}.chain.crt"
+
   echo "[entrypoint] Generating dovecot SSL config..."
+  # IMAP tier: NLB terminates TLS (993→143), so Dovecot must accept
+  # plain-TCP connections from the NLB. Use "ssl = yes" (available but
+  # not required) so auth is allowed on the forwarded plain connection.
+  #
+  # SMTP-OUT tier: NLB does TCP passthrough for submission (587/465),
+  # so Dovecot handles TLS directly. Use "ssl = required".
+  if [ "$TIER" = "imap" ]; then
+    _ssl_mode="yes"
+  else
+    _ssl_mode="required"
+  fi
   cat > /etc/dovecot/conf.d/10-ssl.conf <<SSLCONF
-ssl_ca = </etc/pki/tls/certs/${CERT_DOMAIN}.ca-bundle
-ssl_cert = </etc/pki/tls/certs/${CERT_DOMAIN}.crt
+ssl = ${_ssl_mode}
+ssl_cert = </etc/pki/tls/certs/${CERT_DOMAIN}.chain.crt
 ssl_key = </etc/pki/tls/private/${CERT_DOMAIN}.key
+ssl_min_protocol = TLSv1.2
 SSLCONF
+
+  # Tell Dovecot that NLB health-check IPs are trusted. This suppresses
+  # the noisy "Disconnected (no auth attempts)" info logs from NLB TCP
+  # probes that connect and immediately close.
+  if [ -n "${NETWORK_CIDR:-}" ]; then
+    echo "[entrypoint] Setting Dovecot login_trusted_networks = ${NETWORK_CIDR}"
+    cat > /etc/dovecot/conf.d/05-login.conf <<LOGINCONF
+login_trusted_networks = ${NETWORK_CIDR}
+LOGINCONF
+  fi
 fi
 
 # ── Step 5: Create OS users from Cognito ──────────────────────
@@ -128,10 +156,24 @@ if [ "$TIER" = "imap" ]; then
   htpasswd -b -c -s /etc/dovecot/master-users admin "${MASTER_PASSWORD}"
 fi
 
-# ── Step 10: Prepare rsyslog working directory ─────────────────
+# ── Step 10: fail2ban — whitelist VPC CIDR ─────────────────────
+# NLB health checks arrive from NLB node IPs within the VPC. These
+# TCP probes connect and immediately close without TLS or auth,
+# generating "Disconnected" entries in Dovecot logs. Without a
+# whitelist, fail2ban eventually bans the NLB IPs, causing health
+# checks to fail and the NLB to stop forwarding ALL traffic.
+echo "[entrypoint] Configuring fail2ban to ignore VPC CIDR (${NETWORK_CIDR:-not set})..."
+if [ -n "${NETWORK_CIDR:-}" ]; then
+  cat > /etc/fail2ban/jail.local <<F2B
+[DEFAULT]
+ignoreip = 127.0.0.0/8 ::1 ${NETWORK_CIDR}
+F2B
+fi
+
+# ── Step 11: Prepare rsyslog working directory ─────────────────
 echo "[entrypoint] Preparing rsyslog..."
 mkdir -p /var/lib/rsyslog
 
-# ── Step 11: Start services via supervisord ───────────────────
+# ── Step 12: Start services via supervisord ───────────────────
 echo "[entrypoint] Starting services via supervisord..."
 exec /usr/local/bin/supervisord -c /etc/supervisord.conf
