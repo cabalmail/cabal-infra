@@ -153,7 +153,7 @@ Single cookbook with recipes for three server roles (`imap`, `smtp-in`, `smtp-ou
 ## Code Style Guidelines
 
 - **JavaScript/React**:
-  - Class-based React components with explicit state management
+  - Class-based React components with explicit state management (soon to migrate to function-based components)
   - Import order: third-party libs, main components, utilities, styles
   - Error handling with try/catch blocks and explicit error messaging
   - Use camelCase for variables/functions, PascalCase for components
