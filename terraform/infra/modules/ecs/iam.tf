@@ -151,7 +151,7 @@ resource "aws_iam_role_policy_attachment" "ecs_instance_ecs" {
 
 resource "aws_iam_role_policy_attachment" "ecs_instance_trunking" {
   role       = aws_iam_role.ecs_instance.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonECSInfrastructureRolePolicyForEC2"
+  policy_arn = "arn:aws:iam::aws:policy/AmazonECSInstanceRolePolicyForManagedInstances"
 }
 
 resource "aws_iam_role_policy_attachment" "ecs_instance_ssm" {
