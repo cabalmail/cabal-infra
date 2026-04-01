@@ -25,6 +25,13 @@ data "aws_ami" "ecs_optimized" {
   }
 }
 
+# ── ENI trunking (required for awsvpc tasks on Graviton) ──────
+
+resource "aws_ecs_account_setting_default" "awsvpc_trunking" {
+  name  = "awsvpcTrunking"
+  value = "enabled"
+}
+
 # ── ECS cluster ────────────────────────────────────────────────
 
 resource "aws_ecs_cluster" "mail" {
