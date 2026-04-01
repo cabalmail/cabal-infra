@@ -16,7 +16,7 @@ data "aws_ami" "ecs_optimized" {
 
   filter {
     name   = "name"
-    values = ["al2023-ami-ecs-hvm-*-x86_64"]
+    values = ["al2023-ami-ecs-hvm-*-arm64"]
   }
 
   filter {
