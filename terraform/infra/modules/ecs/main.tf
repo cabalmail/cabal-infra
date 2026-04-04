@@ -59,6 +59,7 @@ resource "aws_launch_template" "ecs" {
   user_data = base64encode(<<-EOF
     #!/bin/bash
     echo "ECS_CLUSTER=${aws_ecs_cluster.mail.name}" >> /etc/ecs/ecs.config
+    echo "ECS_ENABLE_TASK_ENI=true" >> /etc/ecs/ecs.config
   EOF
   )
 
