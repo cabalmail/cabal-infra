@@ -26,7 +26,7 @@ jobs:
 
   build:
     needs: set-tag
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     strategy:
       matrix:
