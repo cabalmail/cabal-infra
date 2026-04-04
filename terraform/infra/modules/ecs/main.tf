@@ -32,6 +32,11 @@ resource "aws_ecs_account_setting_default" "awsvpc_trunking" {
   value = "enabled"
 }
 
+resource "aws_ecs_account_setting" "awsvpc_trunking_root" {
+  name  = "awsvpcTrunking"
+  value = "enabled"
+}
+
 # ── ECS cluster ────────────────────────────────────────────────
 
 resource "aws_ecs_cluster" "mail" {
