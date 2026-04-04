@@ -73,8 +73,9 @@ resource "aws_launch_template" "ecs" {
   }
 
   metadata_options {
-    http_tokens   = "required"
-    http_endpoint = "enabled"
+    http_tokens                 = "required"
+    http_endpoint               = "enabled"
+    http_put_response_hop_limit = 2
   }
 
   lifecycle {
