@@ -1,170 +1,164 @@
-import React from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import Observer from './Observer';
 import { SwipeableList, Type } from 'react-swipeable-list';
 import 'react-swipeable-list/dist/styles.css';
 import Envelope from './Envelope';
-import ApiClient from '../../ApiClient';
+import useApi from '../../hooks/useApi';
 import { PAGE_SIZE } from '../../constants';
 import './Envelopes.css';
 
-class Envelopes extends React.Component {
+function Envelopes({
+  message_ids, folder, selected_messages, showOverlay,
+  handleCheck: handleCheckProp, handleSelect: handleSelectProp,
+  markUnread: markUnreadProp, markRead: markReadProp, archive: archiveProp
+}) {
+  const api = useApi();
 
-  constructor(props) {
-    super(props);
-    this.state = {
-      envelopes: {},
-      pages: [],
-      selected: null // do we need this?
-    };
-    this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
-  }
+  const [envelopes, setEnvelopes] = useState({});
+  const [pages, setPages] = useState([]);
 
-  loadPages = (pages) => {
-    for(const page of pages) {
-      let envelopes = { ...this.state.envelopes, ...this.state.pages[page] };
-      this.setState({
-        ...this.state,
-        envelopes: envelopes
-      });
-    }
-  }
-
-  arrayCompare(array1, array2) {
-    const len = array1.length;
-    if (len !== array2.length) {
-      return false;
-    }
-    for (var i = 0; i < len; i++) {
-      if (array1[i] !== array2[i]) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  // shouldComponentUpdate(_next_props, next_state) {
-  //   return !next_state.loading;
-  // }
-
-  doUpdate() {
-    const num_ids = this.props.message_ids.length;
-    for (var i = 0; i < num_ids; i+=PAGE_SIZE) {
-      let ids = this.props.message_ids.slice(i, i+PAGE_SIZE);
-      let page = Math.floor(i/PAGE_SIZE);
-      this.api.getEnvelopes(this.props.folder, ids).then(data => {
-        let pages = this.state.pages.slice();
-        pages[page] = data.data.envelopes;
-        this.setState({
-          ...this.state,
-          pages: pages
-        });
-        if (page < 4) {
-          this.loadPages([page]);
+  const loadPages = useCallback((pageNums) => {
+    setPages(currentPages => {
+      setEnvelopes(prev => {
+        let merged = { ...prev };
+        for (const p of pageNums) {
+          if (currentPages[p]) {
+            merged = { ...merged, ...currentPages[p] };
+          }
         }
-      }).catch( e => {
+        return merged;
+      });
+      return currentPages;
+    });
+  }, []);
+
+  // Fetch envelopes when message_ids change
+  useEffect(() => {
+    let cancelled = false;
+    const numIds = message_ids.length;
+
+    for (let i = 0; i < numIds; i += PAGE_SIZE) {
+      const ids = message_ids.slice(i, i + PAGE_SIZE);
+      const page = Math.floor(i / PAGE_SIZE);
+
+      api.getEnvelopes(folder, ids).then(data => {
+        if (cancelled) return;
+
+        // Use functional update to avoid race condition
+        setPages(prev => {
+          const next = prev.slice();
+          next[page] = data.data.envelopes;
+          return next;
+        });
+
+        // Auto-load first few pages into the visible envelopes
+        if (page < 4) {
+          setEnvelopes(prev => ({
+            ...prev,
+            ...data.data.envelopes
+          }));
+        }
+      }).catch(e => {
         console.log(e);
       });
     }
-  }
 
-  componentDidMount() {
-    this.doUpdate();
-  }
+    return () => {
+      cancelled = true;
+    };
+  }, [api, folder, message_ids]);
 
-  componentDidUpdate(prevProps, _prevState) {
-    if (!this.arrayCompare(prevProps.message_ids, this.props.message_ids)) {
-      this.doUpdate();
-    }
-  }
+  const handleClick = useCallback((envelope, id) => {
+    showOverlay(envelope);
+    handleSelectProp(id);
+  }, [showOverlay, handleSelectProp]);
 
-  handleClick = (envelope, id) => {
-    this.props.showOverlay(envelope);
-    this.props.handleSelect(id);
-    this.setState({...this.state, selected:id});
-  }
+  const handleCheck = useCallback((id, checked) => {
+    handleCheckProp(id, checked);
+  }, [handleCheckProp]);
 
-  handleCheck = (id, checked) => {
-    this.props.handleCheck(id, checked);
-  }
-
-  markRead = (id, page) => {
-    let envelopes = JSON.parse(JSON.stringify(this.state.envelopes));
-    envelopes[id.toString()].flags.push("\\Seen");
-    this.setState({ ...this.state, envelopes: envelopes });
-    this.props.markRead(id);
-  }
-
-  markUnread = (id, page) => {
-    let envelopes = JSON.parse(JSON.stringify(this.state.envelopes));
-    let envelope = envelopes[id.toString()]
-    envelope.flags.splice(envelope.flags.indexOf("\\Seen"),1);
-    envelopes[id.toString()] = envelope;
-    this.setState({ ...this.state, envelopes: envelopes });
-    this.props.markUnread(id);
-  }
-
-  archive = (id) => {
-    this.props.archive(id);
-  }
-
-  render() {
-    let i = 0;
-    const message_list = this.props.message_ids.filter(k => {
-      return this.state.envelopes.hasOwnProperty(k.toString());
-    }).map(k => {
-      return this.state.envelopes[k.toString()];
-    }).map(e => {
-      let first_of_page = false;
-      let observer = <></>;
-      const page = Math.floor(i/PAGE_SIZE);
-      if (i % PAGE_SIZE === 0) {
-        first_of_page = true;
-        observer = (
-          <Observer
-            pageLoader={this.loadPages}
-            page={page+2}
-            key={page+2}
-          ></Observer>
-        );
-      } else {
-        observer = null;
+  const markRead = useCallback((id) => {
+    setEnvelopes(prev => {
+      const next = JSON.parse(JSON.stringify(prev));
+      if (next[id.toString()]) {
+        next[id.toString()].flags.push("\\Seen");
       }
-      i++;
-      return (
-        <Envelope
-          handleClick={this.handleClick}
-          handleCheck={this.handleCheck}
-          archive={this.archive}
-          markRead={this.markRead}
-          markUnread={this.markUnread}
-          envelope={e}
-          subject={e.subject}
-          priority={e.priority}
-          date={e.date}
-          from={e.from}
-          to={e.to}
-          cc={e.cc}
-          flags={e.flags}
-          struct={e.struct}
-          is_checked={this.props.selected_messages.includes(parseInt(e.id))}
-          dom_id={e.id}
-          page={page}
-          first_of_page={first_of_page}
-          observer={observer}
-          key={e.id}
+      return next;
+    });
+    markReadProp(id);
+  }, [markReadProp]);
+
+  const markUnread = useCallback((id) => {
+    setEnvelopes(prev => {
+      const next = JSON.parse(JSON.stringify(prev));
+      const envelope = next[id.toString()];
+      if (envelope) {
+        envelope.flags.splice(envelope.flags.indexOf("\\Seen"), 1);
+      }
+      return next;
+    });
+    markUnreadProp(id);
+  }, [markUnreadProp]);
+
+  const archive = useCallback((id) => {
+    archiveProp(id);
+  }, [archiveProp]);
+
+  let i = 0;
+  const message_list = message_ids.filter(k => {
+    return envelopes.hasOwnProperty(k.toString());
+  }).map(k => {
+    return envelopes[k.toString()];
+  }).map(e => {
+    let first_of_page = false;
+    let observer = null;
+    const page = Math.floor(i / PAGE_SIZE);
+    if (i % PAGE_SIZE === 0) {
+      first_of_page = true;
+      observer = (
+        <Observer
+          pageLoader={loadPages}
+          page={page + 2}
+          key={page + 2}
         />
       );
-    });
+    }
+    i++;
     return (
-      <SwipeableList
-        fullSwipe={true}
-        type={Type.IOS}
-        className="message-list"
-      >
-        {message_list}
-      </SwipeableList>
+      <Envelope
+        handleClick={handleClick}
+        handleCheck={handleCheck}
+        archive={archive}
+        markRead={markRead}
+        markUnread={markUnread}
+        envelope={e}
+        subject={e.subject}
+        priority={e.priority}
+        date={e.date}
+        from={e.from}
+        to={e.to}
+        cc={e.cc}
+        flags={e.flags}
+        struct={e.struct}
+        is_checked={selected_messages.includes(parseInt(e.id))}
+        dom_id={e.id}
+        page={page}
+        first_of_page={first_of_page}
+        observer={observer}
+        key={e.id}
+      />
     );
-  }
+  });
+
+  return (
+    <SwipeableList
+      fullSwipe={true}
+      type={Type.IOS}
+      className="message-list"
+    >
+      {message_list}
+    </SwipeableList>
+  );
 }
 
 export default Envelopes;
