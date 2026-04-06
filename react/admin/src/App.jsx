@@ -307,11 +307,13 @@ class App extends React.Component {
       token: this.state.token,
       api_url: this.state.api_url,
       host: this.state.imap_host,
+      smtp_host: `smtp-out.${this.state.control_domain}`,
       domains: this.state.domains
     };
+    const appMessageValue = { setMessage: this.setMessage };
     return (
       <AuthContext.Provider value={authValue}>
-        <AppMessageContext.Provider value={this.setMessage}>
+        <AppMessageContext.Provider value={appMessageValue}>
           <div className={`App ${this.state.view}`}>
             <Nav
               onClick={this.updateView}

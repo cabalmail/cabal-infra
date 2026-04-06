@@ -2,333 +2,243 @@
  * Fetches message ids for current users/folder and displays them
  */
 
-import React from 'react';
-import ApiClient from '../../ApiClient';
-// import LazyLoad from 'react-lazyload';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import Envelopes from './Envelopes';
 import Folders from './Folders';
 import Actions from '../Actions';
+import useApi from '../../hooks/useApi';
 import { READ, UNREAD, ASC, DESC, ARRIVAL, DATE, FROM, SUBJECT } from '../../constants';
 import './Messages.css';
 
-class Messages extends React.Component {
+function Messages({ token, api_url, folder, host, showOverlay, setFolder: setFolderProp, setMessage }) {
+  const api = useApi();
 
-  constructor(props) {
-    super(props);
-    this.callbackTimeout = null;
-    this.poller1Timeout = null;
-    this.poller2Timeout = null;
-    this.archiveTimeout = null;
-    this.interval = null;
-    this.state = {
-      message_ids: [],
-      shown_message: null,
-      selected_messages: [],
-      sort_order: DESC,
-      sort_field: DATE,
-      loading: true
-    };
-    this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
-  }
+  const [messageIds, setMessageIds] = useState([]);
+  const [selectedMessages, setSelectedMessages] = useState([]);
+  const [sortOrder, setSortOrder] = useState(DESC);
+  const [sortField, setSortField] = useState(DATE);
+  const [loading, setLoading] = useState(true);
 
-  componentDidMount() {
-    this.poller(
-      this.api,
-      this.props.folder,
-      this.state.sort_order.imap,
-      this.state.sort_field.imap,
-      this
-    );
-    this.poller1Timeout = setTimeout(
-      this.poller,
-      10, 
-      this.api,
-      this.props.folder,
-      this.state.sort_order.imap,
-      this.state.sort_field.imap,
-      this
-    );
-    this.interval = setInterval(
-      this.poller,
-      10000, 
-      this.api,
-      this.props.folder,
-      this.state.sort_order.imap,
-      this.state.sort_field.imap,
-      this
-    );
-  }
+  const callbackTimeoutRef = useRef(null);
+  const archiveTimeoutRef = useRef(null);
+  const intervalRef = useRef(null);
 
-  componentDidUpdate(prevProps, prevState) {
-    if ((this.props.folder !== prevProps.folder) ||
-        (this.state.sort_order !== prevState.sort_order) ||
-        (this.state.sort_field !== prevState.sort_field)) {
-      clearInterval(this.interval);
-      this.poller(
-        this.api,
-        this.props.folder,
-        this.state.sort_order.imap,
-        this.state.sort_field.imap,
-        this
-      );
-      this.poller2Timeout = setTimeout(
-        this.poller,
-        10, 
-        this.api,
-        this.props.folder,
-        this.state.sort_order.imap,
-        this.state.sort_field.imap,
-        this
-      );
-      clearInterval(this.interval);
-      this.interval = setInterval(
-        this.poller,
-        10000, 
-        this.api,
-        this.props.folder,
-        this.state.sort_order.imap,
-        this.state.sort_field.imap,
-        this
-      );
-    }
-  }
+  // Polling effect — runs on mount and whenever folder/sort changes
+  useEffect(() => {
+    let cancelled = false;
 
-  componentWillUnmount() {
-    clearInterval(this.interval);
-    clearTimeout(this.callbackTimeout);
-    clearTimeout(this.poller1Timeout);
-    clearTimeout(this.poller2Timeout);
-    clearTimeout(this.archiveTimeout);
-  }
-
-  poller(api, folder, order, field, that) {
-    const response = api.getMessages(folder, order, field);
-    response.then(data => {
-      that.setState({
-        ...that.state,
-        message_ids: data.data.message_ids,
-        loading: false
-      });
-    }).catch(e => {
-      that.props.setMessage("Unable to get list of messages.", true);
-      console.log(e);
-    });
-  }
-
-  toggleOrder() {
-    this.setState({
-      ...this.state,
-      sort_order: this.state.sort_order.imap === ASC.imap ? DESC : ASC
-    })
-  }
-
-  callback = (data) => {
-    this.setState({
-      ...this.state,
-      message_ids: [],
-      loading: true
-    });
-    this.callbackTimeout = setTimeout(() => {
-      this.setState({
-        ...this.state,
-        message_ids: data.data.message_ids,
-        loading: false
-      });
-    }, 1);
-  }
-
-  catchback = (err) => {
-    this.props.setMessage(`Unable to set flag on selected messages.`, true);
-    console.log(`Unable to set flag on selected messages.`);
-    console.error(err);
-  };
-
-  handleCheck = (message_id, checked) => {
-    var id = parseInt(message_id);
-    if (checked) {
-      this.setState({
-        ...this.state,
-        selected_messages: [...this.state.selected_messages, id]
-      });
-    } else {
-      this.setState({
-        ...this.state,
-        selected_messages: this.state.selected_messages.filter(function(i) { 
-          return id !== i;
+    function poll() {
+      api.getMessages(folder, sortOrder.imap, sortField.imap)
+        .then(data => {
+          if (!cancelled) {
+            setMessageIds(data.data.message_ids);
+            setLoading(false);
+          }
         })
-      });
+        .catch(e => {
+          if (!cancelled) {
+            setMessage("Unable to get list of messages.", true);
+            console.log(e);
+          }
+        });
     }
-  }
 
-  handleSelect = (message_id) => {
-    var id = parseInt(message_id);
-    this.setState({
-      ...this.state,
-      selected_message: id
-    });
-  }
+    setLoading(true);
+    poll();
 
-  archive = (message_id) => {
-    this.api.setFlag(
-      this.props.folder,
+    intervalRef.current = setInterval(poll, 10000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(intervalRef.current);
+    };
+  }, [api, folder, sortOrder, sortField, setMessage]);
+
+  // Cleanup non-polling timers on unmount
+  useEffect(() => {
+    return () => {
+      clearTimeout(callbackTimeoutRef.current);
+      clearTimeout(archiveTimeoutRef.current);
+    };
+  }, []);
+
+  const callback = useCallback((data) => {
+    setMessageIds([]);
+    setLoading(true);
+    callbackTimeoutRef.current = setTimeout(() => {
+      setMessageIds(data.data.message_ids);
+      setLoading(false);
+    }, 1);
+  }, []);
+
+  const catchback = useCallback((err) => {
+    setMessage("Unable to set flag on selected messages.", true);
+    console.log("Unable to set flag on selected messages.");
+    console.error(err);
+  }, [setMessage]);
+
+  const handleCheck = useCallback((message_id, checked) => {
+    const id = parseInt(message_id);
+    setSelectedMessages(prev =>
+      checked ? [...prev, id] : prev.filter(i => id !== i)
+    );
+  }, []);
+
+  const handleSelect = useCallback((message_id) => {
+    // kept for API compatibility — not currently rendered
+    parseInt(message_id);
+  }, []);
+
+  const archive = useCallback((message_id) => {
+    api.setFlag(
+      folder,
       READ.imap,
       READ.op,
       [message_id],
-      this.state.sort_order.imap,
-      this.state.sort_field.imap
+      sortOrder.imap,
+      sortField.imap
     ).then(() => {
-      this.archiveTimeout = setTimeout(() => {
-        this.api.moveMessages(
-          this.props.folder,
+      archiveTimeoutRef.current = setTimeout(() => {
+        api.moveMessages(
+          folder,
           'Archive',
           [message_id],
-          this.state.sort_order.imap,
-          this.state.sort_field.imap
+          sortOrder.imap,
+          sortField.imap
         );
       }, 500);
     });
-  }
+  }, [api, folder, sortOrder, sortField]);
 
-  markRead = (message_id) => {
-    return this.api.setFlag(
-      this.props.folder,
+  const markRead = useCallback((message_id) => {
+    return api.setFlag(
+      folder,
       READ.imap,
       READ.op,
       [message_id],
-      this.state.sort_order.imap,
-      this.state.sort_field.imap
+      sortOrder.imap,
+      sortField.imap
     );
-  }
+  }, [api, folder, sortOrder, sortField]);
 
-  markUnread = (message_id) => {
-    return this.api.setFlag(
-      this.props.folder,
+  const markUnread = useCallback((message_id) => {
+    return api.setFlag(
+      folder,
       UNREAD.imap,
       UNREAD.op,
       [message_id],
-      this.state.sort_order.imap,
-      this.state.sort_field.imap
+      sortOrder.imap,
+      sortField.imap
     );
-  }
+  }, [api, folder, sortOrder, sortField]);
 
-  sortAscending = (e) => {
+  const sortAscending = useCallback((e) => {
     e.preventDefault();
-    this.setState({...this.state, sort_order: ASC, loading: true});
-  }
+    setSortOrder(ASC);
+    setLoading(true);
+  }, []);
 
-  sortDescending = (e) => {
+  const sortDescending = useCallback((e) => {
     e.preventDefault();
-    this.setState({...this.state, sort_order: DESC, loading: true});
-  }
+    setSortOrder(DESC);
+    setLoading(true);
+  }, []);
 
-  setSortField = (e) => {
+  const handleSortField = useCallback((e) => {
     e.preventDefault();
-    switch(e.target.value) {
-      case SUBJECT.imap:
-        this.setState({...this.state, sort_field: SUBJECT, loading: true});
-        break;
-      case DATE.imap:
-        this.setState({...this.state, sort_field: DATE, loading: true});
-        break;
-      case ARRIVAL.imap:
-        this.setState({...this.state, sort_field: ARRIVAL, loading: true});
-        break;
-      case FROM.imap:
-        this.setState({...this.state, sort_field: FROM, loading: true});
-        break;
-      default:
-        this.setState({...this.state, sort_field: DATE, loading: true});
-    }
+    const fields = { [SUBJECT.imap]: SUBJECT, [DATE.imap]: DATE, [ARRIVAL.imap]: ARRIVAL, [FROM.imap]: FROM };
+    const field = fields[e.target.value] || DATE;
+    setSortField(field);
+    setLoading(true);
+  }, []);
+
+  const handleSetFolder = useCallback((f) => {
+    setSelectedMessages([]);
+    setFolderProp(f);
+  }, [setFolderProp]);
+
+  const options = [DATE, ARRIVAL, SUBJECT, FROM].map(i => {
+    return <option id={i.css} value={i.imap} key={i.imap}>{i.description}</option>;
+  });
+  const selected = selectedMessages.length ? " selected" : " none_selected";
+
+  if (loading) {
+    return <div className="email_list loading">Loading...</div>;
   }
 
-  setFolder = (folder) => {
-    this.setState({...this.state, selected_messages: []});
-    this.props.setFolder(folder);
-  }
-
-  render() {
-    // TO field omitted since it's not displayed
-    const options = [DATE, ARRIVAL, SUBJECT, FROM].map(i => {
-      return <option id={i.css} value={i.imap} key={i.imap}>{i.description}</option>;
-    });
-    const selected = this.state.selected_messages.length ? " selected" : " none_selected";
-    if (this.state.loading) {
-      return <div className="email_list loading">Loading...</div>;
-    }
-    return (
-      <div className="email_list">
-        <div className="sticky">
-          <div className={`filters filters-dropdowns ${this.state.sort_order.css}`}>
-            <Folders 
-              token={this.props.token}
-              api_url={this.props.api_url}
-              setFolder={this.setFolder}
-              host={this.props.host}
-              folder={this.props.folder}
-              setMessage={this.props.setMessage}
-              label="Folder"
-            />&nbsp;
-            <div>
-              <span className="filter filter-sort">
-                <label htmlFor="sort-field">Sort by:</label>
-                <select id="sort-by" name="sort-by" className="sort-by" onChange={this.setSortField}>
-                  {options}
-                </select>
-                <button
-                  id={ASC.css}
-                  className="sort-order"
-                  title="Sort ascending"
-                  onClick={this.sortAscending}
-                >&nbsp;
-                  <hr className="long first" />
-                  <hr className="medium second" />
-                  <hr className="short third" />
-                </button>
-                <button
-                  id={DESC.css}
-                  className="sort-order"
-                  title="Sort descending"
-                  onClick={this.sortDescending}
-                >&nbsp;
-                  <hr className="short first" />
-                  <hr className="medium second" />
-                  <hr className="long third" />
-                </button>
-              </span>
-            </div>
+  return (
+    <div className="email_list">
+      <div className="sticky">
+        <div className={`filters filters-dropdowns ${sortOrder.css}`}>
+          <Folders
+            token={token}
+            api_url={api_url}
+            setFolder={handleSetFolder}
+            host={host}
+            folder={folder}
+            setMessage={setMessage}
+            label="Folder"
+          />&nbsp;
+          <div>
+            <span className="filter filter-sort">
+              <label htmlFor="sort-field">Sort by:</label>
+              <select id="sort-by" name="sort-by" className="sort-by" onChange={handleSortField}>
+                {options}
+              </select>
+              <button
+                id={ASC.css}
+                className="sort-order"
+                title="Sort ascending"
+                onClick={sortAscending}
+              >&nbsp;
+                <hr className="long first" />
+                <hr className="medium second" />
+                <hr className="short third" />
+              </button>
+              <button
+                id={DESC.css}
+                className="sort-order"
+                title="Sort descending"
+                onClick={sortDescending}
+              >&nbsp;
+                <hr className="short first" />
+                <hr className="medium second" />
+                <hr className="long third" />
+              </button>
+            </span>
           </div>
-          <Actions
-            token={this.props.token}
-            api_url={this.props.api_url}
-            host={this.props.host}
-            folder={this.props.folder}
-            selected_messages={this.state.selected_messages}
-            selected={selected}
-            order={this.state.sort_order.imap}
-            field={this.state.sort_field.imap}
-            callback={this.callback}
-            catchback={this.catchback}
-            setMessage={this.props.setMessage}
-          />
         </div>
-        <Envelopes
-          message_ids={this.state.message_ids}
-          folder={this.props.folder}
-          host={this.props.host}
-          token={this.props.token}
-          api_url={this.props.api_url}
-          selected_messages={this.state.selected_messages}
-          showOverlay={this.props.showOverlay}
-          handleCheck={this.handleCheck}
-          handleSelect={this.handleSelect}
-          setMessage={this.props.setMessage}
-          markUnread={this.markUnread}
-          markRead={this.markRead}
-          archive={this.archive}
+        <Actions
+          token={token}
+          api_url={api_url}
+          host={host}
+          folder={folder}
+          selected_messages={selectedMessages}
+          selected={selected}
+          order={sortOrder.imap}
+          field={sortField.imap}
+          callback={callback}
+          catchback={catchback}
+          setMessage={setMessage}
         />
       </div>
-    );
-  }
+      <Envelopes
+        message_ids={messageIds}
+        folder={folder}
+        host={host}
+        token={token}
+        api_url={api_url}
+        selected_messages={selectedMessages}
+        showOverlay={showOverlay}
+        handleCheck={handleCheck}
+        handleSelect={handleSelect}
+        setMessage={setMessage}
+        markUnread={markUnread}
+        markRead={markRead}
+        archive={archive}
+      />
+    </div>
+  );
 }
 
 export default Messages;
