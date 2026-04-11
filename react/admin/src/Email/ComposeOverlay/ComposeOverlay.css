@@ -168,17 +168,20 @@ ul li.BCC div {
   padding: 0.25em;
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 2px;
   background-color: inherit;
 }
 
 .wysiwyg-toolbar button {
+  flex: 0 0 auto;
   background: transparent;
   border: 1px solid transparent;
   cursor: pointer;
   padding: 0.2em 0.4em;
   border-radius: 3px;
   min-width: 1.8em;
+  width: auto !important;
   font-size: small !important;
 }
 
@@ -197,11 +200,12 @@ ul li.BCC div {
 }
 
 .toolbar-separator {
+  flex: 0 0 1px;
   width: 1px;
+  height: 1.2em;
   background-color: currentColor;
   opacity: 0.3;
   margin: 0 0.25em;
-  align-self: stretch;
 }
 
 /* TipTap editor content area */
