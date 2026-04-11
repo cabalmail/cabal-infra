@@ -6,6 +6,7 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import TextAlign from '@tiptap/extension-text-align';
 import TurndownService from 'turndown';
+import { marked } from 'marked';
 import useApi from '../../hooks/useApi';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAppMessage } from '../../contexts/AppMessageContext';
@@ -16,18 +17,6 @@ const MESSAGE = {
   target: {
     id: "recipient-to"
   }
-};
-const EMPTY_STATE = {
-  addresses: [],
-  address: "",
-  recipient: "",
-  validation_fail: false,
-  To: [],
-  CC: [],
-  BCC: [],
-  Subject: "",
-  message_id: "",
-  showRequest: false
 };
 
 function MenuBar({ editor }) {
@@ -81,6 +70,12 @@ function MenuBar({ editor }) {
   );
 }
 
+function isEditorEmpty(editor) {
+  if (!editor) return true;
+  const html = editor.getHTML();
+  return !html || html === '<p></p>';
+}
+
 function ComposeOverlay({
   hide, body, recipient: propRecipient, envelope, subject: propSubject,
   type, other_headers, smtp_host, domains
@@ -98,6 +93,8 @@ function ComposeOverlay({
   const [BCC, setBCC] = useState([]);
   const [Subject, setSubject] = useState("");
   const [showRequest, setShowRequest] = useState(false);
+  const [editorMode, setEditorMode] = useState("rich");
+  const [markdownContent, setMarkdownContent] = useState("");
 
   const editor = useEditor({
     extensions: [
@@ -161,6 +158,24 @@ function ComposeOverlay({
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const importFromRich = useCallback(() => {
+    if (markdownContent.trim()) {
+      if (!window.confirm("This will replace your current Markdown content. Continue?")) {
+        return;
+      }
+    }
+    setMarkdownContent(turndown.turndown(editor.getHTML()));
+  }, [editor, markdownContent]);
+
+  const importFromMarkdown = useCallback(() => {
+    if (!isEditorEmpty(editor)) {
+      if (!window.confirm("This will replace your current Rich Text content. Continue?")) {
+        return;
+      }
+    }
+    editor.commands.setContent(marked.parse(markdownContent));
+  }, [editor, markdownContent]);
 
   const randomString = useCallback((length) => {
     let str = '';
@@ -237,8 +252,28 @@ function ComposeOverlay({
       return;
     }
     sendButton.classList.add('sending');
-    const htmlBody = editor.getHTML();
-    const textBody = turndown.turndown(htmlBody);
+
+    const richEmpty = isEditorEmpty(editor);
+    const mdEmpty = !markdownContent.trim();
+
+    let htmlBody, textBody;
+    if (richEmpty && mdEmpty) {
+      htmlBody = '';
+      textBody = '';
+    } else if (!richEmpty && mdEmpty) {
+      // Only rich has content: auto-generate markdown
+      htmlBody = editor.getHTML();
+      textBody = turndown.turndown(htmlBody);
+    } else if (richEmpty && !mdEmpty) {
+      // Only markdown has content: auto-generate HTML
+      textBody = markdownContent;
+      htmlBody = marked.parse(markdownContent);
+    } else {
+      // Both have content: send as-is
+      htmlBody = editor.getHTML();
+      textBody = markdownContent;
+    }
+
     api.sendMessage(
       smtp_host, address, To, CC, BCC, Subject, headers,
       htmlBody, textBody, false
@@ -250,6 +285,7 @@ function ComposeOverlay({
       setCC([]);
       setBCC([]);
       setSubject("");
+      setMarkdownContent("");
       editor.commands.clearContent();
       hide();
       sendButton.classList.remove('sending');
@@ -259,7 +295,7 @@ function ComposeOverlay({
       console.log(err);
     });
   }, [other_headers, smtp_host, recipient, To, CC, BCC, Subject, address, addresses,
-      editor, api, hide, setMessage, addRecipient, randomString]);
+      editor, markdownContent, api, hide, setMessage, addRecipient, randomString]);
 
   const handleCancel = (e) => {
     e.preventDefault();
@@ -407,8 +443,36 @@ function ComposeOverlay({
         onChange={(e) => setSubject(e.target.value)}
         value={Subject}
       />
-      <MenuBar editor={editor} />
-      <EditorContent editor={editor} className="wysiwyg-editor" />
+      <div className="editor-mode-tabs">
+        <button type="button"
+          className={`editor-mode-tab ${editorMode === 'rich' ? 'active' : ''}`}
+          onClick={() => setEditorMode('rich')}>Rich Text</button>
+        <button type="button"
+          className={`editor-mode-tab ${editorMode === 'markdown' ? 'active' : ''}`}
+          onClick={() => setEditorMode('markdown')}>Markdown</button>
+      </div>
+      <div className={`editor-pane ${editorMode === 'rich' ? '' : 'editor-pane-hidden'}`}>
+        <MenuBar editor={editor} />
+        <div className="editor-import-bar">
+          <button type="button" className="import-button" onClick={importFromMarkdown}
+            title="Replace rich text content with converted Markdown content"
+          >Import from Markdown</button>
+        </div>
+        <EditorContent editor={editor} className="wysiwyg-editor" />
+      </div>
+      <div className={`editor-pane ${editorMode === 'markdown' ? '' : 'editor-pane-hidden'}`}>
+        <div className="editor-import-bar">
+          <button type="button" className="import-button" onClick={importFromRich}
+            title="Replace Markdown content with converted Rich Text content"
+          >Import from Rich Text</button>
+        </div>
+        <textarea
+          className="markdown-editor"
+          value={markdownContent}
+          onChange={(e) => setMarkdownContent(e.target.value)}
+          placeholder="Compose in Markdown..."
+        />
+      </div>
       <button onClick={handleSend} className="default" id="compose-send">Send</button>
       <button onClick={handleCancel} id="compose-cancel">Cancel</button>
     </form>

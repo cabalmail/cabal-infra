@@ -157,10 +157,10 @@ ul li.BCC div {
 .wysiwyg-toolbar {
   border: 1px solid;
   border-color: inherit;
-  margin-top: 1em;
+  border-top: none;
+  margin-top: 0;
   margin-bottom: 0;
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
+  border-radius: 0;
   position: -webkit-sticky;
   position: sticky;
   top: -1px;
@@ -173,9 +173,9 @@ ul li.BCC div {
   background-color: inherit;
 }
 
-.wysiwyg-toolbar button {
+.wysiwyg-toolbar button,
+.wysiwyg-toolbar button * {
   flex: 0 0 auto;
-  align-self: center;
   background: transparent;
   border: 1px solid transparent;
   cursor: pointer;
@@ -184,8 +184,9 @@ ul li.BCC div {
   min-width: 1.8em;
   width: auto !important;
   font-size: small !important;
-  line-height: 1;
-  vertical-align: middle;
+  line-height: 1 !important;
+  margin: 0;
+  box-sizing: border-box;
 }
 
 .wysiwyg-toolbar button:hover {
@@ -211,13 +212,64 @@ ul li.BCC div {
   margin: 0 0.25em;
 }
 
+/* Editor mode tabs */
+
+.editor-mode-tabs {
+  display: flex;
+  gap: 0;
+  margin-top: 1em;
+  margin-bottom: 0;
+}
+
+.editor-mode-tab {
+  flex: 0 0 auto;
+  padding: 0.3em 1em !important;
+  border: 1px solid;
+  border-color: inherit;
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  background: transparent;
+  opacity: 0.5;
+  cursor: pointer;
+  font-size: small !important;
+  width: auto !important;
+}
+
+.editor-mode-tab.active {
+  opacity: 1;
+  border-bottom: 1px solid transparent;
+}
+
+.editor-pane-hidden {
+  display: none;
+}
+
+/* Import bar */
+
+.editor-import-bar {
+  padding: 0.2em 0.5em;
+  border: 1px solid;
+  border-color: inherit;
+  border-top: none;
+  border-bottom: none;
+}
+
+.import-button {
+  font-size: x-small !important;
+  opacity: 0.7;
+  padding: 0.15em 0.5em !important;
+  width: auto !important;
+}
+
+.import-button:hover {
+  opacity: 1;
+}
+
 /* TipTap editor content area */
 
 .wysiwyg-editor {
   border: 1px solid;
   border-color: inherit;
-  border-top-left-radius: 0;
-  border-top-right-radius: 0;
   border-top-width: 0;
   z-index: 1;
 }
@@ -230,4 +282,23 @@ ul li.BCC div {
 
 .wysiwyg-editor .tiptap p {
   margin: 0;
+}
+
+/* Markdown editor */
+
+.markdown-editor {
+  display: block;
+  width: 100%;
+  min-height: 20em;
+  padding: 0.5em 1em;
+  border: 1px solid;
+  border-color: inherit;
+  border-top: none;
+  background: transparent;
+  color: inherit;
+  font-family: 'SFMono-Regular', 'Consolas', 'Liberation Mono', 'Menlo', monospace;
+  font-size: small;
+  resize: vertical;
+  box-sizing: border-box;
+  outline: none;
 }
