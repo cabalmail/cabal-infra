@@ -174,7 +174,8 @@ function ComposeOverlay({
         return;
       }
     }
-    editor.commands.setContent(marked.parse(markdownContent));
+    const html = marked.parse(markdownContent, { async: false });
+    editor.commands.setContent(html, { emitUpdate: true });
   }, [editor, markdownContent]);
 
   const randomString = useCallback((length) => {
