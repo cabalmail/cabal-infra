@@ -175,6 +175,7 @@ ul li.BCC div {
 
 .wysiwyg-toolbar button {
   flex: 0 0 auto;
+  align-self: center;
   background: transparent;
   border: 1px solid transparent;
   cursor: pointer;
@@ -183,6 +184,8 @@ ul li.BCC div {
   min-width: 1.8em;
   width: auto !important;
   font-size: small !important;
+  line-height: 1;
+  vertical-align: middle;
 }
 
 .wysiwyg-toolbar button:hover {

@@ -44,8 +44,14 @@ function MenuBar({ editor }) {
       <button type="button" onClick={() => editor.chain().focus().toggleStrike().run()}
         className={editor.isActive('strike') ? 'active' : ''} title="Strikethrough"><s>S</s></button>
       <span className="toolbar-separator" />
+      <button type="button" onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+        className={editor.isActive('heading', { level: 1 }) ? 'active' : ''} title="Heading 1">H1</button>
       <button type="button" onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-        className={editor.isActive('heading', { level: 2 }) ? 'active' : ''} title="Heading">H</button>
+        className={editor.isActive('heading', { level: 2 }) ? 'active' : ''} title="Heading 2">H2</button>
+      <button type="button" onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+        className={editor.isActive('heading', { level: 3 }) ? 'active' : ''} title="Heading 3">H3</button>
+      <button type="button" onClick={() => editor.chain().focus().toggleHeading({ level: 4 }).run()}
+        className={editor.isActive('heading', { level: 4 }) ? 'active' : ''} title="Heading 4">H4</button>
       <button type="button" onClick={() => editor.chain().focus().toggleBulletList().run()}
         className={editor.isActive('bulletList') ? 'active' : ''} title="Bullet list">&#8226;</button>
       <button type="button" onClick={() => editor.chain().focus().toggleOrderedList().run()}
