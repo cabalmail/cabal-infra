@@ -1,97 +1,74 @@
-import React from 'react';
-import ApiClient from '../../ApiClient';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import useApi from '../../hooks/useApi';
 import DOMPurify from 'dompurify';
 
-class RichMessage extends React.Component {
+function RichMessage({ body, seen, id, folder, setMessage }) {
+  const api = useApi();
+  const messageHtmlRef = useRef(null);
 
-  constructor(props) {
-    super(props);
-    const body = this.props.body.replace(/src="http/g, 'src="disabled-http');
-    this.state = {
-      render: "normal",
-      body: body,
-      imagesLoaded: false,
-      hasRemoteImages: false
-    }
-    this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
-  }
+  const disabledBody = body.replace(/src="http/g, 'src="disabled-http');
+  const hasRemoteImages = disabledBody !== body;
 
-  componentDidMount() {
-    if (this.state.body !== this.props.body) {
-      this.setState({...this.state, hasRemoteImages: true});
-    }
-    const imgs = document.getElementById("message_html").getElementsByTagName("img");
-    for (var i = 0; i < imgs.length; i++) {
-      var results = imgs[i].src.match(/^cid:([^"]*)/);
+  const [renderMode, setRenderMode] = useState("normal");
+  const [displayBody, setDisplayBody] = useState(disabledBody);
+  const [imagesLoaded, setImagesLoaded] = useState(false);
+
+  // Load inline images (cid: protocol) after mount
+  useEffect(() => {
+    const el = messageHtmlRef.current;
+    if (!el) return;
+    const imgs = el.getElementsByTagName("img");
+    for (let i = 0; i < imgs.length; i++) {
+      const results = imgs[i].src.match(/^cid:([^"]*)/);
       if (results !== null) {
-        this.loadImage(results[1], imgs[i]);
+        const img = imgs[i];
+        api.fetchImage(results[1], folder, id, seen)
+          .then(data => { img.src = data.data.url; })
+          .catch(() => { setMessage("Unable to load inline image.", true); });
       }
     }
-  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  loadImage(cid, img) {
-    var response = this.api.fetchImage(
-      cid,
-      this.props.folder,
-      this.props.id,
-      this.props.seen
-    );
-    response.then(data => {
-      img.src = data.data.url;
-    }).catch(e => {
-      this.props.setMessage("Unable to load inline image.", true);
-      console.log(e);
-    });
-  }
+  const loadRemoteImages = useCallback(() => {
+    setDisplayBody(body);
+    setImagesLoaded(true);
+  }, [body]);
 
-  loadRemoteImages = () => {
-    this.setState({
-      ...this.state,
-      body: this.props.body,
-      imagesLoaded: true
-    });
-  }
-
-  rotateBackground = (e) => {
+  const rotateBackground = useCallback((e) => {
     e.preventDefault();
-    switch (this.state.render) {
-      case "inverted":
-        this.setState({...this.state, render: "normal"});
-        break;
-      case "forced":
-        this.setState({...this.state, render: "inverted"});
-        break;
-      case "normal":
-        this.setState({...this.state, render: "forced"});
-        break;
-      default:
-        this.setState({...this.state, render: "normal"});
-    }
-  }
+    setRenderMode(prev => {
+      switch (prev) {
+        case "normal": return "forced";
+        case "forced": return "inverted";
+        case "inverted": return "normal";
+        default: return "normal";
+      }
+    });
+  }, []);
 
-  render() {
-    return (
-      <div className={`message message_html ${this.state.render}`}>
-        <div className="buttons">
-          <button
-            className="invert"
-            onClick={this.rotateBackground}
-            title="Invert background (useful when the text color is too close to the default background color)"
-          >◐</button>
-          <button
-            className={`load ${this.state.hasRemoteImages && !this.state.imagesLoaded ? "" : "hidden"}`}
-            onClick={this.loadRemoteImages}
-            title="Download remote images (could allow third parties to track your interactions with this message)"
-          >⇩</button>
-        </div>
-        <div
-          id="message_html"
-          className={this.state.render}
-          dangerouslySetInnerHTML={{__html: DOMPurify.sanitize(this.state.body)}}
-        />
+  return (
+    <div className={`message message_html ${renderMode}`}>
+      <div className="buttons">
+        <button
+          className="invert"
+          onClick={rotateBackground}
+          title="Invert background (useful when the text color is too close to the default background color)"
+        >&#9680;</button>
+        <button
+          className={`load ${hasRemoteImages && !imagesLoaded ? "" : "hidden"}`}
+          onClick={loadRemoteImages}
+          title="Download remote images (could allow third parties to track your interactions with this message)"
+        >&#8681;</button>
       </div>
-    );
-  }
+      <div
+        ref={messageHtmlRef}
+        id="message_html"
+        className={renderMode}
+        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(displayBody) }}
+      />
+    </div>
+  );
 }
 
 export default RichMessage;

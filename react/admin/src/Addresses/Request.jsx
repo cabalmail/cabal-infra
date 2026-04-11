@@ -1,184 +1,152 @@
-import React from 'react';
-import ApiClient from '../ApiClient';
+import React, { useState, useMemo } from 'react';
+import useApi from '../hooks/useApi';
 
-/**
- * Renders a form for requesting a new address and handles
- * calling the request API
- */
+function Request({ domains, showRequest, callback, setMessage }) {
+  const api = useApi();
+  const [username, setUsername] = useState('');
+  const [subdomain, setSubdomain] = useState('');
+  const [domain, setDomain] = useState('');
+  const [comment, setComment] = useState('');
 
-class Request extends React.Component {
-
-  constructor(props) {
-    super(props);
-    this.state = {
-      username: '',
-      subdomain: '',
-      domain: '',
-      comment: '',
-      address: ''
+  // Derive address from parts instead of storing in state
+  const address = useMemo(() => {
+    if (username && subdomain && domain) {
+      return `${username}@${subdomain}.${domain}`;
     }
-    this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
-  }
+    return '';
+  }, [username, subdomain, domain]);
 
-  componentDidUpdate(prevProps, prevState) {
-    if (
-      prevState.username !== this.state.username ||
-      prevState.subdomain !== this.state.subdomain ||
-      prevState.domain !== this.state.domain
-    ) {
-      if (
-        this.state.username === "" ||
-        this.state.subdomain === "" ||
-        this.state.domain === ""
-      ) {
-        this.setState({...this.state, address: ""});
-      } else {
-        this.setState({...this.state, address:`${this.state.username}@${this.state.subdomain}.${this.state.domain}`});
-      }
-    }
-  }
-
-  randomString(length, pool1, pool2, pool3) {
+  const randomString = (length, pool1, pool2, pool3) => {
     let string = '';
     const pool1Size = pool1.length;
     const pool2Size = pool2.length;
     const pool3Size = pool3.length;
-    for ( var i = 0; i < length; i++ ) {
+    for (let i = 0; i < length; i++) {
       switch (i) {
         case 0:
-          string += pool1.charAt(Math.floor(Math.random() *  pool1Size));
+          string += pool1.charAt(Math.floor(Math.random() * pool1Size));
           break;
-        case (length-1):
-          string += pool3.charAt(Math.floor(Math.random() *  pool3Size));
+        case (length - 1):
+          string += pool3.charAt(Math.floor(Math.random() * pool3Size));
           break;
         default:
-          string += pool2.charAt(Math.floor(Math.random() *  pool2Size));
+          string += pool2.charAt(Math.floor(Math.random() * pool2Size));
       }
     }
     return string;
-  }
+  };
 
-  generateRandom = (e) => {
+  const generateRandom = (e) => {
     e.preventDefault();
-    const domainLength = this.props.domains.length;
+    const domainLength = domains.length;
     const alphanum = 'abcdefghijklmnopqrstuvwxyz1234567890';
-    this.setState({
-      ...this.state,
-      username: this.randomString(8, alphanum, alphanum+'._-', alphanum),
-      subdomain: this.randomString(8, alphanum, alphanum+'-', alphanum),
-      domain: this.props.domains[Math.floor(Math.random() *  domainLength)].domain
-    });
-  }
+    setUsername(randomString(8, alphanum, alphanum + '._-', alphanum));
+    setSubdomain(randomString(8, alphanum, alphanum + '-', alphanum));
+    setDomain(domains[Math.floor(Math.random() * domainLength)].domain);
+  };
 
-  doInputChange = e => {
+  const doInputChange = (e) => {
     e.preventDefault();
-    this.setState({...this.state, [e.target.name]: e.target.value});
-  }
+    const { name, value } = e.target;
+    switch (name) {
+      case 'username': setUsername(value); break;
+      case 'subdomain': setSubdomain(value); break;
+      case 'domain': setDomain(value); break;
+      case 'comment': setComment(value); break;
+      default: break;
+    }
+  };
 
-  getOptions() {
-    return this.props.domains.map(d => {
-      return (
-        <option value={d.domain} key={d.domain}>
-          {d.domain}
-        </option>
-      );
-    });
-  }
-
-  handleSubmit = (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    const request_button = e.target;
-    request_button.classList.add('sending');
-    this.setState({
-      ...this.state,
-      username: "",
-      subdomain: "",
-      domain: "",
-      comment: "",
-      address: ""
-    });
-    this.api.newAddress(
-      this.state.username,
-      this.state.subdomain,
-      this.state.domain,
-      this.state.comment,
-      this.state.username + '@' + this.state.subdomain + '.' + this.state.domain
+    const requestButton = e.target;
+    requestButton.classList.add('sending');
+    const submitUsername = username;
+    const submitSubdomain = subdomain;
+    const submitDomain = domain;
+    const submitComment = comment;
+    const submitAddress = submitUsername + '@' + submitSubdomain + '.' + submitDomain;
+    setUsername("");
+    setSubdomain("");
+    setDomain("");
+    setComment("");
+    api.newAddress(
+      submitUsername, submitSubdomain, submitDomain, submitComment, submitAddress
     ).then(data => {
-      request_button.classList.remove('sending');
-      this.props.setMessage(`Successfully requested ${data.data.address}.`, false);
-      this.props.callback(data.data.address);
+      requestButton.classList.remove('sending');
+      setMessage(`Successfully requested ${data.data.address}.`, false);
+      callback(data.data.address);
     });
-  }
+  };
 
-  doClear = (e) => {
+  const doClear = (e) => {
     e.preventDefault();
-    this.setState({
-      ...this.state,
-      username: "",
-      subdomain: "",
-      domain: "",
-      comment: "",
-      address: ""
-    });
-  }
+    setUsername("");
+    setSubdomain("");
+    setDomain("");
+    setComment("");
+  };
 
-  render() {
-    // TODO: Wire up select field for TLD
-    return (
-      <div className={`request ${this.props.showRequest ? "requestVisible" : "requestHidden"}`}>
-        <fieldset className="address-fields">
-          <legend>Address</legend>
-          <input
-            type="text"
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="none"
-            value={this.state.username}
-            onChange={this.doInputChange}
-            id="username"
-            name="username"
-            placeholder="username"
-          /><span id="amphora">@</span><input
-            type="text"
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="none"
-            value={this.state.subdomain}
-            onChange={this.doInputChange}
-            id="subdomain"
-            name="subdomain"
-            placeholder="subdomain"
-          /><span id="dot">.</span><select
-            name="domain"
-            value={this.state.domain}
-            onChange={this.doInputChange}
-          >
-            <option>Select a domain</option>
-            {this.getOptions()}
-          </select>
-        </fieldset>
-        <fieldset className="comment-field">
-          <legend>Comment</legend>
-          <input
-            type="text"
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="none"
-            value={this.state.comment}
-            onChange={this.doInputChange}
-            id="comment"
-            name="comment"
-            placeholder="comment"
-          />
-        </fieldset>
-        <fieldset className="button-fields">
-          <button id="request" className="default" onClick={this.handleSubmit}>Request {this.state.address}</button>
-          <button onClick={this.generateRandom}>Random</button>
-          <button onClick={this.doClear}>Clear</button>
-        </fieldset>
-      </div>
-    );
-  }
+  const getOptions = () => {
+    return domains.map(d => (
+      <option value={d.domain} key={d.domain}>{d.domain}</option>
+    ));
+  };
+
+  return (
+    <div className={`request ${showRequest ? "requestVisible" : "requestHidden"}`}>
+      <fieldset className="address-fields">
+        <legend>Address</legend>
+        <input
+          type="text"
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="none"
+          value={username}
+          onChange={doInputChange}
+          id="username"
+          name="username"
+          placeholder="username"
+        /><span id="amphora">@</span><input
+          type="text"
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="none"
+          value={subdomain}
+          onChange={doInputChange}
+          id="subdomain"
+          name="subdomain"
+          placeholder="subdomain"
+        /><span id="dot">.</span><select
+          name="domain"
+          value={domain}
+          onChange={doInputChange}
+        >
+          <option>Select a domain</option>
+          {getOptions()}
+        </select>
+      </fieldset>
+      <fieldset className="comment-field">
+        <legend>Comment</legend>
+        <input
+          type="text"
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="none"
+          value={comment}
+          onChange={doInputChange}
+          id="comment"
+          name="comment"
+          placeholder="comment"
+        />
+      </fieldset>
+      <fieldset className="button-fields">
+        <button id="request" className="default" onClick={handleSubmit}>Request {address}</button>
+        <button onClick={generateRandom}>Random</button>
+        <button onClick={doClear}>Clear</button>
+      </fieldset>
+    </div>
+  );
 }
 
 export default Request;

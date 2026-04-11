@@ -1,386 +1,313 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import RichMessage from './RichMessage';
 import Actions from '../Actions';
-import ApiClient from '../../ApiClient';
+import useApi from '../../hooks/useApi';
+import { useAppMessage } from '../../contexts/AppMessageContext';
 import './MessageOverlay.css';
 import { ADDRESS_LIST } from '../../constants';
 
-class MessageOverlay extends React.Component {
+function MessageOverlay({
+  envelope, folder, visible, flags, hide: hideProp,
+  updateOverlay, reply: replyProp, replyAll: replyAllProp,
+  forward: forwardProp, token, api_url, host
+}) {
+  const api = useApi();
+  const { setMessage } = useAppMessage();
 
-  constructor(props) {
-    super(props);
-    this.state = {
-      message_raw: "",
-      message_raw_url: "",
-      message_body_plain: "",
-      message_body_html: "",
-      view: "rich",
-      attachments: [],
-      loading: true,
-      top_state: "expanded",
-      bimi_url: "/mask.png",
-      recipient: "",
-      message_id: [],
-      in_reply_to: [],
-      references: [],
-      addresses: []
-    }
-    this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
-  }
+  // Separate state for each independent piece to avoid race conditions
+  const [messageRawUrl, setMessageRawUrl] = useState("");
+  const [messageBodyPlain, setMessageBodyPlain] = useState("");
+  const [messageBodyHtml, setMessageBodyHtml] = useState("");
+  const [view, setView] = useState("rich");
+  const [attachments, setAttachments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [topState, setTopState] = useState("expanded");
+  const [bimiUrl, setBimiUrl] = useState("/mask.png");
+  const [recipient, setRecipient] = useState("");
+  const [messageId, setMessageId] = useState([]);
+  const [inReplyTo, setInReplyTo] = useState([]);
+  const [references, setReferences] = useState([]);
+  const [addresses, setAddresses] = useState([]);
 
-  componentDidMount() {
-    this.api.getAddresses().then(data => {
+  // Fetch addresses on mount
+  useEffect(() => {
+    api.getAddresses().then(data => {
       try {
         localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
       } catch (e) {
         console.log(e);
       }
-      this.setState({ ...this.state, addresses: data.data.Items });
+      setAddresses(data.data.Items);
     });
-  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  componentDidUpdate(prevProps, prevState) {
-    if (this.props.envelope.id !== prevProps.envelope.id) {
-      this.setState({...this.state, loading: true, invert: false});
+  // Fetch message data when envelope changes
+  useEffect(() => {
+    if (!envelope.id) return;
 
-      this.api.getMessage(
-        this.props.folder,
-        this.props.envelope.id,
-        this.props.envelope.flags.includes("\\Seen")
-      ).then(data => {
-        const view =
-          data.data.message_body_plain.length > data.data.message_body_html
+    setLoading(true);
+    setBimiUrl("/mask.png");
+
+    const seen = envelope.flags.includes("\\Seen");
+
+    api.getMessage(folder, envelope.id, seen).then(data => {
+      const newView =
+        data.data.message_body_plain.length > data.data.message_body_html
           ? "plain"
           : "rich";
-        this.setState({
-          ...this.state,
-          message_raw_url: data.data.message_raw,
-          message_body_plain: data.data.message_body_plain,
-          message_body_html: data.data.message_body_html,
-          recipient: data.data.recipient,
-          message_id: data.data.message_id,
-          in_reply_to: data.data.in_reply_to,
-          references: data.data.references,
-          loading: false,
-          view: view
-        });
-      }).catch(e => {
-        this.props.setMessage("Unable to get message.", true);
-        console.log(e);
-      });
-
-      this.api.getAttachments(
-        this.props.folder,
-        this.props.envelope.id,
-        this.props.envelope.flags.includes("\\Seen")
-      ).then(data => {
-        this.setState({
-          ...this.state,
-          attachments: data.data.attachments
-        });
-      }).catch(e => {
-        this.props.setMessage("Unable to get list of attachments.", true);
-        console.log(e);
-      });
-
-      this.api.getBimiUrl(
-        this.props.envelope.from[0]
-      ).then(data => {
-        this.setState({
-          ...this.state,
-          bimi_url: data.data.url
-        });
-      }).catch(e => {
-        console.log(e);
-      });
-    }
-  }
-
-  hide = (e) => {
-    e.preventDefault();
-    this.setState({...this.state, top_state: "expanded"});
-    this.props.hide();
-  }
-
-  downloadAttachment = (e) => {
-    e.preventDefault();
-    var id = parseInt(e.target.dataset.id);
-    var a = this.state.attachments.find(e => e.id === id);
-    this.api.getAttachment(
-      a,
-      this.props.folder,
-      this.props.envelope.id,
-      this.props.envelope.flags.includes("\\Seen")
-    )
-    .then((data) => {
-      var url = data.data.url;
-      window.open(url);
-    })
-    .catch((e) => {
-      this.props.setMessage("Unable to download attachment.", true);
+      setMessageRawUrl(data.data.message_raw);
+      setMessageBodyPlain(data.data.message_body_plain);
+      setMessageBodyHtml(data.data.message_body_html);
+      setRecipient(data.data.recipient);
+      setMessageId(data.data.message_id);
+      setInReplyTo(data.data.in_reply_to);
+      setReferences(data.data.references);
+      setLoading(false);
+      setView(newView);
+    }).catch(e => {
+      setMessage("Unable to get message.", true);
       console.log(e);
     });
-  }
 
-  callback = (d) => {
-    this.api.getEnvelopes(this.props.folder, [this.props.envelope.id]).then(data => {
-      this.props.updateOverlay(data.data.envelopes[this.props.envelope.id]);
+    api.getAttachments(folder, envelope.id, seen).then(data => {
+      setAttachments(data.data.attachments);
+    }).catch(e => {
+      setMessage("Unable to get list of attachments.", true);
+      console.log(e);
     });
-  }
 
-  catchback = (err) => {
-    this.props.setMessage("Unable to set flag on message.", true);
-    console.log(`Unable to set flag on message.`);
+    api.getBimiUrl(envelope.from[0]).then(data => {
+      setBimiUrl(data.data.url);
+    }).catch(e => {
+      console.log(e);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [envelope.id]);
+
+  const hide = useCallback((e) => {
+    e.preventDefault();
+    setTopState("expanded");
+    hideProp();
+  }, [hideProp]);
+
+  const downloadAttachment = useCallback((e) => {
+    e.preventDefault();
+    const id = parseInt(e.target.dataset.id);
+    const a = attachments.find(att => att.id === id);
+    api.getAttachment(
+      a, folder, envelope.id, envelope.flags.includes("\\Seen")
+    ).then((data) => {
+      window.open(data.data.url);
+    }).catch(() => {
+      setMessage("Unable to download attachment.", true);
+    });
+  }, [attachments, folder, envelope, api, setMessage]);
+
+  const callback = useCallback(() => {
+    api.getEnvelopes(folder, [envelope.id]).then(data => {
+      updateOverlay(data.data.envelopes[envelope.id]);
+    });
+  }, [api, folder, envelope.id, updateOverlay]);
+
+  const catchback = useCallback((err) => {
+    setMessage("Unable to set flag on message.", true);
+    console.log("Unable to set flag on message.");
     console.log(err);
-  };
+  }, [setMessage]);
 
-  collapse = (e) => {
-    e.preventDefault();
-    this.setState({...this.state, top_state: "collapsed"});
-  }
-
-  expand = (e) => {
-    e.preventDefault();
-    this.setState({...this.state, top_state: "expanded"});
-  }
-
-  handleNav = (e) => {
-    e.preventDefault();
-    this.setState({...this.state, view: e.target.value});
-  }
-
-  createPayload() {
+  const createPayload = useCallback(() => {
     return [
-      this.state.recipient,
-      this.state.message_body_html || this.state.message_body_plain,
-      this.props.envelope,
-      {
-        message_id: this.state.message_id,
-        in_reply_to: this.state.in_reply_to,
-        references: this.state.references
-      }
-    ]
-  }
+      recipient,
+      messageBodyHtml || messageBodyPlain,
+      envelope,
+      { message_id: messageId, in_reply_to: inReplyTo, references: references }
+    ];
+  }, [recipient, messageBodyHtml, messageBodyPlain, envelope, messageId, inReplyTo, references]);
 
-  reply = () => {
-    const params = this.createPayload();
-    this.props.reply(params[0], params[1], params[2], params[3]);
-  }
+  const reply = useCallback(() => {
+    const params = createPayload();
+    replyProp(params[0], params[1], params[2], params[3]);
+  }, [createPayload, replyProp]);
 
-  replyAll = () => {
-    const params = this.createPayload();
-    this.props.replyAll(params[0], params[1], params[2], params[3]);
-  }
+  const replyAll = useCallback(() => {
+    const params = createPayload();
+    replyAllProp(params[0], params[1], params[2], params[3]);
+  }, [createPayload, replyAllProp]);
 
-  forward = () => {
-    const params = this.createPayload();
-    this.props.forward(params[0], params[1], params[2], params[3]);
-  }
+  const forward = useCallback(() => {
+    const params = createPayload();
+    forwardProp(params[0], params[1], params[2], params[3]);
+  }, [createPayload, forwardProp]);
 
-  revokeAddress = (a) => {
-    return this.api.deleteAddress(a.address, a.subdomain, a.tld, a.public_key);
-  }
+  const revokeAddress = useCallback((a) => {
+    return api.deleteAddress(a.address, a.subdomain, a.tld, a.public_key);
+  }, [api]);
 
-  revoke = (e) => {
+  const revoke = useCallback((e) => {
     e.preventDefault();
     const address = e.target.value;
-    this.revokeAddress(this.state.addresses.find(a => {
-      return a.address === address;
-    })).then(data => {
-      this.props.setMessage("Successfully revoked address.", false);
-      this.setState({...this.state, addresses: this.state.addresses.filter(a => {
-        return a.address !== address;
-      })});
+    revokeAddress(addresses.find(a => a.address === address)).then(() => {
+      setMessage("Successfully revoked address.", false);
+      setAddresses(prev => prev.filter(a => a.address !== address));
     }, reason => {
-      this.props.setMessage("Request to revoke address failed.", true);
+      setMessage("Request to revoke address failed.", true);
       console.error("Promise rejected", reason);
     });
-  }
+  }, [addresses, revokeAddress, setMessage]);
 
-  renderView() {
-    if (this.state.loading) {
-      return (
-        <div className="message message_loading" />
-      );
+  const renderView = () => {
+    if (loading) {
+      return <div className="message message_loading" />;
     }
-    switch (this.state.view) {
+    switch (view) {
       case "rich":
         return (
           <RichMessage
-            body={this.state.message_body_html}
-            seen={this.props.envelope.flags.includes("\\Seen")}
-            id={this.props.envelope.id}
-            folder={this.props.folder}
-            host={this.props.host}
-            token={this.props.token}
-            api_url={this.props.api_url}
-            setMessage={this.props.setMessage}
+            body={messageBodyHtml}
+            seen={envelope.flags.includes("\\Seen")}
+            id={envelope.id}
+            folder={folder}
+            host={host}
+            token={token}
+            api_url={api_url}
+            setMessage={setMessage}
           />
         );
       case "plain":
-        return (
-          <pre className="message message_plain">{this.state.message_body_plain}</pre>
-        );
+        return <pre className="message message_plain">{messageBodyPlain}</pre>;
       case "raw":
-        return (
-          <div  className="message_raw"><iframe src={this.state.message_raw_url} title="Raw message"></iframe></div>
-        );
-      case "attachments":
-        const attachments = this.state.attachments.map(a => {
-          return (
-            <button
-              id={`attachment-${a.id}`}
-              className="attachment"
-              value={a.id}
-              onClick={this.downloadAttachment}
-              data-id={a.id}
-            >
-              <span className="attachment_name" data-id={a.id}>{a.name}</span>
-              <span className="attachment_size" data-id={a.id}>{a.size} bytes</span>
-              <span className="attachment_type" data-id={a.id}>{a.type}</span>
-            </button>
-          );
-        });
-        return (
-          <div className="message message_attachments">{attachments}</div>
-        );
+        return <div className="message_raw"><iframe src={messageRawUrl} title="Raw message"></iframe></div>;
+      case "attachments": {
+        const attachmentList = attachments.map(a => (
+          <button
+            key={a.id}
+            id={`attachment-${a.id}`}
+            className="attachment"
+            value={a.id}
+            onClick={downloadAttachment}
+            data-id={a.id}
+          >
+            <span className="attachment_name" data-id={a.id}>{a.name}</span>
+            <span className="attachment_size" data-id={a.id}>{a.size} bytes</span>
+            <span className="attachment_type" data-id={a.id}>{a.type}</span>
+          </button>
+        ));
+        return <div className="message message_attachments">{attachmentList}</div>;
+      }
       default:
-        return (
-          <pre className="message message_raw">{this.state.message_raw}</pre>
-        );
+        return <pre className="message message_raw">{""}</pre>;
     }
-  }
+  };
 
-  renderHeader() {
-    const to = this.props.envelope.to.length ? (
+  const renderHeader = () => {
+    const to = envelope.to.length ? (
       <>
         <dt className="collapsable">To</dt>
-        <dd className="collapsable">{this.props.envelope.to.join("; ")}</dd>
+        <dd className="collapsable">{envelope.to.join("; ")}</dd>
       </>
     ) : (
       <>
         <dt className="collapsable">To</dt>
         <dd className="collapsable">Undisclosed recipients</dd>
       </>
-    )
-    const cc = this.props.envelope.cc.length ? (
+    );
+    const cc = envelope.cc.length ? (
       <>
         <dt className="collapsable">CC</dt>
-        <dd className="collapsable">{this.props.envelope.cc.join("; ")}</dd>
+        <dd className="collapsable">{envelope.cc.join("; ")}</dd>
       </>
-    ) : ""
-    const bcc = (this.state.recipient &&
-                this.props.envelope.to.indexOf(this.state.recipient) === -1 &&
-                this.props.envelope.cc.indexOf(this.state.recipient) === -1) ? (
+    ) : "";
+    const bcc = (recipient &&
+      envelope.to.indexOf(recipient) === -1 &&
+      envelope.cc.indexOf(recipient) === -1) ? (
       <>
         <dt className="collapsable bcc">BCC</dt>
-        <dd className="collapsable bcc">{this.state.recipient}</dd>
+        <dd className="collapsable bcc">{recipient}</dd>
       </>
-    ) : ""
-    const revoke = this.state.addresses.map(a => a.address).indexOf(this.state.recipient) !== -1 ? (
+    ) : "";
+    const revokeButton = addresses.map(a => a.address).indexOf(recipient) !== -1 ? (
       <dt className="collapsable"><button
         className="revoke collapsable"
-        onClick={this.revoke}
-        value={this.state.recipient}
-        title={`Revoke ${this.state.recipient}`}
-        >🗑️ Revoke {this.state.recipient}</button></dt>
-      ) :""
+        onClick={revoke}
+        value={recipient}
+        title={`Revoke ${recipient}`}
+      >&#128465;&#65039; Revoke {recipient}</button></dt>
+    ) : "";
     return (
       <dl>
         <dt className="collapsable">From</dt>
-        <dd className="collapsable">{this.props.envelope.from.join("; ")}</dd>
+        <dd className="collapsable">{envelope.from.join("; ")}</dd>
         {to}
         {bcc}
         {cc}
         <dt className="collapsable">Received</dt>
-        <dd className="collapsable">{this.props.envelope.date}</dd>
+        <dd className="collapsable">{envelope.date}</dd>
         <dt className="collapsable">Subject</dt>
-        <dd>{this.props.envelope.subject}</dd>
-        {revoke}
+        <dd>{envelope.subject}</dd>
+        {revokeButton}
       </dl>
     );
-  }
+  };
 
-  renderTabBar() {
+  const renderTabBar = () => (
+    <div className={`tabBar ${view}`}>
+      <button className={`tab ${view === "rich" ? "active" : ""}`}
+        onClick={() => setView("rich")} value="rich"
+        title="Show the HTML formatted version">Rich Text</button>
+      <button className={`tab ${view === "plain" ? "active" : ""}`}
+        onClick={() => setView("plain")} value="plain"
+        title="Show the plain text version">Plain Text</button>
+      <button className={`tab ${view === "attachments" ? "active" : ""}`}
+        onClick={() => setView("attachments")} value="attachments"
+        title="Show attachments">&#128206;</button>
+      <button className={`tab ${view === "raw" ? "active" : ""}`}
+        onClick={() => setView("raw")} value="raw"
+        title="View the raw message source">&lt;/&gt;</button>
+    </div>
+  );
+
+  const flagClasses = flags.map(d => d.replace("\\", "")).join(" ");
+
+  if (visible) {
     return (
-      <div className={`tabBar ${this.state.view}`}>
-        <button
-          className={`tab ${this.state.view === "rich" ? "active" : ""}`}
-          onClick={this.handleNav}
-          value="rich"
-          title="Show the HTML formatted version"
-        >Rich Text</button>
-        <button
-          className={`tab ${this.state.view === "plain" ? "active" : ""}`}
-          onClick={this.handleNav}
-          value="plain"
-          title="Show the plain text version"
-        >Plain Text</button>
-        <button
-          className={`tab ${this.state.view === "attachments" ? "active" : ""}`}
-          onClick={this.handleNav}
-          value="attachments"
-          title="Show attachments"
-        >📎</button>
-        <button
-          className={`tab ${this.state.view === "raw" ? "active" : ""}`}
-          onClick={this.handleNav}
-          value="raw"
-          title="View the raw message source"
-        >&lt;/&gt;</button>
+      <div className="message_overlay">
+        <div className={`message_top ${topState} ${flagClasses}`}>
+          <button onClick={(e) => { e.preventDefault(); setTopState("collapsed"); }}
+            className="overlay_expand_collapse collapse_overlay_top"
+            title="Hide message header">&#9650;</button>
+          <button onClick={(e) => { e.preventDefault(); setTopState("expanded"); }}
+            className="overlay_expand_collapse expand_overlay_top"
+            title="Show message header">&#9660;</button>
+          <Actions
+            token={token}
+            api_url={api_url}
+            host={host}
+            folder={folder}
+            selected_messages={[envelope.id]}
+            selected="selected "
+            order=""
+            field="ARRIVAL"
+            callback={callback}
+            catchback={catchback}
+            reply={reply}
+            replyAll={replyAll}
+            forward={forward}
+            setMessage={setMessage}
+          />
+          <button onClick={hide} className="close_overlay"
+            title="Close message">&#10060;</button>
+          {renderHeader()}
+          {renderTabBar()}
+          <div className="bimi">
+            <img src={bimiUrl} alt="" />
+          </div>
+        </div>
+        {renderView()}
       </div>
     );
   }
-
-  render() {
-    const flags = this.props.flags.map(d => {return d.replace("\\","")}).join(" ");
-    if (this.props.visible) {
-      return (
-        <div className="message_overlay">
-          <div className={`message_top ${this.state.top_state} ${flags}`}>
-            <button
-              onClick={this.collapse}
-              className="overlay_expand_collapse collapse_overlay_top"
-              title="Hide message header"
-            >▲</button>
-            <button
-              onClick={this.expand}
-              className="overlay_expand_collapse expand_overlay_top"
-              title="Show message header"
-            >▼</button>
-            <Actions
-              token={this.props.token}
-              api_url={this.props.api_url}
-              host={this.props.host}
-              folder={this.props.folder}
-              selected_messages={[this.props.envelope.id]}
-              selected="selected "
-              order=""
-              field="ARRIVAL"
-              callback={this.callback}
-              catchback={this.catchback}
-              reply={this.reply}
-              replyAll={this.replyAll}
-              forward={this.forward}
-              setMessage={this.props.setMessage}
-            />
-            <button
-              onClick={this.hide}
-              className="close_overlay"
-              title="Close message"
-            >❌</button>
-            {this.renderHeader()}
-            {this.renderTabBar()}
-            <div className="bimi">
-              <img src={this.state.bimi_url} alt="" />
-            </div>
-          </div>
-          {this.renderView()}
-        </div>
-      );
-    }
-    return <div className="message_overlay overlay_hidden"></div>;
-  }
+  return <div className="message_overlay overlay_hidden"></div>;
 }
 
 export default MessageOverlay;

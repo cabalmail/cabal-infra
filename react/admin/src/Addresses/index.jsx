@@ -1,54 +1,47 @@
-import React from 'react';
+import React, { useState } from 'react';
 import List from './List';
 import Request from './Request';
 import './Addresses.css'
 
-class Addresses extends React.Component {
+function Addresses({ token, domains, api_url, setMessage, host }) {
+  const [showRequest, setShowRequest] = useState(false);
+  const [trigger, setTrigger] = useState("");
 
-  constructor(props) {
-    super(props);
-    this.state = {
-      showRequest: false,
-      trigger: ""
-    };
-  }
+  const toggleRequest = () => {
+    setShowRequest(prev => !prev);
+  };
 
-  toggleRequest = () => {
-    this.setState({...this.state, showRequest: !this.state.showRequest})
-  }
+  const regenerateList = (address) => {
+    setTrigger(address);
+    setShowRequest(false);
+  };
 
-  regenerateList = (address) => {
-    this.setState({...this.state, trigger: address, showRequest: false});
-  }
-
-  render() {
-    return (
-      <>
-        <button
-          onClick={this.toggleRequest}
-          className="toggleRequest"
-        >New Address {this.state.showRequest ? "▼" : "▶︎"}</button>
-        <Request
-          token={this.props.token}
-          domains={this.props.domains}
-          api_url={this.props.api_url}
-          setMessage={this.props.setMessage}
-          showRequest={this.state.showRequest}
-          host={this.props.host}
-          callback={this.regenerateList}
-        />
-        <hr />
-        <List
-          token={this.props.token}
-          domains={this.props.domains}
-          api_url={this.props.api_url}
-          setMessage={this.props.setMessage}
-          host={this.props.host}
-          regenerate={this.state.trigger}
-        />
-      </>
-    );
-  }
+  return (
+    <>
+      <button
+        onClick={toggleRequest}
+        className="toggleRequest"
+      >New Address {showRequest ? "▼" : "▶︎"}</button>
+      <Request
+        token={token}
+        domains={domains}
+        api_url={api_url}
+        setMessage={setMessage}
+        showRequest={showRequest}
+        host={host}
+        callback={regenerateList}
+      />
+      <hr />
+      <List
+        token={token}
+        domains={domains}
+        api_url={api_url}
+        setMessage={setMessage}
+        host={host}
+        regenerate={trigger}
+      />
+    </>
+  );
 }
 
 export default Addresses;
