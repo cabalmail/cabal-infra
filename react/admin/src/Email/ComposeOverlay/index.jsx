@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './ComposeOverlay.css';
 import Request from '../../Addresses/Request';
 import { ADDRESS_LIST } from '../../constants';
@@ -95,6 +95,7 @@ function ComposeOverlay({
   const [showRequest, setShowRequest] = useState(false);
   const [editorMode, setEditorMode] = useState("rich");
   const [markdownContent, setMarkdownContent] = useState("");
+  const markdownRef = useRef(null);
 
   const editor = useEditor({
     extensions: [
@@ -157,6 +158,29 @@ function ComposeOverlay({
       setAddresses(data.data.Items.map(a => a.address).sort());
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Convert pasted rich text to markdown in the markdown editor
+  useEffect(() => {
+    const el = markdownRef.current;
+    if (!el) return;
+    const handlePaste = (e) => {
+      const html = e.clipboardData.getData('text/html');
+      if (!html) return;
+      e.preventDefault();
+      const md = turndown.turndown(html);
+      const { selectionStart, selectionEnd } = el;
+      setMarkdownContent(prev =>
+        prev.slice(0, selectionStart) + md + prev.slice(selectionEnd)
+      );
+      requestAnimationFrame(() => {
+        const newPos = selectionStart + md.length;
+        el.selectionStart = newPos;
+        el.selectionEnd = newPos;
+      });
+    };
+    el.addEventListener('paste', handlePaste);
+    return () => el.removeEventListener('paste', handlePaste);
   }, []);
 
   const importFromRich = useCallback(() => {
@@ -468,6 +492,7 @@ function ComposeOverlay({
           >Import from Rich Text</button>
         </div>
         <textarea
+          ref={markdownRef}
           className="markdown-editor"
           value={markdownContent}
           onChange={(e) => setMarkdownContent(e.target.value)}
