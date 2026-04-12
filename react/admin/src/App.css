@@ -35,8 +35,14 @@ hr {
 }
 
 .content {
-  padding: 3.4em 3em 3em 3em;
+  padding: 3.8em 3em 3em 3em;
   overflow: scroll;
+}
+
+@media (max-width: 699px) {
+  .content {
+    padding: 3.8em 1em 3em 1em;
+  }
 }
 
 input, select, button, option, ul.recipient-list {
