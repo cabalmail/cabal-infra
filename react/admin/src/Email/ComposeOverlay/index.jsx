@@ -496,7 +496,6 @@ function ComposeOverlay({
           className="markdown-editor"
           value={markdownContent}
           onChange={(e) => setMarkdownContent(e.target.value)}
-          placeholder="Compose in Markdown..."
         />
       </div>
       <button onClick={handleSend} className="default" id="compose-send">Send</button>
