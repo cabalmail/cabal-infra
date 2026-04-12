@@ -19,11 +19,14 @@ const MESSAGE = {
   }
 };
 
-function MenuBar({ editor }) {
+function MenuBar({ editor, onImportMarkdown }) {
   if (!editor) return null;
 
   return (
     <div className="wysiwyg-toolbar">
+      <button type="button" onClick={onImportMarkdown}
+        title="Import from Markdown">&#9100;</button>
+      <span className="toolbar-separator" />
       <button type="button" onClick={() => editor.chain().focus().toggleBold().run()}
         className={editor.isActive('bold') ? 'active' : ''} title="Bold">B</button>
       <button type="button" onClick={() => editor.chain().focus().toggleItalic().run()}
@@ -477,12 +480,7 @@ function ComposeOverlay({
           onClick={() => setEditorMode('markdown')}>Markdown</button>
       </div>
       <div className={`editor-pane ${editorMode === 'rich' ? '' : 'editor-pane-hidden'}`}>
-        <MenuBar editor={editor} />
-        <div className="editor-import-bar">
-          <button type="button" className="import-button" onClick={importFromMarkdown}
-            title="Replace rich text content with converted Markdown content"
-          >Import from Markdown</button>
-        </div>
+        <MenuBar editor={editor} onImportMarkdown={importFromMarkdown} />
         <EditorContent editor={editor} className="wysiwyg-editor" />
       </div>
       <div className={`editor-pane ${editorMode === 'markdown' ? '' : 'editor-pane-hidden'}`}>
