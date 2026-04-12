@@ -1,4 +1,5 @@
-div#root div.Folders div.content {
+/* App-level layout positioning (class applied by App.jsx on root div) */
+:global(div#root div.Folders div.content) {
   position: absolute;
   top: 3.2em;
   bottom: 0;
@@ -7,27 +8,34 @@ div#root div.Folders div.content {
   overflow: scroll;
 }
 
-div.folders div.new_folder {
+:global(div.Folders div.content) {
+  max-width: 60em;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Component-scoped styles */
+.folders .newFolder {
   display: grid;
   grid-template-columns: 12em auto;
   grid-column-gap: 1em;
   padding: 0;
 }
 
-div.folders div.new_folder input.new_folder {
+.folders .newFolder input.newFolderInput {
   width: 12em;
   max-height: 2.3em;
   margin-top: 1em;
 }
 
-div.folders ul.folder_list {
+.folderList {
   list-style: none;
   padding: 0;
   margin: 0;
   overflow: scroll;
 }
 
-div.folders ul.folder_list li.folder {
+.folder {
   list-style: none;
   margin: 0;
   display: grid;
@@ -36,21 +44,15 @@ div.folders ul.folder_list li.folder {
   align-items: baseline;
 }
 
-div.folders ul.folder_list li.folder button.folder_button {
+.folderButton {
   width: 3em;
 }
 
-div.Folders div.content {
-  max-width: 60em;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-body div.Folders div.content div.folders ul.folder_list li.folder span.subscribed {
+.subscribed {
   color: #fa0;
 }
 
-body div.Folders div.content div.folders ul.folder_list li.folder span.favorite {
+.favorite {
   font-size: medium;
   cursor: pointer;
 }

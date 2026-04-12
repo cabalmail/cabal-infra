@@ -80,7 +80,7 @@
   body.inverted, a.inverted, button.inverted, select.inverted, div.inverted,
   .inverted a, .inverted button, .inverted select, .inverted div {
     color: #aaa;
-    background-color: #200;
+    background-color: #111;
     border-color: #333;
   }
   input.inverted, select.inverted, option.inverted,

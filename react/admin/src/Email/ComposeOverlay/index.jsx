@@ -1,488 +1,507 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './ComposeOverlay.css';
-import ApiClient from '../../ApiClient';
 import Request from '../../Addresses/Request';
 import { ADDRESS_LIST } from '../../constants';
-import { EditorState, ContentState, convertToRaw } from 'draft-js';
-import draftToHtml from 'draftjs-to-html';
-import htmlToDraft from 'html-to-draftjs';
-import { draftToMarkdown } from 'markdown-draft-js';
-import { Editor } from "react-draft-wysiwyg";
-import "react-draft-wysiwyg/dist/react-draft-wysiwyg.css";
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import TextAlign from '@tiptap/extension-text-align';
+import TurndownService from 'turndown';
+import { marked } from 'marked';
+import useApi from '../../hooks/useApi';
+import { useAuth } from '../../contexts/AuthContext';
+import { useAppMessage } from '../../contexts/AppMessageContext';
+
+const turndown = new TurndownService({ headingStyle: 'atx', hr: '---' });
 
 const MESSAGE = {
   target: {
     id: "recipient-to"
   }
 };
-const EMPTY_STATE = {
-  addresses: [],
-  address: "",
-  recipient: "",
-  validation_fail: false,
-  To: [],
-  CC: [],
-  BCC: [],
-  Subject: "",
-  message_id: "",
-  showRequest: false
-};
 
-class ComposeOverlay extends React.Component {
+function MenuBar({ editor }) {
+  if (!editor) return null;
 
-  constructor(props) {
-    super(props);
-    let init_ed_state = null;
-    if (this.props.body) {
-      const block_array = htmlToDraft(this.props.body);
-      const content_state = ContentState.createFromBlockArray(block_array);
-      init_ed_state = EditorState.createWithContent(content_state);
-    } else {
-    	init_ed_state = EditorState.createEmpty();
-    }
+  return (
+    <div className="wysiwyg-toolbar">
+      <button type="button" onClick={() => editor.chain().focus().toggleBold().run()}
+        className={editor.isActive('bold') ? 'active' : ''} title="Bold">B</button>
+      <button type="button" onClick={() => editor.chain().focus().toggleItalic().run()}
+        className={editor.isActive('italic') ? 'active' : ''} title="Italic"><em>I</em></button>
+      <button type="button" onClick={() => editor.chain().focus().toggleUnderline().run()}
+        className={editor.isActive('underline') ? 'active' : ''} title="Underline"><u>U</u></button>
+      <button type="button" onClick={() => editor.chain().focus().toggleStrike().run()}
+        className={editor.isActive('strike') ? 'active' : ''} title="Strikethrough"><s>S</s></button>
+      <span className="toolbar-separator" />
+      <button type="button" onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+        className={editor.isActive('heading', { level: 1 }) ? 'active' : ''} title="Heading 1">H1</button>
+      <button type="button" onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+        className={editor.isActive('heading', { level: 2 }) ? 'active' : ''} title="Heading 2">H2</button>
+      <button type="button" onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+        className={editor.isActive('heading', { level: 3 }) ? 'active' : ''} title="Heading 3">H3</button>
+      <button type="button" onClick={() => editor.chain().focus().toggleHeading({ level: 4 }).run()}
+        className={editor.isActive('heading', { level: 4 }) ? 'active' : ''} title="Heading 4">H4</button>
+      <button type="button" onClick={() => editor.chain().focus().toggleBulletList().run()}
+        className={editor.isActive('bulletList') ? 'active' : ''} title="Bullet list">&#8226;</button>
+      <button type="button" onClick={() => editor.chain().focus().toggleOrderedList().run()}
+        className={editor.isActive('orderedList') ? 'active' : ''} title="Numbered list">1.</button>
+      <span className="toolbar-separator" />
+      <button type="button" onClick={() => editor.chain().focus().setTextAlign('left').run()}
+        className={editor.isActive({ textAlign: 'left' }) ? 'active' : ''} title="Align left">&#8676;</button>
+      <button type="button" onClick={() => editor.chain().focus().setTextAlign('center').run()}
+        className={editor.isActive({ textAlign: 'center' }) ? 'active' : ''} title="Align center">&#8596;</button>
+      <button type="button" onClick={() => editor.chain().focus().setTextAlign('right').run()}
+        className={editor.isActive({ textAlign: 'right' }) ? 'active' : ''} title="Align right">&#8677;</button>
+      <span className="toolbar-separator" />
+      <button type="button" onClick={() => {
+        const url = window.prompt('URL');
+        if (url) editor.chain().focus().setLink({ href: url }).run();
+      }} className={editor.isActive('link') ? 'active' : ''} title="Link">&#128279;</button>
+      <button type="button" onClick={() => editor.chain().focus().unsetLink().run()}
+        disabled={!editor.isActive('link')} title="Remove link">&#10060;</button>
+      <span className="toolbar-separator" />
+      <button type="button" onClick={() => editor.chain().focus().setHorizontalRule().run()}
+        title="Horizontal rule">&mdash;</button>
+      <button type="button" onClick={() => editor.chain().focus().undo().run()}
+        disabled={!editor.can().undo()} title="Undo">&#8617;</button>
+      <button type="button" onClick={() => editor.chain().focus().redo().run()}
+        disabled={!editor.can().redo()} title="Redo">&#8618;</button>
+    </div>
+  );
+}
 
-    this.state = {
-      ...EMPTY_STATE,
-      editorState: init_ed_state
-    };
-    this.api = new ApiClient(this.props.api_url, this.props.token, this.props.host);
-  }
+function isEditorEmpty(editor) {
+  if (!editor) return true;
+  const html = editor.getHTML();
+  return !html || html === '<p></p>';
+}
 
-  componentDidMount() {
-    switch (this.props.type) {
+function ComposeOverlay({
+  hide, body, recipient: propRecipient, envelope, subject: propSubject,
+  type, other_headers, smtp_host, domains
+}) {
+  const { token, api_url, host } = useAuth();
+  const { setMessage } = useAppMessage();
+  const api = useApi();
+
+  const [addresses, setAddresses] = useState([]);
+  const [address, setAddress] = useState("");
+  const [recipient, setRecipient] = useState("");
+  const [validationFail, setValidationFail] = useState(false);
+  const [To, setTo] = useState([]);
+  const [CC, setCC] = useState([]);
+  const [BCC, setBCC] = useState([]);
+  const [Subject, setSubject] = useState("");
+  const [showRequest, setShowRequest] = useState(false);
+  const [editorMode, setEditorMode] = useState("rich");
+  const [markdownContent, setMarkdownContent] = useState("");
+  const markdownRef = useRef(null);
+
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        link: { openOnClick: false },
+      }),
+      TextAlign.configure({ types: ['heading', 'paragraph'] }),
+    ],
+    content: body || '',
+  });
+
+  // Initialize compose state based on type (reply/replyAll/forward/new)
+  useEffect(() => {
+    switch (type) {
       case "reply":
-        this.setState({
-          ...this.state,
-          address: this.props.recipient,
-          To: this.props.envelope.from,
-          CC: [],
-          Subject: this.props.subject
-        });
+        setAddress(propRecipient);
+        setTo(envelope.from);
+        setCC([]);
+        setSubject(propSubject);
         break;
-      case "replyAll":
-        let to_list = [...new Set([
-                        ...(this.props.envelope.from),
-                        ...(this.props.envelope.to || [])
-                      ])];
-        const i = to_list.indexOf(this.props.recipient);
-        if (i > -1) {
-          to_list.splice(i, 1);
-        }
-        let cc_list = this.props.envelope.cc.slice();
-        const j = cc_list.indexOf(this.props.recipient);
-        if (j > -1) {
-          cc_list.splice(j, 1);
-        }
+      case "replyAll": {
+        let toList = [...new Set([
+          ...(envelope.from),
+          ...(envelope.to || [])
+        ])];
+        const i = toList.indexOf(propRecipient);
+        if (i > -1) toList.splice(i, 1);
+        let ccList = envelope.cc.slice();
+        const j = ccList.indexOf(propRecipient);
+        if (j > -1) ccList.splice(j, 1);
         if (i === -1 && j === -1) {
-          this.props.setMessage("Warning: You are replying to a blind copy.", true);
+          setMessage("Warning: You are replying to a blind copy.", true);
         }
-        this.setState({
-          ...this.state,
-          address: this.props.recipient,
-          To: to_list,
-          CC: cc_list,
-          Subject: this.props.subject
-        });
+        setAddress(propRecipient);
+        setTo(toList);
+        setCC(ccList);
+        setSubject(propSubject);
         break;
+      }
       case "forward":
-        this.setState({
-          ...this.state,
-          address: this.props.recipient,
-          To: [],
-          CC: [],
-          Subject: this.props.subject
-        });
+        setAddress(propRecipient);
+        setTo([]);
+        setCC([]);
+        setSubject(propSubject);
         break;
       default:
-        // This must be a new message
-        this.setState({...this.state, EMPTY_STATE});
         break;
     }
-    this.api.getAddresses().then(data => {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Fetch addresses on mount
+  useEffect(() => {
+    api.getAddresses().then(data => {
       try {
         localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
       } catch (e) {
         console.log(e);
       }
-      this.setState({
-        ...this.state,
-        addresses: data.data.Items.map(a => a.address).sort()
-      });
+      setAddresses(data.data.Items.map(a => a.address).sort());
     });
-  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  handleSubmit = (e) => {
+  // Convert pasted rich text to markdown in the markdown editor
+  useEffect(() => {
+    const el = markdownRef.current;
+    if (!el) return;
+    const handlePaste = (e) => {
+      const html = e.clipboardData.getData('text/html');
+      if (!html) return;
+      e.preventDefault();
+      const md = turndown.turndown(html);
+      const { selectionStart, selectionEnd } = el;
+      setMarkdownContent(prev =>
+        prev.slice(0, selectionStart) + md + prev.slice(selectionEnd)
+      );
+      requestAnimationFrame(() => {
+        const newPos = selectionStart + md.length;
+        el.selectionStart = newPos;
+        el.selectionEnd = newPos;
+      });
+    };
+    el.addEventListener('paste', handlePaste);
+    return () => el.removeEventListener('paste', handlePaste);
+  }, []);
+
+  const importFromRich = useCallback(() => {
+    if (markdownContent.trim()) {
+      if (!window.confirm("This will replace your current Markdown content. Continue?")) {
+        return;
+      }
+    }
+    setMarkdownContent(turndown.turndown(editor.getHTML()));
+  }, [editor, markdownContent]);
+
+  const importFromMarkdown = useCallback(() => {
+    if (!isEditorEmpty(editor)) {
+      if (!window.confirm("This will replace your current Rich Text content. Continue?")) {
+        return;
+      }
+    }
+    const html = marked.parse(markdownContent, { async: false });
+    editor.commands.setContent(html, { emitUpdate: true });
+  }, [editor, markdownContent]);
+
+  const randomString = useCallback((length) => {
+    let str = '';
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    const len = chars.length;
+    for (let i = 0; i < length; i++) {
+      str += chars.charAt(Math.floor(Math.random() * len));
+    }
+    return str;
+  }, []);
+
+  const validateAddress = useCallback((addr) => {
+    const re = /(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|.(".+"))@((([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))/;
+    return addr.match(re);
+  }, []);
+
+  const addRecipient = useCallback((e) => {
+    if (validateAddress(recipient)) {
+      const unionList = [...To, ...CC, ...BCC];
+      if (unionList.indexOf(recipient) > -1) return;
+      switch (e.target.id) {
+        case "recipient-to":
+          setTo(prev => [...prev, recipient]);
+          break;
+        case "recipient-cc":
+          setCC(prev => [...prev, recipient]);
+          break;
+        case "recipient-bcc":
+          setBCC(prev => [...prev, recipient]);
+          break;
+        default:
+          setTo(prev => [...prev, recipient]);
+      }
+      setRecipient("");
+    } else {
+      setValidationFail(true);
+    }
+  }, [recipient, To, CC, BCC, validateAddress]);
+
+  const handleSubmit = (e) => {
     e.preventDefault();
     return false;
-  }
+  };
 
-  handleSend = (e) => {
+  const handleSend = useCallback((e) => {
     e.preventDefault();
-    const send_button = e.target;
-    const oh = this.props.other_headers;
+    const sendButton = e.target;
+    const oh = other_headers;
     const irt = oh.message_id || [];
-    const msgid = [ '<' + this.randomString(30) + '@' + this.props.smtp_host + '>' ];
+    const msgid = ['<' + randomString(30) + '@' + smtp_host + '>'];
     const ref = [...new Set([
-                              ...(oh.references || []),
-                              ...(oh.message_id || []),
-                              ...(oh.in_reply_to || [])
-                            ])];
+      ...(oh.references || []),
+      ...(oh.message_id || []),
+      ...(oh.in_reply_to || [])
+    ])];
     const headers = {
       in_reply_to: irt.map(s => s.trim()),
       message_id: msgid.map(s => s.trim()),
       references: ref.map(s => s.trim())
+    };
+    if (recipient) {
+      addRecipient(MESSAGE);
     }
-    if (this.state.recipient) {
-      this.addRecipient(MESSAGE);
-    }
-    if (this.state.To.length + this.state.CC.length + this.state.BCC.length === 0) {
-      this.props.setMessage("Please specify at least one recipient.", true);
+    if (To.length + CC.length + BCC.length === 0) {
+      setMessage("Please specify at least one recipient.", true);
       return;
     }
-    if (this.state.subject === "") {
-      this.props.setMessage("Please provide a subject.", true);
+    if (Subject === "") {
+      setMessage("Please provide a subject.", true);
       return;
     }
-    if (this.state.addresses.indexOf(this.state.address) === -1) {
-      this.props.setMessage("Please select an address from which to send.", true);
+    if (addresses.indexOf(address) === -1) {
+      setMessage("Please select an address from which to send.", true);
       return;
     }
-    send_button.classList.add('sending');
-    this.api.sendMessage(
-      this.props.smtp_host,
-      this.state.address,
-      this.state.To,
-      this.state.CC,
-      this.state.BCC,
-      this.state.Subject,
-      headers,
-      draftToHtml(convertToRaw(this.state.editorState.getCurrentContent())),
-      draftToMarkdown(convertToRaw(this.state.editorState.getCurrentContent())),
-      false
+    sendButton.classList.add('sending');
+
+    const richEmpty = isEditorEmpty(editor);
+    const mdEmpty = !markdownContent.trim();
+
+    let htmlBody, textBody;
+    if (richEmpty && mdEmpty) {
+      htmlBody = '';
+      textBody = '';
+    } else if (!richEmpty && mdEmpty) {
+      // Only rich has content: auto-generate markdown
+      htmlBody = editor.getHTML();
+      textBody = turndown.turndown(htmlBody);
+    } else if (richEmpty && !mdEmpty) {
+      // Only markdown has content: auto-generate HTML
+      textBody = markdownContent;
+      htmlBody = marked.parse(markdownContent);
+    } else {
+      // Both have content: send as-is
+      htmlBody = editor.getHTML();
+      textBody = markdownContent;
+    }
+
+    api.sendMessage(
+      smtp_host, address, To, CC, BCC, Subject, headers,
+      htmlBody, textBody, false
     ).then(() => {
-      this.props.setMessage("Email sent", false);
-      this.setState({
-        ...EMPTY_STATE,
-        editorState: EditorState.createEmpty()
-      });
-      this.props.hide();
-      send_button.classList.remove('sending');
-    }).catch((e) => {
-      this.props.setMessage("Error sending email", true);
-      send_button.classList.remove('sending');
-      console.log(e);
+      setMessage("Email sent", false);
+      setAddress("");
+      setRecipient("");
+      setTo([]);
+      setCC([]);
+      setBCC([]);
+      setSubject("");
+      setMarkdownContent("");
+      editor.commands.clearContent();
+      hide();
+      sendButton.classList.remove('sending');
+    }).catch((err) => {
+      setMessage("Error sending email", true);
+      sendButton.classList.remove('sending');
+      console.log(err);
     });
-  }
+  }, [other_headers, smtp_host, recipient, To, CC, BCC, Subject, address, addresses,
+      editor, markdownContent, api, hide, setMessage, addRecipient, randomString]);
 
-  handleCancel = (e) => {
+  const handleCancel = (e) => {
     e.preventDefault();
-    this.props.hide();
-  }
+    hide();
+  };
 
-  onEditorStateChange = (editorState) => {
-    this.setState({
-      ...this.state,
-      editorState: editorState
-    });
-    try {
-      window.getSelection().getRangeAt(0).commonAncestorContainer.parentNode
-        .scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
-    } catch (e) {
-      if (e.name !== "IndexSizeError") {
-        // OK to ignore IndexSizeError
-        console.error(e);
-      }
+  const onSelectChange = (e) => {
+    if (e.target.value === "new") {
+      setAddress(e.target.value);
+      setShowRequest(true);
+      return;
+    }
+    setAddress(e.target.value);
+    setShowRequest(false);
+  };
+
+  const onRecipientChange = (e) => {
+    setRecipient(e.target.value);
+    setValidationFail(false);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" || e.key === " " || e.key === ";" || e.key === ",") {
+      e.preventDefault();
+      addRecipient(MESSAGE);
+    }
+    if (e.key === "Tab") {
+      addRecipient(MESSAGE);
     }
   };
 
-  randomString(length) {
-    let str = '';
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    const len = chars.length;
-    for (var i = 0; i < length; i++) {
-      str += chars.charAt(Math.floor(Math.random() * len));
-    }
-    return str;
-  }
+  const requestCallback = (addr) => {
+    setAddresses(prev => [...prev, addr].sort());
+    setAddress(addr);
+    setShowRequest(false);
+  };
 
-  validateAddress(address) {
-    // Not going to allow IP addresses; domains only
-    let re = /(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|.(".+"))@((([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))/;
-    return address.match(re);
-  }
+  const removeRecipient = useCallback((list, setList, e) => {
+    const addr = e.target.value;
+    setList(prev => prev.filter(a => a !== addr));
+    setRecipient(addr);
+  }, []);
 
-  addRecipient = (e) => {
-    const address = this.state.recipient;
-    if (this.validateAddress(address)) {
-      let to_list = this.state.To.slice();
-      let cc_list = this.state.CC.slice();
-      let bcc_list = this.state.BCC.slice();
-      const union_list = to_list.concat(cc_list, bcc_list);
-      if (union_list.indexOf(address) > -1) {
-        return;
-      }
-      switch (e.target.id) {
-        case "recipient-to":
-          to_list.push(address);
-          break;
-        case "recipient-cc":
-          cc_list.push(address);
-          break;
-        case "recipient-bcc":
-          bcc_list.push(address);
-          break;
-        default:
-          to_list.push(address);
-      }
-      this.setState({
-        ...this.state,
-        To: to_list,
-        CC: cc_list,
-        BCC: bcc_list,
-        recipient: ""
-      });
-    } else {
-      this.setState({...this.state, validation_fail: true});
-    }
-  }
-
-  onSelectChange = (e) => {
-    if (e.target.value === "new") {
-      this.setState({...this.state, address: e.target.value, showRequest: true});
-      return;
-    }
-    this.setState({...this.state, address: e.target.value, showRequest: false});
-  }
-
-  onRecipientChange = (e) => {
-    this.setState({...this.state, recipient: e.target.value});
-  }
-
-  handleKeyDown = (e) => {
-    if (e.key === "Enter" || e.key === " " || e.key === ";" || e.key === ",") {
-      e.preventDefault();
-      this.addRecipient(MESSAGE);
-    }
-    if (e.key === "Tab") {
-      this.addRecipient(MESSAGE);
-    }
-  }
-
-  onSubjectChange = (e) => {
-    this.setState({...this.state, Subject: e.target.value});
-  }
-
-  requestCallback = (address) => {
-    var addressList = this.state.addresses;
-    addressList.push(address);
-    this.setState({
-      ...this.state,
-      addresses: addressList,
-      address: address,
-      showRequest: false
-    });
-  }
-
-  removeTo = (e) => {
-    let to_list = this.state.To.slice();
-    const i = to_list.indexOf(e.target.value);
-    if (i > -1) {
-      to_list.splice(i, 1);
-      this.setState({...this.state, To: to_list, recipient: e.target.value});
-    }
-  }
-
-  removeCC = (e) => {
-    let cc_list = this.state.CC.slice();
-    const i = cc_list.indexOf(e.target.value);
-    if (i > -1) {
-      cc_list.splice(i, 1);
-      this.setState({...this.state, CC: cc_list, recipient: e.target.value});
-    }
-  }
-
-  removeBCC = (e) => {
-    let bcc_list = this.state.BCC.slice();
-    const i = bcc_list.indexOf(e.target.value);
-    if (i > -1) {
-      bcc_list.splice(i, 1);
-      this.setState({...this.state, BCC: bcc_list, recipient: e.target.value});
-    }
-  }
-
-  moveAddress = (e) => {
-    const address = e.target.getAttribute('data-address');
+  const moveAddress = useCallback((e) => {
+    const addr = e.target.getAttribute('data-address');
     const list = e.target.value;
-    let to_list = this.state.To.slice();
-    let cc_list = this.state.CC.slice();
-    let bcc_list = this.state.BCC.slice();
-    const to_i = to_list.indexOf(address);
-    if (to_i > -1) {
-      to_list.splice(to_i, 1);
-    }
-    const cc_i = cc_list.indexOf(address);
-    if (cc_i > -1) {
-      cc_list.splice(cc_i, 1);
-    }
-    const bcc_i = bcc_list.indexOf(address);
-    if (bcc_i > -1) {
-      bcc_list.splice(bcc_i, 1);
-    }
+    setTo(prev => prev.filter(a => a !== addr));
+    setCC(prev => prev.filter(a => a !== addr));
+    setBCC(prev => prev.filter(a => a !== addr));
     switch (list) {
-      case "To":
-        to_list.push(address);
-        break;
-      case "CC":
-        cc_list.push(address);
-        break;
-      case "BCC":
-        bcc_list.push(address);
-        break;
-      default:
-        to_list.push(address);
+      case "To": setTo(prev => [...prev, addr]); break;
+      case "CC": setCC(prev => [...prev, addr]); break;
+      case "BCC": setBCC(prev => [...prev, addr]); break;
+      default: setTo(prev => [...prev, addr]);
     }
-    this.setState({
-      ...this.state,
-      To: to_list,
-      CC: cc_list,
-      BCC: bcc_list
-    });
-  }
+  }, []);
 
-  getOptions() {
-    if (! this.state.addresses) {
-      return <option key="loading">Loading...</option>;
-    }
-    return this.state.addresses.map((a) => {
-      return <option value={a} key={a}>{a}</option>;
-    });
-  }
-
-  obscureEmail(address) {
-    return address.split('').map((c) => {
+  const obscureEmail = (addr) => {
+    return addr.split('').map((c, idx) => {
       switch (c) {
-        case '.':
-          return <span className="dot"></span>
-        case '@':
-          return <span className="amphora"></span>
-        default:
-          return <span>{c}</span>
+        case '.': return <span key={idx} className="dot"></span>;
+        case '@': return <span key={idx} className="amphora"></span>;
+        default: return <span key={idx}>{c}</span>;
       }
     });
-  }
+  };
 
-  render() {
-    const { editorState } = this.state;
-    const to_list = this.state.To.sort().map((a) => {
-      return (
-        <li key={a} className="To">
-          <div><label><select value="To" data-address={a} onChange={this.moveAddress}>
-            <option>To</option>
-            <option>CC</option>
-            <option>BCC</option>
-          </select>▼</label>{this.obscureEmail(a)}<button onClick={this.removeTo} value={a}>☒</button></div>
-        </li>
-        );
-    });
-    const cc_list = this.state.CC.sort().map((a) => {
-      return (
-        <li key={a} className="CC">
-          <div><label><select value="CC" data-address={a} onChange={this.moveAddress}>
-            <option>To</option>
-            <option>CC</option>
-            <option>BCC</option>
-          </select>▼</label>{this.obscureEmail(a)}<button onClick={this.removeCC} value={a}>☒</button></div>
-        </li>
-        );
-    });
-    const bcc_list = this.state.BCC.sort().map((a) => {
-      return (
-        <li key={a} className="BCC">
-          <div><label><select value="BCC" data-address={a} onChange={this.moveAddress}>
-            <option>To</option>
-            <option>CC</option>
-            <option>BCC</option>
-          </select>▼</label>{this.obscureEmail(a)}<button onClick={this.removeBCC} value={a}>☒</button></div>
-        </li>
-        );
-    });
-    return (
-      <form className="compose-overlay" onSubmit={this.handleSubmit}>
-        <div className="compose-from-old">
-          <label htmlFor="address-from-old" className="address-from-old">From</label>
-          <select
-            type="text"
-            id="address-from-old"
-            name="address-from-old"
-            className="address-from-old"
-            placeholder="Find existing address"
-            onChange={this.onSelectChange}
-            value={this.state.address}
-          >
-            <option value="">Select an address</option>
-            <option value="new">Create a new address</option>
-            {this.getOptions()}
-          </select>
-          <Request
-            token={this.props.token}
-            domains={this.props.domains}
-            api_url={this.props.api_url}
-            setMessage={this.props.setMessage}
-            showRequest={this.state.showRequest}
-            host={this.props.host}
-            callback={this.requestCallback}
-          />
+  const getOptions = () => {
+    if (!addresses) return <option key="loading">Loading...</option>;
+    return addresses.map((a) => <option value={a} key={a}>{a}</option>);
+  };
+
+  const renderRecipientList = (list, listName, removeHandler) => {
+    return list.sort().map((a) => (
+      <li key={a} className={listName}>
+        <div>
+          <label>
+            <select value={listName} data-address={a} onChange={moveAddress}>
+              <option>To</option>
+              <option>CC</option>
+              <option>BCC</option>
+            </select>&#9660;
+          </label>
+          {obscureEmail(a)}
+          <button onClick={(e) => removeHandler(e)} value={a}>&#9746;</button>
         </div>
-        <label htmlFor="recipient-address">Recipients</label>
-        <div
-          className="recipients"
-          onClick={e => document.getElementById('recipient-address').focus()}
-        >
-          <ul
-            className={"recipient-list"}
-            id="recipient-list"
-            tabIndex="0"
-          >
-            {to_list}
-            {cc_list}
-            {bcc_list}
-            <li className="recipient-entry">
-              <input
-                type="email"
-                id="recipient-address"
-                name="address-to"
-                onChange={this.onRecipientChange}
-                onKeyDown={this.handleKeyDown}
-                value={this.state.recipient}
-                className={`recipient-address${this.state.validation_fail ? " invalid" : ""}`}
-              />
-            </li>
-          </ul>
-        </div>
-        <label htmlFor="subject">Subject</label>
-        <input
+      </li>
+    ));
+  };
+
+  return (
+    <form className="compose-overlay" onSubmit={handleSubmit}>
+      <div className="compose-from-old">
+        <label htmlFor="address-from-old" className="address-from-old">From</label>
+        <select
           type="text"
-          id="subject"
-          name="subject"
-          onChange={this.onSubjectChange}
-          value={this.state.Subject}
+          id="address-from-old"
+          name="address-from-old"
+          className="address-from-old"
+          placeholder="Find existing address"
+          onChange={onSelectChange}
+          value={address}
+        >
+          <option value="">Select an address</option>
+          <option value="new">Create a new address</option>
+          {getOptions()}
+        </select>
+        <Request
+          token={token}
+          domains={domains}
+          api_url={api_url}
+          setMessage={setMessage}
+          showRequest={showRequest}
+          host={host}
+          callback={requestCallback}
         />
-        <Editor
-          editorState={editorState}
-          toolbarClassName="wysiwyg-toolbar"
-          wrapperClassName="wysiwyg-wrapper"
-          editorClassName="wysiwyg-editor"
-          onEditorStateChange={this.onEditorStateChange}
-          toolbar={{
-            options: ['inline', 'blockType', 'fontSize', 'fontFamily', 'list', 'textAlign', 'colorPicker', 'link', 'embedded', 'emoji', 'remove', 'history'],
-            
-          }}
+      </div>
+      <label htmlFor="recipient-address">Recipients</label>
+      <div
+        className="recipients"
+        onClick={() => document.getElementById('recipient-address').focus()}
+      >
+        <ul className="recipient-list" id="recipient-list" tabIndex="0">
+          {renderRecipientList(To, "To", (e) => removeRecipient(To, setTo, e))}
+          {renderRecipientList(CC, "CC", (e) => removeRecipient(CC, setCC, e))}
+          {renderRecipientList(BCC, "BCC", (e) => removeRecipient(BCC, setBCC, e))}
+          <li className="recipient-entry">
+            <input
+              type="email"
+              id="recipient-address"
+              name="address-to"
+              onChange={onRecipientChange}
+              onKeyDown={handleKeyDown}
+              value={recipient}
+              className={`recipient-address${validationFail ? " invalid" : ""}`}
+            />
+          </li>
+        </ul>
+      </div>
+      <label htmlFor="subject">Subject</label>
+      <input
+        type="text"
+        id="subject"
+        name="subject"
+        onChange={(e) => setSubject(e.target.value)}
+        value={Subject}
+      />
+      <div className="editor-mode-tabs">
+        <button type="button"
+          className={`editor-mode-tab ${editorMode === 'rich' ? 'active' : ''}`}
+          onClick={() => setEditorMode('rich')}>Rich Text</button>
+        <button type="button"
+          className={`editor-mode-tab ${editorMode === 'markdown' ? 'active' : ''}`}
+          onClick={() => setEditorMode('markdown')}>Markdown</button>
+      </div>
+      <div className={`editor-pane ${editorMode === 'rich' ? '' : 'editor-pane-hidden'}`}>
+        <MenuBar editor={editor} />
+        <div className="editor-import-bar">
+          <button type="button" className="import-button" onClick={importFromMarkdown}
+            title="Replace rich text content with converted Markdown content"
+          >Import from Markdown</button>
+        </div>
+        <EditorContent editor={editor} className="wysiwyg-editor" />
+      </div>
+      <div className={`editor-pane ${editorMode === 'markdown' ? '' : 'editor-pane-hidden'}`}>
+        <div className="editor-import-bar">
+          <button type="button" className="import-button" onClick={importFromRich}
+            title="Replace Markdown content with converted Rich Text content"
+          >Import from Rich Text</button>
+        </div>
+        <textarea
+          ref={markdownRef}
+          className="markdown-editor"
+          value={markdownContent}
+          onChange={(e) => setMarkdownContent(e.target.value)}
         />
-        <button onClick={this.handleSend} className="default" id="compose-send">Send</button>
-        <button onClick={this.handleCancel} id="compose-cancel">Cancel</button>
-      </form>
-    );
-  }
+      </div>
+      <button onClick={handleSend} className="default" id="compose-send">Send</button>
+      <button onClick={handleCancel} id="compose-cancel">Cancel</button>
+    </form>
+  );
 }
 
 export default ComposeOverlay;

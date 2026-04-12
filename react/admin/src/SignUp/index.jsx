@@ -1,13 +1,14 @@
-import './SignUp.css';
+import styles from './SignUp.module.css';
+import loginStyles from '../Login/Login.module.css';
 
 function SignUp({ onSubmit, onUsernameChange, onPasswordChange, onPhoneChange, username, password, phone }) {
   return (
-    <div className="sign-up">
-      <form className="login" onSubmit={onSubmit}>
+    <div className={styles.signUp}>
+      <form className={loginStyles.login} onSubmit={onSubmit}>
         <label htmlFor="userName">User Name</label>
         <input
           type="text"
-          className="login username"
+          className={`${loginStyles.login} ${loginStyles.username}`}
           id="userName"
           name="userName"
           onChange={onUsernameChange}
@@ -16,7 +17,7 @@ function SignUp({ onSubmit, onUsernameChange, onPasswordChange, onPhoneChange, u
         <label htmlFor="phone">Phone</label>
         <input
           type="text"
-          className="login phone"
+          className={`${loginStyles.login} ${loginStyles.username}`}
           id="phone"
           name="phone"
           placeholder="+12125555555"
@@ -26,7 +27,7 @@ function SignUp({ onSubmit, onUsernameChange, onPasswordChange, onPhoneChange, u
         <label htmlFor="password">Password</label>
         <input
           type="password"
-          className="login password"
+          className={`${loginStyles.login} ${loginStyles.password}`}
           id="password"
           name="password"
           onChange={onPasswordChange}

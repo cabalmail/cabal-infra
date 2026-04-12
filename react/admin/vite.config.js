@@ -1,6 +1,5 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-
 export default defineConfig({
   plugins: [react()],
   server: {
@@ -13,6 +12,11 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
-    setupFiles: './src/test/setup.js'
+    setupFiles: './src/test/setup.js',
+    server: {
+      deps: {
+        inline: [/@tiptap\/.*/]
+      }
+    }
   }
 });

@@ -1,6 +1,6 @@
 // Third party libs
 
-import React from 'react';
+import React, { Suspense } from 'react';
 import axios from 'axios';
 import {
   CognitoUser,
@@ -9,10 +9,10 @@ import {
   AuthenticationDetails
 } from 'amazon-cognito-identity-js';
 
-// Main Components
-import Email from './Email';
-import Folders from './Folders';
-import Addresses from './Addresses';
+// Lazy-loaded view components
+const Email = React.lazy(() => import('./Email'));
+const Folders = React.lazy(() => import('./Folders'));
+const Addresses = React.lazy(() => import('./Addresses'));
 
 // Pre-login Components
 import SignUp from './SignUp';
@@ -21,6 +21,9 @@ import Login from './Login';
 // Persistent Components
 import AppMessage from './AppMessage';
 import Nav from './Nav';
+
+// Error Boundary
+import ErrorBoundary from './ErrorBoundary';
 
 // Contexts
 import AuthContext from './contexts/AuthContext';
@@ -31,11 +34,15 @@ import './AppDark.css';
 import './AppLight.css';
 import './App.css';
 
+// Module-level token storage (never persisted to localStorage)
+let _token = null;
+let _expires = Math.floor(Date.now() / 1000) - 1;
+
 // Globals
 let UserPool = null;
 
 /**
- * Application for reading Cabalmail email and 
+ * Application for reading Cabalmail email and
  * managing Cabalmail addresses and folders
  */
 
@@ -45,8 +52,6 @@ class App extends React.Component {
     super(props);
     const defaults = {
       loggedIn: false,
-      token: null,
-      expires: Math.floor(new Date() / 1000) - 1,
       userName: null,
       password: null,
       phone: null,
@@ -62,12 +67,12 @@ class App extends React.Component {
     };
     const saved = JSON.parse(window.localStorage.getItem('state'));
     this.state = saved
-      ? { ...defaults, ...saved, token: null, password: null }
+      ? { ...defaults, ...saved, password: null }
       : defaults;
   }
 
   persistState(state) {
-    const { password, token, ...safe } = { ...this.state, ...state };
+    const { password, ...safe } = { ...this.state, ...state };
     try {
       window.localStorage.setItem('state', JSON.stringify(safe));
     } catch (e) {
@@ -88,6 +93,7 @@ class App extends React.Component {
     const response = this.getConfig();
     response.then(data => {
       const { control_domain, domains, cognitoConfig } = data.data;
+      UserPool = new CognitoUserPool(cognitoConfig.poolData);
       this.setState({
         ...this.state,
         poolData: cognitoConfig.poolData,
@@ -96,7 +102,7 @@ class App extends React.Component {
         domains: domains,
         api_url: "https://admin." + control_domain + "/prod"
       });
-      UserPool = new CognitoUserPool(cognitoConfig.poolData);
+      this.refreshSession();
     });
     window.addEventListener("focus", this.checkSession);
   }
@@ -105,19 +111,32 @@ class App extends React.Component {
     this.checkSession();
   }
 
+  refreshSession = () => {
+    if (!UserPool) return;
+    const cognitoUser = UserPool.getCurrentUser();
+    if (!cognitoUser) return;
+    cognitoUser.getSession((err, session) => {
+      if (err || !session || !session.isValid()) return;
+      _token = session.getIdToken().getJwtToken();
+      _expires = session.getIdToken().getExpiration();
+      this.setState({
+        ...this.state,
+        loggedIn: true,
+        view: "Email"
+      });
+    });
+  }
+
   checkSession = () => {
-    if (this.state.expires < Math.floor(Date.now() / 1000)) {
+    if (_expires < Math.floor(Date.now() / 1000)) {
       if (this.state.view !== "Login" && this.state.view !== "SignUp") {
         this.setState({
           ...this.state,
           view: "Login"
         });
       }
-      if (this.state.token !== null) {
-        this.setState({
-          ...this.state,
-          token: null
-        })
+      if (_token !== null) {
+        _token = null;
       }
       if (this.state.loggedIn !== false) {
         this.setState({
@@ -191,22 +210,22 @@ class App extends React.Component {
     });
     user.authenticateUser(creds, {
       onSuccess: data => {
+        _token = data.getIdToken().getJwtToken();
+        _expires = data.getIdToken().getExpiration();
         this.setState({
           ...this.state,
           message: "",
           loggedIn: true,
-          token: data.getIdToken().getJwtToken(),
-          expires: data.getIdToken().getExpiration(),
           view: "Email"
         });
         this.setMessage("Login succeeded", false);
       },
       onFailure: data => {
+        _token = null;
+        _expires = Math.floor(new Date() / 1000) - 1;
         this.setState({
           ...this.state,
           loggedIn: false,
-          token: null,
-          expires: Math.floor(new Date() / 1000) - 1,
           view: "Login"
         });
         this.setMessage("Login failed", true);
@@ -216,11 +235,15 @@ class App extends React.Component {
 
   doLogout = (e) => {
     e.preventDefault();
+    _token = null;
+    _expires = Math.floor(new Date() / 1000) - 1;
+    if (UserPool) {
+      const cognitoUser = UserPool.getCurrentUser();
+      if (cognitoUser) cognitoUser.signOut();
+    }
     this.setState({
       ...this.state,
       loggedIn: false,
-      token: null,
-      expires: Math.floor(new Date() / 1000) - 1,
       userName: null,
       password: null,
       view: "Login"
@@ -241,22 +264,26 @@ class App extends React.Component {
     switch (this.state.view) {
       case "Addresses":
         return (
-          <Addresses
-            token={this.state.token}
-            api_url={this.state.api_url}
-            host={this.state.imap_host}
-            domains={this.state.domains}
-            setMessage={this.setMessage}
-          />
+          <ErrorBoundary name="Addresses">
+            <Addresses
+              token={_token}
+              api_url={this.state.api_url}
+              host={this.state.imap_host}
+              domains={this.state.domains}
+              setMessage={this.setMessage}
+            />
+          </ErrorBoundary>
         );
       case "Folders":
         return (
-          <Folders
-            token={this.state.token}
-            api_url={this.state.api_url}
-            host={this.state.imap_host}
-            setMessage={this.setMessage}
-          />
+          <ErrorBoundary name="Folders">
+            <Folders
+              token={_token}
+              api_url={this.state.api_url}
+              host={this.state.imap_host}
+              setMessage={this.setMessage}
+            />
+          </ErrorBoundary>
         );
       case "SignUp":
         return (
@@ -269,14 +296,16 @@ class App extends React.Component {
         );
       case "Email":
         return (
-          <Email
-            token={this.state.token}
-            api_url={this.state.api_url}
-            host={this.state.imap_host}
-            smtp_host={`smtp-out.${this.state.control_domain}`}
-            domains={this.state.domains}
-            setMessage={this.setMessage}
-          />
+          <ErrorBoundary name="Email">
+            <Email
+              token={_token}
+              api_url={this.state.api_url}
+              host={this.state.imap_host}
+              smtp_host={`smtp-out.${this.state.control_domain}`}
+              domains={this.state.domains}
+              setMessage={this.setMessage}
+            />
+          </ErrorBoundary>
         );
       case "Logout":
         return (
@@ -304,7 +333,7 @@ class App extends React.Component {
 
   render() {
     const authValue = {
-      token: this.state.token,
+      token: _token,
       api_url: this.state.api_url,
       host: this.state.imap_host,
       smtp_host: `smtp-out.${this.state.control_domain}`,
@@ -322,7 +351,9 @@ class App extends React.Component {
               doLogout={this.doLogout}
             />
             <div className="content">
-              {this.renderContent()}
+              <Suspense fallback={<div className="loading">Loading...</div>}>
+                {this.renderContent()}
+              </Suspense>
             </div>
             <AppMessage
               message={this.state.message}

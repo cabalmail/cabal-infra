@@ -1,13 +1,13 @@
-import './Login.css';
+import styles from './Login.module.css';
 
 function Login({ onSubmit, onUsernameChange, onPasswordChange, username, password }) {
   return (
-    <div className="login">
-      <form className="login" onSubmit={onSubmit}>
+    <div className={styles.login}>
+      <form className={styles.login} onSubmit={onSubmit}>
         <label htmlFor="userName">User Name</label>
         <input
           type="text"
-          className="login username"
+          className={`${styles.login} ${styles.username}`}
           id="userName"
           name="userName"
           onChange={onUsernameChange}
@@ -16,7 +16,7 @@ function Login({ onSubmit, onUsernameChange, onPasswordChange, username, passwor
         <label htmlFor="password">Password</label>
         <input
           type="password"
-          className="login password"
+          className={`${styles.login} ${styles.password}`}
           id="password"
           name="password"
           onChange={onPasswordChange}
