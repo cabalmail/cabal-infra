@@ -58,11 +58,6 @@ variable "control_domain" {
   description = "Base for auth domain. E.g., if control_domain is example.com, then the autho domain will be auth.example.com."
 }
 
-variable "ssm_document_arn" {
-  type        = string
-  description = "ARN of SSM document for running chef on machines"
-}
-
 variable "ecs_cluster_name" {
   type        = string
   description = "Name of the ECS cluster. Used by assign_osid Lambda to force new deployments on user creation."

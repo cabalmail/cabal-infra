@@ -1,10 +1,7 @@
 /**
-* ECS-owned NLB target groups (target_type = "ip").
+* NLB target groups (target_type = "ip").
 *
 * Production NLB listeners in the ELB module forward to these target groups.
-* The old instance-type target groups in the ELB module remain for the ASG
-* modules but are no longer referenced by any active listeners.
-*
 * Keyed by function (imap, relay, submission, starttls) rather than tier
 * because smtp-out maps to two target groups.
 */

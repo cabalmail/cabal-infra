@@ -1,9 +1,0 @@
-DEFAULT=$HOME/Maildir/
-PMDIR=$HOME/.procmail
-LOGFILE=$PMDIR/log
-LOG="
-"
-MAILDIR=$HOME/Maildir       # Make sure this directory exists!
-:0:
-*^X-Mailer: Outlook Express 3.14159
-IN-spam/
