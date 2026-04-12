@@ -251,6 +251,7 @@ ul li.BCC div {
   border-color: inherit;
   border-top: none;
   border-bottom: none;
+  border-radius: 0;
 }
 
 .import-button {
@@ -271,6 +272,7 @@ ul li.BCC div {
   border-color: inherit;
   border-top-width: 0;
   z-index: 1;
+  border-radius: 0;
 }
 
 .wysiwyg-editor .tiptap {
