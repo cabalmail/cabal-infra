@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import sanitizeHtml from 'sanitize-html';
 import './Email.css';
 import Messages from './Messages';
 import MessageOverlay from './MessageOverlay';
@@ -22,12 +23,20 @@ function prepBody(body, envelope) {
       .replace(/&lt;!--[\s\S]*?--&gt;/gm, "");
   } while (sanitizedBody !== previousBody);
 
+  const cleanBody = sanitizeHtml(
+    sanitizedBody.replace(/[\s\S]*<body>/m, "").replace(/<\/body>[\s\S]*/m, "")
+  );
+  const safeFrom = sanitizeHtml(envelope.from?.[0] || "");
+  const safeTo = sanitizeHtml((envelope.to || []).join("; "));
+  const safeDate = sanitizeHtml(envelope.date || "");
+  const safeSubject = sanitizeHtml(envelope.subject || "");
+
   return '<div><p>&#160;</p></div><div><hr /></div>' +
-    `<div style="font-weight: bold;">From: ${envelope.from[0]}</div>` +
-    `<div style="font-weight: bold;">To: ${envelope.to.join("; ")}</div>` +
-    `<div style="font-weight: bold;">Date: ${envelope.date}</div>` +
-    `<div style="font-weight: bold;">Subject: ${envelope.subject}</div><div><p>&#160;</p></div>` +
-    sanitizedBody.replace(/[\s\S]*<body>/m, "").replace(/<\/body>[\s\S]*/m, "");
+    `<div style="font-weight: bold;">From: ${safeFrom}</div>` +
+    `<div style="font-weight: bold;">To: ${safeTo}</div>` +
+    `<div style="font-weight: bold;">Date: ${safeDate}</div>` +
+    `<div style="font-weight: bold;">Subject: ${safeSubject}</div><div><p>&#160;</p></div>` +
+    cleanBody;
 }
 
 function Email() {
