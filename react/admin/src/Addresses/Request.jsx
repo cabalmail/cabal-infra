@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import useApi from '../hooks/useApi';
+import './Request.css';
 
 function Request({ domains, showRequest, callback, setMessage }) {
   const api = useApi();
