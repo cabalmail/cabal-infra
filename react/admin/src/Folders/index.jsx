@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import useApi from '../hooks/useApi';
 import { PERMANENT_FOLDERS, FOLDER_LIST } from '../constants';
-import './Folders.css';
+import styles from './Folders.module.css';
 
 function Folders({ setMessage, setFolder: setFolderProp }) {
   const api = useApi();
@@ -87,24 +87,24 @@ function Folders({ setMessage, setFolder: setFolderProp }) {
 
   const folderList = folders.map(item => {
     const favorite = subFolders.includes(item) ? (
-      <span data-favorite={item} className="favorite subscribed" onClick={unsubscribe}>&#9733;</span>
+      <span data-favorite={item} className={`${styles.favorite} ${styles.subscribed}`} onClick={unsubscribe}>&#9733;</span>
     ) : (
-      <span data-favorite={item} className="favorite unsubscribed" onClick={subscribe}>&#9734;</span>
+      <span data-favorite={item} className={styles.favorite} onClick={subscribe}>&#9734;</span>
     );
     const deleteButton = PERMANENT_FOLDERS.includes(item) ? null : (
       <button
-        className="folder_button delete_folder"
+        className={`${styles.folderButton} ${styles.deleteFolder}`}
         data-folder={item}
         onClick={handleDelClick}
         title={`Delete ${item}`}
       >&#128465;&#65039;</button>
     );
     return (
-      <li className="folder" id={item} key={item}>
+      <li className={styles.folder} id={item} key={item}>
         {favorite}
-        <span className="folder_name">{item}</span>
+        <span className={styles.folderName}>{item}</span>
         <button
-          className="folder_button new_subfolder"
+          className={styles.folderButton}
           data-parent={item}
           onClick={handleNewClick}
           title={`New subfolder of ${item}`}
@@ -115,25 +115,25 @@ function Folders({ setMessage, setFolder: setFolderProp }) {
   });
 
   return (
-    <div className="folders">
-      <div className="new_folder">
+    <div className={styles.folders}>
+      <div className={styles.newFolder}>
         <input
           type="text"
           id="new_folder"
           name="new_folder"
-          className="new_folder"
+          className={styles.newFolderInput}
           value={newFolder}
           onChange={(e) => setNewFolder(e.target.value)}
         />
         <button
-          className="new_folder"
+          className={styles.newFolderButton}
           data-parent=""
           onClick={handleNewClick}
         >New Top-level Folder</button>
       </div>
       <hr />
       <div id="count">Found: {folders.length} folders</div>
-      <ul className="folder_list">
+      <ul className={styles.folderList}>
         {folderList}
       </ul>
     </div>

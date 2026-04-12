@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import AppMessage from './index';
+import styles from './AppMessage.module.css';
 
 describe('AppMessage', () => {
   it('renders the message text', () => {
@@ -11,22 +12,22 @@ describe('AppMessage', () => {
   it('applies hidden class when hide is true', () => {
     render(<AppMessage message="Hidden" hide={true} error={false} />);
     const el = screen.getByText('Hidden');
-    expect(el).toHaveClass('hidden');
-    expect(el).not.toHaveClass('visible');
+    expect(el).toHaveClass(styles.hidden);
+    expect(el).not.toHaveClass(styles.visible);
   });
 
   it('applies visible class when hide is false', () => {
     render(<AppMessage message="Visible" hide={false} error={false} />);
-    expect(screen.getByText('Visible')).toHaveClass('visible');
+    expect(screen.getByText('Visible')).toHaveClass(styles.visible);
   });
 
   it('applies error class when error is true', () => {
     render(<AppMessage message="Err" hide={false} error={true} />);
-    expect(screen.getByText('Err')).toHaveClass('error');
+    expect(screen.getByText('Err')).toHaveClass(styles.error);
   });
 
   it('applies info class when error is false', () => {
     render(<AppMessage message="Info" hide={false} error={false} />);
-    expect(screen.getByText('Info')).toHaveClass('info');
+    expect(screen.getByText('Info')).toHaveClass(styles.info);
   });
 });
