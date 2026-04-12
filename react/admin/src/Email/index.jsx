@@ -13,13 +13,21 @@ const EMPTY_ENVELOPE = {
 };
 
 function prepBody(body, envelope) {
+  let sanitizedBody = body;
+  let previousBody;
+  do {
+    previousBody = sanitizedBody;
+    sanitizedBody = sanitizedBody
+      .replace(/<!--[\s\S]*?-->/gm, "")
+      .replace(/&lt;!--[\s\S]*?--&gt;/gm, "");
+  } while (sanitizedBody !== previousBody);
+
   return '<div><p>&#160;</p></div><div><hr /></div>' +
     `<div style="font-weight: bold;">From: ${envelope.from[0]}</div>` +
     `<div style="font-weight: bold;">To: ${envelope.to.join("; ")}</div>` +
     `<div style="font-weight: bold;">Date: ${envelope.date}</div>` +
     `<div style="font-weight: bold;">Subject: ${envelope.subject}</div><div><p>&#160;</p></div>` +
-    body.replace(/<!--[\s\S]*?-->/gm, "").replace(/&lt;!--[\s\S]*?--&gt;/gm, "")
-    .replace(/[\s\S]*<body>/m, "").replace(/<\/body>[\s\S]*/m, "");
+    sanitizedBody.replace(/[\s\S]*<body>/m, "").replace(/<\/body>[\s\S]*/m, "");
 }
 
 function Email() {
