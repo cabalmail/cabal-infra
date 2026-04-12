@@ -45,16 +45,18 @@ The ACME approach is problematic: certs expire every 90 days and renewal require
 | `schedule.tf` | EventBridge Scheduler rule (`rate(60 days)`), scheduler IAM role |
 | `outputs.tf` | `lambda_function_name`, `ecr_repository_url` |
 
-### Docker image: `docker/certbot-renewal/`
+### Lambda code and Docker image: `lambda/certbot-renewal/`
 
 | File | Purpose |
 |------|---------|
 | `Dockerfile` | Based on `public.ecr.aws/lambda/python:3.13-arm64`, installs `certbot`, `certbot-dns-route53`, `boto3` |
 | `handler.py` | Lambda handler: runs certbot via subprocess, reads generated cert files, writes to SSM (`/cabal/control_domain_ssl_key`, `/cabal/control_domain_ssl_cert`, `/cabal/control_domain_chain_cert`), forces new ECS deployments |
 
+This lives under `lambda/` (not `docker/`) so that all Lambda functions remain in one place. The `docker/` directory is reserved for the mail tier containers and their shared resources.
+
 ### CI workflow update: `.github/workflows/docker.yml`
 
-Add `certbot-renewal` to the build matrix so the image is built and pushed alongside the mail tier images. The certbot image build context is `docker/certbot-renewal/` (self-contained, unlike the mail tiers which use `docker/` as context).
+Add `certbot-renewal` to the build matrix so the image is built and pushed alongside the mail tier images. The certbot image build context is `lambda/certbot-renewal/` (self-contained, unlike the mail tiers which use `docker/` as context).
 
 ---
 

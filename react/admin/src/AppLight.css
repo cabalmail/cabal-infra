@@ -1,7 +1,7 @@
 @media (prefers-color-scheme: light) {
   body, a, button, select, div, label, form {
     color: #222;
-    background-color: #ffe;
+    background-color: #eee;
   }
   * {
     border-color: #999;
@@ -53,7 +53,7 @@
   div.message-list div.message-subject input[type=checkbox]:not(:checked) ~ label .unchecked,
   div.message-list div.message-subject input[type=checkbox]:checked ~ label .checked {
     box-shadow: inset 0 0 0.35em #fff;
-    background-color: #ffe;
+    background-color: #eee;
     border-color: #222;
   }
   .email_list,
@@ -80,7 +80,7 @@
   body.inverted, a.inverted, button.inverted, select.inverted, div.inverted,
   .inverted a, .inverted button, .inverted select, .inverted div {
     color: #aaa;
-    background-color: #200;
+    background-color: #111;
     border-color: #333;
   }
   input.inverted, select.inverted, option.inverted,

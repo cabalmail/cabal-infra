@@ -22,7 +22,7 @@
   border-width: 0;
 }
 
-.nav button.item {
+.nav #logout {
   margin: 0;
   padding: 0.4em;
   border-width: 1px;
@@ -31,6 +31,13 @@
   top: 0.5em;
   right: 0.5em;
   width: auto;
+}
+
+.nav button.item {
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
 }
 
 @keyframes ripple {
@@ -89,5 +96,8 @@ body div.nav div.logo {
   }
   body div.nav {
     text-align: left;
+  }
+  .nav .item {
+    padding: 0.8em 0.6em;
   }
 }

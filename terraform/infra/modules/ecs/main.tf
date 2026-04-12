@@ -16,13 +16,20 @@ data "aws_ami" "ecs_optimized" {
 
   filter {
     name   = "name"
-    values = ["amzn2-ami-ecs-hvm-2.0.*-x86_64-ebs"]
+    values = ["al2023-ami-ecs-hvm-*-arm64"]
   }
 
   filter {
     name   = "virtualization-type"
     values = ["hvm"]
   }
+}
+
+# ── ENI trunking (required for awsvpc tasks on Graviton) ──────
+
+resource "aws_ecs_account_setting_default" "awsvpc_trunking" {
+  name  = "awsvpcTrunking"
+  value = "enabled"
 }
 
 # ── ECS cluster ────────────────────────────────────────────────
@@ -52,6 +59,7 @@ resource "aws_launch_template" "ecs" {
   user_data = base64encode(<<-EOF
     #!/bin/bash
     echo "ECS_CLUSTER=${aws_ecs_cluster.mail.name}" >> /etc/ecs/ecs.config
+    echo "ECS_ENABLE_TASK_ENI=true" >> /etc/ecs/ecs.config
   EOF
   )
 
@@ -66,8 +74,9 @@ resource "aws_launch_template" "ecs" {
   }
 
   metadata_options {
-    http_tokens   = "required"
-    http_endpoint = "enabled"
+    http_tokens                 = "required"
+    http_endpoint               = "enabled"
+    http_put_response_hop_limit = 2
   }
 
   lifecycle {

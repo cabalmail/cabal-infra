@@ -137,20 +137,22 @@ resource "aws_instance" "nat" {
 
     # Create a systemd service to restore rules on boot (replaces iptables-services
     # which requires yum and can't be installed during first boot — the instance has
-    # no public IP until the EIP is associated after creation)
-    cat > /etc/systemd/system/restore-iptables.service <<'UNIT'
-    [Unit]
-    Description=Restore iptables NAT rules
-    After=network.target
-
-    [Service]
-    Type=oneshot
-    ExecStart=/sbin/iptables-restore /etc/sysconfig/iptables
-    RemainAfterExit=yes
-
-    [Install]
-    WantedBy=multi-user.target
-    UNIT
+    # no public IP until the EIP is associated after creation).
+    # Uses printf instead of a nested heredoc to avoid delimiter issues
+    # inside Terraform's <<-EOF.
+    printf '%s\n' \
+      '[Unit]' \
+      'Description=Restore iptables NAT rules' \
+      'After=network.target' \
+      '' \
+      '[Service]' \
+      'Type=oneshot' \
+      'ExecStart=/sbin/iptables-restore /etc/sysconfig/iptables' \
+      'RemainAfterExit=yes' \
+      '' \
+      '[Install]' \
+      'WantedBy=multi-user.target' \
+      > /etc/systemd/system/restore-iptables.service
 
     systemctl daemon-reload
     systemctl enable restore-iptables.service
