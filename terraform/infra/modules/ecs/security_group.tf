@@ -1,8 +1,5 @@
 /**
 * Security groups for ECS tasks (one per tier).
-*
-* These mirror the ASG module security groups but are attached to ECS tasks
-* running in awsvpc mode rather than EC2 instances.
 */
 
 resource "aws_security_group" "tier" {

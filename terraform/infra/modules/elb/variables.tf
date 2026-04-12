@@ -23,32 +23,26 @@ variable "cert_arn" {
   description = "ARN of AWS Certificate Manager certificate."
 }
 
-# ── ECS target group ARNs (Phase 7 cutover) ──────────────────
-# When set, NLB listeners forward to these ip-type target groups
-# instead of the instance-type target groups defined in this module.
+# ── ECS target group ARNs ────────────────────────────────────
 
 variable "ecs_imap_target_group_arn" {
   type        = string
-  description = "ARN of the ECS IMAP target group. When set, the IMAP listener forwards here."
-  default     = ""
+  description = "ARN of the ECS IMAP target group."
 }
 
 variable "ecs_relay_target_group_arn" {
   type        = string
-  description = "ARN of the ECS relay target group. When set, the relay listener forwards here."
-  default     = ""
+  description = "ARN of the ECS relay target group."
 }
 
 variable "ecs_submission_target_group_arn" {
   type        = string
-  description = "ARN of the ECS submission target group. When set, the submission listener forwards here."
-  default     = ""
+  description = "ARN of the ECS submission target group."
 }
 
 variable "ecs_starttls_target_group_arn" {
   type        = string
-  description = "ARN of the ECS STARTTLS target group. When set, the STARTTLS listener forwards here."
-  default     = ""
+  description = "ARN of the ECS STARTTLS target group."
 }
 
 # ── Private DNS ─────────────────────────────────────────────────
