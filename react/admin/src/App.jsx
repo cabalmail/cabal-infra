@@ -1,6 +1,6 @@
 // Third party libs
 
-import React, { Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import axios from 'axios';
 import {
   CognitoUser,
@@ -41,199 +41,180 @@ let _expires = Math.floor(Date.now() / 1000) - 1;
 // Globals
 let UserPool = null;
 
+function loadSavedState() {
+  const defaults = {
+    loggedIn: false,
+    userName: null,
+    password: null,
+    phone: null,
+    view: "Login",
+    poolData: null,
+    control_domain: null,
+    imap_host: null,
+    domains: {},
+    api_url: null,
+  };
+  const saved = JSON.parse(window.localStorage.getItem('state'));
+  return saved ? { ...defaults, ...saved, password: null } : defaults;
+}
+
+function persistState(state) {
+  try {
+    const { password, ...safe } = state;
+    window.localStorage.setItem('state', JSON.stringify(safe));
+  } catch (e) {
+    console.log(e);
+  }
+}
+
 /**
  * Application for reading Cabalmail email and
  * managing Cabalmail addresses and folders
  */
+function App() {
+  const [state, setAppState] = useState(loadSavedState);
+  const [message, setMessageText] = useState(null);
+  const [error, setError] = useState(false);
+  const [hideMessage, setHideMessage] = useState(true);
+  const hideTimerRef = useRef(null);
 
-class App extends React.Component {
+  const setState = useCallback((updates) => {
+    setAppState(prev => {
+      const next = { ...prev, ...updates };
+      persistState(next);
+      return next;
+    });
+  }, []);
 
-  constructor(props) {
-    super(props);
-    const defaults = {
-      loggedIn: false,
-      userName: null,
-      password: null,
-      phone: null,
-      message: null,
-      error: false,
-      view: "Login",
-      poolData: null,
-      control_domain: null,
-      imap_host: null,
-      domains: {},
-      api_url: null,
-      hideMessage: true
-    };
-    const saved = JSON.parse(window.localStorage.getItem('state'));
-    this.state = saved
-      ? { ...defaults, ...saved, password: null }
-      : defaults;
-  }
-
-  persistState(state) {
-    const { password, ...safe } = { ...this.state, ...state };
-    try {
-      window.localStorage.setItem('state', JSON.stringify(safe));
-    } catch (e) {
-      console.log(e);
+  const checkSession = useCallback(() => {
+    if (_expires >= Math.floor(Date.now() / 1000)) return;
+    if (_token !== null) {
+      _token = null;
     }
-  }
+    setAppState(prev => {
+      const updates = {};
+      if (prev.view !== "Login" && prev.view !== "SignUp") {
+        updates.view = "Login";
+      }
+      if (prev.loggedIn !== false) {
+        updates.loggedIn = false;
+      }
+      if (Object.keys(updates).length === 0) return prev;
+      const next = { ...prev, ...updates };
+      persistState(next);
+      return next;
+    });
+  }, []);
 
-  setState(state) {
-    this.persistState(state);
-    super.setState(state);
-  }
+  const setMessage = useCallback((m, e) => {
+    checkSession();
+    setMessageText(m);
+    setError(e);
+    setHideMessage(false);
+    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    hideTimerRef.current = setTimeout(() => {
+      setHideMessage(true);
+    }, e ? 15000 : 4000);
+  }, [checkSession]);
 
-  componentWillUnmount() {
-    window.removeEventListener("focus", this.checkSession);
-  }
-
-  componentDidMount() {
-    const response = this.getConfig();
-    response.then(data => {
-      const { control_domain, domains, cognitoConfig } = data.data;
+  // Fetch config and restore session on mount
+  useEffect(() => {
+    axios.get('/config.js').then(({ data }) => {
+      const { control_domain, domains, cognitoConfig } = data;
       UserPool = new CognitoUserPool(cognitoConfig.poolData);
-      this.setState({
-        ...this.state,
+      setState({
         poolData: cognitoConfig.poolData,
-        control_domain: control_domain,
-        imap_host: control_domain.match(/^dev\./) ? control_domain.replace("dev.", "imap.") : "imap." + control_domain,
-        domains: domains,
+        control_domain,
+        imap_host: control_domain.match(/^dev\./)
+          ? control_domain.replace("dev.", "imap.")
+          : "imap." + control_domain,
+        domains,
         api_url: "https://admin." + control_domain + "/prod"
       });
-      this.refreshSession();
-    });
-    window.addEventListener("focus", this.checkSession);
-  }
-
-  componentDidUpdate(prevProps, prevState) {
-    this.checkSession();
-  }
-
-  refreshSession = () => {
-    if (!UserPool) return;
-    const cognitoUser = UserPool.getCurrentUser();
-    if (!cognitoUser) return;
-    cognitoUser.getSession((err, session) => {
-      if (err || !session || !session.isValid()) return;
-      _token = session.getIdToken().getJwtToken();
-      _expires = session.getIdToken().getExpiration();
-      this.setState({
-        ...this.state,
-        loggedIn: true,
-        view: "Email"
-      });
-    });
-  }
-
-  checkSession = () => {
-    if (_expires < Math.floor(Date.now() / 1000)) {
-      if (this.state.view !== "Login" && this.state.view !== "SignUp") {
-        this.setState({
-          ...this.state,
-          view: "Login"
+      const cognitoUser = UserPool.getCurrentUser();
+      if (cognitoUser) {
+        cognitoUser.getSession((err, session) => {
+          if (err || !session || !session.isValid()) return;
+          _token = session.getIdToken().getJwtToken();
+          _expires = session.getIdToken().getExpiration();
+          setState({ loggedIn: true, view: "Email" });
         });
       }
-      if (_token !== null) {
-        _token = null;
-      }
-      if (this.state.loggedIn !== false) {
-        this.setState({
-          ...this.state,
-          loggedIn: false
-        })
-      }
-    }
-  }
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  setMessage = (m, e) => {
-    var message = m;
-    var error = e;
-    const timeout = error ? 15000 : 4000;
-    this.checkSession()
-    this.setState({...this.state, message: message, error: error, hideMessage: false});
-    setTimeout(() => {
-      this.setState({...this.state, hideMessage: true});
-    }, timeout);
-  }
+  // Check session on window focus
+  useEffect(() => {
+    window.addEventListener("focus", checkSession);
+    return () => window.removeEventListener("focus", checkSession);
+  }, [checkSession]);
 
-  getConfig = () => {
-    const response = axios.get('/config.js');
-    return response;
-  }
+  // Check session on every render (mirrors componentDidUpdate)
+  useEffect(() => {
+    checkSession();
+  });
 
-  doRegister = e => {
+  // Clean up message timer on unmount
+  useEffect(() => {
+    return () => {
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    };
+  }, []);
+
+  const doRegister = useCallback((e) => {
     e.preventDefault();
-    const dataUsername = {
+    const attributeUsername = new CognitoUserAttribute({
       Name: 'preferred_username',
-      Value: this.state.userName
-    };
-    const dataPhone = {
+      Value: state.userName
+    });
+    const attributePhone = new CognitoUserAttribute({
       Name: 'phone_number',
-      Value: this.state.phone
-    };
-    const attributeUsername = new CognitoUserAttribute(dataUsername);
-    const attributePhone = new CognitoUserAttribute(dataPhone);
+      Value: state.phone
+    });
     UserPool.signUp(
-      this.state.userName,
-      this.state.password,
+      state.userName,
+      state.password,
       [attributeUsername, attributePhone],
       null,
       (err, _result) => {
         if (!err) {
-          this.setState({
-            ...this.state,
-            view: "Login"
-          });
-          this.setMessage("Your registration has been submitted.", false);
+          setState({ view: "Login" });
+          setMessage("Your registration has been submitted.", false);
         } else {
-          this.setState({
-            ...this.state,
-            view: "SignUp"
-          });
-          this.setMessage("Registration failed.", true);
+          setState({ view: "SignUp" });
+          setMessage("Registration failed.", true);
         }
       }
     );
-  }
+  }, [state.userName, state.password, state.phone, setState, setMessage]);
 
-  doLogin = e => {
+  const doLogin = useCallback((e) => {
     e.preventDefault();
     const user = new CognitoUser({
-      Username: this.state.userName,
+      Username: state.userName,
       Pool: UserPool
     });
     const creds = new AuthenticationDetails({
-      Username: this.state.userName,
-      Password: this.state.password
+      Username: state.userName,
+      Password: state.password
     });
     user.authenticateUser(creds, {
       onSuccess: data => {
         _token = data.getIdToken().getJwtToken();
         _expires = data.getIdToken().getExpiration();
-        this.setState({
-          ...this.state,
-          message: "",
-          loggedIn: true,
-          view: "Email"
-        });
-        this.setMessage("Login succeeded", false);
+        setState({ loggedIn: true, view: "Email" });
+        setMessage("Login succeeded", false);
       },
-      onFailure: data => {
+      onFailure: () => {
         _token = null;
         _expires = Math.floor(new Date() / 1000) - 1;
-        this.setState({
-          ...this.state,
-          loggedIn: false,
-          view: "Login"
-        });
-        this.setMessage("Login failed", true);
+        setState({ loggedIn: false, view: "Login" });
+        setMessage("Login failed", true);
       }
     });
-  }
+  }, [state.userName, state.password, setState, setMessage]);
 
-  doLogout = (e) => {
+  const doLogout = useCallback((e) => {
     e.preventDefault();
     _token = null;
     _expires = Math.floor(new Date() / 1000) - 1;
@@ -241,36 +222,30 @@ class App extends React.Component {
       const cognitoUser = UserPool.getCurrentUser();
       if (cognitoUser) cognitoUser.signOut();
     }
-    this.setState({
-      ...this.state,
-      loggedIn: false,
-      userName: null,
-      password: null,
-      view: "Login"
-    });
-  }
+    setState({ loggedIn: false, userName: null, password: null, view: "Login" });
+  }, [setState]);
 
-  doInputChange = e => {
+  const doInputChange = useCallback((e) => {
     e.preventDefault();
-    this.setState({...this.state, [e.target.name]: e.target.value});
-  }
+    setState({ [e.target.name]: e.target.value });
+  }, [setState]);
 
-  updateView = e => {
+  const updateView = useCallback((e) => {
     e.preventDefault();
-    this.setState({...this.state, view: e.target.name});
-  }
+    setState({ view: e.target.name });
+  }, [setState]);
 
-  renderContent() {
-    switch (this.state.view) {
+  function renderContent() {
+    switch (state.view) {
       case "Addresses":
         return (
           <ErrorBoundary name="Addresses">
             <Addresses
               token={_token}
-              api_url={this.state.api_url}
-              host={this.state.imap_host}
-              domains={this.state.domains}
-              setMessage={this.setMessage}
+              api_url={state.api_url}
+              host={state.imap_host}
+              domains={state.domains}
+              setMessage={setMessage}
             />
           </ErrorBoundary>
         );
@@ -279,19 +254,19 @@ class App extends React.Component {
           <ErrorBoundary name="Folders">
             <Folders
               token={_token}
-              api_url={this.state.api_url}
-              host={this.state.imap_host}
-              setMessage={this.setMessage}
+              api_url={state.api_url}
+              host={state.imap_host}
+              setMessage={setMessage}
             />
           </ErrorBoundary>
         );
       case "SignUp":
         return (
           <SignUp
-            onSubmit={this.doRegister}
-            onUsernameChange={this.doInputChange}
-            onPasswordChange={this.doInputChange}
-            onPhoneChange={this.doInputChange}
+            onSubmit={doRegister}
+            onUsernameChange={doInputChange}
+            onPasswordChange={doInputChange}
+            onPhoneChange={doInputChange}
           />
         );
       case "Email":
@@ -299,73 +274,61 @@ class App extends React.Component {
           <ErrorBoundary name="Email">
             <Email
               token={_token}
-              api_url={this.state.api_url}
-              host={this.state.imap_host}
-              smtp_host={`smtp-out.${this.state.control_domain}`}
-              domains={this.state.domains}
-              setMessage={this.setMessage}
+              api_url={state.api_url}
+              host={state.imap_host}
+              smtp_host={`smtp-out.${state.control_domain}`}
+              domains={state.domains}
+              setMessage={setMessage}
             />
           </ErrorBoundary>
         );
       case "Logout":
-        return (
-          <Login
-            onSubmit={this.doLogin}
-            onUsernameChange={this.doInputChange}
-            onPasswordChange={this.doInputChange}
-            username={this.state.userName}
-            password={this.state.password}
-          />
-        );
       case "Login":
       default:
         return (
           <Login
-            onSubmit={this.doLogin}
-            onUsernameChange={this.doInputChange}
-            onPasswordChange={this.doInputChange}
-            username={this.state.userName}
-            password={this.state.password}
+            onSubmit={doLogin}
+            onUsernameChange={doInputChange}
+            onPasswordChange={doInputChange}
+            username={state.userName}
+            password={state.password}
           />
         );
-    };
+    }
   }
 
-  render() {
-    const authValue = {
-      token: _token,
-      api_url: this.state.api_url,
-      host: this.state.imap_host,
-      smtp_host: `smtp-out.${this.state.control_domain}`,
-      domains: this.state.domains
-    };
-    const appMessageValue = { setMessage: this.setMessage };
-    return (
-      <AuthContext.Provider value={authValue}>
-        <AppMessageContext.Provider value={appMessageValue}>
-          <div className={`App ${this.state.view}`}>
-            <Nav
-              onClick={this.updateView}
-              loggedIn={this.state.loggedIn}
-              view={this.state.view}
-              doLogout={this.doLogout}
-            />
-            <div className="content">
-              <Suspense fallback={<div className="loading">Loading...</div>}>
-                {this.renderContent()}
-              </Suspense>
-            </div>
-            <AppMessage
-              message={this.state.message}
-              hide={this.state.hideMessage}
-              error={this.state.error}
-            />
+  const authValue = {
+    token: _token,
+    api_url: state.api_url,
+    host: state.imap_host,
+    smtp_host: `smtp-out.${state.control_domain}`,
+    domains: state.domains
+  };
+
+  return (
+    <AuthContext.Provider value={authValue}>
+      <AppMessageContext.Provider value={{ setMessage }}>
+        <div className={`App ${state.view}`}>
+          <Nav
+            onClick={updateView}
+            loggedIn={state.loggedIn}
+            view={state.view}
+            doLogout={doLogout}
+          />
+          <div className="content">
+            <Suspense fallback={<div className="loading">Loading...</div>}>
+              {renderContent()}
+            </Suspense>
           </div>
-        </AppMessageContext.Provider>
-      </AuthContext.Provider>
-    );
-  }
-
+          <AppMessage
+            message={message}
+            hide={hideMessage}
+            error={error}
+          />
+        </div>
+      </AppMessageContext.Provider>
+    </AuthContext.Provider>
+  );
 }
 
 export default App;

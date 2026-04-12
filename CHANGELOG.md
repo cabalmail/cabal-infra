@@ -5,6 +5,63 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - Unreleased
+
+### Added
+
+- Terraform module `terraform/infra/modules/certbot_renewal/` — container-image Lambda on EventBridge schedule (every 60 days) that runs certbot with `certbot-dns-route53`, writes certs to SSM, and forces ECS redeployments, replacing the ACME Terraform provider
+- `lambda/certbot-renewal/` — Dockerfile and Python handler for the certbot renewal Lambda (arm64)
+- React contexts: `AuthContext` and `AppMessageContext` to replace prop drilling for auth state and toast notifications
+- React hook: `useApi` — centralizes `ApiClient` instantiation using auth context
+- `ErrorBoundary` component wrapping Email, Addresses, and Folders views with fallback UI
+- Code splitting with `React.lazy` + `Suspense` for Email, Folders, and Addresses views
+- Dual Rich Text / Markdown editing modes in the compose editor
+- Unit tests for React components (`AppMessage`, `Nav`, `Login`, `SignUp`, `ComposeOverlay`, `MessageOverlay`, `Envelopes`, `Messages`, `ErrorBoundary`)
+- Vitest + jsdom test runner for React app
+- ENI trunking for ECS (`awsvpcTrunking` account setting, `ECS_ENABLE_TASK_ENI` agent config, managed policy attachment) to support `awsvpc` tasks on Graviton instances
+- IMDSv2 hop limit increased to 2 on ECS launch template for container metadata access
+- Documentation: `docs/0.4.1/react-modernization-plan.md`, `docs/unreleased/sendmail-replacement.md`
+
+### Fixed
+
+- NAT instance iptables rules lost on reboot — replaced nested heredoc (which created an empty systemd unit file) with `printf`-based generation
+- Sendmail crash loop on `smtp-out` caused by orphan daemon holding port 25 — added `sendmail-wrapper.sh` with PID file cleanup and supervisord retry configuration
+- `this.stage` typo in `MessageOverlay/index.js`
+- Nav layout: scoped absolute positioning to logout button only
+- Race condition in `Envelopes` where multiple async `getEnvelopes` calls could overwrite pagination state
+- Sequential `setState` calls in `MessageOverlay` that could overwrite each other
+- Memory leak risk from timers in `Messages` — consolidated 5 timer IDs into properly cleaned-up effects
+- JWT token security: moved from `localStorage` to module-level memory variable (no longer persisted to disk)
+- `App.jsx` `setState` override no longer serializes password to `localStorage`
+- `App.jsx` message toast timer leak — stale `setTimeout` could fire after unmount; now tracked in a ref and cleared properly
+- Compose toolbar button alignment and formatting issues
+
+### Changed
+
+- **ECS architecture migrated from x86_64 to ARM64 (Graviton)** — AMI filter changed from `amzn2-ami-ecs-hvm` (x86_64) to `al2023-ami-ecs-hvm` (arm64); instance type changed from T3/T4g to M6g
+- **React upgraded from 17 to 18** — `ReactDOM.render` replaced with `createRoot`, Strict Mode enabled
+- **React build tooling migrated from Create React App to Vite** — new `vite.config.js`, `index.html` moved to root, scripts updated to `vite`/`vitest`, output directory changed from `build/` to `dist/`
+- **All React components converted from class-based to functional** with hooks (`useState`, `useEffect`, `useRef`, `useContext`, `useCallback`)
+- **Compose editor replaced**: draft-js (abandoned) replaced with TipTap — native HTML support, toolbar with formatting/lists/alignment/color/links, heading levels 1-4, rich text paste preservation
+- CSS Modules migration — `AppMessage.css`, `Login.css`, `SignUp.css`, `Folders.css` renamed to `.module.css` with scoped `styles.className` imports
+- React CI workflow (`.github/workflows/react.yml`) — switched from `yarn` to `npm`, updated build commands and artifact paths for Vite
+- Docker CI workflow (`.github/workflows/docker.yml`) — added `certbot-renewal` to build matrix, uses native arm64 runner, pushes `:latest` tag for certbot image
+- `App.jsx` converted from class to functional component — uses hooks, functional state updates, separated transient UI state (message/error/hideMessage) from persisted app state
+- All React `.js` component files renamed to `.jsx`
+- Cloud Map namespace renamed from `cabal.local` to `cabal.internal`
+- `docs/0.4.1/user-management-plan.md` moved to `docs/0.5.0/` (deferred to next release)
+
+### Removed
+
+- `terraform/infra/modules/cert/acme.tf` — ACME/Let's Encrypt Terraform provider approach (replaced by certbot Lambda)
+- `acme` and `tls` provider requirements from `terraform/infra/modules/cert/versions.tf`
+- `prod` and `email` variables from cert module (only used by ACME)
+- `draft-js`, `react-draft-wysiwyg`, `draftjs-to-html`, `html-to-draftjs`, `markdown-draft-js` — 5 packages replaced by TipTap
+- `yarn.lock` (switched to npm/`package-lock.json`)
+- `.github/scripts/react-documentation.sh` and `react-docgen`-generated docs (`react/admin/docs/`)
+- Unused React dependencies: `react-lazyload`, `react-docgen`
+- `greet_pause` from `smtp-out` sendmail template
+
 ## [0.4.0] - 2026-03-15
 
 ### Added
