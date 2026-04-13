@@ -18,3 +18,8 @@ output "domains" {
   value       = module.domains.domains
   description = "Nameservers to be added to your domain registrations."
 }
+
+output "sms_phone_number" {
+  value       = module.pool.sms_phone_number
+  description = "Toll-free phone number used for SMS verification."
+}
