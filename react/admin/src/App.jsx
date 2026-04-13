@@ -289,6 +289,9 @@ function App() {
             onUsernameChange={doInputChange}
             onPasswordChange={doInputChange}
             onPhoneChange={doInputChange}
+            username={state.userName}
+            password={state.password}
+            phone={state.phone}
           />
         );
       case "Email":
