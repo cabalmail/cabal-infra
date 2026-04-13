@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Cabalmail is a self-hosted email system running on AWS. This repository contains all infrastructure, server configuration, and the admin web app. The system provides three mail tiers — IMAP (mailbox access), SMTP-IN (inbound relay), and SMTP-OUT (outbound submission with DKIM signing) — backed by Cognito authentication, DynamoDB address storage, and EFS-based mailstores.
 
-The project is migrating from Chef-managed EC2 instances to Docker containers on ECS (EC2 launch type). See `docs/0.4.0/containerization-plan.md` for the full migration plan. Both stacks run in parallel during the transition; do not remove Chef resources until cutover is complete.
+The mail tiers run as Docker containers on ECS (EC2 launch type). See `docs/0.4.0/containerization-plan.md` for the migration plan from the previous Chef/EC2 architecture.
 
 ## Repository Structure
 
@@ -16,9 +16,8 @@ lambda/api/         AWS Lambda functions behind API Gateway (Python)
 lambda/counter/     Cognito post-confirmation trigger (Python)
 lambda/certbot-renewal/  Let's Encrypt certificate renewal Lambda
 terraform/dns/      Bootstrap stack: Route 53 zone for the control domain
-terraform/infra/    Main stack: VPC, ECS, ASG, ELB, Cognito, DynamoDB, CloudFront, Lambda, etc.
-docker/             Container images replacing Chef (imap, smtp-in, smtp-out)
-chef/cabal/         Legacy Chef cookbook (deprecated, still active during migration)
+terraform/infra/    Main stack: VPC, ECS, ELB, Cognito, DynamoDB, CloudFront, Lambda, etc.
+docker/             Container images for mail tiers (imap, smtp-in, smtp-out)
 docs/               Architecture docs, migration plans, setup guides
 .github/workflows/  CI/CD pipelines for all components
 .github/scripts/    Shared build/deploy helper scripts
@@ -62,8 +61,6 @@ docs/               Architecture docs, migration plans, setup guides
 | `docker.yml` | `docker/**` | Build 3 mail tier images + certbot, push to ECR, trigger terraform |
 | `terraform.yml` | `terraform/infra/**` | Checkov/tflint/tfsec, plan, apply. Also runs weekly (Wednesday) |
 | `bootstrap.yml` | Manual/workflow_call | Applies `terraform/dns` stack (Route 53 zone) |
-| `cookbook.yml` | `chef/**` | Package Chef cookbook, upload tarball to S3 |
-
 All workflows select environment based on branch: `main`=prod, `stage`=stage, other=development.
 
 ## Architecture Details
@@ -74,7 +71,6 @@ All workflows select environment based on branch: `main`=prod, `stage`=stage, ot
 |---|---|
 | `vpc` | VPC, subnets (public/private), NAT instance, Route 53 private zone |
 | `ecs` | ECS cluster, task definitions, services, target groups, SNS/SQS for reconfiguration |
-| `asg` | Auto Scaling Groups for Chef-managed EC2 instances (legacy, parallel run) |
 | `elb` | Network Load Balancer: IMAP (993), SMTP relay (25), submission (587/465) |
 | `app` | CloudFront distribution, API Gateway, Lambda functions, SSM parameters |
 | `s3` | S3 bucket for React app + Lambda artifacts |
@@ -136,19 +132,11 @@ Three container images based on `amazonlinux:2023`, managed by supervisord:
 - **`smtp-out`**: Sendmail (outbound) + Dovecot (submission auth) + OpenDKIM + fail2ban
 
 Shared infrastructure:
-- `docker/shared/entrypoint.sh` — replaces Chef recipes: writes TLS certs, renders sendmail.mc, generates Cognito auth script, syncs OS users, generates sendmail maps from DynamoDB
-- `docker/shared/generate-config.sh` — scans DynamoDB, generates virtusertable, access maps, relay-domains, DKIM tables (replaces Chef's Ruby libraries)
+- `docker/shared/entrypoint.sh` — writes TLS certs, renders sendmail.mc, generates Cognito auth script, syncs OS users, generates sendmail maps from DynamoDB
+- `docker/shared/generate-config.sh` — scans DynamoDB, generates virtusertable, access maps, relay-domains, DKIM tables
 - `docker/shared/reconfigure.sh` — live reconfiguration triggered by SNS/SQS when addresses change
 - `docker/shared/sync-users.sh` — creates OS users from Cognito user pool
 - `docker/templates/` — sendmail `.mc` templates with `__CERT_DOMAIN__` placeholders
-
-### Chef Cookbook (`chef/cabal/`) — Deprecated
-
-Single cookbook with recipes for three server roles (`imap`, `smtp-in`, `smtp-out`). Still active on ASG-managed EC2 instances during the parallel-run migration period. Key components:
-- `libraries/` — Ruby helpers for DynamoDB scanning, Route 53, user management
-- `recipes/` — Server provisioning (packages, configs, services)
-- `templates/` — ERB templates for sendmail, dovecot, DKIM configs
-- `resources/port.rb` — Firewalld port management
 
 ## Code Style Guidelines
 
@@ -175,4 +163,4 @@ Single cookbook with recipes for three server roles (`imap`, `smtp-in`, `smtp-ou
   - `set -euo pipefail` in all scripts
   - Structured logging with `[component]` prefixes
   - Environment variable validation at script entry
-  - Comments referencing the Chef equivalent being replaced
+  - Comments explaining non-obvious configuration choices

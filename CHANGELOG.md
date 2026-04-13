@@ -53,6 +53,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- **Chef/EC2 infrastructure decommissioned (Phase 7 cutover complete):**
+  - `chef/` directory — entire Chef cookbook (recipes, templates, libraries, resources)
+  - `.github/workflows/cookbook.yml` — cookbook build and S3 upload workflow
+  - `terraform/infra/modules/asg/` — Auto Scaling Group module (launch templates, IAM instance profiles, security groups, userdata)
+  - `cabal_chef_document` SSM document and its output/variable plumbing (`modules/app/ssm.tf`, `modules/user_pool/variables.tf`)
+  - `lambda/counter/node/` — legacy Node.js counter Lambda that invoked Chef via SSM (replaced by Python version in 0.4.0)
+  - Instance-type NLB target groups and conditional listener routing in `modules/elb/` — listeners now forward directly to ECS target groups
+  - `chef_license`, `imap_scale`, `smtpin_scale`, `smtpout_scale` variables and their CI/CD tfvars wiring
 - `terraform/infra/modules/cert/acme.tf` — ACME/Let's Encrypt Terraform provider approach (replaced by certbot Lambda)
 - `acme` and `tls` provider requirements from `terraform/infra/modules/cert/versions.tf`
 - `prod` and `email` variables from cert module (only used by ACME)

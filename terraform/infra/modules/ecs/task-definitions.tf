@@ -2,8 +2,8 @@
 * ECS task definitions for the three mail tiers.
 *
 * Each task runs a single container in awsvpc network mode on EC2 launch type.
-* Environment variables replace Chef node.json attributes. Secrets are injected
-* from SSM Parameter Store by the ECS agent at task start.
+* Environment variables and secrets from SSM Parameter Store are injected by
+* the ECS agent at task start.
 */
 
 # ── IMAP task definition ──────────────────────────────────────

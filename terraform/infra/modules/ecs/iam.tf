@@ -5,8 +5,7 @@
 *    and inject secrets from SSM Parameter Store.
 *
 * 2. ECS task role — assumed by the running container. Grants access to
-*    DynamoDB, Cognito, and SQS (replaces the EC2 instance profile
-*    permissions from the ASG module).
+*    DynamoDB, Cognito, and SQS.
 *
 * 3. ECS instance role — allows EC2 instances to join the ECS cluster.
 */
