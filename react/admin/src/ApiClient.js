@@ -362,6 +362,24 @@ export default class ApiClient {
     return response;
   };
   
+  // Admin — DMARC Reports
+
+  listDmarcReports(nextToken) {
+    const params = {};
+    if (nextToken) {
+      params.next_token = nextToken;
+    }
+    const response = axios.get('/list_dmarc_reports', {
+      params: params,
+      baseURL: this.baseURL,
+      headers: {
+        'Authorization': this.token
+      },
+      timeout: TIMEOUT
+    });
+    return response;
+  }
+
   // Admin — User Management
 
   listUsers() {

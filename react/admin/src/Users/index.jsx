@@ -79,9 +79,9 @@ function Users() {
     );
   }, [api, setMessage, loadUsers]);
 
-  const nonMasterUsers = users.filter(u => u.username !== 'master');
-  const pendingUsers = nonMasterUsers.filter(u => u.status !== 'CONFIRMED');
-  const confirmedUsers = nonMasterUsers.filter(u => u.status === 'CONFIRMED');
+  const nonSystemUsers = users.filter(u => !['master', 'dmarc'].includes(u.username));
+  const pendingUsers = nonSystemUsers.filter(u => u.status !== 'CONFIRMED');
+  const confirmedUsers = nonSystemUsers.filter(u => u.status === 'CONFIRMED');
 
   if (loading) {
     return <div className="Users"><div className="loading">Loading...</div></div>;

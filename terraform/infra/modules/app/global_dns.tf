@@ -50,7 +50,7 @@ resource "aws_route53_record" "dmarc" {
   type      = "TXT"
   ttl       = "3600"
   records   = [
-    "v=DMARC1; p=reject; rua=mailto:dmarc-reports@mail-admin.cabalmail.com; ruf=mailto:dmarc-reports@mail-admin.cabalmail.com; fo=1; pct=100"
+    "v=DMARC1; p=reject; rua=mailto:dmarc-reports@mail-admin.${var.domains[0].domain}; ruf=mailto:dmarc-reports@mail-admin.${var.domains[0].domain}; fo=1; pct=100"
   ]
 }
 
