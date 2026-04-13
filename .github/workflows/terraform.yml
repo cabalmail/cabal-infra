@@ -227,4 +227,17 @@ jobs:
     - name: init-terraform
       run: terraform init
     - name: apply-terraform
-      run: terraform apply -auto-approve -lock-timeout=30m -var-file="terraform.tfvars"
+      id: apply-terraform
+      run: |
+        set +e
+        terraform apply -auto-approve -lock-timeout=30m -var-file="terraform.tfvars" 2>&1 | tee /tmp/tf-apply.log
+        TF_EXIT=${PIPESTATUS[0]}
+        set -e
+        if [ $TF_EXIT -ne 0 ]; then
+          if grep -q 'aws_pinpointsmsvoicev2_phone_number.sms' /tmp/tf-apply.log && grep -q "timeout while waiting for state to become 'ACTIVE'" /tmp/tf-apply.log; then
+            echo "::warning::Toll-free number provisioning timed out. Untainting resource for next run."
+            terraform untaint 'module.pool.aws_pinpointsmsvoicev2_phone_number.sms'
+            exit 0
+          fi
+          exit $TF_EXIT
+        fi
