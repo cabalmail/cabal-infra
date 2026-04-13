@@ -6,7 +6,11 @@ User management currently happens in the AWS Cognito console. When confirming us
 
 ## Approach
 
-Four layers of changes: Terraform (Cognito group + Lambda infra), Lambda functions (admin endpoints), React (admin tab with user tables and DMARC reporting), and phone number verification via SMS.
+Four phases of work: core admin dashboard (Terraform, Lambda, React), phone number verification via SMS, DMARC report ingestion and display, and multi-user address management.
+
+---
+
+## Phase 1: Core Admin Dashboard
 
 ### 1. Terraform — Cognito Admin Group (Issue #54)
 
@@ -60,32 +64,41 @@ if 'admin' not in groups:
 
 ### 5. React — App Integration
 
-**`react/admin/src/App.js`**:
-- Add `isAdmin: false` to initial state
-- In `doLogin` success callback: decode JWT payload via `atob(token.split('.')[1])`, extract `cognito:groups`, set `isAdmin`
-- Reset `isAdmin: false` in `doLogout`
+**`react/admin/src/App.jsx`**:
+- In `doLogin` success callback: decode JWT payload via `atob(token.split('.')[1])`, extract `cognito:groups`, set `isAdmin` state
+- Reset `isAdmin` to `false` in `doLogout`
 - Pass `isAdmin` to `Nav`
-- Add `"Users"` case to `renderContent()`, rendering new `Users` component
-- Add `"DMARC"` case to `renderContent()`, rendering new `Dmarc` component
-- Import `Users` and `Dmarc` components
+- Add `"Users"` case to `renderContent()`, rendering new lazy-loaded `Users` component
+- Add `"DMARC"` case to `renderContent()`, rendering new lazy-loaded `Dmarc` component
+- Add lazy imports for `Users` and `Dmarc` components
 
 ### 6. React — Nav
 
-**`react/admin/src/Nav/index.js`** — Destructure `isAdmin` from props, add conditional class `is-admin` to nav div, add Users link with id `users` and DMARC link with id `dmarc`.
+**`react/admin/src/Nav/index.jsx`** — Destructure `isAdmin` from props, add conditional class `is-admin` to nav div, add Users link with id `users` and DMARC link with id `dmarc`.
 
 **`react/admin/src/Nav/Nav.css`** — Add rules to hide `#users` and `#dmarc` when logged out or when nav lacks `.is-admin`.
 
 ### 7. React — Users Component (new)
 
-**`react/admin/src/Users/index.js`** — Class-based component following Addresses/Folders pattern:
-- State: `{ users: [], loading: true }`
+**`react/admin/src/Users/index.jsx`** — Functional component using hooks, following existing patterns:
+- `useApi()` hook for API access, `useAppMessage()` for toast notifications
+- State via `useState`: `users`, `loading`
 - `loadUsers()` calls `api.listUsers()`, populates state
-- Action handlers: `confirmUser`, `disableUser`, `enableUser`, `deleteUser` — each calls API, shows message via `setMessage`, reloads user list
-- `render()`: Two sections — "Pending Users" (status !== CONFIRMED) with confirm/delete buttons, "Confirmed Users" with disable-or-enable/delete buttons. Refresh button at top.
+- Action handlers wrapped in `useCallback`: `confirmUser`, `disableUser`, `enableUser`, `deleteUser` — each calls API, shows message via `setMessage`, reloads user list
+- Two sections — "Pending Users" (status !== CONFIRMED) with confirm/delete buttons, "Confirmed Users" with disable-or-enable/delete buttons. Refresh button at top.
 
 **`react/admin/src/Users/Users.css`** — Grid layout for user rows, following Addresses CSS patterns.
 
-### 8. Phone Number Verification via SMS (Issue #55)
+### Phase 1 Verification
+
+1. `cd react/admin && npm run build` — confirm React compiles without errors
+2. `cd lambda/api && pylint --rcfile .pylintrc list_users/function.py confirm_user/function.py disable_user/function.py enable_user/function.py delete_user/function.py` — lint new Lambdas
+3. Manual: log in as master user, verify Users tab appears; log in as non-admin, verify it does not
+4. `cd react/admin && npm run test` — verify new component tests pass
+
+---
+
+## Phase 2: Phone Number Verification via SMS (Issue #55)
 
 Add SMS-based phone number verification to the sign-up flow so that collected phone numbers are validated.
 
@@ -101,13 +114,19 @@ Add SMS-based phone number verification to the sign-up flow so that collected ph
 
 Cognito handles the verification flow automatically: after sign-up, it sends an SMS with a verification code, and the user confirms via `ConfirmSignUp` or `VerifyUserAttribute`. The React sign-up flow should prompt the user to enter the code they receive.
 
-**`react/admin/src/Register/`** — Update the registration flow to include a phone verification step after initial sign-up, prompting the user to enter the SMS code.
+**`react/admin/src/SignUp/index.jsx`** — Update the registration flow to include a phone verification step after initial sign-up, prompting the user to enter the SMS code.
 
-### 9. DMARC Report Ingestion and Display (Issue #103)
+### Phase 2 Verification
+
+1. Manual: sign up a new user with a phone number, verify SMS verification code is sent and can be confirmed
+
+---
+
+## Phase 3: DMARC Report Ingestion and Display (Issue #103)
 
 Automatically ingest DMARC aggregate reports (currently landing in the admin's inbox as zipped/gzipped XML attachments) into a database and present them in the admin interface.
 
-#### 9a. Report Ingestion Pipeline
+### 3a. Report Ingestion Pipeline
 
 **SES Receipt Rule** — Route incoming DMARC report emails (sent to the `rua` address on the control domain) to an S3 bucket instead of (or in addition to) the admin's inbox.
 
@@ -124,7 +143,7 @@ Automatically ingest DMARC aggregate reports (currently landing in the admin's i
 - DynamoDB table (`dmarc_reports`) with partition key `domain#date_range_end` and sort key `source_ip#report_id` for efficient reverse-chronological queries
 - IAM permissions for the Lambda (S3 read, DynamoDB write)
 
-#### 9b. API Endpoint
+### 3b. API Endpoint
 
 **`lambda/api/list_dmarc_reports/`** (new) — Admin-only Lambda (same auth pattern as user management endpoints):
 - Query DynamoDB, return results in reverse chronological order
@@ -135,10 +154,11 @@ Automatically ingest DMARC aggregate reports (currently landing in the admin's i
 
 **`react/admin/src/ApiClient.js`** — Add `listDmarcReports(paginationToken)` method.
 
-#### 9c. React — DMARC Component (new)
+### 3c. React — DMARC Component (new)
 
-**`react/admin/src/Dmarc/index.js`** — Class-based component:
-- State: `{ reports: [], loading: true, nextToken: null }`
+**`react/admin/src/Dmarc/index.jsx`** — Functional component using hooks:
+- `useApi()` hook for API access, `useAppMessage()` for toast notifications
+- State via `useState`: `reports`, `loading`, `nextToken`
 - `loadReports()` calls `api.listDmarcReports()`, populates state
 - Tabular display in reverse chronological order showing: date, reporting org, source IP, message count, DKIM result, SPF result, disposition
 - Color-coded pass/fail indicators for DKIM and SPF columns
@@ -147,10 +167,77 @@ Automatically ingest DMARC aggregate reports (currently landing in the admin's i
 
 **`react/admin/src/Dmarc/Dmarc.css`** — Table layout for report rows.
 
-## Verification
+### Phase 3 Verification
 
-1. `cd react/admin && npm run build` — confirm React compiles without errors
-2. `cd lambda/api && pylint --rcfile .pylintrc list_users/function.py confirm_user/function.py disable_user/function.py enable_user/function.py delete_user/function.py process_dmarc/function.py list_dmarc_reports/function.py` — lint new Lambdas
-3. Manual: log in as master user, verify Users tab and DMARC tab appear; log in as non-admin, verify they do not
-4. Manual: send a test email to trigger a DMARC report, verify it appears in the DMARC tab after ingestion
-5. Manual: sign up a new user with a phone number, verify SMS verification code is sent and can be confirmed
+1. `cd lambda/api && pylint --rcfile .pylintrc process_dmarc/function.py list_dmarc_reports/function.py` — lint new Lambdas
+2. Manual: log in as master user, verify DMARC tab appears; log in as non-admin, verify it does not
+3. Manual: send a test email to trigger a DMARC report, verify it appears in the DMARC tab after ingestion
+
+---
+
+## Phase 4: Multi-User Address Management
+
+The Docker infrastructure already supports delivering mail to multiple users per address. In `docker/shared/generate-config.sh`, the `user` field from the `cabal-addresses` DynamoDB table is split on `/` — a value like `user1/user2` produces a virtusertable alias (`user1_user2`) that expands via `/etc/aliases.dynamic` to deliver to both users. This phase exposes that latent feature through the API and admin UI, restricted to admin users only.
+
+### 4a. Lambda — Address Assignment Endpoints
+
+**`lambda/api/assign_address/`** (new) — Admin-only Lambda that adds a user to an existing address:
+- Reads the current `user` field from DynamoDB for the given address
+- Appends the new username (slash-separated): e.g., `user1` becomes `user1/user2`
+- Validates that the target user exists in Cognito before writing
+- Writes the updated value back to DynamoDB
+- Publishes an SNS message to trigger container reconfiguration (same pattern as `new` and `revoke`)
+
+**`lambda/api/unassign_address/`** (new) — Admin-only Lambda that removes a user from a multi-user address:
+- Reads the current `user` field, removes the specified username from the slash-separated list
+- If only one user remains, writes back the single username (no slash)
+- Guards against removing the last user — use `revoke` to delete the address entirely
+- Publishes SNS reconfiguration message
+
+**`lambda/api/new/function.py`** — No changes needed. The existing `new` endpoint creates addresses with a single user. Multi-user assignment is admin-only and handled by `assign_address`.
+
+However, a new admin-only variant is needed:
+
+**`lambda/api/new_address_admin/`** (new) — Admin-only Lambda that creates an address with one or more users:
+- Accepts a list of usernames instead of deriving user from the JWT
+- Validates all target users exist in Cognito
+- Writes the address to DynamoDB with a slash-separated `user` field if multiple users are specified
+- Publishes SNS reconfiguration message
+- This is distinct from the existing `new` endpoint, which is self-service (users create addresses for themselves)
+
+### 4b. Terraform — Lambda Infrastructure for Address Assignment
+
+**`terraform/infra/modules/app/locals.tf`** — Add 3 entries to `supported_lambdas`:
+- `assign_address` (PUT), `unassign_address` (PUT), `new_address_admin` (POST)
+- All: `python3.13`, `memory = 128`, `cache = false`, `cache_ttl = 0`
+
+### 4c. React — ApiClient
+
+**`react/admin/src/ApiClient.js`** — Add 3 methods:
+- `assignAddress(address, username)` — add a user to an existing address
+- `unassignAddress(address, username)` — remove a user from an address
+- `newAddressAdmin(address, usernames)` — create an address assigned to one or more users
+
+### 4d. React — Users Component Updates
+
+**`react/admin/src/Users/index.jsx`** — Extend the confirmed users section:
+- Each user row shows their assigned addresses (fetched via existing `list` endpoint filtered by user, or a new admin endpoint)
+- "Assign Address" action on each user: opens a picker/autocomplete showing existing addresses, with an option to assign the user to the selected address
+- "Create Address" action: form to create a new address assigned to the selected user(s)
+
+### 4e. React — Addresses Admin View
+
+**`react/admin/src/Addresses/Admin.jsx`** (new) — Admin-only view of all addresses across all users:
+- Displays each address with its assigned user(s)
+- For multi-user addresses, shows all assigned users with individual "Remove" buttons (calls `unassignAddress`)
+- "Add User" button on each address row: opens a user picker to assign an additional user (calls `assignAddress`)
+- "New Address" button: form that accepts the address fields plus one or more usernames (calls `newAddressAdmin`)
+- Accessible from the Users tab or as a sub-view within the admin interface
+
+### Phase 4 Verification
+
+1. `cd lambda/api && pylint --rcfile .pylintrc assign_address/function.py unassign_address/function.py new_address_admin/function.py` — lint new Lambdas
+2. Manual: as admin, assign a second user to an existing address; verify both users receive mail sent to that address
+3. Manual: as admin, create a new address with two users assigned; verify delivery to both
+4. Manual: as admin, remove one user from a multi-user address; verify only the remaining user receives mail
+5. Manual: verify non-admin users cannot access the assign/unassign/new_address_admin endpoints
