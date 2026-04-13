@@ -116,9 +116,19 @@ Cognito handles the verification flow automatically: after sign-up, it sends an 
 
 **`react/admin/src/SignUp/index.jsx`** — Update the registration flow to include a phone verification step after initial sign-up, prompting the user to enter the SMS code.
 
+**`terraform/infra/modules/user_pool/main.tf`** — Configure the Cognito user pool for SMS-based password recovery:
+- Set `account_recovery_setting` to prefer `verified_phone_number`
+- Cognito's `ForgotPassword` API will send a reset code via SMS to the user's verified phone number
+
+**`react/admin/src/Login/index.jsx`** — Add a "Forgot password?" link below the login form that navigates to a password reset flow:
+- Step 1: User enters their username; calls Cognito `forgotPassword()` which sends an SMS code
+- Step 2: User enters the SMS code and a new password; calls Cognito `confirmPassword()` to complete the reset
+- On success, return the user to the login form with a confirmation message
+
 ### Phase 2 Verification
 
 1. Manual: sign up a new user with a phone number, verify SMS verification code is sent and can be confirmed
+2. Manual: from the login screen, trigger "Forgot password?" for a user with a verified phone number; verify SMS code is received and password can be reset
 
 ---
 
