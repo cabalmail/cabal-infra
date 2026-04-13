@@ -234,7 +234,7 @@ jobs:
         TF_EXIT=${PIPESTATUS[0]}
         set -e
         if [ $TF_EXIT -ne 0 ]; then
-          if grep -q 'aws_pinpointsmsvoicev2_phone_number.sms.*timeout' /tmp/tf-apply.log; then
+          if grep -q 'aws_pinpointsmsvoicev2_phone_number.sms' /tmp/tf-apply.log && grep -q "timeout while waiting for state to become 'ACTIVE'" /tmp/tf-apply.log; then
             echo "::warning::Toll-free number provisioning timed out. Untainting resource for next run."
             terraform untaint 'module.pool.aws_pinpointsmsvoicev2_phone_number.sms'
             exit 0
