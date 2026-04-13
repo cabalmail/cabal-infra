@@ -34,6 +34,14 @@ resource "aws_cognito_user_pool" "users" {
   }
 }
 
+resource "aws_pinpointsmsvoicev2_phone_number" "sms" {
+  iso_country_code          = "US"
+  message_type              = "TRANSACTIONAL"
+  number_capabilities       = ["SMS"]
+  number_type               = "TOLL_FREE"
+  deletion_protection_enabled = false
+}
+
 resource "aws_cognito_user_group" "admin" {
   name         = "admin"
   user_pool_id = aws_cognito_user_pool.users.id
