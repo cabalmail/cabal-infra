@@ -34,6 +34,7 @@ import AppMessageContext from './contexts/AppMessageContext';
 // Site-wide and Theme-specific style
 import './AppDark.css';
 import './AppLight.css';
+import { ADDRESS_LIST, FOLDER_LIST } from './constants';
 import './App.css';
 
 // Module-level token storage (never persisted to localStorage)
@@ -231,6 +232,9 @@ function App() {
       const cognitoUser = UserPool.getCurrentUser();
       if (cognitoUser) cognitoUser.signOut();
     }
+    localStorage.removeItem(ADDRESS_LIST);
+    localStorage.removeItem(FOLDER_LIST);
+    localStorage.removeItem("INBOX");
     setIsAdmin(false);
     setState({ loggedIn: false, userName: null, password: null, view: "Login" });
   }, [setState]);
