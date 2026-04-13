@@ -183,6 +183,14 @@ locals {
       memory    = 128
       cache     = false
       cache_ttl = 0
+    },
+    list_dmarc_reports = {
+      runtime   = "python3.13"
+
+      method    = "GET"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
     }
   }
 }

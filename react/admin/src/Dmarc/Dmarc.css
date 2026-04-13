@@ -1,0 +1,77 @@
+div.App div.Dmarc {
+  max-width: 70em;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+div.App div.Dmarc #reload {
+  font-size: 140%;
+  display: block;
+  width: auto;
+  float: right;
+  padding: 0.2em 0.5em;
+  margin: 0;
+}
+
+div.App div.Dmarc h2 {
+  clear: both;
+}
+
+ul.report-list {
+  list-style: none;
+  padding-left: 0;
+}
+
+ul.report-list li.report-header {
+  list-style: none;
+  display: grid;
+  grid-template-columns: 16% 14% 14% 14% 8% 10% 10% 14%;
+  grid-column-gap: 0.5%;
+  align-items: center;
+  font-weight: bold;
+  border-bottom: 2px solid #666;
+  padding: 0.3em 0;
+}
+
+ul.report-list li.report-row {
+  list-style: none;
+  border-bottom: 1px solid #888;
+  display: grid;
+  grid-template-columns: 16% 14% 14% 14% 8% 10% 10% 14%;
+  grid-column-gap: 0.5%;
+  align-items: center;
+  min-height: 2.5em;
+  padding: 0.3em 0;
+}
+
+ul.report-list li.report-row span,
+ul.report-list li.report-header span {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+span.result.pass {
+  color: #2e7d32;
+  font-weight: bold;
+}
+
+span.result.fail {
+  color: #c62828;
+  font-weight: bold;
+}
+
+button.load-more {
+  display: block;
+  margin: 1em auto;
+  padding: 0.5em 2em;
+  cursor: pointer;
+}
+
+p.empty {
+  color: #888;
+  font-style: italic;
+}
