@@ -1,10 +1,10 @@
-div.Users {
+div.App div.Users {
   max-width: 60em;
   margin-left: auto;
   margin-right: auto;
 }
 
-div.Users #reload {
+div.App div.Users #reload {
   font-size: 140%;
   display: block;
   width: auto;
@@ -13,7 +13,7 @@ div.Users #reload {
   margin: 0;
 }
 
-div.Users h2 {
+div.App div.Users h2 {
   clear: both;
 }
 
