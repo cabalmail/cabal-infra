@@ -40,6 +40,10 @@ resource "aws_pinpointsmsvoicev2_phone_number" "sms" {
   number_capabilities       = ["SMS"]
   number_type               = "TOLL_FREE"
   deletion_protection_enabled = false
+
+  timeouts {
+    create = "60m"
+  }
 }
 
 resource "aws_cognito_user_group" "admin" {
