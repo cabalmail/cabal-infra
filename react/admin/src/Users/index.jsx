@@ -79,8 +79,9 @@ function Users() {
     );
   }, [api, setMessage, loadUsers]);
 
-  const pendingUsers = users.filter(u => u.status !== 'CONFIRMED');
-  const confirmedUsers = users.filter(u => u.status === 'CONFIRMED');
+  const nonMasterUsers = users.filter(u => u.username !== 'master');
+  const pendingUsers = nonMasterUsers.filter(u => u.status !== 'CONFIRMED');
+  const confirmedUsers = nonMasterUsers.filter(u => u.status === 'CONFIRMED');
 
   if (loading) {
     return <div className="Users"><div className="loading">Loading...</div></div>;
