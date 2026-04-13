@@ -14,6 +14,6 @@ output "user_pool_client_id" {
 }
 
 output "admin_group_name" {
-  value       = aws_cognito_user_pool_group.admin.name
+  value       = aws_cognito_user_group.admin.name
   description = "Name of the Cognito admin group"
 }
