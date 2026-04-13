@@ -19,6 +19,9 @@ const Dmarc = React.lazy(() => import('./Dmarc'));
 // Pre-login Components
 import SignUp from './SignUp';
 import Login from './Login';
+import Verify from './Verify';
+import ForgotPassword from './ForgotPassword';
+import ResetPassword from './ResetPassword';
 
 // Persistent Components
 import AppMessage from './AppMessage';
@@ -50,6 +53,7 @@ function loadSavedState() {
     userName: null,
     password: null,
     phone: null,
+    verificationCode: null,
     view: "Login",
     poolData: null,
     control_domain: null,
@@ -97,7 +101,8 @@ function App() {
     }
     setAppState(prev => {
       const updates = {};
-      if (prev.view !== "Login" && prev.view !== "SignUp") {
+      const preLoginViews = ["Login", "SignUp", "Verify", "ForgotPassword", "ResetPassword"];
+      if (!preLoginViews.includes(prev.view)) {
         updates.view = "Login";
       }
       if (prev.loggedIn !== false) {
@@ -185,8 +190,8 @@ function App() {
       null,
       (err, _result) => {
         if (!err) {
-          setState({ view: "Login" });
-          setMessage("Your registration has been submitted.", false);
+          setState({ view: "Verify" });
+          setMessage("Check your phone for a verification code.", false);
         } else {
           setState({ view: "SignUp" });
           setMessage("Registration failed.", true);
@@ -194,6 +199,60 @@ function App() {
       }
     );
   }, [state.userName, state.password, state.phone, setState, setMessage]);
+
+  const doVerify = useCallback((e) => {
+    e.preventDefault();
+    const cognitoUser = new CognitoUser({
+      Username: state.userName,
+      Pool: UserPool
+    });
+    cognitoUser.confirmRegistration(state.verificationCode, true, (err, _result) => {
+      if (!err) {
+        setState({ view: "Login", verificationCode: null });
+        setMessage("Phone verified. Your account is pending admin approval.", false);
+      } else {
+        setMessage("Verification failed. Please check your code and try again.", true);
+      }
+    });
+  }, [state.userName, state.verificationCode, setState, setMessage]);
+
+  const doForgotPassword = useCallback((e) => {
+    e.preventDefault();
+    const cognitoUser = new CognitoUser({
+      Username: state.userName,
+      Pool: UserPool
+    });
+    cognitoUser.forgotPassword({
+      onSuccess: () => {
+        setState({ view: "ResetPassword" });
+        setMessage("A reset code has been sent to your phone.", false);
+      },
+      onFailure: () => {
+        setMessage("Failed to send reset code. Please try again.", true);
+      },
+      inputVerificationCode: () => {
+        setState({ view: "ResetPassword" });
+        setMessage("A reset code has been sent to your phone.", false);
+      }
+    });
+  }, [state.userName, setState, setMessage]);
+
+  const doResetPassword = useCallback((e) => {
+    e.preventDefault();
+    const cognitoUser = new CognitoUser({
+      Username: state.userName,
+      Pool: UserPool
+    });
+    cognitoUser.confirmPassword(state.verificationCode, state.password, {
+      onSuccess: () => {
+        setState({ view: "Login", verificationCode: null, password: null });
+        setMessage("Password reset successful. You can now log in.", false);
+      },
+      onFailure: () => {
+        setMessage("Password reset failed. Please check your code and try again.", true);
+      }
+    });
+  }, [state.userName, state.verificationCode, state.password, setState, setMessage]);
 
   const doLogin = useCallback((e) => {
     e.preventDefault();
@@ -286,13 +345,40 @@ function App() {
             />
           </ErrorBoundary>
         );
+      case "Verify":
+        return (
+          <Verify
+            onSubmit={doVerify}
+            onCodeChange={doInputChange}
+            code={state.verificationCode}
+          />
+        );
+      case "ForgotPassword":
+        return (
+          <ForgotPassword
+            onSubmit={doForgotPassword}
+            onUsernameChange={doInputChange}
+            username={state.userName}
+            onCancel={(e) => { e.preventDefault(); setState({ view: "Login" }); }}
+          />
+        );
+      case "ResetPassword":
+        return (
+          <ResetPassword
+            onSubmit={doResetPassword}
+            onCodeChange={doInputChange}
+            onPasswordChange={doInputChange}
+            code={state.verificationCode}
+            password={state.password}
+          />
+        );
       case "SignUp":
         return (
           <SignUp
             onSubmit={doRegister}
             onUsernameChange={doInputChange}
-            onPasswordChange={doInputChange}
             onPhoneChange={doInputChange}
+            onPasswordChange={doInputChange}
             username={state.userName}
             password={state.password}
             phone={state.phone}
@@ -321,6 +407,7 @@ function App() {
             onPasswordChange={doInputChange}
             username={state.userName}
             password={state.password}
+            onForgotPassword={(e) => { e.preventDefault(); setState({ view: "ForgotPassword" }); }}
           />
         );
     }

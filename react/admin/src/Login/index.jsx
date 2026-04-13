@@ -1,6 +1,6 @@
 import styles from './Login.module.css';
 
-function Login({ onSubmit, onUsernameChange, onPasswordChange, username, password }) {
+function Login({ onSubmit, onUsernameChange, onPasswordChange, username, password, onForgotPassword }) {
   return (
     <div className={styles.login}>
       <form className={styles.login} onSubmit={onSubmit}>
@@ -23,6 +23,7 @@ function Login({ onSubmit, onUsernameChange, onPasswordChange, username, passwor
           value={password || ""}
         />
         <button type="submit" className="default">Login</button>
+        <a href="#" onClick={onForgotPassword}>Forgot password?</a>
       </form>
     </div>
   );

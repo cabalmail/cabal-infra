@@ -3,7 +3,22 @@
 */
 
 resource "aws_cognito_user_pool" "users" {
-  name  = "cabal"
+  name                       = "cabal"
+  auto_verified_attributes   = ["phone_number"]
+  sms_verification_message   = "Your Cabalmail verification code is {####}"
+
+  sms_configuration {
+    sns_caller_arn = aws_iam_role.users.arn
+    external_id    = "cabal-cognito-sms"
+  }
+
+  account_recovery_setting {
+    recovery_mechanism {
+      name     = "verified_phone_number"
+      priority = 1
+    }
+  }
+
   schema {
     name                     = "osid"
     attribute_data_type      = "Number"
