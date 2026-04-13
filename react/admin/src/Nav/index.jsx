@@ -1,8 +1,8 @@
 import './Nav.css';
 
-function Nav({ loggedIn, onClick, view, doLogout }) {
+function Nav({ loggedIn, onClick, view, doLogout, isAdmin }) {
   return (
-    <div className={`nav logged-${loggedIn ? 'in' : 'out'}`}>
+    <div className={`nav logged-${loggedIn ? 'in' : 'out'}${isAdmin ? ' is-admin' : ''}`}>
       <div className="logo">
         <img src="/mask.png" alt="Cabalmail logo" />
       </div>
@@ -24,6 +24,18 @@ function Nav({ loggedIn, onClick, view, doLogout }) {
         name="Addresses"
         onClick={onClick}
       >Addresses</button>
+      <button
+        id="users"
+        className={`item${view === "Users" ? " active" : ""}`}
+        name="Users"
+        onClick={onClick}
+      >Users</button>
+      <button
+        id="dmarc"
+        className={`item${view === "DMARC" ? " active" : ""}`}
+        name="DMARC"
+        onClick={onClick}
+      >DMARC</button>
       <button
         id="login"
         className={`item${view === "Login" ? " active" : ""}`}

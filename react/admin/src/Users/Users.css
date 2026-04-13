@@ -1,0 +1,51 @@
+div.Users {
+  max-width: 60em;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+div.Users #reload {
+  font-size: 140%;
+  display: block;
+  width: auto;
+  float: right;
+  padding: 0.2em 0.5em;
+  margin: 0;
+}
+
+div.Users h2 {
+  clear: both;
+}
+
+ul.user-list {
+  list-style: none;
+  padding-left: 0;
+}
+
+ul.user-list li.user-row {
+  list-style: none;
+  border-bottom: 1px solid #888;
+  display: grid;
+  grid-template-columns: 25% 15% 15% 15% auto auto;
+  grid-column-gap: 1%;
+  align-items: center;
+  min-height: 3em;
+  padding: 0.3em 0;
+}
+
+ul.user-list li.user-row span,
+ul.user-list li.user-row button {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+ul.user-list li.user-row button.action {
+  padding: 0.3em 0.6em;
+  cursor: pointer;
+}
+
+p.empty {
+  color: #888;
+  font-style: italic;
+}

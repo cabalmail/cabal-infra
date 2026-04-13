@@ -13,6 +13,8 @@ import {
 const Email = React.lazy(() => import('./Email'));
 const Folders = React.lazy(() => import('./Folders'));
 const Addresses = React.lazy(() => import('./Addresses'));
+const Users = React.lazy(() => import('./Users'));
+const Dmarc = React.lazy(() => import('./Dmarc'));
 
 // Pre-login Components
 import SignUp from './SignUp';
@@ -73,6 +75,7 @@ function persistState(state) {
  */
 function App() {
   const [state, setAppState] = useState(loadSavedState);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [message, setMessageText] = useState(null);
   const [error, setError] = useState(false);
   const [hideMessage, setHideMessage] = useState(true);
@@ -137,6 +140,9 @@ function App() {
           if (err || !session || !session.isValid()) return;
           _token = session.getIdToken().getJwtToken();
           _expires = session.getIdToken().getExpiration();
+          const payload = JSON.parse(atob(_token.split('.')[1]));
+          const groups = payload['cognito:groups'] || [];
+          setIsAdmin(groups.includes('admin'));
           setState({ loggedIn: true, view: "Email" });
         });
       }
@@ -202,6 +208,9 @@ function App() {
       onSuccess: data => {
         _token = data.getIdToken().getJwtToken();
         _expires = data.getIdToken().getExpiration();
+        const payload = JSON.parse(atob(_token.split('.')[1]));
+        const groups = payload['cognito:groups'] || [];
+        setIsAdmin(groups.includes('admin'));
         setState({ loggedIn: true, view: "Email" });
         setMessage("Login succeeded", false);
       },
@@ -222,6 +231,7 @@ function App() {
       const cognitoUser = UserPool.getCurrentUser();
       if (cognitoUser) cognitoUser.signOut();
     }
+    setIsAdmin(false);
     setState({ loggedIn: false, userName: null, password: null, view: "Login" });
   }, [setState]);
 
@@ -237,6 +247,18 @@ function App() {
 
   function renderContent() {
     switch (state.view) {
+      case "Users":
+        return (
+          <ErrorBoundary name="Users">
+            <Users />
+          </ErrorBoundary>
+        );
+      case "DMARC":
+        return (
+          <ErrorBoundary name="DMARC">
+            <Dmarc />
+          </ErrorBoundary>
+        );
       case "Addresses":
         return (
           <ErrorBoundary name="Addresses">
@@ -314,6 +336,7 @@ function App() {
             loggedIn={state.loggedIn}
             view={state.view}
             doLogout={doLogout}
+            isAdmin={isAdmin}
           />
           <div className="content">
             <Suspense fallback={<div className="loading">Loading...</div>}>

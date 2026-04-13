@@ -19,6 +19,12 @@ resource "aws_cognito_user_pool" "users" {
   }
 }
 
+resource "aws_cognito_user_pool_group" "admin" {
+  name         = "admin"
+  user_pool_id = aws_cognito_user_pool.users.id
+  description  = "Administrators with access to user management"
+}
+
 resource "aws_cognito_user_pool_client" "users" {
   name                  = "cabal_admin_client"
   user_pool_id          = aws_cognito_user_pool.users.id

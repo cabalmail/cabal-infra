@@ -143,6 +143,46 @@ locals {
       memory    = 128
       cache     = false
       cache_ttl = 0
+    },
+    list_users         = {
+      runtime   = "python3.13"
+
+      method    = "GET"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    confirm_user       = {
+      runtime   = "python3.13"
+
+      method    = "PUT"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    disable_user       = {
+      runtime   = "python3.13"
+
+      method    = "PUT"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    enable_user        = {
+      runtime   = "python3.13"
+
+      method    = "PUT"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    delete_user        = {
+      runtime   = "python3.13"
+
+      method    = "DELETE"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
     }
   }
 }

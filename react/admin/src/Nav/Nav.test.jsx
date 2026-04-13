@@ -15,6 +15,8 @@ describe('Nav', () => {
     expect(screen.getByText('Email')).toBeInTheDocument();
     expect(screen.getByText('Folders')).toBeInTheDocument();
     expect(screen.getByText('Addresses')).toBeInTheDocument();
+    expect(screen.getByText('Users')).toBeInTheDocument();
+    expect(screen.getByText('DMARC')).toBeInTheDocument();
     expect(screen.getByText('Log in')).toBeInTheDocument();
     expect(screen.getByText('Sign up')).toBeInTheDocument();
     expect(screen.getByText('Log out')).toBeInTheDocument();
@@ -23,7 +25,7 @@ describe('Nav', () => {
   it('renders nav items as buttons, not anchors', () => {
     render(<Nav {...defaultProps} />);
     const buttons = screen.getAllByRole('button');
-    expect(buttons.length).toBe(6);
+    expect(buttons.length).toBe(8);
   });
 
   it('marks the active view', () => {

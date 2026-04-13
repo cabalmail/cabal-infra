@@ -3,7 +3,11 @@
 .logged-in #signup,
 .logged-in #login,
 .logged-out #email,
-.logged-out #folders {
+.logged-out #folders,
+.logged-out #users,
+.logged-out #dmarc,
+.nav:not(.is-admin) #users,
+.nav:not(.is-admin) #dmarc {
   display: none;
 }
 

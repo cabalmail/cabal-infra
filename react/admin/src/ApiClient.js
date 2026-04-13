@@ -362,6 +362,73 @@ export default class ApiClient {
     return response;
   };
   
+  // Admin — User Management
+
+  listUsers() {
+    const response = axios.get('/list_users', {
+      baseURL: this.baseURL,
+      headers: {
+        'Authorization': this.token
+      },
+      timeout: TIMEOUT
+    });
+    return response;
+  }
+
+  confirmUser(username) {
+    const response = axios.put('/confirm_user',
+      JSON.stringify({ username: username }),
+      {
+        baseURL: this.baseURL,
+        headers: {
+          'Authorization': this.token
+        },
+        timeout: TIMEOUT
+      }
+    );
+    return response;
+  }
+
+  disableUser(username) {
+    const response = axios.put('/disable_user',
+      JSON.stringify({ username: username }),
+      {
+        baseURL: this.baseURL,
+        headers: {
+          'Authorization': this.token
+        },
+        timeout: TIMEOUT
+      }
+    );
+    return response;
+  }
+
+  enableUser(username) {
+    const response = axios.put('/enable_user',
+      JSON.stringify({ username: username }),
+      {
+        baseURL: this.baseURL,
+        headers: {
+          'Authorization': this.token
+        },
+        timeout: TIMEOUT
+      }
+    );
+    return response;
+  }
+
+  deleteUser(username) {
+    const response = axios.delete('/delete_user', {
+      baseURL: this.baseURL,
+      data: JSON.stringify({ username: username }),
+      headers: {
+        'Authorization': this.token
+      },
+      timeout: TIMEOUT
+    });
+    return response;
+  }
+
   getAttachments(folder, id, seen) {
     const response = axios.get('/list_attachments',
       {
