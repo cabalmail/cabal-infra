@@ -1,4 +1,5 @@
 '''Lists all email addresses across all users (admin only)'''
+# pylint: disable=duplicate-code
 import json
 import boto3  # pylint: disable=import-error
 
