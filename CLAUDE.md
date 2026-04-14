@@ -180,19 +180,17 @@ Shared infrastructure:
 | 0.4.0   | Migrate from EC2 instances to containers.                                                           | Done        |
 | 0.4.1   | Move cert renewal from Terraform to Lambda; Modernize web client.                                   | Done        |
 | 0.5.0   | User management dashboard.                                                                          | In Progress |
-| 0.6.0   | Native app for iOS.                                                                                 |             |
-| 0.6.1   | Update documentation with iOS app features.                                                         |             |
+| 0.6.0   | Native app for iOS.                                                                                 | Planning    |
+| 0.6.1   | Update documentation with iOS app features.                                                         | Planning    |
 | 0.7.0   | Stabilize.                                                                                          |             |
 | 1.0.0   | Production-ready release.                                                                           |             |
 | 1.1.0   | Native app for Android.                                                                             |             |
 | 1.2.0   | Quotas.                                                                                             |             |
 | 1.3.0   | Framework for developing procmail-like features (forwarding, marking-read, etc.).                   |             |
 | 1.3.1   | Expose UI for auto-forwarding.                                                                      |             |
-| 1.4.0   | CI/CD for iOS app.                                                                                  |             |
-| 1.5.0   | CI/CD for Android app.                                                                              |             |
-| 1.6.0   | iOS App Store release.                                                                              |             |
-| 1.7.0   | Google Play or other Android store release.                                                         |             |
-| 1.8.0   | Stabilize.                                                                                          |             |
+| 1.4.0   | iOS App Store release.                                                                              |             |
+| 1.5.0   | Google Play or other Android store release.                                                         |             |
+| 1.6.0   | Stabilize.                                                                                          |             |
 | 2.0.0   | RSS reader for web client.                                                                          |             |
 | 2.1.0   | RSS reader for iOS app.                                                                             |             |
 | 2.2.0   | RSS reader for Android app.                                                                         |             |
