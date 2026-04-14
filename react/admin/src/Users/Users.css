@@ -22,9 +22,8 @@ ul.user-list {
   padding-left: 0;
 }
 
-ul.user-list li.user-row {
+ul.user-list .user-row {
   list-style: none;
-  border-bottom: 1px solid #888;
   display: grid;
   grid-template-columns: 25% 15% 15% 15% auto auto;
   grid-column-gap: 1%;
@@ -33,14 +32,18 @@ ul.user-list li.user-row {
   padding: 0.3em 0;
 }
 
-ul.user-list li.user-row span,
-ul.user-list li.user-row button {
+ul.user-list li.user-row {
+  border-bottom: 1px solid #888;
+}
+
+ul.user-list .user-row span,
+ul.user-list .user-row button {
   display: block;
   width: 100%;
   box-sizing: border-box;
 }
 
-ul.user-list li.user-row button.action {
+ul.user-list .user-row button.action {
   padding: 0.3em 0.6em;
   cursor: pointer;
 }
