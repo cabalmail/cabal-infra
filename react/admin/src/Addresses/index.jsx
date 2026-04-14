@@ -7,7 +7,7 @@ import './Addresses.css'
 function Addresses({ token, domains, api_url, setMessage, host, isAdmin }) {
   const [showRequest, setShowRequest] = useState(false);
   const [trigger, setTrigger] = useState("");
-  const [adminView, setAdminView] = useState(false);
+  const [tab, setTab] = useState('mine'); // 'mine' | 'all'
 
   const toggleRequest = () => {
     setShowRequest(prev => !prev);
@@ -18,14 +18,23 @@ function Addresses({ token, domains, api_url, setMessage, host, isAdmin }) {
     setShowRequest(false);
   };
 
-  if (isAdmin && adminView) {
+  const tabs = isAdmin ? (
+    <div className="address-tabs">
+      <button
+        className={`address-tab${tab === 'mine' ? ' active' : ''}`}
+        onClick={() => setTab('mine')}
+      >My Addresses</button>
+      <button
+        className={`address-tab${tab === 'all' ? ' active' : ''}`}
+        onClick={() => setTab('all')}
+      >All Addresses (admin)</button>
+    </div>
+  ) : null;
+
+  if (isAdmin && tab === 'all') {
     return (
       <>
-        <button
-          onClick={() => setAdminView(false)}
-          className="toggleRequest"
-        >My Addresses</button>
-        <hr />
+        {tabs}
         <Admin domains={domains} setMessage={setMessage} />
       </>
     );
@@ -33,16 +42,11 @@ function Addresses({ token, domains, api_url, setMessage, host, isAdmin }) {
 
   return (
     <>
+      {tabs}
       <button
         onClick={toggleRequest}
         className="toggleRequest"
       >New Address {showRequest ? "▼" : "▶︎"}</button>
-      {isAdmin && (
-        <button
-          onClick={() => setAdminView(true)}
-          className="toggleRequest"
-        >All Addresses (admin)</button>
-      )}
       <Request
         token={token}
         domains={domains}

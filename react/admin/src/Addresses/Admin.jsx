@@ -138,6 +138,76 @@ function Admin({ domains, setMessage }) {
 
   return (
     <div className="admin-addresses">
+      <button
+        onClick={() => setShowNew(prev => !prev)}
+        className="toggleRequest"
+      >New Address {showNew ? '▼' : '▶︎'}</button>
+
+      <div className={`admin-new-wrapper ${showNew ? 'visible' : 'hidden'}`}>
+        <fieldset className="address-fields">
+          <legend>Address</legend>
+          <input
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="username"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="none"
+          /><span id="amphora">@</span><input
+            type="text"
+            value={subdomain}
+            onChange={(e) => setSubdomain(e.target.value)}
+            placeholder="subdomain"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="none"
+          /><span id="dot">.</span><select
+            value={domain}
+            onChange={(e) => setDomain(e.target.value)}
+          >
+            <option value="">Select a domain</option>
+            {domains.map(d => (
+              <option key={d.domain} value={d.domain}>{d.domain}</option>
+            ))}
+          </select>
+        </fieldset>
+        <fieldset className="comment-field">
+          <legend>Comment</legend>
+          <input
+            type="text"
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            placeholder="comment"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="none"
+          />
+        </fieldset>
+        <fieldset className="assign-field">
+          <legend>Assign to</legend>
+          <div className="assign-checkboxes">
+            {usernameOptions.map(u => (
+              <label key={u} className="user-checkbox">
+                <input
+                  type="checkbox"
+                  checked={selectedUsers.includes(u)}
+                  onChange={() => toggleSelectedUser(u)}
+                />
+                <span>{u}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <fieldset className="button-fields">
+          <button id="create-admin" className="default" onClick={handleCreate}>
+            Create {newAddress}
+          </button>
+        </fieldset>
+      </div>
+
+      <hr />
+
       <div className="admin-controls">
         <input
           type="text"
@@ -147,65 +217,8 @@ function Admin({ domains, setMessage }) {
           name="filter"
           placeholder="filter"
         />
-        <button onClick={() => setShowNew(prev => !prev)}>
-          New Address {showNew ? '▼' : '▶︎'}
-        </button>
         <button id="reload" onClick={loadData} title="Reload">&#10227;</button>
       </div>
-
-      {showNew && (
-        <fieldset className="admin-new">
-          <legend>New Address (admin)</legend>
-          <div className="admin-new-row">
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="username"
-              autoComplete="off"
-            />
-            <span>@</span>
-            <input
-              type="text"
-              value={subdomain}
-              onChange={(e) => setSubdomain(e.target.value)}
-              placeholder="subdomain"
-              autoComplete="off"
-            />
-            <span>.</span>
-            <select value={domain} onChange={(e) => setDomain(e.target.value)}>
-              <option value="">Select a domain</option>
-              {domains.map(d => (
-                <option key={d.domain} value={d.domain}>{d.domain}</option>
-              ))}
-            </select>
-          </div>
-          <div className="admin-new-row">
-            <input
-              type="text"
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              placeholder="comment"
-            />
-          </div>
-          <div className="admin-new-row admin-user-picker">
-            <span>Assign to:</span>
-            {usernameOptions.map(u => (
-              <label key={u} className="user-checkbox">
-                <input
-                  type="checkbox"
-                  checked={selectedUsers.includes(u)}
-                  onChange={() => toggleSelectedUser(u)}
-                />
-                {u}
-              </label>
-            ))}
-          </div>
-          <div className="admin-new-row">
-            <button onClick={handleCreate}>Create {newAddress}</button>
-          </div>
-        </fieldset>
-      )}
 
       <div id="count">Found: {filteredAddresses.length} addresses</div>
 

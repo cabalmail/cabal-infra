@@ -52,7 +52,73 @@ div.Addresses div.content {
   margin-right: auto;
 }
 
+/* Tabs */
+
+div.address-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 0.5em;
+  border-bottom: 1px solid #888;
+}
+
+button.address-tab {
+  background: none;
+  border: 1px solid transparent;
+  border-bottom: none;
+  padding: 0.5em 1.2em;
+  cursor: pointer;
+  margin-bottom: -1px;
+  border-top-left-radius: 0.3em;
+  border-top-right-radius: 0.3em;
+  width: auto;
+}
+
+button.address-tab.active {
+  border-color: #888;
+  border-bottom: 1px solid #000;
+  font-weight: bold;
+}
+
 /* Admin Addresses View */
+
+div.admin-addresses fieldset.assign-field,
+div.admin-addresses fieldset.address-fields,
+div.admin-addresses fieldset.comment-field,
+div.admin-addresses fieldset.button-fields {
+  margin: 0.4em 0;
+}
+
+div.admin-addresses div.assign-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3em 1em;
+  align-items: center;
+}
+
+div.admin-addresses label.user-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  width: auto;
+}
+
+div.admin-addresses label.user-checkbox input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+}
+
+div.admin-addresses div.admin-new-wrapper {
+  overflow: hidden;
+  transition: max-height 0.5s ease;
+}
+
+div.admin-addresses div.admin-new-wrapper.hidden {
+  max-height: 0;
+}
+
+div.admin-addresses div.admin-new-wrapper.visible {
+  max-height: 40em;
+}
 
 div.admin-addresses div.admin-controls {
   display: flex;
@@ -64,26 +130,7 @@ div.admin-addresses div.admin-controls {
 div.admin-addresses div.admin-controls input#filter {
   flex: 1;
   max-width: 30em;
-}
-
-div.admin-addresses fieldset.admin-new {
-  margin: 0.5em 0;
-  padding: 0.6em;
-}
-
-div.admin-addresses div.admin-new-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4em;
-  margin: 0.4em 0;
-}
-
-div.admin-addresses div.admin-user-picker label.user-checkbox {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.2em;
-  margin-right: 0.5em;
+  width: auto;
 }
 
 ul.admin-address-list {
@@ -126,10 +173,11 @@ span.user-chip {
   display: inline-flex;
   align-items: center;
   gap: 0.2em;
-  padding: 0.15em 0.5em;
+  padding: 0.25em 0.6em;
   border: 1px solid #888;
   border-radius: 1em;
   font-size: 90%;
+  line-height: 1;
 }
 
 span.user-chip button.chip-remove {
@@ -150,12 +198,25 @@ span.user-chip button.chip-remove {
 
 button.add-user {
   font-size: 90%;
-  padding: 0.2em 0.6em;
+  padding: 0.25em 0.6em;
+  line-height: 1;
   cursor: pointer;
+  width: auto;
 }
 
 span.user-picker-inline {
   display: inline-flex;
   gap: 0.3em;
   align-items: center;
+}
+
+span.user-picker-inline select {
+  width: auto;
+  padding: 0.2em 0.4em;
+}
+
+span.user-picker-inline button {
+  width: auto;
+  padding: 0.25em 0.6em;
+  line-height: 1;
 }
