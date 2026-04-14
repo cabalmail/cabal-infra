@@ -65,6 +65,7 @@ resource "aws_iam_role_policy" "process_dmarc" {
         Effect = "Allow"
         Action = [
           "dynamodb:PutItem",
+          "dynamodb:BatchWriteItem",
           "dynamodb:Query",
           "dynamodb:Scan"
         ]
