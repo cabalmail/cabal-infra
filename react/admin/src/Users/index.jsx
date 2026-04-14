@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import useApi from '../hooks/useApi';
 import { useAppMessage } from '../contexts/AppMessageContext';
 import './Users.css';
@@ -7,14 +7,22 @@ function Users() {
   const api = useApi();
   const { setMessage } = useAppMessage();
   const [users, setUsers] = useState([]);
+  const [addresses, setAddresses] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [pickerFor, setPickerFor] = useState(null);
+  const [pickerAddress, setPickerAddress] = useState('');
 
   const loadUsers = useCallback(() => {
     setLoading(true);
-    api.listUsers().then(
-      (response) => {
-        const data = response.data || response;
-        setUsers(data.Users || []);
+    Promise.all([
+      api.listUsers(),
+      api.listAllAddresses().catch(() => ({ data: { Items: [] } }))
+    ]).then(
+      ([userResp, addrResp]) => {
+        const userData = userResp.data || userResp;
+        const addrData = addrResp.data || addrResp;
+        setUsers(userData.Users || []);
+        setAddresses(addrData.Items || []);
         setLoading(false);
       },
       (err) => {
@@ -27,6 +35,18 @@ function Users() {
   useEffect(() => {
     loadUsers();
   }, [loadUsers]);
+
+  const addressesByUser = useMemo(() => {
+    const map = {};
+    addresses.forEach(a => {
+      const assigned = (a.user || '').split('/').filter(Boolean);
+      assigned.forEach(u => {
+        if (!map[u]) map[u] = [];
+        map[u].push(a);
+      });
+    });
+    return map;
+  }, [addresses]);
 
   const handleConfirm = useCallback((username) => {
     api.confirmUser(username).then(
@@ -79,6 +99,39 @@ function Users() {
     );
   }, [api, setMessage, loadUsers]);
 
+  const handleAssign = useCallback((username, address) => {
+    if (!address) {
+      setMessage('Select an address to assign.', true);
+      return;
+    }
+    api.assignAddress(address, username).then(
+      () => {
+        setMessage(`Assigned "${username}" to "${address}".`, false);
+        setPickerFor(null);
+        setPickerAddress('');
+        loadUsers();
+      },
+      (err) => {
+        const msg = err.response?.data?.Error || err.message || err;
+        setMessage('Failed to assign address: ' + msg, true);
+      }
+    );
+  }, [api, setMessage, loadUsers]);
+
+  const handleUnassign = useCallback((username, address) => {
+    if (!window.confirm(`Remove "${username}" from "${address}"?`)) return;
+    api.unassignAddress(address, username).then(
+      () => {
+        setMessage(`Removed "${username}" from "${address}".`, false);
+        loadUsers();
+      },
+      (err) => {
+        const msg = err.response?.data?.Error || err.message || err;
+        setMessage('Failed to remove assignment: ' + msg, true);
+      }
+    );
+  }, [api, setMessage, loadUsers]);
+
   const nonSystemUsers = users.filter(u => !['master', 'dmarc'].includes(u.username));
   const pendingUsers = nonSystemUsers.filter(u => u.status !== 'CONFIRMED');
   const confirmedUsers = nonSystemUsers.filter(u => u.status === 'CONFIRMED');
@@ -113,20 +166,69 @@ function Users() {
         <p className="empty">No confirmed users.</p>
       ) : (
         <ul className="user-list">
-          {confirmedUsers.map(user => (
-            <li key={user.username} className="user-row">
-              <span className="username">{user.username}</span>
-              <span className="enabled">{user.enabled ? 'Enabled' : 'Disabled'}</span>
-              <span className="osid">{user.osid ? `OSID: ${user.osid}` : ''}</span>
-              <span className="created">{new Date(user.created).toLocaleDateString()}</span>
-              {user.enabled ? (
-                <button className="action disable" onClick={() => handleDisable(user.username)}>Disable</button>
-              ) : (
-                <button className="action enable" onClick={() => handleEnable(user.username)}>Enable</button>
-              )}
-              <button className="action delete" onClick={() => handleDelete(user.username)}>Delete</button>
-            </li>
-          ))}
+          {confirmedUsers.map(user => {
+            const userAddrs = addressesByUser[user.username] || [];
+            const assignedSet = new Set(userAddrs.map(a => a.address));
+            const remaining = addresses.filter(a => !assignedSet.has(a.address));
+            return (
+              <li key={user.username} className="user-row-extended">
+                <div className="user-row">
+                  <span className="username">{user.username}</span>
+                  <span className="enabled">{user.enabled ? 'Enabled' : 'Disabled'}</span>
+                  <span className="osid">{user.osid ? `OSID: ${user.osid}` : ''}</span>
+                  <span className="created">{new Date(user.created).toLocaleDateString()}</span>
+                  {user.enabled ? (
+                    <button className="action disable" onClick={() => handleDisable(user.username)}>Disable</button>
+                  ) : (
+                    <button className="action enable" onClick={() => handleEnable(user.username)}>Enable</button>
+                  )}
+                  <button className="action delete" onClick={() => handleDelete(user.username)}>Delete</button>
+                </div>
+                <div className="user-addresses">
+                  <span className="addresses-label">Addresses:</span>
+                  {userAddrs.length === 0 && <span className="none">none</span>}
+                  {userAddrs.map(a => {
+                    const sharers = (a.user || '').split('/').filter(Boolean);
+                    const canRemove = sharers.length > 1;
+                    return (
+                      <span key={a.address} className="address-chip">
+                        {a.address}
+                        {canRemove && (
+                          <button
+                            className="chip-remove"
+                            onClick={() => handleUnassign(user.username, a.address)}
+                            title={`Remove ${user.username} from ${a.address}`}
+                          >&times;</button>
+                        )}
+                      </span>
+                    );
+                  })}
+                  {pickerFor === user.username ? (
+                    <span className="user-picker-inline">
+                      <select
+                        value={pickerAddress}
+                        onChange={(e) => setPickerAddress(e.target.value)}
+                      >
+                        <option value="">Select address…</option>
+                        {remaining.map(a => (
+                          <option key={a.address} value={a.address}>{a.address}</option>
+                        ))}
+                      </select>
+                      <button onClick={() => handleAssign(user.username, pickerAddress)}>Add</button>
+                      <button onClick={() => { setPickerFor(null); setPickerAddress(''); }}>Cancel</button>
+                    </span>
+                  ) : (
+                    remaining.length > 0 && (
+                      <button
+                        className="add-address"
+                        onClick={() => { setPickerFor(user.username); setPickerAddress(''); }}
+                      >+ Address</button>
+                    )
+                  )}
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

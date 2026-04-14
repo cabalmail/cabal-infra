@@ -191,6 +191,38 @@ locals {
       memory    = 128
       cache     = false
       cache_ttl = 0
+    },
+    list_addresses_admin = {
+      runtime   = "python3.13"
+
+      method    = "GET"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    assign_address       = {
+      runtime   = "python3.13"
+
+      method    = "PUT"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    unassign_address     = {
+      runtime   = "python3.13"
+
+      method    = "PUT"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    new_address_admin    = {
+      runtime   = "python3.13"
+
+      method    = "POST"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
     }
   }
 }

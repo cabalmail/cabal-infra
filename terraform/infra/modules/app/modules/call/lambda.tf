@@ -124,6 +124,7 @@ resource "aws_iam_role_policy" "lambda" {
             "Effect": "Allow",
             "Action": [
                 "cognito-idp:ListUsers",
+                "cognito-idp:AdminGetUser",
                 "cognito-idp:AdminConfirmSignUp",
                 "cognito-idp:AdminDisableUser",
                 "cognito-idp:AdminEnableUser",

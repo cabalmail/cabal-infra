@@ -331,6 +331,7 @@ function App() {
               host={state.imap_host}
               domains={state.domains}
               setMessage={setMessage}
+              isAdmin={isAdmin}
             />
           </ErrorBoundary>
         );

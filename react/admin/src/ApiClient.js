@@ -447,6 +447,68 @@ export default class ApiClient {
     return response;
   }
 
+  // Admin — Address Management
+
+  listAllAddresses() {
+    const response = axios.get('/list_addresses_admin', {
+      baseURL: this.baseURL,
+      headers: {
+        'Authorization': this.token
+      },
+      timeout: TIMEOUT
+    });
+    return response;
+  }
+
+  assignAddress(address, username) {
+    const response = axios.put('/assign_address',
+      JSON.stringify({ address: address, username: username }),
+      {
+        baseURL: this.baseURL,
+        headers: {
+          'Authorization': this.token
+        },
+        timeout: TIMEOUT
+      }
+    );
+    return response;
+  }
+
+  unassignAddress(address, username) {
+    const response = axios.put('/unassign_address',
+      JSON.stringify({ address: address, username: username }),
+      {
+        baseURL: this.baseURL,
+        headers: {
+          'Authorization': this.token
+        },
+        timeout: TIMEOUT
+      }
+    );
+    return response;
+  }
+
+  newAddressAdmin(username, subdomain, tld, comment, address, usernames) {
+    const response = axios.post('/new_address_admin',
+      {
+        username: username,
+        subdomain: subdomain,
+        tld: tld,
+        comment: comment,
+        address: address,
+        usernames: usernames
+      },
+      {
+        baseURL: this.baseURL,
+        headers: {
+          'Authorization': this.token
+        },
+        timeout: TIMEOUT
+      }
+    );
+    return response;
+  }
+
   getAttachments(folder, id, seen) {
     const response = axios.get('/list_attachments',
       {

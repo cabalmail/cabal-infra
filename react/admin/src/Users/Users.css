@@ -49,3 +49,62 @@ p.empty {
   color: #888;
   font-style: italic;
 }
+
+ul.user-list li.user-row-extended {
+  list-style: none;
+  border-bottom: 1px solid #888;
+  padding: 0.3em 0;
+}
+
+ul.user-list li.user-row-extended div.user-row {
+  border-bottom: none;
+}
+
+div.user-addresses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3em;
+  align-items: center;
+  padding: 0.2em 0 0.4em 0;
+  font-size: 90%;
+}
+
+span.addresses-label {
+  color: #888;
+  margin-right: 0.3em;
+}
+
+span.none {
+  color: #888;
+  font-style: italic;
+}
+
+span.address-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2em;
+  padding: 0.1em 0.5em;
+  border: 1px solid #888;
+  border-radius: 1em;
+}
+
+button.chip-remove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 0.2em;
+  font-size: 110%;
+  line-height: 1;
+}
+
+button.add-address {
+  font-size: 90%;
+  padding: 0.15em 0.5em;
+  cursor: pointer;
+}
+
+span.user-picker-inline {
+  display: inline-flex;
+  gap: 0.3em;
+  align-items: center;
+}
