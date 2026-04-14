@@ -125,8 +125,8 @@ locals {
 
       method    = "GET"
       memory    = 128
-      cache     = true
-      cache_ttl = 60
+      cache     = false
+      cache_ttl = 0
     },
     new                = {
       runtime   = "python3.13"

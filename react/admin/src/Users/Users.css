@@ -86,11 +86,14 @@ span.address-chip {
   display: inline-flex;
   align-items: center;
   gap: 0.2em;
-  padding: 0.25em 0.6em;
+  height: 1.8em;
+  padding: 0 0.6em;
   border: 1px solid #888;
-  border-radius: 1em;
-  line-height: 1;
+  border-radius: 0.9em;
+  font: inherit;
   font-size: 90%;
+  line-height: 1;
+  box-sizing: border-box;
 }
 
 span.address-chip.shared {
@@ -124,16 +127,19 @@ span.user-chip button.chip-remove {
 button.add-address {
   display: inline-flex;
   align-items: center;
-  padding: 0.25em 0.6em;
+  height: 1.8em;
+  padding: 0 0.6em;
   border: 1px dashed #888;
-  border-radius: 1em;
+  border-radius: 0.9em;
   background: none;
   color: inherit;
+  font: inherit;
   font-size: 90%;
   line-height: 1;
   cursor: pointer;
   width: auto;
   box-sizing: border-box;
+  vertical-align: middle;
 }
 
 span.user-picker-inline {
