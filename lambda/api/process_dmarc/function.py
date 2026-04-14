@@ -1,5 +1,6 @@
 '''Ingests DMARC aggregate reports from the dmarc user's IMAP mailbox into DynamoDB'''
 import email
+import email.header
 import gzip
 import io
 import json
@@ -142,6 +143,36 @@ def write_records(records):
     return written
 
 
+def decode_filename(raw_filename):
+    '''Decodes an RFC 2047 encoded filename'''
+    if not raw_filename:
+        return ''
+    decoded_parts = email.header.decode_header(raw_filename)
+    parts = []
+    for part, charset in decoded_parts:
+        if isinstance(part, bytes):
+            parts.append(part.decode(charset or 'utf-8', errors='replace'))
+        else:
+            parts.append(part)
+    return ''.join(parts)
+
+
+def is_dmarc_attachment(content_type, filename):
+    '''Checks whether a MIME part looks like a DMARC report attachment'''
+    known_types = (
+        'application/zip', 'application/gzip', 'application/x-gzip',
+        'application/xml', 'text/xml', 'application/x-zip-compressed'
+    )
+    if content_type in known_types:
+        return True
+    if filename.endswith(('.zip', '.gz', '.xml')):
+        return True
+    # application/octet-stream is common; rely on the filename
+    if content_type == 'application/octet-stream' and filename:
+        return filename.endswith(('.zip', '.gz', '.xml'))
+    return False
+
+
 def process_message(msg_data):
     '''Processes a single email message, returns count of records written'''
     msg = email.message_from_bytes(msg_data)
@@ -149,15 +180,9 @@ def process_message(msg_data):
 
     for part in msg.walk():
         content_type = part.get_content_type()
-        filename = part.get_filename() or ''
+        filename = decode_filename(part.get_filename())
 
-        is_attachment = (
-            content_type in ('application/zip', 'application/gzip',
-                             'application/x-gzip', 'application/xml',
-                             'text/xml', 'application/x-zip-compressed')
-            or filename.endswith(('.zip', '.gz', '.xml'))
-        )
-        if not is_attachment:
+        if not is_dmarc_attachment(content_type, filename):
             continue
 
         payload = part.get_payload(decode=True)
