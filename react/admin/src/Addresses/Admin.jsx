@@ -54,6 +54,7 @@ function Admin({ domains, setMessage }) {
   const usernameOptions = useMemo(() => {
     return users
       .filter(u => u.status === 'CONFIRMED' && u.enabled)
+      .filter(u => !['master', 'dmarc'].includes(u.username))
       .map(u => u.username)
       .sort();
   }, [users]);

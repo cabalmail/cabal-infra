@@ -461,6 +461,7 @@ export default class ApiClient {
   }
 
   assignAddress(address, username) {
+    localStorage.removeItem(ADDRESS_LIST);
     const response = axios.put('/assign_address',
       JSON.stringify({ address: address, username: username }),
       {
@@ -475,6 +476,7 @@ export default class ApiClient {
   }
 
   unassignAddress(address, username) {
+    localStorage.removeItem(ADDRESS_LIST);
     const response = axios.put('/unassign_address',
       JSON.stringify({ address: address, username: username }),
       {
@@ -489,6 +491,7 @@ export default class ApiClient {
   }
 
   newAddressAdmin(username, subdomain, tld, comment, address, usernames) {
+    localStorage.removeItem(ADDRESS_LIST);
     const response = axios.post('/new_address_admin',
       {
         username: username,
