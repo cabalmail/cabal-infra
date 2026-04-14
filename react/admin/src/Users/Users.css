@@ -125,10 +125,15 @@ span.user-chip button.chip-remove {
 }
 
 button.add-address {
+  -webkit-appearance: none;
+  appearance: none;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   height: 1.8em;
+  min-height: 0;
   padding: 0 0.6em;
+  margin: 0;
   border: 1px dashed #888;
   border-radius: 0.9em;
   background: none;
