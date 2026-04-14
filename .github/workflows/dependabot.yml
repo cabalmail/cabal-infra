@@ -1,0 +1,94 @@
+---
+name: Dependabot Critical Alert Monitor
+
+on:
+  schedule:
+    # Runs daily at 9:00 AM UTC — adjust to your preferred time
+    - cron: "0 9 * * *"
+  workflow_dispatch:  # Allow manual trigger
+
+permissions:
+  contents: write
+  pull-requests: write
+  security-events: read
+
+jobs:
+  check-alerts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch critical Dependabot alerts
+        id: alerts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          alerts=$(gh api repos/${{ github.repository }}/dependabot/alerts \
+            --jq '[.[] | select(.state == "open") | select(
+              .security_vulnerability.severity == "critical" or
+              .security_advisory.severity == "critical"
+            )]')
+
+          count=$(echo "$alerts" | jq 'length')
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+
+          if [ "$count" -gt 0 ]; then
+            # Build a summary for Claude to act on
+            summary=$(echo "$alerts" | jq -r '.[] |
+              "Alert #\(.number): \(.security_advisory.summary // "No summary")\n" +
+              "  Package: \(.security_vulnerability.package.name)\n" +
+              "  Severity: \(.security_vulnerability.severity)\n" +
+              "  CVE: \(.security_advisory.cve_id // "N/A")\n" +
+              "  Vulnerable range: \(.security_vulnerability.vulnerable_version_range)\n" +
+              "  Patched version: \(.security_vulnerability.first_patched_version.identifier // "unknown")\n" +
+              "  URL: \(.html_url)\n"')
+
+            # Write to file to avoid shell quoting issues
+            echo "$summary" > /tmp/alert_summary.txt
+            echo "has_alerts=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_alerts=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: No critical alerts found
+        if: steps.alerts.outputs.has_alerts == 'false'
+        run: echo "✅ No critical Dependabot alerts. All clear."
+
+      - name: Checkout repository
+        if: steps.alerts.outputs.has_alerts == 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Invoke Claude Code to fix vulnerabilities
+        if: steps.alerts.outputs.has_alerts == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            You are a security remediation assistant. The following critical
+            Dependabot alerts were found in this repository:
+
+            $(cat /tmp/alert_summary.txt)
+
+            For each alert:
+
+            1. Identify the dependency file that contains the vulnerable package
+               (e.g., package.json, requirements.txt, go.mod, Gemfile, etc.).
+
+            2. Determine whether bumping to the patched version is safe — check
+               for breaking changes or conflicts with other dependencies.
+
+            3. If the bump looks safe, update the dependency to the patched
+               version and create a separate commit for each fix with the message:
+               "fix: bump <package> to <version> to resolve <CVE>"
+
+            4. If you're unsure the bump is safe, or if the fix is complex,
+               do NOT make the change. Instead, leave a comment in the PR body
+               explaining what you found and why it needs manual attention.
+
+            After making all changes, open a single pull request with:
+            - Title: "fix: resolve critical Dependabot vulnerabilities"
+            - Body: a summary of each alert, what was fixed, and what needs
+              manual review (if anything).
+
+            Be conservative. A correct partial fix is better than a broken
+            complete one.
