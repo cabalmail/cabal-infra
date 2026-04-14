@@ -91,6 +91,17 @@ span.address-chip {
   border-radius: 1em;
 }
 
+span.address-chip.shared {
+  cursor: pointer;
+  border-color: #c88;
+}
+
+span.address-chip.highlighted {
+  background-color: #844;
+  border-color: #fcc;
+  color: #fff;
+}
+
 span.address-chip button.chip-remove,
 span.user-chip button.chip-remove {
   background: none;

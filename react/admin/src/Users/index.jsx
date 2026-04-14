@@ -11,6 +11,9 @@ function Users() {
   const [loading, setLoading] = useState(true);
   const [pickerFor, setPickerFor] = useState(null);
   const [pickerAddress, setPickerAddress] = useState('');
+  const [hoveredAddr, setHoveredAddr] = useState(null);
+  const [stickyAddr, setStickyAddr] = useState(null);
+  const highlighted = hoveredAddr || stickyAddr;
 
   const loadUsers = useCallback(() => {
     setLoading(true);
@@ -190,8 +193,20 @@ function Users() {
                   {userAddrs.map(a => {
                     const sharers = (a.user || '').split('/').filter(Boolean);
                     const canRemove = sharers.length > 1;
+                    const isShared = sharers.length > 1;
+                    const classes = [
+                      'address-chip',
+                      isShared ? 'shared' : '',
+                      highlighted === a.address ? 'highlighted' : ''
+                    ].filter(Boolean).join(' ');
                     return (
-                      <span key={a.address} className="address-chip">
+                      <span
+                        key={a.address}
+                        className={classes}
+                        onMouseEnter={isShared ? () => setHoveredAddr(a.address) : undefined}
+                        onMouseLeave={isShared ? () => setHoveredAddr(prev => prev === a.address ? null : prev) : undefined}
+                        onClick={isShared ? () => setStickyAddr(prev => prev === a.address ? null : a.address) : undefined}
+                      >
                         {a.address}
                         {canRemove && (
                           <button
