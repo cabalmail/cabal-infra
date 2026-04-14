@@ -132,13 +132,20 @@ span.user-chip {
   font-size: 90%;
 }
 
-button.chip-remove {
+span.user-chip button.chip-remove {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 0 0.2em;
+  padding: 0;
+  margin: 0;
+  width: 1em;
+  height: 1em;
   font-size: 110%;
   line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
 }
 
 button.add-user {
