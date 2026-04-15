@@ -123,6 +123,7 @@ body div.nav div.logo {
     cursor: pointer;
     margin: 0;
     z-index: 2;
+    border-width: 0;
   }
   .nav .hamburger span {
     display: block;
