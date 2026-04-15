@@ -101,7 +101,8 @@ body div.nav div.logo {
 
 @media (max-width: 959px) {
   body div.nav div.logo {
-    display: none;
+    right: 0;
+    left: auto;
   }
   body div.nav {
     text-align: left;
