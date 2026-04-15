@@ -19,7 +19,7 @@ jobs:
       - name: Fetch critical Dependabot alerts
         id: alerts
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.DEPENDABOT_PAT }}
         run: |
           alerts=$(gh api repos/${{ github.repository }}/dependabot/alerts \
             --jq '[.[] | select(.state == "open") | select(
