@@ -93,18 +93,20 @@ Option A is preferred because it keeps the client environment-agnostic (same IPA
 
 ## Phase 2: CI/CD
 
-Land the Apple workflow against the Phase 1 scaffold so every subsequent phase develops under green CI. GitHub Actions supports Apple builds on its `macos-14` / `macos-15` hosted runners (Apple Silicon, Xcode preinstalled). The new workflow lives alongside the existing `.github/workflows/` pipelines, mirroring their conventions (branch → environment mapping, path-based triggers, shared `.github/scripts/` helpers where applicable).
+Land the Apple workflow against the Phase 1 scaffold so every subsequent phase develops under green CI. The workflow lives alongside the existing `.github/workflows/` pipelines, mirroring their conventions (branch → environment mapping, path-based triggers, shared `.github/scripts/` helpers where applicable).
+
+All jobs run on GitHub-hosted `macos-15` runners (Apple Silicon, Xcode preinstalled). Because `cabal-infra` is a public repo, GitHub Actions usage on hosted runners is free — no minute billing, no 10× macOS multiplier. The existing pipelines use Linux runners and aren't affected.
 
 ### 1. Workflow layout
 
-**`.github/workflows/apple.yml`** — triggers on `apple/**` path changes, pushes to `main`/`stage`, and manual `workflow_dispatch`. Four jobs:
+**`.github/workflows/apple.yml`** — triggers on `apple/**` path changes, pushes to `main`/`stage`, and manual `workflow_dispatch`. Four jobs, all on `macos-15`:
 
-| Job | Runner | Purpose |
-|---|---|---|
-| `kit-test` | `macos-15` | Build and test `CabalmailKit` across iOS, macOS, visionOS destinations (matrix) |
-| `app-build` | `macos-15` | `xcodebuild archive` for the iOS/iPadOS/visionOS app and the macOS app (matrix of two) |
-| `upload-ios` | `macos-15` | Sign the iOS archive, export `.ipa`, upload to TestFlight (runs on `main` → prod group; `stage` → internal group) |
-| `upload-mac` | `macos-15` | Notarize and staple the macOS archive; upload to TestFlight and attach as a release artifact |
+| Job | Purpose |
+|---|---|
+| `kit-test` | Build and test `CabalmailKit` across iOS, macOS, visionOS destinations (matrix) |
+| `app-build` | `xcodebuild archive` for the iOS/iPadOS/visionOS app and the macOS app (matrix of two) |
+| `upload-ios` | Sign the iOS archive, export `.ipa`, upload to TestFlight (runs on `main` → prod group; `stage` → internal group; skipped on PRs) |
+| `upload-mac` | Notarize and staple the macOS archive; upload to TestFlight and attach as a release artifact (same branch scoping) |
 
 Environment mapping follows the existing repo convention: `main` → prod, `stage` → stage, other branches → development (build + test only; upload jobs skip).
 
@@ -121,7 +123,7 @@ Environment mapping follows the existing repo convention: `main` → prod, `stag
 
 ### 4. Code signing
 
-- **Certificates**: export the Apple Distribution certificate as a `.p12`, base64-encode, store as `APPLE_DISTRIBUTION_CERT_P12` and `APPLE_DISTRIBUTION_CERT_PASSWORD` secrets. At job start, import into a temporary keychain (`security create-keychain`, `security import`, `security set-key-partition-list`).
+- **Certificates**: export the Apple Distribution certificate as a `.p12`, base64-encode, store as `APPLE_DISTRIBUTION_CERT_P12` and `APPLE_DISTRIBUTION_CERT_PASSWORD` secrets. At job start, import into a temporary keychain (`security create-keychain`, `security import`, `security set-key-partition-list`) that is deleted at job end.
 - **Provisioning profiles**: fetched at CI time via the App Store Connect API (rotation-free), or base64-encoded in secrets as a fallback.
 - **App Store Connect API key**: store `APP_STORE_CONNECT_API_KEY_ID`, `APP_STORE_CONNECT_API_ISSUER_ID`, and the `.p8` key (base64) as secrets. Used for provisioning-profile fetch and TestFlight upload.
 
@@ -130,9 +132,14 @@ Environment mapping follows the existing repo convention: `main` → prod, `stag
 - **TestFlight upload**: `xcrun altool --upload-app` with the App Store Connect API key. Build number is `${{ github.run_number }}` for monotonicity; marketing version read from `Info.plist`. A post-upload step posts the TestFlight build URL to the workflow summary.
 - **Notarization (macOS)**: `xcrun notarytool submit --wait` followed by `xcrun stapler staple`.
 
-### 6. Cost note
+### 6. Escape hatches (not required for 0.6.0)
 
-macOS runners bill at a **10× multiplier** on paid plans. The workflow's path filters (`apple/**`) keep cost bounded — unrelated PRs don't trigger it. If iteration becomes painful, self-hosted Apple Silicon is a fallback, at the cost of operational burden.
+If hosted-runner wall-clock ever becomes annoying, the workflow is trivial to point at faster infrastructure:
+
+- **Self-hosted runner on an M-series Mac.** Labeled `[self-hosted, macOS, arm64]`; warm-cache incremental builds typically land in a third of hosted wall-clock. Free (GitHub doesn't charge for self-hosted on any plan), available on every plan. Using self-hosted on a public repo wants the PR-on-hosted / push-on-self-hosted split to keep the fork-PR attack surface bounded, plus ephemeral runner mode (`--ephemeral`) or Tart VMs for isolation.
+- **Managed Apple Silicon CI** (Cirrus Runners, MacStadium) — drop-in runner labels, paid, no Mac to maintain.
+
+Both are YAML-only changes to the existing workflow; no code or architectural impact.
 
 ### Phase 2 Verification
 
