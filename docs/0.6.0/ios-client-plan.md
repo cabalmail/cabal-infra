@@ -11,7 +11,7 @@ Scope of "Apple client" for 0.6.0:
 - **macOS** via Mac Catalyst *or* a native AppKit/SwiftUI target — decision in Phase 1
 - **visionOS** as a secondary target sharing the iOS codebase
 
-App Store public release is explicitly *not* a 0.6.0 goal — the roadmap places that at 1.6.0. This phase produces a working client that is continuously built and tested in CI and distributable via TestFlight internal groups.
+App Store public release is explicitly *not* a 0.6.0 goal — the roadmap places that at 1.4.0. This phase produces a working client that is continuously built and tested in CI and distributable via TestFlight internal groups.
 
 ## Approach
 
