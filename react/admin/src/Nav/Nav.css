@@ -18,7 +18,7 @@
   top: 0;
   height: 3.2em;
   overflow: hidden;
-  z-index: 100;
+  z-index: 100000;
 }
 
 .nav .hamburger {
@@ -99,7 +99,7 @@ body div.nav div.logo {
   width: auto;
 }
 
-@media (max-width: 699px) {
+@media (max-width: 959px) {
   body div.nav div.logo {
     display: none;
   }
