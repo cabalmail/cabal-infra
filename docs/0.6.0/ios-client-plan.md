@@ -15,14 +15,15 @@ App Store public release is explicitly *not* a 0.6.0 goal — the roadmap places
 
 ## Approach
 
-Seven phases: project scaffolding and shared Swift package; **CI/CD (early, so every subsequent phase runs through it)**; authentication and networking; mail reading; mail composition including on-the-fly `From`; address and folder management; platform polish and multiplatform layouts. The API surface already exists — every screen maps to one or more existing endpoints in `lambda/api/`.
+Seven phases: project scaffolding and shared Swift package; **CI/CD (early, so every subsequent phase runs through it)**; authentication and transport (IMAP + SMTP + API); mail reading; mail composition including on-the-fly `From`; address and folder management; platform polish and multiplatform layouts.
 
 ### Guiding principles
 
 - **Native idioms over parity.** Where the React app uses a custom widget, the Apple client uses the equivalent system control: `NavigationSplitView`, `List`, `.searchable`, `Menu`, share sheet, `.contextMenu`, swipe actions, etc. The goal is an app that feels at home next to Mail.app, not a translation of the web UI.
 - **SwiftUI first.** Use SwiftUI for all new views. Drop to UIKit/AppKit only where SwiftUI lacks a capability (e.g. rich-text composition on some OS versions — see Phase 5).
-- **Reuse the existing API.** No new Lambdas are required. The same endpoints that back the React app back the Apple client, including Cognito auth (USER_SRP_AUTH).
-- **No code sharing with the web app.** Swift types mirror the shapes returned by the Lambdas but are defined fresh. Sharing is limited to the *contract* (endpoint paths, JSON shapes), documented in the Swift package.
+- **Hybrid transport: speak protocols directly where they exist; use the API for everything else.** Mail operations (folders, messages, flags, moves, search, drafts, send) go straight to Dovecot over IMAPS (993) and Sendmail over submission (587). Cabalmail-specific operations (address list/create/revoke, BIMI lookup) stay on the existing API Gateway + Lambda surface. This is how every real native mail client works, and it unlocks IMAP IDLE for near-instant new-mail updates without the server-side APNs bridge the container architecture doesn't run. The existing Lambdas (`list_envelopes`, `fetch_message`, `move_messages`, `send`, etc.) continue to back the React app unchanged.
+- **No new Lambdas required.** The address + BIMI endpoints already exist. No server-side changes are needed for the Apple client.
+- **No code sharing with the web app.** Swift types are defined fresh. Sharing is limited to the *contract* (endpoint paths and JSON shapes for the API; standard RFCs for IMAP/SMTP).
 - **One Xcode project, multiple targets.** iOS/iPadOS/visionOS share a single app target; macOS is a separate target sharing the same Swift package.
 - **CI from day one.** The Apple workflow lands in Phase 2 against the empty scaffold. Every subsequent phase is developed under green CI, not alongside it.
 
@@ -40,9 +41,15 @@ apple/
     Views/
     ViewModels/
   CabalmailMac/                # macOS app target (if not using Catalyst)
-  CabalmailKit/                # Swift package: networking, models, auth, caching
+  CabalmailKit/                # Swift package: auth, IMAP, SMTP, API, models, caching
     Package.swift
     Sources/CabalmailKit/
+      Auth/                    # Cognito sign-in, JWT + IMAP credentials in Keychain
+      IMAP/                    # ImapClient actor, IDLE stream, local mirror
+      SMTP/                    # SmtpClient actor (submission on 587)
+      API/                     # ApiClient actor (addresses, BIMI)
+      Models/                  # Shared types
+      Cache/                   # Body + envelope caches
     Tests/CabalmailKitTests/
   README.md
 ```
@@ -72,8 +79,8 @@ Option A is preferred because it keeps the client environment-agnostic (same IPA
 ### 3. `CabalmailKit` — scaffolding
 
 - `Package.swift` declaring platforms (iOS 18, macOS 15, visionOS 2) and product `CabalmailKit`.
-- Folders: `Models/`, `API/`, `Auth/`, `Cache/`, `Config/`.
-- Placeholder `CabalmailClient` actor that will own the auth session and API surface.
+- Folders: `Auth/`, `IMAP/`, `SMTP/`, `API/`, `Models/`, `Cache/`, `Config/`.
+- Placeholder `CabalmailClient` actor that will own the auth session and expose the IMAP/SMTP/API surfaces to the app.
 - Unit test target with a single smoke test.
 
 ### Phase 1 Verification
@@ -136,59 +143,91 @@ macOS runners bill at a **10× multiplier** on paid plans. The workflow's path f
 
 ---
 
-## Phase 3: Authentication & Networking
+## Phase 3: Authentication & Transport
+
+Three transports, unified under a single `CabalmailClient` actor in `CabalmailKit`:
+
+1. **Cognito auth** — for both issuing the API JWT and validating IMAP/SMTP credentials (Dovecot already Cognito-authenticates via `docker/shared/entrypoint.sh`).
+2. **IMAP/SMTP** — direct to Dovecot (993) and Sendmail submission (587) using the user's Cognito username + password.
+3. **API Gateway** — for Cabalmail-specific endpoints that aren't mail protocol operations.
 
 ### 1. Cognito authentication
 
-The React app uses `amazon-cognito-identity-js` for SRP auth, JWT storage, and refresh. The Apple analog is **AWS Amplify Swift** (`Amplify` + `AWSCognitoAuthPlugin`), which wraps the same SRP flow and handles token refresh natively.
+The React app uses `amazon-cognito-identity-js`. The Apple analog is **AWS Amplify Swift** (`Amplify` + `AWSCognitoAuthPlugin`), which wraps the same SRP flow and handles token refresh.
 
 `CabalmailKit/Sources/CabalmailKit/Auth/AuthService.swift`:
-- `func signIn(username:password:) async throws -> AuthSession`
-- `func signUp(username:password:email:phone:) async throws`
-- `func confirmSignUp(username:code:) async throws`
-- `func forgotPassword(username:) async throws` / `confirmForgotPassword(username:code:newPassword:)`
-- `func signOut() async`
-- `func currentIdToken() async throws -> String` — always returns a fresh token, refreshing if needed
+- `signIn(username:password:)`, `signUp(username:password:email:phone:)`, `confirmSignUp(username:code:)`
+- `forgotPassword(username:)` / `confirmForgotPassword(username:code:newPassword:)`
+- `signOut()`
+- `currentIdToken() async throws -> String` — fresh token for API calls; refreshes if needed
+- `currentImapCredentials() async throws -> (username: String, password: String)` — reads from Keychain; returned to the IMAP/SMTP layers, never logged
 
-Amplify stores tokens in the iOS/macOS Keychain automatically. Good.
+Amplify stores the JWT in the Keychain automatically. The IMAP/SMTP password is stored in a separate Keychain item, keyed alongside the username, set at sign-in and cleared at sign-out. Both use the same value today because Dovecot Cognito-auths the user's actual password.
 
-**Alternative if Amplify's footprint is objectionable:** implement SRP directly against the Cognito IdP `InitiateAuth` / `RespondToAuthChallenge` endpoints using `URLSession`. The React app's `amazon-cognito-identity-js` is a reference implementation of the wire protocol. This is maybe a week of work and removes ~2 MB of Amplify dependencies. Decide in Phase 3; default to Amplify for velocity.
+**Amplify alternative:** if Amplify's ~2 MB footprint is objectionable, implement SRP directly against the Cognito IdP `InitiateAuth` / `RespondToAuthChallenge` endpoints using `URLSession` — about a week of work. Decide in Phase 3; default to Amplify for velocity.
 
-### 2. API client
+### 2. IMAP client
 
-`CabalmailKit/Sources/CabalmailKit/API/ApiClient.swift` — an actor that mirrors `react/admin/src/ApiClient.js` method-for-method:
+`CabalmailKit/Sources/CabalmailKit/IMAP/ImapClient.swift` — an actor wrapping an IMAP library.
+
+**Library choice (decide in Phase 3 after a spike):**
+- **MailCore2** (recommended starting point) — battle-tested (Canary, Spark, Airmail), handles UIDVALIDITY/CONDSTORE/THREADing, has Swift bindings. C++/Obj-C++ core; visionOS build status needs verification in the spike.
+- **swift-nio-imap** — Apple-maintained, pure Swift, multiplatform-clean. Lower level — connection lifecycle, command pipelining, and parts of IDLE handling are on us.
+
+Operations exposed:
+- Connection lifecycle with auto-reconnect and TLS pinning (IMAPS only, cert chain from the control domain).
+- `listFolders()` — `LIST "" "*"` + `LSUB` for subscribed set; returns hierarchical folder tree.
+- `createFolder(_:parent:)` / `deleteFolder(_:)` — `CREATE` / `DELETE`.
+- `subscribe(_:)` / `unsubscribe(_:)` — `SUBSCRIBE` / `UNSUBSCRIBE`.
+- `status(_:)` — `STATUS (UNSEEN MESSAGES RECENT UIDVALIDITY UIDNEXT)` for unread badges.
+- `envelopes(folder:range:)` — `UID FETCH n:m (ENVELOPE FLAGS BODYSTRUCTURE INTERNALDATE RFC822.SIZE)`.
+- `fetchBody(folder:uid:)` — `UID FETCH uid BODY.PEEK[]`; returns raw RFC 822 for client-side MIME parsing.
+- `fetchPart(folder:uid:partId:)` — `UID FETCH uid BODY.PEEK[partId]` for attachments and inline images.
+- `setFlags(folder:uids:flags:add:)` — `UID STORE`.
+- `move(folder:uids:destination:)` — `UID MOVE` (RFC 6851) with fallback to `COPY`+`STORE \Deleted`+`EXPUNGE` for servers without MOVE.
+- `append(folder:message:flags:)` — for saving drafts to the `Drafts` folder.
+- `search(folder:query:)` — `UID SEARCH` with server-side criteria.
+- `idle(folder:)` — async sequence yielding `EXISTS` / `EXPUNGE` / `FETCH` events; used by Phase 7 for foreground push.
+
+MIME parsing runs client-side. MailCore2 includes a parser; with swift-nio-imap we'd add a small MIME library (swift-mime, or roll our own for the subset we need).
+
+Folder delimiter handling: Dovecot uses `.` internally; surface paths with `/` to UI code, translate at the client boundary. (Mirrors the existing Lambda's `.replace("/", ".")` normalization.)
+
+### 3. SMTP client
+
+`CabalmailKit/Sources/CabalmailKit/SMTP/SmtpClient.swift` — small SMTP submission client.
+
+- Connects to port 587, STARTTLS, AUTH PLAIN with Cognito credentials.
+- Builds RFC 5322 messages with attachments (multipart/mixed, multipart/alternative for HTML+plain bodies).
+- `send(message:) async throws` — single method; compose layer builds the `Message` value.
+
+Either a lightweight third-party package (SwiftSMTP or similar) or ~300 lines hand-rolled. Prefer hand-rolled — submission is a narrow slice of SMTP and avoids another dependency.
+
+### 4. API client (Cabalmail-specific endpoints)
+
+`CabalmailKit/Sources/CabalmailKit/API/ApiClient.swift` — an actor for the endpoints that aren't mail protocol operations:
 
 | API method | HTTP | Endpoint | Notes |
 |---|---|---|---|
-| `listAddresses()` | GET | `/list` | |
-| `newAddress(...)` | POST | `/new` | |
+| `listAddresses()` | GET | `/list` | Addresses owned by the signed-in user |
+| `newAddress(...)` | POST | `/new` | Used by the on-the-fly From picker |
 | `revokeAddress(address)` | DELETE | `/revoke` | |
-| `listFolders()` | GET | `/list_folders` | |
-| `newFolder(name)` | POST | `/new_folder` | |
-| `deleteFolder(name)` | DELETE | `/delete_folder` | |
-| `subscribeFolder(name)` / `unsubscribeFolder(name)` | PUT | `/subscribe_folder`, `/unsubscribe_folder` | |
-| `listEnvelopes(folder:range:)` | GET | `/list_envelopes` | Paginated |
-| `fetchMessage(folder:id:)` | GET | `/fetch_message` | S3-cached on the server |
-| `listAttachments(folder:id:)` / `fetchAttachment(folder:id:part:)` | GET | | |
-| `fetchInlineImage(folder:id:cid:)` | GET | | |
-| `send(...)` | POST | `/send` | Multipart for attachments |
-| `moveMessages(folder:ids:target:)` | PUT | `/move_messages` | |
-| `setFlag(folder:ids:flag:set:)` | PUT | `/set_flag` | |
-| `fetchBimi(domain)` | GET | `/fetch_bimi` | |
-
-Each method is `async throws` and returns a typed `Codable` model. IMAP folder paths use `/` in the URL (matching the existing Lambdas' `.replace("/", ".")` normalization).
+| `fetchBimi(domain)` | GET | `/fetch_bimi` | Convenience DNS/BIMI lookup; could move client-side later |
 
 All requests attach `Authorization: <idToken>` via a shared `URLRequest` interceptor that calls `authService.currentIdToken()`. 401s trigger a single retry after a forced refresh; a second 401 surfaces as `AuthError.expired`.
 
-### 3. Caching
+### 5. Caching and offline state
 
-Mirror the React app's behavior where sensible, using `URLCache` for GET responses and an explicit in-memory actor for `ADDRESS_LIST` / `FOLDER_LIST` equivalents. Invalidation on mutation matches the React `localStorage.removeItem(...)` pattern in `ApiClient.js`.
+- **IMAP local mirror** — envelopes, flags, and seen UIDs persisted per folder, keyed by UIDVALIDITY. Core Data or a lightweight `Codable` store in the app support directory. On reconnect, `STATUS` + `UID FETCH since last-known UIDNEXT` catches up incrementally.
+- **Message bodies** — cached on disk per UID, evicted LRU with a configurable cap (default 200 MB).
+- **Address list** — in-memory actor with invalidation on mutation, mirroring the React app's `localStorage.removeItem(ADDRESS_LIST)` pattern.
 
 ### Phase 3 Verification
 
-1. Unit tests in `CabalmailKitTests` against a mocked `URLProtocol` cover token attachment, 401 retry, and each endpoint's request shape. These run in `kit-test` on every PR.
-2. Manual: sign in on a dev build against the dev environment; confirm a JWT lands in Keychain and `listAddresses()` returns the expected addresses.
-3. Manual: force-expire the token (wait out the expiry or clear the Keychain entry) and confirm the client recovers silently.
+1. Unit tests in `CabalmailKitTests` cover: Cognito sign-in happy path + refresh, IMAP connection/auth + envelope fetch + STORE + MOVE against a mocked IMAP server (swift-nio-imap ships one; for MailCore2 use GreenMail via a Linux Docker container in CI), SMTP submission against a mock, API client token attachment and 401 retry. These run in `kit-test` on every PR.
+2. Manual: sign in on a dev build; confirm JWT lands in Keychain, IMAP credentials land in Keychain separately, `listAddresses()` returns expected data, `envelopes(folder: "INBOX", range: 1...20)` returns expected messages.
+3. Manual: force-expire the JWT; confirm API calls recover silently. Kill the network mid-IMAP session; confirm auto-reconnect.
+4. Manual: subscribe to IDLE on INBOX; send a message to the account from another mailbox; confirm the `idle` sequence yields an `EXISTS` event within seconds.
 
 ---
 
@@ -198,30 +237,30 @@ First user-visible feature: a functional read-only mail client.
 
 ### 1. Folder sidebar
 
-`Cabalmail/Views/FolderListView.swift` — a SwiftUI `List` backed by `listFolders()`. On iPhone, folders are the root view; on iPad/macOS/visionOS, folders occupy the leading column of a `NavigationSplitView`.
+`Cabalmail/Views/FolderListView.swift` — a SwiftUI `List` backed by `ImapClient.listFolders()`. On iPhone, folders are the root view; on iPad/macOS/visionOS, folders occupy the leading column of a `NavigationSplitView`.
 
 - Inbox pinned to the top, then user folders, then system folders (Sent, Drafts, Trash, Junk) grouped.
-- Unread counts shown as trailing badges (requires a future enhancement on `list_folders` to return counts, or a lazy per-folder fetch — Phase 4 starts without counts and adds them in Phase 7).
-- Pull-to-refresh (`.refreshable`) to reload.
+- Unread counts shown as trailing badges via IMAP `STATUS (UNSEEN)` per folder — available from day one since the transport speaks IMAP directly.
+- Pull-to-refresh (`.refreshable`) triggers `LIST` + a `STATUS` sweep.
 
 ### 2. Message list
 
 `Cabalmail/Views/MessageListView.swift` — middle column of the split view, or pushed view on iPhone.
 
-- Backed by `listEnvelopes(folder:range:)` with page-based lazy loading (`onAppear` on the last row fetches the next page).
-- Each row shows sender, subject, snippet, date, read/unread dot, attachment paperclip, flag.
-- Swipe actions: archive/trash (left), flag/mark-read (right) — wiring to `moveMessages` and `setFlag`.
-- `.searchable` wired to a client-side filter initially; server-side IMAP search is a Phase 7 nice-to-have.
+- Backed by `ImapClient.envelopes(folder:range:)` with page-based lazy loading (`onAppear` on the last row fetches the next page of UIDs).
+- Each row shows sender, subject, snippet, date, read/unread dot (from `\Seen`), attachment paperclip (from BODYSTRUCTURE), flag (from `\Flagged`).
+- Swipe actions: archive/trash (left) → `ImapClient.move`; flag/mark-read (right) → `ImapClient.setFlags`.
+- `.searchable` wired to IMAP `UID SEARCH` — server-side full-text search is free and available from day one.
 - `.contextMenu` mirrors the swipe actions for Mac/iPad pointer users.
 
 ### 3. Message view
 
 `Cabalmail/Views/MessageDetailView.swift` — trailing column / pushed detail.
 
-- Headers block: From (with avatar placeholder and BIMI logo via `fetchBimi`), To/Cc, date, subject.
-- Body: HTML bodies render in a `WKWebView` wrapper (`UIViewRepresentable`) with a restrictive content policy — no remote content by default, a "Load remote content" toolbar button reveals it. Plain-text bodies render in a `Text` with `.textSelection(.enabled)`.
-- Inline images resolved via `fetchInlineImage` and rewritten into the HTML before it is loaded.
-- Attachments shown in a horizontal scroller below the body; tap opens `QLPreviewController` / `NSPreviewPanel` using a file downloaded via `fetchAttachment` to a temporary directory.
+- Headers block: From (with avatar placeholder and BIMI logo via `ApiClient.fetchBimi`), To/Cc, date, subject.
+- Body: fetch via `ImapClient.fetchBody(folder:uid:)`, parse MIME client-side. HTML bodies render in a `WKWebView` wrapper (`UIViewRepresentable`) with a restrictive content policy — no remote content by default, a "Load remote content" toolbar button reveals it. Plain-text bodies render in a `Text` with `.textSelection(.enabled)`.
+- Inline images resolved by fetching referenced parts via `ImapClient.fetchPart(folder:uid:partId:)` and rewriting `cid:` URLs to local file URLs before the HTML is loaded.
+- Attachments shown in a horizontal scroller below the body; tap downloads the part to a temp directory and opens `QLPreviewController` / `NSPreviewPanel`.
 
 ### 4. Sanitization
 
@@ -250,7 +289,7 @@ Fields:
 - **Subject** — plain text field.
 - **Body** — rich-text composition. SwiftUI `TextEditor` with `AttributedString` on iOS 18+/macOS 15+ handles bold/italic/links/lists. For OS versions where attributed `TextEditor` is insufficient, wrap `UITextView` / `NSTextView` as `UIViewRepresentable` / `NSViewRepresentable`. Toolbar provides formatting controls plus an "Attach" button using `PhotosPicker` and `fileImporter`.
 
-Sending invokes `ApiClient.send` with a multipart body. While sending, the compose window shows a progress overlay; on success it dismisses; on failure it remains open with an error banner.
+Sending builds an RFC 5322 message client-side (multipart/mixed with multipart/alternative for HTML+plain bodies) and submits it via `SmtpClient.send`. While sending, the compose window shows a progress overlay; on success it dismisses and the sent message is `APPEND`ed to the `Sent` folder via `ImapClient`; on failure it remains open with an error banner.
 
 ### 2. Reply / Reply All / Forward
 
@@ -262,7 +301,7 @@ Triggered from the message detail toolbar. The compose scene opens pre-populated
 
 ### 3. Drafts
 
-Drafts persist locally in Core Data (or a lightweight Swift `Codable` store in the app's support directory). Autosave every 5 seconds while editing. A "Drafts" row in the folder sidebar shows local drafts first, then IMAP drafts (from `Drafts` folder) — with a visible separator. Local drafts are promoted to IMAP drafts on a manual "Save to Server" action (Phase 7 could automate this).
+Drafts persist locally while actively being edited (Core Data or a lightweight `Codable` store, autosaving every 5 seconds). On compose-window close *without* send, the draft is `APPEND`ed to the IMAP `Drafts` folder with the `\Draft` flag and the local copy cleared. On reopen, the IMAP draft is fetched, edited, and re-`APPEND`ed (old copy flagged `\Deleted` and expunged). This gives cross-device draft sync for free — a laptop-started reply resumes on the phone.
 
 ### Phase 5 Verification
 
@@ -277,20 +316,20 @@ Drafts persist locally in Core Data (or a lightweight Swift `Codable` store in t
 
 Non-mail features from the React app, given their own tabs (iPhone) or sidebar sections (iPad/macOS/visionOS).
 
-### 1. Addresses tab
+### 1. Addresses tab (API-backed)
 
-`Cabalmail/Views/AddressesView.swift` — mirrors `react/admin/src/Addresses/`:
-- Section "My Addresses": every address owned by the user, with a trailing revoke button (`.swipeActions` + long-press `.contextMenu`, confirmation alert).
-- Section "Request New": form with subdomain picker, local-part field, comment, and "Create" button. Same validation rules as the web form (local-part regex, collision check via `newAddress` response).
+`Cabalmail/Views/AddressesView.swift` — mirrors `react/admin/src/Addresses/`, backed by `ApiClient`:
+- Section "My Addresses": `ApiClient.listAddresses()`, with a trailing revoke button (`.swipeActions` + long-press `.contextMenu`, confirmation alert) that calls `ApiClient.revokeAddress`.
+- Section "Request New": form with subdomain picker, local-part field, comment, and "Create" button calling `ApiClient.newAddress`. Same validation rules as the web form.
 - Pull-to-refresh.
 
-### 2. Folders tab
+### 2. Folders tab (IMAP-backed)
 
-`Cabalmail/Views/FoldersAdminView.swift` — mirrors `react/admin/src/Folders/`:
-- List of subscribed folders with unsubscribe action.
-- List of unsubscribed (but present on server) folders with subscribe action.
-- "New Folder" button presenting a sheet with a name field and a parent-folder picker.
-- Delete action on empty user folders with confirmation.
+`Cabalmail/Views/FoldersAdminView.swift` — mirrors `react/admin/src/Folders/`, backed by `ImapClient`:
+- Full folder list from `LIST "" "*"`; subscribed set from `LSUB`.
+- Subscribed folders get an unsubscribe action (`UNSUBSCRIBE`); unsubscribed folders get a subscribe action (`SUBSCRIBE`).
+- "New Folder" button presenting a sheet with a name field and a parent-folder picker → `CREATE parent.name`.
+- Delete action on empty user folders with confirmation → `DELETE`.
 
 ### 3. Settings / Profile
 
@@ -341,16 +380,18 @@ Cross-cutting work to make each platform feel native, plus robustness improvemen
 - Hover effects on list rows.
 - Window sizing respectful of `WindowGroup` defaults (folders+messages in one window; compose and detail open as side volumes / additional windows).
 
-### 5. Unread counts and background refresh
+### 5. IDLE-based foreground push
 
-- Extend `list_folders` (or add a sibling `list_folder_counts` endpoint) to return unread counts. (This is the one API change required for the Apple client — track as a separate ticket.)
-- `BGAppRefreshTask` on iOS / `NSBackgroundActivityScheduler` on macOS fetches envelopes for subscribed folders so unread badges are fresh at launch. Full push via APNs is deferred past 0.6.0 — it requires a server-side watcher process the current container architecture does not run.
+- While the app is foregrounded, `ImapClient.idle(folder: "INBOX")` keeps an IMAP IDLE connection open; `EXISTS` events trigger an immediate envelope fetch and update the message list and unread badge. No server-side infrastructure required.
+- Briefly after backgrounding, iOS keeps the socket alive long enough for IDLE to fire a local notification (via `UNUserNotificationCenter`) for newly arriving mail. Not true push — the connection dies within a minute or two — but it covers the common case of quickly checking another app and returning.
+- True APNs-delivered push (app not running) is still deferred past 0.6.0; it requires a server-side IDLE watcher that translates IMAP events into APNs pokes. The container architecture doesn't run such a process today. Tracked separately.
+- `BGAppRefreshTask` on iOS / `NSBackgroundActivityScheduler` on macOS periodically opens a short-lived IMAP session and catches up via `STATUS` + `UID FETCH since UIDNEXT`, so unread badges are fresh at launch even when IDLE hasn't been running.
 
 ### 6. Offline reading
 
-- Recently viewed messages (last 50 per folder) persisted to disk via the existing S3-cached raw source (`fetch_message` already serves from S3 after first read; locally we cache the parsed response).
-- Starred / flagged messages pinned in cache indefinitely.
-- Offline banner shown when reachability drops; composed messages queue and send on reconnect.
+- The IMAP local mirror from Phase 3 (envelopes + flags per UIDVALIDITY) is already the offline index.
+- Fetched message bodies and parts cache to disk with an LRU eviction cap (default 200 MB); flagged messages pinned indefinitely.
+- Offline banner shown when reachability drops; composed messages queue and send (or `APPEND` to Drafts) on reconnect.
 
 ### 7. Error handling and telemetry
 
@@ -382,5 +423,6 @@ Cross-cutting work to make each platform feel native, plus robustness improvemen
 ## Open Questions
 
 1. **Mac Catalyst vs native macOS target** — decide in Phase 1 after a spike.
-2. **Amplify Swift vs hand-rolled Cognito SRP** — decide in Phase 3 based on Amplify's binary size on an empty project.
-3. **Unread count endpoint** — add to `list_folders` or new endpoint? Light preference for a new endpoint to keep `list_folders` cheap.
+2. **IMAP library: MailCore2 vs swift-nio-imap** — decide in Phase 3 after a spike. Key criteria: visionOS build cleanliness, IDLE ergonomics, MIME parser availability.
+3. **Amplify Swift vs hand-rolled Cognito SRP** — decide in Phase 3 based on Amplify's binary size on an empty project.
+4. **Sent-message APPEND** — some IMAP servers auto-append submitted mail to `Sent` when SMTP submission is configured to do so. Confirm Sendmail+Dovecot's behavior; if it auto-appends, skip the client-side `APPEND` to avoid duplicates.
