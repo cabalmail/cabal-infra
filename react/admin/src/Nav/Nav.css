@@ -20,6 +20,10 @@
   overflow: hidden;
 }
 
+.nav .hamburger {
+  display: none;
+}
+
 .nav .item {
   display: inline-block;
   padding: 1em;
@@ -100,8 +104,76 @@ body div.nav div.logo {
   }
   body div.nav {
     text-align: left;
+    background: #000;
   }
-  .nav .item {
-    padding: 0.8em 0.6em;
+  body div.nav.menu-open {
+    height: auto;
+    overflow: visible;
+  }
+  .nav .hamburger {
+    display: block;
+    position: absolute;
+    top: 0.5em;
+    left: 0.5em;
+    width: 2.2em;
+    height: 2.2em;
+    padding: 0.4em;
+    background: none;
+    border: 1px solid;
+    cursor: pointer;
+    margin: 0;
+    z-index: 2;
+  }
+  .nav .hamburger span {
+    display: block;
+    height: 2px;
+    width: 100%;
+    background: currentColor;
+    margin: 0.25em 0;
+    border-radius: 1px;
+  }
+  .nav #logout {
+    display: none;
+  }
+  .nav .nav-items {
+    display: none;
+    position: absolute;
+    top: 3.2em;
+    left: 0;
+    right: 0;
+    background: #000;
+    border-top: 1px solid #444;
+    z-index: 1;
+  }
+  .nav.menu-open .nav-items {
+    display: block;
+  }
+  .nav.menu-open .item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 0.9em 1em;
+    border-bottom: 1px solid #222;
+  }
+  .nav.menu-open #logout {
+    display: block;
+    position: static;
+    width: 100%;
+    padding: 0.9em 1em;
+    border-width: 1px 0 0 0;
+    border-top: 2px solid #444;
+  }
+  /* Preserve hide rules for logged-out/not-admin in the dropdown */
+  .nav.logged-out.menu-open #addresses,
+  .nav.logged-out.menu-open #logout,
+  .nav.logged-in.menu-open #signup,
+  .nav.logged-in.menu-open #login,
+  .nav.logged-out.menu-open #email,
+  .nav.logged-out.menu-open #folders,
+  .nav.logged-out.menu-open #users,
+  .nav.logged-out.menu-open #dmarc,
+  .nav:not(.is-admin).menu-open #users,
+  .nav:not(.is-admin).menu-open #dmarc {
+    display: none;
   }
 }
