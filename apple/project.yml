@@ -22,7 +22,10 @@ packages:
 settings:
   base:
     SWIFT_VERSION: "5.10"
-    DEVELOPMENT_TEAM: ""            # populated by CI from secrets in Phase 2
+    # DEVELOPMENT_TEAM is intentionally unset here. Set it via:
+    #   - Xcode UI (Signing & Capabilities) for local development, or
+    #   - `xcodebuild ... DEVELOPMENT_TEAM=$APPLE_TEAM_ID` on CI (from secrets).
+    # Unsigned build-only verification passes `CODE_SIGNING_ALLOWED=NO`.
     CODE_SIGN_STYLE: Automatic
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     SWIFT_STRICT_CONCURRENCY: complete

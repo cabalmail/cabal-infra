@@ -35,10 +35,13 @@ generated project files.
 From `apple/` after `xcodegen generate`:
 
 ```sh
-# 1. App builds for iOS
+# 1. App builds for iOS (unsigned; signing is only needed for archive/upload)
 xcodebuild -workspace Cabalmail.xcworkspace \
            -scheme Cabalmail \
            -destination 'generic/platform=iOS' \
+           CODE_SIGNING_ALLOWED=NO \
+           CODE_SIGNING_REQUIRED=NO \
+           CODE_SIGN_IDENTITY="" \
            build
 
 # 2. Kit package tests pass
@@ -47,9 +50,21 @@ swift test --package-path CabalmailKit
 # 3. Launch in simulator and see "Hello, Cabalmail"
 xcodebuild -workspace Cabalmail.xcworkspace \
            -scheme Cabalmail \
-           -destination 'platform=iOS Simulator,name=iPhone 16' \
+           -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
            build
 ```
+
+### Signing
+
+`DEVELOPMENT_TEAM` is deliberately unset in `project.yml`. Three contexts:
+
+| Context | How the team ID is supplied |
+|---|---|
+| Local Xcode | Set once in **Signing & Capabilities**; stored in `xcuserdata/` (gitignored) |
+| Headless `build` | Not required — pass `CODE_SIGNING_ALLOWED=NO` as above |
+| Headless `archive` (CI upload jobs) | `xcodebuild ... DEVELOPMENT_TEAM=$APPLE_TEAM_ID archive`, team ID sourced from a GitHub secret |
+
+Phase 2 CI wires this up. For now, local Xcode users only need step 1.
 
 ## Phase 1 Decisions
 
