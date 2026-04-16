@@ -1,0 +1,103 @@
+# XcodeGen project spec for the Cabalmail Apple client.
+#
+# Run `xcodegen generate` in this directory to produce Cabalmail.xcodeproj.
+# The generated project is not committed; CI regenerates it before every build.
+#
+# Phase 1 decision: native macOS target (not Mac Catalyst). See apple/README.md.
+
+name: Cabalmail
+options:
+  bundleIdPrefix: com.cabalmail
+  deploymentTarget:
+    iOS: "18.0"
+    macOS: "15.0"
+    visionOS: "2.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+
+packages:
+  CabalmailKit:
+    path: CabalmailKit
+
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    DEVELOPMENT_TEAM: ""            # populated by CI from secrets in Phase 2
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    SWIFT_STRICT_CONCURRENCY: complete
+
+targets:
+  Cabalmail:
+    type: application
+    supportedDestinations: [iOS, iPadOS, visionOS]
+    sources:
+      - path: Cabalmail
+    dependencies:
+      - package: CabalmailKit
+    info:
+      path: Cabalmail/Info.plist
+      properties:
+        CFBundleDisplayName: Cabalmail
+        UILaunchScreen:
+          UIColorName: AccentColor
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.cabalmail.Cabalmail
+        TARGETED_DEVICE_FAMILY: "1,2,7"   # iPhone, iPad, visionOS
+        MARKETING_VERSION: "0.6.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+
+  CabalmailMac:
+    type: application
+    platform: macOS
+    sources:
+      - path: CabalmailMac
+    dependencies:
+      - package: CabalmailKit
+    info:
+      path: CabalmailMac/Info.plist
+      properties:
+        CFBundleDisplayName: Cabalmail
+        LSApplicationCategoryType: public.app-category.productivity
+        NSHumanReadableCopyright: ""
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.cabalmail.CabalmailMac
+        MARKETING_VERSION: "0.6.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_ENTITLEMENTS: CabalmailMac/CabalmailMac.entitlements
+
+schemes:
+  Cabalmail:
+    build:
+      targets:
+        Cabalmail: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+  CabalmailMac:
+    build:
+      targets:
+        CabalmailMac: all
+    run:
+      config: Debug
+    archive:
+      config: Release
