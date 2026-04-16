@@ -4,9 +4,9 @@ import PackageDescription
 let package = Package(
     name: "CabalmailKit",
     platforms: [
-        .iOS(.v18),
-        .macOS(.v15),
-        .visionOS(.v2),
+        .iOS("18.0"),
+        .macOS("15.0"),
+        .visionOS("2.0"),
     ],
     products: [
         .library(name: "CabalmailKit", targets: ["CabalmailKit"]),
