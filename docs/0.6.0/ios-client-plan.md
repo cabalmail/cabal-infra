@@ -256,7 +256,7 @@ First user-visible feature: a functional read-only mail client.
 
 - Backed by `ImapClient.envelopes(folder:range:)` with page-based lazy loading (`onAppear` on the last row fetches the next page of UIDs).
 - Each row shows sender, subject, snippet, date, read/unread dot (from `\Seen`), attachment paperclip (from BODYSTRUCTURE), flag (from `\Flagged`).
-- Swipe actions: archive/trash (left) → `ImapClient.move`; flag/mark-read (right) → `ImapClient.setFlags`.
+- Swipe actions: dispose (left) → `ImapClient.move` to Archive or Trash per the "Dispose action" preference (default: Archive); flag/mark-read (right) → `ImapClient.setFlags`.
 - `.searchable` wired to IMAP `UID SEARCH` — server-side full-text search is free and available from day one.
 - `.contextMenu` mirrors the swipe actions for Mac/iPad pointer users.
 
@@ -265,7 +265,8 @@ First user-visible feature: a functional read-only mail client.
 `Cabalmail/Views/MessageDetailView.swift` — trailing column / pushed detail.
 
 - Headers block: From (with avatar placeholder and BIMI logo via `ApiClient.fetchBimi`), To/Cc, date, subject.
-- Body: fetch via `ImapClient.fetchBody(folder:uid:)`, parse MIME client-side. HTML bodies render in a `WKWebView` wrapper (`UIViewRepresentable`) with a restrictive content policy — no remote content by default, a "Load remote content" toolbar button reveals it. Plain-text bodies render in a `Text` with `.textSelection(.enabled)`.
+- Body: fetch via `ImapClient.fetchBody(folder:uid:)` using `BODY.PEEK[]` (does **not** set `\Seen`). Messages are never auto-marked-as-read — the user explicitly marks read via swipe, toolbar button, or context menu, which fires `ImapClient.setFlags`. This matches the React app's behavior. An opt-in "mark read on open" setting is available (see Phase 6 Settings) but defaults to off.
+- MIME parsed client-side. HTML bodies render in a `WKWebView` wrapper (`UIViewRepresentable`) with a restrictive content policy — no remote content by default (per the "Load remote content" preference, default: off), a "Load remote content" toolbar button reveals it. Plain-text bodies render in a `Text` with `.textSelection(.enabled)`.
 - Inline images resolved by fetching referenced parts via `ImapClient.fetchPart(folder:uid:partId:)` and rewriting `cid:` URLs to local file URLs before the HTML is loaded.
 - Attachments shown in a horizontal scroller below the body; tap downloads the part to a temp directory and opens `QLPreviewController` / `NSPreviewPanel`.
 
@@ -291,7 +292,7 @@ This is the feature that differentiates Cabalmail from a generic IMAP client.
 `Cabalmail/Views/ComposeView.swift` — presented as a sheet on iPhone, a new window on iPadOS/macOS (using `openWindow` with a value-based `WindowGroup`), and a volumetric window on visionOS.
 
 Fields:
-- **From** — a `Menu` / `Picker` seeded with `listAddresses()`. The list ends with a "**Create new address…**" item that presents an inline sheet (subdomain picker + local-part field + comment) and calls `newAddress`; on success, the new address is selected and the picker closes.
+- **From** — a `Menu` / `Picker` seeded with `listAddresses()`, **no preselection by default**. The Send button is disabled until the user selects or creates an address. If the user has set a default From address in Settings, that address is preselected instead. The picker ends with a "**Create new address…**" item that presents an inline sheet (subdomain picker + local-part field + comment) and calls `newAddress`; on success, the new address is selected and the picker closes.
 - **To**, **Cc**, **Bcc** — token fields with contact autocomplete (sourced from the system contacts store with explicit permission and/or a learned frequency list stored in `CabalmailKit/Cache/`).
 - **Subject** — plain text field.
 - **Body** — rich-text composition. SwiftUI `TextEditor` with `AttributedString` on iOS 18+/macOS 15+ handles bold/italic/links/lists. For OS versions where attributed `TextEditor` is insufficient, wrap `UITextView` / `NSTextView` as `UIViewRepresentable` / `NSViewRepresentable`. Toolbar provides formatting controls plus an "Attach" button using `PhotosPicker` and `fileImporter`.
@@ -340,19 +341,49 @@ Non-mail features from the React app, given their own tabs (iPhone) or sidebar s
 
 ### 3. Settings / Profile
 
-A new area with no React analog:
+A new area with no React analog. On iPhone and iPad this is a dedicated Settings tab; on macOS it lives in the `Settings` scene (⌘,). All preferences stored locally via `@AppStorage` / `UserDefaults`, synced across the user's devices via `NSUbiquitousKeyValueStore` (iCloud key-value store) so preferences follow the user.
+
+**Account:**
 - Signed-in account, sign-out button.
-- Default From address (used when compose is opened outside a reply context).
-- Signature (stored locally, appended at compose time).
-- "Load remote content in messages" default (off / ask / on).
-- Appearance (system / light / dark), matching the Light/Dark CSS split in `react/admin/src/App*.css`.
-- About / version / link to GitHub issues.
+
+**Reading:**
+
+| Preference | Options | Default | Notes |
+|---|---|---|---|
+| Mark as read | Manual / On open / After delay (2s) | **Manual** | Manual = never set `\Seen` automatically; user marks read via swipe, toolbar, or context menu. Matches the React app. |
+| Load remote content | Off / Ask / Always | **Off** | Controls whether `WKWebView` fetches remote images, fonts, tracking pixels. |
+
+**Composing:**
+
+| Preference | Options | Default | Notes |
+|---|---|---|---|
+| Default From address | None / (list of user's addresses) | **None** | None = From picker starts empty; Send is blocked until the user picks or creates an address. When set, that address preselects in new-compose (replies still default to the original's addressee per 0.3.0 semantics). |
+| Signature | Text field | *(empty)* | Plain text, appended at compose time. Per-address signatures are a future enhancement. |
+
+**Actions:**
+
+| Preference | Options | Default | Notes |
+|---|---|---|---|
+| Dispose action | Archive / Trash | **Archive** | Controls the left-swipe and toolbar dispose button throughout the app. |
+
+**Appearance:**
+
+| Preference | Options | Default | Notes |
+|---|---|---|---|
+| Theme | System / Light / Dark | **System** | Maps to `.preferredColorScheme`. |
+
+**About:**
+- Version, build number, link to GitHub issues.
 
 ### Phase 6 Verification
 
 1. Manual: create, then revoke an address; confirm it disappears from the picker in Compose.
 2. Manual: create a nested folder, subscribe/unsubscribe, delete; confirm changes reflect in the sidebar.
 3. Manual: change signature, compose a new message, confirm signature appended.
+4. Manual: open a message; confirm it stays unread (default mark-as-read: manual). Change setting to "On open"; open a message; confirm `\Seen` is set.
+5. Manual: set Default From to an address; open a new compose; confirm that address is preselected. Clear the setting; open a new compose; confirm the From picker is empty and Send is disabled.
+6. Manual: with Dispose set to Archive, swipe-left a message; confirm it lands in Archive. Switch to Trash; repeat; confirm it lands in Trash.
+7. Manual: toggle theme to Dark; confirm the app switches immediately. Toggle back to System.
 
 ---
 
