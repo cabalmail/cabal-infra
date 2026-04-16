@@ -9,6 +9,10 @@ function formatDate(epoch) {
   return d.toLocaleDateString();
 }
 
+function sortByDate(reports) {
+  return [...reports].sort((a, b) => Number(b.date_end || 0) - Number(a.date_end || 0));
+}
+
 function ResultBadge({ value }) {
   if (!value) return <span className="result">-</span>;
   const cls = value === 'pass' ? 'pass' : 'fail';
@@ -29,9 +33,9 @@ function Dmarc() {
         const data = response.data || response;
         const newReports = data.Reports || [];
         if (token) {
-          setReports(prev => [...prev, ...newReports]);
+          setReports(prev => sortByDate([...prev, ...newReports]));
         } else {
-          setReports(newReports);
+          setReports(sortByDate(newReports));
         }
         setNextToken(data.NextToken || null);
         setLoading(false);
