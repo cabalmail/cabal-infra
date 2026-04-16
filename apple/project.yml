@@ -6,6 +6,15 @@
 # Phase 1 decision: native macOS target (not Mac Catalyst). See apple/README.md.
 
 name: Cabalmail
+
+# Optional local overrides. Create apple/Local.xcconfig (gitignored) with:
+#   DEVELOPMENT_TEAM = ABC123XYZ
+# to supply your Apple Developer team ID without committing it. CI passes
+# DEVELOPMENT_TEAM on the xcodebuild command line instead.
+configFiles:
+  Debug: Local.xcconfig
+  Release: Local.xcconfig
+
 options:
   bundleIdPrefix: com.cabalmail
   deploymentTarget:
