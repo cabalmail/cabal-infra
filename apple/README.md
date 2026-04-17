@@ -92,6 +92,29 @@ xcodegen generate
 
 After that, plain `xcodebuild ... build` and `xcodebuild ... archive` both sign cleanly.
 
+## GitHub secrets for CI (Phase 2)
+
+Phase 2 adds `.github/workflows/apple.yml` with four jobs. The `kit-test` and
+`app-build` jobs run unsigned (`CODE_SIGNING_ALLOWED=NO`) and require **no**
+secrets — PRs from any branch get green CI out of the box.
+
+The `upload-ios` and `upload-mac` jobs sign, notarize, and push to TestFlight.
+They are gated on the secrets below; set all six to enable them. The workflow
+skips the upload jobs cleanly if they are absent.
+
+| Secret | What it is | Where to get it |
+|---|---|---|
+| `APPLE_TEAM_ID` | 10-character Apple Developer team ID | [developer.apple.com](https://developer.apple.com/account) → Membership details |
+| `APPLE_DISTRIBUTION_CERT_P12` | base64 of your Apple Distribution `.p12` | Export from Keychain Access; `base64 -i cert.p12 \| pbcopy` |
+| `APPLE_DISTRIBUTION_CERT_PASSWORD` | Password set when exporting the `.p12` | — |
+| `APP_STORE_CONNECT_API_KEY_ID` | ~10-character key ID (e.g. `ABC123DEF4`) | App Store Connect → Users and Access → Integrations → Keys |
+| `APP_STORE_CONNECT_API_ISSUER_ID` | UUID shown next to "Issuer ID" on the same page | — |
+| `APP_STORE_CONNECT_API_KEY_P8` | base64 of the `.p8` key file | Downloadable exactly once when the key is created — save it |
+
+The App Store Connect API key triple (`KEY_ID` + `ISSUER_ID` + `P8`) is used for
+provisioning-profile fetch, TestFlight upload, and macOS `notarytool` submission
+— no separate notarization credentials are needed.
+
 ## Phase 1 Decisions
 
 ### 1. macOS: native target (not Mac Catalyst)
