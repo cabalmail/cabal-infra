@@ -1,6 +1,9 @@
 ---
 name: Build and Deploy Apple Client
 
+permissions:
+  contents: read
+
 on:
   workflow_dispatch:
   push:
