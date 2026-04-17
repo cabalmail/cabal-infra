@@ -197,13 +197,26 @@ jobs:
 
       - name: Verify secrets are present
         id: check
+        env:
+          S1: ${{ secrets.APPLE_TEAM_ID }}
+          S2: ${{ secrets.APPLE_DISTRIBUTION_CERT_P12 }}
+          S3: ${{ secrets.APPLE_DISTRIBUTION_CERT_PASSWORD }}
+          S4: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          S5: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          S6: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
         run: |
-          if [ -z "${{ secrets.APPLE_DISTRIBUTION_CERT_P12 }}" ] \
-             || [ -z "${{ secrets.APPLE_TEAM_ID }}" ] \
-             || [ -z "${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}" ]; then
-            echo "::warning::Apple signing secrets not configured; skipping upload."
+          MISSING=()
+          [ -z "$S1" ] && MISSING+=("APPLE_TEAM_ID")
+          [ -z "$S2" ] && MISSING+=("APPLE_DISTRIBUTION_CERT_P12")
+          [ -z "$S3" ] && MISSING+=("APPLE_DISTRIBUTION_CERT_PASSWORD")
+          [ -z "$S4" ] && MISSING+=("APP_STORE_CONNECT_API_KEY_ID")
+          [ -z "$S5" ] && MISSING+=("APP_STORE_CONNECT_API_ISSUER_ID")
+          [ -z "$S6" ] && MISSING+=("APP_STORE_CONNECT_API_KEY_P8")
+          if [ ${#MISSING[@]} -gt 0 ]; then
+            echo "::warning::Apple signing secrets missing: ${MISSING[*]}. Skipping upload."
             echo "enabled=false" >> "$GITHUB_OUTPUT"
           else
+            echo "All six signing secrets present."
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           fi
 
@@ -342,13 +355,26 @@ jobs:
 
       - name: Verify secrets are present
         id: check
+        env:
+          S1: ${{ secrets.APPLE_TEAM_ID }}
+          S2: ${{ secrets.APPLE_DISTRIBUTION_CERT_P12 }}
+          S3: ${{ secrets.APPLE_DISTRIBUTION_CERT_PASSWORD }}
+          S4: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          S5: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          S6: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
         run: |
-          if [ -z "${{ secrets.APPLE_DISTRIBUTION_CERT_P12 }}" ] \
-             || [ -z "${{ secrets.APPLE_TEAM_ID }}" ] \
-             || [ -z "${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}" ]; then
-            echo "::warning::Apple signing secrets not configured; skipping upload."
+          MISSING=()
+          [ -z "$S1" ] && MISSING+=("APPLE_TEAM_ID")
+          [ -z "$S2" ] && MISSING+=("APPLE_DISTRIBUTION_CERT_P12")
+          [ -z "$S3" ] && MISSING+=("APPLE_DISTRIBUTION_CERT_PASSWORD")
+          [ -z "$S4" ] && MISSING+=("APP_STORE_CONNECT_API_KEY_ID")
+          [ -z "$S5" ] && MISSING+=("APP_STORE_CONNECT_API_ISSUER_ID")
+          [ -z "$S6" ] && MISSING+=("APP_STORE_CONNECT_API_KEY_P8")
+          if [ ${#MISSING[@]} -gt 0 ]; then
+            echo "::warning::Apple signing secrets missing: ${MISSING[*]}. Skipping upload."
             echo "enabled=false" >> "$GITHUB_OUTPUT"
           else
+            echo "All six signing secrets present."
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           fi
 
