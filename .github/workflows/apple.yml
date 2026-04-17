@@ -29,9 +29,13 @@ jobs:
           - platform: macOS
             destination: 'platform=macOS'
           - platform: iOS
-            destination: 'platform=iOS Simulator,OS=latest,name=iPhone 17 Pro'
+            # No name= pin so xcodebuild picks whatever iPhone simulator the
+            # runner image happens to ship. Pinning a device name is fragile:
+            # new model names (iPhone 17 Pro) require newer Xcode than CI has,
+            # and runner images rotate what's installed.
+            destination: 'platform=iOS Simulator'
           - platform: visionOS
-            destination: 'platform=visionOS Simulator,OS=latest,name=Apple Vision Pro'
+            destination: 'platform=visionOS Simulator'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -52,6 +56,14 @@ jobs:
         if: matrix.platform == 'macOS'
         working-directory: apple
         run: swiftlint lint --strict --quiet
+
+      - name: Ensure ${{ matrix.platform }} simulator runtime is installed
+        if: matrix.platform != 'macOS'
+        run: |
+          # Runner images sometimes ship without the simulator runtime for a
+          # given platform. This is a no-op if the runtime is already present.
+          xcodebuild -downloadPlatform ${{ matrix.platform }} || true
+          xcrun simctl list runtimes
 
       - name: Cache Swift packages
         uses: actions/cache@v4
