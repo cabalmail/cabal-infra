@@ -104,16 +104,71 @@ skips the upload jobs cleanly if they are absent.
 
 | Secret | What it is | Where to get it |
 |---|---|---|
-| `APPLE_TEAM_ID` | 10-character Apple Developer team ID | [developer.apple.com](https://developer.apple.com/account) → Membership details |
-| `APPLE_DISTRIBUTION_CERT_P12` | base64 of your Apple Distribution `.p12` | Export from Keychain Access; `base64 -i cert.p12 \| pbcopy` |
-| `APPLE_DISTRIBUTION_CERT_PASSWORD` | Password set when exporting the `.p12` | — |
+| `APPLE_TEAM_ID` | 10-character Apple Developer team ID | [developer.apple.com](https://developer.apple.com/account) → Membership details. If you belong to multiple teams, make sure you're viewing the right one. |
+| `APPLE_DISTRIBUTION_CERT_P12` | base64 of your Apple Distribution `.p12` | See [Exporting the distribution certificate](#exporting-the-distribution-certificate) below |
+| `APPLE_DISTRIBUTION_CERT_PASSWORD` | Password you set when exporting the `.p12` | GitHub does not accept empty secrets, so the export password must be non-empty |
 | `APP_STORE_CONNECT_API_KEY_ID` | ~10-character key ID (e.g. `ABC123DEF4`) | App Store Connect → Users and Access → Integrations → Keys |
 | `APP_STORE_CONNECT_API_ISSUER_ID` | UUID shown next to "Issuer ID" on the same page | — |
-| `APP_STORE_CONNECT_API_KEY_P8` | base64 of the `.p8` key file | Downloadable exactly once when the key is created — save it |
+| `APP_STORE_CONNECT_API_KEY_P8` | base64 of the `.p8` key file | See [Creating the App Store Connect API key](#creating-the-app-store-connect-api-key) below |
 
 The App Store Connect API key triple (`KEY_ID` + `ISSUER_ID` + `P8`) is used for
 provisioning-profile fetch, TestFlight upload, and macOS `notarytool` submission
 — no separate notarization credentials are needed.
+
+### Exporting the distribution certificate
+
+You need an **Apple Distribution** certificate that belongs to the same team as
+`APPLE_TEAM_ID`. A development certificate or a certificate from a different
+team will not work for TestFlight.
+
+1. Open **Keychain Access** (⌘+Space → type `Keychain Access`, or Applications
+   → Utilities → Keychain Access).
+2. In the sidebar, select the **login** keychain and the **My Certificates**
+   category.
+3. Look for an entry named `Apple Distribution: Your Name (TEAMID)` where
+   `TEAMID` matches `APPLE_TEAM_ID`.
+   - If you only see `Apple Development: …` or `iPhone Developer: …`, or the
+     TEAMID is wrong, you need to create a new one. In Xcode: **Xcode → Settings
+     → Accounts**, select your Apple ID and the correct team, click **Manage
+     Certificates…**, then **+** → **Apple Distribution**. The new cert lands
+     in the login keychain automatically.
+4. Right-click the cert → **Export "Apple Distribution…"**, save as `.p12`.
+5. When prompted, enter a non-empty password you'll remember (or
+   `openssl rand -base64 24 | pbcopy` and keep it on the clipboard).
+6. Authenticate with your macOS login password when Keychain asks.
+7. Encode and copy:
+   ```sh
+   base64 -i ~/Desktop/cabalmail-dist.p12 | pbcopy
+   ```
+   Paste into `APPLE_DISTRIBUTION_CERT_P12`. Put the export password into
+   `APPLE_DISTRIBUTION_CERT_PASSWORD`.
+8. Delete the `.p12` when done — it contains your private key:
+   ```sh
+   rm ~/Desktop/cabalmail-dist.p12
+   ```
+
+### Creating the App Store Connect API key
+
+1. App Store Connect → **Users and Access** → **Integrations** tab → **Keys**.
+2. Click the **+** to generate a new key.
+3. Name it something descriptive (e.g. `Cabalmail CI`). Role: **App Manager**.
+   Do not use Admin (grants billing/team-membership access the CI doesn't need)
+   or Developer (can't upload to TestFlight).
+4. Copy the **Issuer ID** (top of the page) → `APP_STORE_CONNECT_API_ISSUER_ID`.
+5. Copy the **Key ID** (shown in the row for the new key) →
+   `APP_STORE_CONNECT_API_KEY_ID`.
+6. Click **Download API Key**. **This is your only chance** — if you close the
+   page without downloading, you have to revoke the key and create a new one.
+7. Encode and copy:
+   ```sh
+   base64 -i AuthKey_XXXXXXXXXX.p8 | pbcopy
+   ```
+   Paste into `APP_STORE_CONNECT_API_KEY_P8`.
+8. Delete the `.p8` — it grants broad write access to your App Store Connect
+   account:
+   ```sh
+   rm AuthKey_XXXXXXXXXX.p8
+   ```
 
 ## Phase 1 Decisions
 
