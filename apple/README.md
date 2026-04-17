@@ -151,9 +151,11 @@ team will not work for TestFlight.
 
 1. App Store Connect → **Users and Access** → **Integrations** tab → **Keys**.
 2. Click the **+** to generate a new key.
-3. Name it something descriptive (e.g. `Cabalmail CI`). Role: **App Manager**.
-   Do not use Admin (grants billing/team-membership access the CI doesn't need)
-   or Developer (can't upload to TestFlight).
+3. Name it something descriptive (e.g. `Cabalmail CI`). Role: **Admin**.
+   App Manager is *almost* enough — it covers TestFlight uploads — but it
+   cannot create or fetch provisioning profiles via the API, which
+   `xcodebuild -allowProvisioningUpdates` needs during archive/export.
+   Admin is the narrowest built-in role that grants both.
 4. Copy the **Issuer ID** (top of the page) → `APP_STORE_CONNECT_API_ISSUER_ID`.
 5. Copy the **Key ID** (shown in the row for the new key) →
    `APP_STORE_CONNECT_API_KEY_ID`.
