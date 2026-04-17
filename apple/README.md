@@ -115,6 +115,18 @@ The App Store Connect API key triple (`KEY_ID` + `ISSUER_ID` + `P8`) is used for
 provisioning-profile fetch, TestFlight upload, and macOS `notarytool` submission
 — no separate notarization credentials are needed.
 
+**Optional — for notarized direct-distribution .app artifact:**
+
+| Secret | What it is |
+|---|---|
+| `DEVELOPER_ID_CERT_P12` | base64 of your **Developer ID Application** `.p12` (different cert type from Apple Distribution) |
+| `DEVELOPER_ID_CERT_PASSWORD` | Password you set when exporting the `.p12` |
+
+These are only needed if you want `upload-mac` to produce a notarized
+`.app.zip` workflow artifact for distribution outside the App Store /
+TestFlight. With them missing, `upload-mac` still completes successfully
+after the TestFlight upload — the developer-id steps just skip.
+
 ### Exporting the distribution certificate
 
 You need an **Apple Distribution** certificate that belongs to the same team as
