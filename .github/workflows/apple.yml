@@ -11,6 +11,9 @@ on:
       - 'apple/**'
       - '.github/workflows/apple.yml'
 
+permissions:
+  contents: read
+
 env:
   # Pinned for reproducibility. Bump in lockstep with local Xcode and with
   # the deployment targets in apple/project.yml and apple/CabalmailKit/Package.swift.
