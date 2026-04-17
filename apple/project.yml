@@ -7,13 +7,13 @@
 
 name: Cabalmail
 
-# Optional local overrides. Create apple/Local.xcconfig (gitignored) with:
-#   DEVELOPMENT_TEAM = ABC123XYZ
-# to supply your Apple Developer team ID without committing it. CI passes
-# DEVELOPMENT_TEAM on the xcodebuild command line instead.
+# Shared build settings live in Base.xcconfig, which optionally includes
+# Local.xcconfig (gitignored) for per-developer overrides such as
+# DEVELOPMENT_TEAM. CI passes DEVELOPMENT_TEAM on the xcodebuild command
+# line instead and does not need Local.xcconfig to exist.
 configFiles:
-  Debug: Local.xcconfig
-  Release: Local.xcconfig
+  Debug: Base.xcconfig
+  Release: Base.xcconfig
 
 options:
   bundleIdPrefix: com.cabalmail
