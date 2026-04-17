@@ -192,12 +192,28 @@ and caches it in `UserDefaults`. Same IPA works against dev/stage/prod by
 pointing at a different control domain — only the bootstrap URL differs. The
 schema is modelled by `CabalmailKit.Configuration`.
 
+## CI workflow
+
+`.github/workflows/apple.yml` lands with Phase 2. It has four jobs:
+
+| Job | Runs when | What it does |
+|---|---|---|
+| `kit-test` | Any push touching `apple/**` or the workflow file | SwiftLint + `xcodebuild test` on CabalmailKit across macOS / iOS / visionOS destinations |
+| `app-build` | Same | Unsigned `xcodebuild build` for `Cabalmail` (iOS) and `CabalmailMac` (macOS) |
+| `upload-ios` | Pushes to `main` or `stage`, with the six signing secrets configured | Signed archive → TestFlight upload |
+| `upload-mac` | Same | Signed App Store `.pkg` → TestFlight upload, plus a developer-id export → `notarytool submit --wait` → `stapler staple` → uploaded as a workflow artifact |
+
+Upload jobs gracefully no-op (with a workflow warning) when secrets are
+missing. Build and test jobs never require secrets.
+
+Pinned Xcode version lives in the `XCODE_VERSION` env var at the top of the
+workflow; bump it in lockstep with the deployment targets in `project.yml`
+and `CabalmailKit/Package.swift`.
+
 ## What's deliberately not here yet
 
 - Real views (Phase 4)
 - Auth service and API client implementations (Phase 3)
-- CI workflow (Phase 2)
-- Code signing / provisioning profiles (Phase 2)
 - App icons (placeholder asset catalog slots exist)
 
 ## Open questions tracked for later phases
