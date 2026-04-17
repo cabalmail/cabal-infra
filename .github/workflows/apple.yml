@@ -12,9 +12,16 @@ on:
       - '.github/workflows/apple.yml'
 
 env:
-  # Pinned for reproducibility. Bump in lockstep with local Xcode and with
-  # the deployment targets in apple/project.yml and apple/CabalmailKit/Package.swift.
-  XCODE_VERSION: '16.1'
+  # Track the runner image's newest stable Xcode. Pinning a specific version
+  # (e.g. '16.1') is more reproducible but fragile: runner images rotate the
+  # SDK/runtimes independently and a too-old Xcode won't know about the
+  # simulator runtimes that ARE installed, causing test destinations to
+  # resolve as "ineligible" ("iOS 18.1 is not installed").
+  #
+  # If reproducibility becomes important, pin to a specific version here AND
+  # ensure it matches a Xcode actually preinstalled on the macos-15 runner
+  # image.
+  XCODE_VERSION: 'latest-stable'
   WORKSPACE: apple/Cabalmail.xcworkspace
 
 jobs:
