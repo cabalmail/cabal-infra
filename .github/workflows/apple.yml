@@ -25,17 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - platform: macOS
-            destination: 'platform=macOS'
-          - platform: iOS
-            # No name= pin so xcodebuild picks whatever iPhone simulator the
-            # runner image happens to ship. Pinning a device name is fragile:
-            # new model names (iPhone 17 Pro) require newer Xcode than CI has,
-            # and runner images rotate what's installed.
-            destination: 'platform=iOS Simulator'
-          - platform: visionOS
-            destination: 'platform=visionOS Simulator'
+        platform: [macOS, iOS, visionOS]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -57,13 +47,52 @@ jobs:
         working-directory: apple
         run: swiftlint lint --strict --quiet
 
-      - name: Ensure ${{ matrix.platform }} simulator runtime is installed
-        if: matrix.platform != 'macOS'
+      - name: Resolve test destination for ${{ matrix.platform }}
+        id: dest
+        # Runner images ship simulator runtimes without any devices created
+        # on them, so `xcodebuild test` with a bare `platform=iOS Simulator`
+        # specifier fails ("Unable to find a destination..."). We pick the
+        # newest installed runtime for the matrix platform, create a fresh
+        # device against it, and pass that device's UDID as the destination.
         run: |
-          # Runner images sometimes ship without the simulator runtime for a
-          # given platform. This is a no-op if the runtime is already present.
-          xcodebuild -downloadPlatform ${{ matrix.platform }} || true
-          xcrun simctl list runtimes
+          set -euo pipefail
+          if [ "${{ matrix.platform }}" = "macOS" ]; then
+            echo "destination=platform=macOS" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          FAMILY='${{ matrix.platform }}'
+          case "$FAMILY" in
+            iOS)       DEVICE_PREFIX="iPhone" ;;
+            visionOS)  DEVICE_PREFIX="Apple Vision" ;;
+          esac
+          RUNTIME_ID=$(xcrun simctl list runtimes --json | \
+            jq -r --arg fam "$FAMILY" '
+              .runtimes
+              | map(select(.isAvailable and (.name | startswith($fam + " "))))
+              | sort_by(.version | split(".") | map(tonumber))
+              | reverse | .[0].identifier // empty
+            ')
+          if [ -z "$RUNTIME_ID" ]; then
+            echo "::error::No installed $FAMILY runtime."
+            xcrun simctl list runtimes
+            exit 1
+          fi
+          DEVICE_TYPE_ID=$(xcrun simctl list devicetypes --json | \
+            jq -r --arg pfx "$DEVICE_PREFIX" '
+              .devicetypes
+              | map(select(.name | startswith($pfx)))
+              | .[0].identifier // empty
+            ')
+          if [ -z "$DEVICE_TYPE_ID" ]; then
+            echo "::error::No device type matching '$DEVICE_PREFIX'."
+            xcrun simctl list devicetypes
+            exit 1
+          fi
+          UDID=$(xcrun simctl create "ci-$FAMILY" "$DEVICE_TYPE_ID" "$RUNTIME_ID")
+          echo "Created $FAMILY simulator $UDID"
+          echo "  runtime:    $RUNTIME_ID"
+          echo "  devicetype: $DEVICE_TYPE_ID"
+          echo "destination=platform=$FAMILY Simulator,id=$UDID" >> "$GITHUB_OUTPUT"
 
       - name: Cache Swift packages
         uses: actions/cache@v4
@@ -82,7 +111,7 @@ jobs:
           set -o pipefail
           xcodebuild test \
             -scheme CabalmailKit \
-            -destination '${{ matrix.destination }}' \
+            -destination '${{ steps.dest.outputs.destination }}' \
             -skipPackagePluginValidation \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
