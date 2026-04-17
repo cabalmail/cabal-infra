@@ -1,0 +1,6 @@
+// Copy this file to Local.xcconfig (gitignored) and fill in your values.
+//
+// DEVELOPMENT_TEAM is your 10-character Apple Developer team ID, visible at
+// https://developer.apple.com/account under Membership details.
+
+DEVELOPMENT_TEAM = YOUR_TEAM_ID_HERE
