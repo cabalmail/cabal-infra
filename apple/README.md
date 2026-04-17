@@ -26,9 +26,29 @@ xcodegen generate
 open Cabalmail.xcworkspace
 ```
 
-Phase 2 CI (`.github/workflows/apple.yml`, landing next) runs `xcodegen generate`
-before every `xcodebuild` invocation, so contributors never need to commit
-generated project files.
+CI (`.github/workflows/apple.yml`) runs `xcodegen generate` before every
+`xcodebuild` invocation, so contributors never need to commit generated
+project files.
+
+### Prerequisites for local builds
+
+- **Xcode.app installed** (not just the Command Line Tools bundle). If you
+  see `xcodebuild: error: tool 'xcodebuild' requires Xcode, but active
+  developer directory '/Library/Developer/CommandLineTools' is a command
+  line tools instance`, point `xcode-select` at your Xcode installation:
+  ```sh
+  sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+  ```
+- **Apple Developer Program membership.** Signed archives and TestFlight
+  both require an enrolled team.
+- **Repo not under an iCloud-synced directory.** iCloud writes
+  `com.apple.FinderInfo` extended attributes mid-build, which
+  `codesign` rejects with `resource fork, Finder information, or similar
+  detritus not allowed`. Keep the checkout outside `~/Desktop` and
+  `~/Documents` when those are synced, or clone to a path like `~/Code`.
+- **Default DerivedData location.** Do not pass `-derivedDataPath` into
+  the repo tree (for the same xattr reason). Omit the flag to use
+  `~/Library/Developer/Xcode/DerivedData` instead.
 
 ## Verification (Phase 1)
 
@@ -49,23 +69,27 @@ swift test --package-path CabalmailKit
 
 # 3. Launch in the simulator and see "Hello, Cabalmail".
 #    Easiest path: open Cabalmail.xcworkspace in Xcode, pick the Cabalmail
-#    scheme and an iPhone 17 Pro destination, and press ⌘R.
+#    scheme and any iPhone simulator your Xcode ships, and press ⌘R.
 #
 #    Headless equivalent (uses the default DerivedData location — do NOT
 #    pass -derivedDataPath into the repo tree if the repo lives under an
 #    iCloud-synced directory, or codesign will reject the .app with
-#    "resource fork, Finder information, or similar detritus not allowed"):
+#    "resource fork, Finder information, or similar detritus not allowed").
+#    Pick any iPhone simulator name that exists in your `xcrun simctl list
+#    devices` output:
+SIM='iPhone 17 Pro'   # adjust to whatever your Xcode version ships
+
 xcodebuild -workspace Cabalmail.xcworkspace \
            -scheme Cabalmail \
-           -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+           -destination "platform=iOS Simulator,name=$SIM" \
            build
 
 APP_PATH=$(xcodebuild -workspace Cabalmail.xcworkspace \
                       -scheme Cabalmail \
-                      -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+                      -destination "platform=iOS Simulator,name=$SIM" \
                       -showBuildSettings build 2>/dev/null \
            | awk '/ BUILT_PRODUCTS_DIR = /{print $3}')/Cabalmail.app
-xcrun simctl boot "iPhone 17 Pro" 2>/dev/null || true
+xcrun simctl boot "$SIM" 2>/dev/null || true
 open -a Simulator
 xcrun simctl install booted "$APP_PATH"
 xcrun simctl launch booted com.cabalmail.Cabalmail
@@ -92,15 +116,89 @@ xcodegen generate
 
 After that, plain `xcodebuild ... build` and `xcodebuild ... archive` both sign cleanly.
 
-## GitHub secrets for CI (Phase 2)
+## Apple Developer account setup
 
-Phase 2 adds `.github/workflows/apple.yml` with four jobs. The `kit-test` and
-`app-build` jobs run unsigned (`CODE_SIGNING_ALLOWED=NO`) and require **no**
-secrets — PRs from any branch get green CI out of the box.
+This is the one-time manual setup required to enable CI uploads to
+TestFlight. Run through it in order once per team. Individual substeps
+are expanded in the sections further down.
 
-The `upload-ios` and `upload-mac` jobs sign, notarize, and push to TestFlight.
-They are gated on the secrets below; set all six to enable them. The workflow
-skips the upload jobs cleanly if they are absent.
+1. **Enroll the team** at
+   [developer.apple.com](https://developer.apple.com/programs/) if it
+   isn't already. Confirm your 10-character **Team ID** at
+   [Membership details](https://developer.apple.com/account); this
+   becomes the `APPLE_TEAM_ID` secret.
+2. **Create the Apple Distribution certificate.** Xcode → Settings →
+   Accounts → select your Apple ID and team → Manage Certificates… →
+   **+ → Apple Distribution**. See [Exporting the distribution
+   certificate](#exporting-the-distribution-certificate) for the export
+   flow that produces `APPLE_DISTRIBUTION_CERT_P12` /
+   `APPLE_DISTRIBUTION_CERT_PASSWORD`.
+3. **(Optional) Register both bundle identifiers** in the Developer portal
+   at [developer.apple.com](https://developer.apple.com/account) →
+   Certificates, Identifiers & Profiles → **Identifiers** → **+**:
+   - App ID `com.cabalmail.Cabalmail` (description: `Cabalmail`)
+   - App ID `com.cabalmail.CabalmailMac` (description: `Cabalmail Mac`)
+
+   `xcodebuild -allowProvisioningUpdates` together with the Admin API
+   key from the next step will auto-register these on first archive,
+   so skipping this is fine. Registering manually is useful if you want
+   to pre-enable specific Capabilities (Push, Associated Domains, etc.);
+   otherwise leave that for later phases.
+4. **Create an App Store Connect API key** with the **Admin** role. See
+   [Creating the App Store Connect API key](#creating-the-app-store-connect-api-key)
+   — produces the `APP_STORE_CONNECT_API_KEY_ID` /
+   `APP_STORE_CONNECT_API_ISSUER_ID` / `APP_STORE_CONNECT_API_KEY_P8`
+   triple.
+5. **Create two App Store Connect app records** at
+   [appstoreconnect.apple.com](https://appstoreconnect.apple.com) → Apps
+   → **+** → New App:
+
+   | Record | Platforms to tick | Bundle ID | Name |
+   |---|---|---|---|
+   | iOS / iPadOS / visionOS app | iOS ✓, visionOS ✓ | `com.cabalmail.Cabalmail` | Cabalmail |
+   | macOS app | macOS ✓ | `com.cabalmail.CabalmailMac` | Cabalmail Mac |
+
+   SKU can be anything (e.g. `cabalmail-ios`, `cabalmail-mac`); it's
+   never shown publicly. Primary language English (U.S.) or whichever
+   fits.
+
+   Without these records, CI uploads land in App Store Connect but
+   aren't attached to anything visible and you cannot distribute the
+   build.
+6. **Populate the GitHub secrets** listed in the next section.
+7. **Populate TestFlight when you want to install a build.** CI uploads
+   succeed without any TestFlight setup — builds land in each app
+   record's Builds list after ~5–30 minutes of Apple-side processing.
+   Before anyone (including you) can install one, you need a testing
+   group to attach it to:
+   - App Store Connect → your app → **TestFlight** tab → **Internal
+     Testing** → **+** to create a group (e.g. `Stage`, `Prod`).
+   - Add your Apple ID (with an App Store Connect role) as a tester.
+   - Attach the build manually the first time, or enable automatic
+     distribution on the group for future uploads.
+   - Install the **TestFlight** app on the target device, sign in, and
+     accept the invite.
+
+   Internal groups hold up to 100 team members and do not require Apple
+   Beta Review. External groups (invite-by-email, up to 10,000 testers)
+   are out of scope for 0.6.0 but would be the next step before an App
+   Store launch.
+
+## GitHub secrets for CI
+
+`.github/workflows/apple.yml` has four jobs. The `kit-test` and `app-build`
+jobs run unsigned (`CODE_SIGNING_ALLOWED=NO`) and require **no** secrets —
+PRs from any branch get green CI out of the box.
+
+The `upload-ios` and `upload-mac` jobs sign and push to TestFlight. They are
+gated on the secrets below; set all six to enable them. The workflow skips
+the upload jobs cleanly if any are absent, naming the specific missing
+secret(s) in the workflow summary.
+
+Secrets may be set at the repository level (affecting all environments) or
+per-environment under Settings → Environments → `stage` / `prod`.
+Environment-scoped secrets override repo-level ones, so you can use a
+different key set for prod than for stage if desired.
 
 | Secret | What it is | Where to get it |
 |---|---|---|
@@ -122,10 +220,9 @@ provisioning-profile fetch, TestFlight upload, and macOS `notarytool` submission
 | `DEVELOPER_ID_CERT_P12` | base64 of your **Developer ID Application** `.p12` (different cert type from Apple Distribution) |
 | `DEVELOPER_ID_CERT_PASSWORD` | Password you set when exporting the `.p12` |
 
-These are only needed if you want `upload-mac` to produce a notarized
-`.app.zip` workflow artifact for distribution outside the App Store /
-TestFlight. With them missing, `upload-mac` still completes successfully
-after the TestFlight upload — the developer-id steps just skip.
+See [Optional: Developer ID certificate for notarized
+artifacts](#optional-developer-id-certificate-for-notarized-artifacts) for
+creation/export steps.
 
 ### Exporting the distribution certificate
 
@@ -173,9 +270,11 @@ team will not work for TestFlight.
    `APP_STORE_CONNECT_API_KEY_ID`.
 6. Click **Download API Key**. **This is your only chance** — if you close the
    page without downloading, you have to revoke the key and create a new one.
-7. Encode and copy:
+7. Encode and copy. Use `tr -d '\n'` to strip the line wrapping macOS's
+   `base64` adds at 76 chars; GitHub secrets can mangle whitespace in
+   multiline values and CI's decode step is stricter as a result:
    ```sh
-   base64 -i AuthKey_XXXXXXXXXX.p8 | pbcopy
+   base64 -i AuthKey_XXXXXXXXXX.p8 | tr -d '\n' | pbcopy
    ```
    Paste into `APP_STORE_CONNECT_API_KEY_P8`.
 8. Delete the `.p8` — it grants broad write access to your App Store Connect
@@ -183,6 +282,23 @@ team will not work for TestFlight.
    ```sh
    rm AuthKey_XXXXXXXXXX.p8
    ```
+
+### Optional: Developer ID certificate for notarized artifacts
+
+Only needed if you want `upload-mac` to produce a notarized `.app.zip`
+workflow artifact for distribution outside the App Store / TestFlight.
+Without these secrets, `upload-mac` completes successfully after the
+TestFlight upload and skips the notarization steps.
+
+1. Xcode → Settings → Accounts → select your Apple ID and team →
+   Manage Certificates… → **+ → Developer ID Application**. (This is a
+   different cert type from Apple Distribution — you need both.)
+2. Export the new certificate from Keychain Access the same way as the
+   distribution cert (see [Exporting the distribution
+   certificate](#exporting-the-distribution-certificate)), set a
+   non-empty password, encode with `base64 -i cert.p12 | tr -d '\n' |
+   pbcopy`.
+3. Set `DEVELOPER_ID_CERT_P12` and `DEVELOPER_ID_CERT_PASSWORD`.
 
 ## Phase 1 Decisions
 
