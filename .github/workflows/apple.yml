@@ -1,0 +1,506 @@
+---
+name: Build and Deploy Apple Client
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'apple/**'
+      - '.github/workflows/apple.yml'
+
+env:
+  # Track the runner image's newest stable Xcode. Pinning a specific version
+  # (e.g. '16.1') is more reproducible but fragile: runner images rotate the
+  # SDK/runtimes independently and a too-old Xcode won't know about the
+  # simulator runtimes that ARE installed, causing test destinations to
+  # resolve as "ineligible" ("iOS 18.1 is not installed").
+  #
+  # If reproducibility becomes important, pin to a specific version here AND
+  # ensure it matches a Xcode actually preinstalled on the macos-15 runner
+  # image.
+  XCODE_VERSION: 'latest-stable'
+  WORKSPACE: apple/Cabalmail.xcworkspace
+
+jobs:
+  # -----------------------------------------------------------------------
+  # CabalmailKit tests across platforms. Matrix of three destinations so
+  # conditional code paths on any platform break CI loudly.
+  # -----------------------------------------------------------------------
+  kit-test:
+    name: Test CabalmailKit (${{ matrix.platform }})
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macOS, iOS, visionOS]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: ${{ env.XCODE_VERSION }}
+
+      - name: Install XcodeGen + SwiftLint + xcbeautify
+        run: brew install xcodegen swiftlint xcbeautify
+
+      - name: Generate Xcode project
+        working-directory: apple
+        run: xcodegen generate
+
+      - name: SwiftLint
+        if: matrix.platform == 'macOS'
+        working-directory: apple
+        run: swiftlint lint --strict --quiet
+
+      - name: Resolve test destination for ${{ matrix.platform }}
+        id: dest
+        # Runner images ship simulator runtimes without any devices created
+        # on them, so `xcodebuild test` with a bare `platform=iOS Simulator`
+        # specifier fails ("Unable to find a destination..."). We pick the
+        # newest installed runtime for the matrix platform, create a fresh
+        # device against it, and pass that device's UDID as the destination.
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.platform }}" = "macOS" ]; then
+            echo "destination=platform=macOS" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          FAMILY='${{ matrix.platform }}'
+          case "$FAMILY" in
+            iOS)       DEVICE_PREFIX="iPhone" ;;
+            visionOS)  DEVICE_PREFIX="Apple Vision" ;;
+          esac
+          RUNTIME_ID=$(xcrun simctl list runtimes --json | \
+            jq -r --arg fam "$FAMILY" '
+              .runtimes
+              | map(select(.isAvailable and (.name | startswith($fam + " "))))
+              | sort_by(.version | split(".") | map(tonumber))
+              | reverse | .[0].identifier // empty
+            ')
+          if [ -z "$RUNTIME_ID" ]; then
+            echo "::error::No installed $FAMILY runtime."
+            xcrun simctl list runtimes
+            exit 1
+          fi
+          DEVICE_TYPE_ID=$(xcrun simctl list devicetypes --json | \
+            jq -r --arg pfx "$DEVICE_PREFIX" '
+              .devicetypes
+              | map(select(.name | startswith($pfx)))
+              | .[0].identifier // empty
+            ')
+          if [ -z "$DEVICE_TYPE_ID" ]; then
+            echo "::error::No device type matching '$DEVICE_PREFIX'."
+            xcrun simctl list devicetypes
+            exit 1
+          fi
+          UDID=$(xcrun simctl create "ci-$FAMILY" "$DEVICE_TYPE_ID" "$RUNTIME_ID")
+          echo "Created $FAMILY simulator $UDID"
+          echo "  runtime:    $RUNTIME_ID"
+          echo "  devicetype: $DEVICE_TYPE_ID"
+          echo "destination=platform=$FAMILY Simulator,id=$UDID" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Swift packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Developer/Xcode/DerivedData/**/SourcePackages
+            ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ runner.os }}-${{ matrix.platform }}-${{ hashFiles('apple/CabalmailKit/Package.swift', 'apple/CabalmailKit/Package.resolved') }}
+          restore-keys: |
+            spm-${{ runner.os }}-${{ matrix.platform }}-
+            spm-${{ runner.os }}-
+
+      - name: Test CabalmailKit on ${{ matrix.platform }}
+        working-directory: apple/CabalmailKit
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -scheme CabalmailKit \
+            -destination '${{ steps.dest.outputs.destination }}' \
+            -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            | xcbeautify --renderer github-actions
+
+  # -----------------------------------------------------------------------
+  # Build the app targets for the two product platforms. Unsigned — this
+  # job only verifies the code compiles and links; signing happens in the
+  # upload jobs below.
+  # -----------------------------------------------------------------------
+  app-build:
+    name: Build ${{ matrix.scheme }}
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - scheme: Cabalmail
+            destination: 'generic/platform=iOS'
+          - scheme: CabalmailMac
+            destination: 'generic/platform=macOS'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: ${{ env.XCODE_VERSION }}
+
+      - name: Install XcodeGen + xcbeautify
+        run: brew install xcodegen xcbeautify
+
+      - name: Generate Xcode project
+        working-directory: apple
+        run: xcodegen generate
+
+      - name: Cache DerivedData
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Developer/Xcode/DerivedData
+          key: dd-${{ runner.os }}-${{ matrix.scheme }}-${{ hashFiles('apple/project.yml', 'apple/CabalmailKit/Package.swift', 'apple/CabalmailKit/Package.resolved') }}
+          restore-keys: |
+            dd-${{ runner.os }}-${{ matrix.scheme }}-
+
+      - name: Build ${{ matrix.scheme }} (unsigned)
+        working-directory: apple
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -workspace Cabalmail.xcworkspace \
+            -scheme ${{ matrix.scheme }} \
+            -destination '${{ matrix.destination }}' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            | xcbeautify --renderer github-actions
+
+  # -----------------------------------------------------------------------
+  # Signed archive + TestFlight upload for iOS/iPadOS/visionOS. Only runs
+  # on main or stage and only if the required secrets are configured.
+  # -----------------------------------------------------------------------
+  upload-ios:
+    name: Upload iOS to TestFlight
+    needs: [kit-test, app-build]
+    if: ${{ github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'stage') }}
+    runs-on: macos-15
+    environment: ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify secrets are present
+        id: check
+        run: |
+          if [ -z "${{ secrets.APPLE_DISTRIBUTION_CERT_P12 }}" ] \
+             || [ -z "${{ secrets.APPLE_TEAM_ID }}" ] \
+             || [ -z "${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}" ]; then
+            echo "::warning::Apple signing secrets not configured; skipping upload."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Select Xcode
+        if: steps.check.outputs.enabled == 'true'
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: ${{ env.XCODE_VERSION }}
+
+      - name: Install XcodeGen + xcbeautify
+        if: steps.check.outputs.enabled == 'true'
+        run: brew install xcodegen xcbeautify
+
+      - name: Generate Xcode project
+        if: steps.check.outputs.enabled == 'true'
+        working-directory: apple
+        run: xcodegen generate
+
+      - name: Import signing certificate
+        if: steps.check.outputs.enabled == 'true'
+        env:
+          CERT_P12: ${{ secrets.APPLE_DISTRIBUTION_CERT_P12 }}
+          CERT_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_CERT_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/apple-ci.keychain-db"
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 24)
+          echo "$CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$RUNNER_TEMP/cert.p12" \
+            -P "$CERT_PASSWORD" \
+            -A -t cert -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" > /dev/null
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | xargs)
+          rm "$RUNNER_TEMP/cert.p12"
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
+      - name: Install App Store Connect API key
+        if: steps.check.outputs.enabled == 'true'
+        env:
+          ASC_KEY_P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/private_keys"
+          echo "$ASC_KEY_P8" | base64 --decode \
+            > "$RUNNER_TEMP/private_keys/AuthKey_${ASC_KEY_ID}.p8"
+          echo "ASC_KEY_PATH=$RUNNER_TEMP/private_keys/AuthKey_${ASC_KEY_ID}.p8" >> "$GITHUB_ENV"
+
+      - name: Archive Cabalmail
+        if: steps.check.outputs.enabled == 'true'
+        working-directory: apple
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+        run: |
+          set -o pipefail
+          xcodebuild archive \
+            -workspace Cabalmail.xcworkspace \
+            -scheme Cabalmail \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/Cabalmail.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$ASC_KEY_PATH" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            MARKETING_VERSION=0.6.0 \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            | xcbeautify --renderer github-actions
+
+      - name: Export IPA
+        if: steps.check.outputs.enabled == 'true'
+        working-directory: apple
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+        run: |
+          set -o pipefail
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/Cabalmail.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export-ios" \
+            -exportOptionsPlist ci/ExportOptions-iOS.plist \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$ASC_KEY_PATH" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            | xcbeautify --renderer github-actions
+
+      - name: Upload to TestFlight
+        if: steps.check.outputs.enabled == 'true'
+        env:
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+        run: |
+          IPA=$(ls "$RUNNER_TEMP/export-ios"/*.ipa | head -n1)
+          echo "Uploading $IPA"
+          xcrun altool --upload-app \
+            -f "$IPA" \
+            --type ios \
+            --apiKey "$ASC_KEY_ID" \
+            --apiIssuer "$ASC_ISSUER_ID"
+          {
+            echo "### iOS TestFlight upload"
+            echo ""
+            echo "- Build number: \`${{ github.run_number }}\`"
+            echo "- Environment: \`${{ github.ref_name == 'main' && 'prod' || 'stage' }}\`"
+            echo "- Track: App Store Connect → Cabalmail → TestFlight"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Clean up keychain and API key
+        if: always() && steps.check.outputs.enabled == 'true'
+        run: |
+          security delete-keychain "$KEYCHAIN_PATH" || true
+          rm -rf "$RUNNER_TEMP/private_keys"
+
+  # -----------------------------------------------------------------------
+  # Signed archive + TestFlight upload + developer-id notarization for
+  # macOS. Notarized .app is also attached as a workflow artifact.
+  # -----------------------------------------------------------------------
+  upload-mac:
+    name: Upload macOS to TestFlight
+    permissions:
+      contents: read
+      actions: write
+    needs: [kit-test, app-build]
+    if: ${{ github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'stage') }}
+    runs-on: macos-15
+    environment: ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify secrets are present
+        id: check
+        run: |
+          if [ -z "${{ secrets.APPLE_DISTRIBUTION_CERT_P12 }}" ] \
+             || [ -z "${{ secrets.APPLE_TEAM_ID }}" ] \
+             || [ -z "${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}" ]; then
+            echo "::warning::Apple signing secrets not configured; skipping upload."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Select Xcode
+        if: steps.check.outputs.enabled == 'true'
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: ${{ env.XCODE_VERSION }}
+
+      - name: Install XcodeGen + xcbeautify
+        if: steps.check.outputs.enabled == 'true'
+        run: brew install xcodegen xcbeautify
+
+      - name: Generate Xcode project
+        if: steps.check.outputs.enabled == 'true'
+        working-directory: apple
+        run: xcodegen generate
+
+      - name: Import signing certificate
+        if: steps.check.outputs.enabled == 'true'
+        env:
+          CERT_P12: ${{ secrets.APPLE_DISTRIBUTION_CERT_P12 }}
+          CERT_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_CERT_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/apple-ci.keychain-db"
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 24)
+          echo "$CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$RUNNER_TEMP/cert.p12" \
+            -P "$CERT_PASSWORD" \
+            -A -t cert -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" > /dev/null
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | xargs)
+          rm "$RUNNER_TEMP/cert.p12"
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
+      - name: Install App Store Connect API key
+        if: steps.check.outputs.enabled == 'true'
+        env:
+          ASC_KEY_P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/private_keys"
+          echo "$ASC_KEY_P8" | base64 --decode \
+            > "$RUNNER_TEMP/private_keys/AuthKey_${ASC_KEY_ID}.p8"
+          echo "ASC_KEY_PATH=$RUNNER_TEMP/private_keys/AuthKey_${ASC_KEY_ID}.p8" >> "$GITHUB_ENV"
+
+      - name: Archive CabalmailMac
+        if: steps.check.outputs.enabled == 'true'
+        working-directory: apple
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+        run: |
+          set -o pipefail
+          xcodebuild archive \
+            -workspace Cabalmail.xcworkspace \
+            -scheme CabalmailMac \
+            -destination 'generic/platform=macOS' \
+            -archivePath "$RUNNER_TEMP/CabalmailMac.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$ASC_KEY_PATH" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            MARKETING_VERSION=0.6.0 \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            | xcbeautify --renderer github-actions
+
+      - name: Export app-store .pkg
+        if: steps.check.outputs.enabled == 'true'
+        working-directory: apple
+        env:
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+        run: |
+          set -o pipefail
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/CabalmailMac.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export-mac-appstore" \
+            -exportOptionsPlist ci/ExportOptions-macOS.plist \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$ASC_KEY_PATH" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            | xcbeautify --renderer github-actions
+
+      - name: Upload macOS to TestFlight
+        if: steps.check.outputs.enabled == 'true'
+        env:
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+        run: |
+          PKG=$(ls "$RUNNER_TEMP/export-mac-appstore"/*.pkg | head -n1)
+          echo "Uploading $PKG"
+          xcrun altool --upload-app \
+            -f "$PKG" \
+            --type osx \
+            --apiKey "$ASC_KEY_ID" \
+            --apiIssuer "$ASC_ISSUER_ID"
+
+      - name: Export developer-id build for notarization
+        if: steps.check.outputs.enabled == 'true'
+        working-directory: apple
+        env:
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+        run: |
+          set -o pipefail
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/CabalmailMac.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export-mac-devid" \
+            -exportOptionsPlist ci/ExportOptions-macOS-DeveloperID.plist \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$ASC_KEY_PATH" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            | xcbeautify --renderer github-actions
+
+      - name: Notarize and staple
+        if: steps.check.outputs.enabled == 'true'
+        env:
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+        run: |
+          APP=$(ls -d "$RUNNER_TEMP/export-mac-devid"/*.app | head -n1)
+          ZIP="$RUNNER_TEMP/CabalmailMac.zip"
+          ditto -c -k --keepParent "$APP" "$ZIP"
+          xcrun notarytool submit "$ZIP" \
+            --key "$ASC_KEY_PATH" \
+            --key-id "$ASC_KEY_ID" \
+            --issuer "$ASC_ISSUER_ID" \
+            --wait
+          xcrun stapler staple "$APP"
+          NOTARIZED_ZIP="$RUNNER_TEMP/CabalmailMac-notarized.zip"
+          ditto -c -k --keepParent "$APP" "$NOTARIZED_ZIP"
+          echo "NOTARIZED_ZIP=$NOTARIZED_ZIP" >> "$GITHUB_ENV"
+
+      - name: Upload notarized .app as workflow artifact
+        if: steps.check.outputs.enabled == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: CabalmailMac-notarized-${{ github.run_number }}
+          path: ${{ env.NOTARIZED_ZIP }}
+          retention-days: 30
+
+      - name: Clean up keychain and API key
+        if: always() && steps.check.outputs.enabled == 'true'
+        run: |
+          security delete-keychain "$KEYCHAIN_PATH" || true
+          rm -rf "$RUNNER_TEMP/private_keys"
