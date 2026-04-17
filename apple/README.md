@@ -51,16 +51,23 @@ swift test --package-path CabalmailKit
 #    Easiest path: open Cabalmail.xcworkspace in Xcode, pick the Cabalmail
 #    scheme and an iPhone 17 Pro destination, and press ⌘R.
 #
-#    Headless equivalent:
+#    Headless equivalent (uses the default DerivedData location — do NOT
+#    pass -derivedDataPath into the repo tree if the repo lives under an
+#    iCloud-synced directory, or codesign will reject the .app with
+#    "resource fork, Finder information, or similar detritus not allowed"):
 xcodebuild -workspace Cabalmail.xcworkspace \
            -scheme Cabalmail \
            -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
-           -derivedDataPath build \
            build
+
+APP_PATH=$(xcodebuild -workspace Cabalmail.xcworkspace \
+                      -scheme Cabalmail \
+                      -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+                      -showBuildSettings build 2>/dev/null \
+           | awk '/ BUILT_PRODUCTS_DIR = /{print $3}')/Cabalmail.app
 xcrun simctl boot "iPhone 17 Pro" 2>/dev/null || true
 open -a Simulator
-xcrun simctl install booted \
-  build/Build/Products/Debug-iphonesimulator/Cabalmail.app
+xcrun simctl install booted "$APP_PATH"
 xcrun simctl launch booted com.cabalmail.Cabalmail
 ```
 
