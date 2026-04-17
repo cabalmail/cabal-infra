@@ -133,15 +133,17 @@ are expanded in the sections further down.
    certificate](#exporting-the-distribution-certificate) for the export
    flow that produces `APPLE_DISTRIBUTION_CERT_P12` /
    `APPLE_DISTRIBUTION_CERT_PASSWORD`.
-3. **Register both bundle identifiers** in the Developer portal so that
-   provisioning profiles can be created against them. In
-   [developer.apple.com](https://developer.apple.com/account) →
+3. **(Optional) Register both bundle identifiers** in the Developer portal
+   at [developer.apple.com](https://developer.apple.com/account) →
    Certificates, Identifiers & Profiles → **Identifiers** → **+**:
    - App ID `com.cabalmail.Cabalmail` (description: `Cabalmail`)
    - App ID `com.cabalmail.CabalmailMac` (description: `Cabalmail Mac`)
 
-   Leave Capabilities at defaults — we'll enable specific ones (Push,
-   Associated Domains, etc.) in later phases as features need them.
+   `xcodebuild -allowProvisioningUpdates` together with the Admin API
+   key from the next step will auto-register these on first archive,
+   so skipping this is fine. Registering manually is useful if you want
+   to pre-enable specific Capabilities (Push, Associated Domains, etc.);
+   otherwise leave that for later phases.
 4. **Create an App Store Connect API key** with the **Admin** role. See
    [Creating the App Store Connect API key](#creating-the-app-store-connect-api-key)
    — produces the `APP_STORE_CONNECT_API_KEY_ID` /
@@ -164,12 +166,23 @@ are expanded in the sections further down.
    aren't attached to anything visible and you cannot distribute the
    build.
 6. **Populate the GitHub secrets** listed in the next section.
-7. **Create TestFlight internal testing groups** — one named `Stage`
-   and one named `Prod` under each app record's TestFlight tab. Add
-   your Apple ID as a tester to both. Builds uploaded by CI appear in
-   the app's Builds list after ~5-30 minutes of Apple-side processing
-   and can then be attached to a group (or configured for automatic
-   distribution).
+7. **Populate TestFlight when you want to install a build.** CI uploads
+   succeed without any TestFlight setup — builds land in each app
+   record's Builds list after ~5–30 minutes of Apple-side processing.
+   Before anyone (including you) can install one, you need a testing
+   group to attach it to:
+   - App Store Connect → your app → **TestFlight** tab → **Internal
+     Testing** → **+** to create a group (e.g. `Stage`, `Prod`).
+   - Add your Apple ID (with an App Store Connect role) as a tester.
+   - Attach the build manually the first time, or enable automatic
+     distribution on the group for future uploads.
+   - Install the **TestFlight** app on the target device, sign in, and
+     accept the invite.
+
+   Internal groups hold up to 100 team members and do not require Apple
+   Beta Review. External groups (invite-by-email, up to 10,000 testers)
+   are out of scope for 0.6.0 but would be the next step before an App
+   Store launch.
 
 ## GitHub secrets for CI
 
