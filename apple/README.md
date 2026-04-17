@@ -47,11 +47,21 @@ xcodebuild -workspace Cabalmail.xcworkspace \
 # 2. Kit package tests pass
 swift test --package-path CabalmailKit
 
-# 3. Launch in simulator and see "Hello, Cabalmail"
+# 3. Launch in the simulator and see "Hello, Cabalmail".
+#    Easiest path: open Cabalmail.xcworkspace in Xcode, pick the Cabalmail
+#    scheme and an iPhone 17 Pro destination, and press ⌘R.
+#
+#    Headless equivalent:
 xcodebuild -workspace Cabalmail.xcworkspace \
            -scheme Cabalmail \
            -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+           -derivedDataPath build \
            build
+xcrun simctl boot "iPhone 17 Pro" 2>/dev/null || true
+open -a Simulator
+xcrun simctl install booted \
+  build/Build/Products/Debug-iphonesimulator/Cabalmail.app
+xcrun simctl launch booted com.cabalmail.Cabalmail
 ```
 
 ### Signing
