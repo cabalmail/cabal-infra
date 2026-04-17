@@ -514,8 +514,37 @@ jobs:
             --apiKey "$ASC_KEY_ID" \
             --apiIssuer "$ASC_ISSUER_ID"
 
-      - name: Export developer-id build for notarization
+      - name: Check for Developer ID certificate
+        id: devid
         if: steps.check.outputs.enabled == 'true'
+        env:
+          DEVID_P12: ${{ secrets.DEVELOPER_ID_CERT_P12 }}
+        run: |
+          if [ -z "$DEVID_P12" ]; then
+            echo "::notice::DEVELOPER_ID_CERT_P12 not set; skipping notarized .app artifact. TestFlight upload already completed."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Import Developer ID certificate
+        if: steps.devid.outputs.enabled == 'true'
+        env:
+          DEVID_P12: ${{ secrets.DEVELOPER_ID_CERT_P12 }}
+          DEVID_PASSWORD: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          echo "$DEVID_P12" | base64 --decode > "$RUNNER_TEMP/devid.p12"
+          security unlock-keychain -p "$(security list-keychains -d user | head -n1 | tr -d ' "')" "$KEYCHAIN_PATH" 2>/dev/null || true
+          security import "$RUNNER_TEMP/devid.p12" \
+            -P "$DEVID_PASSWORD" \
+            -A -t cert -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -k "$(cat $RUNNER_TEMP/keychain-password 2>/dev/null || echo '')" "$KEYCHAIN_PATH" > /dev/null 2>&1 || true
+          rm "$RUNNER_TEMP/devid.p12"
+
+      - name: Export developer-id build for notarization
+        if: steps.devid.outputs.enabled == 'true'
         working-directory: apple
         env:
           ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
@@ -533,7 +562,7 @@ jobs:
             | xcbeautify --renderer github-actions
 
       - name: Notarize and staple
-        if: steps.check.outputs.enabled == 'true'
+        if: steps.devid.outputs.enabled == 'true'
         env:
           ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
@@ -552,7 +581,7 @@ jobs:
           echo "NOTARIZED_ZIP=$NOTARIZED_ZIP" >> "$GITHUB_ENV"
 
       - name: Upload notarized .app as workflow artifact
-        if: steps.check.outputs.enabled == 'true'
+        if: steps.devid.outputs.enabled == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: CabalmailMac-notarized-${{ github.run_number }}
