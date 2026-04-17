@@ -9,7 +9,7 @@ final class CabalmailKitTests: XCTestCase {
     func testConfigurationDecodesConfigJsonShape() throws {
         // Matches the shape emitted by terraform/infra/modules/app/templates/config.js
         // (which is valid JSON) and the new config.json sibling.
-        let json = """
+        let json = Data("""
         {
           "control_domain": "example.com",
           "domains": ["example.com", "example.net"],
@@ -22,7 +22,7 @@ final class CabalmailKitTests: XCTestCase {
             }
           }
         }
-        """.data(using: .utf8)!
+        """.utf8)
 
         let config = try JSONDecoder().decode(Configuration.self, from: json)
 

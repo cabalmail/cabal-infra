@@ -12,45 +12,6 @@ public struct Configuration: Sendable, Codable, Equatable {
     public let invokeUrl: URL
     public let cognito: CognitoConfiguration
 
-    public struct CognitoConfiguration: Sendable, Codable, Equatable {
-        public let region: String
-        public let userPoolId: String
-        public let clientId: String
-
-        public init(region: String, userPoolId: String, clientId: String) {
-            self.region = region
-            self.userPoolId = userPoolId
-            self.clientId = clientId
-        }
-
-        private enum CodingKeys: String, CodingKey {
-            case region
-            case poolData
-        }
-
-        private struct PoolData: Codable {
-            let UserPoolId: String
-            let ClientId: String
-        }
-
-        public init(from decoder: Decoder) throws {
-            let container = try decoder.container(keyedBy: CodingKeys.self)
-            self.region = try container.decode(String.self, forKey: .region)
-            let pool = try container.decode(PoolData.self, forKey: .poolData)
-            self.userPoolId = pool.UserPoolId
-            self.clientId = pool.ClientId
-        }
-
-        public func encode(to encoder: Encoder) throws {
-            var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(region, forKey: .region)
-            try container.encode(
-                PoolData(UserPoolId: userPoolId, ClientId: clientId),
-                forKey: .poolData
-            )
-        }
-    }
-
     public init(
         controlDomain: String,
         domains: [String],
@@ -68,5 +29,49 @@ public struct Configuration: Sendable, Codable, Equatable {
         case domains
         case invokeUrl
         case cognito = "cognitoConfig"
+    }
+}
+
+/// Cognito portion of `Configuration`.
+///
+/// The JSON wire format nests the pool identifiers under a `poolData` object
+/// whose keys use PascalCase (`UserPoolId`, `ClientId`) because that's what the
+/// Cognito JS SDK consumes; the Swift surface normalizes those to idiomatic
+/// camelCase properties via `CodingKeys`.
+public struct CognitoConfiguration: Sendable, Codable, Equatable {
+    public let region: String
+    public let userPoolId: String
+    public let clientId: String
+
+    public init(region: String, userPoolId: String, clientId: String) {
+        self.region = region
+        self.userPoolId = userPoolId
+        self.clientId = clientId
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case region
+        case poolData
+    }
+
+    private enum PoolKeys: String, CodingKey {
+        case userPoolId = "UserPoolId"
+        case clientId = "ClientId"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.region = try container.decode(String.self, forKey: .region)
+        let pool = try container.nestedContainer(keyedBy: PoolKeys.self, forKey: .poolData)
+        self.userPoolId = try pool.decode(String.self, forKey: .userPoolId)
+        self.clientId = try pool.decode(String.self, forKey: .clientId)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(region, forKey: .region)
+        var pool = container.nestedContainer(keyedBy: PoolKeys.self, forKey: .poolData)
+        try pool.encode(userPoolId, forKey: .userPoolId)
+        try pool.encode(clientId, forKey: .clientId)
     }
 }
