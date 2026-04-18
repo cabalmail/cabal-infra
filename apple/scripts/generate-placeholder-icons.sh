@@ -37,11 +37,6 @@ cat > "$IOS_DIR/Contents.json" <<'JSON'
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
-    },
-    {
-      "filename" : "icon.png",
-      "idiom" : "vision",
-      "size" : "1024x1024"
     }
   ],
   "info" : {
