@@ -120,12 +120,12 @@ enum MessageBuilder {
         out.append(Data("\r\n".utf8))
         let base64 = attachment.data.base64EncodedString()
         // Wrap at 76 characters per RFC 2045.
-        var i = base64.startIndex
-        while i < base64.endIndex {
-            let end = base64.index(i, offsetBy: 76, limitedBy: base64.endIndex) ?? base64.endIndex
-            out.append(Data(base64[i..<end].utf8))
+        var cursor = base64.startIndex
+        while cursor < base64.endIndex {
+            let end = base64.index(cursor, offsetBy: 76, limitedBy: base64.endIndex) ?? base64.endIndex
+            out.append(Data(base64[cursor..<end].utf8))
             out.append(Data("\r\n".utf8))
-            i = end
+            cursor = end
         }
         return out
     }
@@ -148,9 +148,9 @@ enum MessageBuilder {
     }
 
     private static func normalizeCRLF(_ string: String) -> Data {
-        let lf = string.replacingOccurrences(of: "\r\n", with: "\n")
-        let cr = lf.replacingOccurrences(of: "\r", with: "\n")
-        let normalized = cr.replacingOccurrences(of: "\n", with: "\r\n")
+        let lfOnly = string.replacingOccurrences(of: "\r\n", with: "\n")
+        let noBareCR = lfOnly.replacingOccurrences(of: "\r", with: "\n")
+        let normalized = noBareCR.replacingOccurrences(of: "\n", with: "\r\n")
         return Data(normalized.utf8)
     }
 

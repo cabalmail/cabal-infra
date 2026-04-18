@@ -28,6 +28,10 @@ identifier_name:
     - id
     - to
     - cc
+    # IMAP wire-level status codes; renaming would hurt readability at
+    # call sites that compare against these constants.
+    - ok
+    - no
 
 type_name:
   min_length: 3

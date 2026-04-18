@@ -20,7 +20,7 @@ public enum Flag: Sendable, Hashable, Codable {
         case .deleted:    return "\\Deleted"
         case .draft:      return "\\Draft"
         case .recent:     return "\\Recent"
-        case .keyword(let kw): return kw
+        case .keyword(let name): return name
         }
     }
 

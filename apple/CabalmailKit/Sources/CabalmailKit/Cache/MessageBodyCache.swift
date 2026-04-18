@@ -57,9 +57,15 @@ public actor MessageBodyCache {
         return directory.appendingPathComponent(safe)
     }
 
+    private struct CacheEntry {
+        let url: URL
+        let size: UInt64
+        let mtime: Date
+    }
+
     private func evictIfNeeded() throws {
         var totalSize: UInt64 = 0
-        var entries: [(url: URL, size: UInt64, mtime: Date)] = []
+        var entries: [CacheEntry] = []
 
         guard let enumerator = fileManager.enumerator(
             at: directory,
@@ -67,14 +73,17 @@ public actor MessageBodyCache {
             options: [.skipsHiddenFiles]
         ) else { return }
 
+        let keys: Set<URLResourceKey> = [
+            .fileSizeKey, .contentModificationDateKey, .isRegularFileKey
+        ]
         for case let url as URL in enumerator {
-            let values = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey, .isRegularFileKey])
+            let values = try? url.resourceValues(forKeys: keys)
             guard values?.isRegularFile == true,
                   let size = values?.fileSize,
                   let mtime = values?.contentModificationDate else { continue }
-            let sizeU = UInt64(size)
-            totalSize += sizeU
-            entries.append((url, sizeU, mtime))
+            let entrySize = UInt64(size)
+            totalSize += entrySize
+            entries.append(CacheEntry(url: url, size: entrySize, mtime: mtime))
         }
 
         if totalSize <= capacityBytes { return }

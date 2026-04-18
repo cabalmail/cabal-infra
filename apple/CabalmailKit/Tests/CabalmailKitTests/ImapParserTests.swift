@@ -25,10 +25,10 @@ final class ImapParserTests: XCTestCase {
 
     func testParseExists() {
         let line = Data("* 42 EXISTS".utf8)
-        if case .exists(let n) = ImapParser.parse(line: line, literals: []) {
-            XCTAssertEqual(n, 42)
+        if case .exists(let count) = ImapParser.parse(line: line, literals: []) {
+            XCTAssertEqual(count, 42)
         } else {
-            XCTFail()
+            XCTFail("Expected .exists, got something else")
         }
     }
 
@@ -39,7 +39,7 @@ final class ImapParserTests: XCTestCase {
             XCTAssertEqual(delim, ".")
             XCTAssertEqual(mbox, "Archive")
         } else {
-            XCTFail()
+            XCTFail("Expected .list, got something else")
         }
     }
 
@@ -52,7 +52,7 @@ final class ImapParserTests: XCTestCase {
             XCTAssertEqual(attrs["UIDVALIDITY"], 5)
             XCTAssertEqual(attrs["UIDNEXT"], 13)
         } else {
-            XCTFail()
+            XCTFail("Expected .status2, got something else")
         }
     }
 
@@ -61,7 +61,7 @@ final class ImapParserTests: XCTestCase {
         if case let .search(ids) = ImapParser.parse(line: line, literals: []) {
             XCTAssertEqual(ids, [1, 7, 42, 99])
         } else {
-            XCTFail()
+            XCTFail("Expected .search, got something else")
         }
     }
 
@@ -84,7 +84,7 @@ final class ImapParserTests: XCTestCase {
         if case let .continuation(text) = ImapParser.parse(line: line, literals: []) {
             XCTAssertEqual(text, "OK continue")
         } else {
-            XCTFail()
+            XCTFail("Expected .continuation, got something else")
         }
     }
 }

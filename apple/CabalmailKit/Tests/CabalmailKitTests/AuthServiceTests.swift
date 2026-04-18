@@ -37,7 +37,10 @@ final class AuthServiceTests: XCTestCase {
         XCTAssertEqual(requests.count, 1)
         let request = requests[0]
         XCTAssertEqual(request.url?.host, "cognito-idp.us-east-1.amazonaws.com")
-        XCTAssertEqual(request.value(forHTTPHeaderField: "X-Amz-Target"), "AWSCognitoIdentityProviderService.InitiateAuth")
+        XCTAssertEqual(
+            request.value(forHTTPHeaderField: "X-Amz-Target"),
+            "AWSCognitoIdentityProviderService.InitiateAuth"
+        )
         let body = try JSONSerialization.jsonObject(with: request.httpBody ?? Data()) as? [String: Any]
         XCTAssertEqual(body?["AuthFlow"] as? String, "USER_PASSWORD_AUTH")
         XCTAssertEqual(body?["ClientId"] as? String, "clientX")
@@ -96,8 +99,9 @@ final class AuthServiceTests: XCTestCase {
     }
 
     func testInvalidCredentialsMaps() async throws {
+        let errorType = "com.amazonaws.cognito.identity.model#NotAuthorizedException"
         let body = """
-        {"__type":"com.amazonaws.cognito.identity.model#NotAuthorizedException","message":"Incorrect username or password."}
+        {"__type":"\(errorType)","message":"Incorrect username or password."}
         """
         let http = RecordingHTTPTransport(responses: [(Data(body.utf8), 400)])
         let service = CognitoAuthService(

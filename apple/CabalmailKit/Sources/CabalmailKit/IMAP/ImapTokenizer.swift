@@ -85,8 +85,8 @@ struct ImapTokenizer {
 
     private mutating func skipWhitespace() {
         while index < bytes.count {
-            let b = bytes[index]
-            if b == UInt8(ascii: " ") || b == UInt8(ascii: "\t") {
+            let byte = bytes[index]
+            if byte == UInt8(ascii: " ") || byte == UInt8(ascii: "\t") {
                 index += 1
             } else {
                 return
@@ -99,27 +99,27 @@ struct ImapTokenizer {
         index += 1
         var result: [UInt8] = []
         while index < bytes.count {
-            let b = bytes[index]
-            if b == UInt8(ascii: "\\") && index + 1 < bytes.count {
+            let byte = bytes[index]
+            if byte == UInt8(ascii: "\\") && index + 1 < bytes.count {
                 // Quoted-string escape: only \\ and \" are defined by RFC 3501.
                 result.append(bytes[index + 1])
                 index += 2
-            } else if b == UInt8(ascii: "\"") {
+            } else if byte == UInt8(ascii: "\"") {
                 index += 1
-                return String(decoding: result, as: UTF8.self)
+                return String(bytes: result, encoding: .utf8) ?? ""
             } else {
-                result.append(b)
+                result.append(byte)
                 index += 1
             }
         }
-        return String(decoding: result, as: UTF8.self)
+        return String(bytes: result, encoding: .utf8) ?? ""
     }
 
     private mutating func readAtomOrNumber() -> Token {
         var chars: [UInt8] = []
         while index < bytes.count {
-            let b = bytes[index]
-            switch b {
+            let byte = bytes[index]
+            switch byte {
             case UInt8(ascii: " "), UInt8(ascii: "\t"),
                  UInt8(ascii: "("), UInt8(ascii: ")"),
                  UInt8(ascii: "["), UInt8(ascii: "]"),
@@ -128,13 +128,13 @@ struct ImapTokenizer {
                  Self.literalMarker:
                 break
             default:
-                chars.append(b)
+                chars.append(byte)
                 index += 1
                 continue
             }
             break
         }
-        let str = String(decoding: chars, as: UTF8.self)
+        let str = String(bytes: chars, encoding: .utf8) ?? ""
         if str.uppercased() == "NIL" {
             return .nilValue
         }

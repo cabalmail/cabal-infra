@@ -91,7 +91,7 @@ actor ScriptedByteStream: ByteStream {
     }
 
     var outboundString: String {
-        String(decoding: outbound, as: UTF8.self)
+        String(bytes: outbound, encoding: .utf8) ?? ""
     }
 }
 

@@ -41,7 +41,7 @@ actor ImapConnection {
             while true {
                 let response = try await readResponse()
                 if case .continuation = response { break }
-                if case let .completion(t, _, text) = response, t == tag {
+                if case let .completion(responseTag, _, text) = response, responseTag == tag {
                     throw CabalmailError.imapCommandFailed(status: "NO", detail: text)
                 }
             }
@@ -52,7 +52,7 @@ actor ImapConnection {
         var responses: [ImapResponse] = []
         while true {
             let response = try await readResponse()
-            if case let .completion(t, status, text) = response, t == tag {
+            if case let .completion(responseTag, status, text) = response, responseTag == tag {
                 responses.append(response)
                 switch status {
                 case .ok:
@@ -129,16 +129,16 @@ actor ImapConnection {
         }
     }
 
-    private func readExact(_ n: Int) async throws -> Data {
-        while buffer.count < n {
+    private func readExact(_ count: Int) async throws -> Data {
+        while buffer.count < count {
             let chunk = try await stream.read()
             guard !chunk.isEmpty else {
                 throw CabalmailError.transport("IMAP stream closed mid-literal")
             }
             buffer.append(chunk)
         }
-        let data = Data(Array(buffer.prefix(n)))
-        buffer.removeFirst(n)
+        let data = Data(Array(buffer.prefix(count)))
+        buffer.removeFirst(count)
         return data
     }
 
@@ -169,19 +169,20 @@ actor ImapConnection {
     private func extractLiteralHeader(from fragment: Data) -> (prefixEnd: Int, size: Int)? {
         let bytes = Array(fragment)
         guard let last = bytes.last, last == UInt8(ascii: "}") else { return nil }
-        var i = bytes.count - 2
-        while i >= 0 {
-            let byte = bytes[i]
+        var cursor = bytes.count - 2
+        while cursor >= 0 {
+            let byte = bytes[cursor]
             if byte == UInt8(ascii: "{") { break }
             guard byte >= UInt8(ascii: "0"), byte <= UInt8(ascii: "9") else { return nil }
-            i -= 1
+            cursor -= 1
         }
-        guard i >= 0, bytes[i] == UInt8(ascii: "{") else { return nil }
-        let digitsStart = i + 1
+        guard cursor >= 0, bytes[cursor] == UInt8(ascii: "{") else { return nil }
+        let digitsStart = cursor + 1
         let digitsEnd = bytes.count - 1
         guard digitsEnd > digitsStart else { return nil }
-        let digits = String(decoding: bytes[digitsStart..<digitsEnd], as: UTF8.self)
-        guard let size = Int(digits) else { return nil }
-        return (prefixEnd: i, size: size)
+        let digitSlice = Array(bytes[digitsStart..<digitsEnd])
+        guard let digits = String(bytes: digitSlice, encoding: .ascii),
+              let size = Int(digits) else { return nil }
+        return (prefixEnd: cursor, size: size)
     }
 }

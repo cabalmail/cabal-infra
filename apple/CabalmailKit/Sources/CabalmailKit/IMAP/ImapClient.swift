@@ -259,13 +259,21 @@ public actor LiveImapClient: ImapClient {
         _ = try await conn.sendCommand(command, literal: message)
     }
 
-    // MARK: - IDLE
+}
 
+// MARK: - IDLE
+
+public extension LiveImapClient {
     /// Opens a dedicated IMAP connection, SELECTs the folder, issues IDLE,
     /// and yields untagged `EXISTS` / `EXPUNGE` / `FETCH` events until the
     /// stream is terminated. Terminating the stream sends `DONE` and closes
     /// the connection.
-    public func idle(folder: String) async throws -> AsyncThrowingStream<IdleEvent, Error> {
+    func idle(folder: String) async throws -> AsyncThrowingStream<IdleEvent, Error> {
+        let idleConnection = try await startIdleConnection(folder: folder)
+        return makeIdleStream(idleConnection: idleConnection)
+    }
+
+    private func startIdleConnection(folder: String) async throws -> ImapConnection {
         let stream = try await factory.makeConnection()
         let idleConnection = ImapConnection(stream: stream)
         _ = try await idleConnection.readGreeting()
@@ -276,10 +284,9 @@ public actor LiveImapClient: ImapClient {
         _ = try await idleConnection.sendCommand(
             "SELECT \(quoteAstring(toServerPath(folder)))"
         )
-        // Send IDLE outside of `sendCommand` since there is no tagged
-        // completion until DONE is issued.
+        // IDLE has no tagged completion until DONE is issued, so it can't go
+        // through `sendCommand`.
         try await idleConnection.writeRaw("I1 IDLE\r\n")
-        // Wait for `+ idling` continuation.
         while true {
             let response = try await idleConnection.readUntagged()
             if case .continuation = response { break }
@@ -287,16 +294,21 @@ public actor LiveImapClient: ImapClient {
                 throw CabalmailError.imapCommandFailed(status: status.rawValue, detail: text)
             }
         }
+        return idleConnection
+    }
 
-        return AsyncThrowingStream { continuation in
+    private nonisolated func makeIdleStream(
+        idleConnection: ImapConnection
+    ) -> AsyncThrowingStream<IdleEvent, Error> {
+        AsyncThrowingStream { continuation in
             let readerTask = Task { [idleConnection] in
                 do {
                     while !Task.isCancelled {
                         let response = try await idleConnection.readUntagged()
                         switch response {
-                        case .exists(let n):   continuation.yield(IdleEvent(kind: .exists(n)))
-                        case .expunge(let n):  continuation.yield(IdleEvent(kind: .expunge(n)))
-                        case .fetch(let n, _): continuation.yield(IdleEvent(kind: .fetch(n)))
+                        case .exists(let seq):   continuation.yield(IdleEvent(kind: .exists(seq)))
+                        case .expunge(let seq):  continuation.yield(IdleEvent(kind: .expunge(seq)))
+                        case .fetch(let seq, _): continuation.yield(IdleEvent(kind: .fetch(seq)))
                         default: continue
                         }
                     }
@@ -314,40 +326,42 @@ public actor LiveImapClient: ImapClient {
             }
         }
     }
+}
 
-    // MARK: - Internals
+// MARK: - Internals
 
-    private func requireConnection() throws -> ImapConnection {
+private extension LiveImapClient {
+    func requireConnection() throws -> ImapConnection {
         guard let connection else {
             throw CabalmailError.notSignedIn
         }
         return connection
     }
 
-    private func select(folder: String, on conn: ImapConnection) async throws {
+    func select(folder: String, on conn: ImapConnection) async throws {
         if selectedFolder == folder { return }
         _ = try await conn.sendCommand("SELECT \(quoteAstring(toServerPath(folder)))")
         selectedFolder = folder
     }
 
-    private func toServerPath(_ clientPath: String) -> String {
+    func toServerPath(_ clientPath: String) -> String {
         if delimiter == "/" { return clientPath }
         return clientPath.replacingOccurrences(of: "/", with: delimiter)
     }
 
-    private func toClientPath(_ serverPath: String) -> String {
+    func toClientPath(_ serverPath: String) -> String {
         if delimiter == "/" { return serverPath }
         return serverPath.replacingOccurrences(of: delimiter, with: "/")
     }
 
-    private func quoteAstring(_ value: String) -> String {
+    nonisolated func quoteAstring(_ value: String) -> String {
         let escaped = value
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
         return "\"\(escaped)\""
     }
 
-    private func envelopeFromFetch(_ response: ImapResponse) -> Envelope? {
+    nonisolated func envelopeFromFetch(_ response: ImapResponse) -> Envelope? {
         guard case let .fetch(_, attrs) = response else { return nil }
         guard let uid = attrs.uid else { return nil }
         let envelope = attrs.envelope ?? ImapEnvelopeFields()

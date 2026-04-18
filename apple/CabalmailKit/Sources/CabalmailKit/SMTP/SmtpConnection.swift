@@ -65,7 +65,7 @@ actor SmtpConnection {
             if let offset = firstCRLF(in: buffer) {
                 let line = Data(Array(buffer.prefix(offset)))
                 buffer.removeFirst(offset + 2)
-                return String(decoding: line, as: UTF8.self)
+                return String(bytes: line, encoding: .utf8) ?? ""
             }
             let chunk = try await stream.read()
             guard !chunk.isEmpty else {
