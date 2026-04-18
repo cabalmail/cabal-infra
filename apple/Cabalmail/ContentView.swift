@@ -1,20 +1,24 @@
 import SwiftUI
 import CabalmailKit
 
-/// Phase 1 placeholder. Replaced by real navigation in Phase 4.
+/// Top-level router — branches on `AppState.status`.
+///
+/// Phase 4 keeps this trivial: sign-in form when signed out, the Phase-4-
+/// interim `SignedInView` after. Later steps replace `SignedInView` with
+/// the folder / message / detail split.
 struct ContentView: View {
+    @State private var appState = AppState()
+
     var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "envelope.fill")
-                .font(.system(size: 48))
-                .foregroundStyle(.tint)
-            Text("Hello, Cabalmail")
-                .font(.title)
-            Text("Build \(CabalmailKit.version)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+        Group {
+            switch appState.status {
+            case .signedIn:
+                MailRootView()
+            default:
+                SignInView()
+            }
         }
-        .padding()
+        .environment(appState)
     }
 }
 
