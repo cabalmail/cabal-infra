@@ -83,6 +83,16 @@ targets:
     platform: macOS
     sources:
       - path: CabalmailMac
+      # Phase 4 share: the SwiftUI views, view models, and app state are
+      # platform-agnostic (with `#if os(macOS)` toggles where they diverge)
+      # so both app targets compile them from the iOS target's source tree.
+      # Per Phase 1 the binaries stay separate; only the Swift sources are
+      # shared. Revisit at Phase 7 if macOS needs substantially different
+      # view code.
+      - path: Cabalmail/ContentView.swift
+      - path: Cabalmail/AppState.swift
+      - path: Cabalmail/Views
+      - path: Cabalmail/ViewModels
     dependencies:
       - package: CabalmailKit
     info:
