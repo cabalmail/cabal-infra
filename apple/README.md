@@ -340,6 +340,23 @@ Pinned Xcode version lives in the `XCODE_VERSION` env var at the top of the
 workflow; bump it in lockstep with the deployment targets in `project.yml`
 and `CabalmailKit/Package.swift`.
 
+## Installing a build from TestFlight
+
+After a successful CI upload and App Store Connect processing (5–30 min),
+the build appears in your app's **Builds** list. First-time attach:
+
+1. App Store Connect → your app → **TestFlight** tab → pick the `Stage`
+   or `Prod` internal group → **Builds** section → **+** → attach the
+   just-processed build. Toggle **Automatically distribute builds** on
+   the group if you want future uploads attached without clicking.
+2. On your device, install the **TestFlight** app from the App Store.
+3. Sign in with the Apple ID that is a member of the group and accept
+   the invite from the TestFlight inbox. The build installs like any
+   App Store app, with a small yellow dot marking it as a beta.
+
+macOS follows the same flow using the macOS TestFlight app (install
+from the Mac App Store).
+
 ## Placeholder app icons
 
 TestFlight will reject an upload that lacks app icons, so the scaffold ships
@@ -359,10 +376,84 @@ The generator is deliberately ugly-but-on-brand so it's obvious we haven't
 shipped real artwork yet. Replace the output files with a real design
 before any non-internal distribution.
 
+## Phase 3 decisions
+
+Phase 3 lands the `CabalmailKit` networking and auth layer on top of the
+Phase 1 scaffold. Every service is protocol-based so app-side code depends
+on the interface, not the concrete implementation — tests inject fakes
+(`ScriptedByteStream`, `RecordingHTTPTransport`, `InMemorySecureStore`).
+
+### 1. Cognito: hand-rolled `USER_PASSWORD_AUTH`
+
+The plan defaulted to AWS Amplify Swift for velocity. The scaffold takes
+the other branch: since the Cognito pool is provisioned with
+`explicit_auth_flows = ["USER_PASSWORD_AUTH"]` (see
+[`terraform/infra/modules/user_pool/main.tf`](../terraform/infra/modules/user_pool/main.tf)),
+the wire surface reduces to JSON POSTs against
+`https://cognito-idp.<region>.amazonaws.com/`. `CognitoAuthService` drives
+that directly — no AWS SDK dependency, no ~2 MB extra binary. The
+`AuthService` protocol leaves room to swap in Amplify later.
+
+### 2. IMAP: `swift-nio-imap`/`MailCore2` — neither
+
+Rather than adopt either of the two candidates in the plan, Phase 3 lands
+a small hand-rolled client on `NWConnection` + a byte-accurate response
+parser. Trade-offs:
+
+- **For us:** zero external SwiftPM packages (simpler CI, no network
+  resolution, no visionOS build surprises); the parser handles the exact
+  subset of RFC 3501 we need (envelopes, flags, body literals,
+  bodystructure-as-attachment-heuristic, status, search, list/lsub).
+- **Against:** we own the IMAP parser. Real servers emit corner cases we
+  haven't seen yet; expect follow-ups.
+
+The plan leaves this choice open for Phase 3 after a spike — this is the
+spike, committed.
+
+### 3. SMTP submission: implicit TLS on 465 instead of STARTTLS on 587
+
+The plan specified port 587 with STARTTLS. `NWConnection`'s TLS stack
+attaches at connect time, so a clean STARTTLS upgrade requires a custom
+framer — meaningfully more code with no operational upside. The submission
+listener already binds 465 as well as 587 (see
+[`terraform/infra/modules/elb/main.tf`](../terraform/infra/modules/elb/main.tf)),
+and implicit-TLS on 465 is operationally equivalent to STARTTLS on 587,
+so `LiveSmtpClient` defaults to 465. `NetworkByteStream.startTLS(host:)`
+throws deliberately so future contributors see exactly why the upgrade
+path isn't available.
+
+### 4. Storage: Keychain for secrets, on-disk Codable for mirrors
+
+- Cognito tokens: one JSON blob in the data-protection keychain
+  (`KeychainSecureStore`, `kSecUseDataProtectionKeychain = true`).
+- IMAP username + password: separate keychain items keyed to the tokens
+  so sign-out cleans them up together.
+- Envelopes: per-folder JSON files under the app support directory,
+  keyed by UIDVALIDITY — the Phase 3 reconnect flow (`STATUS` + UID
+  FETCH since UIDNEXT) drops straight onto this.
+- Bodies: per-folder directory of raw `.eml` files, LRU-evicted by
+  mtime when the total exceeds a configurable cap (default 200 MB).
+
+### 5. IDLE: separate connection, `AsyncThrowingStream`
+
+`LiveImapClient.idle(folder:)` opens a second authenticated connection
+dedicated to IDLE so foreground mailbox operations aren't blocked by the
+open IDLE socket. Untagged `EXISTS` / `EXPUNGE` / `FETCH` events stream
+via `AsyncThrowingStream<IdleEvent, Error>`; terminating the stream
+cancels the reader task, issues `DONE\r\n`, and closes the connection.
+Phase 7 wires this into the message list / unread badge refresh.
+
 ## What's deliberately not here yet
 
-- Real views (Phase 4)
-- Auth service and API client implementations (Phase 3)
+- Real views (Phase 4) — `ContentView.swift` is still the Phase 1 "Hello,
+  Cabalmail" placeholder; Phase 4 replaces it with the folder/message
+  list UI that consumes `LiveImapClient` + `URLSessionApiClient`.
+- Full MIME parsing — `RawMessage.bytes` is handed to the UI layer verbatim;
+  Phase 4 plugs in a renderer (`WKWebView` for HTML, `Text` for plain).
+- True STARTTLS on `NetworkByteStream` — see Phase 3 decision #3 above.
+- BODYSTRUCTURE structural parsing — the current parser returns a single
+  "has attachments" boolean derived from scanning for `attachment` tokens;
+  Phase 4's attachment chip UI will want the proper tree.
 - Real app icons (placeholder generated by `scripts/generate-placeholder-icons.sh`)
 
 ## Open questions tracked for later phases

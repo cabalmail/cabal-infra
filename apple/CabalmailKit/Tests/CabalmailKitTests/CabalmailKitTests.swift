@@ -8,7 +8,7 @@ final class CabalmailKitTests: XCTestCase {
 
     func testConfigurationDecodesConfigJsonShape() throws {
         // Matches the shape emitted by terraform/infra/modules/app/templates/config.js
-        // (which is valid JSON) and the new config.json sibling.
+        // (which is valid JSON) and the config.json sibling.
         let json = Data("""
         {
           "control_domain": "example.com",
@@ -34,14 +34,40 @@ final class CabalmailKitTests: XCTestCase {
         XCTAssertEqual(config.cognito.clientId, "xyz")
     }
 
-    func testClientInitialization() async {
+    func testClientRoundTripsConfiguration() async throws {
         let config = Configuration(
             controlDomain: "example.com",
             domains: ["example.com"],
             invokeUrl: URL(string: "https://api.example.com/prod")!,
             cognito: .init(region: "us-east-1", userPoolId: "u", clientId: "c")
         )
-        let client = CabalmailClient(configuration: config)
+        let auth = StubAuthService()
+        let api = URLSessionApiClient(
+            configuration: config,
+            authService: auth,
+            transport: RecordingHTTPTransport(responses: [])
+        )
+        let imap = LiveImapClient(
+            factory: ScriptedConnectionFactory(stream: ScriptedByteStream()),
+            authService: auth
+        )
+        let smtp = LiveSmtpClient(
+            factory: ScriptedConnectionFactory(stream: ScriptedByteStream()),
+            authService: auth
+        )
+        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let envelopes = try EnvelopeCache(directory: tmp.appendingPathComponent("e"))
+        let bodies = try MessageBodyCache(directory: tmp.appendingPathComponent("b"))
+        let client = CabalmailClient(
+            configuration: config,
+            authService: auth,
+            apiClient: api,
+            imapClient: imap,
+            smtpClient: smtp,
+            addressCache: AddressCache(),
+            envelopeCache: envelopes,
+            bodyCache: bodies
+        )
         let roundTrip = await client.configuration
         XCTAssertEqual(roundTrip, config)
     }
