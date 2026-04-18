@@ -293,9 +293,14 @@ jobs:
           ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
         run: |
           set -o pipefail
+          # -configuration Release limits xcodebuild to distribution signing
+          # only; without it Xcode tries to prep Development profiles/certs
+          # too, which blows up on CI where we have no Apple Development
+          # certificate and pushes the team past the cert cap.
           xcodebuild archive \
             -workspace Cabalmail.xcworkspace \
             -scheme Cabalmail \
+            -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/Cabalmail.xcarchive" \
             -allowProvisioningUpdates \
@@ -303,6 +308,7 @@ jobs:
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
             MARKETING_VERSION=0.6.0 \
             CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
             | xcbeautify --renderer github-actions
@@ -479,6 +485,7 @@ jobs:
           xcodebuild archive \
             -workspace Cabalmail.xcworkspace \
             -scheme CabalmailMac \
+            -configuration Release \
             -destination 'generic/platform=macOS' \
             -archivePath "$RUNNER_TEMP/CabalmailMac.xcarchive" \
             -allowProvisioningUpdates \
@@ -486,6 +493,7 @@ jobs:
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
             MARKETING_VERSION=0.6.0 \
             CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
             | xcbeautify --renderer github-actions
