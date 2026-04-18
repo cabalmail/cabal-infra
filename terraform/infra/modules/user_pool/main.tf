@@ -42,7 +42,7 @@ resource "aws_pinpointsmsvoicev2_phone_number" "sms" {
   deletion_protection_enabled = false
 
   timeouts {
-    create = "60m"
+    create = "1m"
   }
 }
 
