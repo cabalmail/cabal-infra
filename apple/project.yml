@@ -51,6 +51,12 @@ targets:
       path: Cabalmail/Info.plist
       properties:
         CFBundleDisplayName: Cabalmail
+        # Required by App Store validation for apps built against
+        # iOS 11+ SDKs that ship icons in an asset catalog.
+        CFBundleIconName: AppIcon
+        # App uses only standard HTTPS/TLS; exempt from export compliance
+        # questions on every TestFlight upload.
+        ITSAppUsesNonExemptEncryption: false
         UILaunchScreen:
           UIColorName: AccentColor
         UISupportedInterfaceOrientations:
@@ -83,6 +89,8 @@ targets:
       path: CabalmailMac/Info.plist
       properties:
         CFBundleDisplayName: Cabalmail
+        CFBundleIconName: AppIcon
+        ITSAppUsesNonExemptEncryption: false
         LSApplicationCategoryType: public.app-category.productivity
         NSHumanReadableCopyright: ""
     settings:
