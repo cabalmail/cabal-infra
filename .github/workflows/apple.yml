@@ -348,10 +348,16 @@ jobs:
             --type ios \
             --apiKey "$ASC_KEY_ID" \
             --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tee "$LOG"
-          if grep -qE '^(UPLOAD FAILED|ERROR:|[[:space:]]*ERROR:)' "$LOG"; then
-            echo "::error::altool reported errors despite exit code 0. See log above."
+          # altool writes timestamped "ERROR:" lines and returns 0 anyway in
+          # some releases, so we scan the log and fail the step ourselves if
+          # any error marker appears. The pattern matches anywhere in the
+          # line since altool prefixes errors with a timestamp.
+          if grep -qE '(UPLOAD FAILED|ERROR: |iris-code : STATE_ERROR)' "$LOG"; then
+            ERRORS=$(grep -cE '(UPLOAD FAILED|ERROR: )' "$LOG")
+            echo "::error::altool reported $ERRORS error line(s) despite exit code 0. Review the log above."
             exit 1
           fi
+          echo "::notice::altool upload completed cleanly."
           {
             echo "### iOS TestFlight upload"
             echo ""
@@ -514,6 +520,17 @@ jobs:
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
             | xcbeautify --renderer github-actions
 
+      - name: Summarize macOS upload
+        if: steps.check.outputs.enabled == 'true'
+        run: |
+          {
+            echo "### macOS TestFlight upload"
+            echo ""
+            echo "- Build number: \`${{ github.run_number }}\`"
+            echo "- Environment: \`${{ github.ref_name == 'main' && 'prod' || 'stage' }}\`"
+            echo "- Track: App Store Connect → Cabalmail Mac → TestFlight"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload macOS to TestFlight
         if: steps.check.outputs.enabled == 'true'
         env:
@@ -529,10 +546,16 @@ jobs:
             --type osx \
             --apiKey "$ASC_KEY_ID" \
             --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tee "$LOG"
-          if grep -qE '^(UPLOAD FAILED|ERROR:|[[:space:]]*ERROR:)' "$LOG"; then
-            echo "::error::altool reported errors despite exit code 0. See log above."
+          # altool writes timestamped "ERROR:" lines and returns 0 anyway in
+          # some releases, so we scan the log and fail the step ourselves if
+          # any error marker appears. The pattern matches anywhere in the
+          # line since altool prefixes errors with a timestamp.
+          if grep -qE '(UPLOAD FAILED|ERROR: |iris-code : STATE_ERROR)' "$LOG"; then
+            ERRORS=$(grep -cE '(UPLOAD FAILED|ERROR: )' "$LOG")
+            echo "::error::altool reported $ERRORS error line(s) despite exit code 0. Review the log above."
             exit 1
           fi
+          echo "::notice::altool upload completed cleanly."
 
       - name: Check for Developer ID certificate
         id: devid
