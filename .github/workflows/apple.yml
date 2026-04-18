@@ -332,13 +332,21 @@ jobs:
           ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
         run: |
+          set -euo pipefail
           IPA=$(ls "$RUNNER_TEMP/export-ios"/*.ipa | head -n1)
           echo "Uploading $IPA"
+          LOG="$RUNNER_TEMP/altool-ios.log"
+          # altool returns 0 even on validation failure in some releases, so
+          # we also grep for its failure banners and fail the step ourselves.
           xcrun altool --upload-app \
             -f "$IPA" \
             --type ios \
             --apiKey "$ASC_KEY_ID" \
-            --apiIssuer "$ASC_ISSUER_ID"
+            --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tee "$LOG"
+          if grep -qE '^(UPLOAD FAILED|ERROR:|[[:space:]]*ERROR:)' "$LOG"; then
+            echo "::error::altool reported errors despite exit code 0. See log above."
+            exit 1
+          fi
           {
             echo "### iOS TestFlight upload"
             echo ""
@@ -506,13 +514,19 @@ jobs:
           ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
         run: |
+          set -euo pipefail
           PKG=$(ls "$RUNNER_TEMP/export-mac-appstore"/*.pkg | head -n1)
           echo "Uploading $PKG"
+          LOG="$RUNNER_TEMP/altool-mac.log"
           xcrun altool --upload-app \
             -f "$PKG" \
             --type osx \
             --apiKey "$ASC_KEY_ID" \
-            --apiIssuer "$ASC_ISSUER_ID"
+            --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tee "$LOG"
+          if grep -qE '^(UPLOAD FAILED|ERROR:|[[:space:]]*ERROR:)' "$LOG"; then
+            echo "::error::altool reported errors despite exit code 0. See log above."
+            exit 1
+          fi
 
       - name: Check for Developer ID certificate
         id: devid
