@@ -340,6 +340,23 @@ Pinned Xcode version lives in the `XCODE_VERSION` env var at the top of the
 workflow; bump it in lockstep with the deployment targets in `project.yml`
 and `CabalmailKit/Package.swift`.
 
+## Installing a build from TestFlight
+
+After a successful CI upload and App Store Connect processing (5–30 min),
+the build appears in your app's **Builds** list. First-time attach:
+
+1. App Store Connect → your app → **TestFlight** tab → pick the `Stage`
+   or `Prod` internal group → **Builds** section → **+** → attach the
+   just-processed build. Toggle **Automatically distribute builds** on
+   the group if you want future uploads attached without clicking.
+2. On your device, install the **TestFlight** app from the App Store.
+3. Sign in with the Apple ID that is a member of the group and accept
+   the invite from the TestFlight inbox. The build installs like any
+   App Store app, with a small yellow dot marking it as a beta.
+
+macOS follows the same flow using the macOS TestFlight app (install
+from the Mac App Store).
+
 ## Placeholder app icons
 
 TestFlight will reject an upload that lacks app icons, so the scaffold ships
