@@ -20,6 +20,12 @@ final class MessageDetailViewModel {
     var attachments: [Attachment] = []
     var inlineImages: [String: URL] = [:]
 
+    /// Mirrors the server's `\Seen` state so the toolbar button can flip its
+    /// icon and label between "Mark as read" and "Mark as unread". Initial
+    /// value comes from the envelope; updated in place after every toggle
+    /// so the UI stays coherent without a full refresh.
+    var isSeen: Bool
+
     /// Gate for remote-content loading in the `WKWebView`. Starts off per the
     /// plan (reading preferences default: Off); the user can flip it per-
     /// message from the toolbar.
@@ -37,6 +43,7 @@ final class MessageDetailViewModel {
         self.folder = folder
         self.envelope = envelope
         self.client = client
+        self.isSeen = envelope.flags.contains(.seen)
     }
 
     func load() async {
@@ -54,16 +61,19 @@ final class MessageDetailViewModel {
         }
     }
 
-    /// Mark as read — Phase 4 default is "manual", so the detail view does
-    /// NOT auto-mark on open. Users call this via the toolbar button.
-    func markAsRead() async {
+    /// Toggles the server's `\Seen` flag. Phase 4 default is "manual", so the
+    /// detail view does not auto-mark on open — the user drives this via the
+    /// toolbar button, which also flips its own icon based on `isSeen`.
+    func toggleSeen() async {
+        let shouldBeSeen = !isSeen
         do {
             try await client.imapClient.setFlags(
                 folder: folder.path,
                 uids: [envelope.uid],
                 flags: [.seen],
-                operation: .add
+                operation: shouldBeSeen ? .add : .remove
             )
+            isSeen = shouldBeSeen
         } catch {
             errorMessage = "\(error)"
         }

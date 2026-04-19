@@ -117,11 +117,16 @@ struct MessageDetailView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItem {
-            Button {
-                Task { await model?.markAsRead() }
-            } label: {
-                Image(systemName: "envelope.open")
-                    .accessibilityLabel("Mark as read")
+            if let model {
+                Button {
+                    Task { await model.toggleSeen() }
+                } label: {
+                    // Icon reflects the current state; tap-action is the
+                    // inverse. Matches Mail.app: an already-read message
+                    // shows "envelope.open" and tapping marks it unread.
+                    Image(systemName: model.isSeen ? "envelope.open" : "envelope.badge")
+                        .accessibilityLabel(model.isSeen ? "Mark as unread" : "Mark as read")
+                }
             }
         }
         ToolbarItem {
