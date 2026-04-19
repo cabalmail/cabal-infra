@@ -82,7 +82,17 @@ public actor LiveImapClient: ImapClient {
 
     // MARK: - Connection
 
+    /// Opens and authenticates an IMAP session. Idempotent — a second call
+    /// while a healthy connection exists is a no-op, so view models can
+    /// call this before every folder/fetch without leaking sockets or
+    /// re-logging-in.
+    ///
+    /// If the previous connection was dropped (explicit `disconnect()` or
+    /// a transport error that nil-ed `connection`), this opens a fresh one
+    /// and resets the `SELECTed` mailbox state so the next `select()` call
+    /// actually issues the SELECT command against the new socket.
     public func connectAndAuthenticate() async throws {
+        if connection != nil { return }
         let stream = try await factory.makeConnection()
         let conn = ImapConnection(stream: stream)
         _ = try await conn.readGreeting()
@@ -96,6 +106,10 @@ public actor LiveImapClient: ImapClient {
         let quotedPass = quoteAstring(creds.password)
         _ = try await conn.sendCommand("LOGIN \(quotedUser) \(quotedPass)")
         connection = conn
+        // Fresh socket — no mailbox selected yet. Without this reset a
+        // stale `selectedFolder` from a prior, torn-down session would
+        // trick `select()` into skipping the SELECT command.
+        selectedFolder = nil
     }
 
     public func disconnect() async {

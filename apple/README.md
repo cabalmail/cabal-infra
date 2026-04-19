@@ -133,23 +133,24 @@ are expanded in the sections further down.
    certificate](#exporting-the-distribution-certificate) for the export
    flow that produces `APPLE_DISTRIBUTION_CERT_P12` /
    `APPLE_DISTRIBUTION_CERT_PASSWORD`.
-3. **(Optional) Register both bundle identifiers** in the Developer portal
-   at [developer.apple.com](https://developer.apple.com/account) →
+3. **Register both bundle identifiers** in the Developer portal at
+   [developer.apple.com](https://developer.apple.com/account) →
    Certificates, Identifiers & Profiles → **Identifiers** → **+**:
    - App ID `com.cabalmail.Cabalmail` (description: `Cabalmail`)
    - App ID `com.cabalmail.CabalmailMac` (description: `Cabalmail Mac`)
 
-   `xcodebuild -allowProvisioningUpdates` together with the Admin API
-   key from the next step will auto-register these on first archive,
-   so skipping this is fine. Registering manually is useful if you want
-   to pre-enable specific Capabilities (Push, Associated Domains, etc.);
-   otherwise leave that for later phases.
-4. **Create an App Store Connect API key** with the **Admin** role. See
+   CI uses **manual code signing**, so App IDs must exist before you
+   create the matching provisioning profiles in the next step.
+4. **Create the provisioning profiles** for each App ID. See
+   [Creating provisioning profiles](#creating-provisioning-profiles) —
+   produces the `IOS_APP_STORE_PROFILE` / `MAC_APP_STORE_PROFILE` /
+   (optional) `MAC_DEVID_PROFILE` secrets.
+5. **Create an App Store Connect API key** with the **App Manager** role. See
    [Creating the App Store Connect API key](#creating-the-app-store-connect-api-key)
    — produces the `APP_STORE_CONNECT_API_KEY_ID` /
    `APP_STORE_CONNECT_API_ISSUER_ID` / `APP_STORE_CONNECT_API_KEY_P8`
    triple.
-5. **Create two App Store Connect app records** at
+6. **Create two App Store Connect app records** at
    [appstoreconnect.apple.com](https://appstoreconnect.apple.com) → Apps
    → **+** → New App:
 
@@ -165,8 +166,8 @@ are expanded in the sections further down.
    Without these records, CI uploads land in App Store Connect but
    aren't attached to anything visible and you cannot distribute the
    build.
-6. **Populate the GitHub secrets** listed in the next section.
-7. **Populate TestFlight when you want to install a build.** CI uploads
+7. **Populate the GitHub secrets** listed in the next section.
+8. **Populate TestFlight when you want to install a build.** CI uploads
    succeed without any TestFlight setup — builds land in each app
    record's Builds list after ~5–30 minutes of Apple-side processing.
    Before anyone (including you) can install one, you need a testing
@@ -190,15 +191,21 @@ are expanded in the sections further down.
 jobs run unsigned (`CODE_SIGNING_ALLOWED=NO`) and require **no** secrets —
 PRs from any branch get green CI out of the box.
 
-The `upload-ios` and `upload-mac` jobs sign and push to TestFlight. They are
-gated on the secrets below; set all six to enable them. The workflow skips
-the upload jobs cleanly if any are absent, naming the specific missing
-secret(s) in the workflow summary.
+The `upload-ios` and `upload-mac` jobs sign and push to TestFlight using
+**manual code signing**: no `-allowProvisioningUpdates`, no auto-creation of
+Development or Distribution certificates from the runner. The archive
+grabs the provisioning profile out of a pre-installed file identified by
+its UUID. One cost: you register the profile once and supply it as a
+secret. One benefit: Apple's per-team certificate cap (2 Development /
+3 Distribution) can't fail the build the way it does under
+auto-provisioning.
 
-Secrets may be set at the repository level (affecting all environments) or
-per-environment under Settings → Environments → `stage` / `prod`.
-Environment-scoped secrets override repo-level ones, so you can use a
-different key set for prod than for stage if desired.
+The jobs are gated on the secrets below. The workflow skips the upload
+jobs cleanly if any are absent, naming the specific missing secret(s) in
+the workflow summary. Secrets may be set at the repository level or
+per-environment (Settings → Environments → `stage` / `prod`).
+
+**Required (both jobs):**
 
 | Secret | What it is | Where to get it |
 |---|---|---|
@@ -209,20 +216,35 @@ different key set for prod than for stage if desired.
 | `APP_STORE_CONNECT_API_ISSUER_ID` | UUID shown next to "Issuer ID" on the same page | — |
 | `APP_STORE_CONNECT_API_KEY_P8` | base64 of the `.p8` key file | See [Creating the App Store Connect API key](#creating-the-app-store-connect-api-key) below |
 
-The App Store Connect API key triple (`KEY_ID` + `ISSUER_ID` + `P8`) is used for
-provisioning-profile fetch, TestFlight upload, and macOS `notarytool` submission
-— no separate notarization credentials are needed.
+**Required (iOS job only):**
 
-**Optional — for notarized direct-distribution .app artifact:**
+| Secret | What it is |
+|---|---|
+| `IOS_APP_STORE_PROFILE` | base64 of the `.mobileprovision` for `com.cabalmail.Cabalmail` (App Store distribution). See [Creating provisioning profiles](#creating-provisioning-profiles) below. |
+
+**Required (macOS job only):**
+
+| Secret | What it is |
+|---|---|
+| `MAC_APP_STORE_PROFILE` | base64 of the `.provisionprofile` for `com.cabalmail.CabalmailMac` (App Store distribution). |
+
+**Optional (macOS notarized `.app` artifact):**
 
 | Secret | What it is |
 |---|---|
 | `DEVELOPER_ID_CERT_P12` | base64 of your **Developer ID Application** `.p12` (different cert type from Apple Distribution) |
 | `DEVELOPER_ID_CERT_PASSWORD` | Password you set when exporting the `.p12` |
+| `MAC_DEVID_PROFILE` | base64 of the `.provisionprofile` for `com.cabalmail.CabalmailMac` (Developer ID distribution). Both `DEVELOPER_ID_CERT_P12` and this must be set to produce the notarized artifact; either missing one and the job completes after the TestFlight upload and skips notarization. |
 
-See [Optional: Developer ID certificate for notarized
+The App Store Connect API key triple (`KEY_ID` + `ISSUER_ID` + `P8`) is used
+for `altool` uploads and macOS `notarytool` submission. Under manual signing
+`xcodebuild` itself no longer needs the key at archive time, but the other
+callers still do.
+
+See [Creating provisioning profiles](#creating-provisioning-profiles) for
+the one-time setup and [Optional: Developer ID certificate for notarized
 artifacts](#optional-developer-id-certificate-for-notarized-artifacts) for
-creation/export steps.
+the Developer ID flow.
 
 ### Exporting the distribution certificate
 
@@ -256,15 +278,58 @@ team will not work for TestFlight.
    rm ~/Desktop/cabalmail-dist.p12
    ```
 
+### Creating provisioning profiles
+
+CI signs every archive with a provisioning profile you created ahead of
+time. Three profiles are needed at most — iOS App Store, macOS App Store,
+macOS Developer ID — and each lives in App Store Connect referencing the
+distribution cert you just exported. Recreate them whenever the cert rolls
+(typically once a year); otherwise nothing to do.
+
+1. **Register the App IDs** (one-time) at
+   [developer.apple.com → Identifiers](https://developer.apple.com/account/resources/identifiers/list)
+   → **+**, if you haven't already:
+   - `com.cabalmail.Cabalmail` (App IDs → iOS, tvOS, watchOS, visionOS)
+   - `com.cabalmail.CabalmailMac` (App IDs → macOS)
+
+2. **Create the profiles** at
+   [developer.apple.com → Profiles](https://developer.apple.com/account/resources/profiles/list)
+   → **+**:
+
+   | Profile | Distribution type | App ID | Certificate | Filename extension |
+   |---|---|---|---|---|
+   | Cabalmail iOS App Store | App Store | `com.cabalmail.Cabalmail` | Apple Distribution | `.mobileprovision` |
+   | Cabalmail macOS App Store | App Store | `com.cabalmail.CabalmailMac` | Apple Distribution | `.provisionprofile` |
+   | Cabalmail macOS Developer ID *(optional)* | Developer ID | `com.cabalmail.CabalmailMac` | Developer ID Application | `.provisionprofile` |
+
+   Profile names are arbitrary — CI matches by the UUID embedded in the
+   file, not the name.
+
+3. **Download each profile** (click the profile → **Download**).
+
+4. **Base64-encode each** and paste into the matching GitHub secret:
+   ```sh
+   base64 -i "Cabalmail_iOS_App_Store.mobileprovision" | tr -d '\n' | pbcopy
+   ```
+   | Downloaded file | GitHub secret |
+   |---|---|
+   | iOS `.mobileprovision` | `IOS_APP_STORE_PROFILE` |
+   | macOS App Store `.provisionprofile` | `MAC_APP_STORE_PROFILE` |
+   | macOS Developer ID `.provisionprofile` | `MAC_DEVID_PROFILE` |
+
+5. **Delete the downloaded files** — they embed the team's distribution
+   cert public key and the App ID's capabilities, and can be re-created
+   from the portal if you need them again.
+
 ### Creating the App Store Connect API key
 
 1. App Store Connect → **Users and Access** → **Integrations** tab → **Keys**.
 2. Click the **+** to generate a new key.
-3. Name it something descriptive (e.g. `Cabalmail CI`). Role: **Admin**.
-   App Manager is *almost* enough — it covers TestFlight uploads — but it
-   cannot create or fetch provisioning profiles via the API, which
-   `xcodebuild -allowProvisioningUpdates` needs during archive/export.
-   Admin is the narrowest built-in role that grants both.
+3. Name it something descriptive (e.g. `Cabalmail CI`). Role: **App Manager**.
+   App Manager covers everything CI still needs — TestFlight upload,
+   notarization — now that archives sign manually and don't call the
+   profile-creation API. (Earlier revisions of this setup required
+   Admin.)
 4. Copy the **Issuer ID** (top of the page) → `APP_STORE_CONNECT_API_ISSUER_ID`.
 5. Copy the **Key ID** (shown in the row for the new key) →
    `APP_STORE_CONNECT_API_KEY_ID`.
@@ -330,11 +395,19 @@ schema is modelled by `CabalmailKit.Configuration`.
 |---|---|---|
 | `kit-test` | Any push touching `apple/**` or the workflow file | SwiftLint + `xcodebuild test` on CabalmailKit across macOS / iOS / visionOS destinations |
 | `app-build` | Same | Unsigned `xcodebuild build` for `Cabalmail` (iOS) and `CabalmailMac` (macOS) |
-| `upload-ios` | Pushes to `main` or `stage`, with the six signing secrets configured | Signed archive → TestFlight upload |
-| `upload-mac` | Same | Signed App Store `.pkg` → TestFlight upload, plus a developer-id export → `notarytool submit --wait` → `stapler staple` → uploaded as a workflow artifact |
+| `upload-ios` | Pushes to `main` or `stage`, with the seven signing secrets configured | Manual-signed archive → TestFlight upload |
+| `upload-mac` | Same | Manual-signed App Store `.pkg` → TestFlight upload, plus (optional) a Developer ID export → `notarytool submit --wait` → `stapler staple` → uploaded as a workflow artifact |
 
 Upload jobs gracefully no-op (with a workflow warning) when secrets are
 missing. Build and test jobs never require secrets.
+
+Manual signing installs a pre-created provisioning profile from a GitHub
+secret via `.github/actions/install-provisioning-profile` (a small
+composite action) and passes the profile's UUID to `xcodebuild` as
+`PROVISIONING_PROFILE_SPECIFIER`. No `-allowProvisioningUpdates`, no
+auto-provisioning, no Apple Development cert creation from the runner.
+See the [GitHub secrets for CI](#github-secrets-for-ci) section above for
+how to supply each profile.
 
 Pinned Xcode version lives in the `XCODE_VERSION` env var at the top of the
 workflow; bump it in lockstep with the deployment targets in `project.yml`

@@ -39,27 +39,26 @@ struct MessageListView: View {
                 ProgressView("Fetching messages…")
             }
             ForEach(model.envelopes) { envelope in
-                NavigationLink(value: envelope) {
-                    MessageRow(envelope: envelope)
-                }
-                .swipeActions(edge: .trailing) {
-                    Button(role: .destructive) {
-                        Task { await model.dispose(envelope) }
-                    } label: {
-                        Label("Archive", systemImage: "archivebox")
+                MessageRow(envelope: envelope)
+                    .tag(envelope)
+                    .swipeActions(edge: .trailing) {
+                        Button(role: .destructive) {
+                            Task { await model.dispose(envelope) }
+                        } label: {
+                            Label("Archive", systemImage: "archivebox")
+                        }
                     }
-                }
-                .swipeActions(edge: .leading) {
-                    Button {
-                        Task { await model.toggleFlag(envelope) }
-                    } label: {
-                        Label("Flag", systemImage: "flag")
+                    .swipeActions(edge: .leading) {
+                        Button {
+                            Task { await model.toggleFlag(envelope) }
+                        } label: {
+                            Label("Flag", systemImage: "flag")
+                        }
+                        .tint(.orange)
                     }
-                    .tint(.orange)
-                }
-                .task {
-                    await model.loadMoreIfNeeded(currentItem: envelope)
-                }
+                    .task {
+                        await model.loadMoreIfNeeded(currentItem: envelope)
+                    }
             }
             if model.isLoadingMore {
                 ProgressView()
