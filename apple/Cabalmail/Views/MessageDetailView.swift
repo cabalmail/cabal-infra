@@ -6,6 +6,13 @@ import CabalmailKit
 /// Body rendering prefers HTML when both alternatives are present (matches
 /// the React app). Remote content is gated off by default per the plan's
 /// Phase 4 preference; the toolbar button toggles the reload.
+///
+/// Layout: the header block and attachment strip sit in a fixed-height
+/// region at the top; the body fills the remaining height of the detail
+/// column with its own scroll. Previously we wrapped everything in a single
+/// outer `ScrollView`, which forced the `WKWebView` onto a fixed `minHeight`
+/// (the web view has no intrinsic content size for SwiftUI to grow into),
+/// so resizing the window had no effect on the reading area.
 struct MessageDetailView: View {
     let folder: Folder
     let envelope: Envelope
@@ -14,17 +21,22 @@ struct MessageDetailView: View {
     @State private var model: MessageDetailViewModel?
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                headerBlock
-                Divider()
-                if let model {
-                    body(for: model)
-                } else {
-                    ProgressView()
-                }
+        VStack(alignment: .leading, spacing: 0) {
+            headerBlock
+                .padding(.horizontal)
+                .padding(.top)
+            if let attachments = model?.attachments, !attachments.isEmpty {
+                AttachmentStrip(attachments: attachments)
+                    .padding(.vertical, 8)
             }
-            .padding()
+            Divider()
+            if let model {
+                body(for: model)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
         .navigationTitle(envelope.subject ?? "(no subject)")
         #if os(iOS) || os(visionOS)
@@ -73,27 +85,32 @@ struct MessageDetailView: View {
         if let errorMessage = model.errorMessage {
             Label(errorMessage, systemImage: "exclamationmark.triangle")
                 .foregroundStyle(.red)
+                .padding()
         } else if let html = model.htmlBody {
+            // WKWebView manages its own scrolling; fill the available space
+            // and let it page through tall messages internally.
             HTMLBodyView(
                 html: html,
                 inlineImages: model.inlineImages,
                 allowRemote: model.remoteContentAllowed
             )
-            .frame(minHeight: 400)
         } else if let plain = model.plainText {
-            Text(plain)
-                .font(.body)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            // `.primary` foreground adapts to light/dark mode and gives
+            // message text the same contrast as the surrounding chrome.
+            ScrollView {
+                Text(plain)
+                    .font(.body)
+                    .foregroundStyle(.primary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+            }
         } else if model.isLoading {
             ProgressView("Fetching message…")
         } else {
             Text("No renderable body.")
                 .foregroundStyle(.secondary)
-        }
-        if !model.attachments.isEmpty {
-            Divider().padding(.vertical, 4)
-            AttachmentStrip(attachments: model.attachments)
+                .padding()
         }
     }
 

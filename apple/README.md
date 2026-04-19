@@ -205,10 +205,13 @@ secret. One benefit: Apple's per-team certificate cap (2 Development /
 3 Distribution) can't fail the build the way it does under
 auto-provisioning.
 
-The jobs are gated on the secrets below. The workflow skips the upload
-jobs cleanly if any are absent, naming the specific missing secret(s) in
-the workflow summary. Secrets may be set at the repository level or
-per-environment (Settings → Environments → `stage` / `prod`).
+The jobs are gated on the secrets below. `upload-ios` skips cleanly if
+any of its required secrets are absent, naming the specific missing
+secret(s) in the workflow summary. `upload-mac` **fails** in the same
+situation — missing Mac signing secrets on a `main` / `stage` push is
+treated as a release regression rather than an opt-in skip. Secrets may
+be set at the repository level or per-environment (Settings →
+Environments → `stage` / `prod`).
 
 **Required (both jobs):**
 
@@ -438,8 +441,10 @@ schema is modelled by `CabalmailKit.Configuration`.
 | `upload-ios` | Pushes to `main` or `stage`, with the seven signing secrets configured | Manual-signed archive → TestFlight upload |
 | `upload-mac` | Same | Manual-signed App Store `.pkg` → TestFlight upload, plus (optional) a Developer ID export → `notarytool submit --wait` → `stapler staple` → uploaded as a workflow artifact |
 
-Upload jobs gracefully no-op (with a workflow warning) when secrets are
-missing. Build and test jobs never require secrets.
+`upload-ios` gracefully no-ops (with a workflow warning) when its
+required secrets are missing. `upload-mac` fails the workflow in the
+same situation — treat a missing Mac signing secret as a release-blocking
+bug. Build and test jobs never require secrets.
 
 Manual signing installs a pre-created provisioning profile from a GitHub
 secret via `.github/actions/install-provisioning-profile` (a small
