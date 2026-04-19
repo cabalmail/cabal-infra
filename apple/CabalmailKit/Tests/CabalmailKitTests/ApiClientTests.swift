@@ -5,7 +5,7 @@ final class ApiClientTests: XCTestCase {
     private func makeConfiguration() -> Configuration {
         Configuration(
             controlDomain: "cabalmail.example",
-            domains: ["cabalmail.example"],
+            domains: [MailDomain(domain: "cabalmail.example")],
             invokeUrl: URL(string: "https://api.cabalmail.example/prod")!,
             cognito: .init(region: "us-east-1", userPoolId: "u", clientId: "c")
         )
