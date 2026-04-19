@@ -58,11 +58,11 @@ public actor CabalmailClient {
             transport: httpTransport
         )
         let imap = LiveImapClient(
-            factory: NetworkImapConnectionFactory(host: configuration.controlDomain),
+            factory: NetworkImapConnectionFactory(host: configuration.imapHost),
             authService: auth
         )
         let smtp = LiveSmtpClient(
-            factory: NetworkSmtpConnectionFactory(host: configuration.controlDomain),
+            factory: NetworkSmtpConnectionFactory(host: configuration.smtpHost),
             authService: auth
         )
         let addresses = AddressCache()
