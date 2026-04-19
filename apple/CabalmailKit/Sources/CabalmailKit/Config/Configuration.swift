@@ -8,13 +8,13 @@ import Foundation
 /// app's `config.js` — they are sibling representations of the same values.
 public struct Configuration: Sendable, Codable, Equatable {
     public let controlDomain: String
-    public let domains: [String]
+    public let domains: [MailDomain]
     public let invokeUrl: URL
     public let cognito: CognitoConfiguration
 
     public init(
         controlDomain: String,
-        domains: [String],
+        domains: [MailDomain],
         invokeUrl: URL,
         cognito: CognitoConfiguration
     ) {
@@ -29,6 +29,38 @@ public struct Configuration: Sendable, Codable, Equatable {
         case domains
         case invokeUrl
         case cognito = "cognitoConfig"
+    }
+}
+
+/// One of the mail domains the Cabalmail deployment is authoritative for.
+/// Phase 4 only reads `domain`; Phase 5's From-address picker uses it to
+/// build subdomain choices. The remaining fields mirror the Route 53 hosted-
+/// zone record Terraform writes into `config.json`.
+public struct MailDomain: Sendable, Codable, Equatable, Hashable, Identifiable {
+    public let domain: String
+    public let arn: String?
+    public let zoneId: String?
+    public let nameServers: [String]
+
+    public var id: String { domain }
+
+    public init(
+        domain: String,
+        arn: String? = nil,
+        zoneId: String? = nil,
+        nameServers: [String] = []
+    ) {
+        self.domain = domain
+        self.arn = arn
+        self.zoneId = zoneId
+        self.nameServers = nameServers
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case domain
+        case arn
+        case zoneId = "zone_id"
+        case nameServers = "name_servers"
     }
 }
 

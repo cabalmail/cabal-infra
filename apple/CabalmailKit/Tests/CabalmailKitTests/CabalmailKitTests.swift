@@ -7,12 +7,27 @@ final class CabalmailKitTests: XCTestCase {
     }
 
     func testConfigurationDecodesConfigJsonShape() throws {
-        // Matches the shape emitted by terraform/infra/modules/app/templates/config.js
-        // (which is valid JSON) and the config.json sibling.
+        // Matches the real shape emitted by
+        // terraform/infra/modules/app/templates/config.js (which is valid
+        // JSON) and the config.json sibling. `domains` is an array of
+        // Route 53 hosted-zone records, not a plain string list.
         let json = Data("""
         {
           "control_domain": "example.com",
-          "domains": ["example.com", "example.net"],
+          "domains": [
+            {
+              "arn": "arn:aws:route53:::hostedzone/Z1",
+              "domain": "example.com",
+              "name_servers": ["ns-1.awsdns-0.net"],
+              "zone_id": "Z1"
+            },
+            {
+              "arn": "arn:aws:route53:::hostedzone/Z2",
+              "domain": "example.net",
+              "name_servers": ["ns-2.awsdns-0.net"],
+              "zone_id": "Z2"
+            }
+          ],
           "invokeUrl": "https://api.example.com/prod",
           "cognitoConfig": {
             "region": "us-east-1",
@@ -27,7 +42,8 @@ final class CabalmailKitTests: XCTestCase {
         let config = try JSONDecoder().decode(Configuration.self, from: json)
 
         XCTAssertEqual(config.controlDomain, "example.com")
-        XCTAssertEqual(config.domains, ["example.com", "example.net"])
+        XCTAssertEqual(config.domains.map(\.domain), ["example.com", "example.net"])
+        XCTAssertEqual(config.domains.first?.zoneId, "Z1")
         XCTAssertEqual(config.invokeUrl.absoluteString, "https://api.example.com/prod")
         XCTAssertEqual(config.cognito.region, "us-east-1")
         XCTAssertEqual(config.cognito.userPoolId, "us-east-1_ABC")
@@ -37,7 +53,7 @@ final class CabalmailKitTests: XCTestCase {
     func testClientRoundTripsConfiguration() async throws {
         let config = Configuration(
             controlDomain: "example.com",
-            domains: ["example.com"],
+            domains: [MailDomain(domain: "example.com")],
             invokeUrl: URL(string: "https://api.example.com/prod")!,
             cognito: .init(region: "us-east-1", userPoolId: "u", clientId: "c")
         )
