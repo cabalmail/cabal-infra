@@ -28,6 +28,15 @@ final class MessageListViewModel {
     private var lowestUID: UInt32?
     private var hasMore = true
 
+    /// UIDs currently in flight through `dispose(_:)`. Every swipe enqueues
+    /// the UID here, removes it in `defer`, and short-circuits duplicate
+    /// taps. Prevents re-entrant SwiftUI list mutation when a user taps
+    /// archive rapidly on several rows — the previous pattern queued one
+    /// `UID MOVE` per tap and mutated `envelopes` on completion, which
+    /// allowed `ForEach(model.envelopes)` to diff a shrinking array while
+    /// the in-flight moves were still returning.
+    private var pendingDisposeUIDs: Set<UInt32> = []
+
     init(folder: Folder, client: CabalmailClient, preferences: Preferences) {
         self.folder = folder
         self.client = client
@@ -56,14 +65,40 @@ final class MessageListViewModel {
             }
             self.uidValidity = uidValidity
             let startUID = uidNext > pageSize ? uidNext - pageSize : 1
+            let upperUID = max(uidNext, startUID)
             let fetched = try await client.imapClient.envelopes(
                 folder: folder.path,
-                range: startUID...max(uidNext, startUID)
+                range: startUID...upperUID
             )
+            // Prune any in-memory envelope in the refresh window that the
+            // server didn't return — those UIDs were moved or expunged
+            // (e.g. archived from another device, or by this client before
+            // a crash). Without this, pull-to-refresh never clears stale
+            // rows and "my archived messages still show up in INBOX" after
+            // a relaunch becomes permanent.
+            let fetchedUIDs = Set(fetched.map(\.uid))
+            let disappeared = envelopes
+                .map(\.uid)
+                .filter { uid in uid >= startUID && uid <= upperUID && !fetchedUIDs.contains(uid) }
+            if !disappeared.isEmpty {
+                envelopes.removeAll { disappeared.contains($0.uid) }
+                for uid in disappeared {
+                    await client.bodyCache.remove(
+                        folder: folder.path,
+                        uidValidity: uidValidity,
+                        uid: uid
+                    )
+                }
+            }
             mergeFetched(fetched)
-            lowestUID = fetched.map(\.uid).min() ?? lowestUID
+            lowestUID = envelopes.map(\.uid).min() ?? lowestUID
             hasMore = (lowestUID ?? 0) > 1
-            try await persistCache(uidValidity: uidValidity, uidNext: uidNext)
+            try await persistRefresh(
+                uidValidity: uidValidity,
+                uidNext: uidNext,
+                fetched: fetched,
+                keepingRange: startUID...upperUID
+            )
             errorMessage = nil
         } catch let error as CabalmailError {
             errorMessage = String(describing: error)
@@ -73,7 +108,8 @@ final class MessageListViewModel {
     }
 
     func loadMoreIfNeeded(currentItem: Envelope) async {
-        guard hasMore, !isLoadingMore,
+        guard hasMore, !isLoadingMore, !isLoading,
+              pendingDisposeUIDs.isEmpty,
               envelopes.last?.uid == currentItem.uid,
               let lowestUID,
               lowestUID > 1 else { return }
@@ -87,9 +123,17 @@ final class MessageListViewModel {
                 range: lower...upper
             )
             mergeFetched(fetched)
-            let newLowest = fetched.map(\.uid).min() ?? upper
-            self.lowestUID = newLowest
-            hasMore = newLowest > 1
+            // An empty fetch on a range above UID 1 means the server has no
+            // messages in that band — don't spin indefinitely decrementing
+            // `lowestUID` one at a time. Flag "no more" explicitly.
+            if fetched.isEmpty {
+                hasMore = false
+                self.lowestUID = lower
+            } else {
+                let newLowest = fetched.map(\.uid).min() ?? upper
+                self.lowestUID = newLowest
+                hasMore = newLowest > 1
+            }
             if let uidValidity, let uidNext = envelopes.map(\.uid).max() {
                 try await persistCache(uidValidity: uidValidity, uidNext: uidNext + 1)
             }
@@ -131,6 +175,14 @@ final class MessageListViewModel {
         await setFlag(.seen, add: true, envelope: envelope)
     }
 
+    /// Flip the `\Seen` flag — drives the leading (left-to-right) swipe
+    /// action. Mirrors the Mail.app convention that the same gesture
+    /// toggles between read and unread rather than having two.
+    func toggleSeen(_ envelope: Envelope) async {
+        let add = !envelope.flags.contains(.seen)
+        await setFlag(.seen, add: add, envelope: envelope)
+    }
+
     func toggleFlag(_ envelope: Envelope) async {
         let add = !envelope.flags.contains(.flagged)
         await setFlag(.flagged, add: add, envelope: envelope)
@@ -140,15 +192,49 @@ final class MessageListViewModel {
     /// or Trash. The preference is read on every invocation so a user who
     /// toggles the setting mid-session sees the swipe behavior change
     /// immediately.
+    ///
+    /// Also matches the React webmail behavior by marking the message
+    /// `\Seen` before the move: archived == read. The seen flag is set
+    /// while the message is still in the current folder; post-move the UID
+    /// no longer exists here so `STORE` would reject it.
+    ///
+    /// After the server `UID MOVE` succeeds, the UID is pruned from both
+    /// the in-memory envelope list *and* the persistent envelope cache,
+    /// and the message body cache entry is dropped. Without the cache
+    /// prune, relaunching the app re-hydrated the Inbox from a snapshot
+    /// that still contained the archived UIDs — the "archived messages
+    /// reappear after relaunch" bug.
     func dispose(_ envelope: Envelope) async {
+        guard pendingDisposeUIDs.insert(envelope.uid).inserted else { return }
+        defer { pendingDisposeUIDs.remove(envelope.uid) }
+
         let destination = preferences.disposeAction.destinationFolder
         do {
+            if !envelope.flags.contains(.seen) {
+                try await client.imapClient.setFlags(
+                    folder: folder.path,
+                    uids: [envelope.uid],
+                    flags: [.seen],
+                    operation: .add
+                )
+            }
             try await client.imapClient.move(
                 folder: folder.path,
                 uids: [envelope.uid],
                 destination: destination
             )
             envelopes.removeAll { $0.uid == envelope.uid }
+            if let uidValidity {
+                try? await client.envelopeCache.remove(
+                    uids: [envelope.uid],
+                    folder: folder.path
+                )
+                await client.bodyCache.remove(
+                    folder: folder.path,
+                    uidValidity: uidValidity,
+                    uid: envelope.uid
+                )
+            }
         } catch {
             errorMessage = "\(error)"
         }
@@ -158,10 +244,15 @@ final class MessageListViewModel {
     /// render the right swipe-action label and icon without reaching into
     /// the preferences environment itself.
     var disposeAction: DisposeAction { preferences.disposeAction }
+}
 
-    // MARK: - Internals
+// MARK: - Internals
 
-    private func setFlag(_ flag: Flag, add: Bool, envelope: Envelope) async {
+// Lifted into an extension so the primary type body stays under SwiftLint's
+// 250-line cap. Same-file extension — all helpers remain file-private to
+// the view model.
+extension MessageListViewModel {
+    func setFlag(_ flag: Flag, add: Bool, envelope: Envelope) async {
         do {
             try await client.imapClient.setFlags(
                 folder: folder.path,
@@ -221,6 +312,26 @@ final class MessageListViewModel {
             envelopes: envelopes,
             uidValidity: uidValidity,
             uidNext: uidNext,
+            into: folder.path
+        )
+    }
+
+    /// Persist the refresh window using `replace(..., keepingRange:)` so
+    /// UIDs missing from the server's response are pruned from the cache
+    /// as well as the in-memory list. Older pages outside the refresh
+    /// window are preserved — the caller typically fetches only the top
+    /// `pageSize` UIDs.
+    private func persistRefresh(
+        uidValidity: UInt32,
+        uidNext: UInt32,
+        fetched: [Envelope],
+        keepingRange: ClosedRange<UInt32>
+    ) async throws {
+        try await client.envelopeCache.replace(
+            envelopes: fetched,
+            uidValidity: uidValidity,
+            uidNext: uidNext,
+            keepingRange: keepingRange,
             into: folder.path
         )
     }

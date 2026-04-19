@@ -67,6 +67,82 @@ public actor EnvelopeCache {
         )
     }
 
+    /// Drops the given UIDs from the folder's on-disk snapshot. Called by
+    /// the view model after a successful `UID MOVE` so the cached mirror
+    /// doesn't keep pointing at a message the server no longer has in this
+    /// mailbox — the chief cause of "archived messages reappear after
+    /// relaunch" before this hook existed.
+    ///
+    /// No-op when the folder has no snapshot yet or the UIDs aren't in it.
+    public func remove(uids: [UInt32], folder: String) throws {
+        guard !uids.isEmpty, let existing = snapshot(for: folder) else { return }
+        var envelopes = existing.envelopes
+        var changed = false
+        for uid in uids where envelopes.removeValue(forKey: uid) != nil {
+            changed = true
+        }
+        guard changed else { return }
+        try store(
+            Snapshot(
+                uidValidity: existing.uidValidity,
+                uidNext: existing.uidNext,
+                envelopes: envelopes
+            ),
+            for: folder
+        )
+    }
+
+    /// Writes a fresh snapshot that merges `envelopes` into the existing
+    /// cache, but with a critical difference from `merge(...)`: any UID
+    /// inside `keepingRange` that the server *didn't* return is dropped.
+    ///
+    /// Semantics:
+    ///
+    /// - UIDs outside `keepingRange` are retained (those represent older
+    ///   pages the caller didn't refetch).
+    /// - UIDs inside `keepingRange` are kept only if the server returned
+    ///   them in `envelopes`.
+    /// - A `nil` `keepingRange` replaces the full folder — any cached UID
+    ///   missing from `envelopes` is dropped.
+    ///
+    /// This is the path `MessageListViewModel.refresh` uses so a move /
+    /// expunge that happened on another client (webmail, another device,
+    /// or this client before a crash) prunes stale rows on pull-to-refresh.
+    public func replace(
+        envelopes: [Envelope],
+        uidValidity: UInt32,
+        uidNext: UInt32,
+        keepingRange: ClosedRange<UInt32>?,
+        into folder: String
+    ) throws {
+        let existing = snapshot(for: folder)
+        var merged: [UInt32: Envelope]
+        if let existing, existing.uidValidity == uidValidity {
+            merged = existing.envelopes
+        } else {
+            merged = [:]
+        }
+        if let keepingRange {
+            // Drop cached UIDs inside the refresh window that the server
+            // didn't return. Outside-window entries (older pages) stay.
+            merged = merged.filter { uid, _ in
+                if keepingRange.contains(uid) {
+                    return envelopes.contains { $0.uid == uid }
+                }
+                return true
+            }
+        } else {
+            merged = [:]
+        }
+        for envelope in envelopes {
+            merged[envelope.uid] = envelope
+        }
+        try store(
+            Snapshot(uidValidity: uidValidity, uidNext: uidNext, envelopes: merged),
+            for: folder
+        )
+    }
+
     private func fileURL(for folder: String) -> URL {
         // Path-separator characters would nest into real subdirectories on
         // disk — collapse them into a single hash-safe filename.

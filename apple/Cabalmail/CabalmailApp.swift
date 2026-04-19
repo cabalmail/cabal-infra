@@ -18,6 +18,13 @@ struct CabalmailApp: App {
                 .environment(appState)
                 .environment(preferences)
                 .preferredColorScheme(colorScheme(for: preferences.theme))
+                .task {
+                    // Launch-time auto-restore. `restoreIfPossible()` is a
+                    // no-op once the user is signed in, so SwiftUI re-
+                    // running this `.task` across scene re-attaches (e.g.
+                    // on resume) stays cheap.
+                    await appState.restoreIfPossible()
+                }
         }
     }
 

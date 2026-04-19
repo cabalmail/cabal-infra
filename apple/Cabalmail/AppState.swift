@@ -15,6 +15,11 @@ final class AppState {
     enum Status: Sendable, Equatable {
         case signedOut
         case signingIn
+        /// Launched with stored credentials; we're resolving whether they
+        /// still work. The UI shows a splash rather than the sign-in form
+        /// so the user doesn't see it flash for half a second on every
+        /// launch.
+        case restoring
         case signedIn
         case error(String)
     }
@@ -65,6 +70,87 @@ final class AppState {
         try? await client.authService.signOut()
         self.client = nil
         self.status = .signedOut
+    }
+
+    /// Launch-time auto-restore. Looks at the UserDefaults-persisted
+    /// `controlDomain` + `lastUsername` and the Keychain-persisted Cognito
+    /// tokens; if all three are present and the refresh token is still
+    /// valid (or the ID token hasn't expired), transitions straight to
+    /// `.signedIn` without prompting the user.
+    ///
+    /// Error handling mirrors the plan's cases:
+    ///
+    /// - Missing inputs (first launch, or post-signout) → silent signed-out.
+    /// - Valid tokens → signed-in.
+    /// - Refresh-token expired / revoked → clear the keychain so the sign-in
+    ///   form starts clean, but keep `lastUsername` / `controlDomain` so
+    ///   the form pre-fills.
+    /// - Network / transport error → stay signed out *without* clearing
+    ///   the keychain, so the next launch (or a manual sign-in) can
+    ///   recover without forcing a password re-entry. This is the "airplane
+    ///   mode at launch" path.
+    /// - Any other error → `.error(message)`.
+    ///
+    /// Idempotent: if a client is already wired or sign-in is in flight,
+    /// this is a no-op, so `.task` can call it without worrying about
+    /// SwiftUI's lifecycle re-firing it.
+    func restoreIfPossible() async {
+        guard client == nil else { return }
+        switch status {
+        case .signingIn, .restoring, .signedIn:
+            return
+        default:
+            break
+        }
+        let domain = controlDomain
+        let username = lastUsername
+        guard !domain.isEmpty, !username.isEmpty else {
+            status = .signedOut
+            return
+        }
+        let secureStore = KeychainSecureStore()
+        guard (try? secureStore.get(SecureStoreKey.authTokens)) != nil else {
+            status = .signedOut
+            return
+        }
+
+        status = .restoring
+        do {
+            let configuration = try await ConfigLoader.load(controlDomain: domain)
+            let cacheDirectory = try makeCacheDirectory()
+            let newClient = try CabalmailClient.make(
+                configuration: configuration,
+                secureStore: secureStore,
+                cacheDirectory: cacheDirectory
+            )
+            // Touching `currentIdToken()` validates the keychain contents:
+            // a fresh ID token returns cached; an expired one triggers a
+            // silent refresh; an expired / revoked refresh throws
+            // `.authExpired` (Cognito's `NotAuthorizedException`).
+            _ = try await newClient.authService.currentIdToken()
+            self.client = newClient
+            self.status = .signedIn
+        } catch let error as CabalmailError {
+            switch error {
+            case .authExpired, .invalidCredentials, .notSignedIn:
+                // Refresh token is gone — clear the keychain so a stale
+                // token doesn't keep tripping the sign-in form.
+                try? secureStore.remove(SecureStoreKey.authTokens)
+                try? secureStore.remove(SecureStoreKey.imapUsername)
+                try? secureStore.remove(SecureStoreKey.imapPassword)
+                status = .signedOut
+            case .network, .transport, .timeout, .cancelled, .notConfigured:
+                // Transient — leave the keychain alone. The sign-in form
+                // will show but pre-filled, and a retry (or a later launch)
+                // has a chance to recover without forcing the user to
+                // re-enter their password.
+                status = .signedOut
+            default:
+                status = .error(message(for: error))
+            }
+        } catch {
+            status = .error(error.localizedDescription)
+        }
     }
 
     /// Returns the application-support cache directory for this app, creating
