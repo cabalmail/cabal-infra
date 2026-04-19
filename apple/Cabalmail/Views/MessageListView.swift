@@ -73,26 +73,7 @@ struct MessageListView: View {
                 ProgressView("Fetching messages…")
             }
             ForEach(model.envelopes) { envelope in
-                MessageRow(envelope: envelope)
-                    .tag(envelope)
-                    .swipeActions(edge: .trailing) {
-                        Button(role: .destructive) {
-                            Task { await model.dispose(envelope) }
-                        } label: {
-                            disposeActionLabel(for: model.disposeAction)
-                        }
-                    }
-                    .swipeActions(edge: .leading) {
-                        Button {
-                            Task { await model.toggleFlag(envelope) }
-                        } label: {
-                            Label("Flag", systemImage: "flag")
-                        }
-                        .tint(.orange)
-                    }
-                    .task {
-                        await model.loadMoreIfNeeded(currentItem: envelope)
-                    }
+                row(for: envelope, model: model)
             }
             if model.isLoadingMore {
                 ProgressView()
@@ -109,10 +90,72 @@ struct MessageListView: View {
     }
 
     @ViewBuilder
+    private func row(for envelope: Envelope, model: MessageListViewModel) -> some View {
+        MessageRow(envelope: envelope)
+            .tag(envelope)
+            .swipeActions(edge: .trailing) {
+                Button(role: .destructive) {
+                    Task { await model.dispose(envelope) }
+                } label: {
+                    disposeActionLabel(for: model.disposeAction)
+                }
+            }
+            .swipeActions(edge: .leading) {
+                Button {
+                    Task { await model.toggleSeen(envelope) }
+                } label: {
+                    markReadLabel(for: envelope)
+                }
+                .tint(.blue)
+            }
+            .contextMenu { rowContextMenu(for: envelope, model: model) }
+            .task {
+                await model.loadMoreIfNeeded(currentItem: envelope)
+            }
+    }
+
+    @ViewBuilder
+    private func rowContextMenu(
+        for envelope: Envelope,
+        model: MessageListViewModel
+    ) -> some View {
+        Button {
+            Task { await model.toggleFlag(envelope) }
+        } label: {
+            Label(
+                envelope.flags.contains(.flagged) ? "Unflag" : "Flag",
+                systemImage: envelope.flags.contains(.flagged) ? "flag.slash" : "flag"
+            )
+        }
+        Button {
+            Task { await model.toggleSeen(envelope) }
+        } label: {
+            Label(
+                envelope.flags.contains(.seen) ? "Mark as Unread" : "Mark as Read",
+                systemImage: envelope.flags.contains(.seen) ? "envelope.badge" : "envelope.open"
+            )
+        }
+        Button(role: .destructive) {
+            Task { await model.dispose(envelope) }
+        } label: {
+            disposeActionLabel(for: model.disposeAction)
+        }
+    }
+
+    @ViewBuilder
     private func disposeActionLabel(for action: DisposeAction) -> some View {
         switch action {
         case .archive: Label("Archive", systemImage: "archivebox")
         case .trash:   Label("Trash", systemImage: "trash")
+        }
+    }
+
+    @ViewBuilder
+    private func markReadLabel(for envelope: Envelope) -> some View {
+        if envelope.flags.contains(.seen) {
+            Label("Unread", systemImage: "envelope.badge")
+        } else {
+            Label("Read", systemImage: "envelope.open")
         }
     }
 }

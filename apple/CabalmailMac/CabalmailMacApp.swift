@@ -18,6 +18,9 @@ struct CabalmailMacApp: App {
                 .environment(appState)
                 .environment(preferences)
                 .preferredColorScheme(colorScheme(for: preferences.theme))
+                .task {
+                    await appState.restoreIfPossible()
+                }
         }
         #if os(macOS)
         Settings {

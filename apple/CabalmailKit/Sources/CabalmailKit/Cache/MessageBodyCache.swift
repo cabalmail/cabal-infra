@@ -42,6 +42,16 @@ public actor MessageBodyCache {
         try? fileManager.removeItem(at: url)
     }
 
+    /// Drops a single cached body. Called from `MessageListViewModel.dispose`
+    /// after a successful `UID MOVE`, so the Archive / Trash destination
+    /// doesn't have to re-fetch the full body if the user opens it there —
+    /// we handle that via a separate store at read time — but the source
+    /// folder's cache entry is stale by definition once the UID is gone.
+    public func remove(folder: String, uidValidity: UInt32, uid: UInt32) {
+        let url = url(folder: folder, uidValidity: uidValidity, uid: uid)
+        try? fileManager.removeItem(at: url)
+    }
+
     // MARK: - Internals
 
     private func url(folder: String, uidValidity: UInt32, uid: UInt32) -> URL {
