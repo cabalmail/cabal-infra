@@ -154,6 +154,98 @@ final class ImapClientTests: XCTestCase {
         XCTAssertTrue(outbound.contains("UID EXPUNGE 7"))
     }
 
+    func testTransportErrorTriggersReconnectAndRetry() async throws {
+        // Stream 1 completes LOGIN, then throws a transport error on the
+        // next read — simulating a socket that's been on the far side of a
+        // sleep/wake while the laptop switched networks.
+        let stale = ScriptedByteStream()
+        await stale.enqueue("* OK IMAP4rev1 Service Ready\r\n")
+        await stale.enqueue("A1 OK LOGIN completed\r\n")
+        await stale.enqueueError(CabalmailError.transport("Socket is not connected"))
+
+        // Stream 2 is a fresh socket: greeting, LOGIN on the new connection,
+        // then the LIST / LSUB responses the retry actually consumes.
+        let fresh = ScriptedByteStream()
+        await fresh.enqueue("* OK IMAP4rev1 Service Ready\r\n")
+        await fresh.enqueue("A1 OK LOGIN completed\r\n")
+        await fresh.enqueue(#"* LIST (\HasNoChildren) "." "INBOX"\#r\#n"#)
+        await fresh.enqueue("A2 OK LIST completed\r\n")
+        await fresh.enqueue(#"* LSUB () "." "INBOX"\#r\#n"#)
+        await fresh.enqueue("A3 OK LSUB completed\r\n")
+
+        let factory = RotatingConnectionFactory(streams: [stale, fresh])
+        let client = LiveImapClient(factory: factory, authService: StubAuthService())
+        try await client.connectAndAuthenticate()
+
+        let folders = try await client.listFolders()
+        XCTAssertEqual(folders.map(\.path), ["INBOX"])
+
+        let madeCount = await factory.madeCount
+        XCTAssertEqual(madeCount, 2, "Retry should have opened a second connection")
+
+        let freshOutbound = await fresh.outboundString
+        XCTAssertTrue(freshOutbound.contains("LOGIN \"alice\" \"hunter2\""))
+        XCTAssertTrue(freshOutbound.contains("LIST \"\" \"*\""))
+    }
+
+    func testTransportErrorRetryReSelectsFolder() async throws {
+        // After a stale-socket failure, the retry must SELECT the mailbox
+        // again on the fresh connection before re-issuing the UID FETCH —
+        // the reset of `selectedFolder` during invalidate is what guarantees
+        // this.
+        let stale = ScriptedByteStream()
+        await stale.enqueue("* OK IMAP4rev1 Service Ready\r\n")
+        await stale.enqueue("A1 OK LOGIN completed\r\n")
+        await stale.enqueueError(CabalmailError.transport("Socket is not connected"))
+
+        let fresh = ScriptedByteStream()
+        await fresh.enqueue("* OK IMAP4rev1 Service Ready\r\n")
+        await fresh.enqueue("A1 OK LOGIN completed\r\n")
+        await fresh.enqueue("* 10 EXISTS\r\n")
+        await fresh.enqueue("A2 OK [READ-WRITE] SELECT completed\r\n")
+        let body = "Subject: Hi\r\n\r\nHello world\r\n"
+        let bodyBytes = Data(body.utf8)
+        let header = "* 1 FETCH (UID 42 FLAGS (\\Seen) BODY[] {\(bodyBytes.count)}\r\n"
+        await fresh.enqueue(Data(header.utf8))
+        await fresh.enqueue(bodyBytes)
+        await fresh.enqueue(")\r\n")
+        await fresh.enqueue("A3 OK UID FETCH completed\r\n")
+
+        let factory = RotatingConnectionFactory(streams: [stale, fresh])
+        let client = LiveImapClient(factory: factory, authService: StubAuthService())
+        try await client.connectAndAuthenticate()
+
+        let raw = try await client.fetchBody(folder: "INBOX", uid: 42)
+        XCTAssertEqual(raw.uid, 42)
+        XCTAssertEqual(raw.bytes, bodyBytes)
+
+        let freshOutbound = await fresh.outboundString
+        XCTAssertTrue(freshOutbound.contains("SELECT \"INBOX\""))
+        XCTAssertTrue(freshOutbound.contains("UID FETCH 42"))
+    }
+
+    func testNonTransportErrorIsNotRetried() async throws {
+        // Server-level errors (IMAP NO/BAD) aren't a transport problem — the
+        // retry path should leave them alone so we don't double-submit
+        // commands that the server already rejected.
+        let stale = ScriptedByteStream()
+        let fresh = ScriptedByteStream()
+        let factory = RotatingConnectionFactory(streams: [stale, fresh])
+        let client = LiveImapClient(factory: factory, authService: StubAuthService())
+        try await signIn(on: client, stream: stale)
+
+        await stale.enqueue("A2 NO CREATE failed: invalid mailbox name\r\n")
+        do {
+            try await client.createFolder(name: "bad/../name", parent: nil)
+            XCTFail("Expected .imapCommandFailed")
+        } catch CabalmailError.imapCommandFailed {
+            // expected — and no reconnect should have happened
+        }
+
+        let madeCount = await factory.madeCount
+        XCTAssertEqual(madeCount, 1, "Server-level error should not open a second connection")
+    }
+
     func testFolderDelimiterTranslation() async throws {
         let stream = ScriptedByteStream()
         let client = LiveImapClient(

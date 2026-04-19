@@ -27,6 +27,11 @@ public protocol ImapClient: Sendable {
     func search(folder: String, query: String) async throws -> [UInt32]
     func append(folder: String, message: Data, flags: Set<Flag>) async throws
     func disconnect() async
+
+    /// Drops any cached connection so the next command reconnects. Used by
+    /// `CabalmailClient`'s network-path monitor to purge sockets established
+    /// against a prior network (sleep/wake, WiFi↔cellular handoff).
+    func invalidate() async
 }
 
 /// Opens a second connection for IDLE and yields untagged events until the
@@ -121,158 +126,224 @@ public actor LiveImapClient: ImapClient {
         selectedFolder = nil
     }
 
+    /// Closes the cached connection without sending LOGOUT. The connection is
+    /// assumed to be unreachable (dead socket after a network change), so we
+    /// cancel it directly rather than trying to speak IMAP across it.
+    public func invalidate() async {
+        guard let stale = connection else { return }
+        connection = nil
+        selectedFolder = nil
+        await stale.close()
+    }
+
     // MARK: - Folders
 
     public func listFolders() async throws -> [Folder] {
-        let conn = try requireConnection()
-        let listResponses = try await conn.sendCommand("LIST \"\" \"*\"")
-        let lsubResponses = try await conn.sendCommand("LSUB \"\" \"*\"")
+        try await withTransportRetry {
+            let conn = try self.requireConnection()
+            let listResponses = try await conn.sendCommand("LIST \"\" \"*\"")
+            let lsubResponses = try await conn.sendCommand("LSUB \"\" \"*\"")
 
-        var subscribed: Set<String> = []
-        for response in lsubResponses {
-            if case let .lsub(_, delimiter, mailbox) = response {
-                self.delimiter = delimiter.isEmpty ? self.delimiter : delimiter
-                subscribed.insert(mailbox)
+            var subscribed: Set<String> = []
+            for response in lsubResponses {
+                if case let .lsub(_, delimiter, mailbox) = response {
+                    self.delimiter = delimiter.isEmpty ? self.delimiter : delimiter
+                    subscribed.insert(mailbox)
+                }
             }
-        }
-        var folders: [Folder] = []
-        for response in listResponses {
-            if case let .list(attributes, delimiter, mailbox) = response {
-                self.delimiter = delimiter.isEmpty ? self.delimiter : delimiter
-                let path = toClientPath(mailbox)
-                folders.append(Folder(
-                    path: path,
-                    attributes: attributes,
-                    isSubscribed: subscribed.contains(mailbox)
-                ))
+            var folders: [Folder] = []
+            for response in listResponses {
+                if case let .list(attributes, delimiter, mailbox) = response {
+                    self.delimiter = delimiter.isEmpty ? self.delimiter : delimiter
+                    let path = self.toClientPath(mailbox)
+                    folders.append(Folder(
+                        path: path,
+                        attributes: attributes,
+                        isSubscribed: subscribed.contains(mailbox)
+                    ))
+                }
             }
+            return folders
         }
-        return folders
     }
 
     public func createFolder(name: String, parent: String?) async throws {
-        let conn = try requireConnection()
-        let fullClientPath: String
-        if let parent, !parent.isEmpty {
-            fullClientPath = "\(parent)/\(name)"
-        } else {
-            fullClientPath = name
+        try await withTransportRetry {
+            let conn = try self.requireConnection()
+            let fullClientPath: String
+            if let parent, !parent.isEmpty {
+                fullClientPath = "\(parent)/\(name)"
+            } else {
+                fullClientPath = name
+            }
+            _ = try await conn.sendCommand("CREATE \(self.quoteAstring(self.toServerPath(fullClientPath)))")
         }
-        _ = try await conn.sendCommand("CREATE \(quoteAstring(toServerPath(fullClientPath)))")
     }
 
     public func deleteFolder(path: String) async throws {
-        let conn = try requireConnection()
-        _ = try await conn.sendCommand("DELETE \(quoteAstring(toServerPath(path)))")
+        try await withTransportRetry {
+            let conn = try self.requireConnection()
+            _ = try await conn.sendCommand("DELETE \(self.quoteAstring(self.toServerPath(path)))")
+        }
     }
 
     public func subscribe(path: String) async throws {
-        let conn = try requireConnection()
-        _ = try await conn.sendCommand("SUBSCRIBE \(quoteAstring(toServerPath(path)))")
+        try await withTransportRetry {
+            let conn = try self.requireConnection()
+            _ = try await conn.sendCommand("SUBSCRIBE \(self.quoteAstring(self.toServerPath(path)))")
+        }
     }
 
     public func unsubscribe(path: String) async throws {
-        let conn = try requireConnection()
-        _ = try await conn.sendCommand("UNSUBSCRIBE \(quoteAstring(toServerPath(path)))")
+        try await withTransportRetry {
+            let conn = try self.requireConnection()
+            _ = try await conn.sendCommand("UNSUBSCRIBE \(self.quoteAstring(self.toServerPath(path)))")
+        }
     }
 
     public func status(path: String) async throws -> FolderStatus {
-        let conn = try requireConnection()
-        let responses = try await conn.sendCommand(
-            "STATUS \(quoteAstring(toServerPath(path))) (MESSAGES UNSEEN RECENT UIDVALIDITY UIDNEXT)"
-        )
-        for response in responses {
-            if case let .status2(_, attrs) = response {
-                return FolderStatus(
-                    messages: attrs["MESSAGES"].map(Int.init),
-                    unseen: attrs["UNSEEN"].map(Int.init),
-                    recent: attrs["RECENT"].map(Int.init),
-                    uidValidity: attrs["UIDVALIDITY"].map { UInt32(truncatingIfNeeded: $0) },
-                    uidNext: attrs["UIDNEXT"].map { UInt32(truncatingIfNeeded: $0) }
-                )
+        try await withTransportRetry {
+            let conn = try self.requireConnection()
+            let responses = try await conn.sendCommand(
+                "STATUS \(self.quoteAstring(self.toServerPath(path))) (MESSAGES UNSEEN RECENT UIDVALIDITY UIDNEXT)"
+            )
+            for response in responses {
+                if case let .status2(_, attrs) = response {
+                    return FolderStatus(
+                        messages: attrs["MESSAGES"].map(Int.init),
+                        unseen: attrs["UNSEEN"].map(Int.init),
+                        recent: attrs["RECENT"].map(Int.init),
+                        uidValidity: attrs["UIDVALIDITY"].map { UInt32(truncatingIfNeeded: $0) },
+                        uidNext: attrs["UIDNEXT"].map { UInt32(truncatingIfNeeded: $0) }
+                    )
+                }
             }
+            return FolderStatus()
         }
-        return FolderStatus()
     }
 
     // MARK: - Messages
 
     public func envelopes(folder: String, range: ClosedRange<UInt32>) async throws -> [Envelope] {
-        let conn = try requireConnection()
-        try await select(folder: folder, on: conn)
-        let spec = "\(range.lowerBound):\(range.upperBound)"
-        let responses = try await conn.sendCommand(
-            "UID FETCH \(spec) (UID FLAGS INTERNALDATE RFC822.SIZE ENVELOPE BODYSTRUCTURE)"
-        )
-        return responses.compactMap { envelopeFromFetch($0) }
+        try await withTransportRetry {
+            let conn = try self.requireConnection()
+            try await self.select(folder: folder, on: conn)
+            let spec = "\(range.lowerBound):\(range.upperBound)"
+            let responses = try await conn.sendCommand(
+                "UID FETCH \(spec) (UID FLAGS INTERNALDATE RFC822.SIZE ENVELOPE BODYSTRUCTURE)"
+            )
+            return responses.compactMap { self.envelopeFromFetch($0) }
+        }
     }
 
     public func fetchBody(folder: String, uid: UInt32) async throws -> RawMessage {
-        let conn = try requireConnection()
-        try await select(folder: folder, on: conn)
-        let responses = try await conn.sendCommand("UID FETCH \(uid) (UID FLAGS BODY.PEEK[])")
-        for response in responses {
-            if case let .fetch(_, attrs) = response, let body = attrs.body {
-                return RawMessage(uid: attrs.uid ?? uid, bytes: body, flags: attrs.flags ?? [])
+        try await withTransportRetry {
+            let conn = try self.requireConnection()
+            try await self.select(folder: folder, on: conn)
+            let responses = try await conn.sendCommand("UID FETCH \(uid) (UID FLAGS BODY.PEEK[])")
+            for response in responses {
+                if case let .fetch(_, attrs) = response, let body = attrs.body {
+                    return RawMessage(uid: attrs.uid ?? uid, bytes: body, flags: attrs.flags ?? [])
+                }
             }
+            throw CabalmailError.protocolError("Server returned no BODY for UID \(uid)")
         }
-        throw CabalmailError.protocolError("Server returned no BODY for UID \(uid)")
     }
 
     public func fetchPart(folder: String, uid: UInt32, partId: String) async throws -> Data {
-        let conn = try requireConnection()
-        try await select(folder: folder, on: conn)
-        let responses = try await conn.sendCommand("UID FETCH \(uid) (BODY.PEEK[\(partId)])")
-        for response in responses {
-            if case let .fetch(_, attrs) = response, let body = attrs.body {
-                return body
+        try await withTransportRetry {
+            let conn = try self.requireConnection()
+            try await self.select(folder: folder, on: conn)
+            let responses = try await conn.sendCommand("UID FETCH \(uid) (BODY.PEEK[\(partId)])")
+            for response in responses {
+                if case let .fetch(_, attrs) = response, let body = attrs.body {
+                    return body
+                }
             }
+            throw CabalmailError.protocolError("Server returned no part \(partId) for UID \(uid)")
         }
-        throw CabalmailError.protocolError("Server returned no part \(partId) for UID \(uid)")
     }
 
     public func setFlags(folder: String, uids: [UInt32], flags: Set<Flag>, operation: FlagOperation) async throws {
-        let conn = try requireConnection()
-        try await select(folder: folder, on: conn)
-        let uidList = uids.map(String.init).joined(separator: ",")
-        let flagList = flags.map { $0.wireValue }.joined(separator: " ")
-        _ = try await conn.sendCommand("UID STORE \(uidList) \(operation.wireValue) (\(flagList))")
+        try await withTransportRetry {
+            let conn = try self.requireConnection()
+            try await self.select(folder: folder, on: conn)
+            let uidList = uids.map(String.init).joined(separator: ",")
+            let flagList = flags.map { $0.wireValue }.joined(separator: " ")
+            _ = try await conn.sendCommand("UID STORE \(uidList) \(operation.wireValue) (\(flagList))")
+        }
     }
 
     public func move(folder: String, uids: [UInt32], destination: String) async throws {
-        let conn = try requireConnection()
-        try await select(folder: folder, on: conn)
-        let uidList = uids.map(String.init).joined(separator: ",")
-        do {
-            _ = try await conn.sendCommand("UID MOVE \(uidList) \(quoteAstring(toServerPath(destination)))")
-            return
-        } catch CabalmailError.imapCommandFailed {
-            // Fallback for servers without MOVE (RFC 6851) — COPY + STORE + EXPUNGE.
-            _ = try await conn.sendCommand("UID COPY \(uidList) \(quoteAstring(toServerPath(destination)))")
-            _ = try await conn.sendCommand("UID STORE \(uidList) +FLAGS (\\Deleted)")
-            _ = try await conn.sendCommand("UID EXPUNGE \(uidList)")
+        try await withTransportRetry {
+            let conn = try self.requireConnection()
+            try await self.select(folder: folder, on: conn)
+            let uidList = uids.map(String.init).joined(separator: ",")
+            do {
+                _ = try await conn.sendCommand("UID MOVE \(uidList) \(self.quoteAstring(self.toServerPath(destination)))")
+                return
+            } catch CabalmailError.imapCommandFailed {
+                // Fallback for servers without MOVE (RFC 6851) — COPY + STORE + EXPUNGE.
+                _ = try await conn.sendCommand("UID COPY \(uidList) \(self.quoteAstring(self.toServerPath(destination)))")
+                _ = try await conn.sendCommand("UID STORE \(uidList) +FLAGS (\\Deleted)")
+                _ = try await conn.sendCommand("UID EXPUNGE \(uidList)")
+            }
         }
     }
 
     public func search(folder: String, query: String) async throws -> [UInt32] {
-        let conn = try requireConnection()
-        try await select(folder: folder, on: conn)
-        let responses = try await conn.sendCommand("UID SEARCH \(query)")
-        for response in responses {
-            if case let .search(ids) = response {
-                return ids
+        try await withTransportRetry {
+            let conn = try self.requireConnection()
+            try await self.select(folder: folder, on: conn)
+            let responses = try await conn.sendCommand("UID SEARCH \(query)")
+            for response in responses {
+                if case let .search(ids) = response {
+                    return ids
+                }
             }
+            return []
         }
-        return []
     }
 
     public func append(folder: String, message: Data, flags: Set<Flag>) async throws {
-        let conn = try requireConnection()
-        let flagList = flags.isEmpty ? "" : " (\(flags.map { $0.wireValue }.joined(separator: " ")))"
-        let command = "APPEND \(quoteAstring(toServerPath(folder)))\(flagList) {\(message.count)}"
-        _ = try await conn.sendCommand(command, literal: message)
+        try await withTransportRetry {
+            let conn = try self.requireConnection()
+            let flagList = flags.isEmpty ? "" : " (\(flags.map { $0.wireValue }.joined(separator: " ")))"
+            let command = "APPEND \(self.quoteAstring(self.toServerPath(folder)))\(flagList) {\(message.count)}"
+            _ = try await conn.sendCommand(command, literal: message)
+        }
     }
 
+    // MARK: - Transport retry
+
+    /// Runs `operation`, and on a `.transport` / `.network` failure from a
+    /// cached connection, invalidates + reconnects + runs it once more.
+    ///
+    /// The retry fires at most once. If the reconnect itself fails, or the
+    /// second attempt fails for any reason, the error surfaces unchanged —
+    /// no endless reconnect loops on a genuinely broken network. Non-transport
+    /// errors (auth, protocol, server rejections) bypass the retry entirely.
+    ///
+    /// The closure is actor-isolated (no `@Sendable`), so it can reference
+    /// `self` and mutate actor state freely.
+    private func withTransportRetry<T>(
+        _ operation: () async throws -> T
+    ) async throws -> T {
+        do {
+            return try await operation()
+        } catch let error as CabalmailError where Self.isRecoverableTransportError(error) {
+            await invalidate()
+            try await connectAndAuthenticate()
+            return try await operation()
+        }
+    }
+
+    private static func isRecoverableTransportError(_ error: CabalmailError) -> Bool {
+        switch error {
+        case .transport, .network: return true
+        default: return false
+        }
+    }
 }
 
 // MARK: - IDLE
