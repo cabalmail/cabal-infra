@@ -3,25 +3,27 @@ import CabalmailKit
 
 /// Top-level router — branches on `AppState.status`.
 ///
-/// Phase 4 keeps this trivial: sign-in form when signed out, the Phase-4-
-/// interim `SignedInView` after. Later steps replace `SignedInView` with
-/// the folder / message / detail split.
+/// Signed out: the sign-in form drives Cognito auth through `AppState`.
+/// Signed in: `SignedInRootView` renders the tabbed layout (Mail, Addresses,
+/// Folders, Settings). Both receive `AppState` and `Preferences` from the
+/// App-level `@Environment` tree hoisted in `CabalmailApp` / `CabalmailMacApp`.
 struct ContentView: View {
-    @State private var appState = AppState()
+    @Environment(AppState.self) private var appState
 
     var body: some View {
         Group {
             switch appState.status {
             case .signedIn:
-                MailRootView()
+                SignedInRootView()
             default:
                 SignInView()
             }
         }
-        .environment(appState)
     }
 }
 
 #Preview {
     ContentView()
+        .environment(AppState())
+        .environment(Preferences(store: InMemoryPreferenceStore()))
 }

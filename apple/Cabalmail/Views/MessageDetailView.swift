@@ -18,6 +18,7 @@ struct MessageDetailView: View {
     let envelope: Envelope
 
     @Environment(AppState.self) private var appState
+    @Environment(Preferences.self) private var preferences
     @State private var model: MessageDetailViewModel?
     @State private var composeSeed: Draft?
 
@@ -52,11 +53,13 @@ struct MessageDetailView: View {
                 model = MessageDetailViewModel(
                     folder: folder,
                     envelope: envelope,
-                    client: client
+                    client: client,
+                    preferences: preferences
                 )
                 await model?.load()
             }
         }
+        .onDisappear { model?.onDisappear() }
     }
 
     @ViewBuilder
@@ -66,9 +69,11 @@ struct MessageDetailView: View {
                 seed: seed,
                 client: client,
                 draftStore: client.draftStore,
+                preferences: preferences,
                 onClose: { composeSeed = nil }
             ))
             .environment(appState)
+            .environment(preferences)
         }
     }
 

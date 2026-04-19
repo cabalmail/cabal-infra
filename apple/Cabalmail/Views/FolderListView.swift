@@ -37,16 +37,10 @@ struct FolderListView: View {
         .refreshable {
             await model?.refresh()
         }
-        .toolbar {
-            ToolbarItem {
-                Button(role: .destructive) {
-                    Task { await appState.signOut() }
-                } label: {
-                    Image(systemName: "rectangle.portrait.and.arrow.right")
-                        .accessibilityLabel("Sign Out")
-                }
-            }
-        }
+        // Sign-out used to live here; Phase 6's Settings tab is the
+        // canonical place for it now. Leaving a duplicate confused the UI —
+        // the Mailboxes toolbar is about mailbox navigation, not account
+        // state.
         .task {
             if model == nil, let client = appState.client {
                 model = FolderListViewModel(client: client)
