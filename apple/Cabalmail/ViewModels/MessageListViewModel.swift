@@ -15,6 +15,7 @@ import CabalmailKit
 final class MessageListViewModel {
     let folder: Folder
     private let client: CabalmailClient
+    private let preferences: Preferences
     private let pageSize: UInt32 = 50
 
     var envelopes: [Envelope] = []
@@ -27,9 +28,10 @@ final class MessageListViewModel {
     private var lowestUID: UInt32?
     private var hasMore = true
 
-    init(folder: Folder, client: CabalmailClient) {
+    init(folder: Folder, client: CabalmailClient, preferences: Preferences) {
         self.folder = folder
         self.client = client
+        self.preferences = preferences
     }
 
     func loadInitial() async {
@@ -134,12 +136,13 @@ final class MessageListViewModel {
         await setFlag(.flagged, add: add, envelope: envelope)
     }
 
-    /// Dispose: default Archive, fall back to Trash if no Archive folder.
-    /// Phase 6 introduces the `Dispose action` preference; for Phase 4 we
-    /// just move to Archive when it exists.
+    /// Dispose target is the current `Preferences.disposeAction` — Archive
+    /// or Trash. The preference is read on every invocation so a user who
+    /// toggles the setting mid-session sees the swipe behavior change
+    /// immediately.
     func dispose(_ envelope: Envelope) async {
+        let destination = preferences.disposeAction.destinationFolder
         do {
-            let destination = "Archive"
             try await client.imapClient.move(
                 folder: folder.path,
                 uids: [envelope.uid],
@@ -150,6 +153,11 @@ final class MessageListViewModel {
             errorMessage = "\(error)"
         }
     }
+
+    /// The currently-configured dispose action, exposed so the view can
+    /// render the right swipe-action label and icon without reaching into
+    /// the preferences environment itself.
+    var disposeAction: DisposeAction { preferences.disposeAction }
 
     // MARK: - Internals
 

@@ -21,6 +21,7 @@ final class ComposeViewModel {
     let client: CabalmailClient
     private(set) var draftId: UUID
     private let draftStore: DraftStore
+    private let preferences: Preferences
     private let onClose: @MainActor () -> Void
 
     var fromAddress: String?
@@ -57,20 +58,36 @@ final class ComposeViewModel {
         seed: Draft = Draft(),
         client: CabalmailClient,
         draftStore: DraftStore,
+        preferences: Preferences,
         onClose: @escaping @MainActor () -> Void
     ) {
         self.client = client
         self.draftId = seed.id
         self.draftStore = draftStore
+        self.preferences = preferences
         self.onClose = onClose
-        self.fromAddress = seed.fromAddress
+        // Default From falls back to the user's preference *only* when the
+        // seed didn't already pick one. Reply-builder's "From = original
+        // addressee" behavior (Phase 5) therefore still wins over the
+        // preferences default — the relationship-scoped-address idiom
+        // requires replies to reuse the address the correspondent already
+        // wrote to.
+        self.fromAddress = seed.fromAddress ?? preferences.defaultFromAddress
         self.toText = seed.to.joined(separator: ", ")
         self.ccText = seed.cc.joined(separator: ", ")
         self.bccText = seed.bcc.joined(separator: ", ")
         self.subject = seed.subject
-        self.body = seed.body
         self.inReplyTo = seed.inReplyTo
         self.references = seed.references
+        // Append the preference signature to the seeded body, but only once.
+        // Replies / forwards seed with an attribution + quoted body; the
+        // signature goes *above* that block so the user's reply text lands
+        // with the signature on the line above the quoted original (the
+        // same shape every UNIX mail client has produced since Pine).
+        self.body = SignatureFormatter.seedBody(
+            base: seed.body,
+            signature: preferences.signature
+        )
     }
 
     /// Cancel the autosave loop. Called from the view's `onDisappear` and

@@ -8,6 +8,7 @@ struct MessageListView: View {
     @Binding var selection: Envelope?
 
     @Environment(AppState.self) private var appState
+    @Environment(Preferences.self) private var preferences
     @State private var model: MessageListViewModel?
     @State private var composeSeed: Draft?
 
@@ -35,7 +36,11 @@ struct MessageListView: View {
         }
         .task {
             if model == nil, let client = appState.client {
-                model = MessageListViewModel(folder: folder, client: client)
+                model = MessageListViewModel(
+                    folder: folder,
+                    client: client,
+                    preferences: preferences
+                )
                 await model?.loadInitial()
             }
         }
@@ -48,9 +53,11 @@ struct MessageListView: View {
                 seed: seed,
                 client: client,
                 draftStore: client.draftStore,
+                preferences: preferences,
                 onClose: { composeSeed = nil }
             ))
             .environment(appState)
+            .environment(preferences)
         }
     }
 
@@ -72,7 +79,7 @@ struct MessageListView: View {
                         Button(role: .destructive) {
                             Task { await model.dispose(envelope) }
                         } label: {
-                            Label("Archive", systemImage: "archivebox")
+                            disposeActionLabel(for: model.disposeAction)
                         }
                     }
                     .swipeActions(edge: .leading) {
@@ -98,6 +105,14 @@ struct MessageListView: View {
         }
         .refreshable {
             await model.refresh()
+        }
+    }
+
+    @ViewBuilder
+    private func disposeActionLabel(for action: DisposeAction) -> some View {
+        switch action {
+        case .archive: Label("Archive", systemImage: "archivebox")
+        case .trash:   Label("Trash", systemImage: "trash")
         }
     }
 }

@@ -617,6 +617,81 @@ already-delivered message shouldn't surface as a send failure.
   comment, with a **Random** button that seeds alphanumerics so the
   mint-an-address flow stays a one-tap affordance.
 
+## Phase 6 decisions
+
+Phase 6 lands address and folder management (non-mail features from the
+React app) plus the Settings surface the plan calls for. Three decisions
+that narrow the plan's open choices:
+
+### 1. Preferences storage: `UserDefaults` + `NSUbiquitousKeyValueStore`
+
+`CabalmailKit.Preferences` persists through a pluggable `PreferenceStore`
+protocol. Production uses `UbiquitousPreferenceStore`, which writes to both
+`UserDefaults` (fast local reads) and `NSUbiquitousKeyValueStore` (cross-
+device sync via iCloud). An `NSUbiquitousKeyValueStoreDidChangeExternallyNotification`
+observer mirrors every pushed key back into `UserDefaults` so subsequent
+synchronous reads stay fast. The store degrades gracefully on an
+iCloud-disabled install — the ubiquitous half becomes a no-op and
+`UserDefaults` carries the whole load.
+
+The plan suggests `@AppStorage` property wrappers; we picked a single
+`@Observable` class instead because multiple views (compose, message
+detail, message list) need to read the same preference on the same code
+path, and the SwiftUI 18 `@Observable` macro makes sharing a
+`Preferences` instance across the environment cheaper than keeping a
+property wrapper in each view.
+
+### 2. Signed-in navigation: `TabView(.sidebarAdaptable)`
+
+`SignedInRootView` uses SwiftUI 18's `TabView(selection:)` + the
+`.sidebarAdaptable` style so the same screen renders as a bottom tab bar
+on iPhone and as a collapsible sidebar on iPad / visionOS / macOS. The
+plan flagged "tabs on iPhone / sidebar sections on iPad/macOS/visionOS"
+as the target split; `.sidebarAdaptable` covers both from one definition.
+macOS hides the Settings tab via a `#if !os(macOS)` guard because the
+`Settings` scene wired to ⌘, in `CabalmailMacApp` already covers that
+ground.
+
+### 3. Signature insertion: RFC 3676 delimiter, static helper
+
+Signatures are inserted via `CabalmailKit.SignatureFormatter.seedBody`, a
+pure value-type helper that prepends `"\n-- \n<signature>"` to the seed
+body. The RFC 3676 `"-- "` (dash-dash-space) on its own line is the
+canonical signature marker every UNIX mail client since Pine recognises,
+so downstream clients can collapse / strip the block when threading a
+long reply chain. Keeping the helper pure (and outside `ComposeViewModel`)
+lets `SignatureFormatterTests` pin the three entry-point layouts —
+empty-new-message, reply/forward-with-quoted-original, and arbitrary base
+— without spinning up the full view model.
+
+### Settings surface layout
+
+- **Account.** Signed-in username + control domain (both read-only), plus
+  the single sign-out button. The prior Phase-4 "sign-out on the
+  Mailboxes toolbar" button is removed; Account is the canonical place
+  now.
+- **Reading.** `Mark as read` (manual / on open / after delay) and
+  `Load remote content` (off / ask / always). Defaults match the plan.
+  `MessageDetailViewModel` schedules a cancellable 2-second task for
+  `.afterDelay` that the view cancels on disappear so we don't mark read
+  a message the user only previewed.
+- **Composing.** `Default From address` (None / one of the user's
+  addresses — revoked addresses fall back to None so a stale preference
+  can't persist an address that doesn't exist any more) and a plain-text
+  `Signature`. Reply / forward flows still default From to the original's
+  addressee (Phase 5 on-the-fly-From idiom) so the default From
+  preference only applies to new messages.
+- **Actions.** `Dispose action` (Archive / Trash). `MessageListViewModel`
+  reads this on every swipe so a change mid-session takes effect
+  immediately; the swipe label + icon follow the preference too.
+- **Appearance.** `Theme` (System / Light / Dark) applied via
+  `.preferredColorScheme` at the App level so the whole app flips
+  instantly. `CabalmailApp` and `CabalmailMacApp` now own the `AppState`
+  and `Preferences` instances; the iOS `ContentView` reads them from
+  `@Environment` rather than owning an inline `@State AppState`.
+- **About.** Version + build (read from `Bundle.main.infoDictionary`) and
+  a link to the GitHub issues.
+
 ## What's deliberately not here yet
 
 - Real views (Phase 4) — `ContentView.swift` is still the Phase 1 "Hello,

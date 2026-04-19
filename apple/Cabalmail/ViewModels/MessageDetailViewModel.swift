@@ -12,6 +12,7 @@ final class MessageDetailViewModel {
     let folder: Folder
     let envelope: Envelope
     private let client: CabalmailClient
+    private let preferences: Preferences
 
     var isLoading = false
     var errorMessage: String?
@@ -26,10 +27,22 @@ final class MessageDetailViewModel {
     /// so the UI stays coherent without a full refresh.
     var isSeen: Bool
 
-    /// Gate for remote-content loading in the `WKWebView`. Starts off per the
-    /// plan (reading preferences default: Off); the user can flip it per-
-    /// message from the toolbar.
-    var remoteContentAllowed = false
+    /// Gate for remote-content loading in the `WKWebView`. Seeded from the
+    /// `Preferences.loadRemoteContent` preference — Off leaves the user in
+    /// control per-message, Always drops the block entirely. "Ask" starts
+    /// blocked and surfaces the toolbar toggle so the user can flip it per
+    /// message, which is the plan's "Ask" semantics.
+    var remoteContentAllowed: Bool
+
+    /// Pending mark-as-read task for the `.afterDelay` behavior. Cancelled
+    /// if the user navigates away before the 2-second threshold or marks the
+    /// message read manually in the meantime.
+    private var pendingMarkAsReadTask: Task<Void, Never>?
+
+    /// Delay for the `.afterDelay` mark-as-read mode. Matches the plan's
+    /// "After delay (2s)" label and is low enough that a quick glance
+    /// doesn't bleed over into "read."
+    static let markAsReadDelay: TimeInterval = 2
 
     struct Attachment: Identifiable, Hashable {
         let id: String
@@ -39,11 +52,13 @@ final class MessageDetailViewModel {
         let fileURL: URL
     }
 
-    init(folder: Folder, envelope: Envelope, client: CabalmailClient) {
+    init(folder: Folder, envelope: Envelope, client: CabalmailClient, preferences: Preferences) {
         self.folder = folder
         self.envelope = envelope
         self.client = client
+        self.preferences = preferences
         self.isSeen = envelope.flags.contains(.seen)
+        self.remoteContentAllowed = preferences.loadRemoteContent == .always
     }
 
     func load() async {
@@ -54,6 +69,7 @@ final class MessageDetailViewModel {
             let tree = MimeParser.parse(bytes)
             try await hydrate(from: tree)
             errorMessage = nil
+            scheduleMarkAsReadIfNeeded()
         } catch let error as CabalmailError {
             errorMessage = String(describing: error)
         } catch {
@@ -61,11 +77,24 @@ final class MessageDetailViewModel {
         }
     }
 
-    /// Toggles the server's `\Seen` flag. Phase 4 default is "manual", so the
-    /// detail view does not auto-mark on open — the user drives this via the
-    /// toolbar button, which also flips its own icon based on `isSeen`.
+    /// Cancels any pending delayed mark-as-read task. Called when the detail
+    /// view goes away — either the user navigated to another message or
+    /// backed out entirely — so we don't mark a message read the user
+    /// barely previewed.
+    func onDisappear() {
+        pendingMarkAsReadTask?.cancel()
+        pendingMarkAsReadTask = nil
+    }
+
+    /// Toggles the server's `\Seen` flag. Drives both the toolbar button's
+    /// manual path and the `.onOpen` / `.afterDelay` mark-as-read
+    /// preferences — a successful flip cancels any still-pending delayed
+    /// task so the two paths can't race.
     func toggleSeen() async {
-        let shouldBeSeen = !isSeen
+        await setSeen(!isSeen)
+    }
+
+    private func setSeen(_ shouldBeSeen: Bool) async {
         do {
             try await client.imapClient.setFlags(
                 folder: folder.path,
@@ -74,8 +103,28 @@ final class MessageDetailViewModel {
                 operation: shouldBeSeen ? .add : .remove
             )
             isSeen = shouldBeSeen
+            pendingMarkAsReadTask?.cancel()
+            pendingMarkAsReadTask = nil
         } catch {
             errorMessage = "\(error)"
+        }
+    }
+
+    private func scheduleMarkAsReadIfNeeded() {
+        guard !isSeen else { return }
+        switch preferences.markAsRead {
+        case .manual:
+            return
+        case .onOpen:
+            Task { await setSeen(true) }
+        case .afterDelay:
+            pendingMarkAsReadTask?.cancel()
+            pendingMarkAsReadTask = Task { [weak self] in
+                let delay = Self.markAsReadDelay
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                guard !Task.isCancelled else { return }
+                await self?.setSeen(true)
+            }
         }
     }
 
