@@ -57,6 +57,12 @@ targets:
         # App uses only standard HTTPS/TLS; exempt from export compliance
         # questions on every TestFlight upload.
         ITSAppUsesNonExemptEncryption: false
+        # Route the plist's version fields through build settings so CI's
+        # `CURRENT_PROJECT_VERSION=<timestamp>` actually reaches the shipped
+        # Info.plist. Without this, XcodeGen hardcodes "1" / "1.0" and
+        # every archive uploads as CFBundleVersion=1.
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         UILaunchScreen:
           UIColorName: AccentColor
         UISupportedInterfaceOrientations:
@@ -103,6 +109,11 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         LSApplicationCategoryType: public.app-category.productivity
         NSHumanReadableCopyright: ""
+        # See the Cabalmail target's equivalent comment — XcodeGen defaults
+        # these to "1" / "1.0" unless explicitly plumbed through to the
+        # build settings.
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.cabalmail.CabalmailMac
