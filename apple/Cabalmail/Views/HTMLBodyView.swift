@@ -37,14 +37,15 @@ private struct MobileHTMLView: UIViewRepresentable {
     }
 
     func makeUIView(context: Context) -> WKWebView {
-        let configuration = WKWebViewConfiguration()
-        configuration.websiteDataStore = .nonPersistent()
-        let preferences = WKWebpagePreferences()
-        preferences.allowsContentJavaScript = false
-        configuration.defaultWebpagePreferences = preferences
-        let view = WKWebView(frame: .zero, configuration: configuration)
+        let view = WKWebView(frame: .zero, configuration: makeConfiguration())
         view.navigationDelegate = context.coordinator
-        view.isOpaque = false
+        view.isOpaque = true
+        view.backgroundColor = .white
+        // Force WebKit's light defaults regardless of the system appearance.
+        // Email HTML is written assuming a white page; rendering it against
+        // a dark inherited palette produces unreadable low-contrast text
+        // (the author's `color: black` on our `background: dark` surface).
+        view.overrideUserInterfaceStyle = .light
         return view
     }
 
@@ -69,13 +70,12 @@ private struct MacHTMLView: NSViewRepresentable {
     }
 
     func makeNSView(context: Context) -> WKWebView {
-        let configuration = WKWebViewConfiguration()
-        configuration.websiteDataStore = .nonPersistent()
-        let preferences = WKWebpagePreferences()
-        preferences.allowsContentJavaScript = false
-        configuration.defaultWebpagePreferences = preferences
-        let view = WKWebView(frame: .zero, configuration: configuration)
+        let view = WKWebView(frame: .zero, configuration: makeConfiguration())
         view.navigationDelegate = context.coordinator
+        // See the iOS equivalent — pin WebKit to its default light
+        // appearance so author stylesheets that assume a white page don't
+        // render black-on-dark.
+        view.appearance = NSAppearance(named: .aqua)
         return view
     }
 
@@ -86,6 +86,15 @@ private struct MacHTMLView: NSViewRepresentable {
     }
 }
 #endif
+
+private func makeConfiguration() -> WKWebViewConfiguration {
+    let configuration = WKWebViewConfiguration()
+    configuration.websiteDataStore = .nonPersistent()
+    let preferences = WKWebpagePreferences()
+    preferences.allowsContentJavaScript = false
+    configuration.defaultWebpagePreferences = preferences
+    return configuration
+}
 
 // MARK: - Shared helpers
 
