@@ -307,6 +307,13 @@ jobs:
           # Release build, and hitting Apple's per-team Development cert
           # cap (2) fails the archive with a "choose a certificate to
           # revoke" error. Manual signing never touches Development.
+          # CFBundleVersion must be strictly monotonic per marketing version,
+          # across *everything* that ever uploaded to this App Store Connect
+          # record (not just CI). A Unix timestamp is simple, always
+          # increases, and survives `github.run_number` resets between
+          # workflow renames / repo transfers.
+          BUILD_NUMBER="$(date -u +%s)"
+          echo "Build number: $BUILD_NUMBER" >> "$GITHUB_STEP_SUMMARY"
           xcodebuild archive \
             -workspace Cabalmail.xcworkspace \
             -scheme Cabalmail \
@@ -318,7 +325,7 @@ jobs:
             CODE_SIGN_IDENTITY="Apple Distribution" \
             PROVISIONING_PROFILE_SPECIFIER="$IOS_APP_STORE_PROFILE_UUID" \
             MARKETING_VERSION=0.6.0 \
-            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             | xcbeautify --renderer github-actions
 
       - name: Export IPA
@@ -393,7 +400,7 @@ jobs:
           {
             echo "### iOS TestFlight upload"
             echo ""
-            echo "- Build number: \`${{ github.run_number }}\`"
+            echo "- Workflow run: \`${{ github.run_number }}\`"
             echo "- Environment: \`${{ github.ref_name == 'main' && 'prod' || 'stage' }}\`"
             echo "- Track: App Store Connect → Cabalmail → TestFlight"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -402,6 +409,7 @@ jobs:
         if: always() && steps.check.outputs.enabled == 'true'
         run: |
           security delete-keychain "$KEYCHAIN_PATH" || true
+          rm -f "$RUNNER_TEMP/keychain-password"
           rm -rf "$HOME/.appstoreconnect/private_keys"
 
   # -----------------------------------------------------------------------
@@ -431,6 +439,8 @@ jobs:
           S5: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
           S6: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
           S7: ${{ secrets.MAC_APP_STORE_PROFILE }}
+          S8: ${{ secrets.MAC_INSTALLER_CERT_P12 }}
+          S9: ${{ secrets.MAC_INSTALLER_CERT_PASSWORD }}
         run: |
           MISSING=()
           [ -z "$S1" ] && MISSING+=("APPLE_TEAM_ID")
@@ -440,11 +450,13 @@ jobs:
           [ -z "$S5" ] && MISSING+=("APP_STORE_CONNECT_API_ISSUER_ID")
           [ -z "$S6" ] && MISSING+=("APP_STORE_CONNECT_API_KEY_P8")
           [ -z "$S7" ] && MISSING+=("MAC_APP_STORE_PROFILE")
+          [ -z "$S8" ] && MISSING+=("MAC_INSTALLER_CERT_P12")
+          [ -z "$S9" ] && MISSING+=("MAC_INSTALLER_CERT_PASSWORD")
           if [ ${#MISSING[@]} -gt 0 ]; then
             echo "::warning::Apple signing secrets missing: ${MISSING[*]}. Skipping upload."
             echo "enabled=false" >> "$GITHUB_OUTPUT"
           else
-            echo "All seven signing secrets present."
+            echo "All nine signing secrets present."
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           fi
 
@@ -463,25 +475,50 @@ jobs:
         working-directory: apple
         run: xcodegen generate
 
-      - name: Import signing certificate
+      - name: Import signing certificates
         if: steps.check.outputs.enabled == 'true'
         env:
-          CERT_P12: ${{ secrets.APPLE_DISTRIBUTION_CERT_P12 }}
-          CERT_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_CERT_PASSWORD }}
+          APPLE_DIST_P12: ${{ secrets.APPLE_DISTRIBUTION_CERT_P12 }}
+          APPLE_DIST_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_CERT_PASSWORD }}
+          INSTALLER_P12: ${{ secrets.MAC_INSTALLER_CERT_P12 }}
+          INSTALLER_PASSWORD: ${{ secrets.MAC_INSTALLER_CERT_PASSWORD }}
         run: |
+          set -euo pipefail
+          # Mac App Store distribution needs two certs:
+          #   - Apple Distribution (signs the .app bundle)
+          #   - Mac Installer Distribution (signs the outer .pkg)
+          # Both go into a disposable keychain the workflow creates per-run.
+          # The keychain password is written to $RUNNER_TEMP for later steps
+          # (e.g. the optional Developer ID import) that need to unlock the
+          # same keychain.
           KEYCHAIN_PATH="$RUNNER_TEMP/apple-ci.keychain-db"
           KEYCHAIN_PASSWORD=$(openssl rand -base64 24)
-          echo "$CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          echo -n "$KEYCHAIN_PASSWORD" > "$RUNNER_TEMP/keychain-password"
+          chmod 600 "$RUNNER_TEMP/keychain-password"
+
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security import "$RUNNER_TEMP/cert.p12" \
-            -P "$CERT_PASSWORD" \
-            -A -t cert -f pkcs12 \
-            -k "$KEYCHAIN_PATH"
-          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" > /dev/null
-          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | xargs)
-          rm "$RUNNER_TEMP/cert.p12"
+
+          import_cert() {
+            local label="$1" b64="$2" password="$3"
+            local p12="$RUNNER_TEMP/$label.p12"
+            echo "$b64" | base64 --decode > "$p12"
+            security import "$p12" \
+              -P "$password" \
+              -A -t cert -f pkcs12 \
+              -k "$KEYCHAIN_PATH"
+            rm "$p12"
+          }
+          import_cert apple-distribution "$APPLE_DIST_P12" "$APPLE_DIST_PASSWORD"
+          import_cert mac-installer       "$INSTALLER_P12"  "$INSTALLER_PASSWORD"
+
+          security set-key-partition-list \
+            -S apple-tool:,apple: \
+            -k "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH" > /dev/null
+          security list-keychains -d user \
+            -s "$KEYCHAIN_PATH" $(security list-keychains -d user | xargs)
           echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
 
       - name: Install App Store Connect API key
@@ -522,6 +559,9 @@ jobs:
         run: |
           set -o pipefail
           # Manual signing — see the same block in the iOS job for rationale.
+          # See the iOS archive step for why this is a Unix timestamp.
+          BUILD_NUMBER="$(date -u +%s)"
+          echo "Build number: $BUILD_NUMBER" >> "$GITHUB_STEP_SUMMARY"
           xcodebuild archive \
             -workspace Cabalmail.xcworkspace \
             -scheme CabalmailMac \
@@ -533,7 +573,7 @@ jobs:
             CODE_SIGN_IDENTITY="Apple Distribution" \
             PROVISIONING_PROFILE_SPECIFIER="$MAC_APP_STORE_PROFILE_UUID" \
             MARKETING_VERSION=0.6.0 \
-            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             | xcbeautify --renderer github-actions
 
       - name: Export app-store .pkg
@@ -553,6 +593,8 @@ jobs:
               <string>manual</string>
               <key>signingCertificate</key>
               <string>Apple Distribution</string>
+              <key>installerSigningCertificate</key>
+              <string>3rd Party Mac Developer Installer</string>
               <key>destination</key>
               <string>export</string>
               <key>uploadSymbols</key>
@@ -577,7 +619,7 @@ jobs:
           {
             echo "### macOS TestFlight upload"
             echo ""
-            echo "- Build number: \`${{ github.run_number }}\`"
+            echo "- Workflow run: \`${{ github.run_number }}\`"
             echo "- Environment: \`${{ github.ref_name == 'main' && 'prod' || 'stage' }}\`"
             echo "- Track: App Store Connect → Cabalmail Mac → TestFlight"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -632,13 +674,17 @@ jobs:
           DEVID_PASSWORD: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
         run: |
           set -euo pipefail
+          KEYCHAIN_PASSWORD=$(cat "$RUNNER_TEMP/keychain-password")
           echo "$DEVID_P12" | base64 --decode > "$RUNNER_TEMP/devid.p12"
-          security unlock-keychain -p "$(security list-keychains -d user | head -n1 | tr -d ' "')" "$KEYCHAIN_PATH" 2>/dev/null || true
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security import "$RUNNER_TEMP/devid.p12" \
             -P "$DEVID_PASSWORD" \
             -A -t cert -f pkcs12 \
             -k "$KEYCHAIN_PATH"
-          security set-key-partition-list -S apple-tool:,apple: -k "$(cat $RUNNER_TEMP/keychain-password 2>/dev/null || echo '')" "$KEYCHAIN_PATH" > /dev/null 2>&1 || true
+          security set-key-partition-list \
+            -S apple-tool:,apple: \
+            -k "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH" > /dev/null
           rm "$RUNNER_TEMP/devid.p12"
 
       - name: Install macOS Developer ID provisioning profile
@@ -717,4 +763,5 @@ jobs:
         if: always() && steps.check.outputs.enabled == 'true'
         run: |
           security delete-keychain "$KEYCHAIN_PATH" || true
+          rm -f "$RUNNER_TEMP/keychain-password"
           rm -rf "$HOME/.appstoreconnect/private_keys"

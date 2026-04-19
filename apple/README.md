@@ -133,7 +133,12 @@ are expanded in the sections further down.
    certificate](#exporting-the-distribution-certificate) for the export
    flow that produces `APPLE_DISTRIBUTION_CERT_P12` /
    `APPLE_DISTRIBUTION_CERT_PASSWORD`.
-3. **Register both bundle identifiers** in the Developer portal at
+3. **(macOS only) Create a Mac Installer Distribution certificate.** The
+   `.pkg` that wraps the `.app` at Mac App Store submission time needs
+   its own cert — `Apple Distribution` signs the `.app`, Mac Installer
+   Distribution signs the `.pkg`. See [Exporting the Mac Installer
+   certificate](#exporting-the-mac-installer-certificate).
+4. **Register both bundle identifiers** in the Developer portal at
    [developer.apple.com](https://developer.apple.com/account) →
    Certificates, Identifiers & Profiles → **Identifiers** → **+**:
    - App ID `com.cabalmail.Cabalmail` (description: `Cabalmail`)
@@ -141,16 +146,16 @@ are expanded in the sections further down.
 
    CI uses **manual code signing**, so App IDs must exist before you
    create the matching provisioning profiles in the next step.
-4. **Create the provisioning profiles** for each App ID. See
+5. **Create the provisioning profiles** for each App ID. See
    [Creating provisioning profiles](#creating-provisioning-profiles) —
    produces the `IOS_APP_STORE_PROFILE` / `MAC_APP_STORE_PROFILE` /
    (optional) `MAC_DEVID_PROFILE` secrets.
-5. **Create an App Store Connect API key** with the **App Manager** role. See
+6. **Create an App Store Connect API key** with the **App Manager** role. See
    [Creating the App Store Connect API key](#creating-the-app-store-connect-api-key)
    — produces the `APP_STORE_CONNECT_API_KEY_ID` /
    `APP_STORE_CONNECT_API_ISSUER_ID` / `APP_STORE_CONNECT_API_KEY_P8`
    triple.
-6. **Create two App Store Connect app records** at
+7. **Create two App Store Connect app records** at
    [appstoreconnect.apple.com](https://appstoreconnect.apple.com) → Apps
    → **+** → New App:
 
@@ -166,8 +171,8 @@ are expanded in the sections further down.
    Without these records, CI uploads land in App Store Connect but
    aren't attached to anything visible and you cannot distribute the
    build.
-7. **Populate the GitHub secrets** listed in the next section.
-8. **Populate TestFlight when you want to install a build.** CI uploads
+8. **Populate the GitHub secrets** listed in the next section.
+9. **Populate TestFlight when you want to install a build.** CI uploads
    succeed without any TestFlight setup — builds land in each app
    record's Builds list after ~5–30 minutes of Apple-side processing.
    Before anyone (including you) can install one, you need a testing
@@ -227,6 +232,8 @@ per-environment (Settings → Environments → `stage` / `prod`).
 | Secret | What it is |
 |---|---|
 | `MAC_APP_STORE_PROFILE` | base64 of the `.provisionprofile` for `com.cabalmail.CabalmailMac` (App Store distribution). |
+| `MAC_INSTALLER_CERT_P12` | base64 of a **Mac Installer Distribution** `.p12`. The outer `.pkg` that wraps the macOS `.app` is signed with this cert (distinct from `Apple Distribution`, which signs the `.app` bundle itself). See [Exporting the Mac Installer certificate](#exporting-the-mac-installer-certificate). |
+| `MAC_INSTALLER_CERT_PASSWORD` | Password used when exporting the `.p12`. Must be non-empty. |
 
 **Optional (macOS notarized `.app` artifact):**
 
@@ -276,6 +283,39 @@ team will not work for TestFlight.
 8. Delete the `.p12` when done — it contains your private key:
    ```sh
    rm ~/Desktop/cabalmail-dist.p12
+   ```
+
+### Exporting the Mac Installer certificate
+
+The Mac App Store wraps every `.app` in a `.pkg`, and Apple requires the
+outer `.pkg` to be signed with a separate **Mac Installer Distribution**
+certificate (a.k.a. `3rd Party Mac Developer Installer` — Keychain and
+portal use different names for the same cert type). Distinct from the
+`Apple Distribution` cert used to sign the `.app` itself. Skip this
+section if you only ship iOS.
+
+1. **Create the cert** at
+   [developer.apple.com → Certificates → + → Mac Installer Distribution](https://developer.apple.com/account/resources/certificates/add):
+   - Generate a CSR in Keychain Access (**Keychain Access → Certificate
+     Assistant → Request a Certificate From a Certificate Authority…** →
+     enter your email, pick **Saved to disk**, **Continue**).
+   - Upload the CSR, download the returned `.cer`, double-click it so
+     Keychain Access imports it and links it to the private key.
+2. **Export from Keychain Access** exactly like the Apple Distribution
+   cert — right-click the cert (labelled
+   `3rd Party Mac Developer Installer: Your Name (TEAMID)` on modern
+   macOS, or `Mac Installer Distribution: …` on older installs —
+   functionally identical), **Export "…"**, save as `.p12`, non-empty
+   password.
+3. **Encode and set the secrets:**
+   ```sh
+   base64 -i ~/Desktop/cabalmail-installer.p12 | pbcopy
+   ```
+   Paste into `MAC_INSTALLER_CERT_P12`. Password into
+   `MAC_INSTALLER_CERT_PASSWORD`.
+4. **Delete the `.p12`:**
+   ```sh
+   rm ~/Desktop/cabalmail-installer.p12
    ```
 
 ### Creating provisioning profiles
