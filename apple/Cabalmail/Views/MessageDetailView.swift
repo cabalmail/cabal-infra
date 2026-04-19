@@ -19,6 +19,7 @@ struct MessageDetailView: View {
 
     @Environment(AppState.self) private var appState
     @State private var model: MessageDetailViewModel?
+    @State private var composeSeed: Draft?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -43,6 +44,9 @@ struct MessageDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .toolbar { toolbarContent }
+        .sheet(item: $composeSeed) { seed in
+            composeSheet(for: seed)
+        }
         .task {
             if model == nil, let client = appState.client {
                 model = MessageDetailViewModel(
@@ -52,6 +56,36 @@ struct MessageDetailView: View {
                 )
                 await model?.load()
             }
+        }
+    }
+
+    @ViewBuilder
+    private func composeSheet(for seed: Draft) -> some View {
+        if let client = appState.client {
+            ComposeView(model: ComposeViewModel(
+                seed: seed,
+                client: client,
+                draftStore: client.draftStore,
+                onClose: { composeSeed = nil }
+            ))
+            .environment(appState)
+        }
+    }
+
+    /// Opens compose pre-populated for a `reply` / `replyAll` / `forward`.
+    /// Pulls the user's address list so `ReplyBuilder` can pick a default
+    /// From by matching the original message's recipients against owned
+    /// addresses (per the React app's 0.3.0 behavior).
+    private func beginCompose(_ mode: ReplyBuilder.ReplyMode) {
+        guard let client = appState.client else { return }
+        Task { @MainActor in
+            let addresses = (try? await client.addresses()) ?? []
+            composeSeed = ReplyBuilder.build(
+                from: envelope,
+                body: model?.plainText,
+                mode: mode,
+                userAddresses: addresses
+            )
         }
     }
 
@@ -117,11 +151,38 @@ struct MessageDetailView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItem {
-            Button {
-                Task { await model?.markAsRead() }
+            Menu {
+                Button {
+                    beginCompose(.reply)
+                } label: {
+                    Label("Reply", systemImage: "arrowshape.turn.up.left")
+                }
+                Button {
+                    beginCompose(.replyAll)
+                } label: {
+                    Label("Reply All", systemImage: "arrowshape.turn.up.left.2")
+                }
+                Button {
+                    beginCompose(.forward)
+                } label: {
+                    Label("Forward", systemImage: "arrowshape.turn.up.forward")
+                }
             } label: {
-                Image(systemName: "envelope.open")
-                    .accessibilityLabel("Mark as read")
+                Image(systemName: "arrowshape.turn.up.left")
+                    .accessibilityLabel("Reply")
+            }
+        }
+        ToolbarItem {
+            if let model {
+                Button {
+                    Task { await model.toggleSeen() }
+                } label: {
+                    // Icon reflects the current state; tap-action is the
+                    // inverse. Matches Mail.app: an already-read message
+                    // shows "envelope.open" and tapping marks it unread.
+                    Image(systemName: model.isSeen ? "envelope.open" : "envelope.badge")
+                        .accessibilityLabel(model.isSeen ? "Mark as unread" : "Mark as read")
+                }
             }
         }
         ToolbarItem {
