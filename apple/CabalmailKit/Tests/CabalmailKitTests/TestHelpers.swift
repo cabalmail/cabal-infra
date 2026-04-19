@@ -50,28 +50,42 @@ actor RecordingHTTPTransport: HTTPTransport {
 /// suspends forever — turn on `autoEOFOnDrain` to return empty Data
 /// instead, which the connection layer interprets as a closed peer.
 actor ScriptedByteStream: ByteStream {
-    private var inbound: [Data]
+    private enum Chunk {
+        case data(Data)
+        case error(Error)
+    }
+
+    private var inbound: [Chunk]
     private(set) var outbound = Data()
     let autoEOFOnDrain: Bool
     private var isClosed = false
 
     init(inbound: [Data] = [], autoEOFOnDrain: Bool = false) {
-        self.inbound = inbound
+        self.inbound = inbound.map { .data($0) }
         self.autoEOFOnDrain = autoEOFOnDrain
     }
 
     func enqueue(_ data: Data) {
-        inbound.append(data)
+        inbound.append(.data(data))
     }
 
     func enqueue(_ string: String) {
-        inbound.append(Data(string.utf8))
+        inbound.append(.data(Data(string.utf8)))
+    }
+
+    /// Scripts a transport failure at the next `read()`. Used to simulate a
+    /// dead socket after sleep/wake or a network change.
+    func enqueueError(_ error: Error) {
+        inbound.append(.error(error))
     }
 
     func read() async throws -> Data {
         while true {
             if !inbound.isEmpty {
-                return inbound.removeFirst()
+                switch inbound.removeFirst() {
+                case .data(let data): return data
+                case .error(let error): throw error
+                }
             }
             if isClosed || autoEOFOnDrain {
                 return Data()
@@ -100,6 +114,26 @@ struct ScriptedConnectionFactory: ImapConnectionFactory, SmtpConnectionFactory {
 
     func makeConnection() async throws -> ByteStream {
         stream
+    }
+}
+
+/// Connection factory that hands out pre-built streams in order — one per
+/// `makeConnection()` call. Used to simulate a dead socket being replaced
+/// by a fresh one on reconnect.
+actor RotatingConnectionFactory: ImapConnectionFactory {
+    private var streams: [ScriptedByteStream]
+    private(set) var madeCount: Int = 0
+
+    init(streams: [ScriptedByteStream]) {
+        self.streams = streams
+    }
+
+    func makeConnection() async throws -> ByteStream {
+        guard !streams.isEmpty else {
+            throw CabalmailError.transport("RotatingConnectionFactory exhausted")
+        }
+        madeCount += 1
+        return streams.removeFirst()
     }
 }
 

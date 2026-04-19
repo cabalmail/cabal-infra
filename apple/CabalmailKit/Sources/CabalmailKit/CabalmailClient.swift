@@ -23,6 +23,14 @@ public actor CabalmailClient {
     public nonisolated let bodyCache: MessageBodyCache
     public nonisolated let draftStore: DraftStore
 
+    /// Retained so the path monitor outlives initialization. The underlying
+    /// `NWPathMonitor` stops when this property is released. Only `make(...)`
+    /// sets it — tests that build the client via the memberwise initializer
+    /// leave it nil and skip proactive invalidation.
+    #if canImport(Network)
+    private nonisolated let pathMonitor: NetworkPathMonitor?
+    #endif
+
     public init(
         configuration: Configuration,
         authService: AuthService,
@@ -43,6 +51,9 @@ public actor CabalmailClient {
         self.envelopeCache = envelopeCache
         self.bodyCache = bodyCache
         self.draftStore = draftStore
+        #if canImport(Network)
+        self.pathMonitor = nil
+        #endif
     }
 
     #if canImport(Network)
@@ -90,8 +101,44 @@ public actor CabalmailClient {
             addressCache: addresses,
             envelopeCache: envelopes,
             bodyCache: bodies,
-            draftStore: drafts
+            draftStore: drafts,
+            monitorNetworkPath: true
         )
+    }
+
+    /// Designated init used by `make(...)` — installs a `NetworkPathMonitor`
+    /// that calls `imapClient.invalidate()` whenever the active path shifts.
+    /// Separated from the public memberwise initializer so tests can keep
+    /// constructing bare clients without touching `Network.framework`.
+    private init(
+        configuration: Configuration,
+        authService: AuthService,
+        apiClient: ApiClient,
+        imapClient: ImapClient,
+        smtpClient: SmtpClient,
+        addressCache: AddressCache,
+        envelopeCache: EnvelopeCache,
+        bodyCache: MessageBodyCache,
+        draftStore: DraftStore,
+        monitorNetworkPath: Bool
+    ) {
+        self.configuration = configuration
+        self.authService = authService
+        self.apiClient = apiClient
+        self.imapClient = imapClient
+        self.smtpClient = smtpClient
+        self.addressCache = addressCache
+        self.envelopeCache = envelopeCache
+        self.bodyCache = bodyCache
+        self.draftStore = draftStore
+        if monitorNetworkPath {
+            let imap = imapClient
+            self.pathMonitor = NetworkPathMonitor {
+                Task { await imap.invalidate() }
+            }
+        } else {
+            self.pathMonitor = nil
+        }
     }
     #endif
 

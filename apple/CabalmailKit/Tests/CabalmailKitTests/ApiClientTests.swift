@@ -34,6 +34,47 @@ final class ApiClientTests: XCTestCase {
         XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "idtoken")
     }
 
+    /// Real Lambda wire shape from `lambda/api/list/function.py`:
+    /// `{"Items": [...]}`. This is what the compose view actually receives
+    /// when seeding the From picker — keeping the test pinned to the exact
+    /// Lambda output guards against regressions like the Phase 5 shipping
+    /// bug where the compose sheet showed "Couldn't load addresses".
+    func testListAddressesDecodesItemsWrapperFromLambda() async throws {
+        let body = """
+        {
+          "Items": [
+            {
+              "address": "alice@mail.example.com",
+              "subdomain": "mail",
+              "tld": "example.com",
+              "comment": "personal",
+              "username": "alice",
+              "user": "alice"
+            },
+            {
+              "address": "bob@x.example.com",
+              "subdomain": "x",
+              "tld": "example.com",
+              "username": "bob",
+              "user": "bob"
+            }
+          ]
+        }
+        """
+        let http = RecordingHTTPTransport(responses: [(Data(body.utf8), 200)])
+        let client = URLSessionApiClient(
+            configuration: makeConfiguration(),
+            authService: StubAuthService(),
+            transport: http
+        )
+        let addresses = try await client.listAddresses()
+        XCTAssertEqual(addresses.map(\.address), [
+            "alice@mail.example.com",
+            "bob@x.example.com",
+        ])
+        XCTAssertEqual(addresses.first?.comment, "personal")
+    }
+
     func testListAddressesRetriesOn401AndRefreshesToken() async throws {
         let body = "[]"
         let http = RecordingHTTPTransport(responses: [
