@@ -13,11 +13,6 @@ variable "email" {
   description = "Contact email for Let's Encrypt certificate registration."
 }
 
-variable "prod" {
-  type        = bool
-  description = "Whether to use the production Let's Encrypt service."
-}
-
 variable "region" {
   type        = string
   description = "AWS region."
