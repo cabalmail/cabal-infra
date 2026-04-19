@@ -33,6 +33,11 @@ public struct OutgoingMessage: Sendable, Codable, Hashable {
     public let references: [String]
     public let attachments: [Attachment]
     public let extraHeaders: [String: String]
+    /// Message-ID to stamp on the outgoing RFC 5322 payload. When nil,
+    /// `SmtpClient` generates a random one at send time. Callers that need
+    /// the Sent-folder copy to match the wire copy (see
+    /// `CabalmailClient.send(_:)`) pass a pre-generated value here.
+    public let messageId: String?
 
     public init(
         from: EmailAddress,
@@ -45,7 +50,8 @@ public struct OutgoingMessage: Sendable, Codable, Hashable {
         inReplyTo: String? = nil,
         references: [String] = [],
         attachments: [Attachment] = [],
-        extraHeaders: [String: String] = [:]
+        extraHeaders: [String: String] = [:],
+        messageId: String? = nil
     ) {
         self.from = from
         self.to = to
@@ -58,6 +64,7 @@ public struct OutgoingMessage: Sendable, Codable, Hashable {
         self.references = references
         self.attachments = attachments
         self.extraHeaders = extraHeaders
+        self.messageId = messageId
     }
 }
 

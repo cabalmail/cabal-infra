@@ -77,7 +77,8 @@ public actor LiveSmtpClient: SmtpClient {
         }
         try await connection.writeLine("DATA")
         try await expect(connection, code: 354)
-        let payload = MessageBuilder.build(message, messageID: newMessageID(from: message.from))
+        let messageID = message.messageId ?? newMessageID(from: message.from)
+        let payload = MessageBuilder.build(message, messageID: messageID)
         try await connection.writeDataPayload(payload)
         try await expect(connection, code: 250)
         try await connection.writeLine("QUIT")

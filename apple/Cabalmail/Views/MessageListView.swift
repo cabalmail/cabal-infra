@@ -9,6 +9,7 @@ struct MessageListView: View {
 
     @Environment(AppState.self) private var appState
     @State private var model: MessageListViewModel?
+    @State private var composeSeed: Draft?
 
     var body: some View {
         Group {
@@ -19,11 +20,37 @@ struct MessageListView: View {
             }
         }
         .navigationTitle(folder.name)
+        .toolbar {
+            ToolbarItem {
+                Button {
+                    composeSeed = ReplyBuilder.newDraft()
+                } label: {
+                    Image(systemName: "square.and.pencil")
+                        .accessibilityLabel("New Message")
+                }
+            }
+        }
+        .sheet(item: $composeSeed) { seed in
+            composeSheet(for: seed)
+        }
         .task {
             if model == nil, let client = appState.client {
                 model = MessageListViewModel(folder: folder, client: client)
                 await model?.loadInitial()
             }
+        }
+    }
+
+    @ViewBuilder
+    private func composeSheet(for seed: Draft) -> some View {
+        if let client = appState.client {
+            ComposeView(model: ComposeViewModel(
+                seed: seed,
+                client: client,
+                draftStore: client.draftStore,
+                onClose: { composeSeed = nil }
+            ))
+            .environment(appState)
         }
     }
 

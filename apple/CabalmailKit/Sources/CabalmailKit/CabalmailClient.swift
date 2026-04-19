@@ -7,14 +7,21 @@ import Foundation
 /// target holds a single shared `CabalmailClient` instance in its
 /// `@Observable` root and injects it into views via `.environment`.
 public actor CabalmailClient {
-    public let configuration: Configuration
-    public let authService: AuthService
-    public let apiClient: ApiClient
-    public let imapClient: ImapClient
-    public let smtpClient: SmtpClient
-    public let addressCache: AddressCache
-    public let envelopeCache: EnvelopeCache
-    public let bodyCache: MessageBodyCache
+    // All stored properties are `nonisolated` because they're immutable
+    // `Sendable` references — `Configuration` is a value type, and every
+    // service / cache here is either its own actor or a `Sendable` protocol
+    // existential. Letting views read e.g. `client.configuration.domains`
+    // synchronously avoids forcing every read-only consumer through an
+    // actor hop; mutating flows still funnel through this actor's methods.
+    public nonisolated let configuration: Configuration
+    public nonisolated let authService: AuthService
+    public nonisolated let apiClient: ApiClient
+    public nonisolated let imapClient: ImapClient
+    public nonisolated let smtpClient: SmtpClient
+    public nonisolated let addressCache: AddressCache
+    public nonisolated let envelopeCache: EnvelopeCache
+    public nonisolated let bodyCache: MessageBodyCache
+    public nonisolated let draftStore: DraftStore
 
     public init(
         configuration: Configuration,
@@ -24,7 +31,8 @@ public actor CabalmailClient {
         smtpClient: SmtpClient,
         addressCache: AddressCache,
         envelopeCache: EnvelopeCache,
-        bodyCache: MessageBodyCache
+        bodyCache: MessageBodyCache,
+        draftStore: DraftStore
     ) {
         self.configuration = configuration
         self.authService = authService
@@ -34,6 +42,7 @@ public actor CabalmailClient {
         self.addressCache = addressCache
         self.envelopeCache = envelopeCache
         self.bodyCache = bodyCache
+        self.draftStore = draftStore
     }
 
     #if canImport(Network)
@@ -71,6 +80,7 @@ public actor CabalmailClient {
             directory: cacheDirectory.appendingPathComponent("bodies"),
             capacityBytes: bodyCacheCapacityBytes
         )
+        let drafts = try DraftStore(directory: cacheDirectory.appendingPathComponent("drafts"))
         return CabalmailClient(
             configuration: configuration,
             authService: auth,
@@ -79,7 +89,8 @@ public actor CabalmailClient {
             smtpClient: smtp,
             addressCache: addresses,
             envelopeCache: envelopes,
-            bodyCache: bodies
+            bodyCache: bodies,
+            draftStore: drafts
         )
     }
     #endif
@@ -123,5 +134,51 @@ public actor CabalmailClient {
             publicKey: publicKey
         )
         await addressCache.invalidate()
+    }
+
+    /// Submits an outgoing message via SMTP and, on success, `APPEND`s an
+    /// identical copy to the `Sent` IMAP folder so the sender sees it in
+    /// their sent mailbox on every other client. Sendmail + Dovecot in the
+    /// Cabalmail container stack don't auto-append — the React app's backend
+    /// does the equivalent in the `send` Lambda (see
+    /// `lambda/api/send/function.py`). Mirroring that here keeps the Apple
+    /// client feature-parity with the web UI.
+    ///
+    /// A fresh Message-ID is generated once and stamped on both copies so
+    /// `In-Reply-To` / `References` chains stay intact across a later reply
+    /// composed from either the Sent folder or the recipient's copy.
+    ///
+    /// The APPEND is best-effort: a succeeded-send with a failed Sent-folder
+    /// APPEND does *not* throw, because the user's message was delivered.
+    /// The tradeoff is a mailbox that eventually drifts from what recipients
+    /// see — acceptable because the alternative is reporting a send failure
+    /// for a message that was already accepted for relay.
+    ///
+    /// `sentFolder` defaults to `"Sent"` because that's the name the
+    /// Dovecot config creates. Phase 6 settings will let the user override.
+    public func send(_ message: OutgoingMessage, sentFolder: String = "Sent") async throws {
+        let messageID = message.messageId ?? "\(UUID().uuidString)@\(message.from.host)"
+        let stamped = OutgoingMessage(
+            from: message.from,
+            to: message.to,
+            cc: message.cc,
+            bcc: message.bcc,
+            subject: message.subject,
+            textBody: message.textBody,
+            htmlBody: message.htmlBody,
+            inReplyTo: message.inReplyTo,
+            references: message.references,
+            attachments: message.attachments,
+            extraHeaders: message.extraHeaders,
+            messageId: messageID
+        )
+        try await smtpClient.send(stamped)
+        let payload = MessageBuilder.build(stamped, messageID: messageID)
+        try? await imapClient.connectAndAuthenticate()
+        try? await imapClient.append(
+            folder: sentFolder,
+            message: payload,
+            flags: [.seen]
+        )
     }
 }

@@ -95,6 +95,7 @@ final class CabalmailKitTests: XCTestCase {
         let tmp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let envelopes = try EnvelopeCache(directory: tmp.appendingPathComponent("e"))
         let bodies = try MessageBodyCache(directory: tmp.appendingPathComponent("b"))
+        let drafts = try DraftStore(directory: tmp.appendingPathComponent("d"))
         let client = CabalmailClient(
             configuration: config,
             authService: auth,
@@ -103,9 +104,9 @@ final class CabalmailKitTests: XCTestCase {
             smtpClient: smtp,
             addressCache: AddressCache(),
             envelopeCache: envelopes,
-            bodyCache: bodies
+            bodyCache: bodies,
+            draftStore: drafts
         )
-        let roundTrip = await client.configuration
-        XCTAssertEqual(roundTrip, config)
+        XCTAssertEqual(client.configuration, config)
     }
 }
