@@ -3,37 +3,26 @@ import CabalmailKit
 
 /// Root of the signed-in navigation.
 ///
-/// - iPhone (compact horizontal size class): a `NavigationStack` that
-///   pushes folder → messages → detail.
-/// - iPad / macOS / visionOS (regular size class): a three-column
-///   `NavigationSplitView`. Selections are lifted to `@State` here so the
-///   sibling columns stay in sync.
+/// Single `NavigationSplitView` serves every platform — iPhone compact
+/// collapses it to a stack push sequence automatically. Selection is lifted
+/// to this view so the three columns stay in sync.
+///
+/// `.id(...)` on the content and detail columns forces SwiftUI to rebuild
+/// the view (and its `@State` / `@Observable` view models) when selection
+/// changes. Without it, the same view instance is reused with a new folder
+/// or envelope prop and its one-shot `.task` never re-fires — which is the
+/// bug that made "select a second folder" do nothing on the split layout.
 struct MailRootView: View {
     @State private var selectedFolder: Folder?
     @State private var selectedEnvelope: Envelope?
 
-    #if os(iOS)
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    #endif
-
     var body: some View {
-        #if os(iOS)
-        if horizontalSizeClass == .regular {
-            splitView
-        } else {
-            stackView
-        }
-        #else
-        splitView
-        #endif
-    }
-
-    private var splitView: some View {
         NavigationSplitView {
             FolderListView(selection: $selectedFolder)
         } content: {
             if let selectedFolder {
                 MessageListView(folder: selectedFolder, selection: $selectedEnvelope)
+                    .id(selectedFolder.path)
             } else {
                 ContentUnavailableView(
                     "Select a folder",
@@ -44,6 +33,7 @@ struct MailRootView: View {
         } detail: {
             if let selectedFolder, let selectedEnvelope {
                 MessageDetailView(folder: selectedFolder, envelope: selectedEnvelope)
+                    .id("\(selectedFolder.path)#\(selectedEnvelope.uid)")
             } else {
                 ContentUnavailableView(
                     "No message selected",
@@ -52,17 +42,11 @@ struct MailRootView: View {
                 )
             }
         }
-    }
-
-    private var stackView: some View {
-        NavigationStack {
-            FolderListView(selection: $selectedFolder)
-                .navigationDestination(for: Folder.self) { folder in
-                    MessageListView(folder: folder, selection: $selectedEnvelope)
-                        .navigationDestination(for: Envelope.self) { envelope in
-                            MessageDetailView(folder: folder, envelope: envelope)
-                        }
-                }
+        // Clearing the envelope selection when the folder changes keeps the
+        // detail column from briefly rendering an old message against the
+        // new mailbox.
+        .onChange(of: selectedFolder) { _, _ in
+            selectedEnvelope = nil
         }
     }
 }

@@ -22,9 +22,8 @@ struct FolderListView: View {
                         .foregroundStyle(.red)
                 }
                 ForEach(model.folders) { folder in
-                    NavigationLink(value: folder) {
-                        row(for: folder, unread: model.unreadCounts[folder.path] ?? 0)
-                    }
+                    row(for: folder, unread: model.unreadCounts[folder.path] ?? 0)
+                        .tag(folder)
                 }
             }
         }
