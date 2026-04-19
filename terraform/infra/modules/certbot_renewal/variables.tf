@@ -13,6 +13,11 @@ variable "email" {
   description = "Contact email for Let's Encrypt certificate registration."
 }
 
+variable "image_tag" {
+  type        = string
+  description = "Docker image tag for the certbot Lambda. Rotating this on each deploy is what actually updates the Lambda's container — a bare ':latest' reference looks unchanged to Terraform and leaves the Lambda running the previously-pushed image."
+}
+
 variable "region" {
   type        = string
   description = "AWS region."
