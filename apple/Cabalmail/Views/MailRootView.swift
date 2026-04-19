@@ -18,7 +18,20 @@ struct MailRootView: View {
 
     var body: some View {
         NavigationSplitView {
-            FolderListView(selection: $selectedFolder)
+            FolderListView(
+                selection: $selectedFolder,
+                onFoldersLoaded: { folders in
+                    // Default-select INBOX the first time the list arrives.
+                    // The Compose button lives on the message-list toolbar,
+                    // so a nil-selection state would leave the user no way
+                    // to start a new message. INBOX is always present
+                    // (`FolderListViewModel.sortForSidebar` pins it first).
+                    guard selectedFolder == nil else { return }
+                    selectedFolder = folders.first { inbox in
+                        inbox.path.caseInsensitiveCompare("INBOX") == .orderedSame
+                    } ?? folders.first
+                }
+            )
         } content: {
             if let selectedFolder {
                 MessageListView(folder: selectedFolder, selection: $selectedEnvelope)

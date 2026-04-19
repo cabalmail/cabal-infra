@@ -49,13 +49,30 @@ public actor URLSessionApiClient: ApiClient {
     public func listAddresses() async throws -> [Address] {
         let request = try await get("/list")
         let data = try await send(request, expectedStatuses: 200..<300)
-        // The list Lambda returns either a JSON array directly or `{"addresses": [...]}`.
-        // Support both shapes so we decouple the client from the exact Lambda wire.
+        // The `/list` Lambda actually returns `{"Items": [...]}` — a thin
+        // wrapper over the DynamoDB scan output (see
+        // `lambda/api/list/function.py`). Check that first, with the plain
+        // array and `{"addresses": [...]}` kept as fallbacks in case the
+        // Lambda wire changes.
+        if let wrapped = try? JSONDecoder().decode(ItemsWrapper.self, from: data) {
+            return wrapped.Items
+        }
         if let direct = try? JSONDecoder().decode([Address].self, from: data) {
             return direct
         }
-        struct Wrapper: Decodable { let addresses: [Address] }
-        return try JSONDecoder().decode(Wrapper.self, from: data).addresses
+        return try JSONDecoder().decode(LowercaseAddressesWrapper.self, from: data).addresses
+    }
+
+    // The `Items` key is PascalCase because the Lambda emits the shape
+    // DynamoDB's scan response uses; the struct name is uppercased to match
+    // so Codable finds the key without a custom CodingKeys map.
+    private struct ItemsWrapper: Decodable {
+        // swiftlint:disable:next identifier_name
+        let Items: [Address]
+    }
+
+    private struct LowercaseAddressesWrapper: Decodable {
+        let addresses: [Address]
     }
 
     public func newAddress(

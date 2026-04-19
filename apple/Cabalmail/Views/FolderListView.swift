@@ -9,7 +9,13 @@ import CabalmailKit
 struct FolderListView: View {
     @Environment(AppState.self) private var appState
     @State private var model: FolderListViewModel?
+    @State private var didNotifyLoad = false
     @Binding var selection: Folder?
+    /// Called exactly once, the first time the folder list successfully
+    /// loads. `MailRootView` uses it to seed a default `selection` so the
+    /// signed-in user doesn't land on an empty "pick a mailbox" screen
+    /// (which would also hide the compose entry point on the message list).
+    var onFoldersLoaded: ([Folder]) -> Void = { _ in }
 
     var body: some View {
         List(selection: $selection) {
@@ -45,6 +51,10 @@ struct FolderListView: View {
             if model == nil, let client = appState.client {
                 model = FolderListViewModel(client: client)
                 await model?.refresh()
+                if !didNotifyLoad, let folders = model?.folders, !folders.isEmpty {
+                    didNotifyLoad = true
+                    onFoldersLoaded(folders)
+                }
             }
         }
     }
