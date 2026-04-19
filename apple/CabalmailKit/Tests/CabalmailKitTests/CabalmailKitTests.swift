@@ -50,6 +50,27 @@ final class CabalmailKitTests: XCTestCase {
         XCTAssertEqual(config.cognito.clientId, "xyz")
     }
 
+    func testImapAndSmtpHostDerivation() {
+        let prod = Configuration(
+            controlDomain: "cabal-mail.net",
+            domains: [],
+            invokeUrl: URL(string: "https://api.example.com/prod")!,
+            cognito: .init(region: "us-east-1", userPoolId: "u", clientId: "c")
+        )
+        XCTAssertEqual(prod.imapHost, "imap.cabal-mail.net")
+        XCTAssertEqual(prod.smtpHost, "smtp-out.cabal-mail.net")
+
+        // `dev.` prefix swaps to `imap.`, matching the React app.
+        let dev = Configuration(
+            controlDomain: "dev.cabal-mail.net",
+            domains: [],
+            invokeUrl: URL(string: "https://api.example.com/prod")!,
+            cognito: .init(region: "us-east-1", userPoolId: "u", clientId: "c")
+        )
+        XCTAssertEqual(dev.imapHost, "imap.cabal-mail.net")
+        XCTAssertEqual(dev.smtpHost, "smtp-out.dev.cabal-mail.net")
+    }
+
     func testClientRoundTripsConfiguration() async throws {
         let config = Configuration(
             controlDomain: "example.com",

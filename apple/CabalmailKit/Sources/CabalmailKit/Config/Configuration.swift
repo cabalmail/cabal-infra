@@ -30,6 +30,25 @@ public struct Configuration: Sendable, Codable, Equatable {
         case invokeUrl
         case cognito = "cognitoConfig"
     }
+
+    /// IMAP hostname derived from the control domain.
+    ///
+    /// Mirrors the rule `react/admin/src/App.jsx` uses: a `dev.*` control
+    /// domain swaps the `dev.` prefix for `imap.`, everything else gets
+    /// `imap.` prepended. The resulting hostname is what the
+    /// `terraform/infra/modules/elb` DNS records point at.
+    public var imapHost: String {
+        if controlDomain.hasPrefix("dev.") {
+            return "imap." + controlDomain.dropFirst("dev.".count)
+        }
+        return "imap.\(controlDomain)"
+    }
+
+    /// Submission hostname — always `smtp-out.<control_domain>` per the
+    /// same convention.
+    public var smtpHost: String {
+        "smtp-out.\(controlDomain)"
+    }
 }
 
 /// One of the mail domains the Cabalmail deployment is authoritative for.

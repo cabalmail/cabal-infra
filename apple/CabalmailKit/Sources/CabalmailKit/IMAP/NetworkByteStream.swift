@@ -32,8 +32,13 @@ public final class NetworkByteStream: ByteStream, @unchecked Sendable {
         self.host = host
     }
 
+    /// Opens the connection. Throws `CabalmailError.timeout` after 20 seconds
+    /// if the TLS handshake never completes — without this, a wrong-host /
+    /// wrong-port configuration silently hangs indefinitely because
+    /// `NWConnection` never times the setup out on its own.
     public func start() async throws {
         let guardFlag = ResumeGuard()
+        let connection = self.connection
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             connection.stateUpdateHandler = { state in
                 switch state {
@@ -52,6 +57,12 @@ public final class NetworkByteStream: ByteStream, @unchecked Sendable {
                 }
             }
             connection.start(queue: queue)
+            queue.asyncAfter(deadline: .now() + 20) {
+                if guardFlag.tryFire() {
+                    connection.cancel()
+                    continuation.resume(throwing: CabalmailError.timeout)
+                }
+            }
         }
         connection.stateUpdateHandler = nil
     }
