@@ -152,6 +152,7 @@ module "certbot_renewal" {
   zone_id          = data.terraform_remote_state.zone.outputs.control_domain_zone_id
   email            = var.email
   region           = var.aws_region
+  image_tag        = data.aws_ssm_parameter.deployed_image_tag.value
   ecs_cluster_name = module.ecs.cluster_name
   ecs_service_names = [
     module.ecs.imap_service_name,

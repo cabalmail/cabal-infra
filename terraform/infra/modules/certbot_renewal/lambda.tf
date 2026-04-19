@@ -7,7 +7,7 @@ resource "aws_lambda_function" "certbot" {
   function_name = "cabal-certbot-renewal"
   role          = aws_iam_role.certbot_lambda.arn
   package_type  = "Image"
-  image_uri     = "${aws_ecr_repository.certbot.repository_url}:latest"
+  image_uri     = "${aws_ecr_repository.certbot.repository_url}:${var.image_tag}"
   timeout       = 300
   memory_size   = 512
   architectures = ["arm64"]
