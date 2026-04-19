@@ -430,7 +430,6 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Verify secrets are present
-        id: check
         env:
           S1: ${{ secrets.APPLE_TEAM_ID }}
           S2: ${{ secrets.APPLE_DISTRIBUTION_CERT_P12 }}
@@ -453,30 +452,24 @@ jobs:
           [ -z "$S8" ] && MISSING+=("MAC_INSTALLER_CERT_P12")
           [ -z "$S9" ] && MISSING+=("MAC_INSTALLER_CERT_PASSWORD")
           if [ ${#MISSING[@]} -gt 0 ]; then
-            echo "::warning::Apple signing secrets missing: ${MISSING[*]}. Skipping upload."
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "All nine signing secrets present."
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "::error::Apple signing secrets missing: ${MISSING[*]}"
+            exit 1
           fi
+          echo "All nine signing secrets present."
 
       - name: Select Xcode
-        if: steps.check.outputs.enabled == 'true'
         uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: ${{ env.XCODE_VERSION }}
 
       - name: Install XcodeGen + xcbeautify
-        if: steps.check.outputs.enabled == 'true'
         run: brew install xcodegen xcbeautify
 
       - name: Generate Xcode project
-        if: steps.check.outputs.enabled == 'true'
         working-directory: apple
         run: xcodegen generate
 
       - name: Import signing certificates
-        if: steps.check.outputs.enabled == 'true'
         env:
           APPLE_DIST_P12: ${{ secrets.APPLE_DISTRIBUTION_CERT_P12 }}
           APPLE_DIST_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_CERT_PASSWORD }}
@@ -522,7 +515,6 @@ jobs:
           echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
 
       - name: Install App Store Connect API key
-        if: steps.check.outputs.enabled == 'true'
         env:
           ASC_KEY_P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
           ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
@@ -544,7 +536,6 @@ jobs:
           echo "ASC_KEY_PATH=$KEY_FILE" >> "$GITHUB_ENV"
 
       - name: Install macOS App Store provisioning profile
-        if: steps.check.outputs.enabled == 'true'
         uses: ./.github/actions/install-provisioning-profile
         with:
           base64: ${{ secrets.MAC_APP_STORE_PROFILE }}
@@ -552,7 +543,6 @@ jobs:
           env-name: MAC_APP_STORE_PROFILE_UUID
 
       - name: Archive CabalmailMac
-        if: steps.check.outputs.enabled == 'true'
         working-directory: apple
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -577,7 +567,6 @@ jobs:
             | xcbeautify --renderer github-actions
 
       - name: Export app-store .pkg
-        if: steps.check.outputs.enabled == 'true'
         working-directory: apple
         run: |
           set -o pipefail
@@ -614,7 +603,6 @@ jobs:
             | xcbeautify --renderer github-actions
 
       - name: Summarize macOS upload
-        if: steps.check.outputs.enabled == 'true'
         run: |
           {
             echo "### macOS TestFlight upload"
@@ -625,7 +613,6 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload macOS to TestFlight
-        if: steps.check.outputs.enabled == 'true'
         env:
           ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
@@ -652,7 +639,6 @@ jobs:
 
       - name: Check for Developer ID certificate and profile
         id: devid
-        if: steps.check.outputs.enabled == 'true'
         env:
           DEVID_P12: ${{ secrets.DEVELOPER_ID_CERT_P12 }}
           DEVID_PROFILE: ${{ secrets.MAC_DEVID_PROFILE }}
@@ -760,8 +746,8 @@ jobs:
           retention-days: 30
 
       - name: Clean up keychain and API key
-        if: always() && steps.check.outputs.enabled == 'true'
+        if: always()
         run: |
-          security delete-keychain "$KEYCHAIN_PATH" || true
+          security delete-keychain "${KEYCHAIN_PATH:-}" || true
           rm -f "$RUNNER_TEMP/keychain-password"
           rm -rf "$HOME/.appstoreconnect/private_keys"
