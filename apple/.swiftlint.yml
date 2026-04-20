@@ -1,0 +1,42 @@
+# SwiftLint configuration for the Apple client.
+# Kept intentionally permissive while the scaffold is small; tighten in later
+# phases once there is real code to lint.
+
+included:
+  - Cabalmail
+  - CabalmailMac
+  - CabalmailKit/Sources
+  - CabalmailKit/Tests
+
+excluded:
+  - build
+  - .build
+  - Cabalmail.xcodeproj
+
+disabled_rules:
+  - todo                       # TODO comments are fine during active development
+  - trailing_comma             # Swift tolerates either convention
+
+line_length:
+  warning: 120
+  error: 200
+  ignores_comments: true
+  ignores_urls: true
+
+identifier_name:
+  excluded:
+    - id
+    - to
+    - cc
+    # IMAP wire-level status codes; renaming would hurt readability at
+    # call sites that compare against these constants.
+    - ok
+    - no
+
+type_name:
+  min_length: 3
+  max_length:
+    warning: 50
+    error: 80
+
+reporter: "github-actions-logging"

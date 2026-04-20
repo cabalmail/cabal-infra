@@ -20,13 +20,15 @@ def handler(event, context):
 
     domain = os.environ["CONTROL_DOMAIN"]
     email = os.environ["EMAIL"]
-    use_staging = os.environ.get("USE_STAGING", "true").lower() == "true"
     cluster_name = os.environ["ECS_CLUSTER_NAME"]
     service_names = [
         s for s in os.environ.get("ECS_SERVICE_NAMES", "").split(",") if s
     ]
 
-    # Run certbot
+    # Run certbot against Let's Encrypt production in every environment.
+    # Staging certs aren't trusted by OS certificate stores, so a TestFlight
+    # build of the Apple client can't complete the implicit-TLS handshake
+    # with smtp-out on 465 when the container holds a staging cert.
     cmd = [
         "certbot", "certonly",
         "--dns-route53",
@@ -38,10 +40,8 @@ def handler(event, context):
         "--work-dir", "/tmp/certbot/work",
         "--logs-dir", "/tmp/certbot/logs",
     ]
-    if use_staging:
-        cmd.append("--staging")
 
-    print(f"Running certbot for *.{domain} (staging={use_staging})")
+    print(f"Running certbot for *.{domain}")
     result = subprocess.run(cmd, capture_output=True, text=True, check=False)
     print(result.stdout)
     if result.returncode != 0:

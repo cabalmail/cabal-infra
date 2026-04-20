@@ -1,0 +1,7 @@
+// Shared build settings for all targets / configurations.
+//
+// Local overrides (notably DEVELOPMENT_TEAM) live in Local.xcconfig, which
+// is gitignored. The `#include?` directive is Xcode's "optional include":
+// if Local.xcconfig is missing (e.g. on CI), the include is silently skipped.
+
+#include? "Local.xcconfig"

@@ -1,0 +1,60 @@
+---
+name: Install provisioning profile
+description: >
+  Decodes a base64-encoded provisioning profile into the runner's profile
+  directory and exports its UUID as an environment variable so subsequent
+  xcodebuild steps can pass it as PROVISIONING_PROFILE_SPECIFIER.
+
+inputs:
+  base64:
+    description: >
+      Base64-encoded contents of a .mobileprovision (iOS) or
+      .provisionprofile (macOS) file. Typically wired to a GitHub secret.
+    required: true
+  extension:
+    description: >
+      File extension — "mobileprovision" for iOS / iPadOS / visionOS,
+      "provisionprofile" for macOS.
+    required: true
+  env-name:
+    description: >
+      Name of the environment variable to export the profile's UUID to
+      via $GITHUB_ENV.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Install provisioning profile
+      shell: bash
+      env:
+        PROFILE_B64: ${{ inputs.base64 }}
+        PROFILE_EXT: ${{ inputs.extension }}
+        ENV_NAME: ${{ inputs.env-name }}
+      run: |
+        set -euo pipefail
+        # ~/Library/MobileDevice/Provisioning Profiles is the canonical
+        # install location Xcode reads. The `.mobileprovision` /
+        # `.provisionprofile` extension matters (Xcode's scanner filters on
+        # it); the filename is otherwise free — we use the embedded UUID so
+        # reinstalling the same profile overwrites in place.
+        PROFILES_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+        mkdir -p "$PROFILES_DIR"
+
+        WORK=$(mktemp -d)
+        trap 'rm -rf "$WORK"' EXIT
+
+        # `tr -d '[:space:]'` is defensive: macOS `base64` wraps its output
+        # at 76 columns and GitHub secrets occasionally pick up stray
+        # whitespace — both are harmless to strip, and the `security cms`
+        # step will reject anything else.
+        printf '%s' "$PROFILE_B64" | tr -d '[:space:]' | base64 --decode > "$WORK/profile"
+
+        # Profiles are CMS-signed plists; decode to read the UUID.
+        security cms -D -i "$WORK/profile" > "$WORK/plist"
+        UUID=$(/usr/libexec/PlistBuddy -c "Print :UUID" "$WORK/plist")
+
+        cp "$WORK/profile" "$PROFILES_DIR/$UUID.$PROFILE_EXT"
+
+        echo "$ENV_NAME=$UUID" >> "$GITHUB_ENV"
+        echo "::notice::Installed $PROFILE_EXT $UUID → $ENV_NAME"

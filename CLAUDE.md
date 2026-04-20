@@ -165,8 +165,6 @@ Shared infrastructure:
   - Environment variable validation at script entry
   - Comments explaining non-obvious configuration choices
 
-## Roadmap
-
 # Wiki Home
 
 ## Roadmap
