@@ -22,6 +22,34 @@ resource "aws_s3_object" "website_config" {
   )
 }
 
+# Runtime configuration for the Apple client.
+#
+# The Apple client cannot execute `config.js`, so we emit a sibling JSON
+# object with the same shape. The underlying template already produces
+# valid JSON, so it is reused verbatim. See docs/0.6.0/ios-client-plan.md.
+resource "aws_s3_object" "website_config_json" {
+  bucket       = var.bucket
+  key          = "/config.json"
+  content_type = "application/json"
+  content      = templatefile("${path.module}/templates/config.js", {
+    pool_id        = var.user_pool_id,
+    pool_client_id = var.user_pool_client_id,
+    region         = var.region,
+    invoke_url     = "https://${aws_api_gateway_rest_api.gateway.id}.execute-api.${var.region}.amazonaws.com/${var.stage_name}",
+    domains        = var.domains,
+    control_domain = var.control_domain
+  })
+  etag         = md5(templatefile("${path.module}/templates/config.js", {
+      pool_id        = var.user_pool_id,
+      pool_client_id = var.user_pool_client_id,
+      region         = var.region,
+      invoke_url     = "https://${aws_api_gateway_rest_api.gateway.id}.execute-api.${var.region}.amazonaws.com/${var.stage_name}",
+      domains        = var.domains,
+      control_domain = var.control_domain
+    })
+  )
+}
+
 # Runtime configuration for Node Lambdas
 resource "aws_s3_object" "node_config" {
   bucket       = var.bucket

@@ -165,8 +165,6 @@ Shared infrastructure:
   - Environment variable validation at script entry
   - Comments explaining non-obvious configuration choices
 
-## Roadmap
-
 # Wiki Home
 
 ## Roadmap
@@ -179,10 +177,11 @@ Shared infrastructure:
 | 0.3.1   | Update documentation with new UI features.                                                          | Done        |
 | 0.4.0   | Migrate from EC2 instances to containers.                                                           | Done        |
 | 0.4.1   | Move cert renewal from Terraform to Lambda; Modernize web client.                                   | Done        |
-| 0.5.0   | User management dashboard.                                                                          | In Progress |
-| 0.6.0   | Native app for iOS.                                                                                 | Planning    |
-| 0.6.1   | Update documentation with iOS app features.                                                         | Planning    |
-| 0.7.0   | Stabilize.                                                                                          |             |
+| 0.5.0   | User management dashboard.                                                                          | Done        |
+| 0.6.0   | Native app for iOS.                                                                                 | In Progress |
+| 0.6.1   | Update documentation with iOS app features.                                                         |             |
+| 0.7.0   | Overhaul webmail UX.                                                                                | Planning    |
+| 0.8.0   | Stabilize.                                                                                          | Planning    |
 | 1.0.0   | Production-ready release.                                                                           |             |
 | 1.1.0   | Native app for Android.                                                                             |             |
 | 1.2.0   | Quotas.                                                                                             |             |

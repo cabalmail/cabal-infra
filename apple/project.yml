@@ -1,0 +1,144 @@
+# XcodeGen project spec for the Cabalmail Apple client.
+#
+# Run `xcodegen generate` in this directory to produce Cabalmail.xcodeproj.
+# The generated project is not committed; CI regenerates it before every build.
+#
+# Phase 1 decision: native macOS target (not Mac Catalyst). See apple/README.md.
+
+name: Cabalmail
+
+# Shared build settings live in Base.xcconfig, which optionally includes
+# Local.xcconfig (gitignored) for per-developer overrides such as
+# DEVELOPMENT_TEAM. CI passes DEVELOPMENT_TEAM on the xcodebuild command
+# line instead and does not need Local.xcconfig to exist.
+configFiles:
+  Debug: Base.xcconfig
+  Release: Base.xcconfig
+
+options:
+  bundleIdPrefix: com.cabalmail
+  deploymentTarget:
+    iOS: "18.0"
+    macOS: "15.0"
+    visionOS: "2.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+
+packages:
+  CabalmailKit:
+    path: CabalmailKit
+
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    # DEVELOPMENT_TEAM is intentionally unset here. Set it via:
+    #   - Xcode UI (Signing & Capabilities) for local development, or
+    #   - `xcodebuild ... DEVELOPMENT_TEAM=$APPLE_TEAM_ID` on CI (from secrets).
+    # Unsigned build-only verification passes `CODE_SIGNING_ALLOWED=NO`.
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    SWIFT_STRICT_CONCURRENCY: complete
+
+targets:
+  Cabalmail:
+    type: application
+    supportedDestinations: [iOS, iPadOS, visionOS]
+    sources:
+      - path: Cabalmail
+    dependencies:
+      - package: CabalmailKit
+    info:
+      path: Cabalmail/Info.plist
+      properties:
+        CFBundleDisplayName: Cabalmail
+        # Required by App Store validation for apps built against
+        # iOS 11+ SDKs that ship icons in an asset catalog.
+        CFBundleIconName: AppIcon
+        # App uses only standard HTTPS/TLS; exempt from export compliance
+        # questions on every TestFlight upload.
+        ITSAppUsesNonExemptEncryption: false
+        # Route the plist's version fields through build settings so CI's
+        # `CURRENT_PROJECT_VERSION=<timestamp>` actually reaches the shipped
+        # Info.plist. Without this, XcodeGen hardcodes "1" / "1.0" and
+        # every archive uploads as CFBundleVersion=1.
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        UILaunchScreen:
+          UIColorName: AccentColor
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.cabalmail.Cabalmail
+        TARGETED_DEVICE_FAMILY: "1,2,7"   # iPhone, iPad, visionOS
+        MARKETING_VERSION: "0.6.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+
+  CabalmailMac:
+    type: application
+    platform: macOS
+    sources:
+      - path: CabalmailMac
+      # Phase 4 share: the SwiftUI views, view models, and app state are
+      # platform-agnostic (with `#if os(macOS)` toggles where they diverge)
+      # so both app targets compile them from the iOS target's source tree.
+      # Per Phase 1 the binaries stay separate; only the Swift sources are
+      # shared. Revisit at Phase 7 if macOS needs substantially different
+      # view code.
+      - path: Cabalmail/ContentView.swift
+      - path: Cabalmail/AppState.swift
+      - path: Cabalmail/Views
+      - path: Cabalmail/ViewModels
+    dependencies:
+      - package: CabalmailKit
+    info:
+      path: CabalmailMac/Info.plist
+      properties:
+        CFBundleDisplayName: Cabalmail
+        CFBundleIconName: AppIcon
+        ITSAppUsesNonExemptEncryption: false
+        LSApplicationCategoryType: public.app-category.productivity
+        NSHumanReadableCopyright: ""
+        # See the Cabalmail target's equivalent comment — XcodeGen defaults
+        # these to "1" / "1.0" unless explicitly plumbed through to the
+        # build settings.
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.cabalmail.CabalmailMac
+        MARKETING_VERSION: "0.6.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_ENTITLEMENTS: CabalmailMac/CabalmailMac.entitlements
+
+schemes:
+  Cabalmail:
+    build:
+      targets:
+        Cabalmail: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+  CabalmailMac:
+    build:
+      targets:
+        CabalmailMac: all
+    run:
+      config: Debug
+    archive:
+      config: Release

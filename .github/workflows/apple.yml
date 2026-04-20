@@ -1,0 +1,753 @@
+---
+name: Build and Deploy Apple Client
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'apple/**'
+      - '.github/workflows/apple.yml'
+
+env:
+  # Track the runner image's newest stable Xcode. Pinning a specific version
+  # (e.g. '16.1') is more reproducible but fragile: runner images rotate the
+  # SDK/runtimes independently and a too-old Xcode won't know about the
+  # simulator runtimes that ARE installed, causing test destinations to
+  # resolve as "ineligible" ("iOS 18.1 is not installed").
+  #
+  # If reproducibility becomes important, pin to a specific version here AND
+  # ensure it matches a Xcode actually preinstalled on the macos-15 runner
+  # image.
+  XCODE_VERSION: 'latest-stable'
+  WORKSPACE: apple/Cabalmail.xcworkspace
+
+jobs:
+  # -----------------------------------------------------------------------
+  # CabalmailKit tests across platforms. Matrix of three destinations so
+  # conditional code paths on any platform break CI loudly.
+  # -----------------------------------------------------------------------
+  kit-test:
+    name: Test CabalmailKit (${{ matrix.platform }})
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macOS, iOS, visionOS]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: ${{ env.XCODE_VERSION }}
+
+      - name: Install XcodeGen + SwiftLint + xcbeautify
+        run: brew install xcodegen swiftlint xcbeautify
+
+      - name: Generate Xcode project
+        working-directory: apple
+        run: xcodegen generate
+
+      - name: SwiftLint
+        if: matrix.platform == 'macOS'
+        working-directory: apple
+        run: swiftlint lint --strict --quiet
+
+      - name: Resolve test destination for ${{ matrix.platform }}
+        id: dest
+        # Runner images ship simulator runtimes without any devices created
+        # on them, so `xcodebuild test` with a bare `platform=iOS Simulator`
+        # specifier fails ("Unable to find a destination..."). We pick the
+        # newest installed runtime for the matrix platform, create a fresh
+        # device against it, and pass that device's UDID as the destination.
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.platform }}" = "macOS" ]; then
+            echo "destination=platform=macOS" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          FAMILY='${{ matrix.platform }}'
+          case "$FAMILY" in
+            iOS)       DEVICE_PREFIX="iPhone" ;;
+            visionOS)  DEVICE_PREFIX="Apple Vision" ;;
+          esac
+          RUNTIME_ID=$(xcrun simctl list runtimes --json | \
+            jq -r --arg fam "$FAMILY" '
+              .runtimes
+              | map(select(.isAvailable and (.name | startswith($fam + " "))))
+              | sort_by(.version | split(".") | map(tonumber))
+              | reverse | .[0].identifier // empty
+            ')
+          if [ -z "$RUNTIME_ID" ]; then
+            echo "::error::No installed $FAMILY runtime."
+            xcrun simctl list runtimes
+            exit 1
+          fi
+          DEVICE_TYPE_ID=$(xcrun simctl list devicetypes --json | \
+            jq -r --arg pfx "$DEVICE_PREFIX" '
+              .devicetypes
+              | map(select(.name | startswith($pfx)))
+              | .[0].identifier // empty
+            ')
+          if [ -z "$DEVICE_TYPE_ID" ]; then
+            echo "::error::No device type matching '$DEVICE_PREFIX'."
+            xcrun simctl list devicetypes
+            exit 1
+          fi
+          UDID=$(xcrun simctl create "ci-$FAMILY" "$DEVICE_TYPE_ID" "$RUNTIME_ID")
+          echo "Created $FAMILY simulator $UDID"
+          echo "  runtime:    $RUNTIME_ID"
+          echo "  devicetype: $DEVICE_TYPE_ID"
+          echo "destination=platform=$FAMILY Simulator,id=$UDID" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Swift packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Developer/Xcode/DerivedData/**/SourcePackages
+            ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ runner.os }}-${{ matrix.platform }}-${{ hashFiles('apple/CabalmailKit/Package.swift', 'apple/CabalmailKit/Package.resolved') }}
+          restore-keys: |
+            spm-${{ runner.os }}-${{ matrix.platform }}-
+            spm-${{ runner.os }}-
+
+      - name: Test CabalmailKit on ${{ matrix.platform }}
+        working-directory: apple/CabalmailKit
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -scheme CabalmailKit \
+            -destination '${{ steps.dest.outputs.destination }}' \
+            -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            | xcbeautify --renderer github-actions
+
+  # -----------------------------------------------------------------------
+  # Build the app targets for the two product platforms. Unsigned — this
+  # job only verifies the code compiles and links; signing happens in the
+  # upload jobs below.
+  # -----------------------------------------------------------------------
+  app-build:
+    name: Build ${{ matrix.scheme }}
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - scheme: Cabalmail
+            destination: 'generic/platform=iOS'
+          - scheme: CabalmailMac
+            destination: 'generic/platform=macOS'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: ${{ env.XCODE_VERSION }}
+
+      - name: Install XcodeGen + xcbeautify
+        run: brew install xcodegen xcbeautify
+
+      - name: Generate Xcode project
+        working-directory: apple
+        run: xcodegen generate
+
+      - name: Cache DerivedData
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Developer/Xcode/DerivedData
+          key: dd-${{ runner.os }}-${{ matrix.scheme }}-${{ hashFiles('apple/project.yml', 'apple/CabalmailKit/Package.swift', 'apple/CabalmailKit/Package.resolved') }}
+          restore-keys: |
+            dd-${{ runner.os }}-${{ matrix.scheme }}-
+
+      - name: Build ${{ matrix.scheme }} (unsigned)
+        working-directory: apple
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -workspace Cabalmail.xcworkspace \
+            -scheme ${{ matrix.scheme }} \
+            -destination '${{ matrix.destination }}' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            | xcbeautify --renderer github-actions
+
+  # -----------------------------------------------------------------------
+  # Signed archive + TestFlight upload for iOS/iPadOS/visionOS. Only runs
+  # on main or stage and only if the required secrets are configured.
+  # -----------------------------------------------------------------------
+  upload-ios:
+    name: Upload iOS to TestFlight
+    needs: [kit-test, app-build]
+    if: ${{ github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'stage') }}
+    runs-on: macos-15
+    environment: ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify secrets are present
+        id: check
+        env:
+          S1: ${{ secrets.APPLE_TEAM_ID }}
+          S2: ${{ secrets.APPLE_DISTRIBUTION_CERT_P12 }}
+          S3: ${{ secrets.APPLE_DISTRIBUTION_CERT_PASSWORD }}
+          S4: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          S5: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          S6: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+          S7: ${{ secrets.IOS_APP_STORE_PROFILE }}
+        run: |
+          MISSING=()
+          [ -z "$S1" ] && MISSING+=("APPLE_TEAM_ID")
+          [ -z "$S2" ] && MISSING+=("APPLE_DISTRIBUTION_CERT_P12")
+          [ -z "$S3" ] && MISSING+=("APPLE_DISTRIBUTION_CERT_PASSWORD")
+          [ -z "$S4" ] && MISSING+=("APP_STORE_CONNECT_API_KEY_ID")
+          [ -z "$S5" ] && MISSING+=("APP_STORE_CONNECT_API_ISSUER_ID")
+          [ -z "$S6" ] && MISSING+=("APP_STORE_CONNECT_API_KEY_P8")
+          [ -z "$S7" ] && MISSING+=("IOS_APP_STORE_PROFILE")
+          if [ ${#MISSING[@]} -gt 0 ]; then
+            echo "::warning::Apple signing secrets missing: ${MISSING[*]}. Skipping upload."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "All seven signing secrets present."
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Select Xcode
+        if: steps.check.outputs.enabled == 'true'
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: ${{ env.XCODE_VERSION }}
+
+      - name: Install XcodeGen + xcbeautify
+        if: steps.check.outputs.enabled == 'true'
+        run: brew install xcodegen xcbeautify
+
+      - name: Generate Xcode project
+        if: steps.check.outputs.enabled == 'true'
+        working-directory: apple
+        run: xcodegen generate
+
+      - name: Import signing certificate
+        if: steps.check.outputs.enabled == 'true'
+        env:
+          CERT_P12: ${{ secrets.APPLE_DISTRIBUTION_CERT_P12 }}
+          CERT_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_CERT_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/apple-ci.keychain-db"
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 24)
+          echo "$CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$RUNNER_TEMP/cert.p12" \
+            -P "$CERT_PASSWORD" \
+            -A -t cert -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" > /dev/null
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | xargs)
+          rm "$RUNNER_TEMP/cert.p12"
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
+      - name: Install App Store Connect API key
+        if: steps.check.outputs.enabled == 'true'
+        env:
+          ASC_KEY_P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+        run: |
+          set -euo pipefail
+          # altool only searches four hardcoded locations for AuthKey_*.p8.
+          # ~/.appstoreconnect/private_keys/ is the canonical one and also
+          # works for notarytool. With manual signing, xcodebuild itself
+          # doesn't need the key any more — it's only still used by altool
+          # at upload time (and notarytool in the macOS job).
+          KEY_DIR="$HOME/.appstoreconnect/private_keys"
+          mkdir -p "$KEY_DIR"
+          KEY_FILE="$KEY_DIR/AuthKey_${ASC_KEY_ID}.p8"
+          # Strip whitespace before decoding to tolerate line-wrapped base64
+          # (macOS `base64` wraps at 76 chars) or accidental leading/trailing
+          # whitespace pasted into the GitHub secret.
+          printf '%s' "$ASC_KEY_P8" | tr -d '[:space:]' | base64 --decode > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+          if ! head -c 27 "$KEY_FILE" | grep -q '^-----BEGIN PRIVATE KEY-----$'; then
+            SIZE=$(wc -c < "$KEY_FILE" | tr -d ' ')
+            echo "::error::APP_STORE_CONNECT_API_KEY_P8 decoded to $SIZE bytes but does not start with the PEM header. Re-encode the .p8 with 'base64 -i AuthKey_<KEYID>.p8 | pbcopy' and update the secret."
+            exit 1
+          fi
+          echo "ASC_KEY_PATH=$KEY_FILE" >> "$GITHUB_ENV"
+
+      - name: Install iOS App Store provisioning profile
+        if: steps.check.outputs.enabled == 'true'
+        uses: ./.github/actions/install-provisioning-profile
+        with:
+          base64: ${{ secrets.IOS_APP_STORE_PROFILE }}
+          extension: mobileprovision
+          env-name: IOS_APP_STORE_PROFILE_UUID
+
+      - name: Archive Cabalmail
+        if: steps.check.outputs.enabled == 'true'
+        working-directory: apple
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -o pipefail
+          # Manual signing — the provisioning profile was installed above and
+          # is identified by its UUID in IOS_APP_STORE_PROFILE_UUID.
+          # `-allowProvisioningUpdates` is deliberately omitted: auto-
+          # provisioning preps a Development cert as a precondition to the
+          # Release build, and hitting Apple's per-team Development cert
+          # cap (2) fails the archive with a "choose a certificate to
+          # revoke" error. Manual signing never touches Development.
+          # CFBundleVersion must be strictly monotonic per marketing version,
+          # across *everything* that ever uploaded to this App Store Connect
+          # record (not just CI). A Unix timestamp is simple, always
+          # increases, and survives `github.run_number` resets between
+          # workflow renames / repo transfers.
+          BUILD_NUMBER="$(date -u +%s)"
+          echo "Build number: $BUILD_NUMBER" >> "$GITHUB_STEP_SUMMARY"
+          xcodebuild archive \
+            -workspace Cabalmail.xcworkspace \
+            -scheme Cabalmail \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/Cabalmail.xcarchive" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            PROVISIONING_PROFILE_SPECIFIER="$IOS_APP_STORE_PROFILE_UUID" \
+            MARKETING_VERSION=0.6.0 \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            | xcbeautify --renderer github-actions
+
+      - name: Export IPA
+        if: steps.check.outputs.enabled == 'true'
+        working-directory: apple
+        run: |
+          set -o pipefail
+          # Generate the export-options plist at runtime so the installed
+          # profile UUID can be embedded. Under manual signing, xcodebuild
+          # needs the `provisioningProfiles` dict to map each bundle ID to
+          # a profile; the archive's embedded profile alone isn't always
+          # consulted during export.
+          PLIST="$RUNNER_TEMP/ExportOptions-iOS.plist"
+          cat > "$PLIST" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>app-store-connect</string>
+              <key>signingStyle</key>
+              <string>manual</string>
+              <key>signingCertificate</key>
+              <string>Apple Distribution</string>
+              <key>destination</key>
+              <string>export</string>
+              <key>uploadSymbols</key>
+              <true/>
+              <key>stripSwiftSymbols</key>
+              <true/>
+              <key>provisioningProfiles</key>
+              <dict>
+                  <key>com.cabalmail.Cabalmail</key>
+                  <string>$IOS_APP_STORE_PROFILE_UUID</string>
+              </dict>
+          </dict>
+          </plist>
+          EOF
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/Cabalmail.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export-ios" \
+            -exportOptionsPlist "$PLIST" \
+            | xcbeautify --renderer github-actions
+
+      - name: Upload to TestFlight
+        if: steps.check.outputs.enabled == 'true'
+        env:
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          IPA=$(ls "$RUNNER_TEMP/export-ios"/*.ipa | head -n1)
+          echo "Uploading $IPA"
+          LOG="$RUNNER_TEMP/altool-ios.log"
+          # altool returns 0 even on validation failure in some releases, so
+          # we also grep for its failure banners and fail the step ourselves.
+          xcrun altool --upload-app \
+            -f "$IPA" \
+            --type ios \
+            --apiKey "$ASC_KEY_ID" \
+            --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tee "$LOG"
+          # altool writes timestamped "ERROR:" lines and returns 0 anyway in
+          # some releases, so we scan the log and fail the step ourselves if
+          # any error marker appears. The pattern matches anywhere in the
+          # line since altool prefixes errors with a timestamp.
+          if grep -qE '(UPLOAD FAILED|ERROR: |iris-code : STATE_ERROR)' "$LOG"; then
+            ERRORS=$(grep -cE '(UPLOAD FAILED|ERROR: )' "$LOG")
+            echo "::error::altool reported $ERRORS error line(s) despite exit code 0. Review the log above."
+            exit 1
+          fi
+          echo "::notice::altool upload completed cleanly."
+          {
+            echo "### iOS TestFlight upload"
+            echo ""
+            echo "- Workflow run: \`${{ github.run_number }}\`"
+            echo "- Environment: \`${{ github.ref_name == 'main' && 'prod' || 'stage' }}\`"
+            echo "- Track: App Store Connect → Cabalmail → TestFlight"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Clean up keychain and API key
+        if: always() && steps.check.outputs.enabled == 'true'
+        run: |
+          security delete-keychain "$KEYCHAIN_PATH" || true
+          rm -f "$RUNNER_TEMP/keychain-password"
+          rm -rf "$HOME/.appstoreconnect/private_keys"
+
+  # -----------------------------------------------------------------------
+  # Signed archive + TestFlight upload + developer-id notarization for
+  # macOS. Notarized .app is also attached as a workflow artifact.
+  # -----------------------------------------------------------------------
+  upload-mac:
+    name: Upload macOS to TestFlight
+    permissions:
+      contents: read
+      actions: write
+    needs: [kit-test, app-build]
+    if: ${{ github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'stage') }}
+    runs-on: macos-15
+    environment: ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify secrets are present
+        env:
+          S1: ${{ secrets.APPLE_TEAM_ID }}
+          S2: ${{ secrets.APPLE_DISTRIBUTION_CERT_P12 }}
+          S3: ${{ secrets.APPLE_DISTRIBUTION_CERT_PASSWORD }}
+          S4: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          S5: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          S6: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+          S7: ${{ secrets.MAC_APP_STORE_PROFILE }}
+          S8: ${{ secrets.MAC_INSTALLER_CERT_P12 }}
+          S9: ${{ secrets.MAC_INSTALLER_CERT_PASSWORD }}
+        run: |
+          MISSING=()
+          [ -z "$S1" ] && MISSING+=("APPLE_TEAM_ID")
+          [ -z "$S2" ] && MISSING+=("APPLE_DISTRIBUTION_CERT_P12")
+          [ -z "$S3" ] && MISSING+=("APPLE_DISTRIBUTION_CERT_PASSWORD")
+          [ -z "$S4" ] && MISSING+=("APP_STORE_CONNECT_API_KEY_ID")
+          [ -z "$S5" ] && MISSING+=("APP_STORE_CONNECT_API_ISSUER_ID")
+          [ -z "$S6" ] && MISSING+=("APP_STORE_CONNECT_API_KEY_P8")
+          [ -z "$S7" ] && MISSING+=("MAC_APP_STORE_PROFILE")
+          [ -z "$S8" ] && MISSING+=("MAC_INSTALLER_CERT_P12")
+          [ -z "$S9" ] && MISSING+=("MAC_INSTALLER_CERT_PASSWORD")
+          if [ ${#MISSING[@]} -gt 0 ]; then
+            echo "::error::Apple signing secrets missing: ${MISSING[*]}"
+            exit 1
+          fi
+          echo "All nine signing secrets present."
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: ${{ env.XCODE_VERSION }}
+
+      - name: Install XcodeGen + xcbeautify
+        run: brew install xcodegen xcbeautify
+
+      - name: Generate Xcode project
+        working-directory: apple
+        run: xcodegen generate
+
+      - name: Import signing certificates
+        env:
+          APPLE_DIST_P12: ${{ secrets.APPLE_DISTRIBUTION_CERT_P12 }}
+          APPLE_DIST_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_CERT_PASSWORD }}
+          INSTALLER_P12: ${{ secrets.MAC_INSTALLER_CERT_P12 }}
+          INSTALLER_PASSWORD: ${{ secrets.MAC_INSTALLER_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # Mac App Store distribution needs two certs:
+          #   - Apple Distribution (signs the .app bundle)
+          #   - Mac Installer Distribution (signs the outer .pkg)
+          # Both go into a disposable keychain the workflow creates per-run.
+          # The keychain password is written to $RUNNER_TEMP for later steps
+          # (e.g. the optional Developer ID import) that need to unlock the
+          # same keychain.
+          KEYCHAIN_PATH="$RUNNER_TEMP/apple-ci.keychain-db"
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 24)
+          echo -n "$KEYCHAIN_PASSWORD" > "$RUNNER_TEMP/keychain-password"
+          chmod 600 "$RUNNER_TEMP/keychain-password"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          import_cert() {
+            local label="$1" b64="$2" password="$3"
+            local p12="$RUNNER_TEMP/$label.p12"
+            echo "$b64" | base64 --decode > "$p12"
+            security import "$p12" \
+              -P "$password" \
+              -A -t cert -f pkcs12 \
+              -k "$KEYCHAIN_PATH"
+            rm "$p12"
+          }
+          import_cert apple-distribution "$APPLE_DIST_P12" "$APPLE_DIST_PASSWORD"
+          import_cert mac-installer       "$INSTALLER_P12"  "$INSTALLER_PASSWORD"
+
+          security set-key-partition-list \
+            -S apple-tool:,apple: \
+            -k "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH" > /dev/null
+          security list-keychains -d user \
+            -s "$KEYCHAIN_PATH" $(security list-keychains -d user | xargs)
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
+      - name: Install App Store Connect API key
+        env:
+          ASC_KEY_P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+        run: |
+          set -euo pipefail
+          # Canonical location for altool + notarytool. Manual signing means
+          # xcodebuild itself doesn't consult this key — it's only used by
+          # altool (upload) and notarytool (Developer ID staple).
+          KEY_DIR="$HOME/.appstoreconnect/private_keys"
+          mkdir -p "$KEY_DIR"
+          KEY_FILE="$KEY_DIR/AuthKey_${ASC_KEY_ID}.p8"
+          printf '%s' "$ASC_KEY_P8" | tr -d '[:space:]' | base64 --decode > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+          if ! head -c 27 "$KEY_FILE" | grep -q '^-----BEGIN PRIVATE KEY-----$'; then
+            SIZE=$(wc -c < "$KEY_FILE" | tr -d ' ')
+            echo "::error::APP_STORE_CONNECT_API_KEY_P8 decoded to $SIZE bytes but does not start with the PEM header. Re-encode the .p8 with 'base64 -i AuthKey_<KEYID>.p8 | pbcopy' and update the secret."
+            exit 1
+          fi
+          echo "ASC_KEY_PATH=$KEY_FILE" >> "$GITHUB_ENV"
+
+      - name: Install macOS App Store provisioning profile
+        uses: ./.github/actions/install-provisioning-profile
+        with:
+          base64: ${{ secrets.MAC_APP_STORE_PROFILE }}
+          extension: provisionprofile
+          env-name: MAC_APP_STORE_PROFILE_UUID
+
+      - name: Archive CabalmailMac
+        working-directory: apple
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -o pipefail
+          # Manual signing — see the same block in the iOS job for rationale.
+          # See the iOS archive step for why this is a Unix timestamp.
+          BUILD_NUMBER="$(date -u +%s)"
+          echo "Build number: $BUILD_NUMBER" >> "$GITHUB_STEP_SUMMARY"
+          xcodebuild archive \
+            -workspace Cabalmail.xcworkspace \
+            -scheme CabalmailMac \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -archivePath "$RUNNER_TEMP/CabalmailMac.xcarchive" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            PROVISIONING_PROFILE_SPECIFIER="$MAC_APP_STORE_PROFILE_UUID" \
+            MARKETING_VERSION=0.6.0 \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            | xcbeautify --renderer github-actions
+
+      - name: Export app-store .pkg
+        working-directory: apple
+        run: |
+          set -o pipefail
+          PLIST="$RUNNER_TEMP/ExportOptions-macOS.plist"
+          cat > "$PLIST" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>app-store-connect</string>
+              <key>signingStyle</key>
+              <string>manual</string>
+              <key>signingCertificate</key>
+              <string>Apple Distribution</string>
+              <key>installerSigningCertificate</key>
+              <string>3rd Party Mac Developer Installer</string>
+              <key>destination</key>
+              <string>export</string>
+              <key>uploadSymbols</key>
+              <true/>
+              <key>provisioningProfiles</key>
+              <dict>
+                  <key>com.cabalmail.CabalmailMac</key>
+                  <string>$MAC_APP_STORE_PROFILE_UUID</string>
+              </dict>
+          </dict>
+          </plist>
+          EOF
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/CabalmailMac.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export-mac-appstore" \
+            -exportOptionsPlist "$PLIST" \
+            | xcbeautify --renderer github-actions
+
+      - name: Summarize macOS upload
+        run: |
+          {
+            echo "### macOS TestFlight upload"
+            echo ""
+            echo "- Workflow run: \`${{ github.run_number }}\`"
+            echo "- Environment: \`${{ github.ref_name == 'main' && 'prod' || 'stage' }}\`"
+            echo "- Track: App Store Connect → Cabalmail Mac → TestFlight"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload macOS to TestFlight
+        env:
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          PKG=$(ls "$RUNNER_TEMP/export-mac-appstore"/*.pkg | head -n1)
+          echo "Uploading $PKG"
+          LOG="$RUNNER_TEMP/altool-mac.log"
+          xcrun altool --upload-app \
+            -f "$PKG" \
+            --type osx \
+            --apiKey "$ASC_KEY_ID" \
+            --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tee "$LOG"
+          # altool writes timestamped "ERROR:" lines and returns 0 anyway in
+          # some releases, so we scan the log and fail the step ourselves if
+          # any error marker appears. The pattern matches anywhere in the
+          # line since altool prefixes errors with a timestamp.
+          if grep -qE '(UPLOAD FAILED|ERROR: |iris-code : STATE_ERROR)' "$LOG"; then
+            ERRORS=$(grep -cE '(UPLOAD FAILED|ERROR: )' "$LOG")
+            echo "::error::altool reported $ERRORS error line(s) despite exit code 0. Review the log above."
+            exit 1
+          fi
+          echo "::notice::altool upload completed cleanly."
+
+      - name: Check for Developer ID certificate and profile
+        id: devid
+        env:
+          DEVID_P12: ${{ secrets.DEVELOPER_ID_CERT_P12 }}
+          DEVID_PROFILE: ${{ secrets.MAC_DEVID_PROFILE }}
+        run: |
+          MISSING=()
+          [ -z "$DEVID_P12" ] && MISSING+=("DEVELOPER_ID_CERT_P12")
+          [ -z "$DEVID_PROFILE" ] && MISSING+=("MAC_DEVID_PROFILE")
+          if [ ${#MISSING[@]} -gt 0 ]; then
+            echo "::notice::Developer-ID secrets missing (${MISSING[*]}); skipping notarized .app artifact. TestFlight upload already completed."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Import Developer ID certificate
+        if: steps.devid.outputs.enabled == 'true'
+        env:
+          DEVID_P12: ${{ secrets.DEVELOPER_ID_CERT_P12 }}
+          DEVID_PASSWORD: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN_PASSWORD=$(cat "$RUNNER_TEMP/keychain-password")
+          echo "$DEVID_P12" | base64 --decode > "$RUNNER_TEMP/devid.p12"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$RUNNER_TEMP/devid.p12" \
+            -P "$DEVID_PASSWORD" \
+            -A -t cert -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+          security set-key-partition-list \
+            -S apple-tool:,apple: \
+            -k "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH" > /dev/null
+          rm "$RUNNER_TEMP/devid.p12"
+
+      - name: Install macOS Developer ID provisioning profile
+        if: steps.devid.outputs.enabled == 'true'
+        uses: ./.github/actions/install-provisioning-profile
+        with:
+          base64: ${{ secrets.MAC_DEVID_PROFILE }}
+          extension: provisionprofile
+          env-name: MAC_DEVID_PROFILE_UUID
+
+      - name: Export developer-id build for notarization
+        if: steps.devid.outputs.enabled == 'true'
+        working-directory: apple
+        run: |
+          set -o pipefail
+          # Generate the export-options plist at runtime so the profile UUID
+          # from the just-installed MAC_DEVID_PROFILE can be embedded. The
+          # `provisioningProfiles` dict keys are the app's bundle IDs; the
+          # values are the profile UUIDs (or profile names).
+          PLIST="$RUNNER_TEMP/ExportOptions-macOS-DeveloperID.plist"
+          cat > "$PLIST" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>developer-id</string>
+              <key>signingStyle</key>
+              <string>manual</string>
+              <key>signingCertificate</key>
+              <string>Developer ID Application</string>
+              <key>destination</key>
+              <string>export</string>
+              <key>provisioningProfiles</key>
+              <dict>
+                  <key>com.cabalmail.CabalmailMac</key>
+                  <string>$MAC_DEVID_PROFILE_UUID</string>
+              </dict>
+          </dict>
+          </plist>
+          EOF
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/CabalmailMac.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export-mac-devid" \
+            -exportOptionsPlist "$PLIST" \
+            | xcbeautify --renderer github-actions
+
+      - name: Notarize and staple
+        if: steps.devid.outputs.enabled == 'true'
+        env:
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+        run: |
+          APP=$(ls -d "$RUNNER_TEMP/export-mac-devid"/*.app | head -n1)
+          ZIP="$RUNNER_TEMP/CabalmailMac.zip"
+          ditto -c -k --keepParent "$APP" "$ZIP"
+          xcrun notarytool submit "$ZIP" \
+            --key "$ASC_KEY_PATH" \
+            --key-id "$ASC_KEY_ID" \
+            --issuer "$ASC_ISSUER_ID" \
+            --wait
+          xcrun stapler staple "$APP"
+          NOTARIZED_ZIP="$RUNNER_TEMP/CabalmailMac-notarized.zip"
+          ditto -c -k --keepParent "$APP" "$NOTARIZED_ZIP"
+          echo "NOTARIZED_ZIP=$NOTARIZED_ZIP" >> "$GITHUB_ENV"
+
+      - name: Upload notarized .app as workflow artifact
+        if: steps.devid.outputs.enabled == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: CabalmailMac-notarized-${{ github.run_number }}
+          path: ${{ env.NOTARIZED_ZIP }}
+          retention-days: 30
+
+      - name: Clean up keychain and API key
+        if: always()
+        run: |
+          security delete-keychain "${KEYCHAIN_PATH:-}" || true
+          rm -f "$RUNNER_TEMP/keychain-password"
+          rm -rf "$HOME/.appstoreconnect/private_keys"
