@@ -80,7 +80,10 @@ final class ImapParserTests: XCTestCase {
     }
 
     func testFetchEnvelopeDecodesRFC2047Subject() {
-        let line = Data(#"* 1 FETCH (UID 7 ENVELOPE (NIL "=?utf-8?B?SGVsbG8gV29ybGQ=?=" ((NIL NIL "alice" "example.com")) NIL NIL NIL NIL NIL NIL NIL))"#.utf8)
+        let encodedSubject = #""=?utf-8?B?SGVsbG8gV29ybGQ=?=""#
+        let from = #"((NIL NIL "alice" "example.com"))"#
+        let nilTail = "NIL NIL NIL NIL NIL NIL"
+        let line = Data(#"* 1 FETCH (UID 7 ENVELOPE (NIL \#(encodedSubject) \#(from) \#(nilTail)))"#.utf8)
         guard case let .fetch(_, attrs) = ImapParser.parse(line: line, literals: []) else {
             return XCTFail("Expected fetch response")
         }
@@ -88,7 +91,9 @@ final class ImapParserTests: XCTestCase {
     }
 
     func testFetchEnvelopeDecodesRFC2047AddressName() {
-        let line = Data(#"* 1 FETCH (UID 7 ENVELOPE (NIL "hi" (("=?utf-8?Q?Bj=C3=B6rn?=" NIL "bjorn" "example.com")) NIL NIL NIL NIL NIL NIL NIL))"#.utf8)
+        let encodedAddress = #"(("=?utf-8?Q?Bj=C3=B6rn?=" NIL "bjorn" "example.com"))"#
+        let nilTail = "NIL NIL NIL NIL NIL NIL"
+        let line = Data(#"* 1 FETCH (UID 7 ENVELOPE (NIL "hi" \#(encodedAddress) \#(nilTail)))"#.utf8)
         guard case let .fetch(_, attrs) = ImapParser.parse(line: line, literals: []) else {
             return XCTFail("Expected fetch response")
         }
