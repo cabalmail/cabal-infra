@@ -111,13 +111,26 @@ resource "aws_iam_role_policy" "lambda" {
                 "dynamodb:DescribeGlobalTable"
             ],
             "Resource": [
-                "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-addresses"
+                "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-addresses",
+                "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-dmarc-reports"
             ]
         },
         {
             "Effect": "Allow",
             "Action": "sns:Publish",
             "Resource": "${var.address_changed_topic_arn}"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "cognito-idp:ListUsers",
+                "cognito-idp:AdminGetUser",
+                "cognito-idp:AdminConfirmSignUp",
+                "cognito-idp:AdminDisableUser",
+                "cognito-idp:AdminEnableUser",
+                "cognito-idp:AdminDeleteUser"
+            ],
+            "Resource": "arn:aws:cognito-idp:${var.region}:${var.account}:userpool/${var.user_pool_id}"
         }
     ]
 }
@@ -156,6 +169,8 @@ resource "aws_lambda_function" "api_call" {
       DOMAINS                    = jsonencode({ for r in var.domains : r.domain => r.zone_id })
       CONTROL_DOMAIN             = var.control_domain
       ADDRESS_CHANGED_TOPIC_ARN  = var.address_changed_topic_arn
+      USER_POOL_ID               = var.user_pool_id
+      DMARC_TABLE_NAME           = "cabal-dmarc-reports"
     }
   }
   depends_on = [

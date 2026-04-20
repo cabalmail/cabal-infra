@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import List from './List';
 import Request from './Request';
+import Admin from './Admin';
 import './Addresses.css'
 
-function Addresses({ token, domains, api_url, setMessage, host }) {
+function Addresses({ token, domains, api_url, setMessage, host, isAdmin }) {
   const [showRequest, setShowRequest] = useState(false);
   const [trigger, setTrigger] = useState("");
+  const [tab, setTab] = useState('mine'); // 'mine' | 'all'
 
   const toggleRequest = () => {
     setShowRequest(prev => !prev);
@@ -16,8 +18,31 @@ function Addresses({ token, domains, api_url, setMessage, host }) {
     setShowRequest(false);
   };
 
+  const tabs = isAdmin ? (
+    <div className="address-tabs">
+      <button
+        className={`address-tab${tab === 'mine' ? ' active' : ''}`}
+        onClick={() => setTab('mine')}
+      >My Addresses</button>
+      <button
+        className={`address-tab${tab === 'all' ? ' active' : ''}`}
+        onClick={() => setTab('all')}
+      >All Addresses (admin)</button>
+    </div>
+  ) : null;
+
+  if (isAdmin && tab === 'all') {
+    return (
+      <>
+        {tabs}
+        <Admin domains={domains} setMessage={setMessage} />
+      </>
+    );
+  }
+
   return (
     <>
+      {tabs}
       <button
         onClick={toggleRequest}
         className="toggleRequest"

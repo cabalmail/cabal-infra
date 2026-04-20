@@ -125,8 +125,8 @@ locals {
 
       method    = "GET"
       memory    = 128
-      cache     = true
-      cache_ttl = 60
+      cache     = false
+      cache_ttl = 0
     },
     new                = {
       runtime   = "python3.13"
@@ -140,6 +140,86 @@ locals {
       runtime   = "python3.13"
 
       method    = "DELETE"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    list_users         = {
+      runtime   = "python3.13"
+
+      method    = "GET"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    confirm_user       = {
+      runtime   = "python3.13"
+
+      method    = "PUT"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    disable_user       = {
+      runtime   = "python3.13"
+
+      method    = "PUT"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    enable_user        = {
+      runtime   = "python3.13"
+
+      method    = "PUT"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    delete_user        = {
+      runtime   = "python3.13"
+
+      method    = "DELETE"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    list_dmarc_reports = {
+      runtime   = "python3.13"
+
+      method    = "GET"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    list_addresses_admin = {
+      runtime   = "python3.13"
+
+      method    = "GET"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    assign_address       = {
+      runtime   = "python3.13"
+
+      method    = "PUT"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    unassign_address     = {
+      runtime   = "python3.13"
+
+      method    = "PUT"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    new_address_admin    = {
+      runtime   = "python3.13"
+
+      method    = "POST"
       memory    = 128
       cache     = false
       cache_ttl = 0

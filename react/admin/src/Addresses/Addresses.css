@@ -51,3 +51,190 @@ div.Addresses div.content {
   margin-left: auto;
   margin-right: auto;
 }
+
+/* Tabs */
+
+div.address-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 0.5em;
+  border-bottom: 1px solid #888;
+}
+
+button.address-tab {
+  background: none;
+  border: 1px solid transparent;
+  border-bottom: none;
+  padding: 0.5em 1.2em;
+  cursor: pointer;
+  margin-bottom: -1px;
+  border-top-left-radius: 0.3em;
+  border-top-right-radius: 0.3em;
+  width: auto;
+}
+
+button.address-tab.active {
+  border-color: #888;
+  border-bottom: 1px solid #000;
+  font-weight: bold;
+}
+
+/* Admin Addresses View */
+
+div.admin-addresses fieldset.assign-field,
+div.admin-addresses fieldset.address-fields,
+div.admin-addresses fieldset.comment-field,
+div.admin-addresses fieldset.button-fields {
+  margin: 0.4em 0;
+}
+
+div.admin-addresses div.assign-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3em 1em;
+  align-items: center;
+}
+
+div.admin-addresses label.user-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  width: auto;
+}
+
+div.admin-addresses label.user-checkbox input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+}
+
+div.admin-addresses div.admin-new-wrapper {
+  overflow: hidden;
+  transition: max-height 0.5s ease;
+}
+
+div.admin-addresses div.admin-new-wrapper.hidden {
+  max-height: 0;
+}
+
+div.admin-addresses div.admin-new-wrapper.visible {
+  max-height: 40em;
+}
+
+div.admin-addresses div.admin-controls {
+  display: flex;
+  gap: 0.5em;
+  align-items: center;
+  margin-bottom: 0.5em;
+}
+
+div.admin-addresses div.admin-controls input#filter {
+  flex: 1;
+  max-width: 30em;
+  width: auto;
+}
+
+ul.admin-address-list {
+  list-style: none;
+  padding-left: 0;
+}
+
+ul.admin-address-list li.admin-address-row {
+  list-style: none;
+  border-bottom: 1px solid #888;
+  padding: 0.5em 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-column-gap: 1em;
+  align-items: center;
+}
+
+div.admin-address-main {
+  display: flex;
+  flex-direction: column;
+}
+
+div.admin-address-main span.address {
+  font-weight: bold;
+}
+
+div.admin-address-main span.comment {
+  font-size: 90%;
+  color: #888;
+}
+
+div.admin-address-users {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3em;
+  align-items: center;
+}
+
+span.user-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2em;
+  height: 1.8em;
+  padding: 0 0.6em;
+  border: 1px solid #888;
+  border-radius: 0.9em;
+  font: inherit;
+  font-size: 90%;
+  line-height: 1;
+  box-sizing: border-box;
+}
+
+span.user-chip button.chip-remove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  margin: 0;
+  width: 1em;
+  height: 1em;
+  font-size: 110%;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+}
+
+button.add-user {
+  -webkit-appearance: none;
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 1.8em;
+  min-height: 0;
+  padding: 0 0.6em;
+  margin: 0;
+  border: 1px dashed #888;
+  border-radius: 0.9em;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 90%;
+  line-height: 1;
+  cursor: pointer;
+  width: auto;
+  box-sizing: border-box;
+  vertical-align: middle;
+}
+
+span.user-picker-inline {
+  display: inline-flex;
+  gap: 0.3em;
+  align-items: center;
+}
+
+span.user-picker-inline select {
+  width: auto;
+  padding: 0.2em 0.4em;
+}
+
+span.user-picker-inline button {
+  width: auto;
+  padding: 0.25em 0.6em;
+  line-height: 1;
+}

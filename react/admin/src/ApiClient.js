@@ -362,6 +362,156 @@ export default class ApiClient {
     return response;
   };
   
+  // Admin — DMARC Reports
+
+  listDmarcReports(nextToken) {
+    const params = {};
+    if (nextToken) {
+      params.next_token = nextToken;
+    }
+    const response = axios.get('/list_dmarc_reports', {
+      params: params,
+      baseURL: this.baseURL,
+      headers: {
+        'Authorization': this.token
+      },
+      timeout: TIMEOUT
+    });
+    return response;
+  }
+
+  // Admin — User Management
+
+  listUsers() {
+    const response = axios.get('/list_users', {
+      baseURL: this.baseURL,
+      headers: {
+        'Authorization': this.token
+      },
+      timeout: TIMEOUT
+    });
+    return response;
+  }
+
+  confirmUser(username) {
+    const response = axios.put('/confirm_user',
+      JSON.stringify({ username: username }),
+      {
+        baseURL: this.baseURL,
+        headers: {
+          'Authorization': this.token
+        },
+        timeout: TIMEOUT
+      }
+    );
+    return response;
+  }
+
+  disableUser(username) {
+    const response = axios.put('/disable_user',
+      JSON.stringify({ username: username }),
+      {
+        baseURL: this.baseURL,
+        headers: {
+          'Authorization': this.token
+        },
+        timeout: TIMEOUT
+      }
+    );
+    return response;
+  }
+
+  enableUser(username) {
+    const response = axios.put('/enable_user',
+      JSON.stringify({ username: username }),
+      {
+        baseURL: this.baseURL,
+        headers: {
+          'Authorization': this.token
+        },
+        timeout: TIMEOUT
+      }
+    );
+    return response;
+  }
+
+  deleteUser(username) {
+    const response = axios.delete('/delete_user', {
+      baseURL: this.baseURL,
+      data: JSON.stringify({ username: username }),
+      headers: {
+        'Authorization': this.token
+      },
+      timeout: TIMEOUT
+    });
+    return response;
+  }
+
+  // Admin — Address Management
+
+  listAllAddresses() {
+    const response = axios.get('/list_addresses_admin', {
+      baseURL: this.baseURL,
+      headers: {
+        'Authorization': this.token
+      },
+      timeout: TIMEOUT
+    });
+    return response;
+  }
+
+  assignAddress(address, username) {
+    localStorage.removeItem(ADDRESS_LIST);
+    const response = axios.put('/assign_address',
+      JSON.stringify({ address: address, username: username }),
+      {
+        baseURL: this.baseURL,
+        headers: {
+          'Authorization': this.token
+        },
+        timeout: TIMEOUT
+      }
+    );
+    return response;
+  }
+
+  unassignAddress(address, username) {
+    localStorage.removeItem(ADDRESS_LIST);
+    const response = axios.put('/unassign_address',
+      JSON.stringify({ address: address, username: username }),
+      {
+        baseURL: this.baseURL,
+        headers: {
+          'Authorization': this.token
+        },
+        timeout: TIMEOUT
+      }
+    );
+    return response;
+  }
+
+  newAddressAdmin(username, subdomain, tld, comment, address, usernames) {
+    localStorage.removeItem(ADDRESS_LIST);
+    const response = axios.post('/new_address_admin',
+      {
+        username: username,
+        subdomain: subdomain,
+        tld: tld,
+        comment: comment,
+        address: address,
+        usernames: usernames
+      },
+      {
+        baseURL: this.baseURL,
+        headers: {
+          'Authorization': this.token
+        },
+        timeout: TIMEOUT
+      }
+    );
+    return response;
+  }
+
   getAttachments(folder, id, seen) {
     const response = axios.get('/list_attachments',
       {

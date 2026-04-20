@@ -81,3 +81,8 @@ variable "address_changed_topic_arn" {
   type        = string
   description = "ARN of the SNS topic for address change notifications to ECS containers."
 }
+
+variable "admin_group_name" {
+  type        = string
+  description = "Name of the Cognito admin group."
+}

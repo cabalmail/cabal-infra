@@ -68,6 +68,7 @@ module "admin" {
   dev_mode            = var.prod ? false : true
 
   address_changed_topic_arn = module.ecs.sns_topic_arn
+  admin_group_name          = module.pool.admin_group_name
 }
 
 # Creates a DynamoDB table for storing address data

@@ -13,10 +13,15 @@ import {
 const Email = React.lazy(() => import('./Email'));
 const Folders = React.lazy(() => import('./Folders'));
 const Addresses = React.lazy(() => import('./Addresses'));
+const Users = React.lazy(() => import('./Users'));
+const Dmarc = React.lazy(() => import('./Dmarc'));
 
 // Pre-login Components
 import SignUp from './SignUp';
 import Login from './Login';
+import Verify from './Verify';
+import ForgotPassword from './ForgotPassword';
+import ResetPassword from './ResetPassword';
 
 // Persistent Components
 import AppMessage from './AppMessage';
@@ -32,6 +37,7 @@ import AppMessageContext from './contexts/AppMessageContext';
 // Site-wide and Theme-specific style
 import './AppDark.css';
 import './AppLight.css';
+import { ADDRESS_LIST, FOLDER_LIST } from './constants';
 import './App.css';
 
 // Module-level token storage (never persisted to localStorage)
@@ -47,6 +53,7 @@ function loadSavedState() {
     userName: null,
     password: null,
     phone: null,
+    verificationCode: null,
     view: "Login",
     poolData: null,
     control_domain: null,
@@ -73,6 +80,7 @@ function persistState(state) {
  */
 function App() {
   const [state, setAppState] = useState(loadSavedState);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [message, setMessageText] = useState(null);
   const [error, setError] = useState(false);
   const [hideMessage, setHideMessage] = useState(true);
@@ -93,7 +101,8 @@ function App() {
     }
     setAppState(prev => {
       const updates = {};
-      if (prev.view !== "Login" && prev.view !== "SignUp") {
+      const preLoginViews = ["Login", "SignUp", "Verify", "ForgotPassword", "ResetPassword"];
+      if (!preLoginViews.includes(prev.view)) {
         updates.view = "Login";
       }
       if (prev.loggedIn !== false) {
@@ -137,6 +146,9 @@ function App() {
           if (err || !session || !session.isValid()) return;
           _token = session.getIdToken().getJwtToken();
           _expires = session.getIdToken().getExpiration();
+          const payload = JSON.parse(atob(_token.split('.')[1]));
+          const groups = payload['cognito:groups'] || [];
+          setIsAdmin(groups.includes('admin'));
           setState({ loggedIn: true, view: "Email" });
         });
       }
@@ -178,8 +190,8 @@ function App() {
       null,
       (err, _result) => {
         if (!err) {
-          setState({ view: "Login" });
-          setMessage("Your registration has been submitted.", false);
+          setState({ view: "Verify" });
+          setMessage("Check your phone for a verification code.", false);
         } else {
           setState({ view: "SignUp" });
           setMessage("Registration failed.", true);
@@ -187,6 +199,60 @@ function App() {
       }
     );
   }, [state.userName, state.password, state.phone, setState, setMessage]);
+
+  const doVerify = useCallback((e) => {
+    e.preventDefault();
+    const cognitoUser = new CognitoUser({
+      Username: state.userName,
+      Pool: UserPool
+    });
+    cognitoUser.confirmRegistration(state.verificationCode, true, (err, _result) => {
+      if (!err) {
+        setState({ view: "Login", verificationCode: null });
+        setMessage("Phone verified. Your account is pending admin approval.", false);
+      } else {
+        setMessage("Verification failed. Please check your code and try again.", true);
+      }
+    });
+  }, [state.userName, state.verificationCode, setState, setMessage]);
+
+  const doForgotPassword = useCallback((e) => {
+    e.preventDefault();
+    const cognitoUser = new CognitoUser({
+      Username: state.userName,
+      Pool: UserPool
+    });
+    cognitoUser.forgotPassword({
+      onSuccess: () => {
+        setState({ view: "ResetPassword" });
+        setMessage("A reset code has been sent to your phone.", false);
+      },
+      onFailure: () => {
+        setMessage("Failed to send reset code. Please try again.", true);
+      },
+      inputVerificationCode: () => {
+        setState({ view: "ResetPassword" });
+        setMessage("A reset code has been sent to your phone.", false);
+      }
+    });
+  }, [state.userName, setState, setMessage]);
+
+  const doResetPassword = useCallback((e) => {
+    e.preventDefault();
+    const cognitoUser = new CognitoUser({
+      Username: state.userName,
+      Pool: UserPool
+    });
+    cognitoUser.confirmPassword(state.verificationCode, state.password, {
+      onSuccess: () => {
+        setState({ view: "Login", verificationCode: null, password: null });
+        setMessage("Password reset successful. You can now log in.", false);
+      },
+      onFailure: () => {
+        setMessage("Password reset failed. Please check your code and try again.", true);
+      }
+    });
+  }, [state.userName, state.verificationCode, state.password, setState, setMessage]);
 
   const doLogin = useCallback((e) => {
     e.preventDefault();
@@ -202,6 +268,9 @@ function App() {
       onSuccess: data => {
         _token = data.getIdToken().getJwtToken();
         _expires = data.getIdToken().getExpiration();
+        const payload = JSON.parse(atob(_token.split('.')[1]));
+        const groups = payload['cognito:groups'] || [];
+        setIsAdmin(groups.includes('admin'));
         setState({ loggedIn: true, view: "Email" });
         setMessage("Login succeeded", false);
       },
@@ -222,6 +291,10 @@ function App() {
       const cognitoUser = UserPool.getCurrentUser();
       if (cognitoUser) cognitoUser.signOut();
     }
+    localStorage.removeItem(ADDRESS_LIST);
+    localStorage.removeItem(FOLDER_LIST);
+    localStorage.removeItem("INBOX");
+    setIsAdmin(false);
     setState({ loggedIn: false, userName: null, password: null, view: "Login" });
   }, [setState]);
 
@@ -237,6 +310,18 @@ function App() {
 
   function renderContent() {
     switch (state.view) {
+      case "Users":
+        return (
+          <ErrorBoundary name="Users">
+            <Users />
+          </ErrorBoundary>
+        );
+      case "DMARC":
+        return (
+          <ErrorBoundary name="DMARC">
+            <Dmarc />
+          </ErrorBoundary>
+        );
       case "Addresses":
         return (
           <ErrorBoundary name="Addresses">
@@ -246,6 +331,7 @@ function App() {
               host={state.imap_host}
               domains={state.domains}
               setMessage={setMessage}
+              isAdmin={isAdmin}
             />
           </ErrorBoundary>
         );
@@ -260,13 +346,43 @@ function App() {
             />
           </ErrorBoundary>
         );
+      case "Verify":
+        return (
+          <Verify
+            onSubmit={doVerify}
+            onCodeChange={doInputChange}
+            code={state.verificationCode}
+          />
+        );
+      case "ForgotPassword":
+        return (
+          <ForgotPassword
+            onSubmit={doForgotPassword}
+            onUsernameChange={doInputChange}
+            username={state.userName}
+            onCancel={(e) => { e.preventDefault(); setState({ view: "Login" }); }}
+          />
+        );
+      case "ResetPassword":
+        return (
+          <ResetPassword
+            onSubmit={doResetPassword}
+            onCodeChange={doInputChange}
+            onPasswordChange={doInputChange}
+            code={state.verificationCode}
+            password={state.password}
+          />
+        );
       case "SignUp":
         return (
           <SignUp
             onSubmit={doRegister}
             onUsernameChange={doInputChange}
-            onPasswordChange={doInputChange}
             onPhoneChange={doInputChange}
+            onPasswordChange={doInputChange}
+            username={state.userName}
+            password={state.password}
+            phone={state.phone}
           />
         );
       case "Email":
@@ -292,6 +408,7 @@ function App() {
             onPasswordChange={doInputChange}
             username={state.userName}
             password={state.password}
+            onForgotPassword={(e) => { e.preventDefault(); setState({ view: "ForgotPassword" }); }}
           />
         );
     }
@@ -314,6 +431,7 @@ function App() {
             loggedIn={state.loggedIn}
             view={state.view}
             doLogout={doLogout}
+            isAdmin={isAdmin}
           />
           <div className="content">
             <Suspense fallback={<div className="loading">Loading...</div>}>

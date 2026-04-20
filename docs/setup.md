@@ -107,6 +107,22 @@ Look at the output from Terraform at the end of apply/apply-terraform in GitHub 
 
 The output contains the nameservers that AWS assigned to your mail domains. To work at all, you must [update your domain registrations with these nameservers](./registrar.md).
 
+## SMS Sandbox (Required for phone verification)
+
+New AWS accounts are placed in the SNS SMS sandbox, which restricts SMS delivery to manually verified phone numbers only. For production use, you must request production access so that Cognito can send verification codes to any phone number.
+
+1. Open the [Amazon SNS console](https://console.aws.amazon.com/sns/v3/home#/mobile/text-messaging) in your production account.
+2. In the left navigation, choose **Text messaging (SMS)**.
+3. In the **Account information** section, choose **Exit SMS sandbox**.
+4. Fill out the support case:
+   - **Limit type**: SNS Text Messaging
+   - **Use case description**: Describe that you use Cognito for user phone verification and password recovery.
+   - **Monthly SMS spend limit**: Request an appropriate limit (the default is $1.00/month; typical small deployments need $5-10).
+   - **Message type**: Transactional
+5. AWS typically processes the request within 1-2 business days.
+
+Until production access is granted, you can test SMS by adding destination phone numbers to the sandbox via the SNS console under **Text messaging > Sandbox destination phone numbers**.
+
 ## Port 25 Block (What to do with the `relay_ips` output)
 
 The output contains the IP address of each of your outgoing mail relays. (More specifically, it's the elastic IP addresses used for egress on the NAT gateway.) In order to send mail reliably, you must get AWS to allow outbound traffic on port 25. There is no API for this, so the process cannot be automated. Instead, you must fill out [this form](https://console.aws.amazon.com/support/contacts?#/rdns-limits).

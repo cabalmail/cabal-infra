@@ -50,6 +50,7 @@ module "cabal_method" {
   domains                    = var.domains
   bucket                     = var.bucket
   address_changed_topic_arn  = var.address_changed_topic_arn
+  user_pool_id               = var.user_pool_id
 }
 
 resource "aws_api_gateway_deployment" "deployment" {

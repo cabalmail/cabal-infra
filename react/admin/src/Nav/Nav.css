@@ -3,7 +3,11 @@
 .logged-in #signup,
 .logged-in #login,
 .logged-out #email,
-.logged-out #folders {
+.logged-out #folders,
+.logged-out #users,
+.logged-out #dmarc,
+.nav:not(.is-admin) #users,
+.nav:not(.is-admin) #dmarc {
   display: none;
 }
 
@@ -14,6 +18,11 @@
   top: 0;
   height: 3.2em;
   overflow: hidden;
+  z-index: 100000;
+}
+
+.nav .hamburger {
+  display: none;
 }
 
 .nav .item {
@@ -90,14 +99,83 @@ body div.nav div.logo {
   width: auto;
 }
 
-@media (max-width: 699px) {
+@media (max-width: 959px) {
   body div.nav div.logo {
-    display: none;
+    right: 0;
+    left: auto;
   }
   body div.nav {
     text-align: left;
+    background: #000;
   }
-  .nav .item {
-    padding: 0.8em 0.6em;
+  body div.nav.menu-open {
+    overflow: visible;
+  }
+  .nav .hamburger {
+    display: block;
+    position: absolute;
+    top: 0.5em;
+    left: 0.5em;
+    width: 2.2em;
+    height: 2.2em;
+    padding: 0.4em;
+    background: none;
+    border: 1px solid;
+    cursor: pointer;
+    margin: 0;
+    z-index: 2;
+    border-width: 0;
+  }
+  .nav .hamburger span {
+    display: block;
+    height: 2px;
+    width: 100%;
+    background: currentColor;
+    margin: 0.25em 0;
+    border-radius: 1px;
+  }
+  .nav #logout {
+    display: none;
+  }
+  .nav .nav-items {
+    display: none;
+    position: absolute;
+    top: 3.2em;
+    left: 0;
+    right: 0;
+    background: #000;
+    border-top: 1px solid #444;
+    z-index: 1;
+  }
+  .nav.menu-open .nav-items {
+    display: block;
+  }
+  .nav.menu-open .item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 0.9em 1em;
+    border-bottom: 1px solid #222;
+  }
+  .nav.menu-open #logout {
+    display: block;
+    position: static;
+    width: 100%;
+    padding: 0.9em 1em;
+    border-width: 1px 0 0 0;
+    border-top: 2px solid #444;
+  }
+  /* Preserve hide rules for logged-out/not-admin in the dropdown */
+  .nav.logged-out.menu-open #addresses,
+  .nav.logged-out.menu-open #logout,
+  .nav.logged-in.menu-open #signup,
+  .nav.logged-in.menu-open #login,
+  .nav.logged-out.menu-open #email,
+  .nav.logged-out.menu-open #folders,
+  .nav.logged-out.menu-open #users,
+  .nav.logged-out.menu-open #dmarc,
+  .nav:not(.is-admin).menu-open #users,
+  .nav:not(.is-admin).menu-open #dmarc {
+    display: none;
   }
 }
