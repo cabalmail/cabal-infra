@@ -475,24 +475,86 @@ the build appears in your app's **Builds** list. First-time attach:
 macOS follows the same flow using the macOS TestFlight app (install
 from the Mac App Store).
 
-## Placeholder app icons
+## App icons
 
-TestFlight will reject an upload that lacks app icons, so the scaffold ships
-with a generated placeholder. Run this once locally to produce the PNGs and
-commit them (the script has no side effects beyond writing into the two
-`Assets.xcassets/AppIcon.appiconset` directories):
+Real Cabalmail artwork is installed in both asset catalogs, rendered from
+the vector sources in [`apple/handoff/`](handoff/) (authored by Claude
+Design; see [`handoff/README.md`](handoff/README.md) for the full spec
+including geometry, color tokens, and the per-platform do-not list).
 
-```sh
-cd apple
-scripts/generate-placeholder-icons.sh
-git add Cabalmail/Assets.xcassets/AppIcon.appiconset \
-        CabalmailMac/Assets.xcassets/AppIcon.appiconset
-git commit -m "Add placeholder app icons"
+```
+apple/Cabalmail/Assets.xcassets/AppIcon.appiconset/
+  AppIcon-light.png      (1024×1024, from AppIcon-ios-light.svg)
+  AppIcon-dark.png       (1024×1024, from AppIcon-ios-dark.svg)
+  AppIcon-tinted.png     (1024×1024 RGBA, from AppIcon-ios-tinted.svg —
+                          white glyph on transparent; system tints the
+                          white pixels at runtime)
+apple/CabalmailMac/Assets.xcassets/AppIcon.appiconset/
+  icon_16x16.png … icon_512x512@2x.png    (the full 10-file macOS ladder,
+                                          re-rendered from the light SVG
+                                          at each exact size — no bitmap
+                                          downscaling)
 ```
 
-The generator is deliberately ugly-but-on-brand so it's obvious we haven't
-shipped real artwork yet. Replace the output files with a real design
-before any non-internal distribution.
+`Contents.json` in the iOS catalog uses the iOS 17+ `appearances`
+convention (`luminosity: dark` / `luminosity: tinted`) rather than the
+legacy single-idiom layout.
+
+Both catalogs pass `xcrun actool` cleanly (iphoneos 18, macosx 15, xros 2).
+
+### Regenerating from the SVG sources
+
+```sh
+brew install librsvg                  # one-time
+cd apple
+
+# iOS / iPadOS / visionOS variants
+IOS="Cabalmail/Assets.xcassets/AppIcon.appiconset"
+rsvg-convert -w 1024 -h 1024 handoff/AppIcon-ios-light.svg   -o "$IOS/AppIcon-light.png"
+rsvg-convert -w 1024 -h 1024 handoff/AppIcon-ios-dark.svg    -o "$IOS/AppIcon-dark.png"
+rsvg-convert -w 1024 -h 1024 handoff/AppIcon-ios-tinted.svg  -o "$IOS/AppIcon-tinted.png"
+
+# macOS ladder
+MAC="CabalmailMac/Assets.xcassets/AppIcon.appiconset"
+for pair in 16:icon_16x16 32:icon_16x16@2x 32:icon_32x32 64:icon_32x32@2x \
+            128:icon_128x128 256:icon_128x128@2x 256:icon_256x256 512:icon_256x256@2x \
+            512:icon_512x512 1024:icon_512x512@2x; do
+  size="${pair%%:*}"; name="${pair##*:}"
+  rsvg-convert -w "$size" -h "$size" handoff/AppIcon-ios-light.svg -o "$MAC/${name}.png"
+done
+```
+
+Do **not** apply a squircle mask, bake a drop-shadow, or grayscale the
+tinted variant in any regen pipeline — iOS / macOS / visionOS each own
+those at runtime. The handoff README spells this out.
+
+### visionOS is currently on the shared iOS `.appiconset`
+
+visionOS apps can ship a layered `AppIcon.solidimagestack` (back / middle
+/ front layers, composited with parallax on gaze focus). The three
+visionOS source layers already exist in `apple/handoff/`
+(`AppIcon-visionos-{back,middle,front}.svg`), but this scaffold does
+**not** install them. The `Cabalmail` target's visionOS destination is
+served by the same `AppIcon.appiconset` as iOS/iPadOS, which is a valid
+visionOS icon configuration — just not the layered one.
+
+Adding the solidimagestack is left as a Phase 7 platform-polish task: it
+requires a new `AppIcon.solidimagestack` asset, per-layer
+`Content.imageset/Contents.json` files, and a per-platform icon name
+wired through `project.yml` (e.g. `ASSETCATALOG_COMPILER_APPICON_NAME`
+overridden for xros). Non-trivial, and easy to get wrong without a
+visionOS device in the loop — so we decided to ship the shared
+appiconset now and revisit once the visionOS build is receiving
+first-class attention.
+
+### Obsolete placeholder generator
+
+[`scripts/generate-placeholder-icons.sh`](scripts/generate-placeholder-icons.sh)
+and its Swift sibling `generate-placeholder-icon.swift` produced the
+bootstrap placeholder that shipped before real artwork existed. They are
+no longer part of the icon pipeline — the commands in this section are
+the authoritative regen path. Keep the scripts around if they're useful
+as a standalone demo; otherwise safe to delete.
 
 ## Phase 3 decisions
 
@@ -703,7 +765,14 @@ empty-new-message, reply/forward-with-quoted-original, and arbitrary base
 - BODYSTRUCTURE structural parsing — the current parser returns a single
   "has attachments" boolean derived from scanning for `attachment` tokens;
   Phase 4's attachment chip UI will want the proper tree.
-- Real app icons (placeholder generated by `scripts/generate-placeholder-icons.sh`)
+- visionOS `AppIcon.solidimagestack` (Phase 7 — iOS/iPadOS/visionOS share
+  the same `.appiconset` today; layered-icon source SVGs are in
+  `apple/handoff/`). See [App icons](#app-icons).
+- Adoption of `Color.cmForest` / `cmCream` / etc. in view code —
+  `CabalmailKit/Sources/CabalmailKit/CabalmailTokens.swift` exposes the
+  brand palette as a `SwiftUI.Color` extension, but no existing view
+  consumes them yet; Phase 7 polish is the natural time to replace
+  ad-hoc colors with the tokens.
 - Rich-text compose toolbar + HTML body emission (Phase 5.1)
 - IMAP `Drafts` folder round-trip for cross-device draft sync (Phase 5.1)
 - Contact autocomplete in To / Cc / Bcc fields (Phase 5.1)

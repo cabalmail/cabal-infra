@@ -1,0 +1,1203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cabalmail — Mobile Explorations</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <style>
+    :root {
+      --font-ui: "Inter", system-ui, sans-serif;
+      --font-display: "Source Serif 4", Georgia, serif;
+      --font-reader: "Source Serif 4", Georgia, serif;
+      --font-mono: "IBM Plex Mono", monospace;
+    }
+    /* Stately / Light / Oxblood — matching inbox-explorations */
+    body {
+      --app-bg: oklch(0.98 0.005 85);
+      --chrome-bg: oklch(0.985 0.006 85);
+      --pane-bg: oklch(0.99 0.004 85);
+      --surface: oklch(0.985 0.005 85);
+      --surface-hover: oklch(0.955 0.008 85);
+      --border: oklch(0.9 0.007 85);
+      --border-faint: oklch(0.94 0.005 85);
+      --ink: oklch(0.22 0.015 60);
+      --ink-soft: oklch(0.36 0.012 60);
+      --ink-quiet: oklch(0.55 0.01 60);
+      --accent: oklch(0.42 0.14 20);
+      --accent-soft: oklch(0.94 0.04 20);
+      --accent-fg: oklch(0.99 0.003 60);
+      --unread-dot: oklch(0.5 0.17 20);
+
+      font-family: var(--font-ui);
+      color: var(--ink);
+      background: oklch(0.96 0.005 85);
+      margin: 0;
+      padding: 64px 48px 96px;
+      -webkit-font-smoothing: antialiased;
+    }
+    h1.doc {
+      font-family: var(--font-display);
+      font-weight: 500;
+      font-size: 42px;
+      letter-spacing: -0.02em;
+      margin: 0 0 8px;
+      color: var(--ink);
+    }
+    p.doc-sub {
+      color: var(--ink-soft);
+      max-width: 52ch;
+      line-height: 1.55;
+      font-size: 15px;
+      margin: 0 0 48px;
+    }
+    .section-title {
+      font-family: var(--font-display);
+      font-size: 22px;
+      font-weight: 500;
+      margin: 56px 0 6px;
+      color: var(--ink);
+    }
+    .section-desc {
+      color: var(--ink-soft);
+      font-size: 14px;
+      line-height: 1.55;
+      margin: 0 0 24px;
+      max-width: 62ch;
+    }
+    .frame-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 40px 32px;
+      align-items: flex-start;
+    }
+    .frame-cell {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 402px;
+    }
+    .frame-caption {
+      font-size: 12px;
+      color: var(--ink-quiet);
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    .frame-label {
+      font-family: var(--font-display);
+      font-size: 18px;
+      color: var(--ink);
+      margin: -6px 0 0;
+      font-weight: 500;
+    }
+    .frame-note {
+      font-size: 13px;
+      color: var(--ink-soft);
+      line-height: 1.55;
+      margin: 0;
+    }
+    /* ==== App chrome inside device ==== */
+    .m-screen {
+      position: absolute;
+      inset: 0;
+      background: var(--app-bg);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      color: var(--ink);
+      font-family: var(--font-ui);
+    }
+    .m-statusbar {
+      position: absolute; top: 0; left: 0; right: 0;
+      height: 54px;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 18px 32px 0;
+      font-size: 15px; font-weight: 600;
+      color: var(--ink);
+      z-index: 20; pointer-events: none;
+    }
+    .m-statusbar .icons {
+      display: flex; gap: 6px; align-items: center;
+    }
+    .m-home-indicator {
+      position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+      width: 139px; height: 5px; border-radius: 100px;
+      background: oklch(0.3 0.015 60 / 0.3);
+      z-index: 30;
+    }
+
+    /* Nav / header bars */
+    .m-header {
+      padding: 58px 16px 12px;
+      display: flex; align-items: center; gap: 10px;
+      border-bottom: 1px solid var(--border-faint);
+      background: var(--chrome-bg);
+      flex-shrink: 0;
+    }
+    .m-header-back {
+      width: 36px; height: 36px;
+      display: grid; place-items: center;
+      border-radius: 999px;
+      color: var(--accent);
+      font-size: 22px;
+      background: transparent;
+      border: 0; cursor: pointer;
+      flex-shrink: 0;
+    }
+    .m-header-title {
+      font-family: var(--font-display);
+      font-size: 19px;
+      font-weight: 500;
+      letter-spacing: -0.015em;
+      color: var(--ink);
+      flex: 1;
+      min-width: 0;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .m-header-sub {
+      font-family: var(--font-display);
+      font-size: 28px;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+    }
+    .m-header-action {
+      width: 36px; height: 36px;
+      display: grid; place-items: center;
+      border-radius: 999px;
+      color: var(--ink-soft);
+      background: transparent;
+      border: 0; cursor: pointer;
+      flex-shrink: 0;
+    }
+    .m-header-action:hover { background: var(--surface-hover); }
+
+    /* Search row that appears under header */
+    .m-search {
+      padding: 8px 16px 12px;
+      background: var(--chrome-bg);
+      border-bottom: 1px solid var(--border-faint);
+    }
+    .m-search input {
+      width: 100%;
+      height: 36px;
+      border-radius: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border-faint);
+      padding: 0 12px 0 36px;
+      font: inherit;
+      font-size: 14px;
+      color: var(--ink);
+      box-sizing: border-box;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M7 2a5 5 0 1 0 3.15 8.9l3.17 3.18a.75.75 0 0 0 1.06-1.06l-3.17-3.17A5 5 0 0 0 7 2Zm0 1.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7Z' fill='%23a08c7e'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: 12px center;
+      background-size: 16px;
+    }
+
+    /* Folder list */
+    .m-section-hdr {
+      font-size: 11.5px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink-quiet);
+      padding: 18px 20px 8px;
+    }
+    .m-folder-row {
+      display: flex; align-items: center;
+      gap: 12px;
+      padding: 14px 20px;
+      min-height: 52px;
+      border-bottom: 1px solid var(--border-faint);
+      cursor: pointer;
+    }
+    .m-folder-row:hover { background: var(--surface-hover); }
+    .m-folder-row.current {
+      background: var(--surface-hover);
+    }
+    .m-folder-ico {
+      width: 22px; height: 22px;
+      display: grid; place-items: center;
+      color: var(--accent);
+      flex-shrink: 0;
+    }
+    .m-folder-name { flex: 1; font-size: 15.5px; color: var(--ink); font-weight: 500; }
+    .m-folder-count {
+      color: var(--ink-quiet);
+      font-size: 13px;
+      font-variant-numeric: tabular-nums;
+      font-family: var(--font-mono);
+    }
+    .m-folder-chevron {
+      color: oklch(0.7 0.01 60);
+      font-size: 18px;
+    }
+    .m-folder-row.unread .m-folder-count { color: var(--accent); font-weight: 600; }
+
+    .m-account {
+      display: flex; align-items: center; gap: 12px;
+      padding: 16px 20px;
+      border-top: 1px solid var(--border);
+      background: var(--chrome-bg);
+    }
+    .m-avatar {
+      width: 32px; height: 32px;
+      border-radius: 999px;
+      background: var(--accent);
+      color: var(--accent-fg);
+      display: grid; place-items: center;
+      font-weight: 600; font-size: 13px;
+      flex-shrink: 0;
+    }
+    .m-account-info { flex: 1; min-width: 0; }
+    .m-account-name { font-size: 14px; font-weight: 500; }
+    .m-account-email { font-size: 12px; color: var(--ink-quiet); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* Envelope list */
+    .m-list { flex: 1; overflow: auto; }
+    .m-envelope {
+      padding: 14px 16px 14px 16px;
+      display: flex; gap: 12px;
+      border-bottom: 1px solid var(--border-faint);
+      position: relative;
+      cursor: pointer;
+    }
+    .m-envelope:active, .m-envelope:hover { background: var(--surface-hover); }
+    .m-env-dot {
+      width: 8px; height: 8px;
+      border-radius: 999px;
+      margin-top: 8px;
+      flex-shrink: 0;
+      background: transparent;
+    }
+    .m-envelope.unread .m-env-dot { background: var(--unread-dot); }
+    .m-env-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .m-env-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+    .m-env-from {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--ink);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      min-width: 0;
+    }
+    .m-envelope:not(.unread) .m-env-from { font-weight: 500; color: var(--ink-soft); }
+    .m-env-date {
+      font-size: 12.5px;
+      color: var(--ink-quiet);
+      font-family: var(--font-mono);
+      flex-shrink: 0;
+    }
+    .m-env-subject {
+      font-family: var(--font-display);
+      font-size: 15.5px;
+      line-height: 1.3;
+      color: var(--ink);
+      font-weight: 500;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .m-envelope:not(.unread) .m-env-subject { color: var(--ink-soft); font-weight: 400; }
+    .m-env-snip {
+      font-size: 13px;
+      color: var(--ink-quiet);
+      line-height: 1.4;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+
+    /* Reader view */
+    .m-reader {
+      flex: 1; overflow: auto;
+      background: var(--pane-bg);
+      padding: 20px 20px 80px;
+    }
+    .m-reader-subject {
+      font-family: var(--font-display);
+      font-size: 26px;
+      line-height: 1.22;
+      font-weight: 500;
+      letter-spacing: -0.015em;
+      margin: 0 0 16px;
+      color: var(--ink);
+    }
+    .m-reader-meta {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border-faint);
+    }
+    .m-reader-meta .m-avatar { width: 36px; height: 36px; font-size: 14px; }
+    .m-reader-who { flex: 1; min-width: 0; }
+    .m-reader-name { font-size: 14px; font-weight: 600; color: var(--ink); }
+    .m-reader-email { font-size: 12px; color: var(--ink-quiet); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .m-reader-date { font-size: 12px; color: var(--ink-quiet); font-family: var(--font-mono); flex-shrink: 0; }
+    .m-reader-body {
+      font-family: var(--font-reader);
+      font-size: 16.5px;
+      line-height: 1.62;
+      color: var(--ink);
+    }
+    .m-reader-body p { margin: 0 0 1em; }
+
+    .m-reader-tabbar {
+      position: absolute; bottom: 24px; left: 12px; right: 12px;
+      height: 52px;
+      background: oklch(0.995 0.003 85 / 0.92);
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      border-radius: 18px;
+      border: 1px solid var(--border-faint);
+      box-shadow: 0 10px 32px oklch(0.2 0.02 60 / 0.08), 0 2px 8px oklch(0.2 0.02 60 / 0.05);
+      display: flex; align-items: center; justify-content: space-around;
+      z-index: 25;
+    }
+    .m-tabbar-btn {
+      width: 40px; height: 40px;
+      border-radius: 12px;
+      display: grid; place-items: center;
+      color: var(--ink-soft);
+      background: transparent; border: 0;
+      cursor: pointer;
+    }
+    .m-tabbar-btn:hover { background: var(--surface-hover); }
+    .m-tabbar-btn.danger { color: oklch(0.52 0.17 25); }
+    .m-tabbar-btn.primary { color: var(--accent); }
+    .m-tabbar-divider { width: 1px; height: 22px; background: var(--border); }
+
+    /* Compose sheet */
+    .m-compose-chrome {
+      padding: 58px 12px 10px;
+      display: flex; align-items: center; gap: 8px;
+      border-bottom: 1px solid var(--border-faint);
+      background: var(--chrome-bg);
+    }
+    .m-compose-chrome button.cancel {
+      background: transparent; border: 0;
+      font: inherit; font-size: 16px; color: var(--accent);
+      padding: 8px 12px; cursor: pointer;
+    }
+    .m-compose-chrome .m-compose-title {
+      flex: 1; text-align: center;
+      font-family: var(--font-display);
+      font-weight: 500; font-size: 17px;
+      color: var(--ink);
+    }
+    .m-compose-chrome button.send {
+      background: var(--accent); color: var(--accent-fg);
+      border: 0; border-radius: 999px;
+      padding: 8px 16px;
+      font: inherit; font-size: 14px; font-weight: 600;
+      cursor: pointer;
+    }
+    .m-compose-chrome button.send[disabled] {
+      background: var(--border); color: var(--ink-quiet); cursor: default;
+    }
+    .m-compose-fields { padding: 0 16px; }
+    .m-compose-field {
+      display: flex; align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border-faint);
+      gap: 10px;
+    }
+    .m-compose-label {
+      width: 48px;
+      font-size: 13px;
+      color: var(--ink-quiet);
+      text-transform: lowercase;
+      flex-shrink: 0;
+    }
+    .m-compose-field input, .m-compose-field textarea {
+      flex: 1;
+      border: 0; background: transparent;
+      font: inherit; font-size: 15px;
+      color: var(--ink); outline: none;
+      resize: none;
+    }
+    .m-compose-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .m-compose-body {
+      padding: 14px 16px;
+      font-family: var(--font-reader);
+      font-size: 16px;
+      line-height: 1.55;
+      color: var(--ink);
+      min-height: 180px;
+    }
+    .m-compose-body .sig { color: var(--ink-quiet); margin-top: 16px; font-family: var(--font-ui); font-size: 13px; }
+
+    /* Folders drawer (tablet-ish) */
+    .m-drawer-backdrop {
+      position: absolute; inset: 0;
+      background: oklch(0.2 0.01 60 / 0.35);
+      z-index: 15;
+    }
+    .m-drawer {
+      position: absolute; top: 0; left: 0; bottom: 0;
+      width: 82%;
+      background: var(--pane-bg);
+      box-shadow: 4px 0 24px oklch(0.2 0.02 60 / 0.2);
+      z-index: 16;
+      display: flex; flex-direction: column;
+    }
+
+    /* Settings — grouped iOS-style list */
+    .m-settings { flex: 1; overflow: auto; padding-bottom: 24px; }
+    .m-group-hdr {
+      font-size: 11.5px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ink-quiet);
+      padding: 22px 20px 8px;
+    }
+    .m-group {
+      margin: 0 12px;
+      border-radius: 14px;
+      border: 1px solid var(--border-faint);
+      background: var(--pane-bg);
+      overflow: hidden;
+    }
+    .m-group-row {
+      display: flex; align-items: center;
+      padding: 13px 16px;
+      border-bottom: 1px solid var(--border-faint);
+      gap: 12px;
+      min-height: 48px;
+    }
+    .m-group-row:last-child { border-bottom: 0; }
+    .m-group-label { flex: 1; font-size: 15px; color: var(--ink); }
+    .m-group-detail { color: var(--ink-quiet); font-size: 14px; font-family: var(--font-mono); }
+    .m-group-chevron { color: oklch(0.7 0.01 60); font-size: 18px; }
+
+    /* Decorative annotations around frames */
+    .annot {
+      position: absolute;
+      font-family: var(--font-display);
+      font-style: italic;
+      color: var(--ink-quiet);
+      font-size: 13px;
+      line-height: 1.4;
+      max-width: 180px;
+    }
+    .annot.right { right: -200px; top: 80px; }
+    .annot.left { left: -200px; top: 80px; text-align: right; }
+
+    /* Breakpoint explanation strip */
+    .bp-strip {
+      margin: 72px 0 0;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 16px;
+      padding: 24px;
+      background: var(--pane-bg);
+      border: 1px solid var(--border-faint);
+      border-radius: 12px;
+    }
+    .bp-cell h4 {
+      font-family: var(--font-display);
+      font-size: 17px; font-weight: 500;
+      margin: 0 0 4px;
+    }
+    .bp-cell .px { font-family: var(--font-mono); font-size: 12px; color: var(--ink-quiet); margin-bottom: 8px; }
+    .bp-cell p { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+    .bp-cell .diagram {
+      height: 52px;
+      margin-top: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border-faint);
+      border-radius: 6px;
+      padding: 6px;
+      display: flex; gap: 6px;
+    }
+    .bp-cell .pane {
+      flex: 1;
+      background: var(--accent-soft);
+      border-radius: 3px;
+    }
+
+    /* Inline SVG icons - simple line style */
+    svg.ico { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+    svg.ico-lg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+    svg.ico-sm { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  </style>
+</head>
+<body>
+  <h1 class="doc">Mobile Explorations</h1>
+  <p class="doc-sub">
+    The desktop designs in <code>inbox-explorations.html</code> assume a three-pane layout.
+    This file shows how that collapses to a single-pane, route-driven flow on phones, plus the
+    two-pane tablet intermediate. Uses the same tokens (Stately / Light / Oxblood) so mobile
+    inherits whatever direction the user picks.
+  </p>
+
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState } = React;
+
+    // ═════════════════════════════════════════════════════════════════
+    //  Icons — simple line-based set consistent with desktop
+    // ═════════════════════════════════════════════════════════════════
+    const I = {
+      inbox: <svg className="ico-lg" viewBox="0 0 24 24"><path d="M3 12l3-7h12l3 7v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-6zM3 12h5l2 3h4l2-3h5"/></svg>,
+      sent: <svg className="ico-lg" viewBox="0 0 24 24"><path d="M3 11l18-7-7 18-2-8-9-3z"/></svg>,
+      drafts: <svg className="ico-lg" viewBox="0 0 24 24"><path d="M12 20h9M4 20v-4l12-12 4 4-12 12H4z"/></svg>,
+      archive: <svg className="ico-lg" viewBox="0 0 24 24"><path d="M3 7h18v4H3zM5 11v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9M10 15h4"/></svg>,
+      trash: <svg className="ico-lg" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6"/></svg>,
+      folder: <svg className="ico-lg" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>,
+      spam: <svg className="ico-lg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>,
+      write: <svg className="ico" viewBox="0 0 24 24"><path d="M12 20h9M4 20v-4l12-12 4 4-12 12H4z"/></svg>,
+      search: <svg className="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>,
+      reply: <svg className="ico" viewBox="0 0 24 24"><path d="M9 14l-5-5 5-5M4 9h10a6 6 0 0 1 6 6v5"/></svg>,
+      replyAll: <svg className="ico" viewBox="0 0 24 24"><path d="M7 14l-5-5 5-5M12 14l-5-5 5-5M7 9h8a6 6 0 0 1 6 6v5"/></svg>,
+      forward: <svg className="ico" viewBox="0 0 24 24"><path d="M15 14l5-5-5-5M20 9H10a6 6 0 0 0-6 6v5"/></svg>,
+      archive2: <svg className="ico" viewBox="0 0 24 24"><path d="M3 7h18v4H3zM5 11v9h14v-9M10 15h4"/></svg>,
+      more: <svg className="ico" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none"/></svg>,
+      menu: <svg className="ico" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>,
+      settings: <svg className="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
+      chev: <svg className="ico-sm" viewBox="0 0 16 16"><path d="M6 3l5 5-5 5"/></svg>,
+      plus: <svg className="ico" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>,
+      star: <svg className="ico" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>,
+      attach: <svg className="ico" viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>,
+    };
+
+    // ═════════════════════════════════════════════════════════════════
+    //  Mobile Device Frame — lightweight, no external dep needed
+    // ═════════════════════════════════════════════════════════════════
+    function Phone({ children, label, caption, note, height = 820 }) {
+      return (
+        <div className="frame-cell">
+          {caption && <div className="frame-caption">{caption}</div>}
+          {label && <div className="frame-label">{label}</div>}
+          <div style={{
+            width: 402, height, borderRadius: 52, overflow: 'hidden',
+            position: 'relative',
+            background: '#000',
+            padding: 10, boxSizing: 'border-box',
+            boxShadow: '0 30px 60px oklch(0.2 0.02 60 / 0.18), 0 0 0 1px oklch(0.2 0.02 60 / 0.1)',
+          }}>
+            <div style={{
+              position: 'absolute', inset: 10, borderRadius: 44,
+              overflow: 'hidden', background: 'var(--app-bg)',
+            }}>
+              {/* dynamic island */}
+              <div style={{
+                position: 'absolute', top: 11, left: '50%',
+                transform: 'translateX(-50%)',
+                width: 118, height: 34, borderRadius: 22, background: '#000',
+                zIndex: 50,
+              }} />
+              <div className="m-statusbar">
+                <span>9:41</span>
+                <div className="icons">
+                  <svg width="16" height="10" viewBox="0 0 18 12"><rect x="0" y="7" width="3" height="5" rx="0.7" fill="currentColor"/><rect x="5" y="5" width="3" height="7" rx="0.7" fill="currentColor"/><rect x="10" y="2.5" width="3" height="9.5" rx="0.7" fill="currentColor"/><rect x="15" y="0" width="3" height="12" rx="0.7" fill="currentColor"/></svg>
+                  <svg width="24" height="11" viewBox="0 0 26 12"><rect x="0.5" y="0.5" width="22" height="11" rx="3" stroke="currentColor" strokeOpacity="0.4" fill="none"/><rect x="2" y="2" width="18" height="8" rx="1.5" fill="currentColor"/></svg>
+                </div>
+              </div>
+              {children}
+              <div className="m-home-indicator" />
+            </div>
+          </div>
+          {note && <p className="frame-note">{note}</p>}
+        </div>
+      );
+    }
+
+    // ═════════════════════════════════════════════════════════════════
+    //  1. Folder list (root of mobile nav)
+    // ═════════════════════════════════════════════════════════════════
+    function FolderListScreen() {
+      return (
+        <div className="m-screen">
+          <div className="m-header">
+            <div style={{flex: 1}}>
+              <div className="m-header-title" style={{fontSize: 13, color: 'var(--ink-quiet)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em'}}>Cabalmail</div>
+              <div className="m-header-sub">Mailboxes</div>
+            </div>
+            <button className="m-header-action">{I.settings}</button>
+          </div>
+          <div style={{flex: 1, overflow: 'auto'}}>
+            <div className="m-section-hdr">Inboxes</div>
+            <div className="m-folder-row unread">
+              <div className="m-folder-ico">{I.inbox}</div>
+              <div className="m-folder-name">INBOX</div>
+              <div className="m-folder-count">12</div>
+              <div className="m-folder-chevron">{I.chev}</div>
+            </div>
+            <div className="m-folder-row">
+              <div className="m-folder-ico">{I.star}</div>
+              <div className="m-folder-name">Starred</div>
+              <div className="m-folder-count">3</div>
+              <div className="m-folder-chevron">{I.chev}</div>
+            </div>
+
+            <div className="m-section-hdr">Mail</div>
+            <div className="m-folder-row">
+              <div className="m-folder-ico">{I.drafts}</div>
+              <div className="m-folder-name">Drafts</div>
+              <div className="m-folder-count">2</div>
+              <div className="m-folder-chevron">{I.chev}</div>
+            </div>
+            <div className="m-folder-row">
+              <div className="m-folder-ico">{I.sent}</div>
+              <div className="m-folder-name">Sent Messages</div>
+              <div className="m-folder-count">—</div>
+              <div className="m-folder-chevron">{I.chev}</div>
+            </div>
+            <div className="m-folder-row">
+              <div className="m-folder-ico">{I.archive}</div>
+              <div className="m-folder-name">Archive</div>
+              <div className="m-folder-count">—</div>
+              <div className="m-folder-chevron">{I.chev}</div>
+            </div>
+            <div className="m-folder-row">
+              <div className="m-folder-ico">{I.spam}</div>
+              <div className="m-folder-name">Junk</div>
+              <div className="m-folder-count">—</div>
+              <div className="m-folder-chevron">{I.chev}</div>
+            </div>
+            <div className="m-folder-row">
+              <div className="m-folder-ico">{I.trash}</div>
+              <div className="m-folder-name">Deleted Messages</div>
+              <div className="m-folder-count">—</div>
+              <div className="m-folder-chevron">{I.chev}</div>
+            </div>
+
+            <div className="m-section-hdr">Custom</div>
+            <div className="m-folder-row">
+              <div className="m-folder-ico">{I.folder}</div>
+              <div className="m-folder-name">Receipts</div>
+              <div className="m-folder-count">47</div>
+              <div className="m-folder-chevron">{I.chev}</div>
+            </div>
+            <div className="m-folder-row">
+              <div className="m-folder-ico">{I.folder}</div>
+              <div className="m-folder-name">Work · Cabal</div>
+              <div className="m-folder-count">12</div>
+              <div className="m-folder-chevron">{I.chev}</div>
+            </div>
+          </div>
+
+          <div className="m-account">
+            <div className="m-avatar">AF</div>
+            <div className="m-account-info">
+              <div className="m-account-name">Anna Forsythe</div>
+              <div className="m-account-email">anna@cabalmail.com</div>
+            </div>
+            <button className="m-header-action">{I.plus}</button>
+          </div>
+        </div>
+      );
+    }
+
+    // ═════════════════════════════════════════════════════════════════
+    //  2. Envelope list (/folder/INBOX)
+    // ═════════════════════════════════════════════════════════════════
+    const SAMPLE = [
+      {unread: true, from: "Mira Okafor", date: "10:24", subject: "Board memo — Q2 runway", snip: "Attaching the revised cashflow with the two scenarios we walked through Tuesday. The bridge case still assumes Series B closes…"},
+      {unread: true, from: "GitHub", date: "9:58", subject: "[cabalmail/cabalmail] PR #214 ready for review", snip: "pwnieexpress opened this pull request · 12 commits · +284 −96"},
+      {unread: true, from: "Tomás Herrera", date: "9:12", subject: "Re: dinner Saturday", snip: "Works for us — we'll bring the wine. 7:30?"},
+      {unread: false, from: "Substack", date: "Tue", subject: "Letters from a Quiet Garden: On rain as infrastructure", snip: "There's a particular sound rain makes when it lands on a steel roof after two weeks of dry…"},
+      {unread: false, from: "Kara Nakamura", date: "Tue", subject: "Re: contract red-lines — v3", snip: "Accepted all your changes in §4.2 and §7. One open question on indemnification — see inline."},
+      {unread: false, from: "Stripe", date: "Mon", subject: "Your August invoice is ready", snip: "Amount due: $0.00 — covered by prepaid credit. View invoice for details."},
+    ];
+    function EnvelopeListScreen() {
+      return (
+        <div className="m-screen">
+          <div className="m-header">
+            <button className="m-header-back" title="Back">‹</button>
+            <div className="m-header-title">INBOX</div>
+            <button className="m-header-action" title="Compose">{I.write}</button>
+          </div>
+          <div className="m-search">
+            <input placeholder="Search mail" />
+          </div>
+          <div className="m-list">
+            {SAMPLE.map((m, i) => (
+              <div key={i} className={`m-envelope ${m.unread ? 'unread' : ''}`}>
+                <div className="m-env-dot" />
+                <div className="m-env-body">
+                  <div className="m-env-top">
+                    <div className="m-env-from">{m.from}</div>
+                    <div className="m-env-date">{m.date}</div>
+                  </div>
+                  <div className="m-env-subject">{m.subject}</div>
+                  <div className="m-env-snip">{m.snip}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // ═════════════════════════════════════════════════════════════════
+    //  3. Reader (/folder/INBOX/message/:id)
+    // ═════════════════════════════════════════════════════════════════
+    function ReaderScreen() {
+      return (
+        <div className="m-screen">
+          <div className="m-header">
+            <button className="m-header-back">‹</button>
+            <div className="m-header-title">INBOX</div>
+            <button className="m-header-action">{I.more}</button>
+          </div>
+          <div className="m-reader">
+            <h1 className="m-reader-subject">Board memo — Q2 runway</h1>
+            <div className="m-reader-meta">
+              <div className="m-avatar">MO</div>
+              <div className="m-reader-who">
+                <div className="m-reader-name">Mira Okafor</div>
+                <div className="m-reader-email">mira@cabalventures.fund</div>
+              </div>
+              <div className="m-reader-date">10:24</div>
+            </div>
+            <div className="m-reader-body">
+              <p>Anna —</p>
+              <p>Attaching the revised cashflow with the two scenarios we walked through Tuesday. The bridge case still assumes Series B closes by end of Q3; the conservative case pushes it to Q1 '27 and flags the month we cross into runway-critical territory.</p>
+              <p>Quick ask before Thursday's board meeting: can you circulate the customer-concentration slide with the Artemis contract redacted? Happy to redact it myself if easier.</p>
+              <p>— M</p>
+            </div>
+          </div>
+          <div className="m-reader-tabbar">
+            <button className="m-tabbar-btn" title="Reply">{I.reply}</button>
+            <button className="m-tabbar-btn" title="Reply all">{I.replyAll}</button>
+            <button className="m-tabbar-btn" title="Forward">{I.forward}</button>
+            <div className="m-tabbar-divider" />
+            <button className="m-tabbar-btn" title="Archive">{I.archive2}</button>
+            <button className="m-tabbar-btn danger" title="Trash">{I.trash}</button>
+          </div>
+        </div>
+      );
+    }
+
+    // ═════════════════════════════════════════════════════════════════
+    //  4. Compose sheet (full-screen on mobile)
+    // ═════════════════════════════════════════════════════════════════
+    function ComposeScreen() {
+      return (
+        <div className="m-screen">
+          <div className="m-compose-chrome">
+            <button className="cancel">Cancel</button>
+            <div className="m-compose-title">New message</div>
+            <button className="send">Send</button>
+          </div>
+          <div className="m-compose-fields">
+            <div className="m-compose-field">
+              <div className="m-compose-label">to</div>
+              <div style={{display: 'flex', flexWrap: 'wrap', gap: 6, flex: 1, alignItems: 'center'}}>
+                <span className="m-compose-chip">Mira Okafor ×</span>
+                <span style={{color: 'var(--ink-quiet)', fontSize: 14}}>|</span>
+              </div>
+            </div>
+            <div className="m-compose-field">
+              <div className="m-compose-label">cc</div>
+              <input placeholder="" />
+            </div>
+            <div className="m-compose-field">
+              <div className="m-compose-label">from</div>
+              <div style={{fontSize: 14, color: 'var(--ink-soft)'}}>anna@cabalmail.com ▾</div>
+            </div>
+            <div className="m-compose-field">
+              <div className="m-compose-label">subject</div>
+              <input defaultValue="Re: Board memo — Q2 runway" />
+            </div>
+          </div>
+          <div className="m-compose-body">
+            <div>Mira —</div>
+            <div style={{marginTop: 12}}>Thanks for this. On the concentration slide: I'll redact Artemis and push a revised deck to the data room tonight. One thought on the conservative case —</div>
+            <div className="sig">
+              — Anna Forsythe<br/>
+              Cabalmail · anna@cabalmail.com
+            </div>
+          </div>
+          {/* mini formatting toolbar anchored above keyboard */}
+          <div style={{
+            position: 'absolute', bottom: 24, left: 0, right: 0,
+            display: 'flex', alignItems: 'center', gap: 14,
+            padding: '10px 16px',
+            background: 'var(--chrome-bg)',
+            borderTop: '1px solid var(--border-faint)',
+            color: 'var(--ink-soft)',
+            fontSize: 14,
+          }}>
+            {I.attach}
+            <svg className="ico" viewBox="0 0 24 24"><path d="M6 4v14a2 2 0 0 0 2 2h10M10 4h8v10H10z"/></svg>
+            <span style={{fontFamily: 'var(--font-mono)', fontSize: 12}}>B  <i>I</i>  <u>U</u></span>
+            <div style={{flex: 1}} />
+            <span style={{fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--ink-quiet)'}}>Draft saved</span>
+          </div>
+        </div>
+      );
+    }
+
+    // ═════════════════════════════════════════════════════════════════
+    //  5. Folder list with drawer open over envelope list (tablet, narrow-ish)
+    // ═════════════════════════════════════════════════════════════════
+    function DrawerScreen() {
+      return (
+        <div className="m-screen">
+          {/* background: envelope list */}
+          <div className="m-header">
+            <button className="m-header-action">{I.menu}</button>
+            <div className="m-header-title">INBOX</div>
+            <button className="m-header-action">{I.write}</button>
+          </div>
+          <div className="m-search">
+            <input placeholder="Search mail" />
+          </div>
+          <div className="m-list">
+            {SAMPLE.slice(0, 3).map((m, i) => (
+              <div key={i} className={`m-envelope ${m.unread ? 'unread' : ''}`} style={{opacity: 0.6}}>
+                <div className="m-env-dot" />
+                <div className="m-env-body">
+                  <div className="m-env-top">
+                    <div className="m-env-from">{m.from}</div>
+                    <div className="m-env-date">{m.date}</div>
+                  </div>
+                  <div className="m-env-subject">{m.subject}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          {/* drawer overlay */}
+          <div className="m-drawer-backdrop" />
+          <div className="m-drawer">
+            <div className="m-header">
+              <div className="m-header-title" style={{fontFamily: 'var(--font-display)', fontSize: 22}}>Mailboxes</div>
+              <button className="m-header-action">{I.settings}</button>
+            </div>
+            <div style={{flex: 1, overflow: 'auto'}}>
+              <div className="m-folder-row current">
+                <div className="m-folder-ico">{I.inbox}</div>
+                <div className="m-folder-name">INBOX</div>
+                <div className="m-folder-count">12</div>
+              </div>
+              <div className="m-folder-row">
+                <div className="m-folder-ico">{I.drafts}</div>
+                <div className="m-folder-name">Drafts</div>
+                <div className="m-folder-count">2</div>
+              </div>
+              <div className="m-folder-row">
+                <div className="m-folder-ico">{I.sent}</div>
+                <div className="m-folder-name">Sent</div>
+                <div className="m-folder-count">—</div>
+              </div>
+              <div className="m-folder-row">
+                <div className="m-folder-ico">{I.archive}</div>
+                <div className="m-folder-name">Archive</div>
+                <div className="m-folder-count">—</div>
+              </div>
+              <div className="m-folder-row">
+                <div className="m-folder-ico">{I.trash}</div>
+                <div className="m-folder-name">Trash</div>
+                <div className="m-folder-count">—</div>
+              </div>
+              <div className="m-section-hdr">Custom</div>
+              <div className="m-folder-row">
+                <div className="m-folder-ico">{I.folder}</div>
+                <div className="m-folder-name">Receipts</div>
+                <div className="m-folder-count">47</div>
+              </div>
+              <div className="m-folder-row">
+                <div className="m-folder-ico">{I.folder}</div>
+                <div className="m-folder-name">Work · Cabal</div>
+                <div className="m-folder-count">12</div>
+              </div>
+            </div>
+            <div className="m-account">
+              <div className="m-avatar">AF</div>
+              <div className="m-account-info">
+                <div className="m-account-name">Anna Forsythe</div>
+                <div className="m-account-email">anna@cabalmail.com</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ═════════════════════════════════════════════════════════════════
+    //  6. Settings (addresses, aliases, identities)
+    // ═════════════════════════════════════════════════════════════════
+    function SettingsScreen() {
+      return (
+        <div className="m-screen">
+          <div className="m-header">
+            <button className="m-header-back">‹</button>
+            <div className="m-header-title">Settings</div>
+            <div style={{width: 36}} />
+          </div>
+          <div className="m-settings">
+            <div className="m-group-hdr">Account</div>
+            <div className="m-group">
+              <div className="m-group-row">
+                <div className="m-avatar">AF</div>
+                <div style={{flex: 1}}>
+                  <div className="m-group-label" style={{fontWeight: 500}}>Anna Forsythe</div>
+                  <div style={{fontSize: 12, color: 'var(--ink-quiet)'}}>anna@cabalmail.com</div>
+                </div>
+                <div className="m-group-chevron">{I.chev}</div>
+              </div>
+              <div className="m-group-row">
+                <div className="m-group-label">Signature</div>
+                <div className="m-group-detail">Default</div>
+                <div className="m-group-chevron">{I.chev}</div>
+              </div>
+              <div className="m-group-row">
+                <div className="m-group-label">Signing key</div>
+                <div className="m-group-detail">PGP · ok</div>
+                <div className="m-group-chevron">{I.chev}</div>
+              </div>
+            </div>
+
+            <div className="m-group-hdr">Addresses &amp; Aliases</div>
+            <div className="m-group">
+              <div className="m-group-row">
+                <div className="m-group-label">anna@cabalmail.com</div>
+                <div className="m-group-detail">Primary</div>
+                <div className="m-group-chevron">{I.chev}</div>
+              </div>
+              <div className="m-group-row">
+                <div className="m-group-label">forsythe@cabalmail.com</div>
+                <div className="m-group-detail">Alias</div>
+                <div className="m-group-chevron">{I.chev}</div>
+              </div>
+              <div className="m-group-row">
+                <div className="m-group-label" style={{color: 'var(--accent)'}}>Add address…</div>
+              </div>
+            </div>
+
+            <div className="m-group-hdr">Domain</div>
+            <div className="m-group">
+              <div className="m-group-row">
+                <div className="m-group-label">cabalmail.com</div>
+                <div className="m-group-detail">DMARC ok</div>
+                <div className="m-group-chevron">{I.chev}</div>
+              </div>
+              <div className="m-group-row">
+                <div className="m-group-label">Manage users</div>
+                <div className="m-group-detail">4</div>
+                <div className="m-group-chevron">{I.chev}</div>
+              </div>
+            </div>
+
+            <div className="m-group-hdr">Appearance</div>
+            <div className="m-group">
+              <div className="m-group-row">
+                <div className="m-group-label">Direction</div>
+                <div className="m-group-detail">Stately</div>
+                <div className="m-group-chevron">{I.chev}</div>
+              </div>
+              <div className="m-group-row">
+                <div className="m-group-label">Theme</div>
+                <div className="m-group-detail">Light</div>
+                <div className="m-group-chevron">{I.chev}</div>
+              </div>
+              <div className="m-group-row">
+                <div className="m-group-label">Accent</div>
+                <div style={{
+                  width: 20, height: 20, borderRadius: 999,
+                  background: 'var(--accent)',
+                  border: '2px solid var(--border)',
+                }} />
+                <div className="m-group-chevron">{I.chev}</div>
+              </div>
+            </div>
+
+            <div style={{padding: '22px 20px 0'}}>
+              <button style={{
+                width: '100%', padding: '12px',
+                background: 'transparent',
+                border: 0,
+                color: 'oklch(0.52 0.17 25)',
+                fontSize: 15,
+                cursor: 'pointer',
+              }}>Sign out</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ═════════════════════════════════════════════════════════════════
+    //  7. Login (already mostly works — shown for completeness)
+    // ═════════════════════════════════════════════════════════════════
+    function LoginScreen() {
+      return (
+        <div className="m-screen">
+          <div style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            padding: '0 32px',
+          }}>
+            <div style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: 42,
+              fontWeight: 500,
+              letterSpacing: '-0.02em',
+              marginBottom: 4,
+            }}>Cabalmail</div>
+            <div style={{color: 'var(--ink-quiet)', fontSize: 14, marginBottom: 36}}>
+              Private mail, your own domain.
+            </div>
+            <label style={{fontSize: 12, color: 'var(--ink-quiet)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6}}>Username</label>
+            <input style={{
+              height: 48, padding: '0 14px',
+              border: '1px solid var(--border)',
+              borderRadius: 10,
+              fontSize: 16,
+              fontFamily: 'inherit',
+              marginBottom: 16,
+              background: 'var(--pane-bg)',
+              color: 'var(--ink)',
+            }} defaultValue="anna" />
+            <label style={{fontSize: 12, color: 'var(--ink-quiet)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6}}>Password</label>
+            <input type="password" style={{
+              height: 48, padding: '0 14px',
+              border: '1px solid var(--border)',
+              borderRadius: 10,
+              fontSize: 16,
+              fontFamily: 'inherit',
+              marginBottom: 24,
+              background: 'var(--pane-bg)',
+              color: 'var(--ink)',
+            }} defaultValue="••••••••••" />
+            <button style={{
+              height: 48, background: 'var(--accent)', color: 'var(--accent-fg)',
+              border: 0, borderRadius: 10,
+              fontSize: 15, fontWeight: 600,
+              fontFamily: 'inherit',
+              cursor: 'pointer',
+              marginBottom: 16,
+            }}>Sign in</button>
+            <div style={{display: 'flex', justifyContent: 'space-between', fontSize: 14}}>
+              <a style={{color: 'var(--accent)', textDecoration: 'none'}}>Create account</a>
+              <a style={{color: 'var(--accent)', textDecoration: 'none'}}>Forgot password</a>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ═════════════════════════════════════════════════════════════════
+    //  Breakpoint diagram
+    // ═════════════════════════════════════════════════════════════════
+    function Breakpoints() {
+      return (
+        <div className="bp-strip">
+          <div className="bp-cell">
+            <h4>Phone — single pane</h4>
+            <div className="px">&lt; 768px</div>
+            <p>Folders / list / reader each occupy the full viewport. Navigation pushes the next pane onto a route stack. Back button pops.</p>
+            <div className="diagram">
+              <div className="pane" />
+            </div>
+          </div>
+          <div className="bp-cell">
+            <h4>Tablet — two pane</h4>
+            <div className="px">768 – 1199px</div>
+            <p>Folders collapse into a left drawer (hamburger in header). List + reader sit side by side; tapping the list expands the reader.</p>
+            <div className="diagram">
+              <div className="pane" style={{flex: 0.35}} />
+              <div className="pane" />
+            </div>
+          </div>
+          <div className="bp-cell">
+            <h4>Desktop — three pane</h4>
+            <div className="px">≥ 1200px</div>
+            <p>The existing `inbox-explorations.html` layout. Folders, envelope list, and reader all visible at once.</p>
+            <div className="diagram">
+              <div className="pane" style={{flex: 0.25}} />
+              <div className="pane" style={{flex: 0.35}} />
+              <div className="pane" />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ═════════════════════════════════════════════════════════════════
+    //  Root
+    // ═════════════════════════════════════════════════════════════════
+    function App() {
+      return (
+        <div>
+          <h2 className="section-title">Phone — single-pane flow</h2>
+          <p className="section-desc">
+            Each screen is a full route. Tapping a row pushes the next screen;
+            the back chevron pops. URLs follow <code>/folder/:name</code> →
+            <code>/folder/:name/message/:id</code> so the browser back button behaves the same.
+          </p>
+          <div className="frame-row">
+            <Phone caption="Screen 01" label="Mailboxes" note="Entry point. Folders + account switcher. Tap a folder to open its list.">
+              <FolderListScreen />
+            </Phone>
+            <Phone caption="Screen 02" label="Envelope list" note="Per-folder list with search. Tap a row to push the reader. Compose from the header.">
+              <EnvelopeListScreen />
+            </Phone>
+            <Phone caption="Screen 03" label="Reader" note="Floating tab bar replaces the toolbar row — thumb-reachable, same actions.">
+              <ReaderScreen />
+            </Phone>
+          </div>
+
+          <h2 className="section-title">Overlays — full-sheet on mobile</h2>
+          <p className="section-desc">
+            ComposeOverlay and MessageOverlay go full-bleed on phones. Cancel/Send in the
+            header; the keyboard takes the lower half. A compact formatting bar docks above it.
+          </p>
+          <div className="frame-row">
+            <Phone caption="Screen 04" label="Compose sheet" note="Replaces the desktop ComposeOverlay card. Tap Cancel to dismiss, Send to submit.">
+              <ComposeScreen />
+            </Phone>
+            <Phone caption="Screen 05" label="Login" note="Existing design already stacks well. No mobile-specific changes required.">
+              <LoginScreen />
+            </Phone>
+            <Phone caption="Screen 06" label="Settings" note="Addresses, aliases, domain, and appearance as an iOS-style grouped list.">
+              <SettingsScreen />
+            </Phone>
+          </div>
+
+          <h2 className="section-title">Tablet intermediate — drawer over two-pane</h2>
+          <p className="section-desc">
+            Between 768–1199px, folders retract into a slide-over drawer (hamburger in the
+            header). List + reader are side-by-side; the drawer opens on top with a scrim.
+          </p>
+          <div className="frame-row">
+            <Phone caption="Screen 07" label="Folder drawer open" height={860} note="Shown here at phone width so you can see the drawer interaction. At real tablet widths the background would be a two-pane list+reader.">
+              <DrawerScreen />
+            </Phone>
+          </div>
+
+          <h2 className="section-title">Breakpoints</h2>
+          <p className="section-desc">
+            Three tiers. Same tokens everywhere — the only thing that changes between them is
+            how many panes are visible at once.
+          </p>
+          <Breakpoints />
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
