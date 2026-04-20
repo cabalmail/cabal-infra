@@ -162,16 +162,19 @@ struct MessageDetailView: View {
                 } label: {
                     Label("Reply", systemImage: "arrowshape.turn.up.left")
                 }
+                .keyboardShortcut("r", modifiers: .command)
                 Button {
                     beginCompose(.replyAll)
                 } label: {
                     Label("Reply All", systemImage: "arrowshape.turn.up.left.2")
                 }
+                .keyboardShortcut("d", modifiers: [.command, .shift])
                 Button {
                     beginCompose(.forward)
                 } label: {
                     Label("Forward", systemImage: "arrowshape.turn.up.forward")
                 }
+                .keyboardShortcut("j", modifiers: [.command, .shift])
             } label: {
                 Image(systemName: "arrowshape.turn.up.left")
                     .accessibilityLabel("Reply")

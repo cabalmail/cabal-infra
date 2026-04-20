@@ -38,6 +38,7 @@ struct SettingsView: View {
             composingSection(bindable: preferences)
             actionsSection(bindable: preferences)
             appearanceSection(bindable: preferences)
+            diagnosticsSection(bindable: preferences)
             aboutSection
         }
     }
@@ -142,6 +143,28 @@ struct SettingsView: View {
                 Text("Dark").tag(AppTheme.dark)
             }
             .pickerStyle(.segmented)
+        }
+    }
+
+    @ViewBuilder
+    private func diagnosticsSection(bindable preferences: Preferences) -> some View {
+        @Bindable var preferences = preferences
+        Section("Diagnostics") {
+            Toggle("Crash reports", isOn: Binding(
+                get: { preferences.crashReportingEnabled },
+                set: { newValue in
+                    preferences.crashReportingEnabled = newValue
+                    // Flip the live subscription immediately so turning it
+                    // on during a repro session captures the next hang /
+                    // crash without a relaunch.
+                    appState.client?.setCrashReportingEnabled(newValue)
+                }
+            ))
+            NavigationLink {
+                DebugLogView()
+            } label: {
+                Label("Debug Log", systemImage: "doc.text.magnifyingglass")
+            }
         }
     }
 

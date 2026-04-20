@@ -169,7 +169,26 @@ struct ComposeView: View {
         }
         ToolbarItem(placement: .confirmationAction) {
             Button {
-                Task { _ = await model.send() }
+                Task {
+                    let sent = await model.send()
+                    guard sent else { return }
+                    // Surface the outcome as a toast on the shared AppState
+                    // so the user sees confirmation after the sheet dismisses.
+                    // `.queued` means the message is in the outbox and
+                    // `SendQueue` will drain it on reconnect — callers should
+                    // understand their message isn't lost.
+                    switch model.lastSendOutcome {
+                    case .sent:
+                        appState.showToast(.init(kind: .success, message: "Message sent."))
+                    case .queued:
+                        appState.showToast(.init(
+                            kind: .warning,
+                            message: "Message queued — will send when back online."
+                        ))
+                    case .none:
+                        break
+                    }
+                }
             } label: {
                 if model.isSending {
                     ProgressView()

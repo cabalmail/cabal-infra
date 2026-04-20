@@ -96,6 +96,7 @@ final class CabalmailKitTests: XCTestCase {
         let envelopes = try EnvelopeCache(directory: tmp.appendingPathComponent("e"))
         let bodies = try MessageBodyCache(directory: tmp.appendingPathComponent("b"))
         let drafts = try DraftStore(directory: tmp.appendingPathComponent("d"))
+        let outbox = try Outbox(directory: tmp.appendingPathComponent("o"))
         let client = CabalmailClient(
             configuration: config,
             authService: auth,
@@ -105,7 +106,8 @@ final class CabalmailKitTests: XCTestCase {
             addressCache: AddressCache(),
             envelopeCache: envelopes,
             bodyCache: bodies,
-            draftStore: drafts
+            draftStore: drafts,
+            outbox: outbox
         )
         XCTAssertEqual(client.configuration, config)
     }

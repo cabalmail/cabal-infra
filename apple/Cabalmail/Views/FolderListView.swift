@@ -69,6 +69,14 @@ struct FolderListView: View {
                     .background(Color.secondary.opacity(0.15), in: Capsule())
             }
         }
+        #if os(visionOS)
+        // visionOS spatial UIs want an explicit hover affordance — eye-
+        // tracking highlights the row before the user commits with a pinch,
+        // and the default list row doesn't provide that feedback out of the
+        // box. `.hoverEffect(.highlight)` matches Apple Mail on visionOS.
+        .contentShape(Rectangle())
+        .hoverEffect(.highlight)
+        #endif
     }
 
     private func iconName(for folder: Folder) -> String {

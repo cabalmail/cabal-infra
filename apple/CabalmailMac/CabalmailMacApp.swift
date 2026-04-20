@@ -20,7 +20,19 @@ struct CabalmailMacApp: App {
                 .preferredColorScheme(colorScheme(for: preferences.theme))
                 .task {
                     await appState.restoreIfPossible()
+                    if preferences.crashReportingEnabled {
+                        appState.client?.setCrashReportingEnabled(true)
+                    }
                 }
+                .onChange(of: appState.client != nil) { _, hasClient in
+                    guard hasClient else { return }
+                    if preferences.crashReportingEnabled {
+                        appState.client?.setCrashReportingEnabled(true)
+                    }
+                }
+        }
+        .commands {
+            CabalmailCommands(appState: appState)
         }
         #if os(macOS)
         Settings {
