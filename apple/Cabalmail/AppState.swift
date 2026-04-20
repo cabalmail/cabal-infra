@@ -48,12 +48,6 @@ final class AppState {
     func requestCompose() { composeRequestTick += 1 }
     func requestRefresh() { refreshRequestTick += 1 }
 
-    struct Toast: Equatable, Sendable {
-        enum Kind: Sendable { case info, success, warning, error }
-        let kind: Kind
-        let message: String
-    }
-
     /// Publishes a toast and auto-clears it after `duration`. The task lives
     /// outside structured concurrency because the caller's scope (usually a
     /// compose sheet) dismisses before the banner fades.
@@ -235,4 +229,12 @@ final class AppState {
         default:                  return nil
         }
     }
+}
+
+/// Ephemeral banner message. Promoted out of `AppState` so the nested
+/// `Kind` enum stays at a single level of nesting (SwiftLint's cap).
+struct Toast: Equatable, Sendable {
+    enum Kind: Sendable { case info, success, warning, error }
+    let kind: Kind
+    let message: String
 }

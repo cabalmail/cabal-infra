@@ -70,7 +70,7 @@ struct SignedInRootView: View {
         .padding(.horizontal, 12)
     }
 
-    private func icon(for kind: AppState.Toast.Kind) -> String {
+    private func icon(for kind: Toast.Kind) -> String {
         switch kind {
         case .success: return "checkmark.circle.fill"
         case .info:    return "info.circle.fill"
@@ -79,7 +79,7 @@ struct SignedInRootView: View {
         }
     }
 
-    private func tint(for kind: AppState.Toast.Kind) -> Color {
+    private func tint(for kind: Toast.Kind) -> Color {
         switch kind {
         case .success: return .green
         case .info:    return .blue
