@@ -32,6 +32,27 @@ public protocol ImapClient: Sendable {
     /// `CabalmailClient`'s network-path monitor to purge sockets established
     /// against a prior network (sleep/wake, WiFi↔cellular handoff).
     func invalidate() async
+
+    /// Opens an IDLE stream for `folder` and yields `IdleEvent`s until
+    /// cancelled. Implementations without a live server (unit-test mocks,
+    /// in-memory fakes) can return an empty stream — `MailboxWatcher` treats
+    /// an immediately-finished stream as a clean exit and backs off, which
+    /// is the right behavior for those transports.
+    ///
+    /// Phase 7 wires `MessageListViewModel` into the resulting stream so a
+    /// server-initiated EXISTS / EXPUNGE / FETCH triggers an envelope
+    /// refresh. The watcher itself holds the reconnect / backoff policy.
+    func idle(folder: String) async throws -> AsyncThrowingStream<IdleEvent, Error>
+}
+
+public extension ImapClient {
+    /// Default implementation used by test doubles and any client that
+    /// doesn't yet support IDLE. Returning an immediately-finished stream
+    /// means the watcher yields one `.active` event and then sits in the
+    /// reconnect backoff — cheap, correct, and no per-mock boilerplate.
+    func idle(folder: String) async throws -> AsyncThrowingStream<IdleEvent, Error> {
+        AsyncThrowingStream { $0.finish() }
+    }
 }
 
 /// Opens a second connection for IDLE and yields untagged events until the

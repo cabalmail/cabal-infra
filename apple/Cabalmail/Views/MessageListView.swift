@@ -29,6 +29,7 @@ struct MessageListView: View {
                     Image(systemName: "square.and.pencil")
                         .accessibilityLabel("New Message")
                 }
+                .keyboardShortcut("n", modifiers: .command)
             }
         }
         .sheet(item: $composeSeed) { seed in
@@ -42,7 +43,28 @@ struct MessageListView: View {
                     preferences: preferences
                 )
                 await model?.loadInitial()
+                await model?.startWatching()
             }
+        }
+        .onDisappear {
+            // Tear down the IDLE watcher when the folder drops off-screen.
+            // The view is rebuilt (via `.id(folder.path)` in MailRootView)
+            // when the user picks another folder, so `startWatching` in the
+            // new instance's `.task` starts a fresh IDLE session against the
+            // new mailbox.
+            let model = model
+            Task { await model?.stopWatching() }
+        }
+        // macOS Commands menu (File → New Message, Mailbox → Refresh) and
+        // keyboard shortcuts route through `AppState` tick counters. The
+        // view lifted into view reacts by opening compose / kicking a
+        // refresh. Using the currently-displayed list as the refresh target
+        // matches every desktop mail client's convention.
+        .onChange(of: appState.composeRequestTick) { _, _ in
+            composeSeed = ReplyBuilder.newDraft()
+        }
+        .onChange(of: appState.refreshRequestTick) { _, _ in
+            Task { await model?.refresh() }
         }
     }
 
@@ -93,6 +115,10 @@ struct MessageListView: View {
     private func row(for envelope: Envelope, model: MessageListViewModel) -> some View {
         MessageRow(envelope: envelope)
             .tag(envelope)
+            #if os(visionOS)
+            .contentShape(Rectangle())
+            .hoverEffect(.highlight)
+            #endif
             .swipeActions(edge: .trailing) {
                 Button(role: .destructive) {
                     Task { await model.dispose(envelope) }
