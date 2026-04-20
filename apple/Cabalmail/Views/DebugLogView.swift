@@ -94,8 +94,8 @@ struct DebugLogView: View {
     /// the stream task keeps `entries` current.
     private var shareText: String {
         entries.map { line in
-            let ts = Self.timestampFormatter.string(from: line.timestamp)
-            return "[\(ts)] \(line.level.rawValue.uppercased()) \(line.category): \(line.message)"
+            let stamp = Self.timestampFormatter.string(from: line.timestamp)
+            return "[\(stamp)] \(line.level.rawValue.uppercased()) \(line.category): \(line.message)"
         }.joined(separator: "\n")
     }
 
@@ -128,9 +128,9 @@ struct DebugLogView: View {
     }
 
     private static let timestampFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "HH:mm:ss.SSS"
-        return f
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss.SSS"
+        return formatter
     }()
 }
 
@@ -171,8 +171,8 @@ private struct LogRow: View {
     }
 
     private var timestamp: String {
-        let f = DateFormatter()
-        f.dateFormat = "HH:mm:ss"
-        return f.string(from: entry.timestamp)
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss"
+        return formatter.string(from: entry.timestamp)
     }
 }
