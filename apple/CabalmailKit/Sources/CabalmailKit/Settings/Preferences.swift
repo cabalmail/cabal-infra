@@ -123,6 +123,7 @@ public final class Preferences {
         case signature = "cabalmail.prefs.signature"
         case disposeAction = "cabalmail.prefs.dispose_action"
         case theme = "cabalmail.prefs.theme"
+        case crashReportingEnabled = "cabalmail.prefs.crash_reporting_enabled"
     }
 
     public var markAsRead: MarkAsReadBehavior {
@@ -148,6 +149,13 @@ public final class Preferences {
     public var theme: AppTheme {
         didSet { persist(.theme, theme.rawValue) }
     }
+    /// Opt-in MetricKit-backed crash / hang reporting. Disabled by default
+    /// per the Phase 7 plan — when the user flips this, `CabalmailClient`
+    /// starts (or stops) its `MetricKitCollector`, which funnels diagnostic
+    /// payloads into `DebugLogStore` so they surface in the Debug Log view.
+    public var crashReportingEnabled: Bool {
+        didSet { persist(.crashReportingEnabled, crashReportingEnabled ? "1" : "0") }
+    }
 
     private let store: PreferenceStore
     private var isReloading = false
@@ -166,6 +174,9 @@ public final class Preferences {
             .disposeAction, store: store, default: .archive
         )
         self.theme = Self.readEnum(.theme, store: store, default: .system)
+        self.crashReportingEnabled = store.stringValue(
+            forKey: Key.crashReportingEnabled.rawValue
+        ) == "1"
         store.startObserving { [weak self] in
             self?.reload()
         }
@@ -184,6 +195,9 @@ public final class Preferences {
         signature = store.stringValue(forKey: Key.signature.rawValue) ?? ""
         disposeAction = Self.readEnum(.disposeAction, store: store, default: .archive)
         theme = Self.readEnum(.theme, store: store, default: .system)
+        crashReportingEnabled = store.stringValue(
+            forKey: Key.crashReportingEnabled.rawValue
+        ) == "1"
     }
 
     private func persist(_ key: Key, _ value: String?) {

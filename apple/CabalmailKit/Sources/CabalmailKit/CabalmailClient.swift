@@ -22,6 +22,7 @@ public actor CabalmailClient {
     public nonisolated let envelopeCache: EnvelopeCache
     public nonisolated let bodyCache: MessageBodyCache
     public nonisolated let draftStore: DraftStore
+    public nonisolated let outbox: Outbox
 
     /// Retained so the path monitor outlives initialization. The underlying
     /// `NWPathMonitor` stops when this property is released. Only `make(...)`
@@ -29,7 +30,18 @@ public actor CabalmailClient {
     /// leave it nil and skip proactive invalidation.
     #if canImport(Network)
     private nonisolated let pathMonitor: NetworkPathMonitor?
+    /// Retained so Reachability observers and the send queue's drain task
+    /// outlive initialization. Phase 7 — the offline banner streams from
+    /// here, and `SendQueue` subscribes to drain the outbox on reconnect.
+    public nonisolated let reachability: Reachability?
+    private nonisolated let sendQueue: SendQueue?
     #endif
+
+    /// Opt-in crash / hang reporter. Starts disabled — the Settings toggle
+    /// calls `setCrashReportingEnabled(_:)` to flip it. Retained across
+    /// start/stop cycles so subscriber registration with `MXMetricManager`
+    /// is balanced.
+    public nonisolated let metricKitCollector: MetricKitCollector
 
     public init(
         configuration: Configuration,
@@ -40,7 +52,8 @@ public actor CabalmailClient {
         addressCache: AddressCache,
         envelopeCache: EnvelopeCache,
         bodyCache: MessageBodyCache,
-        draftStore: DraftStore
+        draftStore: DraftStore,
+        outbox: Outbox
     ) {
         self.configuration = configuration
         self.authService = authService
@@ -51,8 +64,12 @@ public actor CabalmailClient {
         self.envelopeCache = envelopeCache
         self.bodyCache = bodyCache
         self.draftStore = draftStore
+        self.outbox = outbox
+        self.metricKitCollector = MetricKitCollector()
         #if canImport(Network)
         self.pathMonitor = nil
+        self.reachability = nil
+        self.sendQueue = nil
         #endif
     }
 
@@ -92,6 +109,7 @@ public actor CabalmailClient {
             capacityBytes: bodyCacheCapacityBytes
         )
         let drafts = try DraftStore(directory: cacheDirectory.appendingPathComponent("drafts"))
+        let outbox = try Outbox(directory: cacheDirectory.appendingPathComponent("outbox"))
         return CabalmailClient(
             configuration: configuration,
             authService: auth,
@@ -102,6 +120,7 @@ public actor CabalmailClient {
             envelopeCache: envelopes,
             bodyCache: bodies,
             draftStore: drafts,
+            outbox: outbox,
             monitorNetworkPath: true
         )
     }
@@ -120,6 +139,7 @@ public actor CabalmailClient {
         envelopeCache: EnvelopeCache,
         bodyCache: MessageBodyCache,
         draftStore: DraftStore,
+        outbox: Outbox,
         monitorNetworkPath: Bool
     ) {
         self.configuration = configuration
@@ -131,13 +151,27 @@ public actor CabalmailClient {
         self.envelopeCache = envelopeCache
         self.bodyCache = bodyCache
         self.draftStore = draftStore
+        self.outbox = outbox
+        self.metricKitCollector = MetricKitCollector()
         if monitorNetworkPath {
             let imap = imapClient
             self.pathMonitor = NetworkPathMonitor {
                 Task { await imap.invalidate() }
             }
+            let reach = Reachability()
+            self.reachability = reach
+            // Sender closure retries the full send flow including Sent-folder
+            // APPEND so a queued message behaves identically to a fresh one.
+            let smtp = smtpClient
+            let queue = SendQueue(outbox: outbox) { message in
+                try await smtp.send(message)
+            }
+            self.sendQueue = queue
+            Task { await queue.bind(reachability: reach.changes()) }
         } else {
             self.pathMonitor = nil
+            self.reachability = nil
+            self.sendQueue = nil
         }
     }
     #endif
@@ -203,7 +237,14 @@ public actor CabalmailClient {
     ///
     /// `sentFolder` defaults to `"Sent"` because that's the name the
     /// Dovecot config creates. Phase 6 settings will let the user override.
-    public func send(_ message: OutgoingMessage, sentFolder: String = "Sent") async throws {
+    ///
+    /// Phase 7: when SMTP fails with a transport-class error, the message
+    /// is persisted to the `Outbox` and `SendOutcome.queued(_)` is returned
+    /// instead of thrown — `SendQueue` drains it when reachability returns.
+    /// Application-level rejections (auth failure, recipient refusal) still
+    /// throw so the user can correct them immediately.
+    @discardableResult
+    public func send(_ message: OutgoingMessage, sentFolder: String = "Sent") async throws -> SendOutcome {
         let messageID = message.messageId ?? "\(UUID().uuidString)@\(message.from.host)"
         let stamped = OutgoingMessage(
             from: message.from,
@@ -219,7 +260,19 @@ public actor CabalmailClient {
             extraHeaders: message.extraHeaders,
             messageId: messageID
         )
-        try await smtpClient.send(stamped)
+        do {
+            try await smtpClient.send(stamped)
+        } catch let error as CabalmailError where Self.shouldQueue(error) {
+            let entry = try await outbox.enqueue(stamped)
+            CabalmailLog.warn(
+                "CabalmailClient",
+                "SMTP transport error; queued message \(entry.id)"
+            )
+            #if canImport(Network)
+            await sendQueue?.kickDrain()
+            #endif
+            return .queued(entry.id)
+        }
         let payload = MessageBuilder.build(stamped, messageID: messageID)
         try? await imapClient.connectAndAuthenticate()
         try? await imapClient.append(
@@ -227,5 +280,42 @@ public actor CabalmailClient {
             message: payload,
             flags: [.seen]
         )
+        return .sent
     }
+
+    /// Activate or deactivate MetricKit diagnostic collection. The Settings
+    /// toggle bridges its `Preferences.crashReportingEnabled` value into
+    /// this method so a user opt-in immediately starts receiving crash and
+    /// hang payloads (the next reports arrive at *the following* launch,
+    /// per MetricKit's delivery semantics).
+    public nonisolated func setCrashReportingEnabled(_ enabled: Bool) {
+        if enabled {
+            metricKitCollector.start()
+        } else {
+            metricKitCollector.stop()
+        }
+    }
+
+    /// Classifies which SMTP failures should fall through to the outbox.
+    ///
+    /// `network` / `transport` / `timeout` / `cancelled` are transient —
+    /// retrying when the connection returns has a real chance of
+    /// succeeding. `invalidCredentials`, `smtpCommandFailed`, and the rest
+    /// are application-level and surface to the user immediately.
+    private static func shouldQueue(_ error: CabalmailError) -> Bool {
+        switch error {
+        case .network, .transport, .timeout, .cancelled:
+            return true
+        default:
+            return false
+        }
+    }
+}
+
+/// Outcome of a `CabalmailClient.send(_:)` call. The compose UI branches
+/// on this so an offline send shows "queued — will send when back
+/// online" instead of a generic success toast.
+public enum SendOutcome: Sendable, Equatable {
+    case sent
+    case queued(UUID)
 }

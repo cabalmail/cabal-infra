@@ -28,6 +28,17 @@ final class MessageListViewModel {
     private var lowestUID: UInt32?
     private var hasMore = true
 
+    /// Foreground-only IDLE loop. Nil when the view is offscreen; started on
+    /// `task`, stopped on `onDisappear`. Separated from the refresh path so
+    /// UIDVALIDITY changes, pagination, and flag toggles never fight the
+    /// watcher for the main actor.
+    private var watcher: MailboxWatcher?
+    private var watcherTask: Task<Void, Never>?
+    /// Coalescing timestamp — if `.changed` fires in bursts (e.g. server
+    /// delivers three messages in quick succession) we collapse them into
+    /// one refresh by gating on elapsed time.
+    private var lastRefreshFromWatcher: Date = .distantPast
+
     /// UIDs currently in flight through `dispose(_:)`. Every swipe enqueues
     /// the UID here, removes it in `defer`, and short-circuits duplicate
     /// taps. Prevents re-entrant SwiftUI list mutation when a user taps
@@ -46,6 +57,53 @@ final class MessageListViewModel {
     func loadInitial() async {
         guard envelopes.isEmpty else { return }
         await hydrateFromCache()
+        await refresh()
+    }
+
+    /// Start the IDLE-backed auto-refresh loop. Called from the view's
+    /// `.task` after `loadInitial()` settles. The watcher runs on its own
+    /// actor and emits `.changed` whenever the server pushes an
+    /// EXISTS/EXPUNGE/FETCH; we collapse bursts to a single refresh by
+    /// gating on elapsed time (IMAP doesn't promise deduped notifications
+    /// and a 10-message import can fire EXISTS ten times in a second).
+    func startWatching() async {
+        guard watcher == nil else { return }
+        let client = self.client
+        let watcher = MailboxWatcher(
+            folder: folder.path,
+            streamFactory: { folder in
+                try await client.imapClient.idle(folder: folder)
+            }
+        )
+        self.watcher = watcher
+        let stream = await watcher.start()
+        watcherTask = Task { [weak self] in
+            for await event in stream {
+                guard !Task.isCancelled, let self else { break }
+                if case .changed = event {
+                    await self.handleWatcherChanged()
+                }
+            }
+        }
+    }
+
+    /// Tear down the watcher. View hooks this into `.onDisappear` so IDLE
+    /// stops when the list isn't on-screen — we don't want to hold a
+    /// background IMAP connection open for a mailbox the user isn't looking
+    /// at (each session costs ~1 IMAP connection against Dovecot's pool).
+    func stopWatching() async {
+        watcherTask?.cancel()
+        watcherTask = nil
+        await watcher?.stop()
+        watcher = nil
+    }
+
+    private func handleWatcherChanged() async {
+        // Coalesce bursts — a multi-message delivery can push ten EXISTS
+        // notifications inside a single second. One refresh is enough.
+        let now = Date()
+        guard now.timeIntervalSince(lastRefreshFromWatcher) > 1 else { return }
+        lastRefreshFromWatcher = now
         await refresh()
     }
 

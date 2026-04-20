@@ -26,6 +26,40 @@ final class AppState {
 
     var status: Status = .signedOut
 
+    /// Ephemeral user-facing status message. Views render this as a floating
+    /// banner and the owner clears it after a short interval. Phase 7's
+    /// offline-send flow is the first consumer: when `CabalmailClient.send`
+    /// returns `.queued`, the compose view sets this to
+    /// "Message queued — will send when back online" so the user knows the
+    /// message didn't silently vanish. Using a single shared slot (rather
+    /// than a per-view toast subject) keeps state lifecycle simple and
+    /// matches the React admin's `AppMessageContext`.
+    var toast: Toast?
+
+    /// Monotonic intent counters read by `MessageListView` /
+    /// `MessageDetailView` via `.onChange`. macOS Commands menu actions
+    /// (and Phase-7 keyboard shortcuts) bump these; consumers react to the
+    /// value change and ignore the number itself. Using a plain `Int`
+    /// instead of a PassthroughSubject keeps the surface `@Observable`-
+    /// friendly without pulling in Combine.
+    var composeRequestTick = 0
+    var refreshRequestTick = 0
+
+    func requestCompose() { composeRequestTick += 1 }
+    func requestRefresh() { refreshRequestTick += 1 }
+
+    /// Publishes a toast and auto-clears it after `duration`. The task lives
+    /// outside structured concurrency because the caller's scope (usually a
+    /// compose sheet) dismisses before the banner fades.
+    func showToast(_ toast: Toast, duration: TimeInterval = 4) {
+        self.toast = toast
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
+            guard let self, self.toast == toast else { return }
+            self.toast = nil
+        }
+    }
+
     /// Last-used control domain, persisted so repeat launches skip re-entry.
     var controlDomain: String {
         get { UserDefaults.standard.string(forKey: "cabalmail.controlDomain") ?? "" }
@@ -195,4 +229,12 @@ final class AppState {
         default:                  return nil
         }
     }
+}
+
+/// Ephemeral banner message. Promoted out of `AppState` so the nested
+/// `Kind` enum stays at a single level of nesting (SwiftLint's cap).
+struct Toast: Equatable, Sendable {
+    enum Kind: Sendable { case info, success, warning, error }
+    let kind: Kind
+    let message: String
 }

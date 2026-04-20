@@ -754,6 +754,92 @@ empty-new-message, reply/forward-with-quoted-original, and arbitrary base
 - **About.** Version + build (read from `Bundle.main.infoDictionary`) and
   a link to the GitHub issues.
 
+## Phase 7 decisions
+
+Phase 7 is the "platform polish" pass: push-style freshness, offline
+reading + send queue, structured errors + MetricKit, a debug log surface,
+and keyboard / menu wiring. Five decisions that narrow the plan's open
+choices:
+
+### 1. IDLE is tied to the message list lifetime, not the app lifetime
+
+`MailboxWatcher` opens a dedicated IDLE connection (see Phase 3 decision
+#5) and emits `.changed` / `.reconnecting` / `.active` ticks on an
+`AsyncStream`. `MessageListViewModel.startWatching()` drives it from the
+message list's `.task { }` and stops it on `.onDisappear`. The watcher
+stays off while the user is elsewhere — mailbox management, compose
+sheet, settings — so the server only holds one open IDLE socket per
+active mailbox. Reconnects use bounded exponential backoff (2s → 60s)
+per RFC 2177's 29-minute disconnect cadence; consecutive `EXISTS` bursts
+are coalesced on the view-model side with a 1-second refresh floor so a
+message sweep doesn't trigger N envelope fetches.
+
+### 2. Send failures classify transient vs permanent before queueing
+
+`CabalmailClient.send(_:)` returns `SendOutcome.sent` or `.queued`.
+Transport / network errors (`CabalmailError.network`, connection
+timeouts) queue the `OutgoingMessage` into the on-disk `Outbox` and
+surface a warning toast; application-level rejections (auth failure,
+malformed recipient, permanent SMTP 5xx) throw immediately so the
+compose sheet can correct them. `SendQueue` drains the outbox when
+`NWPathMonitor` reports reachability or on an explicit user kick, with
+`maxAttempts = 10` before an entry is dropped so a permanently bad
+recipient can't spin forever. One JSON file per entry under app support,
+same layout as `DraftStore`.
+
+### 3. MetricKit is opt-in, not always-on
+
+`Preferences.crashReportingEnabled` defaults to `false`. When the user
+toggles it on in Settings → Diagnostics, `CabalmailClient.setCrashReportingEnabled(true)`
+subscribes the `MetricKitCollector` to `MXMetricManager.shared` and
+payloads land in `DebugLogStore` at the `.info` level. Off by default
+respects the "self-hosted email, minimum phoning-home" stance the
+project leans on; the toggle is explicit and the surface for viewing
+what's captured is right there (Settings → Debug Log → ShareLink).
+visionOS doesn't vend MetricKit at all, so the collector is a no-op on
+that platform behind `#if canImport(MetricKit) && !os(visionOS)`.
+
+### 4. Commands dispatch through `AppState` tick counters
+
+macOS menu commands (File → New Message ⌘N, Mailbox → Refresh ⌘R) and
+iOS keyboard shortcuts need to reach whichever view currently owns the
+action — but `.commands { }` is defined at the scene level, so there's
+no direct reference to the focused view. `AppState` exposes two
+monotonic counters (`composeRequestTick`, `refreshRequestTick`);
+`MessageListView` / `SignedInRootView` watch them with `.onChange` and
+act on each bump. Avoids the @FocusedValue / responder-chain dance, and
+the same tick flow works on iOS (shortcuts) and macOS (menu bar). Reply
+(⌘R), Reply-All (⌘⇧D), Forward (⌘⇧J) are local to `MessageDetailView`
+and use plain `.keyboardShortcut` on the toolbar buttons.
+
+### 5. visionOS `AppIcon.solidimagestack` deferred
+
+The layered-icon source SVGs are installed in `apple/handoff/` but the
+asset catalog wiring isn't. Reason: a correct solidimagestack needs
+per-layer `Content.imageset/Contents.json` and a per-platform icon-name
+override in `project.yml`, and validating the parallax result without a
+visionOS device in the loop is error-prone. Shipping the shared
+`.appiconset` (which visionOS already accepts) keeps the icon correct
+now; the layered variant lands when visionOS becomes a first-class
+deployment target rather than a "build passes" one.
+
+### Platform polish inventory
+
+- **Reachability banner.** `SignedInRootView` overlays a capsule banner
+  sourced from `CabalmailClient.reachability.changes()` when the network
+  drops, clearing on restore.
+- **Toast system.** `AppState.toast` + `showToast(_:duration:)` carries
+  transient success / warning messages; `ComposeView` publishes on send
+  outcome (sent → success, queued → warning).
+- **visionOS hover.** `MessageListView` and `FolderListView` wrap row
+  content in `.contentShape(Rectangle()).hoverEffect(.highlight)` under
+  `#if os(visionOS)` so gaze focus visibly highlights rows without
+  changing iOS / macOS rendering.
+- **Debug Log.** `DebugLogView` (Settings → Debug Log) renders the live
+  `DebugLogStore` tail with level chips, a Clear button, and a ShareLink
+  that exports the current filtered buffer. Capped at 1000 visible
+  entries to keep SwiftUI happy.
+
 ## What's deliberately not here yet
 
 - Real views (Phase 4) — `ContentView.swift` is still the Phase 1 "Hello,
@@ -765,14 +851,13 @@ empty-new-message, reply/forward-with-quoted-original, and arbitrary base
 - BODYSTRUCTURE structural parsing — the current parser returns a single
   "has attachments" boolean derived from scanning for `attachment` tokens;
   Phase 4's attachment chip UI will want the proper tree.
-- visionOS `AppIcon.solidimagestack` (Phase 7 — iOS/iPadOS/visionOS share
-  the same `.appiconset` today; layered-icon source SVGs are in
-  `apple/handoff/`). See [App icons](#app-icons).
+- visionOS `AppIcon.solidimagestack` — deferred in Phase 7 (decision #5
+  above). Source SVGs live in `apple/handoff/`; iOS/iPadOS/visionOS
+  currently share the same `.appiconset`. See [App icons](#app-icons).
 - Adoption of `Color.cmForest` / `cmCream` / etc. in view code —
   `CabalmailKit/Sources/CabalmailKit/CabalmailTokens.swift` exposes the
   brand palette as a `SwiftUI.Color` extension, but no existing view
-  consumes them yet; Phase 7 polish is the natural time to replace
-  ad-hoc colors with the tokens.
+  consumes them yet.
 - Rich-text compose toolbar + HTML body emission (Phase 5.1)
 - IMAP `Drafts` folder round-trip for cross-device draft sync (Phase 5.1)
 - Contact autocomplete in To / Cc / Bcc fields (Phase 5.1)

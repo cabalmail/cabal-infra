@@ -24,6 +24,20 @@ struct CabalmailApp: App {
                     // running this `.task` across scene re-attaches (e.g.
                     // on resume) stays cheap.
                     await appState.restoreIfPossible()
+                    // Opt-in MetricKit needs to register as a subscriber
+                    // *early* in the launch — before `applicationDidFinish
+                    // Launching` returns — or diagnostic payloads from the
+                    // last session won't be delivered. Re-running on every
+                    // `.task` firing is safe because `start()` is idempotent.
+                    if preferences.crashReportingEnabled {
+                        appState.client?.setCrashReportingEnabled(true)
+                    }
+                }
+                .onChange(of: appState.client != nil) { _, hasClient in
+                    guard hasClient else { return }
+                    if preferences.crashReportingEnabled {
+                        appState.client?.setCrashReportingEnabled(true)
+                    }
                 }
         }
     }

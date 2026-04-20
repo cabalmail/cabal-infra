@@ -35,6 +35,11 @@ final class ComposeViewModel {
     var availableAddresses: [Address] = []
     var isSending = false
     var errorMessage: String?
+    /// Set to `.queued` when the most recent send dropped the message into
+    /// the outbox instead of delivering it. `ComposeView` reads this to
+    /// decide whether the dismiss toast should say "Sent" or "Queued — will
+    /// send when back online." Reset whenever the user edits the form.
+    var lastSendOutcome: SendOutcome?
 
     /// Immutable compose-context bits; only set during init from a reply /
     /// forward / new-message seed, never mutated after.
@@ -157,8 +162,10 @@ final class ComposeViewModel {
                 references: references,
                 attachments: attachments.map(\.asKitAttachment)
             )
-            try await client.send(message)
-            // Send succeeded — discard the draft and dismiss.
+            let outcome = try await client.send(message)
+            lastSendOutcome = outcome
+            // Whether the message left the device or got queued, the draft
+            // is no longer authoritative — the outbox owns it from here.
             try? await draftStore.remove(id: draftId)
             stop()
             onClose()
