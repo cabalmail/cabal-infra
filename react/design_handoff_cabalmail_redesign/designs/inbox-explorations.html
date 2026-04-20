@@ -1,0 +1,4429 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Cabalmail — Inbox explorations</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&family=JetBrains+Mono:wght@400;500;600&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* =========================================================================
+   Cabalmail — Inbox Explorations
+   Three directions (Stately · Workbench · Quiet Mono) share these base styles.
+   Each direction has its own block below. Density + theme are data-attributes.
+   ========================================================================= */
+
+:root {
+  --pane-gap: 1px;
+  --radius: 6px;
+
+  /* density (overridden) */
+  --row-py: 10px;
+  --row-line-h: 1.45;
+  --list-sub-size: 14px;
+  --list-from-size: 13px;
+
+  /* focus ring */
+  --focus: 0 0 0 2px color-mix(in oklch, var(--accent) 40%, transparent);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; height: 100%; }
+body {
+  background: var(--app-bg);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "ss01", "cv11";
+}
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: none; box-shadow: var(--focus); }
+
+/* =========================================================================
+   Layout shell
+   ========================================================================= */
+.app {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100vh;
+  background: var(--chrome-bg);
+}
+
+.topbar {
+  display: grid;
+  grid-template-columns: 220px 1fr auto;
+  align-items: center;
+  height: 52px;
+  padding: 0 16px 0 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--chrome-bg);
+  gap: 16px;
+}
+.brand {
+  display: flex; align-items: center; gap: 10px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 17px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.brand-logo-tile {
+  display: inline-block;
+  font-size: 0;
+  line-height: 0;
+  border-radius: 0;
+  background: var(--accent);
+  color: var(--surface);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.brand-logo {
+  height: 37px;
+  width: 72px;
+  display: block;
+  vertical-align: top;
+  color: inherit;
+  margin-top: -1px;
+}
+[data-theme="dark"] .brand-logo-tile {
+  background: var(--accent);
+  color: #0b0b0b;
+}
+.brand-word {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* User menu (avatar dropdown) */
+.user-menu-wrap { position: relative; }
+.avatar { cursor: pointer; }
+.avatar:hover { background: color-mix(in oklch, var(--accent) 28%, var(--surface)); }
+.user-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 260px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 40px -8px rgba(0,0,0,0.25), 0 2px 6px rgba(0,0,0,0.08);
+  padding: 8px;
+  z-index: 50;
+  font-size: 12.5px;
+}
+.user-menu-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 8px 10px;
+}
+.user-menu-avatar {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: color-mix(in oklch, var(--accent) 22%, var(--surface));
+  color: var(--accent);
+  display: grid; place-items: center;
+  font-weight: 600; font-size: 13px;
+  border: 1px solid var(--border);
+}
+.user-menu-who { min-width: 0; }
+.user-menu-name { font-weight: 600; color: var(--ink); font-size: 13px; }
+.user-menu-mail {
+  color: var(--ink-quiet); font-size: 11.5px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.user-menu-section-label {
+  padding: 8px 8px 6px;
+  color: var(--ink-quiet);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+}
+.user-menu-accents {
+  display: flex; gap: 8px;
+  padding: 0 8px 8px;
+}
+.user-menu-accents .accent-swatch {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 1.5px solid var(--border);
+  cursor: pointer;
+  position: relative;
+  transition: transform 0.08s ease;
+  aspect-ratio: auto;
+}
+.user-menu-accents .accent-swatch:hover { transform: scale(1.1); }
+.user-menu-accents .accent-swatch.active {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--ink);
+  outline: none;
+}
+.user-menu-accents .accent-swatch[data-c="ink"]     { background: oklch(0.28 0.02 260); }
+.user-menu-accents .accent-swatch[data-c="oxblood"] { background: oklch(0.48 0.16 22); }
+.user-menu-accents .accent-swatch[data-c="forest"]  { background: oklch(0.45 0.11 155); }
+.user-menu-accents .accent-swatch[data-c="azure"]   { background: oklch(0.52 0.16 240); }
+.user-menu-accents .accent-swatch[data-c="amber"]   { background: oklch(0.68 0.14 70); }
+.user-menu-accents .accent-swatch[data-c="plum"]    { background: oklch(0.42 0.13 320); }
+
+.user-menu-sep {
+  height: 1px; background: var(--border);
+  margin: 4px 0;
+}
+.user-menu-item {
+  display: flex; align-items: center; gap: 9px;
+  width: 100%;
+  padding: 7px 8px;
+  border-radius: 5px;
+  color: var(--ink);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.user-menu-item:hover { background: var(--surface-hover); }
+.user-menu-item > svg { color: var(--ink-quiet); flex-shrink: 0; }
+.search {
+  position: relative;
+  max-width: 560px;
+  width: 100%;
+  justify-self: center;
+}
+.search input {
+  width: 100%;
+  height: 34px;
+  padding: 0 12px 0 34px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+.search .icon-search {
+  position: absolute; left: 10px; top: 50%;
+  transform: translateY(-50%);
+  color: var(--ink-quiet);
+}
+.search kbd {
+  position: absolute; right: 8px; top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-quiet);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  background: var(--chrome-bg);
+}
+.topbar-right { display: flex; align-items: center; gap: 6px; }
+.icon-btn {
+  height: 32px; min-width: 32px; padding: 0 8px;
+  border-radius: var(--radius);
+  color: var(--ink-soft);
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: 6px;
+}
+.icon-btn:hover { background: var(--surface-hover); color: var(--ink); }
+.avatar {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: color-mix(in oklch, var(--accent) 20%, var(--surface));
+  color: var(--accent);
+  display: grid; place-items: center;
+  font-weight: 600; font-size: 11px;
+  border: 1px solid var(--border);
+}
+
+/* Three-pane grid */
+.panes {
+  display: grid;
+  grid-template-columns: 240px minmax(340px, 460px) 1fr;
+  gap: var(--pane-gap);
+  background: var(--border);
+  overflow: hidden;
+}
+[data-compact="compact"] .panes { grid-template-columns: 220px minmax(320px, 400px) 1fr; }
+[data-compact="roomy"] .panes { grid-template-columns: 280px minmax(380px, 520px) 1fr; }
+
+.pane { background: var(--pane-bg); overflow: auto; position: relative; }
+.pane-folders {
+  background: var(--sidebar-bg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+.pane-list { background: var(--list-bg); }
+.pane-reader { background: var(--reader-bg); }
+
+/* =========================================================================
+   Folders pane
+   ========================================================================= */
+.folders-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 14px 6px;
+}
+.compose-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  width: calc(100% - 24px);
+  margin: 4px 12px 12px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: -0.005em;
+  justify-content: center;
+}
+.compose-btn:hover { filter: brightness(1.05); }
+.compose-btn .icon { color: var(--accent-fg); }
+
+.folder-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-quiet);
+  padding: 10px 16px 6px;
+}
+.folders-section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-top: 1px solid transparent;
+}
+.folders-section + .folders-section { border-top-color: var(--border); }
+.folders-section.collapsed { flex: 0 0 auto; }
+.folders-section.expanded { flex: 1 1 0; min-height: 0; overflow: hidden; }
+.folders-section-header {
+  display: flex; align-items: center; gap: 6px;
+  padding: 10px 10px 6px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-quiet);
+  cursor: pointer;
+  user-select: none;
+}
+.folders-section-header:hover { color: var(--ink-soft); }
+.folders-section-header .chev {
+  display: inline-flex;
+  transition: transform 120ms ease;
+}
+.folders-section.collapsed .folders-section-header .chev { transform: rotate(-90deg); }
+.folders-section-header .label { flex: 1; }
+.folders-section-header .section-actions {
+  display: inline-flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.folders-section-header:hover .section-actions,
+.folders-section-header:focus-within .section-actions { opacity: 1; }
+.folders-section-header .section-action {
+  width: 20px; height: 20px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 4px;
+  color: var(--ink-quiet);
+}
+.folders-section-header .section-action:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+.folders-section-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+.folders-section.collapsed .folders-section-body { display: none; }
+
+.folder-list { list-style: none; margin: 0; padding: 0 8px 8px; }
+.folder-item {
+  display: grid;
+  grid-template-columns: 18px 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 7px 10px;
+  border-radius: 5px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  cursor: pointer;
+  line-height: 1.3;
+  position: relative;
+}
+.folder-item:hover { background: var(--surface-hover); color: var(--ink); }
+.folder-item.active {
+  background: var(--accent-soft);
+  color: var(--ink);
+  font-weight: 600;
+}
+.folder-item.active .folder-count { color: var(--accent); }
+.folder-item .icon { color: var(--ink-quiet); }
+.folder-item.active .icon { color: var(--accent); }
+.folder-count {
+  font-size: 11px;
+  color: var(--ink-quiet);
+  font-variant-numeric: tabular-nums;
+}
+.folder-item.nested { padding-left: 28px; }
+.folder-item.parent { font-weight: 500; }
+
+.folder-row-actions {
+  display: inline-flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+  margin-left: -4px;
+}
+.folder-item:hover .folder-row-actions,
+.folder-item:focus-within .folder-row-actions { opacity: 1; }
+.folder-item.has-fav .folder-star { opacity: 1; color: var(--accent); }
+.folder-row-action {
+  width: 20px; height: 20px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 4px;
+  color: var(--ink-quiet);
+  background: transparent;
+}
+.folder-row-action:hover {
+  background: var(--sidebar-bg);
+  color: var(--ink);
+}
+.folder-item:hover .folder-row-action { background: transparent; }
+.folder-item:hover .folder-row-action:hover { background: var(--surface); }
+.folder-item .folder-count { transition: opacity 100ms ease; }
+.folder-item:hover .folder-count { opacity: 0; }
+.folder-item:hover .folder-row-actions + .folder-count,
+.folder-item .folder-row-actions:not(:empty) ~ .folder-count { }
+
+.folder-rename-input {
+  grid-column: 2 / 5;
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 3px 6px;
+  font: inherit;
+  color: var(--ink);
+  outline: none;
+}
+
+.folder-add-row {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 10px;
+  align-items: center;
+  padding: 7px 10px;
+  margin: 0 8px 8px;
+  border-radius: 5px;
+  color: var(--ink-quiet);
+  font-size: 12px;
+  cursor: pointer;
+}
+.folder-add-row:hover { background: var(--surface-hover); color: var(--ink); }
+.folder-add-input {
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 3px 6px;
+  font: inherit;
+  color: var(--ink);
+  min-width: 0;
+  outline: none;
+}
+
+.address-search-wrap {
+  padding: 6px 12px 8px;
+  position: relative;
+  flex: 0 0 auto;
+}
+.address-search {
+  width: 100%;
+  height: 28px;
+  padding: 0 26px 0 26px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink);
+  outline: none;
+}
+.address-search:focus { border-color: var(--accent); }
+.address-search::placeholder { color: var(--ink-quiet); }
+.address-search-icon {
+  position: absolute;
+  left: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ink-quiet);
+  pointer-events: none;
+}
+.address-search-clear {
+  position: absolute;
+  right: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ink-quiet);
+  width: 18px; height: 18px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 3px;
+}
+.address-search-clear:hover { color: var(--ink); background: var(--surface-hover); }
+
+.accounts-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 8px 8px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+.account-item {
+  display: grid;
+  grid-template-columns: 8px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 5px;
+  font-size: 12px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  position: relative;
+}
+.account-item:hover { background: var(--surface-hover); color: var(--ink); }
+.account-item.active {
+  background: var(--accent-soft);
+  color: var(--ink);
+  font-weight: 600;
+}
+.account-swatch {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--swatch, var(--accent));
+}
+.account-label { color: var(--ink-quiet); font-size: 11px; margin-left: 6px; }
+.account-row-actions {
+  display: inline-flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.account-item:hover .account-row-actions,
+.account-item:focus-within .account-row-actions { opacity: 1; }
+.account-row-action {
+  width: 20px; height: 20px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 4px;
+  color: var(--ink-quiet);
+}
+.account-row-action:hover { background: var(--surface); color: var(--danger, #c0392b); }
+.account-item:hover .folder-count { opacity: 0; }
+.account-item .folder-count { transition: opacity 100ms ease; }
+
+.address-empty {
+  padding: 16px 14px;
+  font-size: 12px;
+  color: var(--ink-quiet);
+  text-align: center;
+  font-style: italic;
+}
+
+/* =========================================================================
+   List pane
+   ========================================================================= */
+.list-header {
+  position: sticky; top: 0; z-index: 5;
+  background: var(--list-bg);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 16px 10px;
+}
+.list-title-row {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 10px;
+}
+.list-title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+}
+.list-meta { font-size: 12px; color: var(--ink-quiet); font-variant-numeric: tabular-nums; }
+.list-tabs {
+  display: flex; gap: 2px;
+  margin-top: 10px;
+}
+.list-tab {
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 5px;
+  color: var(--ink-quiet);
+  font-weight: 500;
+}
+.list-tab:hover { color: var(--ink); background: var(--surface-hover); }
+.list-tab.active {
+  color: var(--ink);
+  background: var(--surface-hover);
+}
+.list-tab .count {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-quiet);
+  font-size: 11px;
+  margin-left: 4px;
+}
+.list-tab.active .count { color: var(--accent); }
+
+.list-sort {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--ink-quiet);
+}
+.list-sort select {
+  background: transparent;
+  border: 0;
+  font: inherit;
+  color: var(--ink-soft);
+  font-weight: 500;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  padding-right: 14px;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+                    linear-gradient(-45deg, transparent 50%, currentColor 50%);
+  background-position: right 6px top 55%, right 2px top 55%;
+  background-size: 4px 4px;
+  background-repeat: no-repeat;
+}
+
+.rows { list-style: none; margin: 0; padding: 0; }
+.row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  gap: 10px;
+  padding: var(--row-py) 16px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-faint);
+  transition: background 80ms;
+}
+.row:hover { background: var(--surface-hover); }
+.row.selected {
+  background: var(--accent-soft);
+}
+.row.unread .row-subject { font-weight: 600; color: var(--ink); }
+.row.unread .row-from { font-weight: 600; color: var(--ink); }
+.row .unread-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent);
+  margin-top: 7px;
+  opacity: 0;
+}
+.row.unread .unread-dot { opacity: 1; }
+
+/* ---- Row leading (dot + optional checkbox) ---- */
+.row-leading {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  padding-top: 4px;
+}
+.row-leading .unread-dot { margin-top: 0; grid-area: 1 / 1; }
+.row-leading .row-checkbox { grid-area: 1 / 1; opacity: 0; transform: scale(0.85); transition: opacity 100ms, transform 100ms; }
+.pane-list.select-mode .row-leading .unread-dot { opacity: 0; }
+.pane-list.select-mode .row-leading .row-checkbox { opacity: 1; transform: scale(1); }
+.row-leading.as-checkbox { cursor: pointer; }
+.row.unread .row-leading .unread-dot { opacity: 1; }
+.pane-list.select-mode .row.unread .row-leading .unread-dot { opacity: 0; }
+
+.row.checked {
+  background: color-mix(in oklch, var(--accent) 10%, var(--surface));
+}
+.row.checked:hover {
+  background: color-mix(in oklch, var(--accent) 14%, var(--surface));
+}
+
+/* Generic list checkbox (header + row) */
+.list-checkbox {
+  width: 15px; height: 15px;
+  border-radius: 3px;
+  border: 1.5px solid var(--ink-quiet);
+  background: var(--surface);
+  display: inline-grid; place-items: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: border-color 80ms, background 80ms;
+}
+.list-checkbox:hover { border-color: var(--ink-soft); }
+.list-checkbox.checked {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}
+.list-checkbox.checked svg { stroke-width: 3; }
+.list-checkbox.indeterminate {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.list-checkbox .dash {
+  width: 7px; height: 2px; background: var(--accent-fg); border-radius: 1px;
+}
+
+/* Select toggle + select-all in list header */
+.select-toggle {
+  margin-left: auto;
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  border: 1px solid transparent;
+}
+.select-toggle:hover { background: var(--surface-hover); color: var(--ink); }
+.select-toggle.on {
+  background: var(--accent);
+  color: var(--accent-fg);
+  border-color: var(--accent);
+}
+.select-toggle.on:hover { filter: brightness(1.05); }
+.select-all {
+  display: inline-flex; align-items: center; gap: 8px;
+  cursor: pointer;
+}
+.select-all-label {
+  font-size: 11px;
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+
+/* ---- Bulk selection reader pane ---- */
+.bulk-pane { background: var(--app-bg); }
+.bulk-toolbar {
+  background: color-mix(in oklch, var(--accent) 8%, var(--surface));
+  border-bottom: 1px solid var(--border);
+}
+.bulk-count {
+  display: inline-flex; align-items: baseline; gap: 6px;
+  padding: 0 6px 0 4px;
+  color: var(--ink);
+}
+.bulk-count-num {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: -0.02em;
+  color: var(--accent);
+}
+.bulk-count-label {
+  font-size: 11px;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+.tool-btn.primary {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+.tool-btn.primary:hover { filter: brightness(1.05); }
+
+.bulk-body {
+  padding: 48px 56px;
+  max-width: 680px;
+  overflow: auto;
+}
+.bulk-hero {
+  display: flex; align-items: baseline; gap: 14px;
+  margin-bottom: 32px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+}
+.bulk-hero-num {
+  font-family: var(--font-display);
+  font-size: 72px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--accent);
+}
+.bulk-hero-label {
+  font-family: var(--font-display);
+  font-size: 22px;
+  color: var(--ink-soft);
+  letter-spacing: -0.01em;
+}
+.bulk-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 32px;
+}
+.bulk-stat {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  background: var(--surface);
+}
+.bulk-stat-num {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.bulk-stat-label {
+  font-size: 11px;
+  color: var(--ink-quiet);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 500;
+  margin-top: 2px;
+}
+.bulk-section { margin-bottom: 24px; }
+.bulk-section-label {
+  font-size: 10.5px;
+  color: var(--ink-quiet);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.bulk-chips {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.bulk-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+.bulk-chip.muted { color: var(--ink-quiet); font-style: italic; }
+.bulk-chip-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+}
+.bulk-chip-count {
+  font-size: 10.5px;
+  color: var(--ink-quiet);
+  font-variant-numeric: tabular-nums;
+  padding-left: 4px;
+  border-left: 1px solid var(--border);
+  margin-left: 2px;
+}
+.bulk-hint {
+  margin-top: 32px;
+  padding: 10px 14px;
+  background: var(--chrome-bg);
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  font-size: 11.5px;
+  color: var(--ink-quiet);
+  display: flex; align-items: center; gap: 8px;
+}
+.bulk-hint kbd {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 4px;
+  background: var(--surface);
+}
+
+.row-main { min-width: 0; }
+.row-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px;
+}
+.row-from {
+  font-size: var(--list-from-size);
+  color: var(--ink-soft);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  flex: 1;
+  letter-spacing: -0.003em;
+}
+.row-date {
+  font-size: 11px;
+  color: var(--ink-quiet);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.row-subject {
+  font-size: var(--list-sub-size);
+  color: var(--ink-soft);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-top: 1px;
+  letter-spacing: -0.005em;
+  line-height: var(--row-line-h);
+}
+.row-preview {
+  font-size: 12px;
+  color: var(--ink-quiet);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-top: 3px;
+  line-height: 1.4;
+}
+[data-compact="compact"] .row-preview { display: none; }
+[data-compact="compact"] .row { padding-top: 7px; padding-bottom: 7px; }
+[data-compact="roomy"] .row { padding-top: 13px; padding-bottom: 13px; }
+[data-compact="roomy"] .row-preview { white-space: normal; -webkit-line-clamp: 2; display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
+
+.row-indicators {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 3px;
+  color: var(--ink-quiet);
+}
+.row-indicators .icon { opacity: 0.65; }
+.row.flagged .icon-star { color: var(--accent); opacity: 1; }
+.row.important::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 10px; bottom: 10px;
+  width: 2px;
+  background: var(--accent);
+  border-radius: 2px;
+}
+
+/* =========================================================================
+   Reader pane
+   ========================================================================= */
+.reader {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100%;
+}
+.reader-toolbar {
+  display: flex; align-items: center; gap: 2px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--reader-bg);
+  position: sticky; top: 0; z-index: 4;
+}
+.reader-toolbar .spacer { flex: 1; }
+.tool-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 30px; padding: 0 10px;
+  border-radius: 5px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 500;
+}
+.tool-btn:hover { background: var(--surface-hover); color: var(--ink); }
+.tool-btn .icon { color: var(--ink-quiet); }
+.tool-btn:hover .icon { color: var(--ink); }
+.tool-divider { width: 1px; height: 20px; background: var(--border); margin: 0 6px; }
+
+.reader-body {
+  padding: 26px 48px 80px;
+  overflow: auto;
+}
+[data-compact="compact"] .reader-body { padding: 20px 32px 60px; }
+[data-compact="roomy"] .reader-body { padding: 36px 64px 100px; max-width: 820px; margin: 0 auto; }
+
+.msg-subject {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  color: var(--ink);
+  margin: 0 0 16px;
+  text-wrap: pretty;
+}
+.msg-header {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  gap: 14px;
+  align-items: flex-start;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-faint);
+}
+.msg-avatar {
+  width: 44px; height: 44px; border-radius: 50%;
+  background: color-mix(in oklch, var(--accent) 18%, var(--surface));
+  color: var(--accent);
+  display: grid; place-items: center;
+  font-family: var(--font-display);
+  font-weight: 600; font-size: 16px;
+  border: 1px solid var(--border);
+}
+.msg-meta { min-width: 0; }
+.msg-from { font-size: 14px; font-weight: 600; color: var(--ink); letter-spacing: -0.005em; }
+.msg-from .email { color: var(--ink-quiet); font-weight: 400; }
+.msg-to { font-size: 12px; color: var(--ink-quiet); margin-top: 2px; }
+.msg-date { font-size: 12px; color: var(--ink-quiet); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.msg-body {
+  font-family: var(--font-reader);
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--ink-soft);
+  max-width: 68ch;
+  margin-top: 22px;
+  text-wrap: pretty;
+}
+.msg-body p { margin: 0 0 16px; }
+.msg-body p:last-child { margin-bottom: 0; }
+.msg-body .sig {
+  white-space: pre-wrap;
+  color: var(--ink-quiet);
+  border-top: 1px solid var(--border-faint);
+  padding-top: 16px;
+  margin-top: 22px;
+  font-size: 14px;
+}
+.msg-plain {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--ink-soft);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin: 0;
+  padding: 14px 0 0;
+  max-width: 72ch;
+}
+
+.quick-reply {
+  margin-top: 36px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 14px;
+  align-items: center;
+  font-size: 13px;
+  color: var(--ink-quiet);
+  max-width: 68ch;
+}
+.quick-reply-actions { display: flex; gap: 6px; }
+.qr-btn {
+  height: 30px; padding: 0 12px;
+  border-radius: 5px;
+  font-size: 12px; font-weight: 500;
+  border: 1px solid var(--border);
+  color: var(--ink-soft);
+}
+.qr-btn.primary { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
+.qr-btn:hover { background: var(--surface-hover); }
+.qr-btn.primary:hover { filter: brightness(1.05); background: var(--accent); }
+
+/* ---- Rich/Plain segmented toggle (multipart/alternative) ---- */
+.reader-format-toggle {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  font-size: 11px;
+  font-weight: 500;
+  height: 26px;
+}
+.reader-format-toggle button {
+  height: 20px;
+  padding: 0 10px;
+  border-radius: 4px;
+  color: var(--ink-quiet);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  font-family: var(--font-ui);
+}
+.reader-format-toggle button.active {
+  background: var(--reader-bg);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+}
+.reader-format-toggle button:not(.active):hover { color: var(--ink); }
+
+/* ---- Reader overflow menu ---- */
+.reader-more-wrap { position: relative; }
+.reader-more-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 220px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 40px -8px rgba(0,0,0,0.25), 0 2px 6px rgba(0,0,0,0.08);
+  padding: 6px;
+  z-index: 60;
+  font-size: 12.5px;
+}
+.reader-more-menu button {
+  display: flex; align-items: center; gap: 9px;
+  width: 100%;
+  padding: 7px 8px;
+  border-radius: 5px;
+  color: var(--ink);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+}
+.reader-more-menu button:hover { background: var(--surface-hover); }
+.reader-more-menu button.danger { color: oklch(0.5 0.18 25); }
+.reader-more-menu button.danger:hover { background: color-mix(in oklch, oklch(0.6 0.2 25) 12%, var(--surface)); }
+.reader-more-menu button.checked > svg:first-child { color: var(--accent); }
+.reader-more-menu button.checked > span:not(.hint) { font-weight: 600; }
+.reader-more-menu .check-slot {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+.reader-more-group-label {
+  padding: 6px 10px 4px;
+  color: var(--ink-quiet);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-family: var(--font-ui);
+}
+.reader-more-menu button > svg { color: var(--ink-quiet); flex-shrink: 0; }
+.reader-more-menu button.danger > svg { color: oklch(0.55 0.18 25); }
+.reader-more-menu .sep { height: 1px; background: var(--border-faint); margin: 4px 2px; }
+.reader-more-menu .hint {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-quiet);
+  margin-left: auto;
+}
+
+/* ---- Attachments strip ---- */
+.attachments {
+  margin: 32px 0 0;
+  padding: 16px 0 0;
+  border-top: 1px solid var(--border-faint);
+  max-width: 68ch;
+}
+.attachments-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.attachments-title {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-quiet);
+}
+.attachments-meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-quiet);
+}
+.attachments-list {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  row-gap: 1px;
+  background: var(--border-faint);
+  border: 1px solid var(--border-faint);
+  border-radius: 5px;
+  overflow: hidden;
+}
+.att-row {
+  display: contents;
+}
+.att-row > * {
+  background: var(--reader-bg);
+  padding: 9px 12px;
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.att-row:hover > * {
+  background: var(--surface);
+  cursor: pointer;
+}
+.att-name {
+  min-width: 0;
+}
+.att-name .att-icon {
+  width: 24px; height: 30px;
+  border-radius: 3px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  display: inline-grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  color: var(--ink-quiet);
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+.att-name .att-filename {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1;
+}
+.att-size {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--ink-quiet);
+  font-variant-numeric: tabular-nums;
+  justify-content: flex-end;
+  min-width: 72px;
+}
+.att-download {
+  justify-content: center;
+  min-width: 60px;
+  color: var(--ink-quiet);
+}
+.att-row:hover .att-download { color: var(--accent); }
+
+/* ---- Source view modal ---- */
+.source-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 250;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+.source-window {
+  width: 100%;
+  max-width: 820px;
+  max-height: 86vh;
+  background: var(--reader-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 30px 80px -20px rgba(0,0,0,0.5);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.source-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px 12px 18px;
+  border-bottom: 1px solid var(--border-faint);
+  background: var(--surface);
+}
+.source-header-title {
+  font-family: var(--font-display);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.source-header-title .tag {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--border-faint);
+  color: var(--ink-quiet);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.source-header-tools {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.source-tool {
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--reader-bg);
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.source-tool:hover { background: var(--surface-hover); color: var(--ink); }
+.source-close {
+  width: 28px; height: 28px;
+  border-radius: 4px;
+  color: var(--ink-quiet);
+  display: inline-grid; place-items: center;
+  cursor: pointer; border: 0; background: transparent;
+}
+.source-close:hover { background: var(--surface-hover); color: var(--ink); }
+.source-body {
+  flex: 1;
+  overflow: auto;
+  padding: 18px 22px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  white-space: pre-wrap;
+  word-break: break-word;
+  tab-size: 2;
+}
+.source-body .hdr-name { color: var(--accent); font-weight: 600; }
+.source-body .hdr-sep { color: var(--ink-quiet); opacity: 0.6; margin: 8px 0; border-top: 1px dashed var(--border-faint); }
+.source-body .boundary { color: var(--ink-quiet); }
+.source-body .mime-type { color: oklch(0.55 0.15 200); }
+
+/* =========================================================================
+   DIRECTION A — STATELY  (editorial, warm, serif subjects)
+   ========================================================================= */
+[data-direction="stately"] {
+  --font-ui: "Inter", system-ui, sans-serif;
+  --font-display: "Source Serif 4", "Fraunces", Georgia, serif;
+  --font-reader: "Source Serif 4", Georgia, serif;
+  --font-mono: "IBM Plex Mono", monospace;
+}
+[data-direction="stately"][data-theme="light"] {
+  --app-bg: oklch(0.98 0.005 85);
+  --chrome-bg: oklch(0.985 0.006 85);
+  --sidebar-bg: oklch(0.975 0.006 85);
+  --list-bg: oklch(0.99 0.004 85);
+  --reader-bg: oklch(0.995 0.003 85);
+  --pane-bg: oklch(0.99 0.004 85);
+  --surface: oklch(0.985 0.005 85);
+  --surface-hover: oklch(0.955 0.008 85);
+  --border: oklch(0.9 0.007 85);
+  --border-faint: oklch(0.94 0.005 85);
+  --ink: oklch(0.22 0.015 60);
+  --ink-soft: oklch(0.36 0.012 60);
+  --ink-quiet: oklch(0.55 0.01 60);
+  --accent-fg: oklch(0.99 0.003 60);
+  --accent-ink: var(--ink);
+}
+[data-direction="stately"][data-theme="dark"] {
+  --app-bg: oklch(0.17 0.008 60);
+  --chrome-bg: oklch(0.19 0.008 60);
+  --sidebar-bg: oklch(0.165 0.008 60);
+  --list-bg: oklch(0.185 0.008 60);
+  --reader-bg: oklch(0.2 0.007 60);
+  --pane-bg: oklch(0.19 0.008 60);
+  --surface: oklch(0.22 0.008 60);
+  --surface-hover: oklch(0.26 0.009 60);
+  --border: oklch(0.3 0.01 60);
+  --border-faint: oklch(0.25 0.009 60);
+  --ink: oklch(0.94 0.005 80);
+  --ink-soft: oklch(0.8 0.006 80);
+  --ink-quiet: oklch(0.6 0.008 60);
+  --accent-fg: oklch(0.15 0.008 60);
+  --accent-ink: var(--ink);
+}
+
+/* =========================================================================
+   DIRECTION B — WORKBENCH  (power tool, cool neutrals, dense-friendly)
+   ========================================================================= */
+[data-direction="workbench"] {
+  --font-ui: "Inter", "Geist", system-ui, sans-serif;
+  --font-display: "Inter", "Geist", system-ui, sans-serif;
+  --font-reader: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "IBM Plex Mono", monospace;
+}
+[data-direction="workbench"] .msg-subject { letter-spacing: -0.025em; font-weight: 700; }
+[data-direction="workbench"][data-theme="light"] {
+  --app-bg: oklch(0.985 0.003 250);
+  --chrome-bg: oklch(1 0 0);
+  --sidebar-bg: oklch(0.985 0.003 250);
+  --list-bg: oklch(1 0 0);
+  --reader-bg: oklch(1 0 0);
+  --pane-bg: oklch(1 0 0);
+  --surface: oklch(0.99 0.003 250);
+  --surface-hover: oklch(0.965 0.005 250);
+  --border: oklch(0.91 0.006 250);
+  --border-faint: oklch(0.95 0.005 250);
+  --ink: oklch(0.18 0.015 250);
+  --ink-soft: oklch(0.32 0.012 250);
+  --ink-quiet: oklch(0.55 0.01 250);
+  --accent-fg: oklch(0.99 0 0);
+  --accent-ink: oklch(0.2 0.015 250);
+}
+[data-direction="workbench"][data-theme="dark"] {
+  --app-bg: oklch(0.16 0.01 250);
+  --chrome-bg: oklch(0.19 0.01 250);
+  --sidebar-bg: oklch(0.17 0.01 250);
+  --list-bg: oklch(0.195 0.009 250);
+  --reader-bg: oklch(0.21 0.008 250);
+  --pane-bg: oklch(0.195 0.009 250);
+  --surface: oklch(0.23 0.01 250);
+  --surface-hover: oklch(0.27 0.011 250);
+  --border: oklch(0.3 0.012 250);
+  --border-faint: oklch(0.24 0.01 250);
+  --ink: oklch(0.96 0.003 250);
+  --ink-soft: oklch(0.82 0.005 250);
+  --ink-quiet: oklch(0.6 0.008 250);
+  --accent-fg: oklch(0.15 0.01 250);
+  --accent-ink: var(--ink);
+}
+
+/* =========================================================================
+   DIRECTION C — QUIET MONO  (restrained take on the current oxblood DNA)
+   ========================================================================= */
+[data-direction="quietmono"] {
+  --font-ui: "Inter", system-ui, sans-serif;
+  --font-display: "Inter", system-ui, sans-serif;
+  --font-reader: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "IBM Plex Mono", monospace;
+}
+[data-direction="quietmono"] .row-from { font-family: var(--font-mono); font-size: 12px; letter-spacing: -0.01em; }
+[data-direction="quietmono"] .row-date { font-family: var(--font-mono); }
+[data-direction="quietmono"] .folder-count { font-family: var(--font-mono); }
+[data-direction="quietmono"] .msg-from .email { font-family: var(--font-mono); font-size: 12px; }
+[data-direction="quietmono"] .msg-date { font-family: var(--font-mono); }
+[data-direction="quietmono"] .list-meta { font-family: var(--font-mono); }
+[data-direction="quietmono"] .msg-subject { font-weight: 600; letter-spacing: -0.02em; }
+[data-direction="quietmono"][data-theme="light"] {
+  --app-bg: oklch(0.975 0.002 40);
+  --chrome-bg: oklch(0.99 0.002 40);
+  --sidebar-bg: oklch(0.975 0.003 40);
+  --list-bg: oklch(0.995 0.002 40);
+  --reader-bg: oklch(1 0 0);
+  --pane-bg: oklch(0.995 0.002 40);
+  --surface: oklch(0.985 0.003 40);
+  --surface-hover: oklch(0.955 0.005 40);
+  --border: oklch(0.9 0.005 40);
+  --border-faint: oklch(0.945 0.004 40);
+  --ink: oklch(0.2 0.01 40);
+  --ink-soft: oklch(0.35 0.008 40);
+  --ink-quiet: oklch(0.55 0.006 40);
+  --accent-fg: oklch(0.99 0.002 40);
+  --accent-ink: var(--ink);
+}
+[data-direction="quietmono"][data-theme="dark"] {
+  --app-bg: oklch(0.16 0.005 30);
+  --chrome-bg: oklch(0.18 0.005 30);
+  --sidebar-bg: oklch(0.17 0.005 30);
+  --list-bg: oklch(0.19 0.005 30);
+  --reader-bg: oklch(0.205 0.005 30);
+  --pane-bg: oklch(0.19 0.005 30);
+  --surface: oklch(0.22 0.007 30);
+  --surface-hover: oklch(0.26 0.008 30);
+  --border: oklch(0.3 0.008 30);
+  --border-faint: oklch(0.24 0.007 30);
+  --ink: oklch(0.95 0.003 60);
+  --ink-soft: oklch(0.82 0.005 60);
+  --ink-quiet: oklch(0.6 0.006 40);
+  --accent-fg: oklch(0.15 0.005 30);
+  --accent-ink: var(--ink);
+}
+
+/* =========================================================================
+   Accent palette (tweakable)
+   ========================================================================= */
+[data-accent="ink"]     { --accent: oklch(0.25 0.03 250); --accent-soft: color-mix(in oklch, oklch(0.25 0.03 250) 10%, transparent); }
+[data-accent="oxblood"] { --accent: oklch(0.42 0.12 25);  --accent-soft: color-mix(in oklch, oklch(0.42 0.12 25) 10%, transparent); }
+[data-accent="forest"]  { --accent: oklch(0.45 0.09 150); --accent-soft: color-mix(in oklch, oklch(0.45 0.09 150) 10%, transparent); }
+[data-accent="azure"]   { --accent: oklch(0.52 0.12 250); --accent-soft: color-mix(in oklch, oklch(0.52 0.12 250) 10%, transparent); }
+[data-accent="amber"]   { --accent: oklch(0.55 0.13 70);  --accent-soft: color-mix(in oklch, oklch(0.55 0.13 70) 10%, transparent); }
+[data-accent="plum"]    { --accent: oklch(0.45 0.12 330); --accent-soft: color-mix(in oklch, oklch(0.45 0.12 330) 10%, transparent); }
+
+[data-theme="dark"][data-accent="ink"]     { --accent: oklch(0.78 0.04 250); --accent-soft: color-mix(in oklch, oklch(0.78 0.04 250) 15%, transparent); }
+[data-theme="dark"][data-accent="oxblood"] { --accent: oklch(0.72 0.13 25);  --accent-soft: color-mix(in oklch, oklch(0.72 0.13 25) 15%, transparent); }
+[data-theme="dark"][data-accent="forest"]  { --accent: oklch(0.75 0.11 150); --accent-soft: color-mix(in oklch, oklch(0.75 0.11 150) 15%, transparent); }
+[data-theme="dark"][data-accent="azure"]   { --accent: oklch(0.78 0.12 250); --accent-soft: color-mix(in oklch, oklch(0.78 0.12 250) 15%, transparent); }
+[data-theme="dark"][data-accent="amber"]   { --accent: oklch(0.82 0.13 70);  --accent-soft: color-mix(in oklch, oklch(0.82 0.13 70) 15%, transparent); }
+[data-theme="dark"][data-accent="plum"]    { --accent: oklch(0.78 0.12 330); --accent-soft: color-mix(in oklch, oklch(0.78 0.12 330) 15%, transparent); }
+
+/* Swatches per account */
+.account-item[data-swatch="--accent-1"] { --swatch: oklch(0.52 0.12 250); }
+.account-item[data-swatch="--accent-2"] { --swatch: oklch(0.55 0.13 70); }
+.account-item[data-swatch="--accent-3"] { --swatch: oklch(0.45 0.09 150); }
+.account-item[data-swatch="--accent-4"] { --swatch: oklch(0.45 0.12 330); }
+
+/* =========================================================================
+   Tweaks panel
+   ========================================================================= */
+.tweaks {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  width: 288px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px -10px rgba(0,0,0,0.25);
+  padding: 12px;
+  z-index: 1000;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+.tweaks.hidden { display: none; }
+.tweaks-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.tweaks-title { font-size: 12px; font-weight: 600; color: var(--ink); letter-spacing: -0.005em; }
+.tweaks-close { color: var(--ink-quiet); padding: 2px; border-radius: 4px; }
+.tweaks-close:hover { background: var(--surface-hover); color: var(--ink); }
+
+.tweak-group { margin-bottom: 12px; }
+.tweak-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-quiet);
+  margin-bottom: 6px;
+  display: block;
+}
+.segment {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  background: var(--chrome-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px;
+  gap: 1px;
+}
+.segment button {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 5px 4px;
+  border-radius: 4px;
+  color: var(--ink-soft);
+}
+.segment button.active { background: var(--accent); color: var(--accent-fg); }
+.segment button:not(.active):hover { background: var(--surface-hover); }
+
+.accent-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+.accent-swatch {
+  aspect-ratio: 1;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  position: relative;
+}
+.accent-swatch.active { outline: 2px solid var(--ink); outline-offset: 2px; }
+.accent-swatch[data-c="ink"]     { background: oklch(0.25 0.03 250); }
+.accent-swatch[data-c="oxblood"] { background: oklch(0.42 0.12 25); }
+.accent-swatch[data-c="forest"]  { background: oklch(0.45 0.09 150); }
+.accent-swatch[data-c="azure"]   { background: oklch(0.52 0.12 250); }
+.accent-swatch[data-c="amber"]   { background: oklch(0.55 0.13 70); }
+.accent-swatch[data-c="plum"]    { background: oklch(0.45 0.12 330); }
+
+.toggle-pill {
+  position: fixed;
+  right: 16px; bottom: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  box-shadow: 0 4px 12px -4px rgba(0,0,0,0.15);
+  z-index: 999;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.toggle-pill:hover { background: var(--surface-hover); color: var(--ink); }
+
+/* =========================================================================
+   Annotation banner — explains the setup, non-intrusive
+   ========================================================================= */
+.note {
+  position: fixed;
+  left: 16px; bottom: 16px;
+  max-width: 340px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--ink-quiet);
+  line-height: 1.5;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  z-index: 999;
+}
+.note strong { color: var(--ink); font-weight: 600; }
+.note.hidden { display: none; }
+
+/* =========================================================================
+   COMPOSE — modal window
+   ========================================================================= */
+.compose-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 24px 24px;
+}
+.compose-window {
+  width: 100%;
+  max-width: 680px;
+  background: var(--reader-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px 10px 0 0;
+  box-shadow: 0 -18px 60px -20px rgba(0,0,0,0.35), 0 -2px 8px rgba(0,0,0,0.12);
+  display: flex;
+  flex-direction: column;
+  max-height: 78vh;
+  overflow: hidden;
+  animation: composeRise 180ms ease-out;
+}
+@keyframes composeRise {
+  from { transform: translateY(24px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.compose-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-faint);
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--surface);
+}
+.compose-title button {
+  width: 26px; height: 26px;
+  border-radius: 4px;
+  display: inline-grid; place-items: center;
+  color: var(--ink-quiet);
+  border: 0; background: transparent; cursor: pointer;
+}
+.compose-title button:hover { background: var(--surface-hover); color: var(--ink); }
+
+.compose-headers {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid var(--border-faint);
+}
+.compose-row {
+  display: grid;
+  grid-template-columns: 68px 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 16px;
+  min-height: 36px;
+  border-bottom: 1px solid var(--border-faint);
+}
+.compose-row:last-child { border-bottom: 0; }
+.compose-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-quiet);
+}
+.compose-input {
+  width: 100%;
+  height: 30px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--ink);
+  outline: none;
+  padding: 0;
+}
+.compose-input.mono { font-family: var(--font-mono); font-size: 13px; }
+.compose-input::placeholder { color: var(--ink-quiet); }
+
+.compose-body {
+  flex: 1;
+  min-height: 240px;
+  padding: 18px 18px 14px;
+  overflow: auto;
+  font-family: var(--font-reader);
+  font-size: 15px;
+  color: var(--ink);
+  line-height: 1.6;
+}
+.compose-body-placeholder {
+  margin: 0;
+  color: var(--ink-quiet);
+  font-style: italic;
+}
+
+.compose-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border-faint);
+  background: var(--surface);
+}
+
+/* ----- From field (dropdown) ----- */
+.from-field {
+  position: relative;
+  width: 100%;
+}
+.from-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 8px 0 10px;
+  border-radius: 5px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: transparent;
+}
+.from-trigger:hover { background: var(--surface-hover); }
+.from-trigger.open {
+  background: var(--surface);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  padding: 0 8px;
+}
+.from-trigger .icon { color: var(--ink-quiet); margin-left: auto; }
+.from-swatch {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px var(--border);
+}
+.from-address {
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  flex: 1;
+}
+.from-search {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--ink);
+  outline: none;
+  min-width: 0;
+}
+.from-search::placeholder { color: var(--ink-quiet); }
+
+.from-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 10;
+  max-height: 420px;
+  overflow: auto;
+  background: var(--reader-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 14px 40px -10px rgba(0,0,0,0.3), 0 2px 6px rgba(0,0,0,0.08);
+  padding: 6px;
+}
+.from-section { margin-bottom: 6px; }
+.from-section:last-child { margin-bottom: 0; }
+.from-section-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 8px 8px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-quiet);
+}
+.from-section-count {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-quiet);
+  font-weight: 500;
+}
+.from-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 8px;
+  border-radius: 4px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+.from-option:hover { background: var(--surface-hover); }
+.from-option-swatch {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--ink-quiet);
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px var(--border);
+}
+.from-option-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.from-option-addr {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.from-option-note {
+  font-size: 11px;
+  color: var(--ink-quiet);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.from-option-star {
+  width: 22px; height: 22px;
+  border-radius: 3px;
+  display: inline-grid; place-items: center;
+  color: var(--ink-quiet);
+  opacity: 0;
+  transition: opacity 80ms;
+  cursor: pointer;
+}
+.from-option:hover .from-option-star { opacity: 0.8; }
+.from-option-star.on { opacity: 1; color: var(--accent); }
+.from-option-star:hover { background: var(--surface); color: var(--ink); }
+.from-option mark {
+  background: var(--accent-soft);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+.from-hint {
+  padding: 8px 10px;
+  font-size: 11px;
+  color: var(--ink-quiet);
+  font-style: italic;
+}
+.from-empty {
+  padding: 14px 10px;
+  font-size: 12px;
+  color: var(--ink-quiet);
+  text-align: center;
+}
+.from-create-cta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 10px;
+  margin-top: 6px;
+  border-top: 1px solid var(--border-faint);
+  background: transparent;
+  border-left: 0; border-right: 0; border-bottom: 0;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+.from-create-cta:hover { background: var(--accent-soft); }
+.from-create-cta .plus {
+  width: 22px; height: 22px;
+  border-radius: 4px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-weight: 700;
+  display: inline-grid; place-items: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.from-create-cta .create-label {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+}
+.from-create-cta .create-label strong {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.from-create-cta .create-hint {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-quiet);
+}
+.from-create-cta .icon { color: var(--ink-quiet); }
+
+/* ----- Create address form (inside from-menu) ----- */
+.create-form {
+  padding: 10px 10px 12px;
+}
+.create-form h4 {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-quiet);
+  margin: 0 0 10px;
+}
+.create-form .cf-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 8px;
+  align-items: center;
+}
+.create-form input, .create-form select {
+  width: 100%;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  outline: none;
+}
+.create-form input:focus, .create-form select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+.create-form input.invalid { border-color: oklch(0.55 0.18 25); }
+.create-form .cf-preview {
+  padding: 8px 10px;
+  margin: 8px 0 10px;
+  background: var(--accent-soft);
+  border: 1px solid var(--border-faint);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink);
+  word-break: break-all;
+}
+.create-form .cf-preview.muted { color: var(--ink-quiet); background: transparent; font-style: italic; }
+.create-form .cf-footer {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" data-presets="react">
+
+// ==================== data.jsx ====================
+/* Seeded fake envelope data matching the real shape from Envelope.jsx:
+   { id, from: [], to: [], cc: [], date, subject, flags, struct, priority }
+   flags include "\\Seen", "\\Flagged", "\\Answered"; struct[1] === "mixed" => attachment
+*/
+
+const FOLDERS_TREE = [
+  { id: 'INBOX',            name: 'Inbox',              count: 42, kind: 'inbox',   system: true },
+  { id: 'Drafts',           name: 'Drafts',             count: 3,  kind: 'drafts',  system: true },
+  { id: 'Sent Messages',    name: 'Sent',               count: 0,  kind: 'sent',    system: true },
+  { id: 'Archive',          name: 'Archive',            count: 0,  kind: 'archive', system: true },
+  { id: 'Deleted Messages', name: 'Trash',              count: 14, kind: 'trash',   system: true },
+  { id: 'Junk',             name: 'Junk',               count: 7,  kind: 'junk',    system: true },
+];
+
+const FOLDERS_USER = [
+  { id: 'Receipts',         name: 'Receipts',           count: 132, kind: 'folder' },
+  { id: 'Travel',           name: 'Travel',             count: 28,  kind: 'folder' },
+  { id: 'Newsletters',      name: 'Newsletters',        count: 412, kind: 'folder' },
+  { id: 'Work.Cabalmail',   name: 'Cabalmail',          count: 61,  kind: 'folder', parent: 'Work' },
+  { id: 'Work.AWS',         name: 'AWS',                count: 19,  kind: 'folder', parent: 'Work' },
+  { id: 'Work',             name: 'Work',               count: 0,   kind: 'folder', expandable: true, expanded: true },
+];
+
+// Addresses the user has created (all are send-enabled in Cabalmail).
+// Each address carries an optional `note` — user-added description for easier
+// retrieval when they have hundreds of addresses.
+const ADDRESSES = [
+  { address: 'me@inbox.cabalmail.com',       sub: 'inbox',    domain: 'cabalmail.com', color: '--accent-1', note: 'Primary — friends & family' },
+  { address: 'chris@main.cabalmail.com',     sub: 'main',     domain: 'cabalmail.com', color: '--accent-2', note: 'Work, day-to-day correspondence' },
+  { address: 'ops@team.cabalmail.com',       sub: 'team',     domain: 'cabalmail.com', color: '--accent-3', note: 'AWS, GitHub, infra alerts' },
+  { address: 'hello@public.cabalmail.com',   sub: 'public',   domain: 'cabalmail.com', color: '--accent-4', note: 'On my website, business card' },
+];
+
+// Registered domains (would come from the `domains` prop in the real app)
+const DOMAINS = ['cabalmail.com', 'cabal.email', 'chriscarr.me'];
+
+// A realistic long tail of per-service addresses — in the real product this is
+// hundreds of rows from the addresses table. Each carries a user-authored note
+// for easier retrieval (e.g. "florist down the street").
+const RECEIVE_ONLY = (() => {
+  const services = [
+    'github','linkedin','stripe','aws','figma','vercel','cloudflare','render',
+    'netlify','supabase','1password','dropbox','notion','slack','discord',
+    'zoom','twilio','sentry','datadog','pagerduty','segment','mixpanel',
+    'newsletter-hn','newsletter-tldr','newsletter-mit','substack-patio11',
+    'substack-stratechery','substack-matt-levine','delta','united','marriott',
+    'hilton','airbnb','uber','lyft','doordash','instacart','costco','amazon',
+    'amex','chase','vanguard','fidelity','irs','dmv','utility-water','utility-power',
+    'utility-gas','comcast','verizon','tmobile','att','spotify','netflix','hulu',
+    'disney','apple-id','google-workspace','microsoft','adobe','jetbrains','docker',
+    'npm','pypi','stackoverflow','quora','reddit','hn-alerts','craigslist','zillow',
+    'redfin','kayak','expedia','tripadvisor','yelp','opentable','doctolib',
+    'mychart','cvs','walgreens','doordash-work','instacart-work','receipts-2025',
+    'receipts-2024','taxes-2025','taxes-2024','school-parent-portal','pta',
+    'hoa','landlord','insurance-auto','insurance-home','insurance-health',
+  ];
+  // Curated notes — mirrors the kinds of reminders a power user actually writes.
+  const NOTES = {
+    'github': 'Code alerts, PR reviews',
+    'linkedin': 'Recruiter spam — filter aggressively',
+    'stripe': 'Billing for the consultancy',
+    'aws': 'Root account on the personal org',
+    'figma': 'Design work — team seat',
+    'vercel': 'Side-project deploys',
+    'cloudflare': 'DNS and domain renewals',
+    'render': 'Old deploys — consider retiring',
+    '1password': 'Password manager account',
+    'dropbox': 'Family photos backup',
+    'notion': 'Personal wiki',
+    'slack': 'Alerts from 4 workspaces',
+    'twilio': 'SMS verification inbox',
+    'sentry': 'On-call error alerts',
+    'pagerduty': 'Incident escalation',
+    'newsletter-hn': 'Hacker Newsletter — weekly',
+    'newsletter-tldr': 'TLDR daily digest',
+    'newsletter-mit': 'MIT Tech Review digest',
+    'substack-patio11': 'Bits about Money',
+    'substack-stratechery': 'Ben Thompson — paid',
+    'substack-matt-levine': 'Money Stuff',
+    'delta': 'Flights — SkyMiles 2M',
+    'united': 'Flights — backup status',
+    'marriott': 'Hotels — Bonvoy Titanium',
+    'hilton': 'Hotels — Honors Gold',
+    'airbnb': 'Travel bookings',
+    'uber': 'Work rides',
+    'lyft': 'Personal rides',
+    'doordash': 'Home delivery',
+    'instacart': 'Groceries',
+    'costco': 'Membership renewal',
+    'amazon': 'Main shopping — beware receipts',
+    'amex': 'Platinum card statements',
+    'chase': 'Sapphire + mortgage',
+    'vanguard': 'Retirement — 401k',
+    'fidelity': 'Brokerage',
+    'irs': 'Tax correspondence — keep forever',
+    'dmv': 'Vehicle registration',
+    'utility-water': 'Water bill — autopay',
+    'utility-power': 'PG&E',
+    'utility-gas': 'Gas bill',
+    'comcast': 'Home internet — fighting with monthly',
+    'verizon': 'Phone — Pixel line',
+    'tmobile': 'Work phone',
+    'spotify': 'Family plan — Maya is admin',
+    'netflix': 'Shared with parents',
+    'hulu': 'Live TV — sports',
+    'disney': 'Disney+ — kids',
+    'apple-id': 'iCloud — primary',
+    'google-workspace': 'Legacy workspace — migrating',
+    'adobe': 'Photography plan',
+    'jetbrains': 'All Products Pack',
+    'hn-alerts': 'HN front page keywords',
+    'zillow': 'House hunting saved searches',
+    'redfin': 'Backup MLS alerts',
+    'kayak': 'Price watch — flights',
+    'opentable': 'Reservations',
+    'doctolib': 'Appointments — clinic',
+    'mychart': 'Primary care — Dr. Rivera',
+    'cvs': 'Prescription refills',
+    'receipts-2025': 'Tax-deductible receipts this year',
+    'receipts-2024': 'Filed, keep for 7 years',
+    'taxes-2025': 'CPA correspondence',
+    'taxes-2024': 'Closed return',
+    'school-parent-portal': 'Kid\u2019s school updates',
+    'pta': 'Parent Teacher Assn.',
+    'hoa': 'Homeowners Assn. — meeting minutes',
+    'landlord': 'Rental property tenant',
+    'insurance-auto': 'Progressive — auto',
+    'insurance-home': 'State Farm — homeowners',
+    'insurance-health': 'Blue Shield',
+  };
+  return services.map((s) => ({
+    address: `${s}@svc.cabalmail.com`,
+    sub: 'svc',
+    domain: 'cabalmail.com',
+    note: NOTES[s] || s.replace(/-/g, ' '),
+    createdDaysAgo: Math.floor(Math.random() * 900),
+  }));
+})();
+
+// Envelope-level "account" references on emails still use the send-enabled
+// identity — this is the From they were addressed to when the email is ours,
+// or the To when the email landed in our account. Keep the old single-part
+// strings in ENVELOPES so nothing breaks; ADDRESSES is the authoritative set.
+
+// helpers for dates
+function d(offsetHours, offsetMinutes = 0) {
+  const now = new Date('2026-04-17T14:22:00');
+  now.setHours(now.getHours() - offsetHours);
+  now.setMinutes(now.getMinutes() - offsetMinutes);
+  return now.toISOString();
+}
+
+const ENVELOPES = [
+  {
+    id: 10042,
+    from: ['AWS Billing <no-reply@aws.amazon.com>'],
+    to: ['ops@cabalmail.com'], cc: [],
+    date: d(0, 18),
+    subject: 'Your AWS Invoice [Account 041729382] is available',
+    flags: [], struct: ['text', 'mixed'], priority: '',
+    preview: 'Your March 2026 invoice totaling $847.22 is available. Payment will be automatically charged to your card on file on April 22. View itemized breakdown →',
+    unread: true, attachment: true, account: 'ops@cabalmail.com',
+  },
+  {
+    id: 10041,
+    from: ['Maya Okonkwo <maya@steadystate.so>'],
+    to: ['chris@cabalmail.com'], cc: ['j.rivera@steadystate.so'],
+    date: d(1, 12),
+    subject: 'Re: Q2 roadmap — pushback on the migration timeline',
+    flags: [], struct: ['text', 'plain'], priority: 'important',
+    preview: 'Hey Chris — talked to Jordan and we\'re both a bit worried about compressing the Cognito migration into the May sprint. Could we walk through the risks on Thursday? I put a few notes in the doc.',
+    unread: true, account: 'chris@cabalmail.com',
+  },
+  {
+    id: 10040,
+    from: ['GitHub <notifications@github.com>'],
+    to: ['me@cabalmail.com'], cc: [],
+    date: d(2),
+    subject: '[cabalmail/cabal-infra] PR #284: Refactor IMAP client helper (stage)',
+    flags: [], struct: ['text', 'plain'], priority: '',
+    preview: 'darth-sipid opened a pull request. 14 files changed, +612 −498. CI: all checks passed. Reviewers requested: @cabalmail-team',
+    unread: true, account: 'me@cabalmail.com',
+  },
+  {
+    id: 10039,
+    from: ['Stripe <receipts+acct_1@stripe.com>'],
+    to: ['ops@cabalmail.com'], cc: [],
+    date: d(3, 40),
+    subject: 'Receipt from Cabalmail Hosting — $29.00',
+    flags: ['\\Seen'], struct: ['text', 'mixed'], priority: '',
+    preview: 'Thanks for using Cabalmail. Your April subscription has been processed. Receipt attached as PDF.',
+    attachment: true, account: 'ops@cabalmail.com',
+  },
+  {
+    id: 10038,
+    from: ['Figma <updates@figma.com>'],
+    to: ['hello@cabalmail.com'], cc: [],
+    date: d(4),
+    subject: 'Maya commented on "Inbox v3 — exploration"',
+    flags: [], struct: ['text', 'plain'], priority: '',
+    preview: '"Love the serif subjects but we should probably test with longer threads — some of our threads get to 40+ messages and the current spacing feels tight."',
+    unread: true, account: 'hello@cabalmail.com',
+  },
+  {
+    id: 10037,
+    from: ['Delta Air Lines <DeltaAirLines@e.delta.com>'],
+    to: ['me@cabalmail.com'], cc: [],
+    date: d(5, 10),
+    subject: 'Your flight DL 2041 to SFO on May 3 — check-in opens tomorrow',
+    flags: ['\\Seen'], struct: ['text', 'plain'], priority: '',
+    preview: 'Online check-in opens 24 hours before departure. Seat 14C. Boarding group 3. Forecast: 62°F, partly cloudy.',
+    account: 'me@cabalmail.com',
+  },
+  {
+    id: 10036,
+    from: ['Terraform Cloud <notify@tfe.io>'],
+    to: ['ops@cabalmail.com'], cc: [],
+    date: d(6),
+    subject: '✓ Apply succeeded — prod/infra (run-4fjK2Xq9)',
+    flags: ['\\Seen'], struct: ['text', 'plain'], priority: '',
+    preview: '12 to add, 3 to change, 0 to destroy. Triggered by darth-sipid via GitHub push to main. Duration: 4m 17s.',
+    account: 'ops@cabalmail.com',
+  },
+  {
+    id: 10035,
+    from: ['Jordan Rivera <j.rivera@steadystate.so>'],
+    to: ['chris@cabalmail.com'], cc: ['maya@steadystate.so'],
+    date: d(8),
+    subject: 'Thursday sync — agenda draft',
+    flags: ['\\Seen', '\\Answered'], struct: ['text', 'plain'], priority: '',
+    preview: 'I pushed a rough agenda. Biggest items: (1) migration risk, (2) on-call rotation for May, (3) the visionOS client — do we actually need it or is this premature?',
+    account: 'chris@cabalmail.com',
+  },
+  {
+    id: 10034,
+    from: ['Hacker News Daily <hn@hndigest.com>'],
+    to: ['me@cabalmail.com'], cc: [],
+    date: d(9),
+    subject: 'Top 10 stories for April 16',
+    flags: ['\\Seen'], struct: ['text', 'plain'], priority: '',
+    preview: 'Show HN: I built a self-hosted email system on AWS · Why Dovecot still matters · The case against conversation view · ...',
+    account: 'me@cabalmail.com',
+  },
+  {
+    id: 10033,
+    from: ['Let\'s Encrypt <expiry@letsencrypt.org>'],
+    to: ['ops@cabalmail.com'], cc: [],
+    date: d(11),
+    subject: 'Your certificate for cabalmail.com expires in 19 days',
+    flags: [], struct: ['text', 'plain'], priority: 'important',
+    preview: 'Renewal reminder: Hello. Your certificate(s) will expire in 19 days. You may need to renew manually or check your automated renewal process.',
+    unread: true, account: 'ops@cabalmail.com',
+  },
+  {
+    id: 10032,
+    from: ['Patagonia <service@patagonia.com>'],
+    to: ['me@cabalmail.com'], cc: [],
+    date: d(24),
+    subject: 'Your order has shipped',
+    flags: ['\\Seen'], struct: ['text', 'mixed'], priority: '',
+    preview: 'Order #PT-2840193 is on its way. Expected delivery: April 22. Tracking: 1Z ... inside.',
+    attachment: true, account: 'me@cabalmail.com',
+  },
+  {
+    id: 10031,
+    from: ['Priya Shah <priya@priyashah.design>'],
+    to: ['hello@cabalmail.com'], cc: [],
+    date: d(26),
+    subject: 'Quick intro — I work on Mail for macOS',
+    flags: ['\\Seen', '\\Flagged'], struct: ['text', 'plain'], priority: '',
+    preview: 'Hi! Mutual friend Sam suggested I reach out. I\'ve been following the Cabalmail progress and would love to compare notes on the reader pane — we went through a similar redesign in Q4.',
+    account: 'hello@cabalmail.com',
+  },
+  {
+    id: 10030,
+    from: ['Sentry <noreply@sentry.io>'],
+    to: ['ops@cabalmail.com'], cc: [],
+    date: d(30),
+    subject: '[cabalmail-react] New issue: TypeError in Envelopes.jsx',
+    flags: ['\\Seen'], struct: ['text', 'plain'], priority: '',
+    preview: 'TypeError: Cannot read properties of undefined (reading "flags") — seen 3 times in the last hour, all from Safari 17.4.',
+    account: 'ops@cabalmail.com',
+  },
+  {
+    id: 10029,
+    from: ['The Browser Company <newsletter@thebrowser.company>'],
+    to: ['me@cabalmail.com'], cc: [],
+    date: d(36),
+    subject: 'This week in Arc — multiple spaces, tidier sidebar',
+    flags: ['\\Seen'], struct: ['text', 'plain'], priority: '',
+    preview: 'We shipped multiple spaces for teams, a new command bar interaction, and fixes for the long-standing pinned-tab bug.',
+    account: 'me@cabalmail.com',
+  },
+  {
+    id: 10028,
+    from: ['Audrey Wen <awen@foundationml.com>'],
+    to: ['chris@cabalmail.com'], cc: [],
+    date: d(48),
+    subject: 'Following up on our coffee',
+    flags: ['\\Seen', '\\Answered'], struct: ['text', 'plain'], priority: '',
+    preview: 'Great chatting last week. Here are the two folks I mentioned — both on the infra team, both very sharp on distributed systems.',
+    account: 'chris@cabalmail.com',
+  },
+  {
+    id: 10027,
+    from: ['1Password <notify@1password.com>'],
+    to: ['me@cabalmail.com'], cc: [],
+    date: d(60),
+    subject: 'Your monthly security report is ready',
+    flags: ['\\Seen'], struct: ['text', 'plain'], priority: '',
+    preview: '3 items need your attention: 2 reused passwords, 1 compromised password from a recent data breach.',
+    account: 'me@cabalmail.com',
+  },
+  {
+    id: 10026,
+    from: ['Substack <no-reply@substack.com>'],
+    to: ['me@cabalmail.com'], cc: [],
+    date: d(72),
+    subject: 'New from Robin Sloan: "Notes on post-search"',
+    flags: ['\\Seen'], struct: ['text', 'plain'], priority: '',
+    preview: 'What happens to the open web when everyone\'s search engine is also their autocomplete? A long read for a Sunday morning.',
+    account: 'me@cabalmail.com',
+  },
+  {
+    id: 10025,
+    from: ['DigitalOcean <billing@digitalocean.com>'],
+    to: ['ops@cabalmail.com'], cc: [],
+    date: d(96),
+    subject: 'Invoice #382041 — $42.00',
+    flags: ['\\Seen'], struct: ['text', 'mixed'], priority: '',
+    preview: 'Your April invoice has been charged. Droplets: 3. Backups: enabled. Bandwidth: 847 GB of 3000 GB used.',
+    attachment: true, account: 'ops@cabalmail.com',
+  },
+  {
+    id: 10024,
+    from: ['Wirecutter <wirecutter@nytimes.com>'],
+    to: ['me@cabalmail.com'], cc: [],
+    date: d(120),
+    subject: 'The best mechanical keyboards of 2026',
+    flags: ['\\Seen'], struct: ['text', 'plain'], priority: '',
+    preview: 'We tested 47 keyboards over four months. Our top pick for most people is still the Keychron Q1 Pro, but our pick for programmers changed this year.',
+    account: 'me@cabalmail.com',
+  },
+];
+
+// ======================================================================
+// Selected-message bodies for the reader pane.
+//
+// We model two messages with distinct MIME profiles so the reader can
+// demonstrate the theming strategy:
+//
+//   - SAMPLE_REPLY  is text/plain   -> renders inline, inherits app theme.
+//   - SAMPLE_NEWSLETTER is text/html -> renders on a light "island" card,
+//                                       regardless of app theme, because
+//                                       the sender's styling assumes light.
+//
+// The user can flip between them from the Tweaks panel.
+// ======================================================================
+
+const SAMPLE_REPLY = {
+  mimeType: 'text/plain',
+  paragraphs: [
+    "Hey Chris —",
+    "Talked to Jordan yesterday and we're both a little worried about compressing the Cognito migration into the May sprint. A few things giving us pause:",
+    "1. The post-confirmation trigger is doing more work than the docs suggest and we haven't fully mapped the failure modes. If it fails mid-migration, new sign-ups get stranded in an unverified state, and our current retry logic doesn't catch that.",
+    "2. The IMAP master-user flow is sharing SSM parameters with the SMTP-out submission container, which means any credential rotation during the migration window needs coordinated deploys across both ECS services.",
+    "3. The changelog note about \"master user password rotation on every deploy\" — is that still the plan? If so we need to be very careful about ordering.",
+    "Could we walk through the risks on Thursday? I put a few notes in the migration doc, and Jordan is going to take a first pass at the rollback playbook.",
+    "Not trying to derail anything — I do think May is achievable, just want to make sure we're not setting ourselves up for an emergency all-hands-on-deck on the 17th.",
+    "Thanks,\nMaya",
+  ],
+  attachments: [
+    { name: 'cognito-migration-risks.md',    size: 11_842,   mime: 'text/markdown' },
+    { name: 'rollback-playbook-v1.pdf',      size: 284_193,  mime: 'application/pdf' },
+    { name: 'ssm-param-audit-2026-04.csv',   size: 4_318,    mime: 'text/csv' },
+  ],
+};
+
+// A realistic heavy-styled HTML newsletter. Baked-in light background,
+// hardcoded dark text, header image. Represents the class of email that
+// breaks if you naively apply a dark theme.
+const SAMPLE_NEWSLETTER = {
+  mimeType: 'text/html',
+  // Rendered as a real HTML string so the island card feels authentic.
+  html: `
+<div style="background:#ffffff;color:#1a1a1a;font-family:Georgia,'Times New Roman',serif;max-width:560px;margin:0 auto;">
+  <div style="background:#0b0b0b;padding:28px 32px;text-align:center;">
+    <img style="width:140px;height:auto;display:inline-block;" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 100' fill='%23ffffff' shape-rendering='crispEdges'><path d='M0 0h45v1h-45zM54 0h146v1h-146zM0 1h38v1h-38zM60 1h19v1h-19zM80 1h116v1h-116zM197 1h3v1h-3zM0 2h35v1h-35zM64 2h15v1h-15zM82 2h113v1h-113zM197 2h3v1h-3zM0 3h32v1h-32zM67 3h12v1h-12zM83 3h111v1h-111zM197 3h3v1h-3zM0 4h29v1h-29zM69 4h10v1h-10zM84 4h108v1h-108zM197 4h3v1h-3zM0 5h27v1h-27zM71 5h8v1h-8zM85 5h106v1h-106zM197 5h3v1h-3zM0 6h25v1h-25zM73 6h6v1h-6zM87 6h103v1h-103zM197 6h3v1h-3zM0 7h24v1h-24zM75 7h4v1h-4zM88 7h101v1h-101zM197 7h3v1h-3zM0 8h22v1h-22zM77 8h2v1h-2zM89 8h99v1h-99zM197 8h3v1h-3zM0 9h21v1h-21zM78 9h1v1h-1zM90 9h96v1h-96zM197 9h3v1h-3zM0 10h19v1h-19zM92 10h93v1h-93zM197 10h3v1h-3zM0 11h18v1h-18zM93 11h91v1h-91zM197 11h3v1h-3zM0 12h17v1h-17zM94 12h89v1h-89zM197 12h3v1h-3zM0 13h16v1h-16zM95 13h86v1h-86zM197 13h3v1h-3zM0 14h15v1h-15zM96 14h84v1h-84zM197 14h3v1h-3zM0 15h14v1h-14zM98 15h81v1h-81zM197 15h3v1h-3zM0 16h13v1h-13zM99 16h79v1h-79zM197 16h3v1h-3zM0 17h12v1h-12zM100 17h76v1h-76zM197 17h3v1h-3zM0 18h11v1h-11zM55 18h2v1h-2zM101 18h74v1h-74zM197 18h3v1h-3zM0 19h10v1h-10zM54 19h3v1h-3zM103 19h71v1h-71zM197 19h3v1h-3zM0 20h10v1h-10zM53 20h4v1h-4zM104 20h69v1h-69zM197 20h3v1h-3zM0 21h9v1h-9zM52 21h5v1h-5zM105 21h67v1h-67zM197 21h3v1h-3zM0 22h8v1h-8zM50 22h7v1h-7zM106 22h64v1h-64zM197 22h3v1h-3zM0 23h8v1h-8zM49 23h8v1h-8zM108 23h61v1h-61zM197 23h3v1h-3zM0 24h7v1h-7zM48 24h9v1h-9zM109 24h59v1h-59zM197 24h3v1h-3zM0 25h6v1h-6zM47 25h10v1h-10zM110 25h57v1h-57zM197 25h3v1h-3zM0 26h6v1h-6zM46 26h11v1h-11zM111 26h54v1h-54zM197 26h3v1h-3zM0 27h5v1h-5zM45 27h12v1h-12zM112 27h52v1h-52zM197 27h3v1h-3zM0 28h5v1h-5zM43 28h14v1h-14zM114 28h49v1h-49zM197 28h3v1h-3zM0 29h4v1h-4zM42 29h15v1h-15zM115 29h47v1h-47zM197 29h3v1h-3zM0 30h4v1h-4zM41 30h16v1h-16zM116 30h44v1h-44zM197 30h3v1h-3zM0 31h4v1h-4zM40 31h17v1h-17zM117 31h42v1h-42zM197 31h3v1h-3zM0 32h3v1h-3zM39 32h40v1h-40zM119 32h39v1h-39zM197 32h3v1h-3zM0 33h3v1h-3zM38 33h41v1h-41zM120 33h37v1h-37zM197 33h3v1h-3zM0 34h2v1h-2zM36 34h43v1h-43zM121 34h35v1h-35zM197 34h3v1h-3zM0 35h2v1h-2zM35 35h44v1h-44zM122 35h32v1h-32zM197 35h3v1h-3zM0 36h2v1h-2zM34 36h45v1h-45zM124 36h29v1h-29zM197 36h3v1h-3zM0 37h2v1h-2zM33 37h46v1h-46zM125 37h27v1h-27zM197 37h3v1h-3zM0 38h1v1h-1zM32 38h47v1h-47zM126 38h25v1h-25zM197 38h3v1h-3zM0 39h1v1h-1zM31 39h48v1h-48zM127 39h22v1h-22zM197 39h3v1h-3zM0 40h1v1h-1zM29 40h50v1h-50zM128 40h20v1h-20zM197 40h3v1h-3zM0 41h1v1h-1zM28 41h51v1h-51zM130 41h17v1h-17zM197 41h3v1h-3zM0 42h1v1h-1zM27 42h52v1h-52zM131 42h15v1h-15zM197 42h3v1h-3zM0 43h1v1h-1zM26 43h53v1h-53zM132 43h12v1h-12zM197 43h3v1h-3zM25 44h54v1h-54zM133 44h10v1h-10zM197 44h3v1h-3zM24 45h55v1h-55zM135 45h7v1h-7zM197 45h3v1h-3zM23 46h56v1h-56zM136 46h5v1h-5zM197 46h3v1h-3zM21 47h58v1h-58zM137 47h3v1h-3zM197 47h3v1h-3zM20 48h59v1h-59zM197 48h3v1h-3zM19 49h60v2h-60zM197 49h3v2h-3zM20 51h59v1h-59zM197 51h3v1h-3zM21 52h58v1h-58zM197 52h3v1h-3zM23 53h56v1h-56zM197 53h3v1h-3zM24 54h55v1h-55zM197 54h3v1h-3zM0 55h1v1h-1zM25 55h54v1h-54zM197 55h3v1h-3zM0 56h1v1h-1zM26 56h53v1h-53zM197 56h3v1h-3zM0 57h1v1h-1zM27 57h52v1h-52zM197 57h3v1h-3zM0 58h1v1h-1zM28 58h51v1h-51zM197 58h3v1h-3zM0 59h1v1h-1zM30 59h49v1h-49zM197 59h3v1h-3zM0 60h1v1h-1zM31 60h48v1h-48zM197 60h3v1h-3zM0 61h2v1h-2zM32 61h47v1h-47zM197 61h3v1h-3zM0 62h2v1h-2zM33 62h46v1h-46zM197 62h3v1h-3zM0 63h2v1h-2zM34 63h45v1h-45zM197 63h3v1h-3zM0 64h3v1h-3zM35 64h44v1h-44zM197 64h3v1h-3zM0 65h3v1h-3zM36 65h43v1h-43zM197 65h3v1h-3zM0 66h3v1h-3zM38 66h41v1h-41zM197 66h3v1h-3zM0 67h4v1h-4zM39 67h40v1h-40zM197 67h3v1h-3zM0 68h4v1h-4zM40 68h17v1h-17zM197 68h3v1h-3zM0 69h5v1h-5zM41 69h16v1h-16zM197 69h3v1h-3zM0 70h5v1h-5zM42 70h15v1h-15zM197 70h3v1h-3zM0 71h6v1h-6zM43 71h14v1h-14zM197 71h3v1h-3zM0 72h6v1h-6zM45 72h12v1h-12zM197 72h3v1h-3zM0 73h7v1h-7zM46 73h11v1h-11zM197 73h3v1h-3zM0 74h7v1h-7zM47 74h10v1h-10zM197 74h3v1h-3zM0 75h8v1h-8zM48 75h9v1h-9zM197 75h3v1h-3zM0 76h8v1h-8zM49 76h8v1h-8zM197 76h3v1h-3zM0 77h9v1h-9zM50 77h7v1h-7zM197 77h3v1h-3zM0 78h10v1h-10zM52 78h5v1h-5zM197 78h3v1h-3zM0 79h11v1h-11zM53 79h4v1h-4zM197 79h3v1h-3zM0 80h11v1h-11zM54 80h3v1h-3zM197 80h3v1h-3zM0 81h12v1h-12zM55 81h2v1h-2zM197 81h3v1h-3zM0 82h13v1h-13zM197 82h3v1h-3zM0 83h14v1h-14zM197 83h3v1h-3zM0 84h15v1h-15zM197 84h3v1h-3zM0 85h16v1h-16zM197 85h3v1h-3zM0 86h17v1h-17zM197 86h3v1h-3zM0 87h18v1h-18zM197 87h3v1h-3zM0 88h20v1h-20zM197 88h3v1h-3zM0 89h21v1h-21zM78 89h1v1h-1zM197 89h3v1h-3zM0 90h23v1h-23zM76 90h3v1h-3zM197 90h3v1h-3zM0 91h24v1h-24zM75 91h4v1h-4zM197 91h3v1h-3zM0 92h26v1h-26zM73 92h6v1h-6zM197 92h3v1h-3zM0 93h28v1h-28zM71 93h8v1h-8zM197 93h3v1h-3zM0 94h30v1h-30zM69 94h10v1h-10zM197 94h3v1h-3zM0 95h32v1h-32zM66 95h13v1h-13zM197 95h3v1h-3zM0 96h35v1h-35zM63 96h16v1h-16zM197 96h3v1h-3zM0 97h40v1h-40zM59 97h20v1h-20zM197 97h3v1h-3zM0 98h200v2h-200z'/></svg>" alt="Cabalmail" />
+    <div style="color:#e8e1cf;font-family:Helvetica,Arial,sans-serif;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;margin-top:10px;">Cabalmail Dispatch · Issue 47</div>
+  </div>
+
+  <div style="padding:32px 36px 8px;">
+    <div style="font-family:Helvetica,Arial,sans-serif;font-size:11px;color:#8a7f68;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:12px;">April 17, 2026</div>
+    <h1 style="font-size:30px;line-height:1.15;margin:0 0 8px;color:#111;font-weight:700;letter-spacing:-0.01em;">The quiet return of the subdomain address</h1>
+    <p style="font-size:15px;color:#6a6a6a;margin:0 0 22px;font-style:italic;line-height:1.5;">Why the best way to protect your inbox in 2026 might be the oldest trick in the book.</p>
+  </div>
+
+  <div style="padding:0 36px 24px;font-size:16px;line-height:1.65;color:#1a1a1a;">
+    <p style="margin:0 0 16px;">For most of the last decade, the standard advice for managing a noisy inbox has been some variation of &ldquo;use plus-addressing and better filters.&rdquo; It was never very good advice, and it's getting worse.</p>
+    <p style="margin:0 0 16px;">The problem is that <em>+tag</em> conventions are trivially stripped by any sender who doesn't want to honor them, and the list of senders who don't want to honor them grows every year. A properly-scoped subdomain address, by contrast, is indistinguishable from a separate account &mdash; because to the sending server, it is one.</p>
+
+    <blockquote style="margin:24px 0;padding:18px 22px;border-left:3px solid #c23a2d;background:#faf7f0;color:#2a2a2a;font-family:Georgia,serif;font-size:17px;line-height:1.55;font-style:italic;">
+      &ldquo;Every address you give out is a tiny wager. Subdomains turn that wager into a real bet &mdash; one you can actually close.&rdquo;
+    </blockquote>
+
+    <h2 style="font-family:Georgia,serif;font-size:20px;margin:26px 0 10px;color:#111;font-weight:700;">Three patterns worth stealing</h2>
+    <p style="margin:0 0 14px;">Over the last few months we've watched our heaviest users converge on a small set of patterns. None of them are novel, exactly, but seeing them combined is instructive.</p>
+
+    <ol style="margin:0 0 18px;padding-left:22px;">
+      <li style="margin-bottom:8px;"><strong style="color:#0b0b0b;">Per-relationship subdomains.</strong> <span style="color:#3a3a3a;">One per vendor, airline, landlord. Retire the subdomain; retire the relationship.</span></li>
+      <li style="margin-bottom:8px;"><strong style="color:#0b0b0b;">Time-boxed addresses.</strong> <span style="color:#3a3a3a;">Dated subdomains for one-shot receipts &mdash; <code style="background:#f0ead8;padding:1px 5px;border-radius:3px;font-size:13px;">taxes-2025.</code></span></li>
+      <li style="margin-bottom:8px;"><strong style="color:#0b0b0b;">Public-facing separation.</strong> <span style="color:#3a3a3a;">A single <code style="background:#f0ead8;padding:1px 5px;border-radius:3px;font-size:13px;">public.</code> subdomain for business cards, bylines, and GitHub.</span></li>
+    </ol>
+
+    <p style="margin:0 0 16px;">The thread across all three is a willingness to treat addresses as <em>disposable infrastructure</em> rather than a personal identifier &mdash; a willingness that ten years of Gmail training has made unusual.</p>
+
+    <div style="margin:28px 0;padding:20px 22px;background:#f5efe0;border:1px solid #e0d6b8;border-radius:4px;">
+      <div style="font-family:Helvetica,Arial,sans-serif;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#8a7f68;margin-bottom:8px;">From the archives</div>
+      <p style="margin:0;font-size:15px;color:#2a2a2a;line-height:1.5;">If you missed it last week: <a href="#" style="color:#c23a2d;text-decoration:underline;">&ldquo;Why we stopped offering aliases,&rdquo;</a> on the case against plus-addressing as a privacy primitive.</p>
+    </div>
+
+    <p style="margin:0 0 16px;">Until next week,</p>
+    <p style="margin:0 0 4px;color:#111;font-weight:600;">The Cabalmail team</p>
+  </div>
+
+  <div style="border-top:1px solid #e8e1cf;padding:20px 36px 28px;background:#faf7f0;color:#8a7f68;font-family:Helvetica,Arial,sans-serif;font-size:11px;line-height:1.6;text-align:center;">
+    You're receiving this because you subscribed at <span style="color:#6a6a6a;">cabalmail.com/dispatch</span>.<br/>
+    <a href="#" style="color:#8a7f68;text-decoration:underline;">Unsubscribe</a> &nbsp;·&nbsp; <a href="#" style="color:#8a7f68;text-decoration:underline;">Manage preferences</a> &nbsp;·&nbsp; <a href="#" style="color:#8a7f68;text-decoration:underline;">View in browser</a>
+  </div>
+</div>
+  `.trim(),
+  // Plain-text alternative (multipart/alternative). Rendered when the user flips
+  // the Rich/Plain toggle — a text-mode reader can see the same content without
+  // the sender's styling, which makes this a real defense: a hostile HTML part
+  // can't hide what the plaintext part discloses.
+  plainText: `CABALMAIL DISPATCH · Issue 47
+April 17, 2026
+
+THE QUIET RETURN OF THE SUBDOMAIN ADDRESS
+Why the best way to protect your inbox in 2026 might be the oldest trick
+in the book.
+
+
+For most of the last decade, the standard advice for managing a noisy
+inbox has been some variation of "use plus-addressing and better filters."
+It was never very good advice, and it's getting worse.
+
+The problem is that +tag conventions are trivially stripped by any sender
+who doesn't want to honor them, and the list of senders who don't want to
+honor them grows every year. A properly-scoped subdomain address, by
+contrast, is indistinguishable from a separate account — because to the
+sending server, it is one.
+
+  "Every address you give out is a tiny wager. Subdomains turn
+  that wager into a real bet — one you can actually close."
+
+THREE PATTERNS WORTH STEALING
+
+Over the last few months we've watched our heaviest users converge on a
+small set of patterns. None of them are novel, exactly, but seeing them
+combined is instructive.
+
+  1. Per-relationship subdomains. One per vendor, airline, landlord.
+     Retire the subdomain; retire the relationship.
+
+  2. Time-boxed addresses. Dated subdomains for one-shot receipts —
+     taxes-2025.
+
+  3. Public-facing separation. A single public. subdomain for business
+     cards, bylines, and GitHub.
+
+The thread across all three is a willingness to treat addresses as
+disposable infrastructure rather than a personal identifier — a willingness
+that ten years of Gmail training has made unusual.
+
+-- From the archives --
+If you missed it last week: "Why we stopped offering aliases," on the case
+against plus-addressing as a privacy primitive.
+  https://cabalmail.com/dispatch/46
+
+Until next week,
+The Cabalmail team
+
+
+--
+You're receiving this because you subscribed at cabalmail.com/dispatch.
+Unsubscribe:       https://cabalmail.com/u/9f3a1c
+Manage preferences: https://cabalmail.com/prefs
+View in browser:    https://cabalmail.com/dispatch/47`,
+};
+
+// Kept for back-compat with existing imports.
+const SELECTED_MESSAGE_ID = 10041;
+const SELECTED_BODY = SAMPLE_REPLY;
+
+Object.assign(window, {
+  FOLDERS_TREE, FOLDERS_USER, ADDRESSES, DOMAINS, RECEIVE_ONLY, ENVELOPES,
+  SELECTED_MESSAGE_ID, SELECTED_BODY,
+  SAMPLE_REPLY, SAMPLE_NEWSLETTER,
+});
+
+
+// ==================== icons.jsx ====================
+/* Stroke-style icons — no emoji. Single source of truth across all 3 directions. */
+
+const Icon = ({ name, size = 16, className = '' }) => {
+  const paths = {
+    inbox: <path d="M3 13h4l1.5 2h5L15 13h4M3 13V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8M3 13v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" />,
+    drafts: <><path d="M4 5v14h14V9.5L13.5 5H4z" /><path d="M13 5v5h5" /></>,
+    sent: <><path d="M4 11l16-7-7 16-2-7-7-2z" /></>,
+    archive: <><rect x="3" y="5" width="16" height="3" rx="1" /><path d="M5 8v10a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V8" /><path d="M9 12h4" /></>,
+    trash: <><path d="M4 6h14M9 6V4h4v2M6 6l1 13h8l1-13" /><path d="M10 10v6M12 10v6" /></>,
+    junk: <><circle cx="11" cy="11" r="7" /><path d="M6.5 6.5l9 9" /></>,
+    folder: <path d="M3 6a1 1 0 0 1 1-1h4l2 2h8a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6z" />,
+    folderOpen: <><path d="M3 6a1 1 0 0 1 1-1h4l2 2h8a1 1 0 0 1 1 1v2H3V6z" /><path d="M3 10h16l-2 7H5l-2-7z" /></>,
+    chevron: <path d="M8 6l5 5-5 5" />,
+    chevronDown: <path d="M6 8l5 5 5-5" />,
+    chevronLeft: <path d="M14 6l-5 5 5 5" />,
+    chevronRight: <path d="M8 6l5 5-5 5" />,
+    info: <><circle cx="11" cy="11" r="8" /><path d="M11 10v5" /><circle cx="11" cy="7" r="0.7" fill="currentColor" /></>,
+    star: <path d="M11 3l2.5 5.2 5.5.8-4 4 1 5.5-5-2.7-5 2.7 1-5.5-4-4 5.5-.8L11 3z" />,
+    starFilled: <path d="M11 3l2.5 5.2 5.5.8-4 4 1 5.5-5-2.7-5 2.7 1-5.5-4-4 5.5-.8L11 3z" fill="currentColor" />,
+    paperclip: <path d="M16 8l-7 7a3 3 0 0 1-4.2-4.2L12 3.6a5 5 0 0 1 7 7L12 18" />,
+    reply: <path d="M10 6L4 11l6 5M4 11h9a5 5 0 0 1 5 5" />,
+    replyAll: <><path d="M7 6L2 11l5 5M2 11h11a5 5 0 0 1 5 5" /><path d="M11 6L6 11" /></>,
+    forward: <path d="M12 6l6 5-6 5M18 11H9a5 5 0 0 0-5 5" />,
+    archiveAction: <><rect x="3" y="5" width="16" height="3" rx="1" /><path d="M5 8v10a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V8" /><path d="M9 11l2 2 2-2" /></>,
+    moveTo: <path d="M3 7v9a1 1 0 0 0 1 1h13V8h-7l-2-2H4a1 1 0 0 0-1 1zM12 12h7M16 9l3 3-3 3" />,
+    markUnread: <><path d="M3 7l8 5 8-5" /><rect x="3" y="5" width="16" height="13" rx="2" /></>,
+    markRead: <><path d="M3 7l8 5 8-5" /><rect x="3" y="5" width="16" height="13" rx="2" /><path d="M7 11l2 2 5-5" stroke="var(--accent-ink)" /></>,
+    flag: <path d="M5 3v17M5 4l11 2-3 4 3 4-11 2" />,
+    unflag: <path d="M5 3v17M5 4l11 2-3 4 3 4-11 2" strokeDasharray="2 2" />,
+    search: <><circle cx="9.5" cy="9.5" r="5.5" /><path d="M14 14l4 4" /></>,
+    compose: <><path d="M4 17v3h3l10-10-3-3L4 17z" /><path d="M13 6l3 3" /></>,
+    settings: <><circle cx="11" cy="11" r="3" /><path d="M11 2v3M11 17v3M2 11h3M17 11h3M4.5 4.5l2 2M15.5 15.5l2 2M4.5 17.5l2-2M15.5 6.5l2-2" /></>,
+    more: <><circle cx="6" cy="11" r="1.3" fill="currentColor" /><circle cx="11" cy="11" r="1.3" fill="currentColor" /><circle cx="16" cy="11" r="1.3" fill="currentColor" /></>,
+    close: <path d="M5 5l12 12M17 5L5 17" />,
+    menu: <><path d="M3 6h16M3 11h16M3 16h16" /></>,
+    dot: <circle cx="11" cy="11" r="3" fill="currentColor" />,
+    important: <><path d="M11 3v10" /><circle cx="11" cy="17" r="1" fill="currentColor" /></>,
+    bimi: <circle cx="11" cy="11" r="8" />,
+    sortDown: <><path d="M5 6h12M7 11h8M9 16h4" /><path d="M17 14l2 2 2-2" transform="translate(-2 0)" /></>,
+    sortUp: <><path d="M5 16h12M7 11h8M9 6h4" /></>,
+    print: <><path d="M6 9V4h10v5M6 16H4v-5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v5h-2M6 13h10v6H6z" /></>,
+    download: <><path d="M11 3v11M6 10l5 5 5-5M4 18h14" /></>,
+    minus: <path d="M5 11h12" />,
+    link: <path d="M10 13a3 3 0 0 0 4 0l3-3a3 3 0 0 0-4-4l-1 1M12 9a3 3 0 0 0-4 0l-3 3a3 3 0 0 0 4 4l1-1" />,
+    shuffle: <><path d="M3 6h3l3 5-3 5H3M19 6h-3l-3 5 3 5h3M15 3l4 3-4 3M15 15l4 3-4 3" /></>,
+    check: <path d="M5 11l4 4 8-8" />,
+    pencil: <><path d="M4 16l1-3 9-9 3 3-9 9-3 1z" /><path d="M13 4l3 3" /></>,
+    plus: <><path d="M11 5v12M5 11h12" /></>,
+  };
+  return (
+    <svg
+      className={`icon icon-${name} ${className}`}
+      width={size} height={size} viewBox="0 0 22 22"
+      fill="none" stroke="currentColor" strokeWidth="1.5"
+      strokeLinecap="round" strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {paths[name] || null}
+    </svg>
+  );
+};
+
+window.Icon = Icon;
+
+
+// ==================== inbox.jsx ====================
+/* Inbox — renders the 3-pane layout. Direction/theme come from data-attrs. */
+
+const { useState, useMemo, useRef, useEffect } = React;
+
+function formatDate(iso) {
+  const d = new Date(iso);
+  const now = new Date('2026-04-17T14:22:00');
+  const ms = now - d;
+  const mins = Math.floor(ms / 60000);
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 12) return `${hrs}h`;
+  const days = Math.floor(hrs / 24);
+  const sameYear = d.getFullYear() === now.getFullYear();
+  if (days < 7) return d.toLocaleDateString('en-US', { weekday: 'short' });
+  return d.toLocaleDateString('en-US', sameYear
+    ? { month: 'short', day: 'numeric' }
+    : { month: 'short', day: 'numeric', year: '2-digit' });
+}
+function formatLongDate(iso) {
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
+    + ' · ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+function extractName(fromStr) {
+  const m = /^(.*?)\s*<.*?>\s*$/.exec(fromStr);
+  if (m) return m[1].replace(/^"|"$/g, '') || fromStr;
+  return fromStr;
+}
+function extractEmail(fromStr) {
+  const m = /<(.*?)>/.exec(fromStr);
+  if (m) return m[1];
+  return fromStr;
+}
+function initials(name) {
+  const parts = name.split(/[\s<]+/).filter(Boolean).slice(0, 2);
+  return parts.map(p => p[0]?.toUpperCase() || '').join('') || '·';
+}
+
+// ---------------------------------------------------------------- Folders pane
+// Merged folders (system + user as a single list). System folders use their
+// native icon and can be favorited but not renamed/removed. User folders get
+// a folder icon and the full add/rename/remove/favorite set.
+
+function loadFolders() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('cabal-folders') || 'null');
+    if (saved && Array.isArray(saved)) return saved;
+  } catch (e) {}
+  return [
+    ...FOLDERS_TREE.map(f => ({ ...f, favorite: false })),
+    // drop FOLDERS_USER hierarchy -- flatten Work as its own plain folder
+    { id: 'Receipts',     name: 'Receipts',     count: 132, kind: 'folder', favorite: false },
+    { id: 'Travel',       name: 'Travel',       count: 28,  kind: 'folder', favorite: false },
+    { id: 'Newsletters',  name: 'Newsletters',  count: 412, kind: 'folder', favorite: true  },
+    { id: 'Work',         name: 'Work',         count: 80,  kind: 'folder', favorite: true  },
+  ];
+}
+function saveFolders(folders) {
+  try { localStorage.setItem('cabal-folders', JSON.stringify(folders)); } catch (e) {}
+}
+
+function loadAddrFavs() {
+  try { return new Set(JSON.parse(localStorage.getItem('cabal-addr-favs') || '[]')); }
+  catch (e) { return new Set(); }
+}
+function saveAddrFavs(favs) {
+  try { localStorage.setItem('cabal-addr-favs', JSON.stringify([...favs])); } catch (e) {}
+}
+
+function loadRevoked() {
+  try { return new Set(JSON.parse(localStorage.getItem('cabal-revoked') || '[]')); }
+  catch (e) { return new Set(); }
+}
+function saveRevoked(set) {
+  try { localStorage.setItem('cabal-revoked', JSON.stringify([...set])); } catch (e) {}
+}
+
+function loadSectionState() {
+  try { return JSON.parse(localStorage.getItem('cabal-sections') || '{"folders":true,"addresses":true}'); }
+  catch (e) { return { folders: true, addresses: true }; }
+}
+function saveSectionState(s) {
+  try { localStorage.setItem('cabal-sections', JSON.stringify(s)); } catch (e) {}
+}
+
+function FoldersPane({
+  activeFolder, onFolderClick, activeAccount, onAccountClick,
+  onCompose, onNewAddress,
+  revokedAddrs, onRevokeAddress,
+}) {
+  const [folders, setFolders] = useState(loadFolders);
+  const [editingId, setEditingId] = useState(null);
+  const [editingName, setEditingName] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [sections, setSections] = useState(loadSectionState);
+  const [addrQuery, setAddrQuery] = useState('');
+  const [addrFavs, setAddrFavs] = useState(loadAddrFavs);
+
+  useEffect(() => saveFolders(folders), [folders]);
+  useEffect(() => saveSectionState(sections), [sections]);
+  useEffect(() => saveAddrFavs(addrFavs), [addrFavs]);
+
+  const toggleSection = (key) => setSections(s => ({ ...s, [key]: !s[key] }));
+
+  const updateFolder = (id, patch) =>
+    setFolders(fs => fs.map(f => f.id === id ? { ...f, ...patch } : f));
+  const removeFolder = (id) => {
+    if (!confirm('Remove this folder? Messages inside will not be deleted (this is a mock).')) return;
+    setFolders(fs => fs.filter(f => f.id !== id));
+    if (activeFolder === id) onFolderClick('INBOX');
+  };
+  const beginRename = (f) => { setEditingId(f.id); setEditingName(f.name); };
+  const commitRename = () => {
+    if (editingId && editingName.trim()) {
+      updateFolder(editingId, { name: editingName.trim() });
+    }
+    setEditingId(null);
+    setEditingName('');
+  };
+  const cancelRename = () => { setEditingId(null); setEditingName(''); };
+  const toggleFavorite = (id) =>
+    setFolders(fs => fs.map(f => f.id === id ? { ...f, favorite: !f.favorite } : f));
+
+  const commitAdd = () => {
+    const name = newName.trim();
+    if (!name) { setAdding(false); setNewName(''); return; }
+    const id = name + '-' + Math.random().toString(36).slice(2, 6);
+    setFolders(fs => [...fs, { id, name, count: 0, kind: 'folder', favorite: false }]);
+    setAdding(false); setNewName('');
+  };
+
+  // Sort: favorites first (system favorites, user favorites), then system order, then user order
+  const favoriteFolders = folders.filter(f => f.favorite);
+  const normalFolders = folders.filter(f => !f.favorite);
+  const orderedFolders = [...favoriteFolders, ...normalFolders];
+
+  const toggleAddrFav = (addr) => {
+    setAddrFavs(s => {
+      const n = new Set(s);
+      if (n.has(addr)) n.delete(addr); else n.add(addr);
+      return n;
+    });
+  };
+
+  // Filter + sort addresses: revoked filtered out, favorites first, then alphabetical within
+  const addrQ = addrQuery.trim().toLowerCase();
+  const allAddrsRaw = [...ADDRESSES.map(a => ({ ...a, isPrimary: true })), ...RECEIVE_ONLY.map(a => ({ ...a, isPrimary: false }))];
+  const visibleAddrs = allAddrsRaw
+    .filter(a => !revokedAddrs.has(a.address))
+    .filter(a => {
+      if (!addrQ) return true;
+      return a.address.toLowerCase().includes(addrQ)
+          || (a.note || '').toLowerCase().includes(addrQ)
+          || (a.sub || '').toLowerCase().includes(addrQ);
+    });
+
+  const favAddrs = visibleAddrs.filter(a => addrFavs.has(a.address));
+  const otherAddrs = visibleAddrs.filter(a => !addrFavs.has(a.address));
+  // Without a query, limit non-fav non-primary addresses (there are 100+)
+  const listedAddrs = addrQ
+    ? [...favAddrs, ...otherAddrs]
+    : [...favAddrs, ...otherAddrs.filter(a => a.isPrimary)];
+
+  const revokeAddr = (addr) => {
+    if (!confirm(`Revoke ${addr}?\n\nIncoming mail to this address will start bouncing. This can't be undone in the prototype.`)) return;
+    onRevokeAddress(addr);
+  };
+
+  return (
+    <aside className="pane pane-folders">
+      <button className="compose-btn" onClick={onCompose}>
+        <Icon name="compose" size={14} />
+        New message
+      </button>
+
+      {/* ─── Folders ───────────────────────────────────────────────────── */}
+      <div className={`folders-section ${sections.folders ? 'expanded' : 'collapsed'}`}>
+        <div
+          className="folders-section-header"
+          onClick={() => toggleSection('folders')}
+          role="button"
+          tabIndex={0}
+        >
+          <span className="chev"><Icon name="chevronDown" size={12} /></span>
+          <span className="label">Folders</span>
+          <span className="section-actions">
+            <button
+              className="section-action"
+              title="New folder"
+              onClick={(e) => { e.stopPropagation(); if (!sections.folders) toggleSection('folders'); setAdding(true); }}
+            >
+              <Icon name="plus" size={14} />
+            </button>
+          </span>
+        </div>
+
+        <div className="folders-section-body">
+          <ul className="folder-list">
+            {orderedFolders.map(f => {
+              const isEditing = editingId === f.id;
+              const isActive = activeFolder === f.id;
+              const canEdit = !f.system;
+              return (
+                <li
+                  key={f.id}
+                  className={`folder-item ${isActive ? 'active' : ''} ${f.favorite ? 'has-fav' : ''}`}
+                  onClick={() => !isEditing && onFolderClick(f.id)}
+                >
+                  <Icon name={f.kind} size={16} />
+                  {isEditing ? (
+                    <input
+                      autoFocus
+                      className="folder-rename-input"
+                      value={editingName}
+                      onChange={(e) => setEditingName(e.target.value)}
+                      onBlur={commitRename}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') commitRename();
+                        else if (e.key === 'Escape') cancelRename();
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ) : (
+                    <>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
+                      <span className="folder-row-actions" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          className="folder-row-action folder-star"
+                          title={f.favorite ? 'Unfavorite' : 'Favorite'}
+                          onClick={() => toggleFavorite(f.id)}
+                        >
+                          <Icon name={f.favorite ? 'starFilled' : 'star'} size={13} />
+                        </button>
+                        {canEdit && (
+                          <>
+                            <button
+                              className="folder-row-action"
+                              title="Rename"
+                              onClick={() => beginRename(f)}
+                            >
+                              <Icon name="pencil" size={13} />
+                            </button>
+                            <button
+                              className="folder-row-action"
+                              title="Remove folder"
+                              onClick={() => removeFolder(f.id)}
+                            >
+                              <Icon name="close" size={13} />
+                            </button>
+                          </>
+                        )}
+                      </span>
+                      {f.count > 0 && <span className="folder-count">{f.count}</span>}
+                    </>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          {adding ? (
+            <div className="folder-add-row" style={{ cursor: 'default' }}>
+              <Icon name="folder" size={16} />
+              <input
+                autoFocus
+                className="folder-add-input"
+                placeholder="New folder name"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                onBlur={commitAdd}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') commitAdd();
+                  else if (e.key === 'Escape') { setAdding(false); setNewName(''); }
+                }}
+              />
+            </div>
+          ) : (
+            <div className="folder-add-row" onClick={() => setAdding(true)}>
+              <Icon name="plus" size={14} />
+              <span>New folder</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ─── Addresses ─────────────────────────────────────────────────── */}
+      <div className={`folders-section ${sections.addresses ? 'expanded' : 'collapsed'}`}>
+        <div
+          className="folders-section-header"
+          onClick={() => toggleSection('addresses')}
+          role="button"
+          tabIndex={0}
+        >
+          <span className="chev"><Icon name="chevronDown" size={12} /></span>
+          <span className="label">Addresses</span>
+          <span className="section-actions">
+            <button
+              className="section-action"
+              title="New address"
+              onClick={(e) => { e.stopPropagation(); if (!sections.addresses) toggleSection('addresses'); onNewAddress(); }}
+            >
+              <Icon name="plus" size={14} />
+            </button>
+          </span>
+        </div>
+
+        <div className="folders-section-body">
+          <div className="address-search-wrap">
+            <span className="address-search-icon"><Icon name="search" size={13} /></span>
+            <input
+              className="address-search"
+              placeholder="Filter addresses…"
+              value={addrQuery}
+              onChange={(e) => setAddrQuery(e.target.value)}
+            />
+            {addrQuery && (
+              <button
+                className="address-search-clear"
+                title="Clear"
+                onClick={() => setAddrQuery('')}
+              >
+                <Icon name="close" size={11} />
+              </button>
+            )}
+          </div>
+
+          <ul className="accounts-list">
+            {listedAddrs.length === 0 && (
+              <li className="address-empty">No matches</li>
+            )}
+            {listedAddrs.map(a => {
+              const count = ENVELOPES.filter(e => e.account === a.address && e.unread).length;
+              const isActive = activeAccount === a.address;
+              const isFav = addrFavs.has(a.address);
+              return (
+                <li
+                  key={a.address}
+                  className={`account-item ${isActive ? 'active' : ''}`}
+                  data-swatch={a.color}
+                  onClick={() => onAccountClick(a.address)}
+                  title={a.note ? `${a.note}` : a.address}
+                >
+                  <span className="account-swatch" style={a.color ? { background: `var(${a.color})` } : undefined} />
+                  <span style={{
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    minWidth: 0,
+                    color: isActive ? 'var(--ink)' : 'inherit',
+                    fontWeight: isActive ? 600 : 500,
+                    fontSize: 12,
+                  }}>{a.address}</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, justifySelf: 'end' }}>
+                    <span className="account-row-actions" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        className="account-row-action"
+                        title={isFav ? 'Unfavorite' : 'Favorite'}
+                        onClick={() => toggleAddrFav(a.address)}
+                        style={isFav ? { color: 'var(--accent)' } : undefined}
+                      >
+                        <Icon name={isFav ? 'starFilled' : 'star'} size={12} />
+                      </button>
+                      <button
+                        className="account-row-action"
+                        title="Revoke address"
+                        onClick={() => revokeAddr(a.address)}
+                      >
+                        <Icon name="close" size={12} />
+                      </button>
+                    </span>
+                    {count > 0 && <span className="folder-count">{count}</span>}
+                  </span>
+                </li>
+              );
+            })}
+            {!addrQuery && (
+              <li
+                className="account-item"
+                style={{ cursor: 'pointer' }}
+                onClick={onNewAddress}
+              >
+                <span className="account-swatch" style={{ background: 'transparent', border: '1px dashed var(--ink-quiet)' }} />
+                <span style={{ fontSize: 12, color: 'var(--ink-quiet)' }}>+ New address…</span>
+              </li>
+            )}
+            {!addrQuery && otherAddrs.filter(a => !a.isPrimary).length > 0 && (
+              <li className="address-empty" style={{ fontSize: 11, padding: '6px 14px' }}>
+                Type to search {otherAddrs.filter(a => !a.isPrimary).length} more addresses
+              </li>
+            )}
+          </ul>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+// ---------------------------------------------------------------- List pane
+function ListPane({
+  envelopes, selectedId, onSelect, activeAccount,
+  selectMode, setSelectMode, selectedIds, setSelectedIds,
+  lastSelectedId, setLastSelectedId, clearSelection, exitSelectMode,
+}) {
+  const filtered = activeAccount
+    ? envelopes.filter(e => e.account === activeAccount)
+    : envelopes;
+
+  const tabs = [
+    { id: 'all', label: 'All', count: filtered.length },
+    { id: 'unread', label: 'Unread', count: filtered.filter(e => e.unread).length },
+    { id: 'flagged', label: 'Flagged', count: filtered.filter(e => e.flags.includes('\\Flagged')).length },
+  ];
+  const [activeTab, setActiveTab] = useState('all');
+
+  const shown = activeTab === 'unread' ? filtered.filter(e => e.unread)
+              : activeTab === 'flagged' ? filtered.filter(e => e.flags.includes('\\Flagged'))
+              : filtered;
+
+  // --- selection interactions -------------------------------------------
+  const shownIds = shown.map(e => e.id);
+  const selectedInShown = shownIds.filter(id => selectedIds.has(id));
+  const allSelected = shownIds.length > 0 && selectedInShown.length === shownIds.length;
+  const someSelected = selectedInShown.length > 0 && !allSelected;
+
+  const toggleSelectMode = () => {
+    if (selectMode) exitSelectMode();
+    else setSelectMode(true);
+  };
+
+  const toggleId = (id, { shift, meta } = {}) => {
+    // Entering select mode implicitly when user shift/meta clicks a checkbox.
+    const next = new Set(selectedIds);
+    if (shift && lastSelectedId != null) {
+      const a = shownIds.indexOf(lastSelectedId);
+      const b = shownIds.indexOf(id);
+      if (a !== -1 && b !== -1) {
+        const [lo, hi] = a < b ? [a, b] : [b, a];
+        for (let i = lo; i <= hi; i++) next.add(shownIds[i]);
+      } else {
+        next.add(id);
+      }
+    } else if (meta) {
+      if (next.has(id)) next.delete(id); else next.add(id);
+    } else {
+      if (next.has(id)) next.delete(id); else next.add(id);
+    }
+    setSelectedIds(next);
+    setLastSelectedId(id);
+  };
+
+  const toggleAll = () => {
+    if (allSelected) {
+      clearSelection();
+    } else {
+      setSelectedIds(new Set(shownIds));
+      setLastSelectedId(shownIds[shownIds.length - 1] ?? null);
+    }
+  };
+
+  return (
+    <section className={`pane pane-list ${selectMode ? 'select-mode' : ''}`}>
+      <div className="list-header">
+        <div className="list-title-row">
+          <h1 className="list-title">
+            {activeAccount ? activeAccount : 'Inbox'}
+          </h1>
+          <span className="list-meta">
+            {selectMode && selectedInShown.length > 0
+              ? `${selectedInShown.length} selected`
+              : `${shown.length} of ${filtered.length}`}
+          </span>
+        </div>
+        <div className="list-tabs">
+          {tabs.map(t => (
+            <button
+              key={t.id}
+              className={`list-tab ${activeTab === t.id ? 'active' : ''}`}
+              onClick={() => setActiveTab(t.id)}
+            >
+              {t.label}<span className="count">{t.count}</span>
+            </button>
+          ))}
+        </div>
+        <div className="list-sort">
+          {selectMode ? (
+            <label className="select-all" title={allSelected ? 'Deselect all' : 'Select all'}>
+              <span
+                className={`list-checkbox ${allSelected ? 'checked' : someSelected ? 'indeterminate' : ''}`}
+                onClick={toggleAll}
+                role="checkbox"
+                aria-checked={allSelected ? 'true' : someSelected ? 'mixed' : 'false'}
+              >
+                {allSelected && <Icon name="check" size={10} />}
+                {someSelected && <span className="dash" />}
+              </span>
+              <span className="select-all-label" onClick={toggleAll}>
+                {allSelected ? 'All' : someSelected ? `${selectedInShown.length}` : 'None'}
+              </span>
+            </label>
+          ) : (
+            <>
+              <span>Sort</span>
+              <select defaultValue="date">
+                <option value="date">Date sent</option>
+                <option value="arrival">Date received</option>
+                <option value="from">Sender</option>
+                <option value="subject">Subject</option>
+              </select>
+            </>
+          )}
+          <button
+            className={`select-toggle ${selectMode ? 'on' : ''}`}
+            onClick={toggleSelectMode}
+            title={selectMode ? 'Exit select mode' : 'Select multiple'}
+          >
+            <Icon name="check" size={13} />
+            <span>{selectMode ? 'Done' : 'Select'}</span>
+          </button>
+        </div>
+      </div>
+
+      <ul className="rows">
+        {shown.map(e => {
+          const account = ADDRESSES.find(a => a.address === e.account);
+          const isChecked = selectedIds.has(e.id);
+          const onRowClick = (evt) => {
+            if (selectMode) {
+              toggleId(e.id, { shift: evt.shiftKey, meta: evt.metaKey || evt.ctrlKey });
+            } else if (evt.shiftKey || evt.metaKey || evt.ctrlKey) {
+              // Enter select mode implicitly
+              setSelectMode(true);
+              const next = new Set();
+              if (selectedId != null && selectedId !== e.id && (evt.shiftKey)) {
+                next.add(selectedId);
+              }
+              next.add(e.id);
+              setSelectedIds(next);
+              setLastSelectedId(e.id);
+            } else {
+              onSelect(e.id);
+            }
+          };
+          const onCheckboxClick = (evt) => {
+            evt.stopPropagation();
+            if (!selectMode) setSelectMode(true);
+            toggleId(e.id, { shift: evt.shiftKey, meta: evt.metaKey || evt.ctrlKey });
+          };
+          return (
+            <li
+              key={e.id}
+              className={[
+                'row',
+                e.unread ? 'unread' : '',
+                e.flags.includes('\\Flagged') ? 'flagged' : '',
+                e.priority === 'important' ? 'important' : '',
+                e.id === selectedId && !selectMode ? 'selected' : '',
+                isChecked ? 'checked' : '',
+              ].filter(Boolean).join(' ')}
+              onClick={onRowClick}
+            >
+              <span
+                className={`row-leading ${selectMode ? 'as-checkbox' : ''}`}
+                onClick={onCheckboxClick}
+                title={selectMode ? 'Select message' : `Received at ${e.account}`}
+              >
+                <span
+                  className="unread-dot"
+                  style={account ? {
+                    background: `var(${account.color}, var(--accent))`,
+                    '--account-color': `var(${account.color})`,
+                  } : undefined}
+                />
+                <span className={`list-checkbox row-checkbox ${isChecked ? 'checked' : ''}`}>
+                  {isChecked && <Icon name="check" size={10} />}
+                </span>
+              </span>
+              <div className="row-main">
+                <div className="row-head">
+                  <span className="row-from">{extractName(e.from[0])}</span>
+                  <span className="row-date">{formatDate(e.date)}</span>
+                </div>
+                <div className="row-subject">{e.subject}</div>
+                {e.preview && <div className="row-preview">{e.preview}</div>}
+              </div>
+              <div className="row-indicators">
+                {e.attachment && <Icon name="paperclip" size={13} />}
+                {e.flags.includes('\\Answered') && <Icon name="reply" size={13} />}
+                {e.flags.includes('\\Flagged') && <Icon name="starFilled" size={13} />}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------- Bulk-selection pane
+function BulkSelectionPane({ count, ids, onClear, onDone }) {
+  // Summarize the selection: senders, unread count, attachments, folders
+  const selected = ENVELOPES.filter(e => ids.has(e.id));
+  const senders = [...new Set(selected.map(e => extractName(e.from[0])))];
+  const accounts = [...new Set(selected.map(e => e.account))];
+  const unread = selected.filter(e => e.unread).length;
+  const flagged = selected.filter(e => e.flags.includes('\\Flagged')).length;
+  const withAttach = selected.filter(e => e.attachment).length;
+
+  return (
+    <section className="pane pane-reader bulk-pane">
+      <div className="reader-toolbar bulk-toolbar">
+        <div className="bulk-count">
+          <span className="bulk-count-num">{count}</span>
+          <span className="bulk-count-label">selected</span>
+        </div>
+        <span className="tool-divider" />
+        <button className="tool-btn"><Icon name="archiveAction" size={14} /> Archive</button>
+        <button className="tool-btn"><Icon name="moveTo" size={14} /> Move</button>
+        <button className="tool-btn"><Icon name="trash" size={14} /> Delete</button>
+        <span className="tool-divider" />
+        <button className="tool-btn"><Icon name="flag" size={14} /> Flag</button>
+        <button className="tool-btn"><Icon name="markRead" size={14} /> Mark read</button>
+        <span className="spacer" />
+        <button className="tool-btn" onClick={onClear}>Clear</button>
+        <button className="tool-btn primary" onClick={onDone}><Icon name="close" size={12} /> Done</button>
+      </div>
+
+      <div className="bulk-body">
+        <div className="bulk-hero">
+          <div className="bulk-hero-num">{count}</div>
+          <div className="bulk-hero-label">{count === 1 ? 'message selected' : 'messages selected'}</div>
+        </div>
+
+        <div className="bulk-stats">
+          <div className="bulk-stat">
+            <div className="bulk-stat-num">{unread}</div>
+            <div className="bulk-stat-label">unread</div>
+          </div>
+          <div className="bulk-stat">
+            <div className="bulk-stat-num">{flagged}</div>
+            <div className="bulk-stat-label">flagged</div>
+          </div>
+          <div className="bulk-stat">
+            <div className="bulk-stat-num">{withAttach}</div>
+            <div className="bulk-stat-label">with attachments</div>
+          </div>
+          <div className="bulk-stat">
+            <div className="bulk-stat-num">{senders.length}</div>
+            <div className="bulk-stat-label">{senders.length === 1 ? 'sender' : 'senders'}</div>
+          </div>
+        </div>
+
+        <div className="bulk-section">
+          <div className="bulk-section-label">Received at</div>
+          <div className="bulk-chips">
+            {accounts.map(a => {
+              const acct = ADDRESSES.find(x => x.address === a);
+              return (
+                <span className="bulk-chip" key={a}>
+                  <span className="bulk-chip-dot" style={{ background: acct ? `var(${acct.color})` : 'var(--ink-quiet)' }} />
+                  {a}
+                  <span className="bulk-chip-count">{selected.filter(e => e.account === a).length}</span>
+                </span>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="bulk-section">
+          <div className="bulk-section-label">Senders</div>
+          <div className="bulk-chips">
+            {senders.slice(0, 12).map(s => (
+              <span className="bulk-chip" key={s}>{s}</span>
+            ))}
+            {senders.length > 12 && <span className="bulk-chip muted">+{senders.length - 12} more</span>}
+          </div>
+        </div>
+
+        <div className="bulk-hint">
+          <Icon name="info" size={12} />
+          <span>Shift-click to extend, ⌘-click to toggle. Press <kbd>Esc</kbd> or hit Done to exit.</span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------- Reader pane
+function ReaderPane({ envelope, onCompose, sample, selectMode, selectedIds, clearSelection, exitSelectMode }) {
+  // Bulk-selection state: take over the reader pane with a multi-message summary + action bar.
+  const selectionCount = selectMode ? (selectedIds?.size ?? 0) : 0;
+  if (selectMode && selectionCount > 0) {
+    return <BulkSelectionPane count={selectionCount} ids={selectedIds} onClear={clearSelection} onDone={exitSelectMode} />;
+  }
+  if (!envelope) return <section className="pane pane-reader" />;
+  const fromName = extractName(envelope.from[0]);
+  const fromEmail = extractEmail(envelope.from[0]);
+  const toAccount = ADDRESSES.find(a => a.address === envelope.account);
+
+  // Per-message override. Defaults:
+  //   text/plain -> inherit theme (null = auto)
+  //   text/html  -> light island (null = auto)
+  // User can click the shield in the header to force the other mode.
+  const [override, setOverride] = React.useState(null);
+  // Rich/plain toggle — only meaningful when the message is multipart/alternative.
+  // 'rich' is default; flipping to 'plain' shows the text alternative.
+  const [format, setFormat] = React.useState('rich');
+  // Overflow menu open state.
+  const [moreOpen, setMoreOpen] = React.useState(false);
+  // Source-view modal open state.
+  const [sourceOpen, setSourceOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    setOverride(null);
+    setFormat('rich');
+    setMoreOpen(false);
+  }, [sample]);
+
+  // Close overflow menu on outside click / Esc
+  const moreRef = React.useRef(null);
+  React.useEffect(() => {
+    if (!moreOpen) return;
+    const onDown = (e) => {
+      if (moreRef.current && !moreRef.current.contains(e.target)) setMoreOpen(false);
+    };
+    const onKey = (e) => { if (e.key === 'Escape') setMoreOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [moreOpen]);
+
+  const isHtml = sample.mimeType === 'text/html';
+  const hasAlternative = isHtml && typeof sample.plainText === 'string';
+  const showingPlain = hasAlternative && format === 'plain';
+  // effective rendering mode: 'island' means white card; 'inherit' means theme-matched
+  const autoMode = isHtml ? 'island' : 'inherit';
+  const mode = override || autoMode;
+  const attachments = sample.attachments || [];
+
+  return (
+    <section className="pane pane-reader">
+      <div className="reader">
+        <div className="reader-toolbar">
+          <button className="tool-btn" onClick={() => onCompose('reply', envelope)}>
+            <Icon name="reply" size={14} /> Reply
+          </button>
+          <button className="tool-btn" onClick={() => onCompose('replyAll', envelope)}>
+            <Icon name="replyAll" size={14} /> Reply all
+          </button>
+          <button className="tool-btn" onClick={() => onCompose('forward', envelope)}>
+            <Icon name="forward" size={14} /> Forward
+          </button>
+          <span className="tool-divider" />
+          <button className="tool-btn"><Icon name="archiveAction" size={14} /> Archive</button>
+          <button className="tool-btn"><Icon name="moveTo" size={14} /> Move</button>
+          <button className="tool-btn"><Icon name="trash" size={14} /></button>
+          <span className="tool-divider" />
+          <button className="tool-btn"><Icon name="flag" size={14} /></button>
+          <button className="tool-btn"><Icon name="markUnread" size={14} /></button>
+          <span className="spacer" />
+          <div className="reader-more-wrap" ref={moreRef}>
+            <button
+              className="tool-btn"
+              onClick={() => setMoreOpen(v => !v)}
+              aria-expanded={moreOpen}
+              aria-haspopup="menu"
+            >
+              <Icon name="more" size={14} />
+            </button>
+            {moreOpen && (
+              <div className="reader-more-menu" role="menu">
+                {hasAlternative && (
+                  <>
+                    <div className="reader-more-group-label">Format</div>
+                    <button
+                      onClick={() => { setFormat('rich'); setMoreOpen(false); }}
+                      className={format === 'rich' ? 'checked' : ''}
+                    >
+                      {format === 'rich'
+                        ? <Icon name="check" size={13} />
+                        : <span className="check-slot" />}
+                      <span>Rich (HTML)</span>
+                    </button>
+                    <button
+                      onClick={() => { setFormat('plain'); setMoreOpen(false); }}
+                      className={format === 'plain' ? 'checked' : ''}
+                    >
+                      {format === 'plain'
+                        ? <Icon name="check" size={13} />
+                        : <span className="check-slot" />}
+                      <span>Plain text alternative</span>
+                    </button>
+                    <div className="sep" />
+                  </>
+                )}
+                {isHtml && !showingPlain && (
+                  <>
+                    <button
+                      onClick={() => { setOverride(override === 'inherit' ? null : 'inherit'); setMoreOpen(false); }}
+                      className={override === 'inherit' ? 'checked' : ''}
+                    >
+                      {override === 'inherit'
+                        ? <Icon name="check" size={13} />
+                        : <span className="check-slot" />}
+                      <span>Match app theme</span>
+                    </button>
+                    <div className="sep" />
+                  </>
+                )}
+                <button onClick={() => { setSourceOpen(true); setMoreOpen(false); }}>
+                  <Icon name="settings" size={13} /><span>View source</span><span className="hint">⌥⌘U</span>
+                </button>
+                <button>
+                  <Icon name="info" size={13} /><span>Show original headers</span>
+                </button>
+                <button>
+                  <Icon name="forward" size={13} /><span>Forward as attachment</span>
+                </button>
+                <button>
+                  <Icon name="sent" size={13} /><span>Print…</span><span className="hint">⌘P</span>
+                </button>
+                <div className="sep" />
+                <button>
+                  <Icon name="archive" size={13} /><span>Save to archive folder…</span>
+                </button>
+                <button>
+                  <Icon name="junk" size={13} /><span>Mark as spam</span>
+                </button>
+                <div className="sep" />
+                <button className="danger">
+                  <Icon name="trash" size={13} /><span>Block sender</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="reader-body">
+          <h1 className="msg-subject">{sample === SAMPLE_NEWSLETTER ? 'The quiet return of the subdomain address' : envelope.subject}</h1>
+
+          <div className="msg-header">
+            <div className="msg-avatar">{sample === SAMPLE_NEWSLETTER ? 'CD' : initials(fromName)}</div>
+            <div className="msg-meta">
+              <div className="msg-from">
+                {sample === SAMPLE_NEWSLETTER ? 'Cabalmail Dispatch' : fromName}
+                {' '}<span className="email">&lt;{sample === SAMPLE_NEWSLETTER ? 'dispatch@cabalmail.com' : fromEmail}&gt;</span>
+              </div>
+              <div className="msg-to">
+                <span>to </span>
+                {toAccount && <RecipientPill address={envelope.account} owned />}
+                {isHtml && (
+                  <span className="msg-mime-tag" title="This message is HTML-formatted">HTML</span>
+                )}
+              </div>
+            </div>
+            <div className="msg-header-tools">
+              <div className="msg-date">{formatLongDate(envelope.date)}</div>
+            </div>
+          </div>
+
+          <div className={`msg-body ${showingPlain ? 'inherit' : (mode === 'island' ? 'island' : 'inherit')}`}>
+            {showingPlain ? (
+              <pre className="msg-plain">{sample.plainText}</pre>
+            ) : isHtml ? (
+              mode === 'island'
+                ? <div className="html-island" dangerouslySetInnerHTML={{ __html: sample.html }} />
+                : <div className="html-stripped" dangerouslySetInnerHTML={{ __html: sample.html }} />
+            ) : (
+              sample.paragraphs.map((p, i) => {
+                if (p.includes('Thanks,')) return <div className="sig" key={i}>{p}</div>;
+                return <p key={i}>{p}</p>;
+              })
+            )}
+          </div>
+
+          {attachments.length > 0 && (
+            <AttachmentsList attachments={attachments} />
+          )}
+
+          <div className="quick-reply">
+            <span>Reply as <RecipientPill address={envelope.account} owned inline /></span>
+            <div className="quick-reply-actions">
+              <button className="qr-btn">Change address</button>
+              <button className="qr-btn primary" onClick={() => onCompose('reply', envelope)}>Reply</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {sourceOpen && (
+        <SourceView
+          envelope={envelope}
+          sample={sample}
+          onClose={() => setSourceOpen(false)}
+        />
+      )}
+    </section>
+  );
+}
+
+// Recipient pill — shows an address, with revoke affordance if owned, claim affordance if not
+function RecipientPill({ address, owned, inline }) {
+  const [hover, setHover] = useState(false);
+  const acct = ADDRESSES.find(a => a.address === address);
+  return (
+    <span
+      className="recipient-pill"
+      data-owned={owned ? 'true' : 'false'}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        padding: '2px 8px 2px 6px',
+        borderRadius: 999,
+        border: '1px solid var(--border)',
+        background: 'var(--surface)',
+        fontSize: 11,
+        color: 'var(--ink-soft)',
+        fontFamily: inline ? 'inherit' : 'var(--font-mono)',
+        marginLeft: inline ? 6 : 0,
+        verticalAlign: 'baseline',
+      }}
+    >
+      <span
+        style={{
+          width: 6, height: 6, borderRadius: '50%',
+          background: acct ? `var(${acct.color})` : 'var(--ink-quiet)',
+        }}
+      />
+      {address}
+      {owned && hover && (
+        <button
+          style={{
+            fontSize: 10, color: 'var(--ink-quiet)',
+            padding: '0 2px', marginLeft: 2,
+          }}
+          title="Revoke this address"
+          onClick={(e) => {
+            e.preventDefault(); e.stopPropagation();
+            if (window.__cabalRevoke) window.__cabalRevoke(address);
+          }}
+        >×</button>
+      )}
+    </span>
+  );
+}
+
+// ---- Attachments list (reader pane, bottom of msg) -------------------------
+function AttachmentsList({ attachments }) {
+  const total = attachments.reduce((sum, a) => sum + (a.size || 0), 0);
+  return (
+    <div className="attachments">
+      <div className="attachments-head">
+        <div className="attachments-title">
+          {attachments.length} {attachments.length === 1 ? 'attachment' : 'attachments'}
+        </div>
+        <div className="attachments-meta">{formatBytes(total)} total · <a href="#" onClick={e => e.preventDefault()} style={{ color: 'inherit', textDecoration: 'underline', textUnderlineOffset: 2 }}>Download all</a></div>
+      </div>
+      <div className="attachments-list" role="list">
+        {attachments.map((a, i) => (
+          <div className="att-row" key={i} role="listitem">
+            <div className="att-name" title={a.name}>
+              <span className="att-icon">{extForIcon(a.name)}</span>
+              <span className="att-filename">{a.name}</span>
+            </div>
+            <div className="att-size">{formatBytes(a.size)}</div>
+            <div className="att-download" title="Download">
+              <Icon name="drafts" size={14} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function formatBytes(n) {
+  if (n == null) return '—';
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(n < 10240 ? 1 : 0)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(n < 10 * 1024 * 1024 ? 1 : 0)} MB`;
+}
+function extForIcon(name) {
+  const m = /\.([a-z0-9]+)$/i.exec(name);
+  return m ? m[1].toUpperCase().slice(0, 4) : '—';
+}
+
+// ---- Source view modal ----------------------------------------------------
+// Lightweight RFC 5322 / MIME reconstruction — not a real encoder, just a
+// realistic-looking rendering so the reader can glance at the raw message.
+function SourceView({ envelope, sample, onClose }) {
+  const [tab, setTab] = React.useState('all'); // 'all' | 'headers' | 'body'
+  const [copied, setCopied] = React.useState(false);
+
+  React.useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  // Synthesize a plausible RFC 822-ish source.
+  const isNewsletter = sample === SAMPLE_NEWSLETTER;
+  const hasAlt = sample.mimeType === 'text/html' && typeof sample.plainText === 'string';
+  const fromName = isNewsletter ? 'Cabalmail Dispatch' : extractName(envelope.from[0]);
+  const fromEmail = isNewsletter ? 'dispatch@cabalmail.com' : extractEmail(envelope.from[0]);
+  const subject = isNewsletter ? 'The quiet return of the subdomain address' : envelope.subject;
+  const date = envelope.date;
+  const msgId = `<${Math.random().toString(36).slice(2, 10)}.${Date.now().toString(36)}@${fromEmail.split('@')[1] || 'cabalmail.com'}>`;
+  const boundary = `----=_CabalPart_${Math.random().toString(36).slice(2, 12)}`;
+  const altBoundary = `----=_CabalAlt_${Math.random().toString(36).slice(2, 12)}`;
+
+  const headers = [
+    ['Return-Path', `<${fromEmail}>`],
+    ['Received', `from mx3.cabalmail.com (mx3.cabalmail.com [10.0.12.23])\n\tby imap-04.cabalmail.com with ESMTPS id ${Math.random().toString(36).slice(2,14).toUpperCase()}\n\tfor <${envelope.account}>; ${formatRFC822(date)}`],
+    ['Received-SPF', `pass (cabalmail.com: domain of ${fromEmail} designates ${fromEmail.split('@')[1]} as permitted sender)`],
+    ['Authentication-Results', `mx3.cabalmail.com;\n\tdkim=pass header.d=${fromEmail.split('@')[1]} header.s=default;\n\tspf=pass smtp.mailfrom=${fromEmail};\n\tdmarc=pass (p=REJECT) header.from=${fromEmail.split('@')[1]}`],
+    ['DKIM-Signature', `v=1; a=rsa-sha256; c=relaxed/relaxed; d=${fromEmail.split('@')[1]};\n\ts=default; t=${Math.floor(new Date(date).getTime()/1000)}; bh=${Math.random().toString(36).slice(2,15)}=;\n\th=From:To:Subject:Date:MIME-Version:Content-Type;\n\tb=${Math.random().toString(36).slice(2,20)}${Math.random().toString(36).slice(2,20)}…`],
+    ['From', `"${fromName}" <${fromEmail}>`],
+    ['To', envelope.account],
+    ['Subject', subject],
+    ['Date', formatRFC822(date)],
+    ['Message-ID', msgId],
+    ['MIME-Version', '1.0'],
+  ];
+  if (hasAlt) {
+    headers.push(['Content-Type', `multipart/alternative;\n\tboundary="${altBoundary}"`]);
+  } else if (sample.mimeType === 'text/html') {
+    headers.push(['Content-Type', 'text/html; charset=UTF-8']);
+    headers.push(['Content-Transfer-Encoding', 'quoted-printable']);
+  } else {
+    headers.push(['Content-Type', 'text/plain; charset=UTF-8; format=flowed']);
+    headers.push(['Content-Transfer-Encoding', '7bit']);
+  }
+  if ((sample.attachments || []).length > 0) {
+    // If there are attachments, promote to multipart/mixed wrapping the body.
+    headers[headers.length - 3] = ['Content-Type', `multipart/mixed;\n\tboundary="${boundary}"`];
+  }
+
+  const sampleHtmlShort = sample.html
+    ? sample.html.replace(/data:image\/svg\+xml;utf8,<svg[^>]+>[\s\S]*?<\/svg>/g, 'data:image/svg+xml;utf8,<svg>…[5kb logo SVG elided]…</svg>')
+        .replace(/\n{3,}/g, '\n\n')
+    : '';
+
+  const bodyText = sample.mimeType === 'text/plain'
+    ? sample.paragraphs.join('\n\n')
+    : (hasAlt ? sample.plainText : sampleHtmlShort);
+
+  const full = React.useMemo(() => {
+    const out = [];
+    out.push(...headers.map(([k, v]) => `${k}: ${v}`));
+    out.push('');
+    if ((sample.attachments || []).length > 0) {
+      out.push(`--${boundary}`);
+      if (hasAlt) {
+        out.push(`Content-Type: multipart/alternative; boundary="${altBoundary}"`);
+        out.push('');
+        out.push(`--${altBoundary}`);
+        out.push('Content-Type: text/plain; charset=UTF-8');
+        out.push('Content-Transfer-Encoding: 7bit');
+        out.push('');
+        out.push(sample.plainText);
+        out.push('');
+        out.push(`--${altBoundary}`);
+        out.push('Content-Type: text/html; charset=UTF-8');
+        out.push('Content-Transfer-Encoding: quoted-printable');
+        out.push('');
+        out.push(sampleHtmlShort);
+        out.push(`--${altBoundary}--`);
+      } else {
+        out.push(`Content-Type: ${sample.mimeType}; charset=UTF-8`);
+        out.push('');
+        out.push(bodyText);
+      }
+      for (const a of sample.attachments) {
+        out.push('');
+        out.push(`--${boundary}`);
+        out.push(`Content-Type: ${a.mime}; name="${a.name}"`);
+        out.push('Content-Transfer-Encoding: base64');
+        out.push(`Content-Disposition: attachment; filename="${a.name}"`);
+        out.push('');
+        out.push(`[${formatBytes(a.size)} base64-encoded payload elided]`);
+      }
+      out.push(`--${boundary}--`);
+    } else if (hasAlt) {
+      out.push(`--${altBoundary}`);
+      out.push('Content-Type: text/plain; charset=UTF-8');
+      out.push('Content-Transfer-Encoding: 7bit');
+      out.push('');
+      out.push(sample.plainText);
+      out.push('');
+      out.push(`--${altBoundary}`);
+      out.push('Content-Type: text/html; charset=UTF-8');
+      out.push('Content-Transfer-Encoding: quoted-printable');
+      out.push('');
+      out.push(sampleHtmlShort);
+      out.push(`--${altBoundary}--`);
+    } else {
+      out.push(bodyText);
+    }
+    return out.join('\n');
+  }, [envelope.id, sample]);
+
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(full); setCopied(true); setTimeout(() => setCopied(false), 1400); } catch {}
+  };
+
+  return (
+    <div className="source-scrim" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="source-window" role="dialog" aria-label="Message source">
+        <div className="source-header">
+          <div className="source-header-title">
+            Message source
+            <span className="tag">{subject.length > 44 ? subject.slice(0, 42) + '…' : subject}</span>
+          </div>
+          <div className="source-header-tools">
+            <div className="reader-format-toggle">
+              <button className={tab === 'all' ? 'active' : ''} onClick={() => setTab('all')}>Full</button>
+              <button className={tab === 'headers' ? 'active' : ''} onClick={() => setTab('headers')}>Headers</button>
+              <button className={tab === 'body' ? 'active' : ''} onClick={() => setTab('body')}>Body</button>
+            </div>
+            <button className="source-tool" onClick={copy}>{copied ? '✓ Copied' : 'Copy'}</button>
+            <button className="source-tool">Save .eml</button>
+            <button className="source-close" onClick={onClose} aria-label="Close"><Icon name="close" size={14} /></button>
+          </div>
+        </div>
+        <div className="source-body">
+          {tab === 'headers' ? (
+            headers.map(([k, v], i) => (
+              <div key={i}><span className="hdr-name">{k}:</span> {v}</div>
+            ))
+          ) : tab === 'body' ? (
+            bodyText
+          ) : (() => {
+            // Full view: render headers with color, then show raw body after a separator.
+            // Compute the body portion by counting actual lines produced by the headers.
+            const headerLineCount = headers.reduce((n, [, v]) => n + String(v).split('\n').length, 0);
+            const rest = full.split('\n').slice(headerLineCount + 1).join('\n'); // +1 for blank-line separator
+            return (
+              <>
+                {headers.map(([k, v], i) => (
+                  <div key={i}><span className="hdr-name">{k}:</span> {v}</div>
+                ))}
+                <div className="hdr-sep" />
+                {rest}
+              </>
+            );
+          })()}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function formatRFC822(iso) {
+  try {
+    const d = new Date(iso);
+    return d.toUTCString().replace('GMT', '+0000');
+  } catch { return String(iso); }
+}
+
+window.FoldersPane = FoldersPane;
+window.ListPane = ListPane;
+window.ReaderPane = ReaderPane;
+window.BulkSelectionPane = BulkSelectionPane;
+window.RecipientPill = RecipientPill;
+window.extractName = extractName;
+window.extractEmail = extractEmail;
+window.formatDate = formatDate;
+window.formatLongDate = formatLongDate;
+window.initials = initials;
+
+
+// ==================== tweaks.jsx ====================
+/* Tweaks panel + Compose overlay.
+   Compose From handles the Cabalmail three-part address model:
+     username @ subdomain . domain
+   Creating a new sending identity is a real structured step, not a free-text hack.
+*/
+
+const { useState: useS2, useEffect: useE2, useRef: useR2, useMemo: useM2 } = React;
+
+const DIRECTIONS = [
+  { id: 'stately',   label: 'Stately' },
+  { id: 'workbench', label: 'Workbench' },
+  { id: 'quietmono', label: 'Quiet Mono' },
+];
+const ACCENTS = ['ink', 'oxblood', 'forest', 'azure', 'amber', 'plum'];
+const DENSITIES = [
+  { id: 'compact', label: 'Compact' },
+  { id: 'normal',  label: 'Normal' },
+  { id: 'roomy',   label: 'Roomy' },
+];
+const THEMES = [
+  { id: 'system', label: 'System' },
+  { id: 'light',  label: 'Light' },
+  { id: 'dark',   label: 'Dark' },
+];
+
+function TweaksPanel({ state, setState, onClose }) {
+  return (
+    <div className="tweaks">
+      <div className="tweaks-header">
+        <span className="tweaks-title">Tweaks</span>
+        <button className="tweaks-close" onClick={onClose} aria-label="Close">
+          <Icon name="close" size={12} />
+        </button>
+      </div>
+
+      <div className="tweak-group">
+        <label className="tweak-label">Direction</label>
+        <div className="segment">
+          {DIRECTIONS.map(d => (
+            <button key={d.id}
+              className={state.direction === d.id ? 'active' : ''}
+              onClick={() => setState({ direction: d.id })}>{d.label}</button>
+          ))}
+        </div>
+      </div>
+
+      <div className="tweak-group">
+        <label className="tweak-label">Theme</label>
+        <div className="segment">
+          {THEMES.map(t => (
+            <button key={t.id}
+              className={state.theme === t.id ? 'active' : ''}
+              onClick={() => setState({ theme: t.id })}>{t.label}</button>
+          ))}
+        </div>
+      </div>
+
+      <div className="tweak-group">
+        <label className="tweak-label">Accent</label>
+        <div className="accent-grid">
+          {ACCENTS.map(c => (
+            <button key={c}
+              className={`accent-swatch ${state.accent === c ? 'active' : ''}`}
+              data-c={c}
+              onClick={() => setState({ accent: c })}
+              title={c} />
+          ))}
+        </div>
+      </div>
+
+      <div className="tweak-group">
+        <label className="tweak-label">Density</label>
+        <div className="segment">
+          {DENSITIES.map(d => (
+            <button key={d.id}
+              className={state.density === d.id ? 'active' : ''}
+              onClick={() => setState({ density: d.id })}>{d.label}</button>
+          ))}
+        </div>
+      </div>
+
+      <div className="tweak-group">
+        <label className="tweak-label">Sample message</label>
+        <div className="segment">
+          <button className={state.sample !== 'newsletter' ? 'active' : ''} onClick={() => setState({ sample: 'reply' })}>Plain reply</button>
+          <button className={state.sample === 'newsletter' ? 'active' : ''} onClick={() => setState({ sample: 'newsletter' })}>HTML newsletter</button>
+        </div>
+      </div>
+
+      <div className="tweak-group" style={{ marginBottom: 0 }}>
+        <label className="tweak-label">Show</label>
+        <div className="segment">
+          <button className={!state.composeOpen ? 'active' : ''} onClick={() => setState({ composeOpen: false })}>Reader</button>
+          <button className={state.composeOpen ? 'active' : ''} onClick={() => setState({ composeOpen: true })}>Compose</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Compose overlay
+// ---------------------------------------------------------------------------
+function ComposeOverlay({ onClose, prefill }) {
+  const [from, setFrom] = useS2(() => prefill?.from || ADDRESSES[0].address);
+  const [fromQuery, setFromQuery] = useS2('');
+  const [fromOpen, setFromOpen] = useS2(false);
+  const [mode, setMode] = useS2('pick'); // 'pick' | 'create'
+  const [to, setTo] = useS2(prefill?.to || '');
+  const [subject, setSubject] = useS2(prefill?.subject || '');
+  const fromRef = useR2();
+
+  // New-address form state (mirrors Request.jsx)
+  const [newUser, setNewUser] = useS2('');
+  const [newSub, setNewSub] = useS2('');
+  const [newDomain, setNewDomain] = useS2(DOMAINS[0]);
+  const [newNote, setNewNote] = useS2('');
+
+  // Favorites (starred addresses) — persisted in localStorage
+  const [favs, setFavs] = useS2(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('cabal-favs') || '[]')); }
+    catch { return new Set(); }
+  });
+  const toggleFav = (addr, e) => {
+    e.stopPropagation();
+    setFavs(prev => {
+      const next = new Set(prev);
+      if (next.has(addr)) next.delete(addr); else next.add(addr);
+      try { localStorage.setItem('cabal-favs', JSON.stringify([...next])); } catch {}
+      return next;
+    });
+  };
+
+  const randomString = (len, pool1, pool2, pool3) => {
+    const pick = (pool) => pool[Math.floor(Math.random() * pool.length)];
+    let out = pick(pool1);
+    for (let i = 1; i < len - 1; i++) out += pick(pool2);
+    out += pick(pool3);
+    return out;
+  };
+  const generateRandom = () => {
+    const alphanum = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    setNewUser(randomString(8, alphanum, alphanum + '._-', alphanum));
+    setNewSub(randomString(8, alphanum, alphanum + '-', alphanum));
+    setNewDomain(DOMAINS[Math.floor(Math.random() * DOMAINS.length)]);
+  };
+
+  useE2(() => {
+    const onDoc = (e) => {
+      if (fromRef.current && !fromRef.current.contains(e.target)) {
+        setFromOpen(false); setMode('pick');
+      }
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+
+  const q = fromQuery.trim().toLowerCase();
+
+  const allAddresses = useM2(() => {
+    return [
+      ...ADDRESSES.map(a => ({ ...a, group: 'primary' })),
+      ...RECEIVE_ONLY.map(a => ({ ...a, group: 'other' })),
+    ];
+  }, []);
+
+  const filtered = useM2(() => {
+    const match = (a) => !q
+      || a.address.toLowerCase().includes(q)
+      || (a.note || '').toLowerCase().includes(q)
+      || (a.sub || '').toLowerCase().includes(q);
+    const allFav = allAddresses.filter(a => favs.has(a.address) && match(a));
+    // Without a query: show just starred/labeled primary addresses.
+    // With a query: search the whole pool (cap to 40 extras for perf).
+    const primary = ADDRESSES.filter(a => !favs.has(a.address) && match(a));
+    const other = RECEIVE_ONLY.filter(a => !favs.has(a.address) && match(a))
+      .slice(0, q ? 40 : 0);
+    return { fav: allFav, primary, other };
+  }, [q, favs, allAddresses]);
+
+  const selectedAccount = allAddresses.find(a => a.address === from);
+  const nothingMatches = q && filtered.primary.length === 0 && filtered.other.length === 0 && filtered.fav.length === 0;
+
+  const pickAddress = (addr) => {
+    setFrom(addr);
+    setFromOpen(false);
+    setFromQuery('');
+    setMode('pick');
+  };
+
+  const validUsername = /^[a-z0-9][a-z0-9._-]*$/i.test(newUser);
+  const validSubdomain = /^[a-z0-9][a-z0-9-]*$/i.test(newSub);
+  const canCreate = validUsername && validSubdomain && newDomain;
+  const newAddressPreview = canCreate ? `${newUser}@${newSub}.${newDomain}` : '';
+
+  const submitCreate = () => {
+    if (!canCreate) return;
+    // In real app: api.newAddress(newUser, newSub, newDomain, '', newAddressPreview)
+    // Here we just "create" locally and select it.
+    pickAddress(newAddressPreview);
+  };
+
+  return (
+    <div className="compose-scrim" onClick={onClose}>
+      <div className="compose-window" onClick={e => e.stopPropagation()}>
+        {/* Title bar */}
+        <div className="compose-title">
+          <span>New message</span>
+          <button onClick={onClose} aria-label="Close">
+            <Icon name="close" size={14} />
+          </button>
+        </div>
+
+        {/* Headers */}
+        <div className="compose-headers">
+          {/* FROM */}
+          <div className="compose-row">
+            <span className="compose-label">From</span>
+            <div ref={fromRef} className="from-field">
+              <div
+                className={`from-trigger ${fromOpen ? 'open' : ''}`}
+                onClick={() => { if (!fromOpen) { setFromOpen(true); setMode('pick'); } }}
+              >
+                {!fromOpen && selectedAccount && (
+                  <span className="from-swatch" style={{
+                    background: selectedAccount.color ? `var(${selectedAccount.color})` : 'var(--ink-quiet)'
+                  }} />
+                )}
+                {fromOpen ? (
+                  <input
+                    autoFocus
+                    placeholder={mode === 'create' ? "Filling in new address below…" : "Search your addresses…"}
+                    value={fromQuery}
+                    onChange={(e) => { setFromQuery(e.target.value); setMode('pick'); }}
+                    className="from-search"
+                    disabled={mode === 'create'}
+                  />
+                ) : (
+                  <>
+                    <span className="from-address">{from}</span>
+                    <Icon name="chevronDown" size={14} className="icon" />
+                  </>
+                )}
+              </div>
+
+              {fromOpen && (
+                <div className="from-menu" role="listbox">
+                  {mode === 'create' ? (
+                    <CreateAddressForm
+                      newUser={newUser} setNewUser={setNewUser}
+                      newSub={newSub} setNewSub={setNewSub}
+                      newDomain={newDomain} setNewDomain={setNewDomain}
+                      newNote={newNote} setNewNote={setNewNote}
+                      validUsername={validUsername}
+                      validSubdomain={validSubdomain}
+                      canCreate={canCreate}
+                      preview={newAddressPreview}
+                      onCancel={() => setMode('pick')}
+                      onSubmit={submitCreate}
+                      onRandom={generateRandom}
+                    />
+                  ) : (
+                    <>
+                      {filtered.fav.length > 0 && (
+                        <div className="from-section">
+                          <div className="from-section-label">
+                            Favorites
+                            <span className="from-section-count">{filtered.fav.length}</span>
+                          </div>
+                          {filtered.fav.map(a => (
+                            <FromRow key={a.address} a={a} q={q}
+                              starred={true}
+                              onStar={(e) => toggleFav(a.address, e)}
+                              onPick={() => pickAddress(a.address)} />
+                          ))}
+                        </div>
+                      )}
+
+                      {filtered.primary.length > 0 && (
+                        <div className="from-section">
+                          <div className="from-section-label">
+                            {filtered.fav.length > 0 ? 'More addresses' : 'Your addresses'}
+                            <span className="from-section-count">{filtered.primary.length}</span>
+                          </div>
+                          {filtered.primary.map(a => (
+                            <FromRow key={a.address} a={a} q={q}
+                              starred={favs.has(a.address)}
+                              onStar={(e) => toggleFav(a.address, e)}
+                              onPick={() => pickAddress(a.address)} />
+                          ))}
+                        </div>
+                      )}
+
+                      {filtered.other.length > 0 && (
+                        <div className="from-section">
+                          <div className="from-section-label">
+                            Search results
+                            <span className="from-section-count">{q ? `${filtered.other.length} of ${RECEIVE_ONLY.length}` : RECEIVE_ONLY.length}</span>
+                          </div>
+                          {filtered.other.map(a => (
+                            <FromRow key={a.address} a={a} q={q}
+                              starred={favs.has(a.address)}
+                              onStar={(e) => toggleFav(a.address, e)}
+                              onPick={() => pickAddress(a.address)} />
+                          ))}
+                        </div>
+                      )}
+                      {!q && filtered.other.length === 0 && RECEIVE_ONLY.filter(a => !favs.has(a.address)).length > 0 && (
+                        <div className="from-hint">Type to search {RECEIVE_ONLY.length} more addresses</div>
+                      )}
+
+                      {nothingMatches && (
+                        <div className="from-empty">No address matches “{q}”.</div>
+                      )}
+
+                      <button className="from-create-cta" onClick={() => {
+                        setMode('create');
+                        // prefill create form from the current query if it looks like a username
+                        if (q && /^[a-z0-9][a-z0-9._-]*$/i.test(q) && !q.includes('@')) {
+                          setNewUser(q);
+                        }
+                      }}>
+                        <span className="plus">+</span>
+                        <span className="create-label">
+                          <strong>Create a new address</strong>
+                          <span className="create-hint">username @ subdomain . domain</span>
+                        </span>
+                        <Icon name="chevronRight" size={14} className="icon" />
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* TO */}
+          <div className="compose-row">
+            <span className="compose-label">To</span>
+            <input className="compose-input mono"
+              value={to} onChange={e => setTo(e.target.value)}
+              placeholder="Recipient…" />
+          </div>
+
+          {/* SUBJECT */}
+          <div className="compose-row">
+            <span className="compose-label">Subject</span>
+            <input className="compose-input"
+              value={subject} onChange={e => setSubject(e.target.value)}
+              placeholder="Subject…" />
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="compose-body">
+          <p className="compose-body-placeholder">Write your message…</p>
+        </div>
+
+        {/* Footer */}
+        <div className="compose-footer">
+          <button className="qr-btn primary">Send</button>
+          <button className="qr-btn">Save draft</button>
+          <span style={{ flex: 1 }} />
+          <button className="tool-btn"><Icon name="paperclip" size={14} /></button>
+          <button className="tool-btn"><Icon name="link" size={14} /></button>
+          <button className="tool-btn"><Icon name="more" size={14} /></button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FromRow({ a, q, starred, onStar, onPick }) {
+  return (
+    <button className="from-option" onClick={onPick}>
+      <span className="from-option-swatch"
+        style={a.color ? { background: `var(${a.color})` } : undefined} />
+      <div className="from-option-main">
+        <span className="from-option-addr">{highlight(a.address, q)}</span>
+        {a.note && <span className="from-option-note">{highlight(a.note, q)}</span>}
+      </div>
+      <span
+        className={`from-option-star ${starred ? 'on' : ''}`}
+        onClick={onStar}
+        role="button"
+        aria-label={starred ? 'Unfavorite' : 'Favorite'}
+        title={starred ? 'Remove from favorites' : 'Add to favorites'}
+      >
+        <Icon name={starred ? 'starFilled' : 'star'} size={13} />
+      </span>
+    </button>
+  );
+}
+
+// Highlight query matches inside a string (returns array of JSX nodes)
+function highlight(text, q) {
+  if (!q) return text;
+  const idx = text.toLowerCase().indexOf(q);
+  if (idx === -1) return text;
+  return [
+    text.slice(0, idx),
+    React.createElement('mark', { key: 'm', className: 'from-hl' }, text.slice(idx, idx + q.length)),
+    text.slice(idx + q.length),
+  ];
+}
+
+function CreateAddressForm({
+  newUser, setNewUser, newSub, setNewSub, newDomain, setNewDomain,
+  newNote, setNewNote,
+  validUsername, validSubdomain, canCreate, preview, onCancel, onSubmit, onRandom
+}) {
+  return (
+    <div className="create-form">
+      <div className="create-header">
+        <button className="create-back" onClick={onCancel} aria-label="Back">
+          <Icon name="chevronLeft" size={13} />
+        </button>
+        <div className="create-titles">
+          <div className="create-title">New address</div>
+          <div className="create-sub">Cabalmail requires a subdomain for every address.</div>
+        </div>
+        <button className="create-random" onClick={onRandom} title="Generate random address">
+          <Icon name="shuffle" size={13} />
+          <span>Random</span>
+        </button>
+      </div>
+
+      <div className="address-composer">
+        <input
+          autoFocus
+          value={newUser}
+          onChange={e => setNewUser(e.target.value.toLowerCase())}
+          placeholder="username"
+          className={`ac-input ${newUser && !validUsername ? 'invalid' : ''}`}
+          autoCapitalize="none" autoCorrect="off" spellCheck={false}
+        />
+        <span className="ac-sep">@</span>
+        <input
+          value={newSub}
+          onChange={e => setNewSub(e.target.value.toLowerCase())}
+          placeholder="subdomain"
+          className={`ac-input ${newSub && !validSubdomain ? 'invalid' : ''}`}
+          autoCapitalize="none" autoCorrect="off" spellCheck={false}
+        />
+        <span className="ac-sep">.</span>
+        <select
+          value={newDomain}
+          onChange={e => setNewDomain(e.target.value)}
+          className="ac-select"
+        >
+          {DOMAINS.map(d => <option key={d} value={d}>{d}</option>)}
+        </select>
+      </div>
+
+      <div className="ac-preview-row">
+        {preview ? (
+          <>
+            <span className="ac-preview-label">Preview</span>
+            <code className="ac-preview">{preview}</code>
+          </>
+        ) : (
+          <span className="ac-preview-empty">Fill all three fields to see a preview</span>
+        )}
+      </div>
+
+      <div className="create-note-row">
+        <label className="create-note-label" htmlFor="addr-note">Note</label>
+        <input
+          id="addr-note"
+          value={newNote}
+          onChange={e => setNewNote(e.target.value)}
+          placeholder="e.g. florist down the street, gym sign-up, …"
+          className="create-note-input"
+          maxLength={80}
+        />
+      </div>
+
+      <div className="create-hint-row">
+        <Icon name="info" size={12} />
+        <span>
+          Notes are searchable — helpful when you have a lot of addresses
+          and can&rsquo;t remember which one went where.
+        </span>
+      </div>
+
+      <div className="create-actions">
+        <button className="qr-btn" onClick={onCancel}>Cancel</button>
+        <button className="qr-btn primary" onClick={onSubmit} disabled={!canCreate}>
+          Create &amp; use
+        </button>
+      </div>
+    </div>
+  );
+}
+
+window.TweaksPanel = TweaksPanel;
+window.ComposeOverlay = ComposeOverlay;
+
+
+// ==================== app.jsx ====================
+/* Root app — wires everything together + persists tweak state to localStorage. */
+
+const { useState: useAS, useEffect: useAE } = React;
+
+const LOGO_PATH_D = "M0 0h45v1h-45zM54 0h146v1h-146zM0 1h38v1h-38zM60 1h19v1h-19zM80 1h116v1h-116zM197 1h3v1h-3zM0 2h35v1h-35zM64 2h15v1h-15zM82 2h113v1h-113zM197 2h3v1h-3zM0 3h32v1h-32zM67 3h12v1h-12zM83 3h111v1h-111zM197 3h3v1h-3zM0 4h29v1h-29zM69 4h10v1h-10zM84 4h108v1h-108zM197 4h3v1h-3zM0 5h27v1h-27zM71 5h8v1h-8zM85 5h106v1h-106zM197 5h3v1h-3zM0 6h25v1h-25zM73 6h6v1h-6zM87 6h103v1h-103zM197 6h3v1h-3zM0 7h24v1h-24zM75 7h4v1h-4zM88 7h101v1h-101zM197 7h3v1h-3zM0 8h22v1h-22zM77 8h2v1h-2zM89 8h99v1h-99zM197 8h3v1h-3zM0 9h21v1h-21zM78 9h1v1h-1zM90 9h96v1h-96zM197 9h3v1h-3zM0 10h19v1h-19zM92 10h93v1h-93zM197 10h3v1h-3zM0 11h18v1h-18zM93 11h91v1h-91zM197 11h3v1h-3zM0 12h17v1h-17zM94 12h89v1h-89zM197 12h3v1h-3zM0 13h16v1h-16zM95 13h86v1h-86zM197 13h3v1h-3zM0 14h15v1h-15zM96 14h84v1h-84zM197 14h3v1h-3zM0 15h14v1h-14zM98 15h81v1h-81zM197 15h3v1h-3zM0 16h13v1h-13zM99 16h79v1h-79zM197 16h3v1h-3zM0 17h12v1h-12zM100 17h76v1h-76zM197 17h3v1h-3zM0 18h11v1h-11zM55 18h2v1h-2zM101 18h74v1h-74zM197 18h3v1h-3zM0 19h10v1h-10zM54 19h3v1h-3zM103 19h71v1h-71zM197 19h3v1h-3zM0 20h10v1h-10zM53 20h4v1h-4zM104 20h69v1h-69zM197 20h3v1h-3zM0 21h9v1h-9zM52 21h5v1h-5zM105 21h67v1h-67zM197 21h3v1h-3zM0 22h8v1h-8zM50 22h7v1h-7zM106 22h64v1h-64zM197 22h3v1h-3zM0 23h8v1h-8zM49 23h8v1h-8zM108 23h61v1h-61zM197 23h3v1h-3zM0 24h7v1h-7zM48 24h9v1h-9zM109 24h59v1h-59zM197 24h3v1h-3zM0 25h6v1h-6zM47 25h10v1h-10zM110 25h57v1h-57zM197 25h3v1h-3zM0 26h6v1h-6zM46 26h11v1h-11zM111 26h54v1h-54zM197 26h3v1h-3zM0 27h5v1h-5zM45 27h12v1h-12zM112 27h52v1h-52zM197 27h3v1h-3zM0 28h5v1h-5zM43 28h14v1h-14zM114 28h49v1h-49zM197 28h3v1h-3zM0 29h4v1h-4zM42 29h15v1h-15zM115 29h47v1h-47zM197 29h3v1h-3zM0 30h4v1h-4zM41 30h16v1h-16zM116 30h44v1h-44zM197 30h3v1h-3zM0 31h4v1h-4zM40 31h17v1h-17zM117 31h42v1h-42zM197 31h3v1h-3zM0 32h3v1h-3zM39 32h40v1h-40zM119 32h39v1h-39zM197 32h3v1h-3zM0 33h3v1h-3zM38 33h41v1h-41zM120 33h37v1h-37zM197 33h3v1h-3zM0 34h2v1h-2zM36 34h43v1h-43zM121 34h35v1h-35zM197 34h3v1h-3zM0 35h2v1h-2zM35 35h44v1h-44zM122 35h32v1h-32zM197 35h3v1h-3zM0 36h2v1h-2zM34 36h45v1h-45zM124 36h29v1h-29zM197 36h3v1h-3zM0 37h2v1h-2zM33 37h46v1h-46zM125 37h27v1h-27zM197 37h3v1h-3zM0 38h1v1h-1zM32 38h47v1h-47zM126 38h25v1h-25zM197 38h3v1h-3zM0 39h1v1h-1zM31 39h48v1h-48zM127 39h22v1h-22zM197 39h3v1h-3zM0 40h1v1h-1zM29 40h50v1h-50zM128 40h20v1h-20zM197 40h3v1h-3zM0 41h1v1h-1zM28 41h51v1h-51zM130 41h17v1h-17zM197 41h3v1h-3zM0 42h1v1h-1zM27 42h52v1h-52zM131 42h15v1h-15zM197 42h3v1h-3zM0 43h1v1h-1zM26 43h53v1h-53zM132 43h12v1h-12zM197 43h3v1h-3zM25 44h54v1h-54zM133 44h10v1h-10zM197 44h3v1h-3zM24 45h55v1h-55zM135 45h7v1h-7zM197 45h3v1h-3zM23 46h56v1h-56zM136 46h5v1h-5zM197 46h3v1h-3zM21 47h58v1h-58zM137 47h3v1h-3zM197 47h3v1h-3zM20 48h59v1h-59zM197 48h3v1h-3zM19 49h60v2h-60zM197 49h3v2h-3zM20 51h59v1h-59zM197 51h3v1h-3zM21 52h58v1h-58zM197 52h3v1h-3zM23 53h56v1h-56zM197 53h3v1h-3zM24 54h55v1h-55zM197 54h3v1h-3zM0 55h1v1h-1zM25 55h54v1h-54zM197 55h3v1h-3zM0 56h1v1h-1zM26 56h53v1h-53zM197 56h3v1h-3zM0 57h1v1h-1zM27 57h52v1h-52zM197 57h3v1h-3zM0 58h1v1h-1zM28 58h51v1h-51zM197 58h3v1h-3zM0 59h1v1h-1zM30 59h49v1h-49zM197 59h3v1h-3zM0 60h1v1h-1zM31 60h48v1h-48zM197 60h3v1h-3zM0 61h2v1h-2zM32 61h47v1h-47zM197 61h3v1h-3zM0 62h2v1h-2zM33 62h46v1h-46zM197 62h3v1h-3zM0 63h2v1h-2zM34 63h45v1h-45zM197 63h3v1h-3zM0 64h3v1h-3zM35 64h44v1h-44zM197 64h3v1h-3zM0 65h3v1h-3zM36 65h43v1h-43zM197 65h3v1h-3zM0 66h3v1h-3zM38 66h41v1h-41zM197 66h3v1h-3zM0 67h4v1h-4zM39 67h40v1h-40zM197 67h3v1h-3zM0 68h4v1h-4zM40 68h17v1h-17zM197 68h3v1h-3zM0 69h5v1h-5zM41 69h16v1h-16zM197 69h3v1h-3zM0 70h5v1h-5zM42 70h15v1h-15zM197 70h3v1h-3zM0 71h6v1h-6zM43 71h14v1h-14zM197 71h3v1h-3zM0 72h6v1h-6zM45 72h12v1h-12zM197 72h3v1h-3zM0 73h7v1h-7zM46 73h11v1h-11zM197 73h3v1h-3zM0 74h7v1h-7zM47 74h10v1h-10zM197 74h3v1h-3zM0 75h8v1h-8zM48 75h9v1h-9zM197 75h3v1h-3zM0 76h8v1h-8zM49 76h8v1h-8zM197 76h3v1h-3zM0 77h9v1h-9zM50 77h7v1h-7zM197 77h3v1h-3zM0 78h10v1h-10zM52 78h5v1h-5zM197 78h3v1h-3zM0 79h11v1h-11zM53 79h4v1h-4zM197 79h3v1h-3zM0 80h11v1h-11zM54 80h3v1h-3zM197 80h3v1h-3zM0 81h12v1h-12zM55 81h2v1h-2zM197 81h3v1h-3zM0 82h13v1h-13zM197 82h3v1h-3zM0 83h14v1h-14zM197 83h3v1h-3zM0 84h15v1h-15zM197 84h3v1h-3zM0 85h16v1h-16zM197 85h3v1h-3zM0 86h17v1h-17zM197 86h3v1h-3zM0 87h18v1h-18zM197 87h3v1h-3zM0 88h20v1h-20zM197 88h3v1h-3zM0 89h21v1h-21zM78 89h1v1h-1zM197 89h3v1h-3zM0 90h23v1h-23zM76 90h3v1h-3zM197 90h3v1h-3zM0 91h24v1h-24zM75 91h4v1h-4zM197 91h3v1h-3zM0 92h26v1h-26zM73 92h6v1h-6zM197 92h3v1h-3zM0 93h28v1h-28zM71 93h8v1h-8zM197 93h3v1h-3zM0 94h30v1h-30zM69 94h10v1h-10zM197 94h3v1h-3zM0 95h32v1h-32zM66 95h13v1h-13zM197 95h3v1h-3zM0 96h35v1h-35zM63 96h16v1h-16zM197 96h3v1h-3zM0 97h40v1h-40zM59 97h20v1h-20zM197 97h3v1h-3zM0 98h200v2h-200z";
+const LS_KEY = 'cabalmail-inbox-tweaks';
+
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "direction": "stately",
+  "theme": "light",
+  "accent": "forest",
+  "density": "compact",
+  "sample": "newsletter",
+  "composeOpen": false
+}/*EDITMODE-END*/;
+
+function loadState() {
+  try {
+    const s = JSON.parse(localStorage.getItem(LS_KEY));
+    return { ...TWEAK_DEFAULTS, ...(s || {}) };
+  } catch {
+    return { ...TWEAK_DEFAULTS };
+  }
+}
+
+const USER_ACCENTS = ['ink', 'oxblood', 'forest', 'azure', 'amber', 'plum'];
+
+function UserMenu({ state, setState }) {
+  const [open, setOpen] = useAS(false);
+  const ref = React.useRef(null);
+  useAE(() => {
+    if (!open) return;
+    const onDoc = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+  return (
+    <div className="user-menu-wrap" ref={ref}>
+      <button className="avatar" title="chris@cabalmail.com" onClick={() => setOpen(o => !o)}>CC</button>
+      {open && (
+        <div className="user-menu" role="menu">
+          <div className="user-menu-head">
+            <div className="user-menu-avatar">CC</div>
+            <div className="user-menu-who">
+              <div className="user-menu-name">Chris Carr</div>
+              <div className="user-menu-mail">chris@main.cabalmail.com</div>
+            </div>
+          </div>
+
+          <div className="user-menu-section-label">Accent color</div>
+          <div className="user-menu-accents">
+            {USER_ACCENTS.map(c => (
+              <button key={c}
+                className={`accent-swatch ${state.accent === c ? 'active' : ''}`}
+                data-c={c}
+                onClick={() => setState({ accent: c })}
+                title={c[0].toUpperCase() + c.slice(1)} />
+            ))}
+          </div>
+
+          <div className="user-menu-sep" />
+          <button className="user-menu-item"><Icon name="settings" size={13} /><span>Preferences…</span></button>
+          <button className="user-menu-item"><Icon name="info" size={13} /><span>Keyboard shortcuts</span></button>
+          <div className="user-menu-sep" />
+          <button className="user-menu-item"><span>Sign out</span></button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function App() {
+  const [state, setStateRaw] = useAS(loadState);
+  const setState = (patch) => setStateRaw(s => {
+    const next = { ...s, ...patch };
+    try { localStorage.setItem(LS_KEY, JSON.stringify(next)); } catch {}
+    return next;
+  });
+
+  // Track system color scheme
+  const [systemTheme, setSystemTheme] = useAS(() =>
+    window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  );
+  useAE(() => {
+    const mq = window.matchMedia?.('(prefers-color-scheme: dark)');
+    if (!mq) return;
+    const onChange = (e) => setSystemTheme(e.matches ? 'dark' : 'light');
+    mq.addEventListener?.('change', onChange) ?? mq.addListener?.(onChange);
+    return () => mq.removeEventListener?.('change', onChange) ?? mq.removeListener?.(onChange);
+  }, []);
+  const effectiveTheme = state.theme === 'system' ? systemTheme : state.theme;
+
+  const [showTweaks, setShowTweaks] = useAS(true);
+  const [selectedId, setSelectedId] = useAS(SELECTED_MESSAGE_ID);
+  const [activeFolder, setActiveFolder] = useAS('INBOX');
+  const [activeAccount, setActiveAccount] = useAS(null);
+  const [composePrefill, setComposePrefill] = useAS(null);
+
+  // Bulk selection (multi-select mode)
+  const [selectMode, setSelectMode] = useAS(false);
+  const [selectedIds, setSelectedIds] = useAS(() => new Set());
+  const [lastSelectedId, setLastSelectedId] = useAS(null);
+  const clearSelection = () => { setSelectedIds(new Set()); setLastSelectedId(null); };
+  const exitSelectMode = () => { setSelectMode(false); clearSelection(); };
+
+  // Revoked addresses — persisted in localStorage
+  const [revokedAddrs, setRevokedAddrs] = useAS(loadRevoked);
+  useAE(() => saveRevoked(revokedAddrs), [revokedAddrs]);
+  const revokeAddress = (addr) => {
+    setRevokedAddrs(s => {
+      const n = new Set(s); n.add(addr); return n;
+    });
+    if (activeAccount === addr) setActiveAccount(null);
+  };
+  // Expose to RecipientPill (which is rendered inside ReaderPane / ComposeOverlay and
+  // doesn't otherwise receive app-level props).
+  useAE(() => {
+    window.__cabalRevoke = (addr) => {
+      if (!confirm(`Revoke ${addr}?\n\nIncoming mail to this address will start bouncing. This can't be undone in the prototype.`)) return;
+      revokeAddress(addr);
+    };
+  }, [revokedAddrs, activeAccount]);
+
+  // Listen for host activate/deactivate (Tweaks toolbar toggle)
+  useAE(() => {
+    const onMsg = (e) => {
+      if (e.data?.type === '__activate_edit_mode') setShowTweaks(true);
+      if (e.data?.type === '__deactivate_edit_mode') setShowTweaks(false);
+    };
+    window.addEventListener('message', onMsg);
+    window.parent?.postMessage({ type: '__edit_mode_available' }, '*');
+    return () => window.removeEventListener('message', onMsg);
+  }, []);
+
+  // Persist edits to host
+  useAE(() => {
+    const { composeOpen, ...persisted } = state;
+    window.parent?.postMessage({ type: '__edit_mode_set_keys', edits: persisted }, '*');
+  }, [state.direction, state.theme, state.accent, state.density, state.sample]);  const selectedEnvelope = ENVELOPES.find(e => e.id === selectedId);
+
+  const openCompose = (type, envelope) => {
+    if (!envelope) { setComposePrefill({}); setState({ composeOpen: true }); return; }
+    const prefix = type === 'forward' ? 'Fwd: ' : 'Re: ';
+    setComposePrefill({
+      from: envelope.account,
+      to: type === 'forward' ? '' : extractEmail(envelope.from[0]),
+      subject: prefix + envelope.subject.replace(/^(re:?\s|fwd?:?\s)?/i, ''),
+    });
+    setState({ composeOpen: true });
+  };
+
+  return (
+    <div
+      className="app"
+      data-direction={state.direction}
+      data-theme={effectiveTheme}
+      data-theme-pref={state.theme}
+      data-accent={state.accent}
+      data-compact={state.density}
+    >
+      {/* Top bar */}
+      <header className="topbar">
+        <div className="brand">
+          <span className="brand-logo-tile" aria-label="Cabalmail">
+            <svg className="brand-logo" viewBox="0 0 200 100" fill="currentColor" shapeRendering="crispEdges" aria-hidden="true"><path d={LOGO_PATH_D} /></svg>
+          </span>
+          <span className="brand-word">Cabalmail</span>
+        </div>
+        <div className="search">
+          <Icon name="search" size={14} />
+          <input placeholder="Search mail, senders, attachments…" />
+          <kbd>⌘K</kbd>
+        </div>
+        <div className="topbar-right">
+          <button className="icon-btn" title="Settings"><Icon name="settings" size={15} /></button>
+          <UserMenu state={state} setState={setState} />
+        </div>
+      </header>
+
+      <div className="panes">
+        <FoldersPane
+          activeFolder={activeFolder}
+          onFolderClick={(f) => { setActiveFolder(f); setActiveAccount(null); }}
+          activeAccount={activeAccount}
+          onAccountClick={(a) => setActiveAccount(activeAccount === a ? null : a)}
+          onCompose={() => openCompose('new', null)}
+          onNewAddress={() => { setComposePrefill({ openCreate: true }); setState({ composeOpen: true }); }}
+          revokedAddrs={revokedAddrs}
+          onRevokeAddress={revokeAddress}
+        />
+        <ListPane
+          envelopes={ENVELOPES}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+          activeAccount={activeAccount}
+          selectMode={selectMode}
+          setSelectMode={setSelectMode}
+          selectedIds={selectedIds}
+          setSelectedIds={setSelectedIds}
+          lastSelectedId={lastSelectedId}
+          setLastSelectedId={setLastSelectedId}
+          clearSelection={clearSelection}
+          exitSelectMode={exitSelectMode}
+        />
+        <ReaderPane
+          envelope={selectedEnvelope}
+          onCompose={openCompose}
+          sample={state.sample === 'newsletter' ? SAMPLE_NEWSLETTER : SAMPLE_REPLY}
+          selectMode={selectMode}
+          selectedIds={selectedIds}
+          clearSelection={clearSelection}
+          exitSelectMode={exitSelectMode}
+        />
+      </div>
+
+      {/* Compose overlay */}
+      {state.composeOpen && (
+        <ComposeOverlay
+          prefill={composePrefill}
+          onClose={() => setState({ composeOpen: false })}
+        />
+      )}
+
+      {/* Tweaks */}
+      {showTweaks ? (
+        <TweaksPanel state={state} setState={setState} onClose={() => setShowTweaks(false)} />
+      ) : (
+        <button className="toggle-pill" onClick={() => setShowTweaks(true)}>
+          <Icon name="settings" size={13} /> Tweaks
+        </button>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+
+
+</script>
+</body>
+</html>

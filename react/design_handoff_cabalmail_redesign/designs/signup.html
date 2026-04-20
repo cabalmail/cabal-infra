@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en" data-direction="stately" data-theme="light" data-accent="forest">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Create account · Cabalmail</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+:root { --radius: 6px; }
+
+/* ---- stately tokens (light) ---- */
+[data-direction="stately"] {
+  --font-ui: "Inter", system-ui, sans-serif;
+  --font-display: "Source Serif 4", "Fraunces", Georgia, serif;
+  --font-mono: "IBM Plex Mono", monospace;
+}
+[data-direction="stately"][data-theme="light"] {
+  --app-bg: oklch(0.98 0.005 85);
+  --surface: oklch(0.985 0.005 85);
+  --surface-hover: oklch(0.955 0.008 85);
+  --border: oklch(0.9 0.007 85);
+  --border-faint: oklch(0.94 0.005 85);
+  --ink: oklch(0.22 0.015 60);
+  --ink-soft: oklch(0.36 0.012 60);
+  --ink-quiet: oklch(0.55 0.01 60);
+  --accent-fg: oklch(0.99 0.003 60);
+  --field-bg: oklch(1 0 0);
+}
+[data-direction="stately"][data-theme="dark"] {
+  --app-bg: oklch(0.17 0.008 60);
+  --surface: oklch(0.22 0.008 60);
+  --surface-hover: oklch(0.26 0.009 60);
+  --border: oklch(0.3 0.01 60);
+  --border-faint: oklch(0.25 0.009 60);
+  --ink: oklch(0.94 0.005 80);
+  --ink-soft: oklch(0.8 0.006 80);
+  --ink-quiet: oklch(0.6 0.008 60);
+  --accent-fg: oklch(0.15 0.008 60);
+  --field-bg: oklch(0.19 0.008 60);
+}
+
+/* ---- accents ---- */
+[data-accent="forest"]  { --accent: oklch(0.45 0.09 150); --accent-soft: color-mix(in oklch, oklch(0.45 0.09 150) 10%, transparent); }
+[data-theme="dark"][data-accent="forest"]  { --accent: oklch(0.75 0.11 150); --accent-soft: color-mix(in oklch, oklch(0.75 0.11 150) 15%, transparent); }
+
+/* ---- reset ---- */
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: var(--font-ui);
+  background: var(--app-bg);
+  color: var(--ink);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  font-size: 15px;
+  line-height: 1.5;
+}
+button { font: inherit; cursor: pointer; border: 0; background: transparent; color: inherit; }
+input { font: inherit; color: inherit; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ---- layout ---- */
+.auth-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+}
+.auth-header {
+  padding: 28px 32px 16px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 17px;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.brand-logo-tile {
+  display: inline-block;
+  font-size: 0;
+  line-height: 0;
+  background: var(--accent);
+  color: var(--surface);
+  overflow: hidden;
+}
+[data-theme="dark"] .brand-logo-tile { color: #0b0b0b; }
+.brand-logo {
+  height: 37px;
+  width: 72px;
+  display: block;
+  color: inherit;
+  margin-top: -1px;
+}
+.brand-word {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.header-right {
+  font-size: 13px;
+  color: var(--ink-quiet);
+}
+.header-right a { color: var(--ink-soft); font-weight: 500; }
+
+.auth-main {
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  padding: 40px 36px 32px;
+}
+
+/* ---- title ---- */
+.auth-eyebrow {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-quiet);
+  margin: 0 0 8px;
+}
+.auth-title {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  margin: 0 0 14px;
+  line-height: 1.2;
+}
+.auth-subtitle {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0 0 28px;
+  max-width: 360px;
+  line-height: 1.55;
+}
+
+/* ---- form ---- */
+.auth-form { display: flex; flex-direction: column; gap: 16px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field-header {
+  display: flex; justify-content: space-between; align-items: baseline;
+}
+.field-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.field-hint {
+  font-size: 11px;
+  color: var(--ink-quiet);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.field-help {
+  font-size: 11.5px;
+  color: var(--ink-quiet);
+  line-height: 1.45;
+}
+.field input {
+  height: 42px;
+  padding: 0 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--field-bg);
+  font-size: 14px;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 80ms, box-shadow 80ms;
+  font-family: var(--font-ui);
+}
+.field input:hover { border-color: var(--ink-quiet); }
+.field input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.field input.mono { font-family: var(--font-mono); font-size: 13.5px; }
+.field input::placeholder { color: var(--ink-quiet); }
+.field.invalid input { border-color: oklch(0.55 0.18 25); }
+.field-error {
+  font-size: 11.5px;
+  color: oklch(0.48 0.2 25);
+  margin-top: 2px;
+}
+
+.field-with-adornment {
+  position: relative;
+  width: 100%;
+}
+.field-with-adornment input {
+  width: 100%;
+  padding-right: 60px;
+}
+.field-adornment {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 30px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 4px;
+  color: var(--ink-quiet);
+  font-size: 11px;
+  font-weight: 500;
+}
+.field-adornment:hover { background: var(--surface-hover); color: var(--ink-soft); }
+
+/* ---- button ---- */
+.btn-primary {
+  width: 100%;
+  height: 44px;
+  margin-top: 12px;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: -0.005em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: filter 80ms;
+}
+.btn-primary:hover { filter: brightness(1.05); }
+.btn-primary:active { filter: brightness(0.98); }
+
+/* ---- divider row ---- */
+.auth-alt {
+  margin-top: 24px;
+  font-size: 13px;
+  color: var(--ink-quiet);
+  text-align: center;
+}
+.auth-alt a {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+/* ---- footer ---- */
+.auth-footer {
+  padding: 24px 32px 24px;
+  font-size: 11px;
+  color: var(--ink-quiet);
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.auth-footer a {
+  color: var(--ink-quiet);
+}
+.auth-footer a:hover { color: var(--ink-soft); text-decoration: none; }
+.auth-footer .left { display: flex; gap: 18px; }
+.auth-footer .right { color: var(--ink-quiet); font-variant-numeric: tabular-nums; }
+
+/* ---- responsive ---- */
+@media (max-width: 520px) {
+  .auth-header { padding: 20px 18px 8px; }
+  .auth-footer { padding: 20px 18px; }
+  .auth-card { padding: 20px 18px; }
+  .auth-title { font-size: 28px; }
+}
+</style>
+</head>
+<body>
+
+<div class="auth-shell">
+  <header class="auth-header">
+    <a href="login.html" class="brand" aria-label="Cabalmail home">
+      <span class="brand-logo-tile" aria-hidden="true">
+        <svg class="brand-logo" viewBox="0 0 200 100" fill="currentColor" shape-rendering="crispEdges">
+          <path id="cabal-logo-path" d=""/>
+        </svg>
+      </span>
+    </a>
+    <div class="header-right">
+      Already have an account? <a href="login.html">Sign in</a>
+    </div>
+  </header>
+
+  <main class="auth-main">
+        <div class="auth-card">
+      <p class="auth-eyebrow">Sign up</p>
+      <h1 class="auth-title">Create your account.</h1>
+      <p class="auth-subtitle">Pick a username and password. Your phone number is used only for recovery.</p>
+
+      <form class="auth-form" id="signupForm" novalidate>
+        <div class="field">
+          <div class="field-header">
+            <label class="field-label" for="username">Username</label>
+          </div>
+          <input
+            id="username"
+            name="username"
+            class="mono"
+            autocomplete="username"
+            autocapitalize="off"
+            autocorrect="off"
+            spellcheck="false"
+            placeholder="choose-a-username"
+            required>
+          <p class="field-help">3–32 characters. Lowercase letters, numbers, hyphens.</p>
+        </div>
+
+        <div class="field">
+          <div class="field-header">
+            <label class="field-label" for="phone">Phone number</label>
+            <span class="field-hint">For recovery only</span>
+          </div>
+          <input
+            id="phone"
+            name="phone"
+            type="tel"
+            class="mono"
+            autocomplete="tel"
+            placeholder="+1 555 123 4567"
+            required>
+        </div>
+
+        <div class="field">
+          <div class="field-header">
+            <label class="field-label" for="password">Password</label>
+          </div>
+          <div class="field-with-adornment">
+            <input
+              id="password"
+              name="password"
+              type="password"
+              autocomplete="new-password"
+              placeholder="••••••••"
+              required>
+            <button type="button" class="field-adornment" id="togglePw" aria-label="Show password">Show</button>
+          </div>
+          <p class="field-help">At least 12 characters. A passphrase is better than a clever one.</p>
+        </div>
+
+        <div class="field">
+          <div class="field-header">
+            <label class="field-label" for="passwordConfirm">Confirm password</label>
+          </div>
+          <input
+            id="passwordConfirm"
+            name="passwordConfirm"
+            type="password"
+            autocomplete="new-password"
+            placeholder="••••••••"
+            required>
+        </div>
+
+        <button type="submit" class="btn-primary">Create account</button>
+      </form>
+
+      <p class="auth-alt">
+        Already have an account? <a href="login.html">Sign in</a>
+      </p>
+    </div>
+  </main>
+
+  <footer class="auth-footer">
+    <div class="left">
+      <a href="#">Terms</a>
+      <a href="#">Privacy</a>
+      <a href="#">Status</a>
+    </div>
+    <div class="right">Cabalmail · v1.0</div>
+  </footer>
+</div>
+
+<!-- Inlined logo path -->
+<script>window.CABAL_LOGO_PATH = "M0 0h45v1h-45zM54 0h146v1h-146zM0 1h38v1h-38zM60 1h19v1h-19zM80 1h116v1h-116zM197 1h3v1h-3zM0 2h35v1h-35zM64 2h15v1h-15zM82 2h113v1h-113zM197 2h3v1h-3zM0 3h32v1h-32zM67 3h12v1h-12zM83 3h111v1h-111zM197 3h3v1h-3zM0 4h29v1h-29zM69 4h10v1h-10zM84 4h108v1h-108zM197 4h3v1h-3zM0 5h27v1h-27zM71 5h8v1h-8zM85 5h106v1h-106zM197 5h3v1h-3zM0 6h25v1h-25zM73 6h6v1h-6zM87 6h103v1h-103zM197 6h3v1h-3zM0 7h24v1h-24zM75 7h4v1h-4zM88 7h101v1h-101zM197 7h3v1h-3zM0 8h22v1h-22zM77 8h2v1h-2zM89 8h99v1h-99zM197 8h3v1h-3zM0 9h21v1h-21zM78 9h1v1h-1zM90 9h96v1h-96zM197 9h3v1h-3zM0 10h19v1h-19zM92 10h93v1h-93zM197 10h3v1h-3zM0 11h18v1h-18zM93 11h91v1h-91zM197 11h3v1h-3zM0 12h17v1h-17zM94 12h89v1h-89zM197 12h3v1h-3zM0 13h16v1h-16zM95 13h86v1h-86zM197 13h3v1h-3zM0 14h15v1h-15zM96 14h84v1h-84zM197 14h3v1h-3zM0 15h14v1h-14zM98 15h81v1h-81zM197 15h3v1h-3zM0 16h13v1h-13zM99 16h79v1h-79zM197 16h3v1h-3zM0 17h12v1h-12zM100 17h76v1h-76zM197 17h3v1h-3zM0 18h11v1h-11zM55 18h2v1h-2zM101 18h74v1h-74zM197 18h3v1h-3zM0 19h10v1h-10zM54 19h3v1h-3zM103 19h71v1h-71zM197 19h3v1h-3zM0 20h10v1h-10zM53 20h4v1h-4zM104 20h69v1h-69zM197 20h3v1h-3zM0 21h9v1h-9zM52 21h5v1h-5zM105 21h67v1h-67zM197 21h3v1h-3zM0 22h8v1h-8zM50 22h7v1h-7zM106 22h64v1h-64zM197 22h3v1h-3zM0 23h8v1h-8zM49 23h8v1h-8zM108 23h61v1h-61zM197 23h3v1h-3zM0 24h7v1h-7zM48 24h9v1h-9zM109 24h59v1h-59zM197 24h3v1h-3zM0 25h6v1h-6zM47 25h10v1h-10zM110 25h57v1h-57zM197 25h3v1h-3zM0 26h6v1h-6zM46 26h11v1h-11zM111 26h54v1h-54zM197 26h3v1h-3zM0 27h5v1h-5zM45 27h12v1h-12zM112 27h52v1h-52zM197 27h3v1h-3zM0 28h5v1h-5zM43 28h14v1h-14zM114 28h49v1h-49zM197 28h3v1h-3zM0 29h4v1h-4zM42 29h15v1h-15zM115 29h47v1h-47zM197 29h3v1h-3zM0 30h4v1h-4zM41 30h16v1h-16zM116 30h44v1h-44zM197 30h3v1h-3zM0 31h4v1h-4zM40 31h17v1h-17zM117 31h42v1h-42zM197 31h3v1h-3zM0 32h3v1h-3zM39 32h40v1h-40zM119 32h39v1h-39zM197 32h3v1h-3zM0 33h3v1h-3zM38 33h41v1h-41zM120 33h37v1h-37zM197 33h3v1h-3zM0 34h2v1h-2zM36 34h43v1h-43zM121 34h35v1h-35zM197 34h3v1h-3zM0 35h2v1h-2zM35 35h44v1h-44zM122 35h32v1h-32zM197 35h3v1h-3zM0 36h2v1h-2zM34 36h45v1h-45zM124 36h29v1h-29zM197 36h3v1h-3zM0 37h2v1h-2zM33 37h46v1h-46zM125 37h27v1h-27zM197 37h3v1h-3zM0 38h1v1h-1zM32 38h47v1h-47zM126 38h25v1h-25zM197 38h3v1h-3zM0 39h1v1h-1zM31 39h48v1h-48zM127 39h22v1h-22zM197 39h3v1h-3zM0 40h1v1h-1zM29 40h50v1h-50zM128 40h20v1h-20zM197 40h3v1h-3zM0 41h1v1h-1zM28 41h51v1h-51zM130 41h17v1h-17zM197 41h3v1h-3zM0 42h1v1h-1zM27 42h52v1h-52zM131 42h15v1h-15zM197 42h3v1h-3zM0 43h1v1h-1zM26 43h53v1h-53zM132 43h12v1h-12zM197 43h3v1h-3zM25 44h54v1h-54zM133 44h10v1h-10zM197 44h3v1h-3zM24 45h55v1h-55zM135 45h7v1h-7zM197 45h3v1h-3zM23 46h56v1h-56zM136 46h5v1h-5zM197 46h3v1h-3zM21 47h58v1h-58zM137 47h3v1h-3zM197 47h3v1h-3zM20 48h59v1h-59zM197 48h3v1h-3zM19 49h60v2h-60zM197 49h3v2h-3zM20 51h59v1h-59zM197 51h3v1h-3zM21 52h58v1h-58zM197 52h3v1h-3zM23 53h56v1h-56zM197 53h3v1h-3zM24 54h55v1h-55zM197 54h3v1h-3zM0 55h1v1h-1zM25 55h54v1h-54zM197 55h3v1h-3zM0 56h1v1h-1zM26 56h53v1h-53zM197 56h3v1h-3zM0 57h1v1h-1zM27 57h52v1h-52zM197 57h3v1h-3zM0 58h1v1h-1zM28 58h51v1h-51zM197 58h3v1h-3zM0 59h1v1h-1zM30 59h49v1h-49zM197 59h3v1h-3zM0 60h1v1h-1zM31 60h48v1h-48zM197 60h3v1h-3zM0 61h2v1h-2zM32 61h47v1h-47zM197 61h3v1h-3zM0 62h2v1h-2zM33 62h46v1h-46zM197 62h3v1h-3zM0 63h2v1h-2zM34 63h45v1h-45zM197 63h3v1h-3zM0 64h3v1h-3zM35 64h44v1h-44zM197 64h3v1h-3zM0 65h3v1h-3zM36 65h43v1h-43zM197 65h3v1h-3zM0 66h3v1h-3zM38 66h41v1h-41zM197 66h3v1h-3zM0 67h4v1h-4zM39 67h40v1h-40zM197 67h3v1h-3zM0 68h4v1h-4zM40 68h17v1h-17zM197 68h3v1h-3zM0 69h5v1h-5zM41 69h16v1h-16zM197 69h3v1h-3zM0 70h5v1h-5zM42 70h15v1h-15zM197 70h3v1h-3zM0 71h6v1h-6zM43 71h14v1h-14zM197 71h3v1h-3zM0 72h6v1h-6zM45 72h12v1h-12zM197 72h3v1h-3zM0 73h7v1h-7zM46 73h11v1h-11zM197 73h3v1h-3zM0 74h7v1h-7zM47 74h10v1h-10zM197 74h3v1h-3zM0 75h8v1h-8zM48 75h9v1h-9zM197 75h3v1h-3zM0 76h8v1h-8zM49 76h8v1h-8zM197 76h3v1h-3zM0 77h9v1h-9zM50 77h7v1h-7zM197 77h3v1h-3zM0 78h10v1h-10zM52 78h5v1h-5zM197 78h3v1h-3zM0 79h11v1h-11zM53 79h4v1h-4zM197 79h3v1h-3zM0 80h11v1h-11zM54 80h3v1h-3zM197 80h3v1h-3zM0 81h12v1h-12zM55 81h2v1h-2zM197 81h3v1h-3zM0 82h13v1h-13zM197 82h3v1h-3zM0 83h14v1h-14zM197 83h3v1h-3zM0 84h15v1h-15zM197 84h3v1h-3zM0 85h16v1h-16zM197 85h3v1h-3zM0 86h17v1h-17zM197 86h3v1h-3zM0 87h18v1h-18zM197 87h3v1h-3zM0 88h20v1h-20zM197 88h3v1h-3zM0 89h21v1h-21zM78 89h1v1h-1zM197 89h3v1h-3zM0 90h23v1h-23zM76 90h3v1h-3zM197 90h3v1h-3zM0 91h24v1h-24zM75 91h4v1h-4zM197 91h3v1h-3zM0 92h26v1h-26zM73 92h6v1h-6zM197 92h3v1h-3zM0 93h28v1h-28zM71 93h8v1h-8zM197 93h3v1h-3zM0 94h30v1h-30zM69 94h10v1h-10zM197 94h3v1h-3zM0 95h32v1h-32zM66 95h13v1h-13zM197 95h3v1h-3zM0 96h35v1h-35zM63 96h16v1h-16zM197 96h3v1h-3zM0 97h40v1h-40zM59 97h20v1h-20zM197 97h3v1h-3zM0 98h200v2h-200z";</script>
+
+<script>
+// Apply the logo path on load
+document.querySelectorAll('#cabal-logo-path').forEach(p => {
+  if (window.CABAL_LOGO_PATH) p.setAttribute('d', window.CABAL_LOGO_PATH);
+});
+
+// Show/hide password
+const pw = document.getElementById('password');
+const pwToggle = document.getElementById('togglePw');
+pwToggle.addEventListener('click', () => {
+  const showing = pw.type === 'text';
+  pw.type = showing ? 'password' : 'text';
+  pwToggle.textContent = showing ? 'Show' : 'Hide';
+  pwToggle.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
+});
+
+// Submit: prototype — validate match, then navigate to login page
+document.getElementById('signupForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const u = document.getElementById('username').value.trim();
+  const p = document.getElementById('password').value;
+  const pc = document.getElementById('passwordConfirm').value;
+  // Clear previous errors
+  document.querySelectorAll('.field.invalid').forEach(f => f.classList.remove('invalid'));
+  document.querySelectorAll('.field-error').forEach(e => e.remove());
+
+  let bad = null;
+  if (!u) bad = 'username';
+  else if (p.length < 12) { bad = 'password'; }
+  else if (p !== pc) { bad = 'passwordConfirm'; }
+
+  if (bad) {
+    const input = document.getElementById(bad);
+    input.closest('.field').classList.add('invalid');
+    const msg = document.createElement('p');
+    msg.className = 'field-error';
+    msg.textContent = bad === 'username'
+      ? 'Pick a username to continue.'
+      : bad === 'password'
+      ? 'Password must be at least 12 characters.'
+      : 'Passwords don’t match.';
+    input.closest('.field').appendChild(msg);
+    input.focus();
+    return;
+  }
+  // In real impl, POST /accounts and on success redirect to login with a "check your phone" flash
+  window.location.href = 'login.html';
+});
+</script>
+</body>
+</html>
