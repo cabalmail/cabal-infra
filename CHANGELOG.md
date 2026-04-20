@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.5.0]
 
+### Known Issues
+
+- Forgot Password and Verify Phone were delivered untested due to delays in provisioning an SMS number in AWS
+
 ### Added
 
 - **Admin dashboard with user management (Phase 1 of `docs/0.5.0/user-management-plan.md`):**
