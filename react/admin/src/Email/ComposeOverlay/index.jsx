@@ -207,14 +207,15 @@ function ComposeOverlay({
     loadAddresses().then((items) => {
       const list = items.map((a) => a.address);
       // Respect explicit reply-derived `address` (set above in reply/replyAll/forward)
-      // and a user-picked `composeFromAddress`; otherwise default to the first
-      // address so the picker isn't empty.
+      // and a user-picked `composeFromAddress`. Otherwise the From picker stays
+      // empty — the user must explicitly choose (or create) a From address
+      // before Send is allowed.
       setAddress(prev => {
         if (prev) return prev;
         if (composeFromAddress && list.includes(composeFromAddress)) {
           return composeFromAddress;
         }
-        return list[0] || "";
+        return "";
       });
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps

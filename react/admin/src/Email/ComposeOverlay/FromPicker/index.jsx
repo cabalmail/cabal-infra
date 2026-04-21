@@ -107,7 +107,7 @@ function CreateForm({
   ), [domains]);
   const [user, setUser] = useState(initialUsername || '');
   const [sub, setSub] = useState('');
-  const [domain, setDomain] = useState(domainList[0] || '');
+  const [domain, setDomain] = useState('');
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const userRef = useRef(null);
@@ -182,32 +182,60 @@ function CreateForm({
       </div>
 
       <div className="from-picker__composer">
+        {/*
+          The three inputs look like a credentials form to password managers
+          (1Password, LastPass, Bitwarden). The data-*-ignore attributes plus
+          autoComplete="off" and a neutral name suppress autofill without
+          relying on any single vendor's heuristic.
+        */}
         <input
           ref={userRef}
+          type="text"
+          name="cabal-local-part"
           value={user}
           onChange={(e) => setUser(e.target.value.toLowerCase())}
           placeholder="username"
           aria-label="Username"
           className={`from-picker__ac-input${user && !validUser ? ' is-invalid' : ''}`}
           autoCapitalize="none" autoCorrect="off" spellCheck={false}
+          autoComplete="off"
+          data-1p-ignore="true"
+          data-lpignore="true"
+          data-bwignore="true"
+          data-form-type="other"
         />
         <span className="from-picker__ac-sep">@</span>
         <input
+          type="text"
+          name="cabal-subdomain"
           value={sub}
           onChange={(e) => setSub(e.target.value.toLowerCase())}
           placeholder="subdomain"
           aria-label="Subdomain"
           className={`from-picker__ac-input${sub && !validSub ? ' is-invalid' : ''}`}
           autoCapitalize="none" autoCorrect="off" spellCheck={false}
+          autoComplete="off"
+          data-1p-ignore="true"
+          data-lpignore="true"
+          data-bwignore="true"
+          data-form-type="other"
         />
         <span className="from-picker__ac-sep">.</span>
         <select
+          name="cabal-domain"
           value={domain}
           onChange={(e) => setDomain(e.target.value)}
           aria-label="Domain"
           className="from-picker__ac-select"
+          autoComplete="off"
+          data-1p-ignore="true"
+          data-lpignore="true"
+          data-bwignore="true"
+          data-form-type="other"
         >
-          {domainList.length === 0 && <option value="">(no domains)</option>}
+          <option value="" disabled>
+            {domainList.length === 0 ? '(no domains)' : 'domain'}
+          </option>
           {domainList.map((d) => (
             <option key={d} value={d}>{d}</option>
           ))}

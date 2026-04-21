@@ -93,9 +93,9 @@ describe('ComposeOverlay', () => {
       await waitFor(() => {
         expect(mockGetAddresses).toHaveBeenCalled();
       });
-      // Default fallback address is the first loaded entry.
+      // No default address is pre-selected — the user must choose explicitly.
       await waitFor(() => {
-        expect(screen.getByLabelText('From').textContent).toMatch(/other@test\.com/);
+        expect(screen.getByLabelText('From').textContent).toMatch(/Select address/);
       });
       fireEvent.click(screen.getByLabelText('From'));
       const option = await screen.findByRole('option', { name: /user@test\.com/ });

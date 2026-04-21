@@ -191,7 +191,7 @@ describe('FromPicker', () => {
       const userInput = await screen.findByLabelText('Username');
       fireEvent.change(userInput, { target: { value: 'newu' } });
       fireEvent.change(screen.getByLabelText('Subdomain'), { target: { value: 'sub' } });
-      // domain select defaults to the first domain ('test.com').
+      fireEvent.change(screen.getByLabelText('Domain'), { target: { value: 'test.com' } });
       const submit = screen.getByRole('button', { name: /Create & use/ });
       await act(async () => {
         fireEvent.click(submit);
@@ -204,7 +204,7 @@ describe('FromPicker', () => {
     }
   });
 
-  it('disables Create & use until username and subdomain are valid', async () => {
+  it('disables Create & use until username, subdomain, and domain are all set', async () => {
     const { unmount } = renderPicker();
     try {
       fireEvent.click(document.getElementById('from-picker-trigger-0'));
@@ -214,6 +214,8 @@ describe('FromPicker', () => {
       fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'u' } });
       expect(submit).toBeDisabled();
       fireEvent.change(screen.getByLabelText('Subdomain'), { target: { value: 's' } });
+      expect(submit).toBeDisabled();
+      fireEvent.change(screen.getByLabelText('Domain'), { target: { value: 'test.com' } });
       expect(submit).not.toBeDisabled();
     } finally {
       unmount();
