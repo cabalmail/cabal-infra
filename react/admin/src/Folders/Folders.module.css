@@ -19,8 +19,8 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  width: auto;
-  margin: 4px 8px 12px;
+  width: calc(100% - 24px);
+  margin: 4px 12px 12px;
   height: 36px;
   padding: 0 14px;
   border: 0;
@@ -143,6 +143,7 @@
   padding: 0 12px;
   border-radius: 5px;
   color: var(--ink-soft);
+  font-family: var(--font-ui);
   font-size: 13px;
   line-height: 1;
   cursor: pointer;
@@ -179,6 +180,7 @@
 }
 
 .folderName {
+  font-family: var(--font-ui);
   font-size: 14px;
   color: inherit;
   overflow: hidden;

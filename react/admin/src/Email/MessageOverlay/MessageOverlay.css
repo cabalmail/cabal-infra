@@ -465,24 +465,29 @@
   gap: 6px;
   flex-wrap: wrap;
   color: var(--ink-soft);
-  font-size: 13px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .reader-sender .reader-sender-name {
-  font-weight: 500;
+  font-family: var(--font-ui);
+  font-weight: 600;
   color: var(--ink);
   font-size: 14px;
 }
 
 .reader-sender .reader-sender-email {
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font-family: var(--font-ui);
+  font-weight: 400;
+  font-size: 14px;
   color: var(--ink-quiet);
 }
 
 .reader-timestamp {
   grid-area: timestamp;
   align-self: center;
+  font-family: var(--font-ui);
   font-size: 12px;
   color: var(--ink-quiet);
   white-space: nowrap;
@@ -492,6 +497,7 @@
 
 .reader-to {
   grid-area: to;
+  font-family: var(--font-ui);
   font-size: 12px;
   color: var(--ink-quiet);
   word-break: break-word;

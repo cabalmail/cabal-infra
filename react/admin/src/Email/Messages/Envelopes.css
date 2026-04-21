@@ -122,6 +122,7 @@
 .envelope-from {
   flex: 1;
   min-width: 0;
+  font-family: var(--font-ui);
   font-size: 13px;
   font-weight: 400;
   color: var(--ink-soft);
