@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
-  Minus, Maximize2, Minimize2, X, Paperclip, ChevronDown,
+  Minus, Maximize2, Minimize2, X, Paperclip,
 } from 'lucide-react';
 import './ComposeOverlay.css';
 import { ADDRESS_LIST } from '../../constants';
-import { swatchFor } from '../../utils/addressSwatch';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import TextAlign from '@tiptap/extension-text-align';
@@ -13,6 +12,7 @@ import { marked } from 'marked';
 import useApi from '../../hooks/useApi';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAppMessage } from '../../contexts/AppMessageContext';
+import FromPicker from './FromPicker';
 
 const turndown = new TurndownService({ headingStyle: 'atx', hr: '---' });
 
@@ -99,18 +99,20 @@ function ComposeOverlay({
   type,
   other_headers,
   smtp_host,
+  domains: propDomains,
   stackIndex = 0,
   composeFromAddress,
   setComposeFromAddress,
   layout = 'desktop',
 }) {
-  const { smtp_host: ctxSmtpHost } = useAuth();
+  const { smtp_host: ctxSmtpHost, domains: ctxDomains } = useAuth();
   const { setMessage } = useAppMessage();
   const api = useApi();
 
   const effectiveSmtpHost = smtp_host || ctxSmtpHost;
+  const effectiveDomains = propDomains || ctxDomains || [];
 
-  const [addresses, setAddresses] = useState([]);
+  const [addressItems, setAddressItems] = useState([]);
   const [address, setAddress] = useState(composeFromAddress || "");
   const [recipient, setRecipient] = useState("");
   const [validationFail, setValidationFail] = useState(false);
@@ -121,15 +123,18 @@ function ComposeOverlay({
   const [editorMode, setEditorMode] = useState("rich");
   const [markdownContent, setMarkdownContent] = useState("");
   const [showCcBcc, setShowCcBcc] = useState(false);
-  const [fromMenuOpen, setFromMenuOpen] = useState(false);
   const [windowState, setWindowState] = useState('normal'); // 'normal' | 'minimized' | 'expanded'
   const [sending, setSending] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
   const [, setSavedTick] = useState(0); // forces re-render for "Saved just now" label
   const markdownRef = useRef(null);
-  const fromMenuRef = useRef(null);
   const rootRef = useRef(null);
   const autosaveRef = useRef(null);
+
+  const addresses = useMemo(
+    () => addressItems.map((a) => a.address),
+    [addressItems]
+  );
 
   const editor = useEditor({
     extensions: [
@@ -182,16 +187,25 @@ function ComposeOverlay({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Fetch addresses on mount
-  useEffect(() => {
+  const loadAddresses = useCallback(() => (
     api.getAddresses().then(data => {
       try {
         localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
       } catch (e) {
         console.log(e);
       }
-      const list = data.data.Items.map(a => a.address).sort();
-      setAddresses(list);
+      const items = (data?.data?.Items || [])
+        .slice()
+        .sort((a, b) => (a.address > b.address ? 1 : a.address < b.address ? -1 : 0));
+      setAddressItems(items);
+      return items;
+    })
+  ), [api]);
+
+  // Fetch addresses on mount
+  useEffect(() => {
+    loadAddresses().then((items) => {
+      const list = items.map((a) => a.address);
       // Respect explicit reply-derived `address` (set above in reply/replyAll/forward)
       // and a user-picked `composeFromAddress`; otherwise default to the first
       // address so the picker isn't empty.
@@ -205,18 +219,6 @@ function ComposeOverlay({
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Close From menu on outside click
-  useEffect(() => {
-    if (!fromMenuOpen) return undefined;
-    const onClick = (e) => {
-      if (fromMenuRef.current && !fromMenuRef.current.contains(e.target)) {
-        setFromMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
-  }, [fromMenuOpen]);
 
   // Convert pasted rich text to markdown in the markdown editor
   useEffect(() => {
@@ -325,11 +327,17 @@ function ComposeOverlay({
 
   const pickAddress = useCallback((addr) => {
     setAddress(addr);
-    setFromMenuOpen(false);
     if (typeof setComposeFromAddress === 'function') {
       setComposeFromAddress(addr);
     }
   }, [setComposeFromAddress]);
+
+  const onAddressCreated = useCallback(() => {
+    // The create call invalidates the ADDRESS_LIST cache via ApiClient.newAddress;
+    // re-fetch so the newly-created row (with its comment/label) surfaces in the
+    // picker immediately.
+    loadAddresses().catch(() => { /* non-fatal */ });
+  }, [loadAddresses]);
 
   const handleSend = useCallback(() => {
     const oh = other_headers || {};
@@ -468,8 +476,6 @@ function ComposeOverlay({
     </span>
   );
 
-  const fromSwatch = address ? swatchFor(address) : null;
-
   const isSheet = layout === 'phone';
 
   return (
@@ -534,45 +540,20 @@ function ComposeOverlay({
 
       <div className="compose-body">
         <div className="compose-row">
-          <label className="compose-row__label" htmlFor={`compose-from-${stackIndex}`}>From</label>
+          <label
+            className="compose-row__label"
+            htmlFor={`from-picker-trigger-${stackIndex}`}
+          >From</label>
           <div className="compose-row__field">
-            <div className="from-picker" ref={fromMenuRef}>
-              <button
-                type="button"
-                id={`compose-from-${stackIndex}`}
-                className="from-picker__chip"
-                onClick={() => setFromMenuOpen(o => !o)}
-                aria-haspopup="listbox"
-                aria-expanded={fromMenuOpen}
-              >
-                {fromSwatch && (
-                  <span className="from-picker__swatch" style={{ background: fromSwatch }} />
-                )}
-                <span className="from-picker__address">{address || 'Select address'}</span>
-                <ChevronDown size={14} className="from-picker__caret" />
-              </button>
-              {fromMenuOpen && (
-                <ul className="from-picker__menu" role="listbox">
-                  {addresses.length === 0 && (
-                    <li className="from-picker__empty">No addresses</li>
-                  )}
-                  {addresses.map(a => (
-                    <li key={a}>
-                      <button
-                        type="button"
-                        role="option"
-                        aria-selected={a === address}
-                        className={`from-picker__option${a === address ? ' is-selected' : ''}`}
-                        onClick={() => pickAddress(a)}
-                      >
-                        <span className="from-picker__swatch" style={{ background: swatchFor(a) }} />
-                        <span className="from-picker__address">{a}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+            <FromPicker
+              items={addressItems}
+              domains={effectiveDomains}
+              selected={address}
+              onSelect={pickAddress}
+              onCreated={onAddressCreated}
+              stackIndex={stackIndex}
+              setMessage={setMessage}
+            />
           </div>
         </div>
 
