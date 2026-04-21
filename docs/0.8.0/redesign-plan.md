@@ -152,14 +152,17 @@ If (4) lands on "raw HTML reaches the client," Phase 4 picks up a small sandboxi
 **Work:**
 
 - **Login** (`Login/`) per §1: centered 360px card with wordmark above, fields (Username, Password), Sign in button, Forgot password link, "Don't have an account? Sign up" below. Existing Cognito flow unchanged.
-- **Signup** (`SignUp/`) per §2: 400px card, fields (Email, Preferred subdomain with `.cabalmail.com` static suffix, Password with zxcvbn-style 4-segment strength meter, Confirm password), terms / privacy paragraph, Create account button disabled until valid.
+- **Signup** (`SignUp/`) per §2: 400px card, fields (Email, Password with zxcvbn-style 4-segment strength meter, Confirm password), terms / privacy paragraph, Create account button disabled until valid.
 - **ForgotPassword** (`ForgotPassword/`) per §3: single Email field, Send reset link, success state with checkmark and "Check your email" copy.
 - **Preferences persistence** per README State Management §: localStorage already landed in Phase 1; this phase adds the Cognito custom attribute writeback (`custom:theme`, `custom:accent`, `custom:density`) with 1s debounce. Depends on Preflight (2) — if the user pool schema isn't editable, substitute the DynamoDB `UserPreferences` table path (separate Terraform change, tracked in its own sub-task).
 - **Keyboard shortcuts** per Interactions §: new `useKeyboardShortcuts` hook centralizing j/k/Enter/e/#/r/a/f/s/u/c/⌘K/x/Esc and the `g` prefix sequences (`g i`, `g a`, `g s`, `g t`, `g d`). Remove the scattered handlers these replace. Add a `?` help overlay that enumerates the shortcut set.
 
-**Out of scope:** responsive variants of the auth screens (mobile column-stretch lands in Phase 8).
+**Out of scope:**
 
-**Definition of done:** all three auth screens match the prototype. Theme/accent/density persist to Cognito and survive a fresh login on a different device. All keyboard shortcuts route through the single hook and show up in the `?` overlay.
+- Responsive variants of the auth screens (mobile column-stretch lands in Phase 8).
+- Prefered subdomain at sign-up (won't do).
+
+**Definition of done:** all three auth screens match the prototype, except for the presence of preferred subdomain. Theme/accent/density persist to Cognito and survive a fresh login on a different device. All keyboard shortcuts route through the single hook and show up in the `?` overlay.
 
 ---
 
