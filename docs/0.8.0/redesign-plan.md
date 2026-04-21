@@ -166,6 +166,68 @@ If (4) lands on "raw HTML reaches the client," Phase 4 picks up a small sandboxi
 
 ---
 
+## Phase 7.5 — Cosmetic alignment pass (shipped ad hoc)
+
+**Context.** After Phase 7 merged, eight rounds of dev-deploy + screenshot iteration on a `claude/0.8.0-phase7.5` branch tightened the UI's visual alignment to `inbox-explorations.html`. The decisions below are load-bearing for Phase 8 — don't silently revert them.
+
+### Deliberate font-bug divergence
+
+The mockup sets `data-direction="stately"` on `.app`, not `<html>`. Because body's `var(--font-ui)` is declared under `:root[data-direction="stately"]`, the mockup's variable resolves to undefined and body falls back to the UA default (Times). The app puts `data-direction` on `<html>` correctly per Phase 1, so body rendered in Inter — but the user preferred the mockup's accidental serif look.
+
+Chosen fix: switch specific UI-chrome rules from `var(--font-ui)` to `var(--font-display)` (Source Serif 4). Touched:
+
+- `.folderItem`, `.folderName` (14px)
+- `.addresses-rail__address` (13px)
+- `.envelope-from` (14px)
+- `.msglist-tab` (filter pills, 13px)
+- `.reader-sender`, `.reader-sender-name`, `.reader-sender-email` (15px)
+- `.reader-timestamp`, `.reader-to` (13px)
+
+Also: `:root[data-direction="stately"] body` gained `font-feature-settings: "ss01", "cv11"` to match the mockup body rule.
+
+**For Phase 8 and beyond:** New UI-chrome text in redesigned surfaces should default to `var(--font-display)` where the mockup shows serif. `var(--font-ui)` (Inter) stays on the nav, sort strip, overflow menu, buttons, and any surface not listed above. Don't "fix" these back to Inter.
+
+### Layout and chrome tweaks
+
+- `div.msglist` got `border-right: 1px solid var(--border)` at ≥900px — without it the msglist/reader split was invisible.
+- `.reader-actions` z-index `5 → 10` (icons were paint-occluded by reader content).
+- `.reader-header` border-bottom replaced by an 80%-wide centered `::after` pseudo-element, narrowing the rule between header and body. `.reader-header` gained `position: relative` to host the pseudo.
+- `.nav__brand-tile` height `37px → 36px` (1px top bleed).
+- `.rail .compose` (Folders "New message" button): `flex: 0 0 36px; min-height: 36px; box-sizing: border-box; line-height: 1` to force the 36px height against flex-shrink.
+
+### Legacy pre-redesign CSS still clobbers new surfaces
+
+`AppLight.css:66-77` and `AppDark.css:68-78` still define `body .highlight, body .active, body .default` plus a raw `button` rule, all with `!important` and the old red/yellow palette. They shadow any redesigned surface that reuses an `.active` class.
+
+Phase 7.5 patched the one hit that surfaced — `.msglist-tab.active` uses `!important` on `color`, `background`, and `border-color` to beat the legacy rule.
+
+**For Phase 8:** Sweep or scope these legacy rules. Most redesigned components already use semantic class names (`.selected`, `.is-active`, `.checked`); after the sweep, the `!important` on `.msglist-tab.active` should come back out. While you're in there, the legacy global `button { color/background }` rules in the same files are also load-bearing for a related issue — see next item.
+
+### Lucide-react icon defensive rule
+
+`.reader-actions .reader-btn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; flex-shrink: 0; }` was added to force reader-toolbar icons to paint. Two contributing causes:
+
+1. `lucide-react` is pinned to `^1.8.0`, which predates the modern `<Icon>` wrapper and emits bare SVGs without size attributes.
+2. The legacy global `button { color: ... }` rule in AppLight/Dark.css breaks `currentColor` inheritance for icons inside buttons unless a higher-specificity rule re-asserts it.
+
+**For Phase 8:** After the legacy-CSS sweep, this defensive rule can be simplified (or moved to a global `.icon` selector and shared across reader/msglist/nav). Upgrading `lucide-react` is worth doing but not blocking.
+
+### Deferred: compose "From" picker rebuild
+
+The Phase 6 compose card ships a minimal From chip. The mockup (`inbox-explorations.html`, compose overlay with From focused) shows a full searchable picker: filter input, "Favorites" section, "More addresses" section with per-address descriptive label, a "Type to search N more addresses" hint, and a **"Create a new address"** row at the bottom that expands into an inline `username @ subdomain . domain` form.
+
+Too large for an ad hoc cosmetic pass. Work outline:
+
+- New component — suggest `Email/ComposeOverlay/FromPicker/`.
+- Favorites bit per address. Pick whichever persistence the Phase 7 preferences work landed on (Cognito custom attribute vs. DynamoDB `UserPreferences`). Don't introduce a third mechanism.
+- Inline create-address flow reusing the existing `new` Lambda API path (`lambda/api/new/function.py`). Success should slide the new address into the list without collapsing the picker.
+- Keyboard nav (↑/↓/Enter/Esc) wired through the `useKeyboardShortcuts` hook from Phase 7.
+- Per-address descriptive label is user-supplied — this may require extending the `cabal-addresses` DynamoDB schema with a `label` attribute (free-text). Check whether Phase 6 already added this.
+
+**For Phase 8 or a dedicated Phase 6.5:** Build this as its own session. Not small.
+
+---
+
 ## Phase 8 — Responsive + loading/error state polish
 
 **Goal:** mobile-first CSS rework and the remaining UX polish.
@@ -227,6 +289,7 @@ The redesign adds state: `direction`, `theme`, `accent`, `density`, `selectedId`
 | 5 | View source modal + Match theme + rest of overflow | Medium |
 | 6 | Compose window (From picker, multi-window, floating card) | Medium |
 | 7 | Auth screens + prefs persistence + keyboard shortcuts | Medium |
+| 7.5 | Cosmetic alignment pass (shipped ad hoc) | Small |
 | 8 | Responsive + loading/error polish + viewport tests | Medium |
 
 Eight phases, each a coherent PR. Total: roughly what the README's ten-step list describes, compacted where steps are small enough to merge.
