@@ -25,6 +25,7 @@ import {
 import {
   extractName, extractEmail, formatReaderTimestamp, initialsFor,
 } from '../../utils/formatDate';
+import { folderMeta } from '../../utils/folderMeta';
 import './MessageOverlay.css';
 
 function MessageOverlay({
@@ -285,16 +286,17 @@ function MessageOverlay({
   const sheetAttr = layout === 'phone' ? 'sheet' : undefined;
   const isSheet = layout === 'phone';
 
+  const backLabel = folderMeta(folder).label;
   const phoneBackBar = isSheet ? (
     <div className="reader-phone-bar" role="toolbar" aria-label="Message navigation">
       <button
         type="button"
         className="reader-phone-back"
         onClick={hide}
-        aria-label="Back to messages"
+        aria-label={`Back to ${backLabel}`}
       >
         <ArrowLeft size={18} aria-hidden="true" />
-        <span>Inbox</span>
+        <span>{backLabel}</span>
       </button>
     </div>
   ) : null;
