@@ -8,7 +8,7 @@
   list-style: none;
   margin: 0;
   padding: 0;
-  background: var(--reader-bg);
+  background: var(--pane-bg);
   user-select: none;
   -webkit-user-select: none;
 }
@@ -18,7 +18,7 @@
 }
 
 .envelope-row .swipeable-list-item__content {
-  background: var(--reader-bg);
+  background: var(--pane-bg);
 }
 
 .envelope-content {
@@ -26,6 +26,8 @@
   grid-template-columns: 20px 1fr auto;
   gap: 10px;
   align-items: center;
+  flex: 1;
+  min-width: 0;
   min-height: 56px;
   padding: var(--density-row-py, 10px) 12px;
   cursor: pointer;
@@ -36,7 +38,7 @@
 }
 
 [data-density="roomy"] .envelope-content { min-height: 64px; }
-[data-density="compact"] .envelope-content { min-height: 52px; }
+[data-density="compact"] .envelope-content { min-height: 56px; }
 
 .envelope-row:hover .envelope-content { background: var(--surface-hover); }
 .envelope-row.selected .envelope-content {

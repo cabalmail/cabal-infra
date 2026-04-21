@@ -13,6 +13,7 @@ div.email {
   bottom: 0;
   left: 0;
   right: 0;
+  background: var(--bg);
 }
 
 /* §4b left rail ------------------------------------------------------- */
@@ -43,13 +44,13 @@ div.email__middle {
   bottom: 0;
   left: 280px;
   right: 0;
+  background: var(--pane-bg);
 }
 
 div.msglist, div.reader {
   position: absolute;
   top: 0;
   bottom: 0;
-  z-index: 99999;
 }
 
 @media (min-width: 900px) {
@@ -59,7 +60,7 @@ div.msglist, div.reader {
   }
 
   div.reader {
-    left: 500px;
+    left: 490px;
     right: 0;
   }
 
@@ -84,12 +85,3 @@ div.msglist, div.reader {
 
 /* Composer view is now a floating card rendered by Email/ComposeOverlay —
    see that component's CSS. No layout rules needed here. */
-
-*:not(.wysiwyg-editor *, .wysiwyg-toolbar *) {
-  font-family: 'Tahoma', 'Verdana', 'Trebuchet MS', 'Arial';
-  font-size: small;
-}
-
-button, button * {
-  font-size: x-small !important;
-}
