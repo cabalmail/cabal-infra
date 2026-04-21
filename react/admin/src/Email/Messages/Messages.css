@@ -77,7 +77,8 @@
   background: transparent;
   color: var(--ink-quiet);
   font: inherit;
-  font-size: 12px;
+  font-family: var(--font-display);
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   transition: background 80ms ease, color 80ms ease;
@@ -89,8 +90,9 @@
 }
 
 .msglist-tab.active {
-  color: var(--ink);
-  background: var(--surface-hover);
+  color: var(--ink) !important;
+  background: var(--surface-hover) !important;
+  border-color: transparent !important;
 }
 
 .msglist-tab-count {
