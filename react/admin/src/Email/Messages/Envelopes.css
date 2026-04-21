@@ -40,7 +40,9 @@
 [data-density="roomy"] .envelope-content { min-height: 64px; }
 [data-density="compact"] .envelope-content { min-height: 56px; }
 
+.envelope-row:hover .swipeable-list-item__content,
 .envelope-row:hover .envelope-content { background: var(--surface-hover); }
+.envelope-row.selected .swipeable-list-item__content,
 .envelope-row.selected .envelope-content {
   background: var(--surface-hover);
 }

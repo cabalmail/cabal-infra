@@ -6,7 +6,7 @@
 :root[data-direction="stately"] {
   --font-display: "Source Serif 4", Georgia, serif;
   --font-reader:  "Source Serif 4", Georgia, serif;
-  --font-ui:      "Inter Tight", "Inter", system-ui, sans-serif;
+  --font-ui:      "Inter", system-ui, sans-serif;
   --font-mono:    "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   --radius-sm:   4px;

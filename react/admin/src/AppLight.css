@@ -41,7 +41,7 @@
 /* Legacy prefers-color-scheme styling — preserved until each surface is
    rebuilt in a later phase. Do not extend. */
 @media (prefers-color-scheme: light) {
-  body, a, button, select, div, label, form {
+  body, a, button, select, label, form {
     color: #222;
     background-color: #eee;
   }
