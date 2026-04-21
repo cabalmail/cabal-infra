@@ -29,6 +29,47 @@
   min-height: 0;
 }
 
+/* --- Phone back bar ---------------------------------------------------
+   Tablet/desktop hide this; on phone-sheet it's the only always-visible
+   "close this message" affordance (the full toolbar is replaced by the
+   floating tab bar for primary actions). */
+
+.reader-phone-bar { display: none; }
+
+.reader[data-layout="sheet"] .reader-phone-bar {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  background: var(--pane-bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.reader-phone-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+  padding: 0 10px 0 6px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--accent);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.reader-phone-back:hover { background: var(--surface-hover); }
+
+.reader-phone-back svg {
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+}
+
 /* --- Action bar -------------------------------------------------------- */
 
 .reader-actions {

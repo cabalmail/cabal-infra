@@ -88,10 +88,12 @@ function Email({
     setFolder(f);
     setAddressFilter(null);
     setDrawerOpen(false);
+    setOverlayVisible(false);
   }, []);
 
   const selectAddress = useCallback((address) => {
     setAddressFilter(address);
+    setOverlayVisible(false);
   }, []);
 
   const showOverlay = useCallback((env) => {

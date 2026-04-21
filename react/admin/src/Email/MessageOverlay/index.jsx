@@ -9,6 +9,7 @@ import React, {
   useCallback, useEffect, useMemo, useState,
 } from 'react';
 import {
+  ArrowLeft,
   Reply, ReplyAll, Forward,
   Archive, FolderInput, Trash2, Flag, MailOpen, X,
 } from 'lucide-react';
@@ -282,10 +283,26 @@ function MessageOverlay({
   }
 
   const sheetAttr = layout === 'phone' ? 'sheet' : undefined;
+  const isSheet = layout === 'phone';
+
+  const phoneBackBar = isSheet ? (
+    <div className="reader-phone-bar" role="toolbar" aria-label="Message navigation">
+      <button
+        type="button"
+        className="reader-phone-back"
+        onClick={hide}
+        aria-label="Back to messages"
+      >
+        <ArrowLeft size={18} aria-hidden="true" />
+        <span>Inbox</span>
+      </button>
+    </div>
+  ) : null;
 
   if (loading || !envelopeId) {
     return (
       <div className="reader" data-layout={sheetAttr}>
+        {phoneBackBar}
         <div className="reader-actions" aria-label="Message actions" />
         <div className="reader-scroll">
           <div className="reader-skel" role="status" aria-label="Loading message">
@@ -311,6 +328,7 @@ function MessageOverlay({
   if (loadError) {
     return (
       <div className="reader" data-layout={sheetAttr}>
+        {phoneBackBar}
         <div className="reader-actions" aria-label="Message actions">
           <span className="reader-spacer" />
           <button
@@ -346,6 +364,7 @@ function MessageOverlay({
 
   return (
     <div className="reader" data-layout={sheetAttr} role="region" aria-label="Message">
+      {phoneBackBar}
       <div className="reader-actions" role="toolbar" aria-label="Message actions">
         <button type="button" className="reader-btn" onClick={reply} title="Reply">
           <Reply size={16} aria-hidden="true" />
