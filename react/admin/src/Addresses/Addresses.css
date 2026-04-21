@@ -194,7 +194,6 @@
 }
 
 .addresses-rail__address {
-  font-family: var(--font-mono);
   font-size: 12px;
   color: inherit;
   overflow: hidden;

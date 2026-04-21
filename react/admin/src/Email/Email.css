@@ -25,7 +25,7 @@ aside.email__rail {
   left: 0;
   width: 280px;
   box-sizing: border-box;
-  background: var(--pane-bg);
+  background: var(--bg);
   border-right: 1px solid var(--border);
   color: var(--ink);
   display: flex;

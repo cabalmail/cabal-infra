@@ -33,7 +33,8 @@ function Envelope({
   const flagged = !!flagStr.match(/Flagged/);
   const answered = !!flagStr.match(/Answered/);
   const hasAttachment = struct && struct[1] === 'mixed';
-  const isImportant = priority && priority !== '';
+  const isImportant = Array.isArray(priority)
+    && priority.some((p) => p === 'priority-1' || p === 'priority-2');
   const fromName = extractName(from && from[0]) || (from && from[0]) || '';
   const relDate = formatDate(date);
 

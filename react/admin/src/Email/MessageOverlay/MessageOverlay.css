@@ -426,6 +426,7 @@
   padding: 28px 24px 20px;
   box-sizing: border-box;
   width: 100%;
+  border-bottom: 1px solid var(--border-faint);
 }
 
 .reader-avatar {
