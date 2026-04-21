@@ -9,9 +9,39 @@ body {
 
 div.email {
   position: absolute;
-  top: 3.2em;
+  top: 56px;
   bottom: 0;
   left: 0;
+  right: 0;
+}
+
+/* §4b left rail ------------------------------------------------------- */
+
+aside.email__rail {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 280px;
+  box-sizing: border-box;
+  background: var(--pane-bg);
+  border-right: 1px solid var(--border);
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 10;
+}
+
+/* Middle/right panes — positioned inside a container that starts where
+   the rail ends. Middle-pane styles themselves (Messages / MessageOverlay)
+   are untouched in Phase 2. */
+
+div.email__middle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 280px;
   right: 0;
 }
 

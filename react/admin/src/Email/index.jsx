@@ -3,6 +3,8 @@ import './Email.css';
 import Messages from './Messages';
 import MessageOverlay from './MessageOverlay';
 import ComposeOverlay from './ComposeOverlay';
+import Folders from '../Folders';
+import Addresses from '../Addresses';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppMessage } from '../contexts/AppMessageContext';
 
@@ -35,6 +37,7 @@ function Email() {
   const { setMessage } = useAppMessage();
 
   const [folder, setFolder] = useState("INBOX");
+  const [addressFilter, setAddressFilter] = useState(null);
   const [overlayVisible, setOverlayVisible] = useState(false);
   const [composeVisible, setComposeVisible] = useState(false);
   const [envelope, setEnvelope] = useState({});
@@ -50,6 +53,11 @@ function Email() {
 
   const selectFolder = useCallback((f) => {
     setFolder(f);
+    setAddressFilter(null);
+  }, []);
+
+  const selectAddress = useCallback((address) => {
+    setAddressFilter(address);
   }, []);
 
   const showOverlay = useCallback((env) => {
@@ -133,30 +141,47 @@ function Email() {
 
   return (
     <div className="email">
-      <Messages
-        token={token}
-        api_url={api_url}
-        folder={folder}
-        host={host}
-        showOverlay={showOverlay}
-        setFolder={selectFolder}
-        setMessage={setMessage}
-      />
-      <MessageOverlay
-        token={token}
-        api_url={api_url}
-        envelope={envelope}
-        flags={flags}
-        visible={overlayVisible}
-        folder={folder}
-        host={host}
-        hide={hideOverlay}
-        updateOverlay={showOverlay}
-        setMessage={setMessage}
-        reply={reply}
-        replyAll={replyAll}
-        forward={forward}
-      />
+      <aside className="email__rail" aria-label="Folders and addresses">
+        <Folders
+          folder={folder}
+          setFolder={selectFolder}
+          setMessage={setMessage}
+          onNewMessage={newEmail}
+        />
+        <Addresses
+          domains={domains}
+          setMessage={setMessage}
+          selectedAddress={addressFilter}
+          onSelectAddress={selectAddress}
+        />
+      </aside>
+      <div className="email__middle">
+        <Messages
+          token={token}
+          api_url={api_url}
+          folder={folder}
+          host={host}
+          showOverlay={showOverlay}
+          setFolder={selectFolder}
+          setMessage={setMessage}
+          addressFilter={addressFilter}
+        />
+        <MessageOverlay
+          token={token}
+          api_url={api_url}
+          envelope={envelope}
+          flags={flags}
+          visible={overlayVisible}
+          folder={folder}
+          host={host}
+          hide={hideOverlay}
+          updateOverlay={showOverlay}
+          setMessage={setMessage}
+          reply={reply}
+          replyAll={replyAll}
+          forward={forward}
+        />
+      </div>
       <button className="compose-button" onClick={newEmail}>New Email</button>
       {compose_overlay}
     </div>

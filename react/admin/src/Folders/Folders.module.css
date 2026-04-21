@@ -1,58 +1,264 @@
-/* App-level layout positioning (class applied by App.jsx on root div) */
-:global(div#root div.Folders div.content) {
-  position: absolute;
-  top: 3.2em;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  overflow: scroll;
+/* =========================================================================
+   Folders — §4b top-half of the left rail.
+   Keyed off the Stately direction; matches the prototype's folder list.
+   ========================================================================= */
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding-top: 8px;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
 }
 
-:global(div.Folders div.content) {
-  max-width: 60em;
-  margin-left: auto;
-  margin-right: auto;
+/* "New message" CTA ---------------------------------------------------- */
+
+.rail .compose {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: auto;
+  margin: 4px 8px 12px;
+  height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: -0.005em;
+  cursor: pointer;
 }
 
-/* Component-scoped styles */
-.folders .newFolder {
-  display: grid;
-  grid-template-columns: 12em auto;
-  grid-column-gap: 1em;
+.rail .compose:hover {
+  filter: brightness(1.05);
+}
+
+.rail .compose:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Section -------------------------------------------------------------- */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.section.collapsed .sectionBody {
+  display: none;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 10px 6px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-quiet);
+  cursor: pointer;
+  user-select: none;
+}
+
+.sectionHeader:hover {
+  color: var(--ink-soft);
+}
+
+.sectionLabel {
+  flex: 1;
+}
+
+.chev {
+  display: inline-flex;
+  transition: transform 120ms ease;
+}
+
+.section.collapsed .chev {
+  transform: rotate(-90deg);
+}
+
+.sectionActions {
+  display: inline-flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.sectionHeader:hover .sectionActions,
+.sectionHeader:focus-within .sectionActions {
+  opacity: 1;
+}
+
+.sectionAction {
+  width: 20px;
+  height: 20px;
+  min-height: 0;
+  margin: 0;
   padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-quiet);
+  cursor: pointer;
 }
 
-.folders .newFolder input.newFolderInput {
-  width: 12em;
-  max-height: 2.3em;
-  margin-top: 1em;
+.sectionAction:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
 }
+
+.sectionBody {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* Folder rows ---------------------------------------------------------- */
 
 .folderList {
   list-style: none;
-  padding: 0;
   margin: 0;
-  overflow: scroll;
+  padding: 0 8px 8px;
 }
 
-.folder {
-  list-style: none;
-  margin: 0;
+.folderItem {
+  position: relative;
   display: grid;
-  grid-template-columns: 1.5em auto 3em 3em;
-  border-bottom: 1px solid;
-  align-items: baseline;
-}
-
-.folderButton {
-  width: 3em;
-}
-
-.subscribed {
-  color: #fa0;
-}
-
-.favorite {
-  font-size: medium;
+  grid-template-columns: 18px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 5px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1;
   cursor: pointer;
+}
+
+.folderItem:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+
+.folderItem.active {
+  background: var(--surface-hover);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.folderItem.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+}
+
+.folderIcon {
+  color: var(--ink-quiet);
+}
+
+.folderItem.active .folderIcon {
+  color: var(--accent);
+}
+
+.folderName {
+  font-size: 14px;
+  color: inherit;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Hover-revealed row actions; the unread count hides when shown */
+
+.rowActions {
+  display: inline-flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.folderItem:hover .rowActions,
+.folderItem:focus-within .rowActions {
+  opacity: 1;
+}
+
+.rowAction {
+  width: 20px;
+  height: 20px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-quiet);
+  cursor: pointer;
+}
+
+.rowAction:hover {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.favActive {
+  color: var(--accent);
+  opacity: 1 !important;
+}
+
+/* "New folder" inline row --------------------------------------------- */
+
+.addRow {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 10px;
+  align-items: center;
+  height: 28px;
+  margin: 0 8px 8px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink-quiet);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.addRow:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+
+.addInput {
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 3px 6px;
+  font: inherit;
+  color: var(--ink);
+  min-width: 0;
+  outline: none;
+  width: auto;
 }
