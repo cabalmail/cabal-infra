@@ -81,6 +81,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Submit calls `api.newAddress(username, subdomain, tld, comment, address)`, selects the new address on success, fires `onCreated` so `ComposeOverlay` re-fetches the address list (picking up the new row with its note), and writes an `AppMessage` toast — all without closing the compose window.
   - `ComposeOverlay` now stores the full address items (so the picker has access to `comment`) and exposes `domains` + `setMessage` to the picker; the old inline From dropdown (menu state, outside-click handler, and ~100 lines of `.from-picker__*` CSS) was removed from `ComposeOverlay.css` since the picker now owns its own `FromPicker.css`.
   - 13 new Vitest cases cover trigger open/close, search filtering, favorites toggle + persistence, favorites hydration from localStorage, keyboard nav, create flow submit, validation gating, and cancel.
+  - UAT follow-ups (same phase):
+    - **No default From address.** Fresh compose windows start with the picker empty; the user must pick (or create) an address before sending. `handleSend`'s existing `addresses.indexOf(address) !== -1` guard catches the empty-string case and surfaces the "Please select an address from which to send." toast. Reply / reply-all / forward still pre-fill `address` with the original envelope recipient, and a user-picked `composeFromAddress` still carries over into the next compose window.
+    - **No default domain in the inline Create form.** The domain `<select>` opens on a disabled placeholder (`"domain"`, or `"(no domains)"` when the user has none); Create & use stays disabled until `username`, `subdomain`, and `domain` are all set.
+    - **Password-manager autofill suppressed** on the three Create-form inputs. A `username` input next to a second text field reads as a credentials form to 1Password / LastPass / Bitwarden, so each input (and the domain select) got `autoComplete="off"`, neutral `name` values (`cabal-local-part` / `cabal-subdomain` / `cabal-domain`), and the vendor-specific `data-1p-ignore` / `data-lpignore` / `data-bwignore` / `data-form-type="other"` attributes.
 
 ### Changed
 
