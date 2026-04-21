@@ -1,3 +1,11 @@
+/* =========================================================================
+   Email — Phase 8 responsive layout.
+   Mobile-first: single pane, full-width msglist. The reader slides over the
+   list on phones; on tablets the reader docks next to the list; on desktop
+   the left rail (Folders + Addresses) becomes in-flow.
+   Breakpoints: 768px (tablet), 1200px (desktop).
+   ========================================================================= */
+
 body {
   position: absolute;
   top: 0;
@@ -14,75 +22,121 @@ div.email {
   left: 0;
   right: 0;
   background: var(--bg);
+  display: flex;
+  flex-direction: row;
+  min-width: 0;
+  min-height: 0;
 }
 
-/* §4b left rail ------------------------------------------------------- */
+/* Drawer rail (phone + tablet) -------------------------------------------
+   Slides over content from the left at 82% width, with a scrim behind.
+   Uses position: fixed so it covers the middle pane completely. */
 
-aside.email__rail {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 280px;
-  box-sizing: border-box;
-  background: var(--bg);
-  border-right: 1px solid var(--border);
-  color: var(--ink);
+.email__rail {
   display: flex;
   flex-direction: column;
+  background: var(--bg);
+  color: var(--ink);
+  box-sizing: border-box;
   overflow: hidden;
-  z-index: 10;
+  z-index: 110;
 }
 
-/* Middle/right panes — positioned inside a container that starts where
-   the rail ends. Middle-pane styles themselves (Messages / MessageOverlay)
-   are untouched in Phase 2. */
+.email__rail--drawer {
+  position: fixed;
+  top: 56px;
+  bottom: 0;
+  left: 0;
+  width: 82%;
+  max-width: 320px;
+  border-right: 1px solid var(--border);
+  box-shadow: 0 20px 40px oklch(0 0 0 / 0.25);
+  animation: email-drawer-in 180ms ease-out;
+}
+
+.email__scrim {
+  position: fixed;
+  top: 56px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: oklch(0 0 0 / 0.35);
+  z-index: 105;
+  animation: email-scrim-in 180ms ease-out;
+}
+
+@keyframes email-drawer-in {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
+
+@keyframes email-scrim-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Middle pane container — holds msglist + reader ----------------------- */
 
 div.email__middle {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 280px;
-  right: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
   background: var(--pane-bg);
+  display: flex;
+  flex-direction: row;
 }
 
-div.msglist, div.reader {
-  position: absolute;
-  top: 0;
-  bottom: 0;
+/* Phone: list and reader share the middle pane; show one at a time. */
+.email[data-middle="reader"] .msglist { display: none; }
+.email[data-middle="list"]   .reader:not(.overlay_hidden) { display: none; }
+
+div.msglist,
+div.reader {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
 }
 
-@media (min-width: 900px) {
+/* On phone the reader hides its close-X in favor of the back button in
+   Messages header — but when the reader is up it needs its own back arrow.
+   That's handled inline in MessageOverlay via layout prop. */
+
+/* Tablet ---------------------------------------------------------------- */
+
+@media (min-width: 768px) {
+  /* Two-pane: list (fixed 42ch ish) + reader. */
   div.msglist {
-    left: 0;
-    width: 490px;
+    flex: 0 0 min(46%, 490px);
     border-right: 1px solid var(--border);
   }
-
   div.reader {
-    left: 490px;
-    right: 0;
+    flex: 1 1 auto;
   }
+  /* Tablet/desktop both show list and reader side-by-side. */
+  .email[data-middle="reader"] .msglist { display: flex; }
 
   .reader .close_overlay {
     display: none;
   }
 }
 
-@media (max-width: 899px) {
-  div.msglist, div.reader {
-    left: 0;
-    right: 0;
+/* Desktop -------------------------------------------------------------- */
+
+@media (min-width: 1200px) {
+  /* Rail becomes in-flow; cancel drawer positioning if it sneaks in. */
+  .email__rail {
+    position: static;
+    width: 280px;
+    flex: 0 0 280px;
+    border-right: 1px solid var(--border);
+    box-shadow: none;
+    animation: none;
   }
-  button.action span.wide-screen {
-    display: none;
-  }
-  body div.content div.filters span.filter button.action {
-    padding-left: 2em;
-    padding-right: 2em;
-  }
+  .email__rail--drawer { display: none; }
+  .email__scrim        { display: none; }
 }
 
 /* Composer view is now a floating card rendered by Email/ComposeOverlay —
-   see that component's CSS. No layout rules needed here. */
+   see that component's CSS. */

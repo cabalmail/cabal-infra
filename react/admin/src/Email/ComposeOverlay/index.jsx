@@ -102,6 +102,7 @@ function ComposeOverlay({
   stackIndex = 0,
   composeFromAddress,
   setComposeFromAddress,
+  layout = 'desktop',
 }) {
   const { smtp_host: ctxSmtpHost } = useAuth();
   const { setMessage } = useAppMessage();
@@ -437,12 +438,15 @@ function ComposeOverlay({
 
   // §4e: multiple compose windows stack horizontally with 8px gaps.
   // Each window is 600px wide, pinned bottom-right, offset by its index.
+  // Sheet mode (phone) ignores stackIndex — the sheet always fills the
+  // viewport, so stacking would just hide prior windows anyway.
   const style = useMemo(() => {
+    if (layout === 'phone') return {};
     const width = 600;
     const gap = 8;
     const offset = 24 + stackIndex * (width + gap);
     return { right: `${offset}px` };
-  }, [stackIndex]);
+  }, [stackIndex, layout]);
 
   const savedLabel = savedAt ? formatSaved(savedAt) : 'Draft not saved';
 
@@ -466,43 +470,67 @@ function ComposeOverlay({
 
   const fromSwatch = address ? swatchFor(address) : null;
 
+  const isSheet = layout === 'phone';
+
   return (
     <form
       ref={rootRef}
-      className={`compose-overlay compose-overlay--${windowState}`}
+      className={`compose-overlay compose-overlay--${windowState}${isSheet ? ' compose-overlay--sheet' : ''}`}
+      data-layout={isSheet ? 'sheet' : undefined}
       style={style}
       onSubmit={handleSubmit}
       onKeyDown={onRootKeyDown}
     >
-      <div className="compose-chrome">
-        <span className="compose-chrome__title">New message</span>
-        <div className="compose-chrome__actions">
+      {isSheet ? (
+        <div className="compose-chrome compose-chrome--sheet">
           <button
             type="button"
-            className="compose-chrome__btn"
-            aria-label="Minimize"
-            onClick={() => setWindowState(s => s === 'minimized' ? 'normal' : 'minimized')}
-          >
-            <Minus size={14} />
-          </button>
-          <button
-            type="button"
-            className="compose-chrome__btn"
-            aria-label={windowState === 'expanded' ? 'Restore' : 'Expand'}
-            onClick={() => setWindowState(s => s === 'expanded' ? 'normal' : 'expanded')}
-          >
-            {windowState === 'expanded' ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-          </button>
-          <button
-            type="button"
-            className="compose-chrome__btn"
-            aria-label="Close"
+            className="compose-chrome__text compose-chrome__text--cancel"
             onClick={(e) => handleDiscard(e)}
           >
-            <X size={14} />
+            Cancel
+          </button>
+          <span className="compose-chrome__title">New message</span>
+          <button
+            type="button"
+            className="compose-chrome__text compose-chrome__text--send"
+            onClick={handleSend}
+            disabled={sending}
+          >
+            {sending ? 'Sending…' : 'Send'}
           </button>
         </div>
-      </div>
+      ) : (
+        <div className="compose-chrome">
+          <span className="compose-chrome__title">New message</span>
+          <div className="compose-chrome__actions">
+            <button
+              type="button"
+              className="compose-chrome__btn"
+              aria-label="Minimize"
+              onClick={() => setWindowState(s => s === 'minimized' ? 'normal' : 'minimized')}
+            >
+              <Minus size={14} />
+            </button>
+            <button
+              type="button"
+              className="compose-chrome__btn"
+              aria-label={windowState === 'expanded' ? 'Restore' : 'Expand'}
+              onClick={() => setWindowState(s => s === 'expanded' ? 'normal' : 'expanded')}
+            >
+              {windowState === 'expanded' ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+            </button>
+            <button
+              type="button"
+              className="compose-chrome__btn"
+              aria-label="Close"
+              onClick={(e) => handleDiscard(e)}
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="compose-body">
         <div className="compose-row">

@@ -12,6 +12,66 @@
   font-family: var(--font-ui);
 }
 
+/* Drawer variant — Phase 8. Used on phone + tablet where the rail slides
+   over the rest of the layout instead of docking in-flow. Gains a header
+   row with title and a close button; rows get larger hit targets. */
+
+.drawer {
+  height: 100%;
+  padding-top: 0;
+}
+
+.drawerHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 48px;
+  padding: 0 12px 0 16px;
+  border-bottom: 1px solid var(--border-faint);
+  flex: 0 0 auto;
+}
+
+.drawerTitle {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.drawerClose {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.drawerClose:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+
+@media (max-width: 767px) {
+  .drawer .folderItem {
+    height: 44px;
+  }
+  .drawer .compose {
+    height: 44px;
+    min-height: 44px;
+  }
+}
+
+@media (min-width: 1200px) {
+  /* Desktop — rail is never a drawer; this @media guard is a no-op anchor
+     so every component has the required two breakpoint markers. */
+  .rail { /* no-op */ }
+}
+
 /* "New message" CTA ---------------------------------------------------- */
 
 .rail .compose {

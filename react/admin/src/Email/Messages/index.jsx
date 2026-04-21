@@ -7,6 +7,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowLeft, PenSquare } from 'lucide-react';
 import Envelopes from './Envelopes';
 import FolderPicker from './Folders';
 import Icon from './icons';
@@ -33,6 +34,9 @@ function Messages({
   setBulkMode,
   selected,
   setSelected,
+  layout = 'desktop',
+  onOpenDrawer,
+  onCompose,
 }) {
   const api = useApi();
 
@@ -312,10 +316,30 @@ function Messages({
     return (
       <div className="msglist-header">
         <div className="msglist-title-row">
+          {layout !== 'desktop' && (
+            <button
+              type="button"
+              className="msglist-phone-btn msglist-phone-back"
+              onClick={() => typeof onOpenDrawer === 'function' && onOpenDrawer()}
+              aria-label="Open navigation"
+            >
+              <ArrowLeft size={18} aria-hidden="true" />
+            </button>
+          )}
           <h1 className="msglist-title" title={title}>{title}</h1>
           <span className="msglist-meta">
             {totalIds > 0 ? `${totalShown} of ${totalIds}` : '0'}
           </span>
+          {layout === 'phone' && (
+            <button
+              type="button"
+              className="msglist-phone-btn msglist-phone-compose"
+              onClick={() => typeof onCompose === 'function' && onCompose()}
+              aria-label="New message"
+            >
+              <PenSquare size={18} aria-hidden="true" />
+            </button>
+          )}
         </div>
         <div className="msglist-tabs" role="tablist" aria-label="Message filter">
           {['all', 'unread', 'flagged'].map((f) => (
@@ -384,7 +408,19 @@ function Messages({
       <div className="msglist-sticky">{renderHeader()}</div>
       {loading && messageIds.length === 0 ? (
         <div className="msglist-loading" role="status" aria-label="Loading messages">
-          <span>Loading…</span>
+          <ul className="msglist-skel" aria-hidden="true">
+            {[0, 1, 2, 3].map((i) => (
+              <li key={i} className="msglist-skel-row">
+                <span className="msglist-skel-dot" />
+                <span className="msglist-skel-lines">
+                  <span className="msglist-skel-line msglist-skel-line-from" />
+                  <span className="msglist-skel-line msglist-skel-line-subject" />
+                </span>
+                <span className="msglist-skel-date" />
+              </li>
+            ))}
+          </ul>
+          <span className="sr-only">Loading messages…</span>
         </div>
       ) : (
         <Envelopes

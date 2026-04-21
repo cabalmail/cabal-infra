@@ -616,3 +616,73 @@
   font-family: var(--font-ui);
   font-size: 12px;
 }
+
+/* Phase 8 — Sheet mode (phone). Compose fills the viewport with a top
+   chrome row of [Cancel / title / Send] instead of the window buttons. */
+
+.compose-overlay--sheet {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  max-width: 100vw;
+  height: 100vh;
+  max-height: 100vh;
+  bottom: 0;
+  right: 0;
+  border: 0;
+  border-radius: 0;
+  animation: compose-sheet-in 220ms ease-out;
+}
+
+@keyframes compose-sheet-in {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+.compose-chrome--sheet {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  height: 52px;
+  padding-top: env(safe-area-inset-top, 0px);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 0;
+}
+
+.compose-chrome__text {
+  height: 36px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.compose-chrome__text--cancel { justify-self: start; font-weight: 500; }
+.compose-chrome__text--send   { justify-self: end; font-weight: 600; }
+.compose-chrome__text:disabled { opacity: 0.5; cursor: progress; }
+
+.compose-chrome--sheet .compose-chrome__title {
+  justify-self: center;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* On sheet, the old Send-in-bottom-bar is redundant. Don't show two sends. */
+.compose-overlay--sheet .compose-bottom__left .compose-send { display: none; }
+
+@media (min-width: 768px) {
+  /* Tablet+ — keep floating card chrome; sheet-only rules below are no-ops. */
+  .compose-overlay:not(.compose-overlay--sheet) { /* no-op */ }
+}
+
+@media (min-width: 1200px) {
+  /* Desktop anchor — satisfies the two-guard Phase 8 rule. */
+  .compose-overlay { /* no-op */ }
+}

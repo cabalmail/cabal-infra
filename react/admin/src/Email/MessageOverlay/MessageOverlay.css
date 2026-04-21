@@ -569,6 +569,155 @@
   text-align: center;
 }
 
+/* Shimmer skeleton — 1 header block + 3 body paragraphs. */
+
+.reader-skel {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 28px 24px 0;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.reader-skel-header {
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  gap: 14px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border-faint);
+}
+
+.reader-skel-avatar,
+.reader-skel-line,
+.reader-skel-para {
+  background: var(--surface-hover);
+  border-radius: 4px;
+  background-image: linear-gradient(
+    90deg,
+    var(--surface-hover) 0%,
+    color-mix(in oklch, var(--surface-hover) 55%, var(--border-faint)) 50%,
+    var(--surface-hover) 100%
+  );
+  background-size: 200% 100%;
+  animation: reader-shimmer 1.2s linear infinite;
+}
+
+.reader-skel-avatar { width: 40px; height: 40px; border-radius: 50%; }
+.reader-skel-headlines { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.reader-skel-subject { height: 20px; width: 70%; }
+.reader-skel-sender  { height: 14px; width: 42%; }
+.reader-skel-to      { height: 12px; width: 36%; }
+
+.reader-skel-body {
+  padding: 24px 0 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.reader-skel-para { height: 12px; }
+.reader-skel-para:nth-child(1) { width: 96%; }
+.reader-skel-para:nth-child(2) { width: 88%; }
+.reader-skel-para:nth-child(3) { width: 72%; }
+
+@keyframes reader-shimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+
+/* Inline error retry card. */
+
+.reader-retry {
+  max-width: 520px;
+  margin: 64px auto;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-menu);
+  text-align: center;
+  color: var(--ink);
+}
+
+.reader-retry-msg {
+  margin: 0 0 14px;
+  font-family: var(--font-display);
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.reader-retry-btn {
+  height: 36px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.reader-retry-btn:hover { filter: brightness(1.05); }
+
+/* Floating tab bar — phone sheet posture only.
+   Docked above the home indicator; backdrop-blur over scrolling content. */
+
+.reader-tabbar {
+  display: none;
+}
+
+.reader[data-layout="sheet"] .reader-tabbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  position: absolute;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  left: 12px;
+  right: 12px;
+  height: 52px;
+  padding: 0 8px;
+  z-index: 30;
+  background: color-mix(in oklch, var(--surface) 80%, transparent);
+  backdrop-filter: saturate(160%) blur(14px);
+  -webkit-backdrop-filter: saturate(160%) blur(14px);
+  border: 1px solid var(--border-faint);
+  border-radius: 26px;
+  box-shadow: 0 12px 28px oklch(0 0 0 / 0.18);
+}
+
+.reader-tab {
+  flex: 1 1 0;
+  height: 36px;
+  border: 0;
+  border-radius: 18px;
+  background: transparent;
+  color: var(--ink-soft);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.reader-tab:hover { background: var(--surface-hover); color: var(--ink); }
+
+.reader-tab-sep {
+  display: inline-block;
+  width: 1px;
+  height: 24px;
+  margin: 0 2px;
+  background: var(--border);
+  flex: 0 0 1px;
+}
+
+.reader-tab--danger { color: var(--ink-danger); }
+
+/* Make room for the tabbar so content doesn't hide behind it. */
+.reader[data-layout="sheet"] .reader-scroll {
+  padding-bottom: 88px;
+}
+
 .reader-empty {
   flex: 1 1 auto;
   display: flex;
@@ -718,9 +867,11 @@
   color: var(--ink);
 }
 
-/* --- Responsive -------------------------------------------------------- */
+/* --- Responsive --------------------------------------------------------
+   Phase 8 breakpoints: 768 (tablet), 1200 (desktop). Mobile-first base
+   styles are above; the tab bar replaces the toolbar row on phone. */
 
-@media (max-width: 899px) {
+@media (max-width: 767px) {
   .reader-header,
   .reader-body,
   .reader-attachments,
@@ -728,12 +879,21 @@
     padding-left: 16px;
     padding-right: 16px;
   }
-  .reader-actions .reader-btn .reader-btn-label {
-    display: none;
-  }
+  /* On phone the floating tab bar is the primary action surface — hide the
+     toolbar row entirely so we don't compete with it. */
+  .reader[data-layout="sheet"] .reader-actions { display: none; }
+  .reader-actions .reader-btn .reader-btn-label { display: none; }
   .reader-actions .reader-btn:not(.icon-only) {
     width: 32px;
     padding: 0;
     justify-content: center;
   }
+}
+
+@media (min-width: 768px) {
+  .reader-actions .reader-btn .reader-btn-label { display: inline; }
+}
+
+@media (min-width: 1200px) {
+  .reader-tabbar { display: none; }
 }

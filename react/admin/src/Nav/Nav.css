@@ -21,6 +21,45 @@
   font-family: var(--font-ui);
 }
 
+/* Left cluster — hamburger (when logged in on small screens) + brand. */
+
+.nav__left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* Hamburger (phone + tablet) ------------------------------------------ */
+
+.nav__hamburger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.nav__hamburger:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+
+@media (max-width: 1199px) {
+  .nav.logged-in .nav__hamburger { display: inline-flex; }
+}
+
+@media (min-width: 1200px) {
+  .nav__hamburger { display: none; }
+}
+
 /* Brand ---------------------------------------------------------------- */
 
 .nav__brand {
@@ -328,10 +367,11 @@
 
 /* Responsive ----------------------------------------------------------- */
 
-@media (max-width: 699px) {
+@media (max-width: 767px) {
   .nav {
     grid-template-columns: auto 1fr auto;
     padding: 0 12px;
+    gap: 8px;
   }
   .nav__search { display: none; }
   .nav__brand-word { display: none; }

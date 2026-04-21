@@ -188,13 +188,14 @@ describe('MessageOverlay (Reader)', () => {
     }
   });
 
-  it('shows error when message fetch fails', async () => {
+  it('shows inline retry card when message fetch fails', async () => {
     mockGetMessage.mockRejectedValueOnce(new Error('fail'));
     const { unmount } = renderOverlay();
     try {
       await waitFor(() => {
-        expect(setMessage).toHaveBeenCalledWith('Unable to get message.', true);
+        expect(screen.getByText(/Couldn.t load this message/i)).toBeInTheDocument();
       });
+      expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
     } finally {
       unmount();
     }

@@ -5,6 +5,7 @@ import MessageOverlay from './MessageOverlay';
 import ComposeOverlay from './ComposeOverlay';
 import Folders from '../Folders';
 import Addresses from '../Addresses';
+import useMediaQuery from '../hooks/useMediaQuery';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppMessage } from '../contexts/AppMessageContext';
 
@@ -47,18 +48,46 @@ function Email({
   const { token, api_url, host, domains, smtp_host } = useAuth();
   const { setMessage } = useAppMessage();
 
+  // Phase 8: responsive layout breakpoints.
+  //   phone   — <768px  : one pane; Folders as drawer; Reader/Compose as sheets
+  //   tablet  — ≥768px  : two panes (Messages + Reader); Folders as drawer
+  //   desktop — ≥1200px : three panes, Folders in-flow
+  const isDesktop = useMediaQuery('(min-width: 1200px)');
+  const isTabletUp = useMediaQuery('(min-width: 768px)');
+  const layout = isDesktop ? 'desktop' : isTabletUp ? 'tablet' : 'phone';
+
   const [folder, setFolder] = useState("INBOX");
   const [addressFilter, setAddressFilter] = useState(null);
   const [overlayVisible, setOverlayVisible] = useState(false);
   const [envelope, setEnvelope] = useState({});
   const [flags, setFlags] = useState([]);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   // §4e: multiple compose windows coexist. Each entry carries its own
   // composeState so windows don't share recipients / subject / body.
   const [composeWindows, setComposeWindows] = useState([]);
 
+  const closeDrawer = useCallback(() => setDrawerOpen(false), []);
+  const openDrawer = useCallback(() => setDrawerOpen(true), []);
+
+  // Close drawer when layout reaches desktop — rail becomes in-flow and the
+  // drawer UI would otherwise stay stuck open underneath.
+  useEffect(() => {
+    if (isDesktop && drawerOpen) setDrawerOpen(false);
+  }, [isDesktop, drawerOpen]);
+
+  // The global Nav (rendered outside this tree) owns the hamburger button;
+  // it dispatches `cabal:toggle-nav-drawer` when tapped. Listen here so the
+  // button can drive the drawer without lifting state to App.jsx.
+  useEffect(() => {
+    const toggle = () => setDrawerOpen((v) => !v);
+    window.addEventListener('cabal:toggle-nav-drawer', toggle);
+    return () => window.removeEventListener('cabal:toggle-nav-drawer', toggle);
+  }, []);
+
   const selectFolder = useCallback((f) => {
     setFolder(f);
     setAddressFilter(null);
+    setDrawerOpen(false);
   }, []);
 
   const selectAddress = useCallback((address) => {
@@ -148,22 +177,58 @@ function Email({
     };
   }, [shortcutHandlersRef, newEmail, selectFolder, overlayVisible, hideOverlay, composeWindows, closeCompose]);
 
+  // On phone the reader takes over the whole middle pane — hide the msglist
+  // body while the reader is open so we don't see both stacked.
+  const middleMode = layout === 'phone' && overlayVisible ? 'reader' : 'list';
+
   return (
-    <div className="email">
-      <aside className="email__rail" aria-label="Folders and addresses">
-        <Folders
-          folder={folder}
-          setFolder={selectFolder}
-          setMessage={setMessage}
-          onNewMessage={newEmail}
-        />
-        <Addresses
-          domains={domains}
-          setMessage={setMessage}
-          selectedAddress={addressFilter}
-          onSelectAddress={selectAddress}
-        />
-      </aside>
+    <div className="email" data-layout={layout} data-middle={middleMode}>
+      {layout === 'desktop' ? (
+        <aside className="email__rail" aria-label="Folders and addresses">
+          <Folders
+            folder={folder}
+            setFolder={selectFolder}
+            setMessage={setMessage}
+            onNewMessage={newEmail}
+          />
+          <Addresses
+            domains={domains}
+            setMessage={setMessage}
+            selectedAddress={addressFilter}
+            onSelectAddress={selectAddress}
+          />
+        </aside>
+      ) : (
+        drawerOpen && (
+          <>
+            <div
+              className="email__scrim"
+              role="presentation"
+              onClick={closeDrawer}
+            />
+            <aside
+              className="email__rail email__rail--drawer"
+              aria-label="Folders and addresses"
+            >
+              <Folders
+                folder={folder}
+                setFolder={selectFolder}
+                setMessage={setMessage}
+                onNewMessage={() => { setDrawerOpen(false); newEmail(); }}
+                asDrawer
+                onClose={closeDrawer}
+              />
+              <Addresses
+                domains={domains}
+                setMessage={setMessage}
+                selectedAddress={addressFilter}
+                onSelectAddress={(a) => { setAddressFilter(a); setDrawerOpen(false); }}
+              />
+            </aside>
+          </>
+        )
+      )}
+
       <div className="email__middle">
         <Messages
           token={token}
@@ -184,6 +249,9 @@ function Email({
           setBulkMode={setBulkMode}
           selected={selected}
           setSelected={setSelected}
+          layout={layout}
+          onOpenDrawer={openDrawer}
+          onCompose={newEmail}
         />
         <MessageOverlay
           token={token}
@@ -201,6 +269,7 @@ function Email({
           forward={forward}
           readerFormat={readerFormat}
           setReaderFormat={setReaderFormat}
+          layout={layout}
         />
       </div>
       {composeWindows.length > 0 && (
@@ -220,6 +289,7 @@ function Email({
               other_headers={w.other_headers}
               composeFromAddress={composeFromAddress}
               setComposeFromAddress={setComposeFromAddress}
+              layout={layout}
             />
           ))}
         </div>

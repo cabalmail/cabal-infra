@@ -31,6 +31,7 @@ function MessageOverlay({
   hide: hideProp, updateOverlay,
   reply: replyProp, replyAll: replyAllProp, forward: forwardProp,
   readerFormat, setReaderFormat,
+  layout = 'desktop',
 }) {
   const api = useApi();
   const { setMessage } = useAppMessage();
@@ -39,6 +40,8 @@ function MessageOverlay({
   const [messageBodyHtml, setMessageBodyHtml] = useState('');
   const [attachments, setAttachments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [loadNonce, setLoadNonce] = useState(0);
   const [recipient, setRecipient] = useState('');
   const [messageId, setMessageId] = useState([]);
   const [inReplyTo, setInReplyTo] = useState([]);
@@ -68,6 +71,7 @@ function MessageOverlay({
   useEffect(() => {
     if (!envelopeId) return;
     setLoading(true);
+    setLoadError(false);
     setMessageBodyHtml('');
     setMessageBodyPlain('');
     setAttachments([]);
@@ -87,18 +91,22 @@ function MessageOverlay({
       setMessageRawUrl(data.data.message_raw || null);
       setLoading(false);
     }).catch((e) => {
-      setMessage('Unable to get message.', true);
+      setLoading(false);
+      setLoadError(true);
       console.log(e);
     });
 
     api.getAttachments(folder, envelopeId, seen).then((data) => {
       setAttachments(data.data.attachments || []);
     }).catch((e) => {
-      setMessage('Unable to get list of attachments.', true);
       console.log(e);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [envelopeId]);
+  }, [envelopeId, loadNonce]);
+
+  const retryLoad = useCallback(() => {
+    setLoadNonce((n) => n + 1);
+  }, []);
 
   const hasRich = !!messageBodyHtml;
   const hasPlain = !!messageBodyPlain;
@@ -273,12 +281,55 @@ function MessageOverlay({
     return <div className="reader overlay_hidden" />;
   }
 
+  const sheetAttr = layout === 'phone' ? 'sheet' : undefined;
+
   if (loading || !envelopeId) {
     return (
-      <div className="reader">
+      <div className="reader" data-layout={sheetAttr}>
         <div className="reader-actions" aria-label="Message actions" />
         <div className="reader-scroll">
-          <div className="reader-loading">Loading…</div>
+          <div className="reader-skel" role="status" aria-label="Loading message">
+            <div className="reader-skel-header">
+              <div className="reader-skel-avatar" />
+              <div className="reader-skel-headlines">
+                <div className="reader-skel-line reader-skel-subject" />
+                <div className="reader-skel-line reader-skel-sender" />
+                <div className="reader-skel-line reader-skel-to" />
+              </div>
+            </div>
+            <div className="reader-skel-body">
+              <div className="reader-skel-para" />
+              <div className="reader-skel-para" />
+              <div className="reader-skel-para" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="reader" data-layout={sheetAttr}>
+        <div className="reader-actions" aria-label="Message actions">
+          <span className="reader-spacer" />
+          <button
+            type="button"
+            className="reader-btn icon-only close_overlay"
+            onClick={hide}
+            title="Close message"
+            aria-label="Close message"
+          >
+            <X size={16} aria-hidden="true" />
+          </button>
+        </div>
+        <div className="reader-scroll">
+          <div className="reader-retry" role="alert">
+            <p className="reader-retry-msg">Couldn&rsquo;t load this message.</p>
+            <button type="button" className="reader-retry-btn" onClick={retryLoad}>
+              Retry
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -294,7 +345,7 @@ function MessageOverlay({
   const timestamp = formatReaderTimestamp(envelope.date);
 
   return (
-    <div className="reader" role="region" aria-label="Message">
+    <div className="reader" data-layout={sheetAttr} role="region" aria-label="Message">
       <div className="reader-actions" role="toolbar" aria-label="Message actions">
         <button type="button" className="reader-btn" onClick={reply} title="Reply">
           <Reply size={16} aria-hidden="true" />
@@ -422,6 +473,32 @@ function MessageOverlay({
           onDownload={downloadAttachment}
         />
       </div>
+
+      {layout === 'phone' && (
+        <nav className="reader-tabbar" aria-label="Message actions">
+          <button type="button" className="reader-tab" onClick={reply} aria-label="Reply">
+            <Reply size={20} aria-hidden="true" />
+          </button>
+          <button type="button" className="reader-tab" onClick={replyAll} aria-label="Reply all">
+            <ReplyAll size={20} aria-hidden="true" />
+          </button>
+          <button type="button" className="reader-tab" onClick={forward} aria-label="Forward">
+            <Forward size={20} aria-hidden="true" />
+          </button>
+          <span className="reader-tab-sep" aria-hidden="true" />
+          <button type="button" className="reader-tab" onClick={doArchive} aria-label="Archive">
+            <Archive size={20} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            className="reader-tab reader-tab--danger"
+            onClick={doDelete}
+            aria-label="Delete"
+          >
+            <Trash2 size={20} aria-hidden="true" />
+          </button>
+        </nav>
+      )}
 
       <ViewSourceModal
         open={sourceOpen}

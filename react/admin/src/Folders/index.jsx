@@ -33,7 +33,7 @@ function FolderIcon({ kind }) {
   return <Icon className={styles.folderIcon} size={16} aria-hidden="true" />;
 }
 
-function Folders({ setMessage, folder, setFolder, onNewMessage }) {
+function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false, onClose }) {
   const api = useApi();
   const [folders, setFolders] = useState([]);
   const [subscribed, setSubscribed] = useState([]);
@@ -111,7 +111,23 @@ function Folders({ setMessage, folder, setFolder, onNewMessage }) {
   }, []);
 
   return (
-    <section className={styles.rail} aria-label="Folders">
+    <section
+      className={`${styles.rail}${asDrawer ? ` ${styles.drawer}` : ''}`}
+      aria-label="Folders"
+    >
+      {asDrawer && (
+        <div className={styles.drawerHeader}>
+          <span className={styles.drawerTitle}>Mailboxes</span>
+          <button
+            type="button"
+            className={styles.drawerClose}
+            onClick={() => typeof onClose === 'function' && onClose()}
+            aria-label="Close navigation"
+          >
+            <X size={16} aria-hidden="true" />
+          </button>
+        </div>
+      )}
       <button
         type="button"
         className={styles.compose}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Search, Check } from 'lucide-react';
+import { Search, Check, Menu } from 'lucide-react';
 import logoMarkup from '../assets/logo.svg?raw';
 import './Nav.css';
 
@@ -62,17 +62,36 @@ function Nav({
 
   const visibleViews = NAV_VIEWS.filter((v) => !v.requiresAdmin || isAdmin);
 
+  const openDrawer = useCallback(() => {
+    // Email listens for this event and toggles its folder drawer. Using a
+    // window event avoids lifting drawer state into App for a button that
+    // only matters in one view.
+    window.dispatchEvent(new CustomEvent('cabal:toggle-nav-drawer'));
+  }, []);
+
   return (
     <header
       className={`nav logged-${loggedIn ? 'in' : 'out'}${isAdmin ? ' is-admin' : ''}`}
     >
-      <div className="nav__brand">
-        <span
-          className="nav__brand-tile"
-          aria-hidden="true"
-          dangerouslySetInnerHTML={{ __html: logoMarkup }}
-        />
-        <span className="nav__brand-word">Cabalmail</span>
+      <div className="nav__left">
+        {loggedIn && (
+          <button
+            type="button"
+            className="nav__hamburger"
+            aria-label="Open navigation"
+            onClick={openDrawer}
+          >
+            <Menu size={18} aria-hidden="true" />
+          </button>
+        )}
+        <div className="nav__brand">
+          <span
+            className="nav__brand-tile"
+            aria-hidden="true"
+            dangerouslySetInnerHTML={{ __html: logoMarkup }}
+          />
+          <span className="nav__brand-word">Cabalmail</span>
+        </div>
       </div>
 
       {loggedIn && (
