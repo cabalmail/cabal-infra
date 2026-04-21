@@ -11,7 +11,9 @@ extension ImapParser {
         guard case .lparen = tokenizer.next() else { return env }
 
         env.date = readNString(&tokenizer).flatMap(parseEnvelopeDate)
-        env.subject = readNString(&tokenizer)
+        // Subject (and address display names below) arrive as raw RFC 2047
+        // headers per RFC 3501 — decode encoded-words so non-ASCII renders.
+        env.subject = readNString(&tokenizer).map(HeaderDecoder.decode)
         env.from = readAddressList(&tokenizer)
         env.sender = readAddressList(&tokenizer)
         env.replyTo = readAddressList(&tokenizer)
@@ -54,7 +56,7 @@ extension ImapParser {
                 return addresses
             }
             _ = tokenizer.next() // consume lparen
-            let name = readNString(&tokenizer)
+            let name = readNString(&tokenizer).map(HeaderDecoder.decode)
             _ = readNString(&tokenizer) // source-route, effectively obsolete
             let mailbox = readNString(&tokenizer) ?? ""
             let host = readNString(&tokenizer) ?? ""
