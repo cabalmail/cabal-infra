@@ -104,6 +104,12 @@ function App() {
   // itself clamps to 'plain' for messages with no HTML part.
   const [readerFormat, setReaderFormat] = useState('rich');
 
+  // Compose "From" preference per §4e. Newly-opened compose windows default
+  // to this address; the From picker writes back so the next window inherits
+  // the user's last choice. `null` defers to the first address the compose
+  // window loads.
+  const [composeFromAddress, setComposeFromAddress] = useState(null);
+
   const setState = useCallback((updates) => {
     setAppState(prev => {
       const next = { ...prev, ...updates };
@@ -425,6 +431,8 @@ function App() {
               setSelected={setSelected}
               readerFormat={readerFormat}
               setReaderFormat={setReaderFormat}
+              composeFromAddress={composeFromAddress}
+              setComposeFromAddress={setComposeFromAddress}
             />
           </ErrorBoundary>
         );
