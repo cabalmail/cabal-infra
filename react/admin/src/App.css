@@ -26,6 +26,7 @@
   background: var(--bg);
   color: var(--ink);
   font-family: var(--font-ui);
+  font-feature-settings: "ss01", "cv11";
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

@@ -19,9 +19,12 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
+  box-sizing: border-box;
+  flex: 0 0 36px;
   width: calc(100% - 24px);
   margin: 4px 12px 12px;
   height: 36px;
+  min-height: 36px;
   padding: 0 14px;
   border: 0;
   border-radius: var(--radius-md);
@@ -30,6 +33,7 @@
   font-family: var(--font-ui);
   font-weight: 600;
   font-size: 13px;
+  line-height: 1;
   letter-spacing: -0.005em;
   cursor: pointer;
 }
