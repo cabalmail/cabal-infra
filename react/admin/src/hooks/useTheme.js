@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 const STORAGE_KEY = 'cabalmail.theme.v1';
 const DIRECTION = 'stately';
+const SAVE_DEBOUNCE_MS = 1000;
 
 const DEFAULTS = {
   theme: 'light',
@@ -15,16 +16,20 @@ const VALID = {
   density: ['compact', 'normal', 'roomy'],
 };
 
+function sanitize(input) {
+  if (!input || typeof input !== 'object') return { ...DEFAULTS };
+  return {
+    theme:   VALID.theme.includes(input.theme)     ? input.theme   : DEFAULTS.theme,
+    accent:  VALID.accent.includes(input.accent)   ? input.accent  : DEFAULTS.accent,
+    density: VALID.density.includes(input.density) ? input.density : DEFAULTS.density,
+  };
+}
+
 function readStoredPrefs() {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return { ...DEFAULTS };
-    const parsed = JSON.parse(raw);
-    return {
-      theme:   VALID.theme.includes(parsed.theme)     ? parsed.theme   : DEFAULTS.theme,
-      accent:  VALID.accent.includes(parsed.accent)   ? parsed.accent  : DEFAULTS.accent,
-      density: VALID.density.includes(parsed.density) ? parsed.density : DEFAULTS.density,
-    };
+    return sanitize(JSON.parse(raw));
   } catch {
     return { ...DEFAULTS };
   }
@@ -43,11 +48,17 @@ function writeStoredPrefs(prefs) {
  * to `data-direction` / `data-theme` / `data-accent` / `data-density`
  * attributes on the document root so CSS custom properties resolve.
  *
- * localStorage-only in Phase 1. Cognito sync lands in Phase 7.
+ * Phase 7: when an ApiClient is provided, preferences load from the
+ * `get_preferences` Lambda on mount and save via `set_preferences`
+ * debounced at 1s. localStorage is always the fast path for initial
+ * render and offline.
  */
-export default function useTheme() {
+export default function useTheme(apiClient) {
   const [prefs, setPrefs] = useState(readStoredPrefs);
+  const hasHydrated = useRef(false);
+  const saveTimer = useRef(null);
 
+  // Push prefs onto the root and mirror to localStorage for instant-apply.
   useEffect(() => {
     const root = document.documentElement;
     root.setAttribute('data-direction', DIRECTION);
@@ -56,6 +67,45 @@ export default function useTheme() {
     root.setAttribute('data-density', prefs.density);
     writeStoredPrefs(prefs);
   }, [prefs]);
+
+  // Hydrate from API once an authenticated ApiClient becomes available.
+  useEffect(() => {
+    if (!apiClient || hasHydrated.current) return;
+    let cancelled = false;
+    apiClient.getPreferences()
+      .then(({ data }) => {
+        if (cancelled) return;
+        hasHydrated.current = true;
+        const remote = sanitize(data);
+        setPrefs((prev) => (
+          prev.theme === remote.theme
+            && prev.accent === remote.accent
+            && prev.density === remote.density
+          ? prev
+          : remote
+        ));
+      })
+      .catch(() => {
+        // Network / auth failure — keep localStorage values; allow future
+        // mounts to retry. Leaving hasHydrated=false means a fresh login
+        // with working network will still sync.
+      });
+    return () => { cancelled = true; };
+  }, [apiClient]);
+
+  // Debounced save to API. Waits 1s after the last change, and only fires
+  // once hydration has completed so the initial hydrated value isn't echoed
+  // straight back.
+  useEffect(() => {
+    if (!apiClient || !hasHydrated.current) return undefined;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      apiClient.putPreferences(prefs).catch(() => { /* transient failure ok */ });
+    }, SAVE_DEBOUNCE_MS);
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, [apiClient, prefs]);
 
   const setTheme = useCallback((theme) => {
     if (!VALID.theme.includes(theme)) return;

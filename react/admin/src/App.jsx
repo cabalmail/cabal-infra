@@ -1,7 +1,8 @@
 // Third party libs
 
-import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo, Suspense } from 'react';
 import axios from 'axios';
+import ApiClient from './ApiClient';
 import {
   CognitoUser,
   CognitoUserPool,
@@ -26,6 +27,7 @@ import ResetPassword from './ResetPassword';
 // Persistent Components
 import AppMessage from './AppMessage';
 import Nav from './Nav';
+import KeyboardHelp from './KeyboardHelp';
 
 // Error Boundary
 import ErrorBoundary from './ErrorBoundary';
@@ -36,6 +38,7 @@ import AppMessageContext from './contexts/AppMessageContext';
 
 // Hooks
 import useTheme from './hooks/useTheme';
+import useKeyboardShortcuts from './hooks/useKeyboardShortcuts';
 
 // Site-wide and Theme-specific style
 import './AppDark.css';
@@ -88,7 +91,16 @@ function App() {
   const [error, setError] = useState(false);
   const [hideMessage, setHideMessage] = useState(true);
   const hideTimerRef = useRef(null);
-  const theme = useTheme();
+
+  // ApiClient for preference hydration. Only usable once login has populated
+  // `api_url` and the module-level `_token`. Re-created when those inputs
+  // change so useTheme picks up the fresh token.
+  const prefsApi = useMemo(() => (
+    state.loggedIn && state.api_url && _token
+      ? new ApiClient(state.api_url, _token, state.imap_host)
+      : null
+  ), [state.loggedIn, state.api_url, state.imap_host]);
+  const theme = useTheme(prefsApi);
 
   // Message-list state bags per §4c / State Management. Lifted here so that
   // future phases (reader selection, keyboard shortcuts) can read the same
@@ -109,6 +121,19 @@ function App() {
   // the user's last choice. `null` defers to the first address the compose
   // window loads.
   const [composeFromAddress, setComposeFromAddress] = useState(null);
+
+  // Phase 7 §3: controls the ForgotPassword success state. Set on Cognito
+  // `forgotPassword` success; cleared when the user leaves the screen.
+  const [forgotPasswordSent, setForgotPasswordSent] = useState(false);
+
+  // Phase 7 §Interactions: `?` toggles the keyboard-shortcut overlay.
+  const [helpOpen, setHelpOpen] = useState(false);
+
+  // Bridge for keys whose handlers live inside the Email view (compose,
+  // folder navigation, j/k cursor, etc.). Child components register
+  // handlers on mount; the shortcut hook proxies through this ref so
+  // App doesn't need to lift Email's internals.
+  const shortcutHandlersRef = useRef({});
 
   const setState = useCallback((updates) => {
     setAppState(prev => {
@@ -248,18 +273,18 @@ function App() {
     });
     cognitoUser.forgotPassword({
       onSuccess: () => {
-        setState({ view: "ResetPassword" });
+        setForgotPasswordSent(true);
         setMessage("A reset code has been sent to your phone.", false);
       },
       onFailure: () => {
         setMessage("Failed to send reset code. Please try again.", true);
       },
       inputVerificationCode: () => {
-        setState({ view: "ResetPassword" });
+        setForgotPasswordSent(true);
         setMessage("A reset code has been sent to your phone.", false);
       }
     });
-  }, [state.userName, setState, setMessage]);
+  }, [state.userName, setMessage]);
 
   const doResetPassword = useCallback((e) => {
     e.preventDefault();
@@ -376,6 +401,7 @@ function App() {
             onSubmit={doVerify}
             onCodeChange={doInputChange}
             code={state.verificationCode}
+            onBackToSignIn={(e) => { e.preventDefault(); setState({ view: "Login" }); }}
           />
         );
       case "ForgotPassword":
@@ -384,7 +410,17 @@ function App() {
             onSubmit={doForgotPassword}
             onUsernameChange={doInputChange}
             username={state.userName}
-            onCancel={(e) => { e.preventDefault(); setState({ view: "Login" }); }}
+            submitted={forgotPasswordSent}
+            onBackToSignIn={(e) => {
+              e.preventDefault();
+              setForgotPasswordSent(false);
+              setState({ view: "Login" });
+            }}
+            onProceed={(e) => {
+              e.preventDefault();
+              setForgotPasswordSent(false);
+              setState({ view: "ResetPassword" });
+            }}
           />
         );
       case "ResetPassword":
@@ -395,6 +431,7 @@ function App() {
             onPasswordChange={doInputChange}
             code={state.verificationCode}
             password={state.password}
+            onBackToSignIn={(e) => { e.preventDefault(); setState({ view: "Login" }); }}
           />
         );
       case "SignUp":
@@ -407,6 +444,7 @@ function App() {
             username={state.userName}
             password={state.password}
             phone={state.phone}
+            onSignIn={(e) => { e.preventDefault(); setState({ view: "Login" }); }}
           />
         );
       case "Email":
@@ -433,6 +471,7 @@ function App() {
               setReaderFormat={setReaderFormat}
               composeFromAddress={composeFromAddress}
               setComposeFromAddress={setComposeFromAddress}
+              shortcutHandlersRef={shortcutHandlersRef}
             />
           </ErrorBoundary>
         );
@@ -446,7 +485,8 @@ function App() {
             onPasswordChange={doInputChange}
             username={state.userName}
             password={state.password}
-            onForgotPassword={(e) => { e.preventDefault(); setState({ view: "ForgotPassword" }); }}
+            onForgotPassword={(e) => { e.preventDefault(); setForgotPasswordSent(false); setState({ view: "ForgotPassword" }); }}
+            onSignUp={(e) => { e.preventDefault(); setState({ view: "SignUp" }); }}
           />
         );
     }
@@ -460,23 +500,56 @@ function App() {
     domains: state.domains
   };
 
+  const isPreLoginView = ["Login", "SignUp", "Verify", "ForgotPassword", "ResetPassword"]
+    .includes(state.view);
+
+  const shortcutCallbacks = useMemo(() => ({
+    onToggleHelp: () => setHelpOpen(prev => !prev),
+    onFocusSearch: () => {
+      const el = document.querySelector('.nav__search-input');
+      if (el && el.focus) el.focus();
+    },
+    onEscape: () => {
+      setHelpOpen(false);
+      if (bulkMode) setBulkMode(false);
+      shortcutHandlersRef.current.onEscape?.();
+    },
+    onToggleBulk: () => setBulkMode(prev => !prev),
+    onCompose:    () => shortcutHandlersRef.current.onCompose?.(),
+    onGoToFolder: (f) => shortcutHandlersRef.current.onGoToFolder?.(f),
+    onNext:       () => shortcutHandlersRef.current.onNext?.(),
+    onPrev:       () => shortcutHandlersRef.current.onPrev?.(),
+    onOpen:       () => shortcutHandlersRef.current.onOpen?.(),
+    onArchive:    () => shortcutHandlersRef.current.onArchive?.(),
+    onDelete:     () => shortcutHandlersRef.current.onDelete?.(),
+    onReply:      () => shortcutHandlersRef.current.onReply?.(),
+    onReplyAll:   () => shortcutHandlersRef.current.onReplyAll?.(),
+    onForward:    () => shortcutHandlersRef.current.onForward?.(),
+    onFlag:       () => shortcutHandlersRef.current.onFlag?.(),
+    onMarkUnread: () => shortcutHandlersRef.current.onMarkUnread?.(),
+  }), [bulkMode]);
+
+  useKeyboardShortcuts(shortcutCallbacks, state.loggedIn && !isPreLoginView);
+
   return (
     <AuthContext.Provider value={authValue}>
       <AppMessageContext.Provider value={{ setMessage }}>
-        <div className={`App ${state.view}`}>
-          <Nav
-            onClick={updateView}
-            loggedIn={state.loggedIn}
-            view={state.view}
-            doLogout={doLogout}
-            isAdmin={isAdmin}
-            userName={state.userName}
-            theme={theme.theme}
-            accent={theme.accent}
-            onToggleTheme={theme.toggleTheme}
-            onSelectAccent={theme.setAccent}
-            accents={theme.accents}
-          />
+        <div className={`App ${state.view}${isPreLoginView ? ' pre-login' : ''}`}>
+          {!isPreLoginView && (
+            <Nav
+              onClick={updateView}
+              loggedIn={state.loggedIn}
+              view={state.view}
+              doLogout={doLogout}
+              isAdmin={isAdmin}
+              userName={state.userName}
+              theme={theme.theme}
+              accent={theme.accent}
+              onToggleTheme={theme.toggleTheme}
+              onSelectAccent={theme.setAccent}
+              accents={theme.accents}
+            />
+          )}
           <div className="content">
             <Suspense fallback={<div className="loading">Loading...</div>}>
               {renderContent()}
@@ -487,6 +560,7 @@ function App() {
             hide={hideMessage}
             error={error}
           />
+          <KeyboardHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
         </div>
       </AppMessageContext.Provider>
     </AuthContext.Provider>

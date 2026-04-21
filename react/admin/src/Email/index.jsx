@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import './Email.css';
 import Messages from './Messages';
 import MessageOverlay from './MessageOverlay';
@@ -42,6 +42,7 @@ function Email({
   selected, setSelected,
   readerFormat, setReaderFormat,
   composeFromAddress, setComposeFromAddress,
+  shortcutHandlersRef,
 }) {
   const { token, api_url, host, domains, smtp_host } = useAuth();
   const { setMessage } = useAppMessage();
@@ -124,6 +125,28 @@ function Email({
   const forward = useCallback((recipient, body, env, other_headers) => {
     launchComposer(recipient, body, env, other_headers, "forward");
   }, [launchComposer]);
+
+  // Register keyboard-shortcut handlers with App-level hook.
+  useEffect(() => {
+    if (!shortcutHandlersRef) return undefined;
+    const ref = shortcutHandlersRef;
+    ref.current = {
+      ...ref.current,
+      onCompose:    () => newEmail(),
+      onGoToFolder: (f) => selectFolder(f),
+      onEscape:     () => {
+        if (overlayVisible) { hideOverlay(); return; }
+        if (composeWindows.length > 0) { closeCompose(composeWindows[composeWindows.length - 1].id); }
+      },
+    };
+    return () => {
+      if (ref.current) {
+        delete ref.current.onCompose;
+        delete ref.current.onGoToFolder;
+        delete ref.current.onEscape;
+      }
+    };
+  }, [shortcutHandlersRef, newEmail, selectFolder, overlayVisible, hideOverlay, composeWindows, closeCompose]);
 
   return (
     <div className="email">

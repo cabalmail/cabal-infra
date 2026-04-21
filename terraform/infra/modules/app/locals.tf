@@ -223,6 +223,22 @@ locals {
       memory    = 128
       cache     = false
       cache_ttl = 0
+    },
+    get_preferences      = {
+      runtime   = "python3.13"
+
+      method    = "GET"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    set_preferences      = {
+      runtime   = "python3.13"
+
+      method    = "PUT"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
     }
   }
 }
