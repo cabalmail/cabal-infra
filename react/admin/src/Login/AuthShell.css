@@ -54,7 +54,9 @@
   overflow: hidden;
 }
 
-:root[data-theme="dark"] .auth__brand-tile { color: #0b0b0b; }
+@media (prefers-color-scheme: dark) {
+  .auth__brand-tile { color: #0b0b0b; }
+}
 
 .auth__brand-logo {
   height: 37px;

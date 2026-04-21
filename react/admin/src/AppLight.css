@@ -1,12 +1,9 @@
 /* =========================================================================
-   Stately direction — Light theme tokens
-   Keyed off :root[data-direction="stately"][data-theme="light"].
-   Scoped to Phase 1 surfaces (document chrome + Nav). The legacy
-   prefers-color-scheme block below continues to style the rest of the app
-   until each surface is rebuilt in later phases.
+   Stately direction — Light theme tokens (system-light default).
+   Dark variants live in AppDark.css under @media (prefers-color-scheme: dark).
    ========================================================================= */
 
-:root[data-direction="stately"][data-theme="light"] {
+:root[data-direction="stately"] {
   --bg:            oklch(0.975 0.008 85);
   --reader-bg:     oklch(0.995 0.003 85);
   --pane-bg:       oklch(0.99  0.004 85);
@@ -34,12 +31,12 @@
 }
 
 /* Accent palette — light */
-:root[data-direction="stately"][data-theme="light"][data-accent="ink"]     { --accent: oklch(0.25 0.03 250); }
-:root[data-direction="stately"][data-theme="light"][data-accent="oxblood"] { --accent: oklch(0.42 0.12 25);  }
-:root[data-direction="stately"][data-theme="light"][data-accent="forest"]  { --accent: oklch(0.45 0.09 150); }
-:root[data-direction="stately"][data-theme="light"][data-accent="azure"]   { --accent: oklch(0.52 0.12 250); }
-:root[data-direction="stately"][data-theme="light"][data-accent="amber"]   { --accent: oklch(0.55 0.13 70);  }
-:root[data-direction="stately"][data-theme="light"][data-accent="plum"]    { --accent: oklch(0.45 0.12 330); }
+:root[data-direction="stately"][data-accent="ink"]     { --accent: oklch(0.25 0.03 250); }
+:root[data-direction="stately"][data-accent="oxblood"] { --accent: oklch(0.42 0.12 25);  }
+:root[data-direction="stately"][data-accent="forest"]  { --accent: oklch(0.45 0.09 150); }
+:root[data-direction="stately"][data-accent="azure"]   { --accent: oklch(0.52 0.12 250); }
+:root[data-direction="stately"][data-accent="amber"]   { --accent: oklch(0.55 0.13 70);  }
+:root[data-direction="stately"][data-accent="plum"]    { --accent: oklch(0.45 0.12 330); }
 
 /* Legacy prefers-color-scheme styling — preserved until each surface is
    rebuilt in a later phase. Do not extend. */

@@ -5,13 +5,11 @@ const DIRECTION = 'stately';
 const SAVE_DEBOUNCE_MS = 1000;
 
 const DEFAULTS = {
-  theme: 'light',
   accent: 'forest',
   density: 'compact',
 };
 
 const VALID = {
-  theme: ['light', 'dark'],
   accent: ['ink', 'oxblood', 'forest', 'azure', 'amber', 'plum'],
   density: ['compact', 'normal', 'roomy'],
 };
@@ -19,7 +17,6 @@ const VALID = {
 function sanitize(input) {
   if (!input || typeof input !== 'object') return { ...DEFAULTS };
   return {
-    theme:   VALID.theme.includes(input.theme)     ? input.theme   : DEFAULTS.theme,
     accent:  VALID.accent.includes(input.accent)   ? input.accent  : DEFAULTS.accent,
     density: VALID.density.includes(input.density) ? input.density : DEFAULTS.density,
   };
@@ -39,16 +36,17 @@ function writeStoredPrefs(prefs) {
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
   } catch {
-    /* quota or disabled storage — theme simply won't persist across reloads */
+    /* quota or disabled storage — prefs simply won't persist across reloads */
   }
 }
 
 /**
- * Reads and writes theme / accent / density preferences, and syncs them
- * to `data-direction` / `data-theme` / `data-accent` / `data-density`
- * attributes on the document root so CSS custom properties resolve.
+ * Reads and writes accent / density preferences, and syncs them to
+ * `data-direction` / `data-accent` / `data-density` attributes on the
+ * document root so CSS custom properties resolve. Light vs. dark is
+ * driven entirely by the OS `prefers-color-scheme` media query.
  *
- * Phase 7: when an ApiClient is provided, preferences load from the
+ * When an ApiClient is provided, preferences load from the
  * `get_preferences` Lambda on mount and save via `set_preferences`
  * debounced at 1s. localStorage is always the fast path for initial
  * render and offline.
@@ -62,7 +60,6 @@ export default function useTheme(apiClient) {
   useEffect(() => {
     const root = document.documentElement;
     root.setAttribute('data-direction', DIRECTION);
-    root.setAttribute('data-theme',   prefs.theme);
     root.setAttribute('data-accent',  prefs.accent);
     root.setAttribute('data-density', prefs.density);
     writeStoredPrefs(prefs);
@@ -78,11 +75,9 @@ export default function useTheme(apiClient) {
         hasHydrated.current = true;
         const remote = sanitize(data);
         setPrefs((prev) => (
-          prev.theme === remote.theme
-            && prev.accent === remote.accent
-            && prev.density === remote.density
-          ? prev
-          : remote
+          prev.accent === remote.accent && prev.density === remote.density
+            ? prev
+            : remote
         ));
       })
       .catch(() => {
@@ -107,11 +102,6 @@ export default function useTheme(apiClient) {
     };
   }, [apiClient, prefs]);
 
-  const setTheme = useCallback((theme) => {
-    if (!VALID.theme.includes(theme)) return;
-    setPrefs((prev) => (prev.theme === theme ? prev : { ...prev, theme }));
-  }, []);
-
   const setAccent = useCallback((accent) => {
     if (!VALID.accent.includes(accent)) return;
     setPrefs((prev) => (prev.accent === accent ? prev : { ...prev, accent }));
@@ -122,19 +112,12 @@ export default function useTheme(apiClient) {
     setPrefs((prev) => (prev.density === density ? prev : { ...prev, density }));
   }, []);
 
-  const toggleTheme = useCallback(() => {
-    setPrefs((prev) => ({ ...prev, theme: prev.theme === 'dark' ? 'light' : 'dark' }));
-  }, []);
-
   return {
     direction: DIRECTION,
-    theme:    prefs.theme,
-    accent:   prefs.accent,
-    density:  prefs.density,
-    setTheme,
+    accent:    prefs.accent,
+    density:   prefs.density,
     setAccent,
     setDensity,
-    toggleTheme,
     accents:    VALID.accent,
     densities:  VALID.density,
   };

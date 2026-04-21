@@ -11,9 +11,7 @@ const baseProps = {
   doLogout: vi.fn(),
   isAdmin: false,
   userName: null,
-  theme: 'light',
   accent: 'forest',
-  onToggleTheme: vi.fn(),
   onSelectAccent: vi.fn(),
   accents: ACCENTS,
 };
@@ -42,18 +40,9 @@ describe('Nav', () => {
     expect(screen.getByRole('button', { name: 'Account menu' })).toBeInTheDocument();
   });
 
-  it('renders the theme toggle with an accurate label', () => {
-    const { rerender } = render(<Nav {...baseProps} theme="light" />);
-    expect(screen.getByRole('button', { name: /switch to dark theme/i })).toBeInTheDocument();
-    rerender(<Nav {...baseProps} theme="dark" />);
-    expect(screen.getByRole('button', { name: /switch to light theme/i })).toBeInTheDocument();
-  });
-
-  it('calls onToggleTheme when the theme toggle is clicked', () => {
-    const onToggleTheme = vi.fn();
-    render(<Nav {...baseProps} onToggleTheme={onToggleTheme} />);
-    fireEvent.click(screen.getByRole('button', { name: /switch to dark theme/i }));
-    expect(onToggleTheme).toHaveBeenCalledTimes(1);
+  it('does not render a manual theme toggle', () => {
+    render(<Nav {...baseProps} />);
+    expect(screen.queryByRole('button', { name: /switch to (light|dark) theme/i })).not.toBeInTheDocument();
   });
 
   it('opens the account menu when the avatar is clicked', () => {

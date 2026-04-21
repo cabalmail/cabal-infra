@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Search, Sun, Moon, Check } from 'lucide-react';
+import { Search, Check } from 'lucide-react';
 import logoSvg from '../assets/logo.svg';
 import './Nav.css';
 
@@ -27,9 +27,7 @@ function Nav({
   doLogout,
   isAdmin,
   userName,
-  theme,
   accent,
-  onToggleTheme,
   onSelectAccent,
   accents,
 }) {
@@ -89,17 +87,6 @@ function Nav({
       )}
 
       <div className="nav__right">
-        <button
-          type="button"
-          className="nav__icon-btn"
-          aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-          onClick={onToggleTheme}
-        >
-          {theme === 'dark'
-            ? <Sun size={16} aria-hidden="true" />
-            : <Moon size={16} aria-hidden="true" />}
-        </button>
-
         {loggedIn ? (
           <div className="nav__menu-wrap" ref={menuRef}>
             <button

@@ -100,7 +100,7 @@ function App() {
       ? new ApiClient(state.api_url, _token, state.imap_host)
       : null
   ), [state.loggedIn, state.api_url, state.imap_host]);
-  const theme = useTheme(prefsApi);
+  const prefs = useTheme(prefsApi);
 
   // Message-list state bags per §4c / State Management. Lifted here so that
   // future phases (reader selection, keyboard shortcuts) can read the same
@@ -543,11 +543,9 @@ function App() {
               doLogout={doLogout}
               isAdmin={isAdmin}
               userName={state.userName}
-              theme={theme.theme}
-              accent={theme.accent}
-              onToggleTheme={theme.toggleTheme}
-              onSelectAccent={theme.setAccent}
-              accents={theme.accents}
+              accent={prefs.accent}
+              onSelectAccent={prefs.setAccent}
+              accents={prefs.accents}
             />
           )}
           <div className="content">
