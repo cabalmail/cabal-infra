@@ -1,11 +1,13 @@
 /**
- * Reader — §4d (Phase 4).
- * Action bar + header block + body + attachments, with the overflow
- * menu's FORMAT group (Rich / Plain). View-source modal, Match theme,
- * and destructive overflow items are deferred to Phase 5.
+ * Reader — §4d. Phase 5 adds:
+ *   - View source modal (Full / Headers / Body, Copy, Save .eml),
+ *   - Match theme toggle + iframe style injection,
+ *   - the remaining overflow-menu items.
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, {
+  useCallback, useEffect, useMemo, useState,
+} from 'react';
 import {
   Reply, ReplyAll, Forward,
   Archive, FolderInput, Trash2, Flag, MailOpen, X,
@@ -13,6 +15,7 @@ import {
 import ReaderBody from './ReaderBody';
 import Attachments from './Attachments';
 import OverflowMenu from './OverflowMenu';
+import ViewSourceModal from './ViewSourceModal';
 import useApi from '../../hooks/useApi';
 import { useAppMessage } from '../../contexts/AppMessageContext';
 import {
@@ -40,6 +43,20 @@ function MessageOverlay({
   const [messageId, setMessageId] = useState([]);
   const [inReplyTo, setInReplyTo] = useState([]);
   const [references, setReferences] = useState([]);
+  const [messageRawUrl, setMessageRawUrl] = useState(null);
+
+  // Match theme (§4d, Phase 5). Local — one toggle per reader session.
+  // Only meaningful in Rich mode; the OverflowMenu hides it otherwise.
+  const [matchTheme, setMatchTheme] = useState(false);
+
+  // View source modal state. `initialTab` is 'full' when triggered from
+  // "View source" and 'headers' when triggered from "Show original
+  // headers". `rawText` is lazy-loaded the first time the modal opens.
+  const [sourceOpen, setSourceOpen] = useState(false);
+  const [sourceInitialTab, setSourceInitialTab] = useState('full');
+  const [rawText, setRawText] = useState('');
+  const [rawLoading, setRawLoading] = useState(false);
+  const [rawError, setRawError] = useState(false);
 
   const envelopeId = envelope && envelope.id;
   const seen = envelope && envelope.flags
@@ -54,6 +71,11 @@ function MessageOverlay({
     setMessageBodyHtml('');
     setMessageBodyPlain('');
     setAttachments([]);
+    setMessageRawUrl(null);
+    setRawText('');
+    setRawError(false);
+    setSourceOpen(false);
+    setMatchTheme(false);
 
     api.getMessage(folder, envelopeId, seen).then((data) => {
       setMessageBodyPlain(data.data.message_body_plain || '');
@@ -62,6 +84,7 @@ function MessageOverlay({
       setMessageId(data.data.message_id || []);
       setInReplyTo(data.data.in_reply_to || []);
       setReferences(data.data.references || []);
+      setMessageRawUrl(data.data.message_raw || null);
       setLoading(false);
     }).catch((e) => {
       setMessage('Unable to get message.', true);
@@ -132,6 +155,16 @@ function MessageOverlay({
       });
   }, [api, folder, envelopeId, hide, setMessage]);
 
+  const doMarkSpam = useCallback(() => {
+    if (!envelopeId) return;
+    api.moveMessages(folder, 'Junk', [envelopeId], '', ARRIVAL.imap)
+      .then(() => hide())
+      .catch((err) => {
+        setMessage('Unable to mark as spam.', true);
+        console.log(err);
+      });
+  }, [api, folder, envelopeId, hide, setMessage]);
+
   const toggleFlagged = useCallback(() => {
     runFlag(isFlagged ? { ...FLAGGED, op: 'unset' } : FLAGGED);
   }, [isFlagged, runFlag]);
@@ -175,6 +208,66 @@ function MessageOverlay({
       .then((data) => window.open(data.data.url))
       .catch(() => setMessage('Unable to download attachment.', true));
   }, [api, attachments, folder, envelopeId, seen, setMessage]);
+
+  /* Fetch the raw .eml on first open of the View source modal and cache
+     it. Subsequent opens (for the same envelope) reuse the cached text;
+     `rawText` is cleared whenever the envelope changes. */
+  const ensureRawText = useCallback(() => {
+    if (rawText || rawLoading) return;
+    if (!messageRawUrl) {
+      setRawError(true);
+      return;
+    }
+    setRawLoading(true);
+    setRawError(false);
+    api.getRawMessage(messageRawUrl)
+      .then((r) => {
+        setRawText(typeof r.data === 'string' ? r.data : String(r.data || ''));
+      })
+      .catch(() => {
+        setRawError(true);
+        setMessage('Unable to load message source.', true);
+      })
+      .finally(() => setRawLoading(false));
+  }, [rawText, rawLoading, messageRawUrl, api, setMessage]);
+
+  const openViewSource = useCallback(() => {
+    setSourceInitialTab('full');
+    setSourceOpen(true);
+    ensureRawText();
+  }, [ensureRawText]);
+
+  const openHeaders = useCallback(() => {
+    setSourceInitialTab('headers');
+    setSourceOpen(true);
+    ensureRawText();
+  }, [ensureRawText]);
+
+  const closeSource = useCallback(() => setSourceOpen(false), []);
+
+  const forwardAsAttachment = useCallback(() => {
+    /* Forward-as-attachment is called out in the plan as a stub — the
+       backing flow (attach raw .eml to a new compose) lands later. For
+       now we surface an informational toast so the button is non-silent
+       but does nothing destructive. */
+    setMessage('Forward as attachment is not available yet.', false);
+  }, [setMessage]);
+
+  const doPrint = useCallback(() => {
+    if (typeof window !== 'undefined' && window.print) window.print();
+  }, []);
+
+  const blockSender = useCallback(() => {
+    /* Block sender is a gating feature that needs server-side support
+       (filter rules per §1.3). Until that lands, show a toast instead
+       of a no-op. */
+    setMessage('Block sender is not available yet.', false);
+  }, [setMessage]);
+
+  const sourceSubject = useMemo(
+    () => (envelope && envelope.subject) || '',
+    [envelope],
+  );
 
   if (!visible) {
     return <div className="reader overlay_hidden" />;
@@ -274,6 +367,15 @@ function MessageOverlay({
           setFormat={setReaderFormat}
           hasRich={hasRich}
           hasPlain={hasPlain}
+          matchTheme={matchTheme}
+          setMatchTheme={setMatchTheme}
+          onViewSource={openViewSource}
+          onShowHeaders={openHeaders}
+          onForwardAsAttachment={forwardAsAttachment}
+          onPrint={doPrint}
+          onArchive={doArchive}
+          onMarkSpam={doMarkSpam}
+          onBlockSender={blockSender}
         />
 
         <button
@@ -312,6 +414,7 @@ function MessageOverlay({
           messageId={envelopeId}
           seen={seen}
           setMessage={setMessage}
+          matchTheme={matchTheme && effectiveFormat === 'rich'}
         />
 
         <Attachments
@@ -319,6 +422,16 @@ function MessageOverlay({
           onDownload={downloadAttachment}
         />
       </div>
+
+      <ViewSourceModal
+        open={sourceOpen}
+        subject={sourceSubject}
+        rawText={rawText}
+        loading={rawLoading}
+        error={rawError}
+        onClose={closeSource}
+        initialTab={sourceInitialTab}
+      />
     </div>
   );
 }

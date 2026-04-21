@@ -341,6 +341,14 @@ export default class ApiClient {
     return response;
   };
   
+  getRawMessage(signedUrl) {
+    return axios.get(signedUrl, {
+      responseType: 'text',
+      transformResponse: [(v) => v],
+      timeout: ONE_SECOND * 30,
+    });
+  }
+
   getAttachment(a, folder, id, seen) {
     const response = axios.get('/fetch_attachment',
       {

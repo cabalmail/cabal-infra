@@ -4,10 +4,20 @@ import MessageOverlay from './index';
 import AuthContext from '../../contexts/AuthContext';
 import AppMessageContext from '../../contexts/AppMessageContext';
 
+const RAW_EML = [
+  'From: Alice Sender <sender@example.com>',
+  'Subject: Test Subject',
+  'Date: Thu, 17 Apr 2025 13:10:00 +0000',
+  '',
+  'Raw body line 1',
+  'Raw body line 2',
+].join('\r\n');
+
 const mockGetMessage = vi.fn().mockResolvedValue({
   data: {
     message_body_plain: 'plain text body',
     message_body_html: '<p>html body</p>',
+    message_raw: 'https://cache.example/signed',
     recipient: 'me@test.com',
     message_id: ['<msg1@test>'],
     in_reply_to: [],
@@ -20,12 +30,14 @@ const mockGetAttachments = vi.fn().mockResolvedValue({
 const mockGetEnvelopes = vi.fn().mockResolvedValue({
   data: { envelopes: { 1: { id: 1 } } },
 });
+const mockGetRawMessage = vi.fn().mockResolvedValue({ data: RAW_EML });
 
 const mockApi = {
   getMessage: mockGetMessage,
   getAttachments: mockGetAttachments,
   getEnvelopes: mockGetEnvelopes,
   getAttachment: vi.fn().mockResolvedValue({ data: { url: 'http://dl.url' } }),
+  getRawMessage: mockGetRawMessage,
   fetchImage: vi.fn().mockResolvedValue({ data: { url: 'http://img.url' } }),
   setFlag: vi.fn().mockResolvedValue({}),
   moveMessages: vi.fn().mockResolvedValue({}),
@@ -183,6 +195,100 @@ describe('MessageOverlay (Reader)', () => {
       await waitFor(() => {
         expect(setMessage).toHaveBeenCalledWith('Unable to get message.', true);
       });
+    } finally {
+      unmount();
+    }
+  });
+
+  it('opens the View source modal and fetches raw text once', async () => {
+    const { unmount } = renderOverlay();
+    try {
+      await waitFor(() => expect(mockGetMessage).toHaveBeenCalled());
+      fireEvent.click(screen.getByLabelText('More actions'));
+      fireEvent.click(screen.getByText('View source'));
+      await waitFor(() => {
+        expect(mockGetRawMessage).toHaveBeenCalledWith('https://cache.example/signed');
+      });
+      await waitFor(() => {
+        expect(screen.getByRole('dialog', { name: 'Message source' })).toBeInTheDocument();
+      });
+    } finally {
+      unmount();
+    }
+  });
+
+  it('"Show original headers" opens the same modal pre-set to Headers', async () => {
+    const { unmount } = renderOverlay();
+    try {
+      await waitFor(() => expect(mockGetMessage).toHaveBeenCalled());
+      fireEvent.click(screen.getByLabelText('More actions'));
+      fireEvent.click(screen.getByText('Show original headers'));
+      await waitFor(() => {
+        expect(screen.getByRole('dialog', { name: 'Message source' })).toBeInTheDocument();
+      });
+      expect(
+        screen.getByRole('tab', { name: 'Headers' }).getAttribute('aria-selected'),
+      ).toBe('true');
+    } finally {
+      unmount();
+    }
+  });
+
+  it('Match theme item is only shown in Rich mode and toggles state', async () => {
+    const { unmount } = renderOverlay();
+    try {
+      await waitFor(() => expect(mockGetMessage).toHaveBeenCalled());
+      fireEvent.click(screen.getByLabelText('More actions'));
+      const match = screen.getByText('Match app theme');
+      const item = match.closest('button');
+      expect(item.getAttribute('aria-checked')).toBe('false');
+      fireEvent.click(match);
+      // Menu stays open on check-toggle; the re-rendered button reflects state.
+      const reMatch = screen.getByText('Match app theme').closest('button');
+      expect(reMatch.getAttribute('aria-checked')).toBe('true');
+    } finally {
+      unmount();
+    }
+  });
+
+  it('Match theme is hidden in Plain mode', async () => {
+    const { unmount } = renderOverlay({ readerFormat: 'plain' });
+    try {
+      await waitFor(() => expect(mockGetMessage).toHaveBeenCalled());
+      fireEvent.click(screen.getByLabelText('More actions'));
+      expect(screen.queryByText('Match app theme')).not.toBeInTheDocument();
+    } finally {
+      unmount();
+    }
+  });
+
+  it('overflow menu exposes Archive, Mark as spam, Block sender, Print', async () => {
+    const { unmount } = renderOverlay();
+    try {
+      await waitFor(() => expect(mockGetMessage).toHaveBeenCalled());
+      fireEvent.click(screen.getByLabelText('More actions'));
+      expect(screen.getByText('Archive')).toBeInTheDocument();
+      expect(screen.getByText('Mark as spam')).toBeInTheDocument();
+      expect(screen.getByText('Block sender')).toBeInTheDocument();
+      expect(screen.getByText('Print…')).toBeInTheDocument();
+    } finally {
+      unmount();
+    }
+  });
+
+  it('Archive overflow item moves the message and hides the reader', async () => {
+    const hide = vi.fn();
+    const { unmount } = renderOverlay({ hide });
+    try {
+      await waitFor(() => expect(mockGetMessage).toHaveBeenCalled());
+      fireEvent.click(screen.getByLabelText('More actions'));
+      fireEvent.click(screen.getByText('Archive'));
+      await waitFor(() => {
+        expect(mockApi.moveMessages).toHaveBeenCalledWith(
+          'INBOX', 'Archive', [1], '', expect.anything(),
+        );
+      });
+      await waitFor(() => expect(hide).toHaveBeenCalled());
     } finally {
       unmount();
     }
