@@ -87,9 +87,10 @@ div.email__middle {
   flex-direction: row;
 }
 
-/* Phone: list and reader share the middle pane; show one at a time. */
-.email[data-middle="reader"] .msglist { display: none; }
-.email[data-middle="list"]   .reader:not(.overlay_hidden) { display: none; }
+/* Phone only: list and reader share the middle pane, so show one at a time.
+   Tablet/desktop render both side-by-side regardless of data-middle. */
+.email[data-layout="phone"][data-middle="reader"] .msglist { display: none; }
+.email[data-layout="phone"][data-middle="list"] .reader:not(.overlay_hidden) { display: none; }
 
 div.msglist,
 div.reader {
@@ -114,8 +115,6 @@ div.reader {
   div.reader {
     flex: 1 1 auto;
   }
-  /* Tablet/desktop both show list and reader side-by-side. */
-  .email[data-middle="reader"] .msglist { display: flex; }
 
   .reader .close_overlay {
     display: none;
