@@ -57,6 +57,7 @@ div.msglist, div.reader {
   div.msglist {
     left: 0;
     width: 490px;
+    border-right: 1px solid var(--border);
   }
 
   div.reader {

@@ -98,6 +98,15 @@
   color: currentColor;
 }
 
+.reader-actions .reader-btn svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  flex-shrink: 0;
+}
+
 /* --- Overflow menu ----------------------------------------------------- */
 
 .reader-overflow {
@@ -412,6 +421,7 @@
 /* --- Header ------------------------------------------------------------ */
 
 .reader-header {
+  position: relative;
   display: grid;
   grid-template-columns: 40px 1fr auto;
   grid-template-areas:
@@ -426,7 +436,17 @@
   padding: 28px 24px 20px;
   box-sizing: border-box;
   width: 100%;
-  border-bottom: 1px solid var(--border-faint);
+}
+
+.reader-header::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: 80%;
+  height: 1px;
+  background: var(--border-faint);
 }
 
 .reader-avatar {
