@@ -47,11 +47,15 @@
   flex-shrink: 0;
 }
 
-.nav__brand-logo {
+.nav__brand-tile svg {
   width: 100%;
   height: 100%;
   display: block;
   color: inherit;
+}
+
+@media (prefers-color-scheme: dark) {
+  .nav__brand-tile { color: #0b0b0b; }
 }
 
 .nav__brand-word {

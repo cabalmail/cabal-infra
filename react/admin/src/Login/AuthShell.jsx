@@ -1,4 +1,4 @@
-import logoSvg from '../assets/logo.svg';
+import logoMarkup from '../assets/logo.svg?raw';
 import './AuthShell.css';
 
 /**
@@ -15,9 +15,11 @@ export default function AuthShell({ headerRight, children, cardSize = 'default' 
     <div className="auth">
       <header className="auth__header">
         <span className="auth__brand" aria-label="Cabalmail">
-          <span className="auth__brand-tile" aria-hidden="true">
-            <img className="auth__brand-logo" src={logoSvg} alt="" />
-          </span>
+          <span
+            className="auth__brand-tile"
+            aria-hidden="true"
+            dangerouslySetInnerHTML={{ __html: logoMarkup }}
+          />
         </span>
         {headerRight ? <div className="auth__header-right">{headerRight}</div> : <span />}
       </header>

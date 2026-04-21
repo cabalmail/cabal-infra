@@ -58,7 +58,7 @@
   .auth__brand-tile { color: #0b0b0b; }
 }
 
-.auth__brand-logo {
+.auth__brand-tile svg {
   height: 37px;
   width: 72px;
   display: block;

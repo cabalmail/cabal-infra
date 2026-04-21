@@ -67,19 +67,9 @@ hr {
   }
 }
 
-input, select, button, option, ul.recipient-list {
-  padding: 0.5em;
-  border-width: 1px;
-  border-style: solid;
-}
-
 input::placeholder {
   font-style: italic;
   color: #888;
-}
-
-input, select, option {
-  width: 30em;
 }
 
 body form div.wysiwyg-toolbar input, ul.recipient-list {
@@ -90,18 +80,6 @@ select {
   -webkit-appearance: none;
   -moz-appearance: none;
   appearance: none;
-}
-
-label {
-  display: block;
-  margin-top: 1em;
-}
-
-button {
-  display: block;
-  width: 10em;
-  margin-top: 1em;
-  border-radius: 4px;
 }
 
 fieldset {

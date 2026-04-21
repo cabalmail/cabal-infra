@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Search, Check } from 'lucide-react';
-import logoSvg from '../assets/logo.svg';
+import logoMarkup from '../assets/logo.svg?raw';
 import './Nav.css';
 
 const NAV_VIEWS = [
@@ -67,9 +67,11 @@ function Nav({
       className={`nav logged-${loggedIn ? 'in' : 'out'}${isAdmin ? ' is-admin' : ''}`}
     >
       <div className="nav__brand">
-        <span className="nav__brand-tile" aria-hidden="true">
-          <img className="nav__brand-logo" src={logoSvg} alt="" />
-        </span>
+        <span
+          className="nav__brand-tile"
+          aria-hidden="true"
+          dangerouslySetInnerHTML={{ __html: logoMarkup }}
+        />
         <span className="nav__brand-word">Cabalmail</span>
       </div>
 
