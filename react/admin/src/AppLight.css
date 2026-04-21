@@ -63,52 +63,17 @@
   a.rdw-dropdown-selectedtext, div.rdw-option-wrapper:not(.rdw-colorpicker-option) {
     background-color: #ddd !important;
   }
-  div.message-list div.message-subject {
-    color: #222;
-  }
-  div.message-list div.Seen div.message-subject {
-    color: #444;
-  }
   body .highlight, body .active, body .default,
-  body div.message-list div.selected,
-  body div.message-list div.selected *,
   body div.compose-wrapper form.compose-overlay div.wysiwyg-toolbar div.rdw-option-active,
   body div.compose-wrapper form.compose-overlay div.wysiwyg-toolbar div.rdw-option-wrapper:active {
     color: #000 !important;
     border-color: #d00 !important;
   }
   body .highlight, body .active, body .default,
-  body div.message-list div.selected,
-  body div.message-list div.selected *,
   body div.compose-wrapper form.compose-overlay div.wysiwyg-toolbar div.rdw-option-active:not(.rdw-colorpicker-option),
   body div.compose-wrapper form.compose-overlay div.wysiwyg-toolbar div.rdw-option-wrapper:active:not(.rdw-colorpicker-option) {
     background-color: #a33 !important;
     color: #ff9 !important;
-  }
-  div.message-list div.Seen.selected div.message-subject {
-    color: #000
-  }
-  div.message-list div.message-subject input[type=checkbox]:not(:checked) ~ label .unchecked,
-  div.message-list div.message-subject input[type=checkbox]:checked ~ label .checked {
-    box-shadow: inset 0 0 0.35em #fff;
-    background-color: #eee;
-    border-color: #222;
-  }
-  .email_list,
-  .email_list div.swipeable-list-item__content,
-  .email_list :not(.highlight *,
-                   .active *,
-                   .default *,
-                   .selected *,
-                   .swipeable-list-item__trailing-actions,
-                   .swipeable-list-item__leading-actions,
-                   .swipeable-list-item__trailing-actions *,
-                   .swipeable-list-item__leading-actions *,
-                   button,
-                   select,
-                   span.checked,
-                   span.unchecked) {
-    background-color: #e8e8e8 !important;
   }
   /* forced */
   .forced * {

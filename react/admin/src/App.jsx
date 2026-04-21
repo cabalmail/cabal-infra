@@ -40,9 +40,12 @@ import AppMessageContext from './contexts/AppMessageContext';
 import useTheme from './hooks/useTheme';
 import useKeyboardShortcuts from './hooks/useKeyboardShortcuts';
 
-// Site-wide and Theme-specific style
-import './AppDark.css';
+// Site-wide and Theme-specific style.
+// AppLight.css defines unconditional default tokens; AppDark.css overrides
+// them inside @media (prefers-color-scheme: dark). Load light first so the
+// media-gated dark rules win by source order at equal specificity.
 import './AppLight.css';
+import './AppDark.css';
 import { ADDRESS_LIST, FOLDER_LIST, DATE, DESC } from './constants';
 import './App.css';
 
