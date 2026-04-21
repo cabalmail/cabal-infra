@@ -1,313 +1,326 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import RichMessage from './RichMessage';
-import Actions from '../Actions';
+/**
+ * Reader — §4d (Phase 4).
+ * Action bar + header block + body + attachments, with the overflow
+ * menu's FORMAT group (Rich / Plain). View-source modal, Match theme,
+ * and destructive overflow items are deferred to Phase 5.
+ */
+
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  Reply, ReplyAll, Forward,
+  Archive, FolderInput, Trash2, Flag, MailOpen, X,
+} from 'lucide-react';
+import ReaderBody from './ReaderBody';
+import Attachments from './Attachments';
+import OverflowMenu from './OverflowMenu';
 import useApi from '../../hooks/useApi';
 import { useAppMessage } from '../../contexts/AppMessageContext';
+import {
+  READ, UNREAD, FLAGGED, ARRIVAL,
+} from '../../constants';
+import {
+  extractName, extractEmail, formatReaderTimestamp, initialsFor,
+} from '../../utils/formatDate';
 import './MessageOverlay.css';
-import { ADDRESS_LIST } from '../../constants';
 
 function MessageOverlay({
-  envelope, folder, visible, flags, hide: hideProp,
-  updateOverlay, reply: replyProp, replyAll: replyAllProp,
-  forward: forwardProp, token, api_url, host
+  envelope, folder, visible, flags,
+  hide: hideProp, updateOverlay,
+  reply: replyProp, replyAll: replyAllProp, forward: forwardProp,
+  readerFormat, setReaderFormat,
 }) {
   const api = useApi();
   const { setMessage } = useAppMessage();
 
-  // Separate state for each independent piece to avoid race conditions
-  const [messageRawUrl, setMessageRawUrl] = useState("");
-  const [messageBodyPlain, setMessageBodyPlain] = useState("");
-  const [messageBodyHtml, setMessageBodyHtml] = useState("");
-  const [view, setView] = useState("rich");
+  const [messageBodyPlain, setMessageBodyPlain] = useState('');
+  const [messageBodyHtml, setMessageBodyHtml] = useState('');
   const [attachments, setAttachments] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [topState, setTopState] = useState("expanded");
-  const [bimiUrl, setBimiUrl] = useState("/mask.png");
-  const [recipient, setRecipient] = useState("");
+  const [recipient, setRecipient] = useState('');
   const [messageId, setMessageId] = useState([]);
   const [inReplyTo, setInReplyTo] = useState([]);
   const [references, setReferences] = useState([]);
-  const [addresses, setAddresses] = useState([]);
 
-  // Fetch addresses on mount
+  const envelopeId = envelope && envelope.id;
+  const seen = envelope && envelope.flags
+    ? envelope.flags.includes('\\Seen')
+    : false;
+  const isFlagged = (flags || []).includes('\\Flagged');
+  const isSeen = (flags || []).includes('\\Seen');
+
   useEffect(() => {
-    api.getAddresses().then(data => {
-      try {
-        localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
-      } catch (e) {
-        console.log(e);
-      }
-      setAddresses(data.data.Items);
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Fetch message data when envelope changes
-  useEffect(() => {
-    if (!envelope.id) return;
-
+    if (!envelopeId) return;
     setLoading(true);
-    setBimiUrl("/mask.png");
+    setMessageBodyHtml('');
+    setMessageBodyPlain('');
+    setAttachments([]);
 
-    const seen = envelope.flags.includes("\\Seen");
-
-    api.getMessage(folder, envelope.id, seen).then(data => {
-      const newView =
-        data.data.message_body_plain.length > data.data.message_body_html
-          ? "plain"
-          : "rich";
-      setMessageRawUrl(data.data.message_raw);
-      setMessageBodyPlain(data.data.message_body_plain);
-      setMessageBodyHtml(data.data.message_body_html);
-      setRecipient(data.data.recipient);
-      setMessageId(data.data.message_id);
-      setInReplyTo(data.data.in_reply_to);
-      setReferences(data.data.references);
+    api.getMessage(folder, envelopeId, seen).then((data) => {
+      setMessageBodyPlain(data.data.message_body_plain || '');
+      setMessageBodyHtml(data.data.message_body_html || '');
+      setRecipient(data.data.recipient || '');
+      setMessageId(data.data.message_id || []);
+      setInReplyTo(data.data.in_reply_to || []);
+      setReferences(data.data.references || []);
       setLoading(false);
-      setView(newView);
-    }).catch(e => {
-      setMessage("Unable to get message.", true);
+    }).catch((e) => {
+      setMessage('Unable to get message.', true);
       console.log(e);
     });
 
-    api.getAttachments(folder, envelope.id, seen).then(data => {
-      setAttachments(data.data.attachments);
-    }).catch(e => {
-      setMessage("Unable to get list of attachments.", true);
-      console.log(e);
-    });
-
-    api.getBimiUrl(envelope.from[0]).then(data => {
-      setBimiUrl(data.data.url);
-    }).catch(e => {
+    api.getAttachments(folder, envelopeId, seen).then((data) => {
+      setAttachments(data.data.attachments || []);
+    }).catch((e) => {
+      setMessage('Unable to get list of attachments.', true);
       console.log(e);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [envelope.id]);
+  }, [envelopeId]);
+
+  const hasRich = !!messageBodyHtml;
+  const hasPlain = !!messageBodyPlain;
+
+  // Clamp format to what's actually available for this message. The state
+  // bag itself remains whatever the user chose — we just degrade the view
+  // when the chosen format isn't present.
+  const effectiveFormat = (readerFormat === 'rich' && !hasRich)
+    ? 'plain'
+    : (readerFormat === 'plain' && !hasPlain && hasRich)
+      ? 'rich'
+      : readerFormat;
 
   const hide = useCallback((e) => {
-    e.preventDefault();
-    setTopState("expanded");
+    if (e) e.preventDefault();
     hideProp();
   }, [hideProp]);
 
-  const downloadAttachment = useCallback((e) => {
-    e.preventDefault();
-    const id = parseInt(e.target.dataset.id);
-    const a = attachments.find(att => att.id === id);
-    api.getAttachment(
-      a, folder, envelope.id, envelope.flags.includes("\\Seen")
-    ).then((data) => {
-      window.open(data.data.url);
-    }).catch(() => {
-      setMessage("Unable to download attachment.", true);
+  const refreshEnvelope = useCallback(() => {
+    if (!envelopeId) return;
+    api.getEnvelopes(folder, [envelopeId]).then((data) => {
+      const next = data.data.envelopes[envelopeId];
+      if (next) updateOverlay(next);
     });
-  }, [attachments, folder, envelope, api, setMessage]);
+  }, [api, folder, envelopeId, updateOverlay]);
 
-  const callback = useCallback(() => {
-    api.getEnvelopes(folder, [envelope.id]).then(data => {
-      updateOverlay(data.data.envelopes[envelope.id]);
-    });
-  }, [api, folder, envelope.id, updateOverlay]);
+  const runFlag = useCallback((spec) => {
+    if (!envelopeId) return;
+    api.setFlag(folder, spec.imap, spec.op, [envelopeId], '', ARRIVAL.imap)
+      .then(refreshEnvelope)
+      .catch((err) => {
+        setMessage('Unable to set flag on message.', true);
+        console.log(err);
+      });
+  }, [api, folder, envelopeId, refreshEnvelope, setMessage]);
 
-  const catchback = useCallback((err) => {
-    setMessage("Unable to set flag on message.", true);
-    console.log("Unable to set flag on message.");
-    console.log(err);
-  }, [setMessage]);
+  const doArchive = useCallback(() => {
+    if (!envelopeId) return;
+    api.moveMessages(folder, 'Archive', [envelopeId], '', ARRIVAL.imap)
+      .then(() => hide())
+      .catch((err) => {
+        setMessage('Unable to archive message.', true);
+        console.log(err);
+      });
+  }, [api, folder, envelopeId, hide, setMessage]);
 
-  const createPayload = useCallback(() => {
-    return [
-      recipient,
-      messageBodyHtml || messageBodyPlain,
-      envelope,
-      { message_id: messageId, in_reply_to: inReplyTo, references: references }
-    ];
-  }, [recipient, messageBodyHtml, messageBodyPlain, envelope, messageId, inReplyTo, references]);
+  const doDelete = useCallback(() => {
+    if (!envelopeId) return;
+    api.moveMessages(folder, 'Deleted Messages', [envelopeId], '', ARRIVAL.imap)
+      .then(() => hide())
+      .catch((err) => {
+        setMessage('Unable to delete message.', true);
+        console.log(err);
+      });
+  }, [api, folder, envelopeId, hide, setMessage]);
+
+  const toggleFlagged = useCallback(() => {
+    runFlag(isFlagged ? { ...FLAGGED, op: 'unset' } : FLAGGED);
+  }, [isFlagged, runFlag]);
+
+  const markUnread = useCallback(() => {
+    if (!isSeen) return;
+    runFlag(UNREAD);
+  }, [isSeen, runFlag]);
+
+  const markRead = useCallback(() => {
+    if (isSeen) return;
+    runFlag(READ);
+  }, [isSeen, runFlag]);
+
+  const createPayload = useCallback(() => [
+    recipient,
+    messageBodyHtml || messageBodyPlain,
+    envelope,
+    { message_id: messageId, in_reply_to: inReplyTo, references },
+  ], [recipient, messageBodyHtml, messageBodyPlain, envelope, messageId, inReplyTo, references]);
 
   const reply = useCallback(() => {
-    const params = createPayload();
-    replyProp(params[0], params[1], params[2], params[3]);
+    const [r, b, e, h] = createPayload();
+    replyProp(r, b, e, h);
   }, [createPayload, replyProp]);
 
   const replyAll = useCallback(() => {
-    const params = createPayload();
-    replyAllProp(params[0], params[1], params[2], params[3]);
+    const [r, b, e, h] = createPayload();
+    replyAllProp(r, b, e, h);
   }, [createPayload, replyAllProp]);
 
   const forward = useCallback(() => {
-    const params = createPayload();
-    forwardProp(params[0], params[1], params[2], params[3]);
+    const [r, b, e, h] = createPayload();
+    forwardProp(r, b, e, h);
   }, [createPayload, forwardProp]);
 
-  const revokeAddress = useCallback((a) => {
-    return api.deleteAddress(a.address, a.subdomain, a.tld, a.public_key);
-  }, [api]);
+  const downloadAttachment = useCallback((id) => {
+    const a = attachments.find((att) => att.id === id);
+    if (!a || !envelopeId) return;
+    api.getAttachment(a, folder, envelopeId, seen)
+      .then((data) => window.open(data.data.url))
+      .catch(() => setMessage('Unable to download attachment.', true));
+  }, [api, attachments, folder, envelopeId, seen, setMessage]);
 
-  const revoke = useCallback((e) => {
-    e.preventDefault();
-    const address = e.target.value;
-    revokeAddress(addresses.find(a => a.address === address)).then(() => {
-      setMessage("Successfully revoked address.", false);
-      setAddresses(prev => prev.filter(a => a.address !== address));
-    }, reason => {
-      setMessage("Request to revoke address failed.", true);
-      console.error("Promise rejected", reason);
-    });
-  }, [addresses, revokeAddress, setMessage]);
+  if (!visible) {
+    return <div className="reader overlay_hidden" />;
+  }
 
-  const renderView = () => {
-    if (loading) {
-      return <div className="message message_loading" />;
-    }
-    switch (view) {
-      case "rich":
-        return (
-          <RichMessage
-            body={messageBodyHtml}
-            seen={envelope.flags.includes("\\Seen")}
-            id={envelope.id}
-            folder={folder}
-            host={host}
-            token={token}
-            api_url={api_url}
-            setMessage={setMessage}
-          />
-        );
-      case "plain":
-        return <pre className="message message_plain">{messageBodyPlain}</pre>;
-      case "raw":
-        return <div className="message_raw"><iframe src={messageRawUrl} title="Raw message"></iframe></div>;
-      case "attachments": {
-        const attachmentList = attachments.map(a => (
-          <button
-            key={a.id}
-            id={`attachment-${a.id}`}
-            className="attachment"
-            value={a.id}
-            onClick={downloadAttachment}
-            data-id={a.id}
-          >
-            <span className="attachment_name" data-id={a.id}>{a.name}</span>
-            <span className="attachment_size" data-id={a.id}>{a.size} bytes</span>
-            <span className="attachment_type" data-id={a.id}>{a.type}</span>
-          </button>
-        ));
-        return <div className="message message_attachments">{attachmentList}</div>;
-      }
-      default:
-        return <pre className="message message_raw">{""}</pre>;
-    }
-  };
-
-  const renderHeader = () => {
-    const to = envelope.to.length ? (
-      <>
-        <dt className="collapsable">To</dt>
-        <dd className="collapsable">{envelope.to.join("; ")}</dd>
-      </>
-    ) : (
-      <>
-        <dt className="collapsable">To</dt>
-        <dd className="collapsable">Undisclosed recipients</dd>
-      </>
-    );
-    const cc = envelope.cc.length ? (
-      <>
-        <dt className="collapsable">CC</dt>
-        <dd className="collapsable">{envelope.cc.join("; ")}</dd>
-      </>
-    ) : "";
-    const bcc = (recipient &&
-      envelope.to.indexOf(recipient) === -1 &&
-      envelope.cc.indexOf(recipient) === -1) ? (
-      <>
-        <dt className="collapsable bcc">BCC</dt>
-        <dd className="collapsable bcc">{recipient}</dd>
-      </>
-    ) : "";
-    const revokeButton = addresses.map(a => a.address).indexOf(recipient) !== -1 ? (
-      <dt className="collapsable"><button
-        className="revoke collapsable"
-        onClick={revoke}
-        value={recipient}
-        title={`Revoke ${recipient}`}
-      >&#128465;&#65039; Revoke {recipient}</button></dt>
-    ) : "";
+  if (loading || !envelopeId) {
     return (
-      <dl>
-        <dt className="collapsable">From</dt>
-        <dd className="collapsable">{envelope.from.join("; ")}</dd>
-        {to}
-        {bcc}
-        {cc}
-        <dt className="collapsable">Received</dt>
-        <dd className="collapsable">{envelope.date}</dd>
-        <dt className="collapsable">Subject</dt>
-        <dd>{envelope.subject}</dd>
-        {revokeButton}
-      </dl>
-    );
-  };
-
-  const renderTabBar = () => (
-    <div className={`tabBar ${view}`}>
-      <button className={`tab ${view === "rich" ? "active" : ""}`}
-        onClick={() => setView("rich")} value="rich"
-        title="Show the HTML formatted version">Rich Text</button>
-      <button className={`tab ${view === "plain" ? "active" : ""}`}
-        onClick={() => setView("plain")} value="plain"
-        title="Show the plain text version">Plain Text</button>
-      <button className={`tab ${view === "attachments" ? "active" : ""}`}
-        onClick={() => setView("attachments")} value="attachments"
-        title="Show attachments">&#128206;</button>
-      <button className={`tab ${view === "raw" ? "active" : ""}`}
-        onClick={() => setView("raw")} value="raw"
-        title="View the raw message source">&lt;/&gt;</button>
-    </div>
-  );
-
-  const flagClasses = flags.map(d => d.replace("\\", "")).join(" ");
-
-  if (visible) {
-    return (
-      <div className="message_overlay">
-        <div className={`message_top ${topState} ${flagClasses}`}>
-          <button onClick={(e) => { e.preventDefault(); setTopState("collapsed"); }}
-            className="overlay_expand_collapse collapse_overlay_top"
-            title="Hide message header">&#9650;</button>
-          <button onClick={(e) => { e.preventDefault(); setTopState("expanded"); }}
-            className="overlay_expand_collapse expand_overlay_top"
-            title="Show message header">&#9660;</button>
-          <Actions
-            token={token}
-            api_url={api_url}
-            host={host}
-            folder={folder}
-            selected_messages={[envelope.id]}
-            selected="selected "
-            order=""
-            field="ARRIVAL"
-            callback={callback}
-            catchback={catchback}
-            reply={reply}
-            replyAll={replyAll}
-            forward={forward}
-            setMessage={setMessage}
-          />
-          <button onClick={hide} className="close_overlay"
-            title="Close message">&#10060;</button>
-          {renderHeader()}
-          {renderTabBar()}
-          <div className="bimi">
-            <img src={bimiUrl} alt="" />
-          </div>
+      <div className="reader">
+        <div className="reader-actions" aria-label="Message actions" />
+        <div className="reader-scroll">
+          <div className="reader-loading">Loading…</div>
         </div>
-        {renderView()}
       </div>
     );
   }
-  return <div className="message_overlay overlay_hidden"></div>;
+
+  const senderRaw = (envelope.from && envelope.from[0]) || '';
+  const senderName = extractName(senderRaw) || senderRaw || 'Unknown sender';
+  const senderEmail = extractEmail(senderRaw);
+  const initials = initialsFor(senderRaw);
+  const toList = (envelope.to && envelope.to.length)
+    ? envelope.to.join(', ')
+    : 'Undisclosed recipients';
+  const timestamp = formatReaderTimestamp(envelope.date);
+
+  return (
+    <div className="reader" role="region" aria-label="Message">
+      <div className="reader-actions" role="toolbar" aria-label="Message actions">
+        <button type="button" className="reader-btn" onClick={reply} title="Reply">
+          <Reply size={16} aria-hidden="true" />
+          <span className="reader-btn-label">Reply</span>
+        </button>
+        <button type="button" className="reader-btn" onClick={replyAll} title="Reply all">
+          <ReplyAll size={16} aria-hidden="true" />
+          <span className="reader-btn-label">Reply all</span>
+        </button>
+        <button type="button" className="reader-btn" onClick={forward} title="Forward">
+          <Forward size={16} aria-hidden="true" />
+          <span className="reader-btn-label">Forward</span>
+        </button>
+
+        <span className="reader-sep" aria-hidden="true" />
+
+        <button
+          type="button"
+          className="reader-btn icon-only"
+          onClick={doArchive}
+          title="Archive"
+          aria-label="Archive"
+        >
+          <Archive size={16} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="reader-btn icon-only"
+          onClick={() => setMessage('Move is coming in a later phase.', false)}
+          title="Move"
+          aria-label="Move"
+          disabled
+        >
+          <FolderInput size={16} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="reader-btn icon-only"
+          onClick={doDelete}
+          title="Delete"
+          aria-label="Delete"
+        >
+          <Trash2 size={16} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className={`reader-btn icon-only ${isFlagged ? 'flagged' : ''}`}
+          onClick={toggleFlagged}
+          title={isFlagged ? 'Unflag' : 'Flag'}
+          aria-label={isFlagged ? 'Unflag' : 'Flag'}
+          aria-pressed={isFlagged}
+        >
+          <Flag size={16} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="reader-btn icon-only"
+          onClick={markUnread}
+          title="Mark unread"
+          aria-label="Mark unread"
+          disabled={!isSeen}
+        >
+          <MailOpen size={16} aria-hidden="true" />
+        </button>
+
+        <span className="reader-spacer" />
+
+        <OverflowMenu
+          format={effectiveFormat}
+          setFormat={setReaderFormat}
+          hasRich={hasRich}
+          hasPlain={hasPlain}
+        />
+
+        <button
+          type="button"
+          className="reader-btn icon-only close_overlay"
+          onClick={hide}
+          title="Close message"
+          aria-label="Close message"
+        >
+          <X size={16} aria-hidden="true" />
+        </button>
+      </div>
+
+      <div className="reader-scroll">
+        <header className="reader-header">
+          <span className="reader-avatar" aria-hidden="true">{initials}</span>
+          <h1 className="reader-subject">{envelope.subject || '(no subject)'}</h1>
+          <div className="reader-sender">
+            <span className="reader-sender-name">{senderName}</span>
+            {senderEmail && (
+              <span className="reader-sender-email">&lt;{senderEmail}&gt;</span>
+            )}
+          </div>
+          <div className="reader-timestamp">{timestamp}</div>
+          <div className="reader-to">
+            <span className="reader-to-label">to</span>
+            <span>{toList}</span>
+          </div>
+        </header>
+
+        <ReaderBody
+          format={effectiveFormat}
+          html={messageBodyHtml}
+          plain={messageBodyPlain}
+          folder={folder}
+          messageId={envelopeId}
+          seen={seen}
+          setMessage={setMessage}
+        />
+
+        <Attachments
+          attachments={attachments}
+          onDownload={downloadAttachment}
+        />
+      </div>
+    </div>
+  );
 }
 
 export default MessageOverlay;

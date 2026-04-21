@@ -38,6 +38,7 @@ function Email({
   sortDir, setSortDir,
   bulkMode, setBulkMode,
   selected, setSelected,
+  readerFormat, setReaderFormat,
 }) {
   const { token, api_url, host, domains, smtp_host } = useAuth();
   const { setMessage } = useAppMessage();
@@ -196,6 +197,8 @@ function Email({
           reply={reply}
           replyAll={replyAll}
           forward={forward}
+          readerFormat={readerFormat}
+          setReaderFormat={setReaderFormat}
         />
       </div>
       <button className="compose-button" onClick={newEmail}>New Email</button>

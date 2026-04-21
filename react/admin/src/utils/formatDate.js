@@ -54,3 +54,32 @@ export function extractEmail(fromStr) {
   const m = /<(.*?)>/.exec(fromStr);
   return m ? m[1] : fromStr;
 }
+
+/* Reader-pane timestamp, per §4d: "Friday, Apr 17 · 1:10 PM". */
+export function formatReaderTimestamp(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const datePart = d.toLocaleDateString(LOCALE, {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+  });
+  const timePart = d.toLocaleTimeString(LOCALE, {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+  return `${datePart} · ${timePart}`;
+}
+
+/* Initials for the header avatar. "Jane Doe" → "JD", "jane@x.com" → "J". */
+export function initialsFor(fromStr) {
+  if (!fromStr) return '?';
+  const name = extractName(fromStr);
+  const base = (name || extractEmail(fromStr) || fromStr).trim();
+  if (!base) return '?';
+  const parts = base.replace(/[<>"]/g, '').split(/[\s.@_-]+/).filter(Boolean);
+  if (parts.length === 0) return base.slice(0, 1).toUpperCase();
+  if (parts.length === 1) return parts[0].slice(0, 1).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}

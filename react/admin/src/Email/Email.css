@@ -45,15 +45,11 @@ div.email__middle {
   right: 0;
 }
 
-div.msglist, div.message_overlay {
+div.msglist, div.reader {
   position: absolute;
   top: 0;
   bottom: 0;
   z-index: 99999;
-}
-
-div.message_overlay {
-  overflow: scroll;
 }
 
 @media (min-width: 900px) {
@@ -62,18 +58,18 @@ div.message_overlay {
     width: 490px;
   }
 
-  div.message_overlay {
+  div.reader {
     left: 500px;
     right: 0;
   }
 
-  button.close_overlay {
+  .reader .close_overlay {
     display: none;
   }
 }
 
 @media (max-width: 899px) {
-  div.msglist, div.message_overlay {
+  div.msglist, div.reader {
     left: 0;
     right: 0;
   }

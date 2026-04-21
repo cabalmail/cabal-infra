@@ -99,6 +99,11 @@ function App() {
   const [bulkMode, setBulkMode] = useState(false);
   const [selected, setSelected] = useState(() => new Set());
 
+  // Reader format preference per §4d. 'rich' renders HTML in a sandboxed
+  // iframe; 'plain' falls back to the text/plain alternative. The reader
+  // itself clamps to 'plain' for messages with no HTML part.
+  const [readerFormat, setReaderFormat] = useState('rich');
+
   const setState = useCallback((updates) => {
     setAppState(prev => {
       const next = { ...prev, ...updates };
@@ -418,6 +423,8 @@ function App() {
               setBulkMode={setBulkMode}
               selected={selected}
               setSelected={setSelected}
+              readerFormat={readerFormat}
+              setReaderFormat={setReaderFormat}
             />
           </ErrorBoundary>
         );
