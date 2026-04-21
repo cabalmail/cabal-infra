@@ -79,6 +79,27 @@ final class ImapParserTests: XCTestCase {
         XCTAssertEqual(attrs.body, literalBody)
     }
 
+    func testFetchEnvelopeDecodesRFC2047Subject() {
+        let encodedSubject = #""=?utf-8?B?SGVsbG8gV29ybGQ=?=""#
+        let from = #"((NIL NIL "alice" "example.com"))"#
+        let nilTail = "NIL NIL NIL NIL NIL NIL"
+        let line = Data(#"* 1 FETCH (UID 7 ENVELOPE (NIL \#(encodedSubject) \#(from) \#(nilTail)))"#.utf8)
+        guard case let .fetch(_, attrs) = ImapParser.parse(line: line, literals: []) else {
+            return XCTFail("Expected fetch response")
+        }
+        XCTAssertEqual(attrs.envelope?.subject, "Hello World")
+    }
+
+    func testFetchEnvelopeDecodesRFC2047AddressName() {
+        let encodedAddress = #"(("=?utf-8?Q?Bj=C3=B6rn?=" NIL "bjorn" "example.com"))"#
+        let nilTail = "NIL NIL NIL NIL NIL NIL"
+        let line = Data(#"* 1 FETCH (UID 7 ENVELOPE (NIL "hi" \#(encodedAddress) \#(nilTail)))"#.utf8)
+        guard case let .fetch(_, attrs) = ImapParser.parse(line: line, literals: []) else {
+            return XCTFail("Expected fetch response")
+        }
+        XCTAssertEqual(attrs.envelope?.from.first?.name, "Björn")
+    }
+
     func testContinuationResponse() {
         let line = Data("+ OK continue".utf8)
         if case let .continuation(text) = ImapParser.parse(line: line, literals: []) {
