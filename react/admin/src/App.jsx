@@ -40,7 +40,7 @@ import useTheme from './hooks/useTheme';
 // Site-wide and Theme-specific style
 import './AppDark.css';
 import './AppLight.css';
-import { ADDRESS_LIST, FOLDER_LIST } from './constants';
+import { ADDRESS_LIST, FOLDER_LIST, DATE, DESC } from './constants';
 import './App.css';
 
 // Module-level token storage (never persisted to localStorage)
@@ -89,6 +89,15 @@ function App() {
   const [hideMessage, setHideMessage] = useState(true);
   const hideTimerRef = useRef(null);
   const theme = useTheme();
+
+  // Message-list state bags per §4c / State Management. Lifted here so that
+  // future phases (reader selection, keyboard shortcuts) can read the same
+  // source of truth. `selected` is a Set of numeric message IDs.
+  const [filter, setFilter] = useState('all');
+  const [sortKey, setSortKey] = useState(DATE);
+  const [sortDir, setSortDir] = useState(DESC);
+  const [bulkMode, setBulkMode] = useState(false);
+  const [selected, setSelected] = useState(() => new Set());
 
   const setState = useCallback((updates) => {
     setAppState(prev => {
@@ -399,6 +408,16 @@ function App() {
               smtp_host={`smtp-out.${state.control_domain}`}
               domains={state.domains}
               setMessage={setMessage}
+              filter={filter}
+              setFilter={setFilter}
+              sortKey={sortKey}
+              setSortKey={setSortKey}
+              sortDir={sortDir}
+              setSortDir={setSortDir}
+              bulkMode={bulkMode}
+              setBulkMode={setBulkMode}
+              selected={selected}
+              setSelected={setSelected}
             />
           </ErrorBoundary>
         );

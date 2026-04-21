@@ -32,7 +32,13 @@ function prepBody(body, envelope) {
     sanitizedBody.replace(/[\s\S]*<body>/m, "").replace(/<\/body>[\s\S]*/m, "");
 }
 
-function Email() {
+function Email({
+  filter, setFilter,
+  sortKey, setSortKey,
+  sortDir, setSortDir,
+  bulkMode, setBulkMode,
+  selected, setSelected,
+}) {
   const { token, api_url, host, domains, smtp_host } = useAuth();
   const { setMessage } = useAppMessage();
 
@@ -165,6 +171,16 @@ function Email() {
           setFolder={selectFolder}
           setMessage={setMessage}
           addressFilter={addressFilter}
+          filter={filter}
+          setFilter={setFilter}
+          sortKey={sortKey}
+          setSortKey={setSortKey}
+          sortDir={sortDir}
+          setSortDir={setSortDir}
+          bulkMode={bulkMode}
+          setBulkMode={setBulkMode}
+          selected={selected}
+          setSelected={setSelected}
         />
         <MessageOverlay
           token={token}

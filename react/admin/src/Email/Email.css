@@ -45,20 +45,19 @@ div.email__middle {
   right: 0;
 }
 
-div.email_list, div.message_overlay {
+div.msglist, div.message_overlay {
   position: absolute;
   top: 0;
   bottom: 0;
-  overflow: scroll;
   z-index: 99999;
 }
 
-div.message_list {
-  position: relative;
+div.message_overlay {
+  overflow: scroll;
 }
 
 @media (min-width: 900px) {
-  div.email_list {
+  div.msglist {
     left: 0;
     width: 490px;
   }
@@ -74,7 +73,7 @@ div.message_list {
 }
 
 @media (max-width: 899px) {
-  div.email_list, div.message_overlay {
+  div.msglist, div.message_overlay {
     left: 0;
     right: 0;
   }
