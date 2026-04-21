@@ -1,3 +1,35 @@
+/* =========================================================================
+   Stately direction — non-theme tokens
+   Fonts, radii, and density vars live alongside the theme tokens in
+   AppLight.css / AppDark.css. These are theme-independent.
+   ========================================================================= */
+:root[data-direction="stately"] {
+  --font-display: "Source Serif 4", Georgia, serif;
+  --font-reader:  "Source Serif 4", Georgia, serif;
+  --font-ui:      "Inter Tight", "Inter", system-ui, sans-serif;
+  --font-mono:    "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --radius-sm:   4px;
+  --radius-md:   6px;
+  --radius-lg:   10px;
+  --radius-xl:   14px;
+  --radius-pill: 999px;
+}
+
+:root[data-density="compact"] { --density-row-py: 6px;  --density-leading: 1.55; }
+:root[data-density="normal"]  { --density-row-py: 10px; --density-leading: 1.65; }
+:root[data-density="roomy"]   { --density-row-py: 14px; --density-leading: 1.75; }
+
+/* Document chrome keyed to the token system, authoritative over the legacy
+   prefers-color-scheme rules so user theme choice always wins. */
+:root[data-direction="stately"] body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
 body {
   margin: 0;
 }

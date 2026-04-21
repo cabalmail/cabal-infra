@@ -34,6 +34,9 @@ import ErrorBoundary from './ErrorBoundary';
 import AuthContext from './contexts/AuthContext';
 import AppMessageContext from './contexts/AppMessageContext';
 
+// Hooks
+import useTheme from './hooks/useTheme';
+
 // Site-wide and Theme-specific style
 import './AppDark.css';
 import './AppLight.css';
@@ -85,6 +88,7 @@ function App() {
   const [error, setError] = useState(false);
   const [hideMessage, setHideMessage] = useState(true);
   const hideTimerRef = useRef(null);
+  const theme = useTheme();
 
   const setState = useCallback((updates) => {
     setAppState(prev => {
@@ -432,6 +436,12 @@ function App() {
             view={state.view}
             doLogout={doLogout}
             isAdmin={isAdmin}
+            userName={state.userName}
+            theme={theme.theme}
+            accent={theme.accent}
+            onToggleTheme={theme.toggleTheme}
+            onSelectAccent={theme.setAccent}
+            accents={theme.accents}
           />
           <div className="content">
             <Suspense fallback={<div className="loading">Loading...</div>}>
