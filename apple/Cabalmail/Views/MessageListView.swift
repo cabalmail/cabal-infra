@@ -66,6 +66,17 @@ struct MessageListView: View {
         .onChange(of: appState.refreshRequestTick) { _, _ in
             Task { await model?.refresh() }
         }
+        .onChange(of: appState.lastDisposedEnvelope) { _, signal in
+            // Detail view archived / trashed the current message. Advance
+            // the split-view selection to the next unread envelope (so the
+            // user can keep triaging without bouncing back to the list),
+            // then prune the matching row so it disappears immediately.
+            // Other folders ignore the signal.
+            guard let signal, signal.folderPath == folder.path else { return }
+            let current = model?.envelopes.first { $0.uid == signal.uid }
+            selection = current.flatMap { model?.nextUnreadEnvelope(after: $0) }
+            model?.pruneEnvelope(uid: signal.uid)
+        }
     }
 
     @ViewBuilder

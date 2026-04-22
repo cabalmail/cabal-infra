@@ -91,6 +91,7 @@ final class ImapParserTests: XCTestCase {
     }
 
     func testFetchEnvelopeDecodesRFC2047AddressName() {
+        let line = Data([
             #"* 1 FETCH (UID 7 ENVELOPE (NIL "hi" "#,
             #"(("=?utf-8?Q?Bj=C3=B6rn?=" NIL "bjorn" "example.com")) "#,
             #"NIL NIL NIL NIL NIL NIL NIL))"#,

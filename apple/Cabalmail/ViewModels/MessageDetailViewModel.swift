@@ -132,6 +132,56 @@ final class MessageDetailViewModel {
         remoteContentAllowed.toggle()
     }
 
+    /// Dispose target mirrors `MessageListViewModel.dispose(_:)`: read
+    /// `Preferences.disposeAction` at call time (Archive or Trash), mark
+    /// `\Seen` before the move (archived == read, matching the React app),
+    /// then run `UID MOVE` and prune both caches so a relaunch can't re-
+    /// hydrate the message into the list. `onSuccess` fires on the main
+    /// actor after all state writes settle; `MessageDetailView` uses it to
+    /// clear the split-view selection and signal the list to drop the UID
+    /// without waiting for the next IDLE refresh.
+    func dispose(onSuccess: (() -> Void)? = nil) async {
+        let destination = preferences.disposeAction.destinationFolder
+        do {
+            if !isSeen {
+                try await client.imapClient.setFlags(
+                    folder: folder.path,
+                    uids: [envelope.uid],
+                    flags: [.seen],
+                    operation: .add
+                )
+                isSeen = true
+                pendingMarkAsReadTask?.cancel()
+                pendingMarkAsReadTask = nil
+            }
+            try await client.imapClient.move(
+                folder: folder.path,
+                uids: [envelope.uid],
+                destination: destination
+            )
+            let uidValidity = try? await currentUIDValidity()
+            try? await client.envelopeCache.remove(
+                uids: [envelope.uid],
+                folder: folder.path
+            )
+            if let uidValidity {
+                await client.bodyCache.remove(
+                    folder: folder.path,
+                    uidValidity: uidValidity,
+                    uid: envelope.uid
+                )
+            }
+            onSuccess?()
+        } catch {
+            errorMessage = "\(error)"
+        }
+    }
+
+    /// The currently-configured dispose action, exposed so the toolbar can
+    /// render the right icon and label without reaching into the preferences
+    /// environment itself.
+    var disposeAction: DisposeAction { preferences.disposeAction }
+
     // MARK: - Internals
 
     private func fetchBodyBytes() async throws -> Data {

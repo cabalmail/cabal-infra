@@ -209,5 +209,40 @@ struct MessageDetailView: View {
                 }
             }
         }
+        ToolbarItem {
+            if let model {
+                Button(role: disposeRole(for: model.disposeAction)) {
+                    Task {
+                        await model.dispose {
+                            appState.signalDisposed(
+                                folderPath: folder.path,
+                                uid: envelope.uid
+                            )
+                        }
+                    }
+                } label: {
+                    disposeToolbarLabel(for: model.disposeAction)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func disposeToolbarLabel(for action: DisposeAction) -> some View {
+        switch action {
+        case .archive:
+            Image(systemName: "archivebox")
+                .accessibilityLabel("Archive")
+        case .trash:
+            Image(systemName: "trash")
+                .accessibilityLabel("Delete")
+        }
+    }
+
+    private func disposeRole(for action: DisposeAction) -> ButtonRole? {
+        switch action {
+        case .archive: return nil
+        case .trash:   return .destructive
+        }
     }
 }
