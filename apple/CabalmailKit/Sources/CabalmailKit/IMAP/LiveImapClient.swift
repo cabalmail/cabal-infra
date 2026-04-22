@@ -183,6 +183,23 @@ public actor LiveImapClient: ImapClient {
         }
     }
 
+    public func topEnvelopes(
+        folder: String,
+        limit: UInt32,
+        totalMessages: UInt32
+    ) async throws -> [Envelope] {
+        guard totalMessages > 0, limit > 0 else { return [] }
+        return try await withTransportRetry {
+            let conn = try self.requireConnection()
+            try await self.select(folder: folder, on: conn)
+            let start = totalMessages > limit ? totalMessages - limit + 1 : 1
+            let responses = try await conn.sendCommand(
+                "FETCH \(start):* (UID FLAGS INTERNALDATE RFC822.SIZE ENVELOPE BODYSTRUCTURE)"
+            )
+            return responses.compactMap { self.envelopeFromFetch($0) }
+        }
+    }
+
     public func fetchBody(folder: String, uid: UInt32) async throws -> RawMessage {
         try await withTransportRetry {
             let conn = try self.requireConnection()

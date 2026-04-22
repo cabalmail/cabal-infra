@@ -5,13 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.2] - 2026-04-22
+
+### Fixed
+
+- Apple client: the folder message list now fetches the top page by IMAP sequence number (`FETCH (messages - pageSize + 1):*`) instead of a UID range window (`UID FETCH (UIDNEXT - pageSize):UIDNEXT`). The UID-range approach silently returned fewer envelopes than requested whenever UIDs were sparse after expunges — a long-lived Inbox with UIDNEXT well past pageSize but only a handful of surviving messages would render just the few whose UIDs happened to land in the top-pageSize band (observed as "Inbox shows only 3 of 19 messages"). Dense folders (hundreds of thousands of messages) were unaffected because their UIDs are contiguous. `loadMoreIfNeeded` continues to paginate older pages by UID. New `ImapClient.topEnvelopes(folder:limit:totalMessages:)` protocol method, regression coverage in `ImapClientTests`.
+
 ## [0.6.1] - 2026-04-21
 
 ### Fixed
 
 - Apple client: IMAP envelope subject and address display names now pass through `HeaderDecoder.decode`, so RFC 2047 encoded-words (`=?utf-8?B?…?=`, `=?utf-8?Q?…?=`) render as their decoded text instead of appearing literally. Matches the Python `decode_header` behavior in `lambda/api/list_envelopes/function.py`. Regression coverage added in `ImapParserTests`.
 
-## [0.6.0] - Unreleased
+## [0.6.0] - 2026-04-20
 
 ### Added
 
