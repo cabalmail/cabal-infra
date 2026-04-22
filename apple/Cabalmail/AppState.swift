@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import UserNotifications
 import CabalmailKit
 
 /// Root observable state for the Cabalmail app.
@@ -53,6 +54,13 @@ final class AppState {
     /// the observer.
     var lastDisposedEnvelope: DisposedEnvelope?
     private var disposedTick = 0
+
+    /// Authoritative Inbox unread count, refreshed by the badge poller.
+    /// Exposed as an observable so future views (e.g. a sidebar indicator)
+    /// can mirror what shows on the dock/home-screen badge.
+    private(set) var inboxUnreadCount: Int = 0
+    private var inboxBadgeTask: Task<Void, Never>?
+    private let inboxBadgePollInterval: UInt64 = 60 * 1_000_000_000
 
     func requestCompose() { composeRequestTick += 1 }
     func requestRefresh() { refreshRequestTick += 1 }
@@ -109,6 +117,7 @@ final class AppState {
             self.lastUsername = username
             self.client = newClient
             self.status = .signedIn
+            startInboxBadgePolling()
         } catch let error as CabalmailError {
             status = .error(message(for: error))
         } catch {
@@ -117,6 +126,7 @@ final class AppState {
     }
 
     func signOut() async {
+        stopInboxBadgePolling()
         guard let client else { status = .signedOut; return }
         await client.imapClient.disconnect()
         try? await client.authService.signOut()
@@ -182,6 +192,7 @@ final class AppState {
             _ = try await newClient.authService.currentIdToken()
             self.client = newClient
             self.status = .signedIn
+            startInboxBadgePolling()
         } catch let error as CabalmailError {
             switch error {
             case .authExpired, .invalidCredentials, .notSignedIn:
@@ -202,6 +213,54 @@ final class AppState {
             }
         } catch {
             status = .error(error.localizedDescription)
+        }
+    }
+
+    /// Begin the Inbox-badge polling loop. Runs while signed in and polls
+    /// `STATUS (UNSEEN)` on INBOX every 60 seconds, pushing the count to the
+    /// system badge via `UNUserNotificationCenter`. Requests `.badge`
+    /// authorization on first start — the system ignores repeat requests
+    /// once the user has responded, so calling this on every sign-in is safe.
+    /// Idempotent: subsequent calls while the task is running are no-ops.
+    func startInboxBadgePolling() {
+        guard inboxBadgeTask == nil, client != nil else { return }
+        Task {
+            _ = try? await UNUserNotificationCenter.current()
+                .requestAuthorization(options: [.badge])
+        }
+        let interval = inboxBadgePollInterval
+        inboxBadgeTask = Task { [weak self] in
+            while !Task.isCancelled {
+                await self?.refreshInboxUnread()
+                try? await Task.sleep(nanoseconds: interval)
+            }
+        }
+    }
+
+    /// Tear down the badge poller and clear the system badge. Called on
+    /// sign-out so the icon doesn't keep showing the last signed-in user's
+    /// count. Idempotent — safe to call even if polling never started.
+    func stopInboxBadgePolling() {
+        inboxBadgeTask?.cancel()
+        inboxBadgeTask = nil
+        inboxUnreadCount = 0
+        Task {
+            try? await UNUserNotificationCenter.current().setBadgeCount(0)
+        }
+    }
+
+    private func refreshInboxUnread() async {
+        guard let client else { return }
+        do {
+            try await client.imapClient.connectAndAuthenticate()
+            let status = try await client.imapClient.status(path: "INBOX")
+            let count = max(0, status.unseen ?? 0)
+            inboxUnreadCount = count
+            try? await UNUserNotificationCenter.current().setBadgeCount(count)
+        } catch {
+            // Best-effort: if the STATUS call fails (transient network
+            // blip, IMAP reconnection) the prior badge value stays put
+            // until the next poll succeeds.
         }
     }
 
