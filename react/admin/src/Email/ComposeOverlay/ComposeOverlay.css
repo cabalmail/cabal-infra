@@ -296,8 +296,8 @@
 }
 
 .editor-mode-tab.active {
-  color: var(--ink);
-  background: var(--surface-hover);
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .editor-pane {
