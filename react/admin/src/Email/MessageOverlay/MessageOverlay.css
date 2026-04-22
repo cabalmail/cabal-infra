@@ -371,9 +371,12 @@
   color: var(--ink);
 }
 
+/* !important defeats the legacy global `body .active` rule in
+   AppLight.css / AppDark.css (same pattern used in Messages.css). */
 .source-seg-btn.active {
-  background: var(--accent);
-  color: var(--accent-fg);
+  background: var(--accent) !important;
+  color: var(--accent-fg) !important;
+  border-color: transparent !important;
 }
 
 .source-tool {
