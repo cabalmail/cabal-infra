@@ -56,14 +56,19 @@ describe('Nav', () => {
     render(<Nav {...baseProps} loggedIn={true} userName="alex" />);
     fireEvent.click(screen.getByRole('button', { name: 'Account menu' }));
     expect(screen.getByRole('menuitem', { name: 'Email' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Folders' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Addresses' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'Log out' })).toBeInTheDocument();
+  });
+
+  it('hides the Folders menu item for everyone', () => {
+    render(<Nav {...baseProps} loggedIn={true} userName="alex" isAdmin={true} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Account menu' }));
+    expect(screen.queryByRole('menuitem', { name: 'Folders' })).not.toBeInTheDocument();
   });
 
   it('hides admin-only items when isAdmin is false', () => {
     render(<Nav {...baseProps} loggedIn={true} userName="alex" isAdmin={false} />);
     fireEvent.click(screen.getByRole('button', { name: 'Account menu' }));
+    expect(screen.queryByRole('menuitem', { name: 'Addresses' })).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Users' })).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'DMARC' })).not.toBeInTheDocument();
   });
@@ -71,20 +76,21 @@ describe('Nav', () => {
   it('shows admin-only items when isAdmin is true', () => {
     render(<Nav {...baseProps} loggedIn={true} userName="alex" isAdmin={true} />);
     fireEvent.click(screen.getByRole('button', { name: 'Account menu' }));
+    expect(screen.getByRole('menuitem', { name: 'Addresses' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'Users' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'DMARC' })).toBeInTheDocument();
   });
 
   it('marks the active view in the menu', () => {
-    render(<Nav {...baseProps} loggedIn={true} userName="alex" view="Email" />);
+    render(<Nav {...baseProps} loggedIn={true} userName="alex" view="Email" isAdmin={true} />);
     fireEvent.click(screen.getByRole('button', { name: 'Account menu' }));
     expect(screen.getByRole('menuitem', { name: 'Email' })).toHaveClass('is-active');
-    expect(screen.getByRole('menuitem', { name: 'Folders' })).not.toHaveClass('is-active');
+    expect(screen.getByRole('menuitem', { name: 'Addresses' })).not.toHaveClass('is-active');
   });
 
   it('calls onClick with the event when a menu item is chosen', () => {
     const onClick = vi.fn();
-    render(<Nav {...baseProps} loggedIn={true} userName="alex" onClick={onClick} />);
+    render(<Nav {...baseProps} loggedIn={true} userName="alex" isAdmin={true} onClick={onClick} />);
     fireEvent.click(screen.getByRole('button', { name: 'Account menu' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Addresses' }));
     expect(onClick).toHaveBeenCalledTimes(1);

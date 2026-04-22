@@ -1,6 +1,6 @@
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import Addresses from './index';
+import Rail from './Rail';
 import AuthContext from '../contexts/AuthContext';
 
 const mockGetAddresses = vi.fn();
@@ -29,7 +29,7 @@ const SAMPLE_ADDRESSES = [
 function renderAddresses(props = {}) {
   return render(
     <AuthContext.Provider value={authValue}>
-      <Addresses
+      <Rail
         domains={[{ domain: 'cabalmail.com' }]}
         setMessage={vi.fn()}
         selectedAddress={null}

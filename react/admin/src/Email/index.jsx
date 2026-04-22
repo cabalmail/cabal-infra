@@ -4,7 +4,7 @@ import Messages from './Messages';
 import MessageOverlay from './MessageOverlay';
 import ComposeOverlay from './ComposeOverlay';
 import Folders from '../Folders';
-import Addresses from '../Addresses';
+import AddressesRail from '../Addresses/Rail';
 import useMediaQuery from '../hooks/useMediaQuery';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppMessage } from '../contexts/AppMessageContext';
@@ -193,7 +193,7 @@ function Email({
             setMessage={setMessage}
             onNewMessage={newEmail}
           />
-          <Addresses
+          <AddressesRail
             domains={domains}
             setMessage={setMessage}
             selectedAddress={addressFilter}
@@ -220,7 +220,7 @@ function Email({
                 asDrawer
                 onClose={closeDrawer}
               />
-              <Addresses
+              <AddressesRail
                 domains={domains}
                 setMessage={setMessage}
                 selectedAddress={addressFilter}

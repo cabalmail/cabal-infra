@@ -12,7 +12,6 @@ import {
 
 // Lazy-loaded view components
 const Email = React.lazy(() => import('./Email'));
-const Folders = React.lazy(() => import('./Folders'));
 const Addresses = React.lazy(() => import('./Addresses'));
 const Users = React.lazy(() => import('./Users'));
 const Dmarc = React.lazy(() => import('./Dmarc'));
@@ -225,6 +224,15 @@ function App() {
     };
   }, []);
 
+  // Bounce non-admins away from admin-only views (e.g. "Addresses" persisted
+  // in localStorage from a prior admin session, or a deep-link).
+  useEffect(() => {
+    const adminOnlyViews = ["Addresses", "Users", "DMARC"];
+    if (state.loggedIn && !isAdmin && adminOnlyViews.includes(state.view)) {
+      setState({ view: "Email" });
+    }
+  }, [state.loggedIn, state.view, isAdmin, setState]);
+
   const doRegister = useCallback((e) => {
     e.preventDefault();
     const attributeUsername = new CognitoUserAttribute({
@@ -378,22 +386,7 @@ function App() {
         return (
           <ErrorBoundary name="Addresses">
             <Addresses
-              token={_token}
-              api_url={state.api_url}
-              host={state.imap_host}
               domains={state.domains}
-              setMessage={setMessage}
-              isAdmin={isAdmin}
-            />
-          </ErrorBoundary>
-        );
-      case "Folders":
-        return (
-          <ErrorBoundary name="Folders">
-            <Folders
-              token={_token}
-              api_url={state.api_url}
-              host={state.imap_host}
               setMessage={setMessage}
             />
           </ErrorBoundary>

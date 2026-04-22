@@ -5,8 +5,7 @@ import './Nav.css';
 
 const NAV_VIEWS = [
   { id: 'email',     name: 'Email',     label: 'Email',     requiresAdmin: false },
-  { id: 'folders',   name: 'Folders',   label: 'Folders',   requiresAdmin: false },
-  { id: 'addresses', name: 'Addresses', label: 'Addresses', requiresAdmin: false },
+  { id: 'addresses', name: 'Addresses', label: 'Addresses', requiresAdmin: true  },
   { id: 'users',     name: 'Users',     label: 'Users',     requiresAdmin: true  },
   { id: 'dmarc',     name: 'DMARC',     label: 'DMARC',     requiresAdmin: true  },
 ];

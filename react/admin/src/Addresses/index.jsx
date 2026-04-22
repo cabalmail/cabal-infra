@@ -1,208 +1,243 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Plus, Search, X } from 'lucide-react';
 import useApi from '../hooks/useApi';
 import { ADDRESS_LIST } from '../constants';
-import { swatchFor } from '../utils/addressSwatch';
 import Request from './Request';
-import './Addresses.css';
+import './Admin.css';
 
-function sortAddresses(items) {
-  return items.slice().sort((a, b) => {
-    if (a.address > b.address) return 1;
-    if (a.address < b.address) return -1;
-    return 0;
-  });
-}
-
-function Addresses({ domains, setMessage, selectedAddress, onSelectAddress }) {
+function AdminAddresses({ domains, setMessage }) {
   const api = useApi();
   const [addresses, setAddresses] = useState([]);
-  const [query, setQuery] = useState('');
-  const [showRequest, setShowRequest] = useState(false);
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('');
+  const [showNew, setShowNew] = useState(false);
+  const [pickerFor, setPickerFor] = useState(null);
+  const [pickerUser, setPickerUser] = useState('');
 
-  const refresh = useCallback(() => {
-    api.getAddresses().then((data) => {
-      try {
-        localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
-      } catch (e) {
-        console.log(e);
+  const loadData = useCallback(() => {
+    setLoading(true);
+    Promise.all([
+      api.listAllAddresses(),
+      api.listUsers().catch(() => ({ data: { Users: [] } })),
+    ]).then(
+      ([addrResp, userResp]) => {
+        const addrData = addrResp.data || addrResp;
+        const userData = userResp.data || userResp;
+        setAddresses(addrData.Items || []);
+        setUsers(userData.Users || []);
+        setLoading(false);
+      },
+      (err) => {
+        setMessage && setMessage('Failed to load addresses: ' + (err.message || err), true);
+        setLoading(false);
       }
-      setAddresses(sortAddresses(data.data.Items));
-    }).catch((e) => {
-      console.log(e);
-    });
-  }, [api]);
-
-  useEffect(() => { refresh(); }, [refresh]);
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return addresses;
-    return addresses.filter((a) =>
-      [a.address, a.comment].filter(Boolean).join('.').toLowerCase().includes(q)
     );
-  }, [addresses, query]);
+  }, [api, setMessage]);
 
-  const hiddenCount = addresses.length - filtered.length;
+  useEffect(() => { loadData(); }, [loadData]);
 
-  const handleSelect = useCallback((address) => {
-    if (typeof onSelectAddress === 'function') onSelectAddress(address);
-  }, [onSelectAddress]);
+  const usernameOptions = useMemo(() => (
+    users
+      .filter((u) => u.status === 'CONFIRMED' && u.enabled)
+      .filter((u) => !['master', 'dmarc'].includes(u.username))
+      .map((u) => u.username)
+      .sort()
+  ), [users]);
 
-  const openRequest = useCallback((e) => {
-    if (e) e.stopPropagation();
-    setShowRequest(true);
-  }, []);
+  const filteredAddresses = useMemo(() => {
+    const f = filter.trim().toLowerCase();
+    const list = f
+      ? addresses.filter((a) => (
+          [a.address, a.comment || '', a.user || ''].join(' ').toLowerCase().includes(f)
+        ))
+      : addresses;
+    return list.slice().sort((a, b) => a.address.localeCompare(b.address));
+  }, [addresses, filter]);
 
-  const closeRequest = useCallback(() => {
-    setShowRequest(false);
-  }, []);
-
-  const onRequested = useCallback((newAddress) => {
-    setShowRequest(false);
+  const handleRequested = useCallback((newAddress) => {
     localStorage.removeItem(ADDRESS_LIST);
-    refresh();
-    if (typeof onSelectAddress === 'function') onSelectAddress(newAddress);
-  }, [refresh, onSelectAddress]);
+    setShowNew(false);
+    if (newAddress) {
+      setMessage && setMessage(`Address "${newAddress}" created.`, false);
+    }
+    loadData();
+  }, [setMessage, loadData]);
 
-  const revoke = useCallback((e, a) => {
-    e.stopPropagation();
-    api.deleteAddress(a.address, a.subdomain, a.tld, a.public_key).then(() => {
-      setMessage && setMessage('Successfully revoked address.', false);
-      localStorage.removeItem(ADDRESS_LIST);
-      setAddresses((prev) => prev.filter((x) => x.address !== a.address));
-      if (selectedAddress === a.address && typeof onSelectAddress === 'function') {
-        onSelectAddress(null);
+  const handleAssign = useCallback((address, username) => {
+    if (!username) {
+      setMessage && setMessage('Select a user to assign.', true);
+      return;
+    }
+    api.assignAddress(address, username).then(
+      () => {
+        setMessage && setMessage(`Assigned "${username}" to "${address}".`, false);
+        setPickerFor(null);
+        setPickerUser('');
+        loadData();
+      },
+      (err) => {
+        const msg = err.response?.data?.Error || err.message || err;
+        setMessage && setMessage('Failed to assign user: ' + msg, true);
       }
-    }).catch(() => {
-      setMessage && setMessage('Request to revoke address failed.', true);
-    });
-  }, [api, setMessage, selectedAddress, onSelectAddress]);
+    );
+  }, [api, setMessage, loadData]);
+
+  const handleUnassign = useCallback((address, username) => {
+    if (!window.confirm(`Remove "${username}" from "${address}"?`)) return;
+    api.unassignAddress(address, username).then(
+      () => {
+        setMessage && setMessage(`Removed "${username}" from "${address}".`, false);
+        loadData();
+      },
+      (err) => {
+        const msg = err.response?.data?.Error || err.message || err;
+        setMessage && setMessage('Failed to remove user: ' + msg, true);
+      }
+    );
+  }, [api, setMessage, loadData]);
+
+  const handleRevoke = useCallback((a) => {
+    if (!window.confirm(`Revoke "${a.address}"? This cannot be undone.`)) return;
+    api.deleteAddress(a.address, a.subdomain, a.tld, a.public_key).then(
+      () => {
+        setMessage && setMessage(`Revoked "${a.address}".`, false);
+        localStorage.removeItem(ADDRESS_LIST);
+        loadData();
+      },
+      (err) => {
+        const msg = err.response?.data?.Error || err.message || err;
+        setMessage && setMessage('Failed to revoke address: ' + msg, true);
+      }
+    );
+  }, [api, setMessage, loadData]);
+
+  if (loading) {
+    return <div className="admin-addresses"><div className="loading">Loading addresses…</div></div>;
+  }
 
   return (
-    <section className="addresses-rail" aria-label="Addresses">
-      <div className="addresses-rail__header" role="button" tabIndex={0}>
-        <span className="addresses-rail__label">Addresses</span>
-        <span className="addresses-rail__actions">
-          <button
-            type="button"
-            className="addresses-rail__action"
-            title="New address"
-            aria-label="New address"
-            onClick={openRequest}
-          >
-            <Plus size={14} aria-hidden="true" />
-          </button>
+    <div className="admin-addresses">
+      <div className="admin-addresses__header">
+        <h2>All Addresses</h2>
+        <button
+          type="button"
+          className="admin-addresses__reload"
+          title="Reload"
+          onClick={loadData}
+        >&#10227;</button>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setShowNew((prev) => !prev)}
+        className="admin-addresses__new-toggle"
+      >New Address {showNew ? '▼' : '▶︎'}</button>
+
+      {showNew && (
+        <div className="admin-addresses__new">
+          <Request
+            domains={domains}
+            showRequest={true}
+            setMessage={setMessage}
+            callback={handleRequested}
+          />
+        </div>
+      )}
+
+      <div className="admin-addresses__controls">
+        <input
+          type="text"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder="Filter by address, comment, or user…"
+          className="admin-addresses__filter"
+        />
+        <span className="admin-addresses__count">
+          {filteredAddresses.length} of {addresses.length}
         </span>
       </div>
 
-      <div className="addresses-rail__search">
-        <Search className="addresses-rail__search-icon" size={13} aria-hidden="true" />
-        <input
-          type="search"
-          className="addresses-rail__search-input"
-          placeholder="Filter addresses…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          aria-label="Filter addresses"
-        />
-        {query && (
-          <button
-            type="button"
-            className="addresses-rail__search-clear"
-            title="Clear"
-            aria-label="Clear filter"
-            onClick={() => setQuery('')}
-          >
-            <X size={11} aria-hidden="true" />
-          </button>
-        )}
-      </div>
-
-      <ul className="addresses-rail__list">
-        {filtered.length === 0 && query && (
-          <li className="addresses-rail__empty">No matches</li>
-        )}
-        {filtered.map((a) => {
-          const isActive = selectedAddress === a.address;
-          return (
-            <li
-              key={a.address}
-              id={a.address}
-              className={`addresses-rail__row${isActive ? ' is-active' : ''}`}
-              title={a.comment || a.address}
-              onClick={() => handleSelect(a.address)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleSelect(a.address); }}
-              aria-current={isActive ? 'true' : undefined}
-            >
-              <span
-                className="addresses-rail__swatch"
-                style={{ background: swatchFor(a.address) }}
-                aria-hidden="true"
-              />
-              <span className="addresses-rail__address">{a.address}</span>
-              <span className="addresses-rail__row-actions" onClick={(e) => e.stopPropagation()}>
+      {filteredAddresses.length === 0 ? (
+        <p className="admin-addresses__empty">
+          {filter ? 'No addresses match the filter.' : 'No addresses yet.'}
+        </p>
+      ) : (
+        <ul className="admin-addresses__list">
+          {filteredAddresses.map((a) => {
+            const assignedUsers = (a.user || '').split('/').filter(Boolean);
+            const remaining = usernameOptions.filter((u) => !assignedUsers.includes(u));
+            return (
+              <li key={a.address} className="admin-addresses__row">
+                <div className="admin-addresses__main">
+                  <span className="admin-addresses__address">
+                    {a.address.replace(/([.@])/g, '$&\u200B')}
+                  </span>
+                  {a.comment && (
+                    <span className="admin-addresses__comment">{a.comment}</span>
+                  )}
+                </div>
+                <div className="admin-addresses__users">
+                  {assignedUsers.length === 0 && (
+                    <span className="admin-addresses__none">unassigned</span>
+                  )}
+                  {assignedUsers.map((u) => (
+                    <span key={u} className="admin-addresses__chip">
+                      {u}
+                      {assignedUsers.length > 1 && (
+                        <button
+                          type="button"
+                          className="admin-addresses__chip-remove"
+                          title={`Remove ${u}`}
+                          aria-label={`Remove ${u} from ${a.address}`}
+                          onClick={() => handleUnassign(a.address, u)}
+                        >&times;</button>
+                      )}
+                    </span>
+                  ))}
+                  {pickerFor === a.address ? (
+                    <span className="admin-addresses__picker">
+                      <select
+                        value={pickerUser}
+                        onChange={(e) => setPickerUser(e.target.value)}
+                      >
+                        <option value="">Select user…</option>
+                        {remaining.map((u) => (
+                          <option key={u} value={u}>{u}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => handleAssign(a.address, pickerUser)}
+                      >Add</button>
+                      <button
+                        type="button"
+                        onClick={() => { setPickerFor(null); setPickerUser(''); }}
+                      >Cancel</button>
+                    </span>
+                  ) : (
+                    remaining.length > 0 && (
+                      <button
+                        type="button"
+                        className="admin-addresses__add-user"
+                        onClick={() => { setPickerFor(a.address); setPickerUser(''); }}
+                      >+ User</button>
+                    )
+                  )}
+                </div>
                 <button
                   type="button"
-                  className="addresses-rail__row-action"
-                  title="Revoke address"
+                  className="admin-addresses__revoke"
+                  title={`Revoke ${a.address}`}
                   aria-label={`Revoke ${a.address}`}
-                  onClick={(e) => revoke(e, a)}
-                >
-                  <X size={12} aria-hidden="true" />
-                </button>
-              </span>
-            </li>
-          );
-        })}
-
-        {!query && (
-          <li
-            className="addresses-rail__row addresses-rail__row--new"
-            onClick={openRequest}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => { if (e.key === 'Enter') openRequest(); }}
-          >
-            <span className="addresses-rail__swatch addresses-rail__swatch--ghost" aria-hidden="true" />
-            <span className="addresses-rail__new-label">+ New address…</span>
-          </li>
-        )}
-
-        {!query && hiddenCount === 0 && addresses.length > 5 && (
-          <li className="addresses-rail__hint">
-            Type to search {addresses.length} addresses
-          </li>
-        )}
-      </ul>
-
-      {showRequest && (
-        <div className="addresses-rail__modal-scrim" onClick={closeRequest}>
-          <div className="addresses-rail__modal" onClick={(e) => e.stopPropagation()}>
-            <div className="addresses-rail__modal-head">
-              <span>New address</span>
-              <button
-                type="button"
-                className="addresses-rail__modal-close"
-                aria-label="Close"
-                onClick={closeRequest}
-              >
-                <X size={14} aria-hidden="true" />
-              </button>
-            </div>
-            <Request
-              domains={domains}
-              showRequest={true}
-              setMessage={setMessage}
-              callback={onRequested}
-            />
-          </div>
-        </div>
+                  onClick={() => handleRevoke(a)}
+                >Revoke</button>
+              </li>
+            );
+          })}
+        </ul>
       )}
-    </section>
+    </div>
   );
 }
 
-export default Addresses;
+export default AdminAddresses;
