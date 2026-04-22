@@ -7,9 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.6.3] - 2026-04-22
 
+### Added
+
+- Apple client: archive/trash button in the message detail toolbar. Matches the list view's swipe action — sets `\Seen` before the `UID MOVE`, prunes the envelope and body caches so a relaunch can't re-hydrate the moved message, and (for users whose dispose preference is Trash) renders as a destructive delete button instead of the archive box. After a successful move the split view clears its envelope selection and signals the message list to drop the row from its in-memory copy immediately, so the user doesn't see the archived message linger until the next IDLE refresh. `MessageDetailViewModel.dispose(onSuccess:)` mirrors `MessageListViewModel.dispose(_:)`; `AppState.signalDisposed(folderPath:uid:)` + a new `DisposedEnvelope` payload carry the prune signal from the detail view's toolbar back to the list view's `.onChange`, and `MessageListViewModel.pruneEnvelope(uid:)` applies it.
+
 ### Fixed
 
 - Apple client: `MimeParser.findBlankLine` no longer traps on empty input. The recursive `MimeParser.parse` can be handed an empty `Data` when `splitMultipart` trims a sub-part down to nothing — most reliably reproduced by Microsoft-originated DMARC aggregate reports, whose `multipart/alternative` tree begins with a body-less sub-part. Before the fix, `0..<(bytes.count - 1)` became `0..<-1` and tripped Swift's `Range requires lowerBound <= upperBound` runtime check (`EXC_BREAKPOINT` / `SIGTRAP`), crashing the detail view the moment a DMARC report was opened on both iOS and macOS. Now guarded with `bytes.count >= 2`; regression coverage in `MimeParserTests.testMultipartWithEmptyLeadingSubPartDoesNotCrash`.
+- Apple client: remote content in HTML messages is now genuinely blocked when the `Load remote content` preference is Off or Ask, fixing the regression where tracker pixels and remote images were fetching despite the toolbar "eye" icon showing the closed state. `HTMLBodyView`'s `WKNavigationDelegate.webView(_:decidePolicyFor:)` only intercepts top-level and subframe navigations; subresource loads (images, CSS, fonts, iframes — the tracker-pixel vector) bypass the delegate entirely, so the "deny non-file URLs in `decidePolicyFor`" approach never actually blocked them. The renderer now installs a `WKContentRuleList` that blocks every `http`/`https` request on the web view's `userContentController` when `allowRemote` is false, and removes it when the user flips the toolbar toggle. The rule list is compiled once per process and cached. The navigation-delegate check stays in place as a secondary guard against top-level navigations (meta-refresh, document.location=…) the user didn't ask for.
+>>>>>>> claude/jolly-wescoff-011aad
 
 ## [0.6.2] - 2026-04-22
 
