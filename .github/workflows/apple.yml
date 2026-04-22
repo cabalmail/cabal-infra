@@ -38,7 +38,7 @@ jobs:
         platform: [macOS, iOS, visionOS]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@v1
@@ -105,7 +105,7 @@ jobs:
           echo "destination=platform=$FAMILY Simulator,id=$UDID" >> "$GITHUB_OUTPUT"
 
       - name: Cache Swift packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/Library/Developer/Xcode/DerivedData/**/SourcePackages
@@ -146,7 +146,7 @@ jobs:
             destination: 'generic/platform=macOS'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@v1
@@ -161,7 +161,7 @@ jobs:
         run: xcodegen generate
 
       - name: Cache DerivedData
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/Library/Developer/Xcode/DerivedData
           key: dd-${{ runner.os }}-${{ matrix.scheme }}-${{ hashFiles('apple/project.yml', 'apple/CabalmailKit/Package.swift', 'apple/CabalmailKit/Package.resolved') }}
@@ -193,7 +193,7 @@ jobs:
     environment: ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Verify secrets are present
         id: check
@@ -427,7 +427,7 @@ jobs:
     environment: ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Verify secrets are present
         env:
@@ -739,7 +739,7 @@ jobs:
 
       - name: Upload notarized .app as workflow artifact
         if: steps.devid.outputs.enabled == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: CabalmailMac-notarized-${{ github.run_number }}
           path: ${{ env.NOTARIZED_ZIP }}
