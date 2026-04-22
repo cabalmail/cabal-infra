@@ -16,6 +16,10 @@ import CabalmailKit
 struct MessageDetailView: View {
     let folder: Folder
     let envelope: Envelope
+    /// Called after a successful archive/trash from the detail toolbar so
+    /// the split-view parent can clear the envelope selection. The list
+    /// pruning happens via the `AppState.lastDisposedEnvelope` signal.
+    var onDispose: () -> Void = {}
 
     @Environment(AppState.self) private var appState
     @Environment(Preferences.self) private var preferences
@@ -208,6 +212,42 @@ struct MessageDetailView: View {
                         )
                 }
             }
+        }
+        ToolbarItem {
+            if let model {
+                Button(role: disposeRole(for: model.disposeAction)) {
+                    Task {
+                        await model.dispose {
+                            appState.signalDisposed(
+                                folderPath: folder.path,
+                                uid: envelope.uid
+                            )
+                            onDispose()
+                        }
+                    }
+                } label: {
+                    disposeToolbarLabel(for: model.disposeAction)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func disposeToolbarLabel(for action: DisposeAction) -> some View {
+        switch action {
+        case .archive:
+            Image(systemName: "archivebox")
+                .accessibilityLabel("Archive")
+        case .trash:
+            Image(systemName: "trash")
+                .accessibilityLabel("Delete")
+        }
+    }
+
+    private func disposeRole(for action: DisposeAction) -> ButtonRole? {
+        switch action {
+        case .archive: return nil
+        case .trash:   return .destructive
         }
     }
 }

@@ -277,6 +277,15 @@ final class MessageListViewModel {
     /// render the right swipe-action label and icon without reaching into
     /// the preferences environment itself.
     var disposeAction: DisposeAction { preferences.disposeAction }
+
+    /// Drop a UID from the in-memory envelope list after it was disposed
+    /// elsewhere (currently: the detail-view archive button). The detail
+    /// view model already pruned the envelope + body caches; this only
+    /// touches the list's in-memory copy so the row disappears immediately
+    /// without a server round trip.
+    func pruneEnvelope(uid: UInt32) {
+        envelopes.removeAll { $0.uid == uid }
+    }
 }
 
 // MARK: - Internals

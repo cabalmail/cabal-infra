@@ -66,6 +66,13 @@ struct MessageListView: View {
         .onChange(of: appState.refreshRequestTick) { _, _ in
             Task { await model?.refresh() }
         }
+        .onChange(of: appState.lastDisposedEnvelope) { _, signal in
+            // Detail view archived / trashed the current message — prune the
+            // matching row so it disappears immediately. Other folders
+            // ignore the signal.
+            guard let signal, signal.folderPath == folder.path else { return }
+            model?.pruneEnvelope(uid: signal.uid)
+        }
     }
 
     @ViewBuilder
