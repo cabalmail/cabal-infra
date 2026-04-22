@@ -1,7 +1,6 @@
 /**
  * Reader — §4d. Phase 5 adds:
  *   - View source modal (Full / Headers / Body, Copy, Save .eml),
- *   - Match theme toggle + iframe style injection,
  *   - the remaining overflow-menu items.
  */
 
@@ -50,10 +49,6 @@ function MessageOverlay({
   const [references, setReferences] = useState([]);
   const [messageRawUrl, setMessageRawUrl] = useState(null);
 
-  // Match theme (§4d, Phase 5). Local — one toggle per reader session.
-  // Only meaningful in Rich mode; the OverflowMenu hides it otherwise.
-  const [matchTheme, setMatchTheme] = useState(false);
-
   // View source modal state. `initialTab` is 'full' when triggered from
   // "View source" and 'headers' when triggered from "Show original
   // headers". `rawText` is lazy-loaded the first time the modal opens.
@@ -81,7 +76,6 @@ function MessageOverlay({
     setRawText('');
     setRawError(false);
     setSourceOpen(false);
-    setMatchTheme(false);
 
     api.getMessage(folder, envelopeId, seen).then((data) => {
       setMessageBodyPlain(data.data.message_body_plain || '');
@@ -439,8 +433,6 @@ function MessageOverlay({
           setFormat={setReaderFormat}
           hasRich={hasRich}
           hasPlain={hasPlain}
-          matchTheme={matchTheme}
-          setMatchTheme={setMatchTheme}
           onViewSource={openViewSource}
           onShowHeaders={openHeaders}
           onForwardAsAttachment={forwardAsAttachment}
@@ -486,7 +478,6 @@ function MessageOverlay({
           messageId={envelopeId}
           seen={seen}
           setMessage={setMessage}
-          matchTheme={matchTheme && effectiveFormat === 'rich'}
         />
 
         <Attachments

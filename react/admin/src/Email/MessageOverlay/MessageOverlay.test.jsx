@@ -235,34 +235,6 @@ describe('MessageOverlay (Reader)', () => {
     }
   });
 
-  it('Match theme item is only shown in Rich mode and toggles state', async () => {
-    const { unmount } = renderOverlay();
-    try {
-      await waitFor(() => expect(mockGetMessage).toHaveBeenCalled());
-      fireEvent.click(screen.getByLabelText('More actions'));
-      const match = screen.getByText('Match app theme');
-      const item = match.closest('button');
-      expect(item.getAttribute('aria-checked')).toBe('false');
-      fireEvent.click(match);
-      // Menu stays open on check-toggle; the re-rendered button reflects state.
-      const reMatch = screen.getByText('Match app theme').closest('button');
-      expect(reMatch.getAttribute('aria-checked')).toBe('true');
-    } finally {
-      unmount();
-    }
-  });
-
-  it('Match theme is hidden in Plain mode', async () => {
-    const { unmount } = renderOverlay({ readerFormat: 'plain' });
-    try {
-      await waitFor(() => expect(mockGetMessage).toHaveBeenCalled());
-      fireEvent.click(screen.getByLabelText('More actions'));
-      expect(screen.queryByText('Match app theme')).not.toBeInTheDocument();
-    } finally {
-      unmount();
-    }
-  });
-
   it('overflow menu exposes Archive, Mark as spam, Block sender, Print', async () => {
     const { unmount } = renderOverlay();
     try {

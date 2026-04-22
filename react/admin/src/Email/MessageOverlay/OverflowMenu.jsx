@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   MoreHorizontal, Check,
-  Palette, Code, Info, Forward, Printer,
+  Code, Info, Forward, Printer,
   Archive, Ban, ShieldOff,
 } from 'lucide-react';
 
@@ -11,7 +11,6 @@ import {
    Phase 4 shipped the FORMAT group (Rich / Plain). Phase 5 adds the rest
    of the menu per the design spec:
 
-     - Match app theme  — checkable, only when Rich mode is active.
      - View source
      - Show original headers  → opens the same modal pre-set to Headers
      - Forward as attachment
@@ -70,7 +69,6 @@ function Separator() {
 
 function OverflowMenu({
   format, setFormat, hasRich, hasPlain,
-  matchTheme, setMatchTheme,
   onViewSource, onShowHeaders, onForwardAsAttachment, onPrint,
   onArchive, onMarkSpam, onBlockSender,
 }) {
@@ -80,7 +78,6 @@ function OverflowMenu({
   const triggerRef = useRef(null);
 
   const showFormatGroup = hasRich && hasPlain;
-  const inRichMode = format === 'rich' && hasRich;
 
   const close = useCallback(() => {
     setOpen(false);
@@ -147,10 +144,6 @@ function OverflowMenu({
        the prototype behavior */
   };
 
-  const toggleMatch = () => {
-    if (setMatchTheme) setMatchTheme(!matchTheme);
-  };
-
   return (
     <div className="reader-overflow" ref={rootRef}>
       <button
@@ -181,18 +174,6 @@ function OverflowMenu({
                 onClick={() => choose('plain')}
               >
                 Plain text alternative
-              </MenuCheckItem>
-              <Separator />
-            </>
-          )}
-
-          {inRichMode && setMatchTheme && (
-            <>
-              <MenuCheckItem
-                checked={!!matchTheme}
-                onClick={toggleMatch}
-              >
-                Match app theme
               </MenuCheckItem>
               <Separator />
             </>

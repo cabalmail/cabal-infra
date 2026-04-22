@@ -6,11 +6,12 @@ import useApi from '../../hooks/useApi';
    Rich mode: sandboxed srcdoc iframe, height-probed post-load.
    Plain mode: <pre> with white-space: pre-wrap.
 
-   Match theme (Phase 5): when enabled in Rich mode, we inject a <style>
-   block into the iframe's <head> that sets body background / color /
-   font-family using *resolved literal values* — CSS custom properties do
-   not cross the iframe boundary, so we read them from the parent's
-   documentElement via getComputedStyle and write them in verbatim.
+   Plain text follows the app theme (inherits --ink on a transparent
+   background). HTML, by contrast, is rendered against a fixed light
+   default regardless of app theme — senders author HTML email assuming
+   a white canvas, and forcing dark mode on arbitrary HTML breaks far
+   more messages than it helps. The injected default has no !important,
+   so any sender-authored styles still win.
 
    Per Preflight (4), the server returns raw HTML — sanitization happens
    client-side. The sandbox denies script execution; `allow-same-origin`
@@ -19,10 +20,10 @@ import useApi from '../../hooks/useApi';
 
 const IFRAME_SANDBOX = 'allow-same-origin allow-popups allow-popups-to-escape-sandbox';
 
-/* Tokens we pull from the parent's computed style for Match theme. These
-   are the ones we inline — keep the list short so we don't cascade the
-   entire design system into sender-written HTML. */
-const MATCH_THEME_TOKENS = ['--reader-bg', '--ink', '--font-reader'];
+const DEFAULT_LIGHT_STYLE = `
+<style data-cabal-reader-default>
+  html, body { background: #ffffff; color: #111111; }
+</style>`;
 
 function blockTrackingImages(html) {
   // Defuse http(s) <img> srcs so remote images don't load until the user
@@ -35,62 +36,24 @@ function restoreTrackingImages(html) {
   return html.replace(/(<img\b[^>]*?\bsrc=["'])disabled-(https?:)/gi, '$1$2');
 }
 
-function resolveMatchThemeTokens() {
-  if (typeof window === 'undefined' || !window.getComputedStyle) return null;
-  const cs = window.getComputedStyle(document.documentElement);
-  const out = {};
-  for (const name of MATCH_THEME_TOKENS) {
-    const v = cs.getPropertyValue(name).trim();
-    if (v) out[name] = v;
-  }
-  return out;
-}
-
-function buildMatchThemeStyle(tokens) {
-  if (!tokens) return '';
-  const bg = tokens['--reader-bg'] || 'transparent';
-  const ink = tokens['--ink'] || 'inherit';
-  const font = tokens['--font-reader'] || 'serif';
-  /* The naive background-neutralization pass from the README: any inline
-     `background: #fff` or `background-color: #ffffff` gets swapped to the
-     reader background token so white islands inside dark mode don't look
-     marooned. Production-grade sanitization is flagged in the plan as a
-     v1-follow-up. */
-  return `
-<style data-cabal-match-theme>
-  html, body { background: ${bg} !important; color: ${ink} !important; font-family: ${font}; }
-  [style*="background: #fff"],
-  [style*="background:#fff"],
-  [style*="background-color: #fff"],
-  [style*="background-color:#fff"],
-  [style*="background: #ffffff"],
-  [style*="background-color: #ffffff"],
-  [style*="background: white"],
-  [style*="background-color: white"] {
-    background: ${bg} !important;
-    background-color: ${bg} !important;
-  }
-</style>`;
-}
-
-/* Prepend the Match theme <style> block to the srcdoc. If the HTML has a
-   <head>, slot it in there; otherwise drop it at the start so the
-   browser's implicit head-promotion picks it up. */
-function injectMatchThemeStyle(html, styleBlock) {
-  if (!styleBlock) return html;
-  if (!html) return `<html><head>${styleBlock}</head><body></body></html>`;
+/* Prepend the default-light <style> block to the srcdoc. If the HTML has
+   a <head>, slot it in there; otherwise drop it at the start so the
+   browser's implicit head-promotion picks it up. Placing the block first
+   inside <head> means any sender-authored styles parse later and win on
+   specificity ties. */
+function injectDefaultStyle(html) {
+  if (!html) return `<html><head>${DEFAULT_LIGHT_STYLE}</head><body></body></html>`;
   if (/<head[^>]*>/i.test(html)) {
-    return html.replace(/<head([^>]*)>/i, `<head$1>${styleBlock}`);
+    return html.replace(/<head([^>]*)>/i, `<head$1>${DEFAULT_LIGHT_STYLE}`);
   }
   if (/<html[^>]*>/i.test(html)) {
-    return html.replace(/<html([^>]*)>/i, `<html$1><head>${styleBlock}</head>`);
+    return html.replace(/<html([^>]*)>/i, `<html$1><head>${DEFAULT_LIGHT_STYLE}</head>`);
   }
-  return `${styleBlock}${html}`;
+  return `${DEFAULT_LIGHT_STYLE}${html}`;
 }
 
 function ReaderBody({
   format, html, plain, folder, messageId, seen, setMessage,
-  matchTheme = false, themeKey,
 }) {
   const api = useApi();
   const iframeRef = useRef(null);
@@ -105,8 +68,7 @@ function ReaderBody({
 
   // Compose the srcdoc. Tracking images are defused unless the user opted
   // in; cid: references are resolved to presigned URLs asynchronously;
-  // the Match-theme style block (if on) is prepended last so its rules
-  // win over anything the sender wrote.
+  // the default-light style block is prepended so sender styles still win.
   const [resolvedHtml, setResolvedHtml] = useState('');
 
   useEffect(() => {
@@ -121,10 +83,7 @@ function ReaderBody({
 
     const finalize = (htmlStr) => {
       if (cancelled) return;
-      const styleBlock = matchTheme
-        ? buildMatchThemeStyle(resolveMatchThemeTokens())
-        : '';
-      setResolvedHtml(injectMatchThemeStyle(htmlStr || '', styleBlock));
+      setResolvedHtml(injectDefaultStyle(htmlStr || ''));
     };
 
     if (cids.length === 0) {
@@ -157,7 +116,7 @@ function ReaderBody({
     });
 
     return () => { cancelled = true; };
-  }, [format, html, imagesLoaded, folder, messageId, seen, api, setMessage, matchTheme, themeKey]);
+  }, [format, html, imagesLoaded, folder, messageId, seen, api, setMessage]);
 
   // Height probe on load. The sandbox allows same-origin so we can read
   // scrollHeight directly. Re-probe after late image loads settle.
@@ -225,7 +184,6 @@ function ReaderBody({
           sandbox={IFRAME_SANDBOX}
           srcDoc={resolvedHtml || '<html><body></body></html>'}
           style={{ height: `${iframeHeight}px` }}
-          data-match-theme={matchTheme ? 'on' : 'off'}
         />
       </div>
     </>

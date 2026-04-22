@@ -1,7 +1,7 @@
 /* =========================================================================
    Reader — §4d (Phase 4). Action bar + header + body + attachments.
-   View-source modal, Match theme, and destructive overflow items are
-   deferred to Phase 5.
+   View-source modal and destructive overflow items are deferred to
+   Phase 5.
    ========================================================================= */
 
 .reader {
@@ -596,7 +596,10 @@
   width: 100%;
   min-height: 120px;
   border: 0;
-  background: var(--reader-bg);
+  /* HTML email is authored against a white canvas; keep the iframe's
+     backdrop light in both themes so messages with transparent bodies
+     don't render against a dark surface. */
+  background: #ffffff;
   color-scheme: normal;
 }
 
