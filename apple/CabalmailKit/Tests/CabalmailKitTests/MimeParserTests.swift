@@ -114,6 +114,49 @@ final class MimeParserTests: XCTestCase {
         XCTAssertEqual(decoded, "HelloWorld")
     }
 
+    func testMultipartWithEmptyLeadingSubPartDoesNotCrash() {
+        // Regression: Microsoft-originated DMARC aggregate reports wrap their
+        // body in multipart/mixed → multipart/related → multipart/alternative,
+        // and the alternative's first sub-part is empty (no headers, no body).
+        // After boundary trimming an empty `Data` reaches the recursive
+        // `parse(_:)`, which previously trapped in `findBlankLine` on
+        // `0..<(0 - 1)`.
+        let outer = "mpm"
+        let related = "rv"
+        let alternative = "av"
+        let message = """
+        Content-Type: multipart/mixed; boundary="\(outer)"\r
+        \r
+        --\(outer)\r
+        Content-Type: multipart/related; boundary="\(related)"\r
+        \r
+        --\(related)\r
+        Content-Type: multipart/alternative; boundary="\(alternative)"\r
+        \r
+        --\(alternative)\r
+        \r
+        --\(alternative)\r
+        Content-Type: text/html; charset=us-ascii\r
+        \r
+        <p>body</p>\r
+        --\(alternative)--\r
+        --\(related)--\r
+        --\(outer)\r
+        Content-Type: application/gzip\r
+        Content-Disposition: attachment; filename="report.xml.gz"\r
+        Content-Transfer-Encoding: base64\r
+        \r
+        H4sIAAAAAAAAAA==\r
+        --\(outer)--
+        """
+        let part = MimeParser.parse(Data(message.utf8))
+        XCTAssertTrue(part.contentType.isMultipart)
+        let html = part.firstPart { $0.contentType.mimeType == "text/html" }
+        XCTAssertEqual(html?.textContent(), "<p>body</p>")
+        let attachment = part.leafParts.first { $0.contentDisposition?.isAttachment == true }
+        XCTAssertEqual(attachment?.contentDisposition?.filename, "report.xml.gz")
+    }
+
     func testFoldedHeadersUnfoldIntoSingleValue() {
         let message = """
         Subject: Hello\r

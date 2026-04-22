@@ -10,7 +10,7 @@ jobs:
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     steps:
     - name: checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v5
     - name: generate-versions
       run: env TF_ENVIRONMENT="${{ vars.TF_VAR_ENVIRONMENT }}" ./.github/scripts/make-terraform.sh
     - name: debug-1
@@ -18,7 +18,7 @@ jobs:
     - name: debug-2
       run: echo "${{ vars.TF_VAR_ENVIRONMENT }}"
     - name: store-artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: backend.tf
         path: ./terraform/infra/backend.tf
@@ -37,9 +37,9 @@ jobs:
       AWS_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v5
     - name: retrieve-artifact
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         name: backend.tf
     - name: move
