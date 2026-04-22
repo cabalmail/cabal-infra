@@ -45,8 +45,26 @@ final class AppState {
     var composeRequestTick = 0
     var refreshRequestTick = 0
 
+    /// Latest envelope disposed from the detail view. `MessageListView`
+    /// observes this via `.onChange` and prunes the matching UID from its
+    /// in-memory list so the moved message disappears immediately, without
+    /// waiting for the next IDLE / pull-to-refresh. `tick` is monotonic so
+    /// re-disposing the same UID (e.g. in a different folder) still fires
+    /// the observer.
+    var lastDisposedEnvelope: DisposedEnvelope?
+    private var disposedTick = 0
+
     func requestCompose() { composeRequestTick += 1 }
     func requestRefresh() { refreshRequestTick += 1 }
+
+    func signalDisposed(folderPath: String, uid: UInt32) {
+        disposedTick += 1
+        lastDisposedEnvelope = DisposedEnvelope(
+            folderPath: folderPath,
+            uid: uid,
+            tick: disposedTick
+        )
+    }
 
     /// Publishes a toast and auto-clears it after `duration`. The task lives
     /// outside structured concurrency because the caller's scope (usually a
@@ -237,4 +255,14 @@ struct Toast: Equatable, Sendable {
     enum Kind: Sendable { case info, success, warning, error }
     let kind: Kind
     let message: String
+}
+
+/// Signal payload for a successful dispose action. Carries the folder path
+/// and UID so list views in non-matching folders can ignore it, plus a
+/// monotonic `tick` so `.onChange` fires even if the same UID value
+/// reappears after a folder switch + UIDVALIDITY reset.
+struct DisposedEnvelope: Equatable, Sendable {
+    let folderPath: String
+    let uid: UInt32
+    let tick: Int
 }

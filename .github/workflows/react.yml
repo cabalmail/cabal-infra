@@ -24,7 +24,7 @@ jobs:
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     steps:
     - name: checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
     - name: build
       env:
         NODE_ENV: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
@@ -32,7 +32,7 @@ jobs:
     - name: package
       run: cd react/admin && tar czvf ../../react_app.tar.gz dist/
     - name: store-artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: react-app
         path: react_app.tar.gz
@@ -50,7 +50,7 @@ jobs:
         json
         EOF
     - name: retrieve-artifact
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         name: react-app
     - name: unpack

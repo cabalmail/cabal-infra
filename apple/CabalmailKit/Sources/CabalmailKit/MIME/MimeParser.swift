@@ -36,6 +36,8 @@ public enum MimeParser {
 
     private static func findBlankLine(in bytes: [UInt8]) -> Int? {
         // Looks for either `\r\n\r\n` or `\n\n` (lenient).
+        // `0..<(count - 1)` traps at runtime for empty input, so short-circuit.
+        guard bytes.count >= 2 else { return nil }
         for index in 0..<(bytes.count - 1) {
             if bytes[index] == 0x0D, bytes[index + 1] == 0x0A,
                index + 3 < bytes.count,
