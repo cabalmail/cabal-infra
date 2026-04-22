@@ -265,3 +265,77 @@ final class ImapClientTests: XCTestCase {
         XCTAssertTrue(outbound.contains("CREATE \"Archive.2024\""))
     }
 }
+
+// Coverage for `topEnvelopes(folder:limit:totalMessages:)`. Lifted into a
+// same-file extension so the primary `ImapClientTests` body stays under
+// SwiftLint's 250-line cap; XCTest discovers test methods across extensions.
+extension ImapClientTests {
+    func testTopEnvelopesUsesSequenceFetchForSmallFolder() async throws {
+        // Regression coverage for the "Apple client only shows 3 of 19 inbox
+        // messages" bug: a long-lived Inbox where UIDNEXT is well past
+        // pageSize but only a handful of messages remain would return just
+        // the messages whose UIDs happened to land in the top-50 UID band.
+        // Sequence-number FETCH is the fix — `1:*` here covers the full
+        // folder regardless of UID density.
+        let stream = ScriptedByteStream()
+        let client = LiveImapClient(
+            factory: ScriptedConnectionFactory(stream: stream),
+            authService: StubAuthService()
+        )
+        try await signIn(on: client, stream: stream)
+
+        await stream.enqueue("* 19 EXISTS\r\n")
+        await stream.enqueue("A2 OK [READ-WRITE] SELECT completed\r\n")
+        let envelopeLine = [
+            "* 1 FETCH (UID 784 FLAGS (\\Seen) INTERNALDATE \"01-Jan-2024 10:00:00 +0000\" ",
+            "RFC822.SIZE 42 ENVELOPE (\"Mon, 1 Jan 2024 10:00:00 +0000\" \"Hi\" ",
+            "((\"A\" NIL \"a\" \"example.com\")) ((\"A\" NIL \"a\" \"example.com\")) ",
+            "((\"A\" NIL \"a\" \"example.com\")) ((\"B\" NIL \"b\" \"example.com\")) ",
+            "NIL NIL NIL \"<x@example.com>\") BODYSTRUCTURE (\"text\" \"plain\" NIL NIL NIL \"7bit\" 10 1))\r\n",
+            "A3 OK FETCH completed\r\n",
+        ].joined()
+        await stream.enqueue(envelopeLine)
+
+        let fetched = try await client.topEnvelopes(folder: "INBOX", limit: 50, totalMessages: 19)
+        XCTAssertEqual(fetched.count, 1)
+        XCTAssertEqual(fetched.first?.uid, 784)
+
+        let outbound = await stream.outboundString
+        XCTAssertTrue(outbound.contains("FETCH 1:* "), "expected sequence FETCH 1:*, got: \(outbound)")
+        XCTAssertFalse(outbound.contains("UID FETCH"), "top-page fetch must not use UID FETCH")
+    }
+
+    func testTopEnvelopesClampsStartWhenExceedingLimit() async throws {
+        let stream = ScriptedByteStream()
+        let client = LiveImapClient(
+            factory: ScriptedConnectionFactory(stream: stream),
+            authService: StubAuthService()
+        )
+        try await signIn(on: client, stream: stream)
+
+        await stream.enqueue("* 200000 EXISTS\r\n")
+        await stream.enqueue("A2 OK [READ-WRITE] SELECT completed\r\n")
+        await stream.enqueue("A3 OK FETCH completed\r\n")
+
+        _ = try await client.topEnvelopes(folder: "INBOX", limit: 50, totalMessages: 200_000)
+
+        let outbound = await stream.outboundString
+        XCTAssertTrue(outbound.contains("FETCH 199951:* "), "expected FETCH 199951:*, got: \(outbound)")
+    }
+
+    func testTopEnvelopesSkipsWireWhenFolderEmpty() async throws {
+        let stream = ScriptedByteStream()
+        let client = LiveImapClient(
+            factory: ScriptedConnectionFactory(stream: stream),
+            authService: StubAuthService()
+        )
+        try await signIn(on: client, stream: stream)
+
+        let fetched = try await client.topEnvelopes(folder: "INBOX", limit: 50, totalMessages: 0)
+        XCTAssertTrue(fetched.isEmpty)
+
+        let outbound = await stream.outboundString
+        XCTAssertFalse(outbound.contains("SELECT"))
+        XCTAssertFalse(outbound.contains("FETCH"))
+    }
+}
