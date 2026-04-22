@@ -295,7 +295,7 @@
   cursor: pointer;
 }
 
-.editor-mode-tab.active {
+.editor-mode-tab.is-active {
   color: var(--accent);
   background: var(--accent-soft);
 }

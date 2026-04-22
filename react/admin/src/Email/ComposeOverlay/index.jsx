@@ -647,10 +647,10 @@ function ComposeOverlay({
         <div className="compose-editor">
           <div className="editor-mode-tabs">
             <button type="button"
-              className={`editor-mode-tab ${editorMode === 'rich' ? 'active' : ''}`}
+              className={`editor-mode-tab ${editorMode === 'rich' ? 'is-active' : ''}`}
               onClick={() => setEditorMode('rich')}>Rich Text</button>
             <button type="button"
-              className={`editor-mode-tab ${editorMode === 'markdown' ? 'active' : ''}`}
+              className={`editor-mode-tab ${editorMode === 'markdown' ? 'is-active' : ''}`}
               onClick={() => setEditorMode('markdown')}>Markdown</button>
           </div>
           <div className={`editor-pane ${editorMode === 'rich' ? '' : 'editor-pane-hidden'}`}>
