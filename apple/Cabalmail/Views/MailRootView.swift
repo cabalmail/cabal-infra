@@ -47,8 +47,7 @@ struct MailRootView: View {
             if let selectedFolder, let selectedEnvelope {
                 MessageDetailView(
                     folder: selectedFolder,
-                    envelope: selectedEnvelope,
-                    onDispose: { self.selectedEnvelope = nil }
+                    envelope: selectedEnvelope
                 )
                 .id("\(selectedFolder.path)#\(selectedEnvelope.uid)")
             } else {
