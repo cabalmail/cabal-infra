@@ -11,6 +11,10 @@
   margin: 0 auto;
   padding: 1.2em 1.4em 2em;
   color: var(--ink);
+  /* Match Dmarc.css: body is pinned to the viewport with overflow:hidden
+     (see Email.css), so the page must scroll itself. */
+  overflow: auto;
+  max-height: calc(100vh - 7em);
 }
 
 .admin-addresses__header {
