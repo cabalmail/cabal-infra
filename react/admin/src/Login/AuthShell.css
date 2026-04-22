@@ -52,6 +52,7 @@
   width: 72px;
   border-radius: var(--radius-sm);
   overflow: hidden;
+  padding: 4px;
 }
 
 @media (prefers-color-scheme: dark) {
