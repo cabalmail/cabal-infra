@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.3] - 2026-04-22
+
+### Fixed
+
+- Apple client: `MimeParser.findBlankLine` no longer traps on empty input. The recursive `MimeParser.parse` can be handed an empty `Data` when `splitMultipart` trims a sub-part down to nothing — most reliably reproduced by Microsoft-originated DMARC aggregate reports, whose `multipart/alternative` tree begins with a body-less sub-part. Before the fix, `0..<(bytes.count - 1)` became `0..<-1` and tripped Swift's `Range requires lowerBound <= upperBound` runtime check (`EXC_BREAKPOINT` / `SIGTRAP`), crashing the detail view the moment a DMARC report was opened on both iOS and macOS. Now guarded with `bytes.count >= 2`; regression coverage in `MimeParserTests.testMultipartWithEmptyLeadingSubPartDoesNotCrash`.
+
 ## [0.6.2] - 2026-04-22
 
 ### Fixed
