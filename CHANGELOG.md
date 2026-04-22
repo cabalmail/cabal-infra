@@ -97,6 +97,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.7.0] - Unreleased
 
+## [0.6.4] - 2026-04-22
+
+### Added
+
+- Apple client: the folder message list now refreshes on a 60-second wall-clock timer while it is on screen, in addition to the existing IMAP IDLE push. IDLE usually delivers new mail within seconds, but long-lived IDLE sockets can stall silently — iOS suspends idle connections while the app is foregrounded but network-idle, cellular ↔ WiFi handoffs drop the stream without surfacing an error, and some middleboxes time out TCP idle after a few minutes. The net effect was that users had to pull-to-refresh to see new messages even with the app in the foreground. A second SwiftUI `.task` on `MessageListView` sleeps 60 s and calls `MessageListViewModel.refresh()`; `.task` auto-cancels on `.onDisappear` so the timer starts and stops together with the IDLE watcher and doesn't hold a connection open for a mailbox the user isn't looking at.
+- Apple client: the app icon now shows a badge with the Inbox unread count on iOS / iPadOS / visionOS (home-screen icon) and macOS (dock tile). `AppState` owns an independent poller that runs while signed in, requests `.badge` authorization via `UNUserNotificationCenter` on first start (silently no-ops on denial or repeat calls), polls `STATUS (UNSEEN)` on `INBOX` every 60 seconds, and pushes the count through `UNUserNotificationCenter.setBadgeCount(_:)`. The poll is independent of which folder the user is viewing, so the badge stays current even while Drafts/Sent are on screen. Started at the `.signedIn` transition of both `signIn()` and `restoreIfPossible()`; stopped (and the badge cleared) at the start of `signOut()` so the icon doesn't keep showing the previous user's count. Transient network failures leave the prior badge value in place until the next successful poll. The authoritative count is also exposed as an `AppState.inboxUnreadCount` observable for future in-app indicators.
+
 ## [0.6.3] - 2026-04-22
 
 ### Added
