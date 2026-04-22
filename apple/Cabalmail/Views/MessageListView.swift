@@ -46,6 +46,20 @@ struct MessageListView: View {
                 await model?.startWatching()
             }
         }
+        // Wall-clock fallback refresh. IDLE usually pushes new mail within
+        // seconds, but long-lived IDLE sockets can stall silently (iOS
+        // suspends idle connections, cellular handoffs drop the stream,
+        // NAT/middleboxes time out TCP after a few minutes). Polling every
+        // 60 seconds while the list is on screen guarantees the user sees
+        // new mail without pull-to-refresh. `.task` cancels automatically
+        // on `.onDisappear`, so the timer stops with the watcher.
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(60))
+                guard !Task.isCancelled else { break }
+                await model?.refresh()
+            }
+        }
         .onDisappear {
             // Tear down the IDLE watcher when the folder drops off-screen.
             // The view is rebuilt (via `.id(folder.path)` in MailRootView)
