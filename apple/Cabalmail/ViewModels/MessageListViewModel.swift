@@ -122,41 +122,16 @@ final class MessageListViewModel {
                 lowestUID = nil
             }
             self.uidValidity = uidValidity
-            let startUID = uidNext > pageSize ? uidNext - pageSize : 1
-            let upperUID = max(uidNext, startUID)
-            let fetched = try await client.imapClient.envelopes(
+            // Top page uses sequence-number FETCH via `topEnvelopes` — see
+            // the protocol doc for why UID range fetches go wrong on sparse
+            // folders. `loadMoreIfNeeded` handles older pages by UID.
+            let messages = UInt32(max(0, status.messages ?? 0))
+            let fetched = try await client.imapClient.topEnvelopes(
                 folder: folder.path,
-                range: startUID...upperUID
+                limit: pageSize,
+                totalMessages: messages
             )
-            // Prune any in-memory envelope in the refresh window that the
-            // server didn't return — those UIDs were moved or expunged
-            // (e.g. archived from another device, or by this client before
-            // a crash). Without this, pull-to-refresh never clears stale
-            // rows and "my archived messages still show up in INBOX" after
-            // a relaunch becomes permanent.
-            let fetchedUIDs = Set(fetched.map(\.uid))
-            let disappeared = envelopes
-                .map(\.uid)
-                .filter { uid in uid >= startUID && uid <= upperUID && !fetchedUIDs.contains(uid) }
-            if !disappeared.isEmpty {
-                envelopes.removeAll { disappeared.contains($0.uid) }
-                for uid in disappeared {
-                    await client.bodyCache.remove(
-                        folder: folder.path,
-                        uidValidity: uidValidity,
-                        uid: uid
-                    )
-                }
-            }
-            mergeFetched(fetched)
-            lowestUID = envelopes.map(\.uid).min() ?? lowestUID
-            hasMore = (lowestUID ?? 0) > 1
-            try await persistRefresh(
-                uidValidity: uidValidity,
-                uidNext: uidNext,
-                fetched: fetched,
-                keepingRange: startUID...upperUID
-            )
+            try await applyRefreshPage(fetched, uidNext: uidNext, uidValidity: uidValidity)
             errorMessage = nil
         } catch let error as CabalmailError {
             errorMessage = String(describing: error)
@@ -374,17 +349,36 @@ extension MessageListViewModel {
         )
     }
 
-    /// Persist the refresh window using `replace(..., keepingRange:)` so
-    /// UIDs missing from the server's response are pruned from the cache
-    /// as well as the in-memory list. Older pages outside the refresh
-    /// window are preserved — the caller typically fetches only the top
-    /// `pageSize` UIDs.
-    private func persistRefresh(
-        uidValidity: UInt32,
+    /// Merges a top-page fetch into in-memory state and the envelope cache.
+    /// `keepingRange` covers `min(fetched.uid)...uidNext`: any in-memory
+    /// envelope in that band but missing from the fetch was moved or
+    /// expunged elsewhere. An empty fetch means the folder is empty, so we
+    /// replace the full cache.
+    func applyRefreshPage(
+        _ fetched: [Envelope],
         uidNext: UInt32,
-        fetched: [Envelope],
-        keepingRange: ClosedRange<UInt32>
+        uidValidity: UInt32
     ) async throws {
+        let fetchedUIDs = Set(fetched.map(\.uid))
+        let keepingRange: ClosedRange<UInt32>? = fetched
+            .map(\.uid).min()
+            .map { lower in lower...max(uidNext, lower) }
+        let disappeared: [UInt32] = keepingRange.map { range in
+            envelopes.map(\.uid).filter { range.contains($0) && !fetchedUIDs.contains($0) }
+        } ?? envelopes.map(\.uid)
+        if !disappeared.isEmpty {
+            envelopes.removeAll { disappeared.contains($0.uid) }
+            for uid in disappeared {
+                await client.bodyCache.remove(
+                    folder: folder.path,
+                    uidValidity: uidValidity,
+                    uid: uid
+                )
+            }
+        }
+        mergeFetched(fetched)
+        lowestUID = envelopes.map(\.uid).min() ?? lowestUID
+        hasMore = (lowestUID ?? 0) > 1
         try await client.envelopeCache.replace(
             envelopes: fetched,
             uidValidity: uidValidity,
