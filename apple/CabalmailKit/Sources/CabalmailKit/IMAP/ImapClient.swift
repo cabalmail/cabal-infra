@@ -20,6 +20,18 @@ public protocol ImapClient: Sendable {
     func unsubscribe(path: String) async throws
     func status(path: String) async throws -> FolderStatus
     func envelopes(folder: String, range: ClosedRange<UInt32>) async throws -> [Envelope]
+
+    /// Fetches up to `limit` most-recent envelopes by sequence number. Use
+    /// this for the first/top page of a folder — a UID range window can
+    /// return fewer envelopes than requested when UIDs are sparse after
+    /// expunges (long-lived Inboxes with mixed archive/delete traffic
+    /// routinely hit this), because the window `(UIDNEXT - N)...UIDNEXT`
+    /// assumes UIDs are dense. Sequence numbers are always contiguous, so
+    /// `(totalMessages - limit + 1):*` always yields up to `limit` actual
+    /// messages. `totalMessages` comes from a prior `STATUS` (MESSAGES) or
+    /// `SELECT`'s EXISTS response; a count of 0 returns `[]` without
+    /// touching the wire.
+    func topEnvelopes(folder: String, limit: UInt32, totalMessages: UInt32) async throws -> [Envelope]
     func fetchBody(folder: String, uid: UInt32) async throws -> RawMessage
     func fetchPart(folder: String, uid: UInt32, partId: String) async throws -> Data
     func setFlags(folder: String, uids: [UInt32], flags: Set<Flag>, operation: FlagOperation) async throws
