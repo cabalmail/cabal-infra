@@ -45,8 +45,12 @@ struct MailRootView: View {
             }
         } detail: {
             if let selectedFolder, let selectedEnvelope {
-                MessageDetailView(folder: selectedFolder, envelope: selectedEnvelope)
-                    .id("\(selectedFolder.path)#\(selectedEnvelope.uid)")
+                MessageDetailView(
+                    folder: selectedFolder,
+                    envelope: selectedEnvelope,
+                    onDispose: { self.selectedEnvelope = nil }
+                )
+                .id("\(selectedFolder.path)#\(selectedEnvelope.uid)")
             } else {
                 ContentUnavailableView(
                     "No message selected",
