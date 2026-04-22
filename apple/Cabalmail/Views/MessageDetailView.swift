@@ -16,10 +16,6 @@ import CabalmailKit
 struct MessageDetailView: View {
     let folder: Folder
     let envelope: Envelope
-    /// Called after a successful archive/trash from the detail toolbar so
-    /// the split-view parent can clear the envelope selection. The list
-    /// pruning happens via the `AppState.lastDisposedEnvelope` signal.
-    var onDispose: () -> Void = {}
 
     @Environment(AppState.self) private var appState
     @Environment(Preferences.self) private var preferences
@@ -222,7 +218,6 @@ struct MessageDetailView: View {
                                 folderPath: folder.path,
                                 uid: envelope.uid
                             )
-                            onDispose()
                         }
                     }
                 } label: {
