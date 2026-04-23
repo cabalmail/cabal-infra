@@ -123,6 +123,10 @@ New AWS accounts are placed in the SNS SMS sandbox, which restricts SMS delivery
 
 Until production access is granted, you can test SMS by adding destination phone numbers to the sandbox via the SNS console under **Text messaging > Sandbox destination phone numbers**.
 
+## Monitoring & Alerting (Optional)
+
+Cabalmail ships with an optional monitoring stack (Uptime Kuma + SMS alerting via an `alert_sms` Lambda) that is disabled by default. To turn it on, set `TF_VAR_MONITORING=true` and populate `TF_VAR_ON_CALL_PHONE_NUMBERS` in your GitHub Actions environment, then follow [the monitoring setup guide](./monitoring.md) to confirm SMS subscriptions, create the Kuma admin user, wire the webhook provider, and add the Phase 1 monitors. The guide also covers shared-secret rotation and cleanly disabling the stack.
+
 ## Port 25 Block (What to do with the `relay_ips` output)
 
 The output contains the IP address of each of your outgoing mail relays. (More specifically, it's the elastic IP addresses used for egress on the NAT gateway.) In order to send mail reliably, you must get AWS to allow outbound traffic on port 25. There is no API for this, so the process cannot be automated. Instead, you must fill out [this form](https://console.aws.amazon.com/support/contacts?#/rdns-limits).

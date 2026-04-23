@@ -1,0 +1,40 @@
+# ── Public ALB with Cognito authenticate-oidc in front of Kuma ─
+
+#tfsec:ignore:aws-elb-alb-not-public
+resource "aws_lb" "uptime" {
+  name               = "cabal-uptime-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb.id]
+  subnets            = var.public_subnet_ids
+
+  drop_invalid_header_fields = true
+}
+
+resource "aws_lb_listener" "https" {
+  load_balancer_arn = aws_lb.uptime.arn
+  port              = 443
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+  certificate_arn   = var.cert_arn
+
+  default_action {
+    type  = "authenticate-cognito"
+    order = 1
+
+    authenticate_cognito {
+      user_pool_arn              = var.user_pool_arn
+      user_pool_client_id        = aws_cognito_user_pool_client.kuma.id
+      user_pool_domain           = var.user_pool_domain
+      scope                      = "openid email profile"
+      on_unauthenticated_request = "authenticate"
+      session_timeout            = 43200
+    }
+  }
+
+  default_action {
+    type             = "forward"
+    order            = 2
+    target_group_arn = aws_lb_target_group.kuma.arn
+  }
+}
