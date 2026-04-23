@@ -13,6 +13,7 @@ final class PreferencesTests: XCTestCase {
         XCTAssertEqual(preferences.signature, "")
         XCTAssertEqual(preferences.disposeAction, .archive)
         XCTAssertEqual(preferences.theme, .system)
+        XCTAssertEqual(preferences.defaultBodyRenderMode, .original)
     }
 
     func testDisposeActionDestinationFolders() {
@@ -32,6 +33,7 @@ final class PreferencesTests: XCTestCase {
         preferences.signature = "-- sent from iOS"
         preferences.disposeAction = .trash
         preferences.theme = .dark
+        preferences.defaultBodyRenderMode = .reader
 
         XCTAssertEqual(
             store.stringValue(forKey: Preferences.Key.markAsRead.rawValue),
@@ -56,6 +58,10 @@ final class PreferencesTests: XCTestCase {
         XCTAssertEqual(
             store.stringValue(forKey: Preferences.Key.theme.rawValue),
             "dark"
+        )
+        XCTAssertEqual(
+            store.stringValue(forKey: Preferences.Key.defaultBodyRenderMode.rawValue),
+            "reader"
         )
     }
 
@@ -116,6 +122,7 @@ final class PreferencesTests: XCTestCase {
             Preferences.Key.signature.rawValue: "Best,\nAlice",
             Preferences.Key.disposeAction.rawValue: "trash",
             Preferences.Key.theme.rawValue: "light",
+            Preferences.Key.defaultBodyRenderMode.rawValue: "reader",
         ])
         let preferences = Preferences(store: store)
         XCTAssertEqual(preferences.markAsRead, .afterDelay)
@@ -124,6 +131,7 @@ final class PreferencesTests: XCTestCase {
         XCTAssertEqual(preferences.signature, "Best,\nAlice")
         XCTAssertEqual(preferences.disposeAction, .trash)
         XCTAssertEqual(preferences.theme, .light)
+        XCTAssertEqual(preferences.defaultBodyRenderMode, .reader)
     }
 
     /// Garbage values in the store (wire drift, a legacy build, a typo) fall
