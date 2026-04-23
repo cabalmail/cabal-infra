@@ -75,6 +75,21 @@ public enum AppTheme: String, Codable, Sendable, CaseIterable, Identifiable {
     public var id: String { rawValue }
 }
 
+/// Default rendering mode when a message's HTML body first appears.
+///
+/// `.original` hands the author's HTML to `WKWebView` untouched (minus the
+/// tracker-pixel blocker). `.reader` prepends a stylesheet that overrides
+/// author CSS — system font, capped line length, dark-mode aware — for a
+/// Safari Reader-style presentation. The user can still flip modes per-
+/// message from the detail toolbar; this preference only chooses which side
+/// of the toggle the detail view lands on when it opens.
+public enum BodyRenderMode: String, Codable, Sendable, CaseIterable, Identifiable {
+    case original
+    case reader
+
+    public var id: String { rawValue }
+}
+
 // MARK: - Storage protocol
 
 /// Minimal key/value surface `Preferences` needs from its backing store.
@@ -124,6 +139,7 @@ public final class Preferences {
         case disposeAction = "cabalmail.prefs.dispose_action"
         case theme = "cabalmail.prefs.theme"
         case crashReportingEnabled = "cabalmail.prefs.crash_reporting_enabled"
+        case defaultBodyRenderMode = "cabalmail.prefs.default_body_render_mode"
     }
 
     public var markAsRead: MarkAsReadBehavior {
@@ -156,6 +172,9 @@ public final class Preferences {
     public var crashReportingEnabled: Bool {
         didSet { persist(.crashReportingEnabled, crashReportingEnabled ? "1" : "0") }
     }
+    public var defaultBodyRenderMode: BodyRenderMode {
+        didSet { persist(.defaultBodyRenderMode, defaultBodyRenderMode.rawValue) }
+    }
 
     private let store: PreferenceStore
     private var isReloading = false
@@ -177,6 +196,9 @@ public final class Preferences {
         self.crashReportingEnabled = store.stringValue(
             forKey: Key.crashReportingEnabled.rawValue
         ) == "1"
+        self.defaultBodyRenderMode = Self.readEnum(
+            .defaultBodyRenderMode, store: store, default: .original
+        )
         store.startObserving { [weak self] in
             self?.reload()
         }
@@ -198,6 +220,9 @@ public final class Preferences {
         crashReportingEnabled = store.stringValue(
             forKey: Key.crashReportingEnabled.rawValue
         ) == "1"
+        defaultBodyRenderMode = Self.readEnum(
+            .defaultBodyRenderMode, store: store, default: .original
+        )
     }
 
     private func persist(_ key: Key, _ value: String?) {

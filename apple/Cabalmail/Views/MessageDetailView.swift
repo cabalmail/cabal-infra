@@ -131,7 +131,8 @@ struct MessageDetailView: View {
             HTMLBodyView(
                 html: html,
                 inlineImages: model.inlineImages,
-                allowRemote: model.remoteContentAllowed
+                allowRemote: model.remoteContentAllowed,
+                readerMode: model.readerMode
             )
         } else if let plain = model.plainText {
             // `.primary` foreground adapts to light/dark mode and gives
@@ -205,6 +206,22 @@ struct MessageDetailView: View {
                             model.remoteContentAllowed
                             ? "Hide remote content"
                             : "Show remote content"
+                        )
+                }
+            }
+        }
+        ToolbarItem {
+            if let model, model.htmlBody != nil {
+                Button {
+                    model.toggleReaderMode()
+                } label: {
+                    Image(systemName: model.readerMode
+                          ? "text.alignleft"
+                          : "doc.richtext")
+                        .accessibilityLabel(
+                            model.readerMode
+                            ? "Show original formatting"
+                            : "Show reader view"
                         )
                 }
             }
