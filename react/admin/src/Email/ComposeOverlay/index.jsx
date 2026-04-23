@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
-  Minus, Maximize2, Minimize2, X, Paperclip,
+  Minus, Maximize2, Minimize2, X,
 } from 'lucide-react';
 import './ComposeOverlay.css';
 import { ADDRESS_LIST } from '../../constants';
@@ -681,26 +681,9 @@ function ComposeOverlay({
             onClick={handleSend}
             disabled={sending}
           >{sending ? 'Sending…' : 'Send'}</button>
-          <button
-            type="button"
-            className="compose-icon-btn"
-            title="Attach file"
-            aria-label="Attach file"
-          >
-            <Paperclip size={16} />
-          </button>
         </div>
         <div className="compose-bottom__right">
           <span className="compose-saved" aria-live="polite">{savedLabel}</span>
-          <button
-            type="button"
-            className="compose-icon-btn"
-            onClick={handleDiscard}
-            aria-label="Discard"
-            title="Discard"
-          >
-            <X size={16} />
-          </button>
         </div>
       </div>
     </form>

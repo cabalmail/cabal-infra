@@ -488,26 +488,6 @@
   cursor: progress;
 }
 
-.compose-icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  margin: 0;
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-sm);
-  color: var(--ink-soft);
-  cursor: pointer;
-}
-
-.compose-icon-btn:hover {
-  background: color-mix(in oklch, var(--ink) 8%, transparent);
-  color: var(--ink);
-}
-
 .compose-saved {
   color: var(--ink-quiet);
   font-family: var(--font-ui);

@@ -59,7 +59,7 @@ describe('ComposeOverlay', () => {
     vi.clearAllMocks();
   });
 
-  it('renders floating chrome with From, To, Subject, Send, and Discard', async () => {
+  it('renders floating chrome with From, To, Subject, Send, and Close', async () => {
     const { unmount } = renderCompose();
     try {
       expect(screen.getByText('New message')).toBeInTheDocument();
@@ -67,7 +67,7 @@ describe('ComposeOverlay', () => {
       expect(screen.getByLabelText('Recipients')).toBeInTheDocument();
       expect(screen.getByLabelText('Subject')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Send' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Discard' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Minimize' })).toBeInTheDocument();
       await act(async () => { await Promise.resolve(); });
     } finally {
@@ -155,17 +155,6 @@ describe('ComposeOverlay', () => {
       await waitFor(() => {
         expect(screen.getByLabelText('Cc')).toBeInTheDocument();
       });
-    } finally {
-      unmount();
-    }
-  });
-
-  it('calls hide when Discard is clicked', async () => {
-    const hide = vi.fn();
-    const { unmount } = renderCompose({ hide });
-    try {
-      fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
-      expect(hide).toHaveBeenCalled();
     } finally {
       unmount();
     }
