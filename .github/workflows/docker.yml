@@ -30,7 +30,7 @@ jobs:
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     strategy:
       matrix:
-        tier: [imap, smtp-in, smtp-out]
+        tier: [imap, smtp-in, smtp-out, uptime-kuma]
     steps:
     - name: checkout
       uses: actions/checkout@v4

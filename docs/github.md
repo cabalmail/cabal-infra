@@ -31,6 +31,8 @@ After signing up and logging in, [fork this repository](https://docs.github.com/
     | TF_VAR_ENVIRONMENT        | production                                                       |
     | TF_VAR_IMAP_SCALE         | { min = 1, max = 1, des = 1, size = \\"t3.small\\" }             |
     | TF_VAR_MAIL_DOMAINS       | [\\"example.com\\",\\"example.org\\"]                            |
+    | TF_VAR_MONITORING         | false                                                            |
+    | TF_VAR_ON_CALL_PHONE_NUMBERS | []                                                            |
     | TF_VAR_PROD               | true                                                             |
     | TF_VAR_REPO               | https://github.com/your-account/cabal-infra                      |
     | TF_VAR_SMTPIN_SCALE       | { min = 1, max = 1, des = 1, size = \\"t2.micro\\" }             |

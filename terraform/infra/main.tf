@@ -110,9 +110,12 @@ module "efs" {
   private_subnet_ids = module.vpc.private_subnets[*].id
 }
 
-# Creates ECR repositories for containerized mail services
+# Creates ECR repositories for containerized mail services. The uptime-kuma
+# repo exists regardless of var.monitoring so that the Docker workflow can
+# push images unconditionally; only the ECS service is gated by the flag.
 module "ecr" {
-  source = "./modules/ecr"
+  source             = "./modules/ecr"
+  extra_repositories = ["uptime-kuma"]
 }
 
 # ECS cluster, services, and task definitions for containerized mail tiers.
@@ -147,13 +150,13 @@ module "ecs" {
 
 # Runs certbot on a schedule to renew Let's Encrypt certificates and restart ECS services
 module "certbot_renewal" {
-  source         = "./modules/certbot_renewal"
-  control_domain = var.control_domain
-  zone_id        = data.terraform_remote_state.zone.outputs.control_domain_zone_id
-  email          = var.email
-  prod           = var.prod
-  region         = var.aws_region
-  ecs_cluster_name  = module.ecs.cluster_name
+  source           = "./modules/certbot_renewal"
+  control_domain   = var.control_domain
+  zone_id          = data.terraform_remote_state.zone.outputs.control_domain_zone_id
+  email            = var.email
+  prod             = var.prod
+  region           = var.aws_region
+  ecs_cluster_name = module.ecs.cluster_name
   ecs_service_names = [
     module.ecs.imap_service_name,
     module.ecs.smtp_in_service_name,
@@ -167,4 +170,35 @@ module "backup" {
   count  = var.backup ? 1 : 0
   table  = module.table.table_arn
   efs    = module.efs.efs_arn
+}
+
+# Phase 1 monitoring & alerting (0.7.0). See docs/0.7.0/monitoring-plan.md.
+module "monitoring" {
+  source = "./modules/monitoring"
+  count  = var.monitoring ? 1 : 0
+
+  control_domain     = var.control_domain
+  region             = var.aws_region
+  vpc_id             = module.vpc.vpc.id
+  vpc_cidr_block     = module.vpc.vpc.cidr_block
+  public_subnet_ids  = module.vpc.public_subnets[*].id
+  private_subnet_ids = module.vpc.private_subnets[*].id
+  zone_id            = data.terraform_remote_state.zone.outputs.control_domain_zone_id
+  cert_arn           = module.cert.cert_arn
+
+  ecs_cluster_id                = module.ecs.cluster_arn
+  ecs_cluster_capacity_provider = module.ecs.capacity_provider_name
+  efs_id                        = module.efs.efs_id
+
+  ecr_repository_url = module.ecr.repository_urls["uptime-kuma"]
+  image_tag          = data.aws_ssm_parameter.deployed_image_tag.value
+
+  user_pool_id     = module.pool.user_pool_id
+  user_pool_arn    = module.pool.user_pool_arn
+  user_pool_domain = module.pool.user_pool_domain
+
+  lambda_bucket         = module.bucket.bucket
+  on_call_phone_numbers = var.on_call_phone_numbers
+  ses_email_from        = var.email
+  ses_email_to          = var.email
 }
