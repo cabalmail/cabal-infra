@@ -125,7 +125,7 @@ Until production access is granted, you can test SMS by adding destination phone
 
 ## Monitoring & Alerting (Optional)
 
-Cabalmail ships with an optional monitoring stack (Uptime Kuma + SMS alerting via an `alert_sms` Lambda) that is disabled by default. To turn it on, set `TF_VAR_MONITORING=true` and populate `TF_VAR_ON_CALL_PHONE_NUMBERS` in your GitHub Actions environment, then follow [the monitoring setup guide](./monitoring.md) to confirm SMS subscriptions, create the Kuma admin user, wire the webhook provider, and add the Phase 1 monitors. The guide also covers shared-secret rotation and cleanly disabling the stack.
+Cabalmail ships with an optional monitoring stack (Uptime Kuma + self-hosted ntfy + an `alert_sink` Lambda that fans out to Pushover and ntfy push notifications) that is disabled by default. To turn it on, set `TF_VAR_MONITORING=true` in your GitHub Actions environment, then follow [the monitoring setup guide](./monitoring.md) to create your Pushover account, seed the SSM secrets, bootstrap the ntfy admin user, create the Kuma admin user, wire the webhook provider, and add the Phase 1 monitors. The guide also covers secret rotation and cleanly disabling the stack.
 
 ## Port 25 Block (What to do with the `relay_ips` output)
 

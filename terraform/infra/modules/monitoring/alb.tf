@@ -1,4 +1,9 @@
-# ── Public ALB with Cognito authenticate-oidc in front of Kuma ─
+# ── Public ALB fronting Kuma (Cognito-auth) and ntfy (no auth) ─
+#
+# Default listener action forwards to Kuma with Cognito authenticate-oidc.
+# A host-header listener rule peels off requests to ntfy.<control-domain>
+# and forwards them to ntfy without any ALB-level auth; ntfy enforces its
+# own bearer-token auth.
 
 #tfsec:ignore:aws-elb-alb-not-public
 resource "aws_lb" "uptime" {
@@ -36,5 +41,22 @@ resource "aws_lb_listener" "https" {
     type             = "forward"
     order            = 2
     target_group_arn = aws_lb_target_group.kuma.arn
+  }
+}
+
+#tfsec:ignore:aws-elb-http-not-used
+resource "aws_lb_listener_rule" "ntfy" {
+  listener_arn = aws_lb_listener.https.arn
+  priority     = 100
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.ntfy.arn
+  }
+
+  condition {
+    host_header {
+      values = ["ntfy.${var.control_domain}"]
+    }
   }
 }

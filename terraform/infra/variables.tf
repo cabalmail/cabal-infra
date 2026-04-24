@@ -85,20 +85,8 @@ variable "backup" {
 
 variable "monitoring" {
   type        = bool
-  description = "Whether to deploy the monitoring & alerting stack (Uptime Kuma, alert_sms Lambda, SNS alerts topic). Defaults to false."
+  description = "Whether to deploy the monitoring & alerting stack (Uptime Kuma, self-hosted ntfy, alert_sink Lambda). Defaults to false."
   default     = false
-}
-
-variable "on_call_phone_numbers" {
-  type        = list(string)
-  description = "E.164-formatted phone numbers that receive alert SMS messages when monitoring is enabled. Ignored when monitoring is false."
-  default     = []
-  validation {
-    condition = alltrue([
-      for n in var.on_call_phone_numbers : can(regex("^\\+[1-9][0-9]{7,14}$", n))
-    ])
-    error_message = "Each phone number must be E.164 format, e.g. +14155551212."
-  }
 }
 
 

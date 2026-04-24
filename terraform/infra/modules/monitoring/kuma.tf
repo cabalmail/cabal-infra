@@ -74,7 +74,7 @@ resource "aws_ecs_task_definition" "kuma" {
 
   container_definitions = jsonencode([{
     name              = "uptime-kuma"
-    image             = "${var.ecr_repository_url}:${var.image_tag}"
+    image             = "${var.kuma_ecr_repository_url}:${var.image_tag}"
     essential         = true
     memoryReservation = 256
     memory            = 512

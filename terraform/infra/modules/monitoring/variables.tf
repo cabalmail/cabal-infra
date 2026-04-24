@@ -1,6 +1,6 @@
 variable "control_domain" {
   type        = string
-  description = "Control domain; used to derive uptime.<control-domain>."
+  description = "Control domain; used to derive uptime.<control-domain> and ntfy.<control-domain>."
 }
 
 variable "region" {
@@ -15,17 +15,17 @@ variable "vpc_id" {
 
 variable "vpc_cidr_block" {
   type        = string
-  description = "VPC CIDR block. Used to allow the ALB to reach the Kuma task."
+  description = "VPC CIDR block. Used to allow the ALB to reach the Kuma and ntfy tasks."
 }
 
 variable "public_subnet_ids" {
   type        = list(string)
-  description = "Public subnet IDs for the uptime ALB."
+  description = "Public subnet IDs for the monitoring ALB."
 }
 
 variable "private_subnet_ids" {
   type        = list(string)
-  description = "Private subnet IDs for the Kuma ECS task."
+  description = "Private subnet IDs for the Kuma and ntfy ECS tasks."
 }
 
 variable "zone_id" {
@@ -40,27 +40,32 @@ variable "cert_arn" {
 
 variable "ecs_cluster_id" {
   type        = string
-  description = "ID of the ECS cluster that hosts Uptime Kuma."
+  description = "ID of the ECS cluster that hosts Uptime Kuma and ntfy."
 }
 
 variable "ecs_cluster_capacity_provider" {
   type        = string
-  description = "Name of the ECS capacity provider to place the Kuma task on."
+  description = "Name of the ECS capacity provider to place the monitoring tasks on."
 }
 
 variable "efs_id" {
   type        = string
-  description = "EFS file system ID used for Kuma's persistent SQLite state."
+  description = "EFS file system ID used for Kuma and ntfy persistent state."
 }
 
-variable "ecr_repository_url" {
+variable "kuma_ecr_repository_url" {
   type        = string
   description = "ECR repository URL for the uptime-kuma image."
 }
 
+variable "ntfy_ecr_repository_url" {
+  type        = string
+  description = "ECR repository URL for the ntfy image."
+}
+
 variable "image_tag" {
   type        = string
-  description = "Image tag to deploy for uptime-kuma, shared with the mail tiers."
+  description = "Image tag to deploy for the monitoring services, shared with the mail tiers."
 }
 
 variable "user_pool_id" {
@@ -80,23 +85,11 @@ variable "user_pool_domain" {
 
 variable "lambda_bucket" {
   type        = string
-  description = "S3 bucket holding the alert_sms Lambda zip (built by build-api.sh)."
+  description = "S3 bucket holding the alert_sink Lambda zip (built by build-api.sh)."
 }
 
-variable "on_call_phone_numbers" {
-  type        = list(string)
-  description = "E.164-formatted phone numbers to receive alert SMS. Empty list disables SMS subscriptions."
-  default     = []
-}
-
-variable "ses_email_from" {
+variable "ntfy_topic" {
   type        = string
-  description = "From: address used for warning-severity email alerts. Empty disables email fallback."
-  default     = ""
-}
-
-variable "ses_email_to" {
-  type        = string
-  description = "To: address for warning-severity email alerts. Empty disables email fallback."
-  default     = ""
+  description = "ntfy topic name that alert_sink publishes to. Must match the topic the admin user has publish access on."
+  default     = "alerts"
 }

@@ -174,7 +174,6 @@ jobs:
         echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
         echo "backup = ${{ vars.TF_VAR_BACKUP }}" >> terraform.tfvars
         echo "monitoring = ${{ vars.TF_VAR_MONITORING }}" >> terraform.tfvars
-        echo "on_call_phone_numbers = ${{ vars.TF_VAR_ON_CALL_PHONE_NUMBERS }}" >> terraform.tfvars
         echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
@@ -224,7 +223,6 @@ jobs:
         echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
         echo "backup = ${{ vars.TF_VAR_BACKUP }}" >> terraform.tfvars
         echo "monitoring = ${{ vars.TF_VAR_MONITORING }}" >> terraform.tfvars
-        echo "on_call_phone_numbers = ${{ vars.TF_VAR_ON_CALL_PHONE_NUMBERS }}" >> terraform.tfvars
         echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
     - name: init-terraform
       run: terraform init

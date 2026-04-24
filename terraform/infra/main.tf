@@ -110,12 +110,13 @@ module "efs" {
   private_subnet_ids = module.vpc.private_subnets[*].id
 }
 
-# Creates ECR repositories for containerized mail services. The uptime-kuma
-# repo exists regardless of var.monitoring so that the Docker workflow can
-# push images unconditionally; only the ECS service is gated by the flag.
+# Creates ECR repositories for containerized mail services. The monitoring
+# repos (uptime-kuma, ntfy) exist regardless of var.monitoring so the Docker
+# workflow can push images unconditionally; only the ECS services are gated
+# by the flag.
 module "ecr" {
   source             = "./modules/ecr"
-  extra_repositories = ["uptime-kuma"]
+  extra_repositories = ["uptime-kuma", "ntfy"]
 }
 
 # ECS cluster, services, and task definitions for containerized mail tiers.
@@ -190,15 +191,13 @@ module "monitoring" {
   ecs_cluster_capacity_provider = module.ecs.capacity_provider_name
   efs_id                        = module.efs.efs_id
 
-  ecr_repository_url = module.ecr.repository_urls["uptime-kuma"]
-  image_tag          = data.aws_ssm_parameter.deployed_image_tag.value
+  kuma_ecr_repository_url = module.ecr.repository_urls["uptime-kuma"]
+  ntfy_ecr_repository_url = module.ecr.repository_urls["ntfy"]
+  image_tag               = data.aws_ssm_parameter.deployed_image_tag.value
 
   user_pool_id     = module.pool.user_pool_id
   user_pool_arn    = module.pool.user_pool_arn
   user_pool_domain = module.pool.user_pool_domain
 
-  lambda_bucket         = module.bucket.bucket
-  on_call_phone_numbers = var.on_call_phone_numbers
-  ses_email_from        = var.email
-  ses_email_to          = var.email
+  lambda_bucket = module.bucket.bucket
 }
