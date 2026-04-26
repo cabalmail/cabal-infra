@@ -285,7 +285,6 @@ Configured in Kuma at first boot (manually for Phase 1; Phase 4 considers IaC fo
 | API Gateway `/list` round-trip   | HTTP, auth'd   | critical |
 | ntfy server probe                | HTTP 200 on `https://ntfy.<control-domain>/v1/health` | critical |
 | Control-domain ACM cert          | cert expiry    | warning  |
-| Mail-domain certs (each)         | cert expiry    | warning  |
 
 ### 5. Acceptance for Phase 1
 
