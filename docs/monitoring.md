@@ -111,11 +111,13 @@ In Kuma, add a new Notification provider:
 - **Body template**:
   ```json
   {
-    "summary": "{{msg}}",
-    "severity": "{{#if (heartbeatJSON.status == 0)}}critical{{else}}info{{/if}}",
-    "source": "kuma/{{monitorJSON.name}}"
+    "summary": "{{ msg }}",
+    "severity": "{% if heartbeatJSON.status == 0 %}critical{% else %}info{% endif %}",
+    "source": "kuma/{{ monitorJSON.name }}"
   }
   ```
+
+  Kuma uses Liquid templating — `{{ ... }}` for interpolation, `{% if %}…{% endif %}` for conditionals. Handlebars-style `{{#if}}` will fail with a TokenizationError.
 
 Click **Test** — you should receive a Pushover push **and** a ntfy notification within 30 seconds. If either is missing, check the `alert_sink` CloudWatch log group at `/cabal/lambda/alert_sink` for per-transport errors.
 
