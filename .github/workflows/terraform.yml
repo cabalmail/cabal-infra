@@ -173,6 +173,7 @@ jobs:
         echo "mail_domains = ${{ vars.TF_VAR_MAIL_DOMAINS }}" >> terraform.tfvars
         echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
         echo "backup = ${{ vars.TF_VAR_BACKUP }}" >> terraform.tfvars
+        echo "monitoring = ${{ vars.TF_VAR_MONITORING }}" >> terraform.tfvars
         echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
@@ -221,6 +222,7 @@ jobs:
         echo "mail_domains = ${{ vars.TF_VAR_MAIL_DOMAINS }}" >> terraform.tfvars
         echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
         echo "backup = ${{ vars.TF_VAR_BACKUP }}" >> terraform.tfvars
+        echo "monitoring = ${{ vars.TF_VAR_MONITORING }}" >> terraform.tfvars
         echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
     - name: init-terraform
       run: terraform init

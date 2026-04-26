@@ -3,7 +3,7 @@
 */
 
 resource "aws_ecr_repository" "tier" {
-  for_each             = toset(var.tiers)
+  for_each             = toset(concat(var.tiers, var.extra_repositories))
   name                 = "cabal-${each.key}"
   image_tag_mutability = "IMMUTABLE"
   force_delete         = false
