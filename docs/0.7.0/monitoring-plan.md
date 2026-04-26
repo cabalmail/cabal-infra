@@ -293,6 +293,31 @@ Configured in Kuma at first boot (manually for Phase 1; Phase 4 considers IaC fo
 - Kuma UI is reachable behind Cognito at `uptime.<control-domain>`.
 - ntfy UI/app is reachable (with token auth) at `ntfy.<control-domain>`.
 
+### 6. Implementation notes (lessons from the prod deploy)
+
+The Phase 1 deploy turned up several non-obvious things worth recording so Phase 2 doesn't re-trip them. Each is reflected in code on `0.7.0`; this list is for future readers.
+
+- **Monitoring ALB needs ≥2 AZs.** The mail-tier NLB is happy in a single AZ, but ALBs are not. Prod has two AZs in `TF_VAR_AVAILABILITY_ZONES`; dev and stage have one each. Phase 1 was deployed directly to prod for that reason. Restoring dev/stage parity would require adding a second public subnet to the existing single-AZ VPCs (the per-AZ `cidrsubnet` math means simply adding another AZ to the list rebuilds every subnet — destructive). The monitoring module owning a small extra subnet just for the ALB is the right pattern when we get back to it.
+- **EFS access points reject `chown`.** The upstream `louislam/uptime-kuma` entrypoint runs `chown -R node:node /app/data`, which EFS access points refuse regardless of caller. Fix: override `entryPoint` and `user` in the task definition so Kuma starts directly as 1000:1000 without the shim. ntfy's image doesn't have this problem, but the same workaround applies to any upstream image that chowns at boot.
+- **ALB SG needs egress to Cognito.** The `authenticate-cognito` action calls Cognito's hosted UI domain to swap the auth code for tokens. Without an HTTPS egress rule on the ALB SG, the call drops and the ALB returns 500 on `/oauth2/idpresponse`. Egress to `0.0.0.0/0:443` is the minimum.
+- **Lambda Function URLs need TWO resource-policy statements.** With `authorization_type = NONE`, AWS requires both `lambda:InvokeFunctionUrl` (auth-layer check) and `lambda:InvokeFunction` scoped to URL callers via `lambda:InvokedViaFunctionUrl=true` (execute layer). Missing either returns 403 at the URL gateway. The aws Terraform provider ≥ **6.28.0** added `invoked_via_function_url = true` on `aws_lambda_permission`; earlier versions can't express this condition declaratively.
+- **The VPC private hosted zone shadows the public zone for the control domain.** Records that exist only in the public zone don't resolve from inside the VPC. Phase 1 mirrors `admin.`, `uptime.`, `ntfy.` into the private zone (CloudFront/ALB targets resolve globally so the alias targets work fine from inside). Mail-tier hosts (`imap.`, `smtp-in.`, `smtp-out.`) are intentionally **not** mirrored — Kuma's TCP probes for those tiers point at the NLB's public DNS name directly, which resolves cleanly via the public zone. Phase 2/3 monitors that need to talk to the mail tiers should follow the same pattern.
+- **Kuma webhook templating is Liquid, not Handlebars.** Use `{% if … %}…{% endif %}` and `{{ … }}`. Handlebars `{{#if}}…{{/if}}` raises a `TokenizationError`.
+- **ntfy admin role doesn't bypass `deny-all` ACLs in older releases — but in 2.14+ it does.** Confirmed in our deploy: `ntfy access admin "*" rw` is a no-op because admin has implicit access. The mobile app failures we hit were instead authentication issues (bcrypt truncates passwords at 72 bytes; non-ASCII or trailing-newline copies fail silently). Operationally: keep the admin password short, ASCII, and pasted carefully.
+- **GitHub Actions masks `AWS_REGION`** in workflow logs, including the `alert_sink` Function URL output. The masked URL with literal `***` is unusable; fetch the real URL via `aws lambda get-function-url-config --function-name alert_sink` from a shell with unmasked region.
+- **Mail domains have no certs.** Entries in `TF_VAR_MAIL_DOMAINS` are address namespaces only; only the control domain has an ACM cert. Don't add per-mail-domain cert-expiry monitors.
+
+### 7. Manual prerequisites and post-apply steps
+
+Captured in full in [docs/monitoring.md](../monitoring.md). Brief:
+
+1. Pushover account + `cabalmail-alerts` application, manually created on pushover.net (one-time).
+2. After Terraform apply: `aws ssm put-parameter` the Pushover user key and app token, ECS-Exec into the ntfy task to create the admin user and a publisher token, `aws ssm put-parameter` the ntfy publisher token.
+3. Kuma admin user is created on first browser hit (Cognito-authenticated), separate from the Cognito identity.
+4. Kuma webhook notification provider points at the `alert_sink_function_url` with `X-Alert-Secret` header from `/cabal/alert_sink_secret`.
+
+The Pushover/ntfy SSM parameters are TF-managed with placeholder values + `ignore_changes = [value]`. Folding them into "real" Terraform inputs is queued for [docs/0.9.0/state-encryption-plan.md](../0.9.0/state-encryption-plan.md), which gates that on encrypted Terraform state.
+
 ---
 
 ## Phase 2: Heartbeat Monitoring
