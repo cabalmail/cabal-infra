@@ -101,3 +101,15 @@ resource "aws_lambda_function_url" "alert_sink" {
     allow_headers = ["content-type", "x-alert-secret"]
   }
 }
+
+# Function URLs with authorization_type = NONE still require an explicit
+# resource policy granting public invoke; otherwise AWS responds 403.
+# Authentication is enforced inside the function via the X-Alert-Secret
+# header, so the public principal is intentional.
+resource "aws_lambda_permission" "alert_sink_url" {
+  statement_id           = "FunctionURLAllowPublicAccess"
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name          = aws_lambda_function.alert_sink.function_name
+  principal              = "*"
+  function_url_auth_type = "NONE"
+}
