@@ -79,6 +79,14 @@ resource "aws_ecs_task_definition" "kuma" {
     memoryReservation = 256
     memory            = 512
 
+    # Bypass the upstream entrypoint, which chown's /app/data on every
+    # boot. EFS access points reject chown regardless of caller, so the
+    # shim aborts and the container exits 1. The access point already
+    # creates /uptime-kuma owned by 1000:1000, so no chown is needed.
+    user       = "1000:1000"
+    entryPoint = ["node"]
+    command    = ["server/server.js"]
+
     portMappings = [
       { containerPort = 3001, protocol = "tcp" }
     ]
