@@ -58,6 +58,7 @@ module "admin" {
   region              = var.aws_region
   cert_arn            = module.cert.cert_arn
   zone_id             = data.terraform_remote_state.zone.outputs.control_domain_zone_id
+  private_zone_id     = module.vpc.private_zone.zone_id
   domains             = module.domains.domains
   layers              = module.lambda_layers.layers
   bucket              = module.bucket.bucket
@@ -185,6 +186,7 @@ module "monitoring" {
   public_subnet_ids  = module.vpc.public_subnets[*].id
   private_subnet_ids = module.vpc.private_subnets[*].id
   zone_id            = data.terraform_remote_state.zone.outputs.control_domain_zone_id
+  private_zone_id    = module.vpc.private_zone.zone_id
   cert_arn           = module.cert.cert_arn
 
   ecs_cluster_id                = module.ecs.cluster_arn

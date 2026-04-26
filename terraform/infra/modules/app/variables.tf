@@ -41,6 +41,11 @@ variable "zone_id" {
   description = "Route 53 zone ID for the control domain."
 }
 
+variable "private_zone_id" {
+  type        = string
+  description = "Route 53 private zone ID for the control domain. The admin CNAME is mirrored here so VPC-internal callers (e.g. Kuma) can resolve admin.<control-domain>."
+}
+
 variable "domains" {
   type        = list
   description = "List of email domains."
