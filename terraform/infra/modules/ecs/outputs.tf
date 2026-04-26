@@ -8,6 +8,11 @@ output "cluster_arn" {
   description = "ARN of the ECS cluster."
 }
 
+output "capacity_provider_name" {
+  value       = aws_ecs_capacity_provider.ec2.name
+  description = "Name of the EC2 capacity provider. Consumed by non-mail services that share the cluster."
+}
+
 output "sns_topic_arn" {
   value       = aws_sns_topic.address_changed.arn
   description = "ARN of the address-changed SNS topic. Lambdas publish here to trigger reconfiguration."

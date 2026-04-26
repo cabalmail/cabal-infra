@@ -83,4 +83,10 @@ variable "backup" {
   default     = false
 }
 
+variable "monitoring" {
+  type        = bool
+  description = "Whether to deploy the monitoring & alerting stack (Uptime Kuma, self-hosted ntfy, alert_sink Lambda). Defaults to false."
+  default     = false
+}
+
 
