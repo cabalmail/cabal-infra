@@ -33,6 +33,11 @@ variable "zone_id" {
   description = "Route 53 public zone ID for the control domain."
 }
 
+variable "private_zone_id" {
+  type        = string
+  description = "Route 53 private zone ID for the control domain. uptime/ntfy aliases are mirrored here so VPC-internal callers (e.g. Kuma) can resolve them."
+}
+
 variable "cert_arn" {
   type        = string
   description = "ARN of the wildcard ACM certificate for *.<control-domain>."
