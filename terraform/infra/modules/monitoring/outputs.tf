@@ -37,3 +37,20 @@ output "ntfy_service_name" {
   value       = aws_ecs_service.ntfy.name
   description = "ECS service name for ntfy, used by the bootstrap runbook."
 }
+
+output "heartbeat_url" {
+  value       = "https://heartbeat.${var.control_domain}/"
+  description = "Cognito-authenticated URL for the Healthchecks UI."
+}
+
+output "healthchecks_service_name" {
+  value       = aws_ecs_service.healthchecks.name
+  description = "ECS service name for Healthchecks, used by the bootstrap runbook."
+}
+
+output "healthcheck_ping_parameter_names" {
+  value = {
+    for k, p in aws_ssm_parameter.healthcheck_ping : k => p.name
+  }
+  description = "Map of job key to SSM Parameter Store name for the Healthchecks ping URL. Operator populates each value out-of-band after creating the corresponding check."
+}

@@ -14,10 +14,11 @@ resource "aws_lambda_function" "certbot" {
 
   environment {
     variables = {
-      CONTROL_DOMAIN    = var.control_domain
-      EMAIL             = var.email
-      ECS_CLUSTER_NAME  = var.ecs_cluster_name
-      ECS_SERVICE_NAMES = join(",", var.ecs_service_names)
+      CONTROL_DOMAIN         = var.control_domain
+      EMAIL                  = var.email
+      ECS_CLUSTER_NAME       = var.ecs_cluster_name
+      ECS_SERVICE_NAMES      = join(",", var.ecs_service_names)
+      HEALTHCHECK_PING_PARAM = var.healthcheck_ping_param
     }
   }
 

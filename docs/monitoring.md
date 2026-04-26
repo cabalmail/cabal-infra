@@ -1,12 +1,14 @@
 # Monitoring & Alerting
 
-The 0.7.0 release adds an optional monitoring stack on top of the existing mail infrastructure. Phase 1 provides black-box uptime monitoring plus a push-notification alerting path that bypasses the Cabalmail email system. See [monitoring-plan.md](./0.7.0/monitoring-plan.md) for the multi-phase roadmap and design rationale; this page is the operator's runbook for enabling the stack and completing first-boot configuration.
+The 0.7.0 release adds an optional monitoring stack on top of the existing mail infrastructure. Phase 1 provides black-box uptime monitoring plus a push-notification alerting path that bypasses the Cabalmail email system. Phase 2 adds heartbeat monitoring for scheduled jobs (certbot, weekly Terraform, AWS Backup, DMARC ingestion, ECS reconfigure loop, Cognito user-sync). See [monitoring-plan.md](./0.7.0/monitoring-plan.md) for the multi-phase roadmap and design rationale; this page is the operator's runbook for enabling the stack and completing first-boot configuration.
 
 The stack is disabled by default. When enabled it deploys:
 
 - **Uptime Kuma** — a small, self-hosted status-page / probe runner. Reachable at `https://uptime.<control-domain>/` behind Cognito login.
 - **Self-hosted ntfy** — open-source push-notification server. Reachable at `https://ntfy.<control-domain>/` with token auth enforced by the app (not the ALB).
 - **`alert_sink` Lambda** — a webhook sink fronted by a Lambda Function URL. Callers authenticate with a shared secret. `critical` severity fans out to Pushover (priority 1) and ntfy (priority 5); `warning` goes to ntfy (priority 3); `info` is dropped.
+- **Self-hosted Healthchecks** (Phase 2) — a [healthchecks.io](https://healthchecks.io) instance for "did this scheduled job ping recently?" heartbeats. Reachable at `https://heartbeat.<control-domain>/` behind Cognito.
+- **`backup_heartbeat` Lambda** (Phase 2) — invoked by an EventBridge rule on AWS Backup `JOB_COMPLETED` events; pings the corresponding Healthchecks check.
 
 ## 1. Create your Pushover account and application
 
@@ -163,6 +165,96 @@ The Terraform `ignore_changes = [value]` lifecycle on each SSM parameter means s
 
 ## Disabling the stack
 
-Set `TF_VAR_MONITORING=false` in the GitHub environment and re-run Terraform. The module is gated with `count = var.monitoring ? 1 : 0`, so the ECS services, ALB, Lambda, and SSM parameters are destroyed cleanly. The `cabal-uptime-kuma` and `cabal-ntfy` ECR repositories and the Cognito user pool domain persist (they are cheap and not flag-gated).
+Set `TF_VAR_MONITORING=false` in the GitHub environment and re-run Terraform. The module is gated with `count = var.monitoring ? 1 : 0`, so the ECS services, ALB, Lambda, and SSM parameters are destroyed cleanly. The `cabal-uptime-kuma`, `cabal-ntfy`, and `cabal-healthchecks` ECR repositories and the Cognito user pool domain persist (they are cheap and not flag-gated).
 
-**Note on EFS state:** destroying the stack leaves the `/uptime-kuma` and `/ntfy` directories on the shared EFS. Re-enabling monitoring later will pick up the existing SQLite databases and ntfy user/auth state, preserving your configuration. Remove the directories manually from any running mail-tier container if you want a clean start.
+**Note on EFS state:** destroying the stack leaves the `/uptime-kuma`, `/ntfy`, and `/healthchecks` directories on the shared EFS. Re-enabling monitoring later will pick up the existing SQLite databases and ntfy user/auth state, preserving your configuration. Remove the directories manually from any running mail-tier container if you want a clean start.
+
+---
+
+# Phase 2: Heartbeat monitoring
+
+Phase 2 adds Healthchecks for the scheduled jobs that Phase 1 cannot see (cron-style runs, EventBridge schedules, the ECS reconfigure loop). It is enabled by the same `TF_VAR_MONITORING=true` flag — there is no separate switch. Once Phase 1 is up, follow the steps below to bring Phase 2 online.
+
+## 11. First-boot configuration in Healthchecks
+
+`https://heartbeat.<control-domain>/` sits behind Cognito. The Cabalmail Cognito user pool is the front door; Healthchecks itself uses its own local accounts (Cognito gates whether you can _reach_ the UI, Healthchecks gates whether you can _change_ checks).
+
+1. Open `https://heartbeat.<control-domain>/` in a browser. Cognito challenges you. Sign in.
+2. On the Healthchecks landing page, click **Sign Up** (Healthchecks ships with `REGISTRATION_OPEN=True` so the first apply lets you create the operator account). Use a real email address (Healthchecks sends confirmation links and password-reset emails — see step 13 if you want email notifications wired up).
+3. Confirm the email if your inbox is reachable. If not, you can mark the user verified directly in the SQLite store via ECS Exec:
+   ```
+   aws ecs execute-command --cluster <cluster> \
+     --task $(aws ecs list-tasks --cluster <cluster> --service-name cabal-healthchecks --query 'taskArns[0]' --output text) \
+     --container healthchecks --interactive --command /bin/sh
+   # inside the container:
+   ./manage.py shell -c "from accounts.models import Profile; p=Profile.objects.first(); p.user.is_active=True; p.user.save()"
+   ```
+4. Once registration is complete, lock the door: set `REGISTRATION_OPEN=False` in [healthchecks.tf](../terraform/infra/modules/monitoring/healthchecks.tf) and apply. (You can also flip it via ECS Exec by editing the env var on the running task definition for a quick fix; the next Terraform run will reconcile.)
+
+## 12. Create one check per scheduled job
+
+In the Healthchecks dashboard, click **Add Check** for each entry below. The **schedule** column tells Healthchecks what cadence to expect; tune the **grace** column if it produces false alarms.
+
+| Check name             | Schedule type / value          | Grace | Notes                                                          |
+| ---------------------- | ------------------------------ | ----- | -------------------------------------------------------------- |
+| `certbot-renewal`      | Simple, every 60 days          | 24 h  | Lambda runs every 60 days via EventBridge Scheduler.           |
+| `terraform-weekly`     | Simple, every 7 days           | 24 h  | GitHub Actions only pings on a successful apply.               |
+| `aws-backup`           | Simple, every 1 day            | 6 h   | EventBridge `JOB_COMPLETED` events feed `backup_heartbeat`.    |
+| `dmarc-ingest`         | Simple, every 6 hours          | 2 h   | DMARC scheduler runs every 6 h.                                |
+| `ecs-reconfigure`      | Simple, every 30 minutes       | 30 m  | Pings on each successful regenerate; fallback fires every 15 m.|
+| `cognito-user-sync`    | Simple, every 30 days          | 7 d   | Fires only on user signup; very loose grace by design.         |
+
+For each check, copy the **ping URL** (e.g. `https://heartbeat.<control-domain>/ping/abcd1234-...`) and paste it into the matching SSM parameter:
+
+```
+aws ssm put-parameter --name /cabal/healthcheck_ping_certbot_renewal     --type SecureString --overwrite --value '<url>'
+aws ssm put-parameter --name /cabal/healthcheck_ping_terraform_weekly    --type SecureString --overwrite --value '<url>'
+aws ssm put-parameter --name /cabal/healthcheck_ping_aws_backup          --type SecureString --overwrite --value '<url>'
+aws ssm put-parameter --name /cabal/healthcheck_ping_dmarc_ingest        --type SecureString --overwrite --value '<url>'
+aws ssm put-parameter --name /cabal/healthcheck_ping_ecs_reconfigure     --type SecureString --overwrite --value '<url>'
+aws ssm put-parameter --name /cabal/healthcheck_ping_cognito_user_sync   --type SecureString --overwrite --value '<url>'
+```
+
+Lambdas cache the URL at cold start, so the next invocation after the secret-set picks it up automatically. The mail-tier containers receive the URL via ECS task-definition `secrets` and need a deployment cycle (`aws ecs update-service --force-new-deployment`) to pick up changes.
+
+## 13. Wire Healthchecks alerts back to `alert_sink`
+
+A missed heartbeat is only useful if it becomes a push notification. In Healthchecks, **Integrations → Add Integration → Webhook**:
+
+- **URL for "down" events** — the same `alert_sink_function_url` from Phase 1.
+- **HTTP Method** — `POST`.
+- **HTTP Headers**:
+  ```
+  Content-Type: application/json
+  X-Alert-Secret: <value of /cabal/alert_sink_secret>
+  ```
+- **Request Body**:
+  ```json
+  {"summary": "Missed heartbeat: $NAME", "severity": "critical", "source": "healthchecks/$NAME"}
+  ```
+- **URL for "up" events** — same URL.
+- **Body for "up" events**:
+  ```json
+  {"summary": "Recovered: $NAME", "severity": "warning", "source": "healthchecks/$NAME"}
+  ```
+
+Then assign the integration to every check from step 12.
+
+## 14. Acceptance checklist for Phase 2
+
+- [ ] `https://heartbeat.<control-domain>/` is unreachable without a Cognito session.
+- [ ] Every check from step 12 shows green in the Healthchecks dashboard within one full schedule cycle (i.e. the certbot check stays "new" until either you trigger the Lambda manually or wait 60 days; the others should turn green within 24 hours).
+- [ ] Disabling the certbot Lambda's EventBridge schedule in dev (or temporarily setting its ping SSM parameter to `placeholder-`) and waiting past the grace window produces a Pushover push and a ntfy push citing `healthchecks/certbot-renewal`.
+- [ ] Manually triggering the certbot Lambda (`aws lambda invoke --function-name cabal-certbot-renewal /tmp/out.json`) restores the check to green within one cold-start.
+- [ ] Triggering `aws backup start-backup-job` (or waiting for the daily run) advances the `aws-backup` check.
+
+## Disabling individual heartbeats
+
+To silence one heartbeat without disabling the entire monitoring stack: pause the corresponding check in the Healthchecks UI, or set its SSM parameter back to a value that does not start with `http` (e.g. `aws ssm put-parameter --overwrite --type SecureString --name /cabal/healthcheck_ping_dmarc_ingest --value 'paused'`). Consumer code skips the ping when the value is not an HTTP(S) URL, and Healthchecks stops expecting pings while the check is paused.
+
+## Phase 2 troubleshooting
+
+- **Healthchecks task crash-looping with permission errors on `/data`.** Same shape as the Kuma `chown` issue from Phase 1 lesson 2 in [monitoring-plan.md §6](./0.7.0/monitoring-plan.md). The EFS access point under `/healthchecks` is owned by `1000:1000` with `0755`; any upstream entrypoint that tries to `chown` it will fail. If a future Healthchecks release adds a chown shim, follow the Kuma fix: override `entryPoint` and `user` in [healthchecks.tf](../terraform/infra/modules/monitoring/healthchecks.tf) so the container starts directly as `1000:1000` and skips the shim. The current `v3.10` image's entrypoint runs `manage.py migrate` then `uwsgi` — no chown — so no override is needed yet.
+- **Healthchecks dashboard shows `heartbeat.<control-domain>` but Cognito redirects loop.** The ALB SG already has `alb_https_out` from Phase 1 (Cognito token exchange). If the loop is on first signup specifically, it's the `REGISTRATION_OPEN=True → False` flip in the task definition: confirm `True` until the operator account is created, then commit a flip to `False` and apply.
+- **Heartbeat misfires immediately after enabling monitoring.** Each consumer caches the SSM ping URL at cold start (Lambdas) or task start (containers). After populating a placeholder, force a refresh: `aws lambda invoke --function-name cabal-certbot-renewal /tmp/out.json` for Lambdas; `aws ecs update-service --cluster <cluster> --service cabal-imap --force-new-deployment` (and the smtp tiers) for the reconfigure heartbeat.
+- **`backup_heartbeat` Lambda silent.** Confirm `var.backup = true` in the environment — without the AWS Backup plan, no `Backup Job State Change` events fire and the EventBridge rule has nothing to invoke. The Lambda existing without the backup plan is harmless but useless.

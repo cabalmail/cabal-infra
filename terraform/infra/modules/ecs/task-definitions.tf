@@ -6,6 +6,15 @@
 * the ECS agent at task start.
 */
 
+# Phase 2 heartbeat: when var.healthcheck_ping_param is set, ECS injects
+# HEALTHCHECK_PING_URL into each tier from SSM. reconfigure.sh reads it
+# at runtime and pings Healthchecks at the end of each loop iteration.
+locals {
+  healthcheck_secrets = var.healthcheck_ping_param != "" ? [
+    { name = "HEALTHCHECK_PING_URL", valueFrom = var.healthcheck_ping_param },
+  ] : []
+}
+
 # ── IMAP task definition ──────────────────────────────────────
 
 resource "aws_ecs_task_definition" "imap" {
@@ -39,12 +48,12 @@ resource "aws_ecs_task_definition" "imap" {
       { name = "SQS_QUEUE_URL", value = aws_sqs_queue.tier["imap"].url },
     ]
 
-    secrets = [
+    secrets = concat([
       { name = "MASTER_PASSWORD", valueFrom = "/cabal/master_password" },
       { name = "TLS_CA_BUNDLE", valueFrom = "/cabal/control_domain_chain_cert" },
       { name = "TLS_CERT", valueFrom = "/cabal/control_domain_ssl_cert" },
       { name = "TLS_KEY", valueFrom = "/cabal/control_domain_ssl_key" },
-    ]
+    ], local.healthcheck_secrets)
 
     mountPoints = [{
       sourceVolume  = "mailstore"
@@ -109,11 +118,11 @@ resource "aws_ecs_task_definition" "smtp_in" {
       { name = "IMAP_INTERNAL_HOST", value = "${aws_service_discovery_service.imap.name}.${aws_service_discovery_private_dns_namespace.mail.name}" },
     ]
 
-    secrets = [
+    secrets = concat([
       { name = "TLS_CA_BUNDLE", valueFrom = "/cabal/control_domain_chain_cert" },
       { name = "TLS_CERT", valueFrom = "/cabal/control_domain_ssl_cert" },
       { name = "TLS_KEY", valueFrom = "/cabal/control_domain_ssl_key" },
-    ]
+    ], local.healthcheck_secrets)
 
     linuxParameters = {
       capabilities = {
@@ -166,12 +175,12 @@ resource "aws_ecs_task_definition" "smtp_out" {
       { name = "IMAP_INTERNAL_HOST", value = "${aws_service_discovery_service.imap.name}.${aws_service_discovery_private_dns_namespace.mail.name}" },
     ]
 
-    secrets = [
+    secrets = concat([
       { name = "TLS_CA_BUNDLE", valueFrom = "/cabal/control_domain_chain_cert" },
       { name = "TLS_CERT", valueFrom = "/cabal/control_domain_ssl_cert" },
       { name = "TLS_KEY", valueFrom = "/cabal/control_domain_ssl_key" },
       { name = "DKIM_PRIVATE_KEY", valueFrom = "/cabal/dkim_private_key" },
-    ]
+    ], local.healthcheck_secrets)
 
     linuxParameters = {
       capabilities = {

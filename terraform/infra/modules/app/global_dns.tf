@@ -14,17 +14,17 @@ resource "tls_private_key" "key" {
 }
 
 resource "aws_route53_record" "dkim_public_key" {
-  zone_id   = var.zone_id
-  name      = "cabal._domainkey.${var.control_domain}"
-  type      = "TXT"
-  ttl       = "3600"
-  records   = [
+  zone_id = var.zone_id
+  name    = "cabal._domainkey.${var.control_domain}"
+  type    = "TXT"
+  ttl     = "3600"
+  records = [
     join("", [
       "v=DKIM1; k=rsa; p=",
       join("",
         slice(
           split(
-            "\n",trimspace(
+            "\n", trimspace(
               tls_private_key.key.public_key_pem
             )
           ), 1, 4
@@ -34,7 +34,7 @@ resource "aws_route53_record" "dkim_public_key" {
       join("",
         slice(
           split(
-            "\n",trimspace(
+            "\n", trimspace(
               tls_private_key.key.public_key_pem
             )
           ), 4, 8
@@ -45,11 +45,11 @@ resource "aws_route53_record" "dkim_public_key" {
 }
 
 resource "aws_route53_record" "dmarc" {
-  zone_id   = var.zone_id
-  name      = "_dmarc.${var.control_domain}"
-  type      = "TXT"
-  ttl       = "3600"
-  records   = [
+  zone_id = var.zone_id
+  name    = "_dmarc.${var.control_domain}"
+  type    = "TXT"
+  ttl     = "3600"
+  records = [
     "v=DMARC1; p=reject; rua=mailto:dmarc-reports@mail-admin.${var.domains[0].domain}; ruf=mailto:dmarc-reports@mail-admin.${var.domains[0].domain}; fo=1; pct=100"
   ]
 }

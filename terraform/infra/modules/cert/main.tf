@@ -5,8 +5,8 @@
 resource "aws_acm_certificate" "cert" {
   domain_name       = "*.${var.control_domain}"
   validation_method = "DNS"
-  tags              = {
-    Name                 = "cabal-nlb"
+  tags = {
+    Name = "cabal-nlb"
   }
   lifecycle {
     create_before_destroy = true
