@@ -63,9 +63,14 @@ regenerate() {
   # reliably re-read these on AL2023's sendmail, so when a new
   # subdomain is added the IMAP tier fails to recognise it as local
   # and bounces the message back via MX → smtp-in → imap → loop.
-  # Use supervisorctl so the wrapper script and daemon are stopped
-  # and started together cleanly.
-  supervisorctl restart sendmail
+  #
+  # We kill sendmail and rely on supervisord's autorestart to bring
+  # it back up.  supervisorctl is not configured (no unix_http_server
+  # / supervisorctl section in supervisord.conf), and the wrapper
+  # already pkills any stale daemon and removes the stale PID file
+  # before exec'ing sendmail, so a plain pkill is safe.
+  echo "[reconfigure] Killing sendmail; supervisord will restart it..."
+  pkill -x sendmail 2>/dev/null || true
 
   # For SMTP-OUT, also reload OpenDKIM tables
   if [ "$TIER" = "smtp-out" ]; then
