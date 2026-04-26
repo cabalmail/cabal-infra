@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-04-26
+
+### Added
+
+- Phase 1 of the 0.7.0 monitoring & alerting stack, gated on `var.monitoring` per environment. New `terraform/infra/modules/monitoring/` deploys: an `alert_sink` Lambda fronted by a Lambda Function URL that fans out webhook payloads (`{severity, source, summary}`) to Pushover and a self-hosted ntfy server; a `cabal-ntfy` ECS service backed by an EFS access point at `/ntfy`; a `cabal-uptime-kuma` ECS service backed by an EFS access point at `/uptime-kuma`; and a shared public ALB whose default listener action forwards to Kuma behind a Cognito `authenticate-oidc` action and whose host-header rule on `ntfy.<control-domain>` forwards to ntfy without ALB-level auth (ntfy enforces its own bearer-token auth). Severity routing in the Lambda: critical → Pushover priority 1 + ntfy priority 5, warning → ntfy priority 3, info dropped. Partial-failure (one transport up, one down) returns HTTP 207 so callers don't retry-storm.
+- `docker/ntfy/Dockerfile` — thin wrapper over `binwiederhier/ntfy`, added to the docker workflow matrix and to the ECR `extra_repositories` list.
+- `docker/uptime-kuma/Dockerfile` — thin wrapper over `louislam/uptime-kuma`. The ECS task definition overrides `entryPoint` and runs as UID 1000 to skip the upstream image's `chown -R node:node /app/data`, which fails on EFS access points (access points reject `chown` regardless of caller).
+- SSM `SecureString` parameters managed by Terraform with `ignore_changes = [value]` so out-of-band rotation sticks: `/cabal/alert_sink_secret` (auto-generated random for the webhook), `/cabal/pushover_user_key`, `/cabal/pushover_app_token`, `/cabal/ntfy_publisher_token` (operator-populated after creating the Pushover account and bootstrapping the ntfy admin user via ECS Exec).
+- `lambda/api/alert_sink/` (formerly `alert_sms/`) — the universal sink Lambda. Reads secrets from SSM with cold-start caching, validates `X-Alert-Secret` with `hmac.compare_digest`, emits per-transport HTTPS POSTs (Pushover form-encoded, ntfy bearer-auth + `Title`/`Priority` headers) using the standard library only; no boto3 SNS/SES dependencies.
+- ALB egress rule on the monitoring ALB security group permitting outbound HTTPS to `0.0.0.0/0`. Required for the ALB `authenticate-cognito` action to reach Cognito's hosted UI for the code-for-tokens exchange; without it, `/oauth2/idpresponse` returns 500.
+- Two `aws_lambda_permission` resources granting public access to the Function URL: one for `lambda:InvokeFunctionUrl` with `lambda:FunctionUrlAuthType=NONE`, one for `lambda:InvokeFunction` scoped to URL callers via `invoked_via_function_url = true`. Both are required by AWS's URL-gateway auth model; missing either returns 403. The latter argument requires aws Terraform provider ≥ **6.28.0**, which is now the floor for the monitoring module.
+- VPC private-zone mirrors of public DNS records so monitoring probes from the private subnet can resolve hosts on the control domain that the private zone would otherwise shadow: `admin.<control-domain>` (CNAME → CloudFront), `uptime.<control-domain>` and `ntfy.<control-domain>` (A aliases → monitoring ALB). Mail-tier hosts (`imap.`, `smtp-in.`, `smtp-out.`) are intentionally not mirrored; the Phase 1 monitor set targets the NLB's public DNS name directly for those probes.
+- `docs/monitoring.md` — operator runbook covering Pushover signup, SSM seeding, ntfy admin/token bootstrap via ECS Exec, mobile-app subscription, Kuma admin creation, webhook wiring (with Liquid templating — `{% if heartbeatJSON.status == 0 %}critical{% else %}info{% endif %}`, not Handlebars), the Phase 1 monitor set, secret rotation, and clean disabling.
+- `docs/0.7.0/monitoring-plan.md` — multi-phase design doc with the four-phase plan (alert sink + uptime, heartbeats, metrics, logs+tuning), a per-tier golden-signals table, the `var.monitoring` feature-flag pattern, and an "Implementation notes" section capturing the gotchas surfaced by the prod deploy.
+- `docs/0.9.0/state-encryption-plan.md` — plan to migrate both Terraform stacks to client-side KMS-encrypted state (TF 1.10+ `encryption` block) so secrets like the Pushover/ntfy tokens can be folded into normal Terraform inputs instead of seeded out-of-band.
+
+### Removed
+
+- `TF_VAR_ON_CALL_PHONE_NUMBERS` and the SMS-via-SNS alerting path. AWS toll-free SMS provisioning was slow and opaque, and SES email can't alert on our own mail outage. Replaced with the Pushover + ntfy push-notification fan-out described above.
+
+### Operational notes
+
+- The monitoring ALB requires ≥2 AZs. Production has two AZs; dev and stage have one each, and the `cidrsubnet` math in the VPC module makes adding a second AZ to those environments destructive (every subnet is renumbered). Phase 1 was therefore deployed directly to prod. Future work: have the monitoring module own a small extra public subnet in a second AZ instead of leaning on the VPC's per-AZ list.
+- Phase 1 SSM seeding is manual, deliberately. The placeholder + `ignore_changes` pattern keeps real secrets out of state and out of `terraform.tfvars`. The 0.9.0 plan replaces this once state encryption is in place.
+
 ## [0.6.4] - 2026-04-22
 
 ### Added
