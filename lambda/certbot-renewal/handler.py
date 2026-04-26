@@ -4,6 +4,8 @@ and stores them in SSM Parameter Store."""
 import json
 import os
 import subprocess
+import urllib.error
+import urllib.request
 
 import boto3
 
@@ -13,6 +15,32 @@ SSM_PATHS = {
     "cert": "/cabal/control_domain_ssl_cert",
     "chain": "/cabal/control_domain_chain_cert",
 }
+
+PING_PARAM = os.environ.get("HEALTHCHECK_PING_PARAM", "")
+_PING_URL = None
+
+
+def _ping_healthcheck(ssm):
+    """Best-effort heartbeat to Healthchecks. Silent on failure."""
+    global _PING_URL  # pylint: disable=global-statement
+    if _PING_URL is None:
+        if not PING_PARAM:
+            _PING_URL = ""
+        else:
+            try:
+                resp = ssm.get_parameter(Name=PING_PARAM, WithDecryption=True)
+                value = resp["Parameter"]["Value"]
+                _PING_URL = value if value.startswith("http") else ""
+            except Exception as err:  # pylint: disable=broad-exception-caught
+                print(f"healthcheck ping URL fetch failed: {err}")
+                _PING_URL = ""
+    if not _PING_URL:
+        return
+    try:
+        with urllib.request.urlopen(_PING_URL, timeout=5) as resp:
+            print(f"healthcheck ping -> {resp.status}")
+    except (urllib.error.URLError, urllib.error.HTTPError, OSError) as err:
+        print(f"healthcheck ping failed: {err}")
 
 
 def handler(event, context):
@@ -78,6 +106,8 @@ def handler(event, context):
                 forceNewDeployment=True,
             )
             print(f"Forced new deployment for {service_name}")
+
+    _ping_healthcheck(ssm)
 
     return {
         "statusCode": 200,

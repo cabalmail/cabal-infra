@@ -5,11 +5,11 @@ resource "aws_api_gateway_resource" "api_call" {
 }
 
 resource "aws_api_gateway_method" "api_call" {
-  rest_api_id        = var.gateway_id
-  resource_id        = aws_api_gateway_resource.api_call.id
-  http_method        = var.method
-  authorization      = "COGNITO_USER_POOLS"
-  authorizer_id      = var.authorizer
+  rest_api_id   = var.gateway_id
+  resource_id   = aws_api_gateway_resource.api_call.id
+  http_method   = var.method
+  authorization = "COGNITO_USER_POOLS"
+  authorizer_id = var.authorizer
   request_parameters = {
     "method.request.path.proxy" = true
   }
@@ -25,10 +25,10 @@ resource "aws_api_gateway_integration" "api_call" {
 }
 
 resource "aws_api_gateway_method_response" "api_call" {
-  rest_api_id     = var.gateway_id
-  resource_id     = aws_api_gateway_resource.api_call.id
-  http_method     = aws_api_gateway_method.api_call.http_method
-  status_code     = "200"
+  rest_api_id = var.gateway_id
+  resource_id = aws_api_gateway_resource.api_call.id
+  http_method = aws_api_gateway_method.api_call.http_method
+  status_code = "200"
   response_models = {
     "application/json" = "Empty"
   }

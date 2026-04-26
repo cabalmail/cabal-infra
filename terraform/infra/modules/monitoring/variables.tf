@@ -68,6 +68,11 @@ variable "ntfy_ecr_repository_url" {
   description = "ECR repository URL for the ntfy image."
 }
 
+variable "healthchecks_ecr_repository_url" {
+  type        = string
+  description = "ECR repository URL for the Healthchecks image."
+}
+
 variable "image_tag" {
   type        = string
   description = "Image tag to deploy for the monitoring services, shared with the mail tiers."

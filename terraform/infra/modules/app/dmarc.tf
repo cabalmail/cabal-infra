@@ -57,9 +57,12 @@ resource "aws_iam_role_policy" "process_dmarc" {
         Resource = "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:*"
       },
       {
-        Effect   = "Allow"
-        Action   = ["ssm:GetParameter"]
-        Resource = "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/cabal/master_password"
+        Effect = "Allow"
+        Action = ["ssm:GetParameter"]
+        Resource = compact([
+          "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/cabal/master_password",
+          var.dmarc_healthcheck_ping_param != "" ? "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter${var.dmarc_healthcheck_ping_param}" : "",
+        ])
       },
       {
         Effect = "Allow"
@@ -116,9 +119,10 @@ resource "aws_lambda_function" "process_dmarc" {
 
   environment {
     variables = {
-      CONTROL_DOMAIN   = var.control_domain
-      DMARC_TABLE_NAME = aws_dynamodb_table.dmarc_reports.name
-      DMARC_USER       = "dmarc"
+      CONTROL_DOMAIN         = var.control_domain
+      DMARC_TABLE_NAME       = aws_dynamodb_table.dmarc_reports.name
+      DMARC_USER             = "dmarc"
+      HEALTHCHECK_PING_PARAM = var.dmarc_healthcheck_ping_param
     }
   }
 

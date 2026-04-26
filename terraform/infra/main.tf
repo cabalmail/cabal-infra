@@ -15,6 +15,26 @@ data "aws_ssm_parameter" "deployed_image_tag" {
   name = "/cabal/deployed_image_tag"
 }
 
+# ── Phase 2 heartbeat parameter names ───────────────────────
+#
+# When var.monitoring is true, the monitoring module creates these as
+# SSM SecureString placeholders and the operator populates each with a
+# real Healthchecks ping URL after creating the corresponding check.
+# Consumer modules read the parameter at runtime and skip the ping if
+# the value still starts with "placeholder-".
+#
+# The strings here MUST match the names created in
+# `terraform/infra/modules/monitoring/ssm.tf`. When monitoring is off,
+# we pass empty strings so consumer modules skip the env var and IAM
+# permission entirely.
+
+locals {
+  hc_ping_certbot         = var.monitoring ? "/cabal/healthcheck_ping_certbot_renewal" : ""
+  hc_ping_dmarc           = var.monitoring ? "/cabal/healthcheck_ping_dmarc_ingest" : ""
+  hc_ping_assign_osid     = var.monitoring ? "/cabal/healthcheck_ping_cognito_user_sync" : ""
+  hc_ping_ecs_reconfigure = var.monitoring ? "/cabal/healthcheck_ping_ecs_reconfigure" : ""
+}
+
 # Create S3 bucket for React App
 module "bucket" {
   source         = "./modules/s3"
@@ -29,11 +49,12 @@ module "lambda_layers" {
 
 # Creates a Cognito User Pool
 module "pool" {
-  source           = "./modules/user_pool"
-  control_domain   = var.control_domain
-  bucket           = module.bucket.bucket
-  bucket_arn       = module.bucket.bucket_arn
-  ecs_cluster_name = module.ecs.cluster_name
+  source                 = "./modules/user_pool"
+  control_domain         = var.control_domain
+  bucket                 = module.bucket.bucket
+  bucket_arn             = module.bucket.bucket_arn
+  ecs_cluster_name       = module.ecs.cluster_name
+  healthcheck_ping_param = local.hc_ping_assign_osid
 }
 
 # Creates an AWS Certificate Manager certificate for use on load balancers and CloudFront
@@ -70,6 +91,8 @@ module "admin" {
 
   address_changed_topic_arn = module.ecs.sns_topic_arn
   admin_group_name          = module.pool.admin_group_name
+
+  dmarc_healthcheck_ping_param = local.hc_ping_dmarc
 }
 
 # Creates a DynamoDB table for storing address data
@@ -112,12 +135,12 @@ module "efs" {
 }
 
 # Creates ECR repositories for containerized mail services. The monitoring
-# repos (uptime-kuma, ntfy) exist regardless of var.monitoring so the Docker
-# workflow can push images unconditionally; only the ECS services are gated
-# by the flag.
+# repos (uptime-kuma, ntfy, healthchecks) exist regardless of var.monitoring
+# so the Docker workflow can push images unconditionally; only the ECS
+# services are gated by the flag.
 module "ecr" {
   source             = "./modules/ecr"
-  extra_repositories = ["uptime-kuma", "ntfy"]
+  extra_repositories = ["uptime-kuma", "ntfy", "healthchecks"]
 }
 
 # ECS cluster, services, and task definitions for containerized mail tiers.
@@ -147,6 +170,8 @@ module "ecs" {
   deregistration_delay      = 120
   unhealthy_threshold       = 10
 
+  healthcheck_ping_param = local.hc_ping_ecs_reconfigure
+
   depends_on = [module.cert]
 }
 
@@ -164,6 +189,8 @@ module "certbot_renewal" {
     module.ecs.smtp_in_service_name,
     module.ecs.smtp_out_service_name,
   ]
+
+  healthcheck_ping_param = local.hc_ping_certbot
 }
 
 # Establishes a daily backup schedule for mail and address data
@@ -174,7 +201,7 @@ module "backup" {
   efs    = module.efs.efs_arn
 }
 
-# Phase 1 monitoring & alerting (0.7.0). See docs/0.7.0/monitoring-plan.md.
+# Phase 1 + 2 monitoring & alerting (0.7.0). See docs/0.7.0/monitoring-plan.md.
 module "monitoring" {
   source = "./modules/monitoring"
   count  = var.monitoring ? 1 : 0
@@ -193,9 +220,10 @@ module "monitoring" {
   ecs_cluster_capacity_provider = module.ecs.capacity_provider_name
   efs_id                        = module.efs.efs_id
 
-  kuma_ecr_repository_url = module.ecr.repository_urls["uptime-kuma"]
-  ntfy_ecr_repository_url = module.ecr.repository_urls["ntfy"]
-  image_tag               = data.aws_ssm_parameter.deployed_image_tag.value
+  kuma_ecr_repository_url         = module.ecr.repository_urls["uptime-kuma"]
+  ntfy_ecr_repository_url         = module.ecr.repository_urls["ntfy"]
+  healthchecks_ecr_repository_url = module.ecr.repository_urls["healthchecks"]
+  image_tag                       = data.aws_ssm_parameter.deployed_image_tag.value
 
   user_pool_id     = module.pool.user_pool_id
   user_pool_arn    = module.pool.user_pool_arn

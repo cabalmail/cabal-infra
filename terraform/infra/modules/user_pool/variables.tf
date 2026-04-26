@@ -34,7 +34,7 @@ data "aws_iam_policy_document" "cognito_to_s3" {
     }
   }
   statement {
-    actions   = ["s3:GetObject"]
+    actions = ["s3:GetObject"]
     resources = [
       "arn:aws:s3:::admin.${var.control_domain}/message-cache/${"$"}{cognito-identity.amazonaws.com:sub}/*"
     ]
@@ -59,4 +59,10 @@ variable "control_domain" {
 variable "ecs_cluster_name" {
   type        = string
   description = "Name of the ECS cluster. Used by assign_osid Lambda to force new deployments on user creation."
+}
+
+variable "healthcheck_ping_param" {
+  type        = string
+  description = "SSM Parameter Store name holding the Healthchecks ping URL for the assign_osid Lambda. Empty string disables the heartbeat."
+  default     = ""
 }

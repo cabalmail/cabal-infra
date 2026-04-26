@@ -79,6 +79,27 @@ regenerate() {
 
   LAST_REGEN=$(date +%s)
   echo "[reconfigure] Done."
+
+  ping_healthcheck
+}
+
+# ── Healthchecks heartbeat ─────────────────────────────────────
+# Sent at the end of each successful regenerate() iteration.
+# HEALTHCHECK_PING_URL is injected as an ECS secret only when the
+# parent stack has var.monitoring = true; absent or placeholder values
+# disable the ping silently.
+ping_healthcheck() {
+  local url="${HEALTHCHECK_PING_URL:-}"
+  case "$url" in
+    http://*|https://*)
+      curl -fsS -m 5 -o /dev/null "$url" \
+        && echo "[reconfigure] Healthchecks ping sent." \
+        || echo "[reconfigure] Healthchecks ping failed (ignored)."
+      ;;
+    *)
+      : # unset or placeholder; skip silently
+      ;;
+  esac
 }
 
 # ── Drain remaining SQS messages after a regeneration ──────────

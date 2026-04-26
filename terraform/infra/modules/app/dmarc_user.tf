@@ -21,7 +21,7 @@ resource "aws_cognito_user" "dmarc" {
 resource "aws_dynamodb_table_item" "dmarc_address" {
   table_name = "cabal-addresses"
   hash_key   = "address"
-  item       = jsonencode({
+  item = jsonencode({
     address   = { S = "dmarc-reports@mail-admin.${var.domains[0].domain}" }
     tld       = { S = var.domains[0].domain }
     user      = { S = "dmarc" }

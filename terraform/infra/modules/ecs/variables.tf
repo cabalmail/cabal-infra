@@ -107,3 +107,11 @@ variable "unhealthy_threshold" {
   description = "Consecutive failed NLB health checks before a target is marked unhealthy."
   default     = 2
 }
+
+# ── Heartbeat monitoring ──────────────────────────────────────
+
+variable "healthcheck_ping_param" {
+  type        = string
+  description = "SSM Parameter Store name holding the Healthchecks ping URL for the reconfigure.sh loop. Empty string disables the heartbeat (used when var.monitoring is false in the parent stack)."
+  default     = ""
+}

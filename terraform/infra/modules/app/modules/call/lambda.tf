@@ -1,5 +1,5 @@
 locals {
-  hosted_zone_arns = join(",",[for domain in var.domains : "\"${domain.arn}\""])
+  hosted_zone_arns = join(",", [for domain in var.domains : "\"${domain.arn}\""])
   wildcard         = "*"
   zip_file         = "s3://${var.bucket}/lambda/${var.name}_lambda.zip"
 }
@@ -9,7 +9,7 @@ resource "aws_lambda_permission" "api_exec" {
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.api_call.function_name
   principal     = "apigateway.amazonaws.com"
-  source_arn    = join("", [
+  source_arn = join("", [
     join(":", [
       "arn:aws:execute-api",
       var.region,
@@ -166,11 +166,11 @@ resource "aws_lambda_function" "api_call" {
   }
   environment {
     variables = {
-      DOMAINS                    = jsonencode({ for r in var.domains : r.domain => r.zone_id })
-      CONTROL_DOMAIN             = var.control_domain
-      ADDRESS_CHANGED_TOPIC_ARN  = var.address_changed_topic_arn
-      USER_POOL_ID               = var.user_pool_id
-      DMARC_TABLE_NAME           = "cabal-dmarc-reports"
+      DOMAINS                   = jsonencode({ for r in var.domains : r.domain => r.zone_id })
+      CONTROL_DOMAIN            = var.control_domain
+      ADDRESS_CHANGED_TOPIC_ARN = var.address_changed_topic_arn
+      USER_POOL_ID              = var.user_pool_id
+      DMARC_TABLE_NAME          = "cabal-dmarc-reports"
     }
   }
   depends_on = [
