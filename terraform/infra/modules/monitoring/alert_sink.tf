@@ -102,14 +102,26 @@ resource "aws_lambda_function_url" "alert_sink" {
   }
 }
 
-# Function URLs with authorization_type = NONE still require an explicit
-# resource policy granting public invoke; otherwise AWS responds 403.
+# Function URLs with authorization_type = NONE require TWO statements
+# in the function's resource policy: lambda:InvokeFunctionUrl satisfies
+# the URL gateway's auth-layer check, and lambda:InvokeFunction (scoped
+# to URL callers via lambda:InvokedViaFunctionUrl=true) satisfies the
+# execute layer. Missing either returns 403 at the URL gateway.
 # Authentication is enforced inside the function via the X-Alert-Secret
 # header, so the public principal is intentional.
+
 resource "aws_lambda_permission" "alert_sink_url" {
   statement_id           = "FunctionURLAllowPublicAccess"
   action                 = "lambda:InvokeFunctionUrl"
   function_name          = aws_lambda_function.alert_sink.function_name
   principal              = "*"
   function_url_auth_type = "NONE"
+}
+
+resource "aws_lambda_permission" "alert_sink_url_invoke" {
+  statement_id             = "FunctionURLInvokeAllowPublicAccess"
+  action                   = "lambda:InvokeFunction"
+  function_name            = aws_lambda_function.alert_sink.function_name
+  principal                = "*"
+  invoked_via_function_url = true
 }
