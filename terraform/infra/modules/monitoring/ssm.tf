@@ -96,7 +96,6 @@ resource "aws_ssm_parameter" "healthchecks_secret_key" {
 locals {
   heartbeat_jobs = {
     certbot_renewal   = "Daily certbot renewal Lambda."
-    terraform_weekly  = "Weekly Terraform apply (workflow_dispatch + push)."
     aws_backup        = "Daily AWS Backup completion (DynamoDB + EFS)."
     dmarc_ingest      = "Hourly DMARC report ingestion Lambda (process_dmarc)."
     ecs_reconfigure   = "ECS reconfigure loop in the mail tier containers."

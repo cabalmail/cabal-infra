@@ -209,17 +209,17 @@ In the Healthchecks dashboard, click **Add Check** for each entry below. The **s
 | Check name             | Schedule type / value          | Grace | Notes                                                          |
 | ---------------------- | ------------------------------ | ----- | -------------------------------------------------------------- |
 | `certbot-renewal`      | Simple, every 60 days          | 24 h  | Lambda runs every 60 days via EventBridge Scheduler.           |
-| `terraform-weekly`     | Simple, every 7 days           | 24 h  | GitHub Actions only pings on a successful apply.               |
 | `aws-backup`           | Simple, every 1 day            | 6 h   | EventBridge `JOB_COMPLETED` events feed `backup_heartbeat`.    |
 | `dmarc-ingest`         | Simple, every 6 hours          | 2 h   | DMARC scheduler runs every 6 h.                                |
 | `ecs-reconfigure`      | Simple, every 30 minutes       | 30 m  | Pings on each successful regenerate; fallback fires every 15 m.|
 | `cognito-user-sync`    | Simple, every 30 days          | 7 d   | Fires only on user signup; very loose grace by design.         |
 
+(The Phase 2 plan originally included a `terraform-weekly` heartbeat. That was dropped because the Terraform workflow no longer runs on a cron schedule, so a heartbeat that only fires on manual dispatch isn't a useful signal.)
+
 For each check, copy the **ping URL** (e.g. `https://heartbeat.<control-domain>/ping/abcd1234-...`) and paste it into the matching SSM parameter:
 
 ```
 aws ssm put-parameter --name /cabal/healthcheck_ping_certbot_renewal     --type SecureString --overwrite --value '<url>'
-aws ssm put-parameter --name /cabal/healthcheck_ping_terraform_weekly    --type SecureString --overwrite --value '<url>'
 aws ssm put-parameter --name /cabal/healthcheck_ping_aws_backup          --type SecureString --overwrite --value '<url>'
 aws ssm put-parameter --name /cabal/healthcheck_ping_dmarc_ingest        --type SecureString --overwrite --value '<url>'
 aws ssm put-parameter --name /cabal/healthcheck_ping_ecs_reconfigure     --type SecureString --overwrite --value '<url>'

@@ -243,16 +243,3 @@ jobs:
           fi
           exit $TF_EXIT
         fi
-    - name: heartbeat-ping
-      if: success() && vars.TF_VAR_MONITORING == 'true'
-      env:
-        PING_PARAM: /cabal/healthcheck_ping_terraform_weekly
-      run: |
-        # Phase 2 monitoring: ping Healthchecks after a successful apply.
-        # If the parameter is missing or still a placeholder, skip silently.
-        URL=$(aws ssm get-parameter --name "$PING_PARAM" --with-decryption \
-          --query 'Parameter.Value' --output text 2>/dev/null || true)
-        case "$URL" in
-          http://*|https://*) curl -fsS -m 5 -o /dev/null "$URL" || true ;;
-          *) echo "Healthchecks ping URL unset; skipping." ;;
-        esac
