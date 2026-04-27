@@ -103,3 +103,8 @@ variable "ntfy_topic" {
   description = "ntfy topic name that alert_sink publishes to. Must match the topic the admin user has publish access on."
   default     = "alerts"
 }
+
+variable "mail_domains" {
+  type        = list(string)
+  description = "List of Cabalmail-hosted mail domains. The first entry is used as the From: domain for Healthchecks-originated mail (control_domain typically has no MX at the apex, so noreply@<control-domain> gets rejected by sendmail's sender-domain check)."
+}
