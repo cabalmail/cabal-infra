@@ -435,15 +435,16 @@ The runbook covers what the review entails. If you skip it, the worst that happe
 
 ## 23. Tabletop exercises
 
-Phase 4 §5 acceptance includes simulating three failure modes end-to-end:
+Phase 4 §5 acceptance includes simulating four failure modes end-to-end:
 
 | Scenario | How to simulate | Expected page | Expected runbook |
 | --- | --- | --- | --- |
-| Mail queue backup | On `smtp-out`, `mailq` and `sendmail -OQueueLA=0 -q` to artificially defer; the rule fires once Phase 4 §2 log-derived metrics land. *Until then, the closest equivalent is a Kuma probe failure on port 25 by blocking it in the SG.* | Probe failure → critical ntfy + Pushover | [probe-failure.md](./operations/runbooks/probe-failure.md) |
+| Mail queue backup (deferred) | ECS-Exec into the `smtp-out` task; inject 12 fake `stat=Deferred` log lines via `logger -t sm-mta 'XXX: stat=Deferred'` in <1 minute, then wait. | `SendmailDeferredSpike` (warning ntfy) within ~17 min (10 min window + 15 min `for`) | [sendmail-deferred-spike.md](./operations/runbooks/sendmail-deferred-spike.md) |
 | IMAP cert expiring (control-domain) | In dev: re-issue a short-lived cert and wait, or temporarily replace the listener cert with a deliberately near-expiry one. Don't do this in prod. | `BlackboxTLSCertExpiringSoon` (warning ntfy) and Kuma's "Control-domain cert" 21-day notification | [cert-expiring.md](./operations/runbooks/cert-expiring.md) |
 | Certbot Lambda silently disabled | Disable the EventBridge schedule on `cabal-certbot-renewal` in dev; wait past the 24 h grace | `healthchecks/certbot-renewal` missed → critical ntfy + Pushover | [heartbeat-certbot-renewal.md](./operations/runbooks/heartbeat-certbot-renewal.md) |
+| Healthchecks IaC drift | Add a check by hand in the Healthchecks UI without adding it to `config.py`. Re-invoke `cabal-healthchecks-iac`. | Lambda log line `WARNING: extras in Healthchecks not in config.py: [...]`. No alert fires (drift is a warning, not a paging event). | (no runbook — see §26.1) |
 
-Run the table top once after each Phase 4 ship, and again at every quarterly review. If the expected push doesn't arrive, fix the broken link before treating the tabletop as passing.
+Run the tabletop once after each Phase 4 ship, and again at every quarterly review. If the expected push doesn't arrive, fix the broken link before treating the tabletop as passing.
 
 ## 24. Acceptance for Phase 4
 
@@ -452,7 +453,7 @@ Run the table top once after each Phase 4 ship, and again at every quarterly rev
 - [ ] A test push from Kuma (any monitor) and from Healthchecks (any check) arrives on the operator's phone with a tappable runbook link.
 - [ ] An Alertmanager test alert (e.g. via `amtool alert add testing severity=warning runbook_url=https://example.test/r.md ...`) round-trips with the runbook URL preserved.
 - [ ] The `quarterly-review` check is configured in Healthchecks and shows green after the initial bootstrap ping.
-- [ ] Tabletop exercise from §23 runs cleanly for at least the certbot scenario; mail-queue and cert-expiry scenarios run cleanly once Phase 4 §2 lands.
+- [ ] Tabletop exercise from §23 runs cleanly for the certbot, mail-queue, cert-expiry, and IaC-drift scenarios.
 
 ## 25. Phase 4 §2 — log-derived metrics & alerts
 
