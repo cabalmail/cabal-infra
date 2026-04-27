@@ -334,9 +334,14 @@ resource "aws_ecs_service" "node_exporter" {
   task_definition     = aws_ecs_task_definition.node_exporter.arn
   scheduling_strategy = "DAEMON"
 
-  # DAEMON-strategy services place exactly one task per container
-  # instance the cluster's capacity provider supplies. No desired_count
-  # — ECS picks the count automatically.
+  # DAEMON services don't accept a capacity_provider_strategy — not
+  # even one inherited from the cluster default. They need an explicit
+  # launch_type. The mail-tier cluster runs on EC2 instances managed
+  # by an autoscaling-group capacity provider, but launch_type=EC2 is
+  # the right shape for DAEMON: ECS schedules one task on every EC2
+  # the cluster knows about, regardless of which capacity provider
+  # supplied it.
+  launch_type = "EC2"
 
   # network_mode = host means no awsvpc → no security_groups block; the
   # task uses the host's SG. `service_registries` still works for host
