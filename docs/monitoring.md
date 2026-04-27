@@ -215,6 +215,7 @@ In the Healthchecks dashboard, click **Add Check** for each entry below. The **s
 | `dmarc-ingest`         | Simple, every 6 hours          | 2 h   | DMARC scheduler runs every 6 h.                                |
 | `ecs-reconfigure`      | Simple, every 30 minutes       | 30 m  | Pings on each successful regenerate; fallback fires every 15 m.|
 | `cognito-user-sync`    | Simple, every 30 days          | 7 d   | Fires only on user signup; very loose grace by design.         |
+| `quarterly-review`     | Simple, every 90 days          | 14 d  | Phase 4 §5. Manual operator ping after the quarterly review (see below).|
 
 (The Phase 2 plan originally included a `terraform-weekly` heartbeat. That was dropped because the Terraform workflow no longer runs on a cron schedule, so a heartbeat that only fires on manual dispatch isn't a useful signal.)
 
@@ -226,6 +227,7 @@ aws ssm put-parameter --name /cabal/healthcheck_ping_aws_backup          --type 
 aws ssm put-parameter --name /cabal/healthcheck_ping_dmarc_ingest        --type SecureString --overwrite --value '<url>'
 aws ssm put-parameter --name /cabal/healthcheck_ping_ecs_reconfigure     --type SecureString --overwrite --value '<url>'
 aws ssm put-parameter --name /cabal/healthcheck_ping_cognito_user_sync   --type SecureString --overwrite --value '<url>'
+aws ssm put-parameter --name /cabal/healthcheck_ping_quarterly_review    --type SecureString --overwrite --value '<url>'
 ```
 
 Lambdas cache the URL at cold start, so the next invocation after the secret-set picks it up automatically. The mail-tier containers receive the URL via ECS task-definition `secrets` and need a deployment cycle (`aws ecs update-service --force-new-deployment`) to pick up changes.
@@ -352,11 +354,102 @@ The §3 plan calls for two mail-tier-specific alert rules (`MailQueueGrowing`, `
 
 The mail-tier alert rules will land in a follow-up pass that ships either log-derived metrics or per-tier sidecars, after the trade-off is settled.
 
+## What populates when
+
+Some Grafana panels are blank for several minutes after the stack starts; some are blank by design. Useful expectations to set before you go diagnostic-hunting:
+
+- **1–2 min: probe panels** (Mail Tiers TCP/TLS, Frontend HTTP probe). Blackbox-driven; Prometheus scrapes blackbox every 30s.
+- **3–5 min: AWS-side metrics that always have a value** (EFS BurstCreditBalance / PercentIOLimit, ECS RunningTaskCount, ACM days to expiry). cloudwatch_exporter polls every 60s with a built-in 120s `delay_seconds` lag (CloudWatch metrics aren't immediately consistent), so first datapoint arrives ~3 min after the exporter starts.
+- **Empty until something happens (correct behavior)**: DynamoDB ThrottledRequests, Lambda errors / throttles, API Gateway 5xx rate. These are alert signals; flat-empty in steady state is what you want.
+- **Empty unless someone is using the system**: DynamoDB ConsumedRead/Write CU, API Gateway request count, Lambda duration p95. Use the admin app once and these populate within the next minute.
+- **Permanently empty with the current config**: CloudFront panels on the Frontend dashboard. CloudFront metrics live exclusively in `us-east-1`, and a single cloudwatch_exporter task scrapes one region. Either enable the AWS/CloudFront block in [docker/cloudwatch-exporter/config.yml](../docker/cloudwatch-exporter/config.yml) and run a second exporter pinned to `us-east-1`, or strip the panels — Phase 1's Kuma already covers the React app end-to-end so they're nice-to-have rather than load-bearing.
+
+If a panel is still blank after ~10 min and isn't in one of the categories above, dig in — start with `wget -qO- http://localhost:9090/api/v1/label/__name__/values` from inside the Prometheus task to confirm whether the metric series even exists.
+
 ## Phase 3 troubleshooting
 
-- **Grafana fails to start with `permission denied` on `/var/lib/grafana/grafana.db`.** Same family as the Kuma `chown` issue. The Grafana EFS access point is created with `posix_user = 472:472` (the upstream image's `grafana` user). If you ever bumped the image to a major version that changed the user, the old EFS files at `/grafana` retain the old uid. Either roll back, or `aws efs delete-access-point` and let Terraform recreate it (this also wipes the dashboards-edited-via-UI state — provisioning-baked dashboards come back on next boot).
+The notes below are lessons from the actual deploy, in roughly the order they were tripped over. Each is also reflected in code on `0.7.0`; this list is for future readers and re-deployers.
+
+- **Cloud Map service replacement cycle.** Every `terraform apply` was scheduling a forced replacement of all five awsvpc-mode Cloud Map services and the destroy step was failing with `ResourceInUse: Service contains registered instances`. Operators were having to manually `aws servicediscovery deregister-instance` after each apply. Root cause: AWS deprecated the `failure_threshold` field on `health_check_custom_config` and pins it to `1` server-side regardless. An empty `health_check_custom_config {}` block reads back as drift on every plan. Fix in [terraform/infra/modules/monitoring/discovery.tf](../terraform/infra/modules/monitoring/discovery.tf) is to set `failure_threshold = 1` explicitly and add `lifecycle { ignore_changes = [health_check_custom_config] }`. With that fix in place, manual deregistration should never be needed.
+- **node_exporter ECS service rejected with `containerName/containerPort must be specified`.** The DAEMON service uses `network_mode = "host"`. With awsvpc, ECS infers the ENI mapping from the task definition; with host or bridge, `service_registries.container_name` and `container_port` must be explicit.
+- **node_exporter ECS service rejected with `serviceRegistries value is configured to use a type 'A' DNS record, which is not supported when specifying 'host' or 'bridge' for networkMode`.** A host can run multiple containers on different ports, so ECS can't infer the port from an A-record alone. node_exporter's Cloud Map service registers SRV records instead; the awsvpc-mode services keep type A. Prometheus's scrape config follows: `type: SRV` on the `node` job, `type: A` everywhere else.
+- **node_exporter ECS service rejected with `Specifying a capacity provider strategy is not supported when you create a service using the DAEMON scheduling strategy`.** DAEMON places exactly one task per container instance regardless of which capacity provider supplied it; AWS rejects any `capacity_provider_strategy` block, even an inherited cluster default. Use `launch_type = "EC2"` instead.
+- **Grafana task fails to start with `failed to chown /var/lib/ecs/volumes/...: operation not permitted`.** Same family as the Phase 1 Kuma chown gotcha. The upstream `grafana/grafana` image creates `/var/lib/grafana` with explicit ownership, so binding an EFS access point at that path makes dockerd's copy-up try to chown the host volume mount and the access point's `posix_user` rejects it. Fix mirrors Phase 2 Healthchecks: mount EFS at a path that doesn't exist in the image (`/grafana-data`) and override `GF_PATHS_DATA` to match, so dockerd has nothing to copy-up. The same fix will apply to any future upstream image that pre-creates its data directory.
+- **cloudwatch_exporter container exits immediately with the JVM logging `NumberFormatException`.** The Java cloudwatch_exporter takes its config path positionally (`<port> <config-path>`); the `--config.file=` flag is a Go/Prometheus convention. The flag was being parsed as the listen port and the JVM crashed at startup. The Dockerfile `CMD` now passes `/config/config.yml` directly.
+- **Grafana comes up but the four bootstrap dashboards don't appear under the Cabalmail folder.** Two distinct problems hit at once. First: the provisioned Prometheus datasource didn't pin a `uid`, so Grafana auto-generated one — and the dashboards reference `datasource.uid: "prometheus"`, so the binding silently failed. Second: Grafana 11.x silently rejects provisioned dashboard JSON without a top-level `"id": null` field. Both fixes shipped together in [docker/grafana/provisioning/datasources/prometheus.yml](../docker/grafana/provisioning/datasources/prometheus.yml) and the dashboard JSONs.
 - **Alertmanager's webhook calls fail with `403 Forbidden` from the `alert_sink` Lambda.** The Lambda accepts both `X-Alert-Secret: <secret>` and `Authorization: Bearer <secret>`. Alertmanager's `http_config.authorization` sets the Bearer header; if the header arrives with leading whitespace or the secret in the wrong env var, the HMAC compare fails. Check `/cabal/lambda/alert_sink` log group and confirm the SSM secret matches what the entrypoint substituted into `/etc/alertmanager-rendered/alertmanager.yml`.
-- **Prometheus reports `cloudwatch-exporter` target as `down`.** Almost always an IAM problem at the cloudwatch-exporter task role. Re-check `cabal-cloudwatch-exporter-task-policy` includes `cloudwatch:GetMetricData`, `cloudwatch:GetMetricStatistics`, and `cloudwatch:ListMetrics` on `Resource: "*"`. Region-mismatched metric scrapes fail silently — the exporter doesn't error, it just returns no data. Confirm `AWS_REGION` env var on the task matches the region of the metrics you're scraping.
+- **Prometheus reports `cloudwatch-exporter` target as `down`.** Most likely a stale image tag (the JVM crash above). After ruling that out, check the IAM task role policy `cabal-cloudwatch-exporter-task-policy` includes `cloudwatch:GetMetricData`, `cloudwatch:GetMetricStatistics`, and `cloudwatch:ListMetrics` on `Resource: "*"`. Region-mismatched metric scrapes fail silently — the exporter doesn't error, it just returns no data; confirm `AWS_REGION` env var on the task matches the region of the metrics you're scraping.
 - **`node_exporter` daemon tasks don't start.** The daemon-strategy service requires the ECS cluster instance role to allow daemon-strategy task placement (the existing `AmazonEC2ContainerServiceforEC2Role` covers this) and for the host's SG to allow inbound TCP 9100 from the Prometheus task SG. The mail-tier `aws_security_group.ecs_instance` already permits all VPC traffic; if you ever scope it down, add an explicit ingress rule for 9100 from the Prometheus SG.
 - **Grafana "Data source is failing" against Prometheus, but Prometheus is healthy from Exec.** The Grafana SG allows broad egress; the Prometheus SG only allows ingress on 9090 from Grafana's SG (intentional — Prometheus has no public surface). If you switched the Grafana SG mid-apply, the security group rule may not have been recreated. `aws ecs update-service --cluster <cluster> --service cabal-grafana --force-new-deployment` to roll the task and re-resolve.
-- **Grafana dashboards are empty.** Three causes, in order of likelihood: cloudwatch_exporter has not yet scraped (give it 10 min after first start; it polls at 60s with a 120s lag); region mismatch (see above); the metric panel queries reference statistics not enabled in `docker/cloudwatch-exporter/config.yml` (e.g. asking for `p99` when only `Average` is exported). Check Prometheus `/api/v1/label/__name__/values` for the `aws_*` series the dashboard expects.
+- **Grafana dashboards still empty after the provisioning fixes above.** Three remaining causes, in order of likelihood: cloudwatch_exporter has not yet scraped (give it 10 min after first start; see "What populates when"); region mismatch on the cloudwatch_exporter task; the metric panel queries reference statistics not enabled in [docker/cloudwatch-exporter/config.yml](../docker/cloudwatch-exporter/config.yml) (e.g. asking for `p99` when only `Average` is exported). Check Prometheus `/api/v1/label/__name__/values` for the `aws_*` series the dashboard expects.
+
+---
+
+# Phase 4: Logs, runbooks, and tuning
+
+Phase 4 doesn't add new ECS services in its first wave — instead it formalizes the pieces of an alerting system that often get neglected: a runbook for every alert, a tap-action link from the push notification straight to that runbook, an explicit "stay on CloudWatch Logs" decision, and a quarterly-review heartbeat that prompts the operator to keep all of the above honest.
+
+Like Phases 1-3, Phase 4 is gated by `TF_VAR_MONITORING=true` — there is no separate flag.
+
+## 20. Runbook framework
+
+Every alert that can fire a push notification has a runbook in [docs/operations/runbooks/](./operations/runbooks/). Each runbook follows the same shape: what the alert means, who/what is impacted, the first three things to check, and how to escalate. See [the runbook README](./operations/runbooks/README.md) for the full index.
+
+How the runbook URL reaches your phone:
+
+- **Prometheus / Alertmanager**: each rule in [docker/prometheus/rules/alerts.yml](../docker/prometheus/rules/alerts.yml) carries a `runbook_url` annotation. Alertmanager forwards it as part of its native webhook body; the `alert_sink` Lambda's translator surfaces it (`_translate_alertmanager`) and attaches it to outbound pushes.
+- **Kuma & Healthchecks**: their webhook bodies don't carry a per-monitor runbook URL natively. The `alert_sink` Lambda has a static `_RUNBOOK_MAP` keyed by `source` (e.g. `kuma/IMAP TLS handshake`, `healthchecks/certbot-renewal`). When you add or rename a Kuma monitor, update the keys in [`lambda/api/alert_sink/function.py`](../lambda/api/alert_sink/function.py) to match, or the push will arrive without a runbook link.
+
+When a push includes a runbook URL, you'll see:
+
+- **Pushover**: a "Runbook" tap-action link in the notification, below the body.
+- **ntfy**: the notification body itself becomes tappable (`Click` header), opening the runbook in the phone's browser.
+
+The map and the runbook files are version-controlled together; PRs that change one without the other should fail review.
+
+## 21. Logs: stay on CloudWatch (for now)
+
+The Phase 4 plan offered a choice between adding self-hosted Loki+Promtail and staying on CloudWatch Logs. Cabalmail stays on CloudWatch:
+
+- Log volume is small (one operator, low mail traffic). CloudWatch's per-GB ingest cost dominates the comparison and is not a problem at this scale.
+- We don't need cross-tier log correlation in real time. Each tier's logs are already grouped (`/ecs/cabal-imap`, `/aws/lambda/cabal-list`, etc.); a CloudWatch Logs Insights query covers the rare ad-hoc cross-tier search.
+- Loki adds another stateful ECS service to operate, with EFS-backed chunk storage that grows monotonically. The maintenance cost outweighs the benefit until either log volume or cross-tier search frequency becomes painful.
+- Log-derived metrics (sendmail deferred/bounced rate, IMAP auth failure rate, fail2ban activity, Cognito post-confirmation errors) are doable as **CloudWatch metric filters** without a log-aggregation tier. They show up as Prometheus metrics via `cloudwatch_exporter` and reuse the existing alert path.
+
+Revisit if log volume grows past ~10 GB/day, if a recurring incident type needs cross-tier search, or if a feature needs structured query (Phase 4 §2 metrics will surface what we can get without it).
+
+## 22. Quarterly monitoring review
+
+The system needs maintenance attention. The plan's "tuning discipline" (zero false pages in a typical week, threshold tuning recorded against issues, monthly review of the noisiest and longest-silent alerts) only works if it actually happens. Phase 4 §5 adds a `quarterly-review` Healthchecks check that pages the operator if 90+ days pass without a manual ping.
+
+The check is **not** automated. Nothing pings it on a schedule. The operator pings it after walking through the checklist in [heartbeat-quarterly-review.md](./operations/runbooks/heartbeat-quarterly-review.md).
+
+Set up the check the same way as the other heartbeats in §12, then ping it once at the end of setup (so it starts green, with a 90-day clock):
+
+```sh
+PING_URL=$(aws ssm get-parameter --name /cabal/healthcheck_ping_quarterly_review --with-decryption --query Parameter.Value --output text)
+curl -fsS "$PING_URL"
+```
+
+The runbook covers what the review entails. If you skip it, the worst that happens is one critical-severity push every 90 + 14 = 104 days.
+
+## 23. Tabletop exercises
+
+Phase 4 §5 acceptance includes simulating three failure modes end-to-end:
+
+| Scenario | How to simulate | Expected page | Expected runbook |
+| --- | --- | --- | --- |
+| Mail queue backup | On `smtp-out`, `mailq` and `sendmail -OQueueLA=0 -q` to artificially defer; the rule fires once Phase 4 §2 log-derived metrics land. *Until then, the closest equivalent is a Kuma probe failure on port 25 by blocking it in the SG.* | Probe failure → critical ntfy + Pushover | [probe-failure.md](./operations/runbooks/probe-failure.md) |
+| IMAP cert expiring (control-domain) | In dev: re-issue a short-lived cert and wait, or temporarily replace the listener cert with a deliberately near-expiry one. Don't do this in prod. | `BlackboxTLSCertExpiringSoon` (warning ntfy) and Kuma's "Control-domain cert" 21-day notification | [cert-expiring.md](./operations/runbooks/cert-expiring.md) |
+| Certbot Lambda silently disabled | Disable the EventBridge schedule on `cabal-certbot-renewal` in dev; wait past the 24 h grace | `healthchecks/certbot-renewal` missed → critical ntfy + Pushover | [heartbeat-certbot-renewal.md](./operations/runbooks/heartbeat-certbot-renewal.md) |
+
+Run the table top once after each Phase 4 ship, and again at every quarterly review. If the expected push doesn't arrive, fix the broken link before treating the tabletop as passing.
+
+## 24. Acceptance for Phase 4
+
+- [ ] Every alert in `docker/prometheus/rules/alerts.yml` has a `runbook_url` annotation pointing into [docs/operations/runbooks/](./operations/runbooks/).
+- [ ] The `alert_sink` Lambda's `_RUNBOOK_MAP` covers every Kuma monitor in §9 and every Healthchecks check in §12.
+- [ ] A test push from Kuma (any monitor) and from Healthchecks (any check) arrives on the operator's phone with a tappable runbook link.
+- [ ] An Alertmanager test alert (e.g. via `amtool alert add testing severity=warning runbook_url=https://example.test/r.md ...`) round-trips with the runbook URL preserved.
+- [ ] The `quarterly-review` check is configured in Healthchecks and shows green after the initial bootstrap ping.
+- [ ] Tabletop exercise from §23 runs cleanly for at least the certbot scenario; mail-queue and cert-expiry scenarios run cleanly once Phase 4 §2 lands.
