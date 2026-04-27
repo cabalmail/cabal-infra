@@ -124,10 +124,16 @@ resource "aws_ecs_task_definition" "grafana" {
       { name = "GF_AUTH_ANONYMOUS_ORG_ROLE", value = "Viewer" },
       { name = "GF_AUTH_DISABLE_LOGIN_FORM", value = "false" },
       { name = "GF_USERS_DEFAULT_THEME", value = "dark" },
-      # The default sqlite store goes under /var/lib/grafana, which is
-      # mounted from EFS. Provisioning files live under
-      # /etc/grafana/provisioning, baked into the image.
-      { name = "GF_PATHS_DATA", value = "/var/lib/grafana" },
+      # Data dir is mounted at /grafana-data, NOT /var/lib/grafana.
+      # The upstream image creates /var/lib/grafana with explicit
+      # ownership; bind-mounting EFS onto that path makes dockerd's
+      # copy-up try to chown the host volume mount, which the access
+      # point rejects (`operation not permitted`) — same family as
+      # the Kuma and Healthchecks chown gotchas. Mounting at a path
+      # that doesn't exist in the image skips copy-up entirely.
+      # Provisioning files live under /etc/grafana/provisioning,
+      # baked into the image at a path the EFS mount doesn't shadow.
+      { name = "GF_PATHS_DATA", value = "/grafana-data" },
       { name = "GF_PATHS_PROVISIONING", value = "/etc/grafana/provisioning" },
       { name = "GF_INSTALL_PLUGINS", value = "" },
     ]
@@ -138,7 +144,7 @@ resource "aws_ecs_task_definition" "grafana" {
 
     mountPoints = [{
       sourceVolume  = "grafana-data"
-      containerPath = "/var/lib/grafana"
+      containerPath = "/grafana-data"
     }]
 
     logConfiguration = {
