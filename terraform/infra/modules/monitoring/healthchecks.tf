@@ -140,7 +140,15 @@ resource "aws_ecs_task_definition" "healthchecks" {
       # /var/local/healthchecks-data does not exist in the image, so no
       # copy-up runs.
       { name = "DB_NAME", value = "/var/local/healthchecks-data/hc.sqlite" },
-      { name = "ALLOWED_HOSTS", value = "heartbeat.${var.control_domain}" },
+      # ALLOWED_HOSTS is `*` because the ALB target-group health check
+      # cannot set a custom Host header — it sends `Host: <target-ip>`,
+      # which fails Django's host validation and 400s the probe. The
+      # ECS task sits in a private subnet behind a security group that
+      # only accepts the ALB SG, and the ALB listener rule for
+      # `heartbeat.<control-domain>` is the only public ingress to this
+      # target group, so hostname enforcement is already done at the
+      # ALB layer; Django doesn't need to repeat it.
+      { name = "ALLOWED_HOSTS", value = "*" },
       { name = "SITE_ROOT", value = "https://heartbeat.${var.control_domain}" },
       { name = "SITE_NAME", value = "Cabalmail Healthchecks" },
       { name = "DEFAULT_FROM_EMAIL", value = "noreply@${var.control_domain}" },
