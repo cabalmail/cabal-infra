@@ -89,8 +89,11 @@ scrape_configs:
         replacement: blackbox-exporter.cabal-monitoring.cabal.internal:9115
 
   - job_name: node
+    # SRV query — node_exporter's Cloud Map service registers SRV
+    # records (the only type ECS accepts for host network-mode
+    # services). The SRV response carries both target host and port
+    # (9100), so no static `port:` is set here.
     dns_sd_configs:
       - names:
           - node-exporter.cabal-monitoring.cabal.internal
-        type: A
-        port: 9100
+        type: SRV

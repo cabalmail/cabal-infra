@@ -344,7 +344,7 @@ resource "aws_ecs_service" "node_exporter" {
   # `container_name` + `container_port` to be explicit (with awsvpc the
   # ENI mapping is unambiguous; with host/bridge ECS won't infer).
   service_registries {
-    registry_arn   = aws_service_discovery_service.monitoring["node-exporter"].arn
+    registry_arn   = aws_service_discovery_service.node_exporter.arn
     container_name = "node-exporter"
     container_port = 9100
   }
