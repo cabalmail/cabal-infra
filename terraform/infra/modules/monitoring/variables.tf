@@ -108,3 +108,9 @@ variable "mail_domains" {
   type        = list(string)
   description = "List of Cabalmail-hosted mail domains. The first entry is used as the From: domain for Healthchecks-originated mail (control_domain typically has no MX at the apex, so noreply@<control-domain> gets rejected by sendmail's sender-domain check)."
 }
+
+variable "healthchecks_registration_open" {
+  type        = bool
+  description = "Whether the Healthchecks signup form is open. True at bootstrap to let the operator sign up the first user via the magic-link flow; false the rest of the time."
+  default     = false
+}

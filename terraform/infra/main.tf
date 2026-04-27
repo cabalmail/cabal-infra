@@ -231,5 +231,6 @@ module "monitoring" {
 
   lambda_bucket = module.bucket.bucket
 
-  mail_domains = var.mail_domains
+  mail_domains                   = var.mail_domains
+  healthchecks_registration_open = var.healthchecks_registration_open
 }

@@ -25,9 +25,10 @@ The monitoring stack is gated by `var.monitoring`. Set it to `true` only in the 
 
 In your GitHub repository settings, go to **Settings → Environments → _environment_ → Variables** and add:
 
-| Variable            | Example value | Notes                                                               |
-| ------------------- | ------------- | ------------------------------------------------------------------- |
-| `TF_VAR_MONITORING` | `true`        | Set to `true` in `prod`; leave as `false` (or unset) elsewhere.     |
+| Variable                                  | Example value | Notes                                                                                                                    |
+| ----------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `TF_VAR_MONITORING`                       | `true`        | Gates the whole stack. Set to `true` in `prod`; leave as `false` (or unset) elsewhere.                                   |
+| `TF_VAR_HEALTHCHECKS_REGISTRATION_OPEN`   | `false`       | Phase 2 only. Controls whether the Healthchecks signup form accepts new accounts. Defaults to `false` (closed) when unset; flip to `true` for the bootstrap signup in §11, then back to `false`. Has no effect when `TF_VAR_MONITORING=false`. |
 
 ## 3. Apply Terraform
 
@@ -181,10 +182,11 @@ Phase 2 adds Healthchecks for the scheduled jobs that Phase 1 cannot see (cron-s
 
 The Healthchecks task is wired to deliver mail through the IMAP tier's local-delivery sendmail (`EMAIL_HOST=imap.cabal.internal`, port 25, no TLS, no auth) — see [healthchecks.tf](../terraform/infra/modules/monitoring/healthchecks.tf). This means magic-link signup and password reset work natively, **as long as you sign up with a Cabalmail-hosted address whose mailbox you can read**. Mail destined for non-Cabalmail addresses (gmail, etc.) won't deliver from this Healthchecks instance — it can only relay inbound to itself.
 
-1. Pick a Cabalmail address you own to use as the operator login (e.g. `admin@<one-of-your-mail-domains>`). It needs to be a real address in `cabal-addresses`; if it isn't, IMAP's sendmail will TEMPFAIL the magic-link delivery.
-2. Open `https://heartbeat.<control-domain>/` in a browser. Cognito challenges you. Sign in.
-3. On the Healthchecks landing page, click **Sign Up** and enter the address from step 1. Healthchecks emails a magic link; the link arrives in your Cabalmail inbox within seconds. Click it to set a password.
-4. Lock the door: set `REGISTRATION_OPEN=False` in [healthchecks.tf](../terraform/infra/modules/monitoring/healthchecks.tf) and re-apply.
+1. Open the signup form: in your GitHub environment for this stack, set `TF_VAR_HEALTHCHECKS_REGISTRATION_OPEN=true` and re-run the Terraform workflow. The default is `false` (closed); flipping to `true` lets the Healthchecks `Sign Up` form accept new accounts.
+2. Pick a Cabalmail address you own to use as the operator login (e.g. `admin@<one-of-your-mail-domains>`). It needs to be a real address in `cabal-addresses`; if it isn't, IMAP's sendmail will TEMPFAIL the magic-link delivery.
+3. Open `https://heartbeat.<control-domain>/` in a browser. Cognito challenges you. Sign in.
+4. On the Healthchecks landing page, click **Sign Up** and enter the address from step 2. Healthchecks emails a magic link; the link arrives in your Cabalmail inbox within seconds. Click it to set a password.
+5. Lock the door: set `TF_VAR_HEALTHCHECKS_REGISTRATION_OPEN=false` (or just delete the variable — `false` is the default) and re-run Terraform.
 
 **Fallback if mail delivery doesn't work** (e.g. you want to bootstrap before adding a Cabalmail address, or the IMAP tier is down): create a superuser via ECS Exec and log in with the password form:
 
@@ -264,7 +266,7 @@ To silence one heartbeat without disabling the entire monitoring stack: pause th
 ## Phase 2 troubleshooting
 
 - **Healthchecks task fails with `CannotCreateContainerError: failed to chown … operation not permitted`.** Same family as the Kuma `chown` issue from Phase 1 lesson 2 in [monitoring-plan.md §6](./0.7.0/monitoring-plan.md), but the chown is happening in dockerd at container creation, not in an entrypoint shim. The upstream Dockerfile runs `useradd --system hc` (system uid, typically ~999) and `mkdir /data && chown hc /data`, so when ECS bind-mounts the EFS access point onto `/data`, dockerd's copy-up logic tries to chown the host volume path to hc's uid — which the access point's `posix_user = 1000:1000` enforcement refuses. [healthchecks.tf](../terraform/infra/modules/monitoring/healthchecks.tf) sidesteps this by mounting EFS at `/var/local/healthchecks-data` (a path that doesn't exist in the image, so no copy-up runs) and forcing the container to run as `user = "1000:1000"` so writes succeed under the access point's translated uid. If you change the data path, update the `DB_NAME` env var and the `mountPoints.containerPath` in lockstep.
-- **Healthchecks dashboard shows `heartbeat.<control-domain>` but Cognito redirects loop.** The ALB SG already has `alb_https_out` from Phase 1 (Cognito token exchange). If the loop is on first signup specifically, it's the `REGISTRATION_OPEN=True → False` flip in the task definition: confirm `True` until the operator account is created, then commit a flip to `False` and apply.
+- **Healthchecks dashboard shows `heartbeat.<control-domain>` but Cognito redirects loop.** The ALB SG already has `alb_https_out` from Phase 1 (Cognito token exchange). If the loop is on first signup specifically, the signup form is closed: set `TF_VAR_HEALTHCHECKS_REGISTRATION_OPEN=true` in your GitHub environment and re-run Terraform, complete the signup, then flip the variable back to `false`.
 - **Heartbeat misfires immediately after enabling monitoring.** Each consumer caches the SSM ping URL at cold start (Lambdas) or task start (containers). After populating a placeholder, force a refresh: `aws lambda invoke --function-name cabal-certbot-renewal /tmp/out.json` for Lambdas; `aws ecs update-service --cluster <cluster> --service cabal-imap --force-new-deployment` (and the smtp tiers) for the reconfigure heartbeat.
 - **`backup_heartbeat` Lambda silent.** Confirm `var.backup = true` in the environment — without the AWS Backup plan, no `Backup Job State Change` events fire and the EventBridge rule has nothing to invoke. The Lambda existing without the backup plan is harmless but useless.
 - **Healthchecks task is up and serving but the ALB target stays unhealthy.** Look at the uwsgi log: if `GET /` from the VPC subnet IPs returns HTTP 400 in single-digit ms, Django is rejecting the probe with `DisallowedHost`. ALB target-group health checks can't set a custom Host header — they send `Host: <target-ip>:<port>`, which fails Django's `ALLOWED_HOSTS` check. The task definition uses `ALLOWED_HOSTS=*` for this reason; the ALB listener rule for `heartbeat.<control-domain>` is the only public path to the target group, and the task SG only accepts traffic from the ALB SG, so hostname validation is enforced at the ALB layer. If you change `ALLOWED_HOSTS` away from `*` you also need to either accept the 4xx in the matcher (don't) or front the health check with something that can rewrite the Host header (don't).
