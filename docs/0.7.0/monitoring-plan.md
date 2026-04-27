@@ -341,11 +341,12 @@ Each scheduled component pings a unique URL on success. A missing ping past the 
 | Job                                  | Where to add the ping                                            | Schedule          |
 | ------------------------------------ | ---------------------------------------------------------------- | ----------------- |
 | Certbot renewal Lambda               | End of `lambda/certbot-renewal/function.py`                      | Daily             |
-| Weekly Terraform `apply`             | End of `.github/workflows/terraform.yml` (Wednesday job)         | Weekly            |
 | DynamoDB / EFS AWS Backup            | EventBridge rule → tiny Lambda that pings on `BACKUP_JOB` success | Daily             |
 | DMARC report ingestion               | End of `process_dmarc` Lambda                                    | Hourly            |
 | ECS reconfigure (`reconfigure.sh`)   | Successful end of each loop iteration                            | On SQS message    |
 | Cognito user-sync Lambda             | End of function                                                  | On invocation     |
+
+(The original Phase 2 plan also listed a "Weekly Terraform `apply`" heartbeat. It was dropped during implementation: the Terraform workflow doesn't run on a cron schedule, only on push / manual dispatch / the post-Docker `repository_dispatch`, so a missed heartbeat would have been ambiguous between "Terraform is broken" and "no one has dispatched a run lately.")
 
 Ping URLs are stored as SSM parameters per job; Lambdas read at cold start.
 
@@ -402,7 +403,7 @@ Alertmanager routes critical → `alert_sink` Lambda (Pushover + ntfy), warning 
 
 - Grafana dashboards exist for: Mail Tiers, AWS Services, API Gateway, Frontend.
 - Each rule above has been triggered at least once on the dev account (synthetically or by load) and produced the expected Pushover and/or ntfy notification.
-- Alertmanager is configured with at least one silence window (e.g., the weekly Wednesday Terraform apply) to validate silencing works.
+- Alertmanager is configured with at least one silence window (e.g., during a planned maintenance dispatch of the Terraform workflow) to validate silencing works.
 
 ---
 
