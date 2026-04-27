@@ -25,9 +25,10 @@ The monitoring stack is gated by `var.monitoring`. Set it to `true` only in the 
 
 In your GitHub repository settings, go to **Settings → Environments → _environment_ → Variables** and add:
 
-| Variable            | Example value | Notes                                                               |
-| ------------------- | ------------- | ------------------------------------------------------------------- |
-| `TF_VAR_MONITORING` | `true`        | Set to `true` in `prod`; leave as `false` (or unset) elsewhere.     |
+| Variable                                  | Example value | Notes                                                                                                                    |
+| ----------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `TF_VAR_MONITORING`                       | `true`        | Gates the whole stack. Set to `true` in `prod`; leave as `false` (or unset) elsewhere.                                   |
+| `TF_VAR_HEALTHCHECKS_REGISTRATION_OPEN`   | `false`       | Phase 2 only. Controls whether the Healthchecks signup form accepts new accounts. Defaults to `false` (closed) when unset; flip to `true` for the bootstrap signup in §11, then back to `false`. Has no effect when `TF_VAR_MONITORING=false`. |
 
 ## 3. Apply Terraform
 
