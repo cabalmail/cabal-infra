@@ -230,4 +230,6 @@ module "monitoring" {
   user_pool_domain = module.pool.user_pool_domain
 
   lambda_bucket = module.bucket.bucket
+
+  mail_domains = var.mail_domains
 }

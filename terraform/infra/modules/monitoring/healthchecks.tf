@@ -151,7 +151,18 @@ resource "aws_ecs_task_definition" "healthchecks" {
       { name = "ALLOWED_HOSTS", value = "*" },
       { name = "SITE_ROOT", value = "https://heartbeat.${var.control_domain}" },
       { name = "SITE_NAME", value = "Cabalmail Healthchecks" },
-      { name = "DEFAULT_FROM_EMAIL", value = "noreply@${var.control_domain}" },
+      # From: domain piggy-backs on the `mail-admin.<first-mail-domain>`
+      # subdomain that the DMARC ingestion infrastructure already
+      # provisions (see terraform/infra/modules/app/dmarc_user.tf):
+      # MX, SPF, DKIM and DMARC records all land there as part of the
+      # standard apply. Cabalmail does not allow addressing on the
+      # apex of a mail domain by design, so neither <control-domain>
+      # nor mail_domains[0] itself resolves to MX/A — both fail
+      # sendmail's check_mail with `Domain of sender ... does not
+      # exist`. mail-admin.<first-mail-domain> has full DNS, so it's
+      # the natural place for system-originated mail like the
+      # Healthchecks magic-link FROM. Local part is free to vary.
+      { name = "DEFAULT_FROM_EMAIL", value = "noreply@mail-admin.${var.mail_domains[0]}" },
       { name = "DEBUG", value = "False" },
       { name = "REGISTRATION_OPEN", value = "True" },
       { name = "USE_PAYMENTS", value = "False" },
