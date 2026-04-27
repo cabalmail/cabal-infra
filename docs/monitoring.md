@@ -112,6 +112,7 @@ In Kuma, add a new Notification provider:
   aws ssm get-parameter --name /cabal/alert_sink_secret --with-decryption --query Parameter.Value --output text
   ```
 - **Body template**:
+  {% raw %}
   ```json
   {
     "summary": "{{ msg }}",
@@ -119,8 +120,9 @@ In Kuma, add a new Notification provider:
     "source": "kuma/{{ monitorJSON.name }}"
   }
   ```
+  {% endraw %}
 
-  Kuma uses Liquid templating — `{{ ... }}` for interpolation, `{% if %}…{% endif %}` for conditionals. Handlebars-style `{{#if}}` will fail with a TokenizationError.
+  Kuma uses Liquid templating — {% raw %}`{{ ... }}`{% endraw %} for interpolation, {% raw %}`{% if %}…{% endif %}`{% endraw %} for conditionals. Handlebars-style {% raw %}`{{#if}}`{% endraw %} will fail with a TokenizationError.
 
 Click **Test** — you should receive a Pushover push **and** a ntfy notification within 30 seconds. If either is missing, check the `alert_sink` CloudWatch log group at `/cabal/lambda/alert_sink` for per-transport errors.
 
