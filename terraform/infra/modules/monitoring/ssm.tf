@@ -61,3 +61,80 @@ resource "aws_ssm_parameter" "ntfy_publisher_token" {
     ignore_changes = [value]
   }
 }
+
+# ── Healthchecks Django secret key ─────────────────────────────
+#
+# Generated at first apply. Rotate via `terraform taint
+# random_password.healthchecks_secret_key` (will invalidate active
+# sessions on the Healthchecks UI).
+
+resource "random_password" "healthchecks_secret_key" {
+  length  = 50
+  special = false
+}
+
+resource "aws_ssm_parameter" "healthchecks_secret_key" {
+  name        = "/cabal/healthchecks_secret_key"
+  description = "Django SECRET_KEY for the Healthchecks ECS service. Rotate via terraform taint."
+  type        = "SecureString"
+  value       = random_password.healthchecks_secret_key.result
+
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
+
+# ── Healthcheck ping URLs (Phase 2 heartbeats) ─────────────────
+#
+# One placeholder per scheduled job. After Healthchecks is up, the
+# operator creates a check per job in the UI and pastes its ping URL
+# into the corresponding parameter with `aws ssm put-parameter
+# --overwrite`. Consumers (Lambdas, reconfigure.sh, GH Actions) read
+# the value at invocation time and skip the ping if the value still
+# starts with "placeholder-".
+
+locals {
+  heartbeat_jobs = {
+    certbot_renewal   = "Daily certbot renewal Lambda."
+    aws_backup        = "Daily AWS Backup completion (DynamoDB + EFS)."
+    dmarc_ingest      = "Hourly DMARC report ingestion Lambda (process_dmarc)."
+    ecs_reconfigure   = "ECS reconfigure loop in the mail tier containers."
+    cognito_user_sync = "Cognito post-confirmation Lambda (assign_osid)."
+  }
+}
+
+resource "aws_ssm_parameter" "healthcheck_ping" {
+  for_each = local.heartbeat_jobs
+
+  name        = "/cabal/healthcheck_ping_${each.key}"
+  description = "Healthchecks ping URL for ${each.value} Populate after creating the corresponding check in the Healthchecks UI."
+  type        = "SecureString"
+  value       = "placeholder-set-via-aws-ssm-put-parameter"
+
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
+
+# ── Grafana admin password (Phase 3) ───────────────────────────
+#
+# Generated at first apply; rotation via `terraform taint
+# random_password.grafana_admin_password` followed by an apply (Grafana
+# reads GF_SECURITY_ADMIN_PASSWORD on every boot, so the new value
+# takes effect on the next task replacement).
+
+resource "random_password" "grafana_admin_password" {
+  length  = 32
+  special = false
+}
+
+resource "aws_ssm_parameter" "grafana_admin_password" {
+  name        = "/cabal/grafana_admin_password"
+  description = "Grafana local-admin password. Used to log in for admin actions; viewer access comes via Cognito at the ALB."
+  type        = "SecureString"
+  value       = random_password.grafana_admin_password.result
+
+  lifecycle {
+    ignore_changes = [value]
+  }
+}

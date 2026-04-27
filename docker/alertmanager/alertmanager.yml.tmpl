@@ -1,0 +1,73 @@
+# Alertmanager configuration for Cabalmail Phase 3.
+#
+# Single sink — the alert_sink Lambda — for both severities. The Lambda
+# is the universal fan-out point (Pushover for critical, ntfy for both)
+# so Alertmanager itself doesn't need per-transport configuration.
+#
+# Placeholders __ALERT_SINK_URL__ and __ALERT_SECRET__ are substituted at
+# boot by the entrypoint (the secret comes from SSM via the ECS `secrets`
+# mechanism so it never appears in the task definition or git).
+
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: ['alertname', 'severity']
+  group_wait: 30s
+  group_interval: 5m
+  # Daily re-page on still-firing critical alerts so a stuck issue
+  # eventually re-prompts. Warnings repeat every 6h to avoid noise.
+  repeat_interval: 24h
+  receiver: alert-sink-warning
+  routes:
+    - matchers:
+        - severity = critical
+      receiver: alert-sink-critical
+      repeat_interval: 24h
+    - matchers:
+        - severity = warning
+      receiver: alert-sink-warning
+      repeat_interval: 6h
+
+receivers:
+  - name: alert-sink-critical
+    webhook_configs:
+      - url: __ALERT_SINK_URL__
+        send_resolved: true
+        http_config:
+          authorization:
+            type: Bearer
+            credentials: __ALERT_SECRET__
+        # Custom payload via templates so the Lambda receives the
+        # {severity, summary, source} shape it expects rather than the
+        # default Alertmanager fan-out body.
+        max_alerts: 10
+
+  - name: alert-sink-warning
+    webhook_configs:
+      - url: __ALERT_SINK_URL__
+        send_resolved: true
+        http_config:
+          authorization:
+            type: Bearer
+            credentials: __ALERT_SECRET__
+        max_alerts: 10
+
+# Alertmanager doesn't allow custom JSON payloads in the standard
+# webhook_configs — it always posts its native schema. We rely on the
+# alert_sink Lambda's body_extractor: if `severity`, `summary`, and
+# `source` aren't at the top level, the Lambda picks them off the first
+# alert in `alerts[]`. The bridging logic lives in the Lambda, not here.
+#
+# The Lambda's `X-Alert-Secret` header is satisfied by the
+# Authorization: Bearer header above — the Lambda accepts either.
+
+inhibit_rules:
+  # When a cert is critically expiring, suppress the warning-level
+  # variant on the same domain — both rules fire on the same cert and
+  # we only need one push.
+  - source_matchers:
+      - alertname = CertExpiringSoonCritical
+    target_matchers:
+      - alertname = CertExpiringSoonWarning
+    equal: ['domain_name']

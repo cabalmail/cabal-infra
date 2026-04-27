@@ -1,8 +1,9 @@
 terraform {
   required_providers {
     aws = {
-      source  = "hashicorp/aws"
-      version = ">= 5.32"
+      source = "hashicorp/aws"
+      # 6.28 added invoked_via_function_url on aws_lambda_permission.
+      version = ">= 6.28"
     }
     random = {
       source  = "hashicorp/random"

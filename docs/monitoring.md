@@ -1,12 +1,14 @@
 # Monitoring & Alerting
 
-The 0.7.0 release adds an optional monitoring stack on top of the existing mail infrastructure. Phase 1 provides black-box uptime monitoring plus a push-notification alerting path that bypasses the Cabalmail email system. See [monitoring-plan.md](./0.7.0/monitoring-plan.md) for the multi-phase roadmap and design rationale; this page is the operator's runbook for enabling the stack and completing first-boot configuration.
+The 0.7.0 release adds an optional monitoring stack on top of the existing mail infrastructure. Phase 1 provides black-box uptime monitoring plus a push-notification alerting path that bypasses the Cabalmail email system. Phase 2 adds heartbeat monitoring for scheduled jobs (certbot, weekly Terraform, AWS Backup, DMARC ingestion, ECS reconfigure loop, Cognito user-sync). See [monitoring-plan.md](./0.7.0/monitoring-plan.md) for the multi-phase roadmap and design rationale; this page is the operator's runbook for enabling the stack and completing first-boot configuration.
 
 The stack is disabled by default. When enabled it deploys:
 
 - **Uptime Kuma** — a small, self-hosted status-page / probe runner. Reachable at `https://uptime.<control-domain>/` behind Cognito login.
 - **Self-hosted ntfy** — open-source push-notification server. Reachable at `https://ntfy.<control-domain>/` with token auth enforced by the app (not the ALB).
 - **`alert_sink` Lambda** — a webhook sink fronted by a Lambda Function URL. Callers authenticate with a shared secret. `critical` severity fans out to Pushover (priority 1) and ntfy (priority 5); `warning` goes to ntfy (priority 3); `info` is dropped.
+- **Self-hosted Healthchecks** (Phase 2) — a [healthchecks.io](https://healthchecks.io) instance for "did this scheduled job ping recently?" heartbeats. Reachable at `https://heartbeat.<control-domain>/` behind Cognito.
+- **`backup_heartbeat` Lambda** (Phase 2) — invoked by an EventBridge rule on AWS Backup `JOB_COMPLETED` events; pings the corresponding Healthchecks check.
 
 ## 1. Create your Pushover account and application
 
@@ -23,9 +25,10 @@ The monitoring stack is gated by `var.monitoring`. Set it to `true` only in the 
 
 In your GitHub repository settings, go to **Settings → Environments → _environment_ → Variables** and add:
 
-| Variable            | Example value | Notes                                                               |
-| ------------------- | ------------- | ------------------------------------------------------------------- |
-| `TF_VAR_MONITORING` | `true`        | Set to `true` in `prod`; leave as `false` (or unset) elsewhere.     |
+| Variable                                  | Example value | Notes                                                                                                                    |
+| ----------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `TF_VAR_MONITORING`                       | `true`        | Gates the whole stack. Set to `true` in `prod`; leave as `false` (or unset) elsewhere.                                   |
+| `TF_VAR_HEALTHCHECKS_REGISTRATION_OPEN`   | `false`       | Phase 2 only. Controls whether the Healthchecks signup form accepts new accounts. Defaults to `false` (closed) when unset; flip to `true` for the bootstrap signup in §11, then back to `false`. Has no effect when `TF_VAR_MONITORING=false`. |
 
 ## 3. Apply Terraform
 
@@ -109,13 +112,17 @@ In Kuma, add a new Notification provider:
   aws ssm get-parameter --name /cabal/alert_sink_secret --with-decryption --query Parameter.Value --output text
   ```
 - **Body template**:
+  {% raw %}
   ```json
   {
-    "summary": "{{msg}}",
-    "severity": "{{#if (heartbeatJSON.status == 0)}}critical{{else}}info{{/if}}",
-    "source": "kuma/{{monitorJSON.name}}"
+    "summary": "{{ msg }}",
+    "severity": "{% if heartbeatJSON.status == 0 %}critical{% else %}info{% endif %}",
+    "source": "kuma/{{ monitorJSON.name }}"
   }
   ```
+  {% endraw %}
+
+  Kuma uses Liquid templating — {% raw %}`{{ ... }}`{% endraw %} for interpolation, {% raw %}`{% if %}…{% endif %}`{% endraw %} for conditionals. Handlebars-style {% raw %}`{{#if}}`{% endraw %} will fail with a TokenizationError.
 
 Click **Test** — you should receive a Pushover push **and** a ntfy notification within 30 seconds. If either is missing, check the `alert_sink` CloudWatch log group at `/cabal/lambda/alert_sink` for per-transport errors.
 
@@ -133,7 +140,6 @@ In the Kuma dashboard, add one monitor for each row below. Attach the webhook no
 | API round-trip (`/list`)       | HTTP(s)     | `https://admin.<control-domain>/prod/list` | 5 min    | 2       |
 | ntfy server health             | HTTP(s)     | `https://ntfy.<control-domain>/v1/health`  | 120 s    | 2       |
 | Control-domain cert            | Keyword     | `https://admin.<control-domain>/`, keyword: any. Enable **Certificate expiration notification**: 21 / 7 / 1 days. | 4 h | 2 |
-| Mail-domain certs              | Keyword     | One monitor per entry in `TF_VAR_MAIL_DOMAINS`, same cert settings. | 4 h | 2 |
 
 The `/list` probe needs a valid Cognito JWT. In Phase 1, seed it manually: sign in to the admin app, copy your `id_token` out of DevTools, and paste it as `Authorization: Bearer <token>` in the monitor's headers. Rotate it monthly. (Phase 4 adds a longer-lived monitor identity.)
 
@@ -162,6 +168,215 @@ The Terraform `ignore_changes = [value]` lifecycle on each SSM parameter means s
 
 ## Disabling the stack
 
-Set `TF_VAR_MONITORING=false` in the GitHub environment and re-run Terraform. The module is gated with `count = var.monitoring ? 1 : 0`, so the ECS services, ALB, Lambda, and SSM parameters are destroyed cleanly. The `cabal-uptime-kuma` and `cabal-ntfy` ECR repositories and the Cognito user pool domain persist (they are cheap and not flag-gated).
+Set `TF_VAR_MONITORING=false` in the GitHub environment and re-run Terraform. The module is gated with `count = var.monitoring ? 1 : 0`, so the ECS services, ALB, Lambda, and SSM parameters are destroyed cleanly. The `cabal-uptime-kuma`, `cabal-ntfy`, and `cabal-healthchecks` ECR repositories and the Cognito user pool domain persist (they are cheap and not flag-gated).
 
-**Note on EFS state:** destroying the stack leaves the `/uptime-kuma` and `/ntfy` directories on the shared EFS. Re-enabling monitoring later will pick up the existing SQLite databases and ntfy user/auth state, preserving your configuration. Remove the directories manually from any running mail-tier container if you want a clean start.
+**Note on EFS state:** destroying the stack leaves the `/uptime-kuma`, `/ntfy`, and `/healthchecks` directories on the shared EFS. Re-enabling monitoring later will pick up the existing SQLite databases and ntfy user/auth state, preserving your configuration. Remove the directories manually from any running mail-tier container if you want a clean start.
+
+---
+
+# Phase 2: Heartbeat monitoring
+
+Phase 2 adds Healthchecks for the scheduled jobs that Phase 1 cannot see (cron-style runs, EventBridge schedules, the ECS reconfigure loop). It is enabled by the same `TF_VAR_MONITORING=true` flag — there is no separate switch. Once Phase 1 is up, follow the steps below to bring Phase 2 online.
+
+## 11. First-boot configuration in Healthchecks
+
+`https://heartbeat.<control-domain>/` sits behind Cognito. The Cabalmail Cognito user pool is the front door; Healthchecks itself uses its own local accounts (Cognito gates whether you can _reach_ the UI, Healthchecks gates whether you can _change_ checks).
+
+The Healthchecks task is wired to deliver mail through the IMAP tier's local-delivery sendmail (`EMAIL_HOST=imap.cabal.internal`, port 25, no TLS, no auth) — see [healthchecks.tf](../terraform/infra/modules/monitoring/healthchecks.tf). This means magic-link signup and password reset work natively, **as long as you sign up with a Cabalmail-hosted address whose mailbox you can read**. Mail destined for non-Cabalmail addresses (gmail, etc.) won't deliver from this Healthchecks instance — it can only relay inbound to itself.
+
+1. Open the signup form: in your GitHub environment for this stack, set `TF_VAR_HEALTHCHECKS_REGISTRATION_OPEN=true` and re-run the Terraform workflow. The default is `false` (closed); flipping to `true` lets the Healthchecks `Sign Up` form accept new accounts.
+2. Pick a Cabalmail address you own to use as the operator login (e.g. `admin@<one-of-your-mail-domains>`). It needs to be a real address in `cabal-addresses`; if it isn't, IMAP's sendmail will TEMPFAIL the magic-link delivery.
+3. Open `https://heartbeat.<control-domain>/` in a browser. Cognito challenges you. Sign in.
+4. On the Healthchecks landing page, click **Sign Up** and enter the address from step 2. Healthchecks emails a magic link; the link arrives in your Cabalmail inbox within seconds. Click it to set a password.
+5. Lock the door: set `TF_VAR_HEALTHCHECKS_REGISTRATION_OPEN=false` (or just delete the variable — `false` is the default) and re-run Terraform.
+
+**Fallback if mail delivery doesn't work** (e.g. you want to bootstrap before adding a Cabalmail address, or the IMAP tier is down): create a superuser via ECS Exec and log in with the password form:
+
+```
+aws ecs execute-command --cluster <cluster> \
+  --task $(aws ecs list-tasks --cluster <cluster> --service-name cabal-healthchecks --query 'taskArns[0]' --output text) \
+  --container healthchecks --interactive --command /bin/sh
+# inside the container:
+cd /opt/healthchecks
+./manage.py shell -c "from django.contrib.auth.models import User; User.objects.filter(email='you@example.com').delete()"
+./manage.py createsuperuser
+```
+
+Then log in at `https://heartbeat.<control-domain>/accounts/login/` using the password field (next to the magic-link button).
+
+## 12. Create one check per scheduled job
+
+In the Healthchecks dashboard, click **Add Check** for each entry below. The **schedule** column tells Healthchecks what cadence to expect; tune the **grace** column if it produces false alarms.
+
+| Check name             | Schedule type / value          | Grace | Notes                                                          |
+| ---------------------- | ------------------------------ | ----- | -------------------------------------------------------------- |
+| `certbot-renewal`      | Simple, every 60 days          | 24 h  | Lambda runs every 60 days via EventBridge Scheduler.           |
+| `aws-backup`           | Simple, every 1 day            | 6 h   | EventBridge `JOB_COMPLETED` events feed `backup_heartbeat`.    |
+| `dmarc-ingest`         | Simple, every 6 hours          | 2 h   | DMARC scheduler runs every 6 h.                                |
+| `ecs-reconfigure`      | Simple, every 30 minutes       | 30 m  | Pings on each successful regenerate; fallback fires every 15 m.|
+| `cognito-user-sync`    | Simple, every 30 days          | 7 d   | Fires only on user signup; very loose grace by design.         |
+
+(The Phase 2 plan originally included a `terraform-weekly` heartbeat. That was dropped because the Terraform workflow no longer runs on a cron schedule, so a heartbeat that only fires on manual dispatch isn't a useful signal.)
+
+For each check, copy the **ping URL** (e.g. `https://heartbeat.<control-domain>/ping/abcd1234-...`) and paste it into the matching SSM parameter:
+
+```
+aws ssm put-parameter --name /cabal/healthcheck_ping_certbot_renewal     --type SecureString --overwrite --value '<url>'
+aws ssm put-parameter --name /cabal/healthcheck_ping_aws_backup          --type SecureString --overwrite --value '<url>'
+aws ssm put-parameter --name /cabal/healthcheck_ping_dmarc_ingest        --type SecureString --overwrite --value '<url>'
+aws ssm put-parameter --name /cabal/healthcheck_ping_ecs_reconfigure     --type SecureString --overwrite --value '<url>'
+aws ssm put-parameter --name /cabal/healthcheck_ping_cognito_user_sync   --type SecureString --overwrite --value '<url>'
+```
+
+Lambdas cache the URL at cold start, so the next invocation after the secret-set picks it up automatically. The mail-tier containers receive the URL via ECS task-definition `secrets` and need a deployment cycle (`aws ecs update-service --force-new-deployment`) to pick up changes.
+
+## 13. Wire Healthchecks alerts back to `alert_sink`
+
+A missed heartbeat is only useful if it becomes a push notification. In Healthchecks, **Integrations → Add Integration → Webhook**:
+
+- **URL for "down" events** — the same `alert_sink_function_url` from Phase 1.
+- **HTTP Method** — `POST`.
+- **HTTP Headers**:
+  ```
+  Content-Type: application/json
+  X-Alert-Secret: <value of /cabal/alert_sink_secret>
+  ```
+- **Request Body**:
+  ```json
+  {"summary": "Missed heartbeat: $NAME", "severity": "critical", "source": "healthchecks/$NAME"}
+  ```
+- **URL for "up" events** — same URL.
+- **Body for "up" events**:
+  ```json
+  {"summary": "Recovered: $NAME", "severity": "warning", "source": "healthchecks/$NAME"}
+  ```
+
+Then assign the integration to every check from step 12.
+
+## 14. Acceptance checklist for Phase 2
+
+- [ ] `https://heartbeat.<control-domain>/` is unreachable without a Cognito session.
+- [ ] Every check from step 12 shows green in the Healthchecks dashboard within one full schedule cycle (i.e. the certbot check stays "new" until either you trigger the Lambda manually or wait 60 days; the others should turn green within 24 hours).
+- [ ] Disabling the certbot Lambda's EventBridge schedule in dev (or temporarily setting its ping SSM parameter to `placeholder-`) and waiting past the grace window produces a Pushover push and a ntfy push citing `healthchecks/certbot-renewal`.
+- [ ] Manually triggering the certbot Lambda (`aws lambda invoke --function-name cabal-certbot-renewal /tmp/out.json`) restores the check to green within one cold-start.
+- [ ] Triggering `aws backup start-backup-job` (or waiting for the daily run) advances the `aws-backup` check.
+
+## Disabling individual heartbeats
+
+To silence one heartbeat without disabling the entire monitoring stack: pause the corresponding check in the Healthchecks UI, or set its SSM parameter back to a value that does not start with `http` (e.g. `aws ssm put-parameter --overwrite --type SecureString --name /cabal/healthcheck_ping_dmarc_ingest --value 'paused'`). Consumer code skips the ping when the value is not an HTTP(S) URL, and Healthchecks stops expecting pings while the check is paused.
+
+## Phase 2 troubleshooting
+
+- **Healthchecks task fails with `CannotCreateContainerError: failed to chown … operation not permitted`.** Same family as the Kuma `chown` issue from Phase 1 lesson 2 in [monitoring-plan.md §6](./0.7.0/monitoring-plan.md), but the chown is happening in dockerd at container creation, not in an entrypoint shim. The upstream Dockerfile runs `useradd --system hc` (system uid, typically ~999) and `mkdir /data && chown hc /data`, so when ECS bind-mounts the EFS access point onto `/data`, dockerd's copy-up logic tries to chown the host volume path to hc's uid — which the access point's `posix_user = 1000:1000` enforcement refuses. [healthchecks.tf](../terraform/infra/modules/monitoring/healthchecks.tf) sidesteps this by mounting EFS at `/var/local/healthchecks-data` (a path that doesn't exist in the image, so no copy-up runs) and forcing the container to run as `user = "1000:1000"` so writes succeed under the access point's translated uid. If you change the data path, update the `DB_NAME` env var and the `mountPoints.containerPath` in lockstep.
+- **Healthchecks dashboard shows `heartbeat.<control-domain>` but Cognito redirects loop.** The ALB SG already has `alb_https_out` from Phase 1 (Cognito token exchange). If the loop is on first signup specifically, the signup form is closed: set `TF_VAR_HEALTHCHECKS_REGISTRATION_OPEN=true` in your GitHub environment and re-run Terraform, complete the signup, then flip the variable back to `false`.
+- **Heartbeat misfires immediately after enabling monitoring.** Each consumer caches the SSM ping URL at cold start (Lambdas) or task start (containers). After populating a placeholder, force a refresh: `aws lambda invoke --function-name cabal-certbot-renewal /tmp/out.json` for Lambdas; `aws ecs update-service --cluster <cluster> --service cabal-imap --force-new-deployment` (and the smtp tiers) for the reconfigure heartbeat.
+- **`backup_heartbeat` Lambda silent.** Confirm `var.backup = true` in the environment — without the AWS Backup plan, no `Backup Job State Change` events fire and the EventBridge rule has nothing to invoke. The Lambda existing without the backup plan is harmless but useless.
+- **Healthchecks task is up and serving but the ALB target stays unhealthy.** Look at the uwsgi log: if `GET /` from the VPC subnet IPs returns HTTP 400 in single-digit ms, Django is rejecting the probe with `DisallowedHost`. ALB target-group health checks can't set a custom Host header — they send `Host: <target-ip>:<port>`, which fails Django's `ALLOWED_HOSTS` check. The task definition uses `ALLOWED_HOSTS=*` for this reason; the ALB listener rule for `heartbeat.<control-domain>` is the only public path to the target group, and the task SG only accepts traffic from the ALB SG, so hostname validation is enforced at the ALB layer. If you change `ALLOWED_HOSTS` away from `*` you also need to either accept the 4xx in the matcher (don't) or front the health check with something that can rewrite the Host header (don't).
+
+---
+
+# Phase 3: Metrics stack
+
+Phase 3 adds a Prometheus / Alertmanager / Grafana stack and a small set of cluster-scope exporters. Like Phases 1 and 2, it's gated by `TF_VAR_MONITORING=true` — there is no separate switch.
+
+When enabled the apply adds:
+
+- **Prometheus** — TSDB on EFS at `/prometheus`. Not exposed publicly; reach via Grafana's data-source proxy or `aws ecs execute-command` port-forwarding.
+- **Alertmanager** — silences and notification log on EFS at `/alertmanager`. Not exposed publicly. Posts to the `alert_sink` Lambda for both critical and warning severities.
+- **Grafana** — UI on EFS at `/grafana` (sqlite). Reachable at `https://metrics.<control-domain>/` behind Cognito. Cognito-authenticated users land as anonymous Viewers; admin actions (data sources, dashboards beyond what's provisioned) require the local admin password from `/cabal/grafana_admin_password`.
+- **`cloudwatch_exporter`** — single ECS service translating AWS/Lambda, AWS/DynamoDB, AWS/EFS, AWS/ECS, AWS/ApiGateway, AWS/ApplicationELB, AWS/CertificateManager, and AWS/Cognito metrics for Prometheus.
+- **`blackbox_exporter`** — single ECS service for synthetic HTTP/TCP/TLS probes (mail tier ports + the React app).
+- **`node_exporter`** — DaemonSet ECS service (one task per cluster instance), bind-mounting host `/proc` and `/sys` to report host CPU/memory/disk per EC2.
+- **Cloud Map private DNS namespace `cabal-monitoring.cabal.internal`** — Prometheus uses this to discover scrape targets.
+- A new ALB listener rule on `metrics.<control-domain>` with its own Cognito client (priority 120, after Phase 1's ntfy=100 / heartbeat=110).
+
+## 15. Bake images and apply
+
+Prometheus, Alertmanager, Grafana, and the three exporters all ship as their own ECR images built by the existing Docker workflow. The first time you toggle `TF_VAR_MONITORING=true` after the Phase 3 PR lands, run the **Build and Push Container Images** workflow first — this populates the new ECR repos with `sha-<first-8>` tags. Then run the Terraform workflow, which will pick the freshly-pushed tag from `/cabal/deployed_image_tag` and create the new ECS services.
+
+If you flip `TF_VAR_MONITORING` to `true` without the images present, ECS will keep the services in pending state until the images appear; nothing else breaks.
+
+## 16. Set the Grafana admin password (optional)
+
+Terraform auto-generates a random Grafana admin password on first apply (`/cabal/grafana_admin_password`, `ignore_changes` so subsequent applies don't rotate it). Read it with:
+
+```
+aws ssm get-parameter --name /cabal/grafana_admin_password --with-decryption --query Parameter.Value --output text
+```
+
+Or set your own:
+
+```
+aws ssm put-parameter --name /cabal/grafana_admin_password --type SecureString --overwrite --value '<your-password>'
+```
+
+Grafana picks up the value at task start (`GF_SECURITY_ADMIN_PASSWORD`); a `force-new-deployment` rolls in any change.
+
+## 17. First-boot configuration in Grafana
+
+1. Open `https://metrics.<control-domain>/`. Cognito challenges; sign in.
+2. You arrive as an anonymous Viewer. Navigate to **Cabalmail → Dashboards** in the side menu — four provisioned dashboards (`Mail Tiers`, `AWS Services`, `API Gateway & Lambda`, `Frontend`) are already there. Initial charts will be empty for ~5 min until cloudwatch_exporter has scraped.
+3. To make changes — add a panel, edit a datasource, install a plugin — sign in to the local admin account at `/login`. The username is `admin`; the password is the SSM value from §16.
+4. The Prometheus datasource is provisioned read-only at `http://prometheus.cabal-monitoring.cabal.internal:9090`. To verify, **Connections → Data sources → Prometheus → Test**.
+
+## 18. Verify Prometheus scrape targets
+
+Prometheus has no public UI by default. To inspect scrape state:
+
+```
+CLUSTER=<cluster-name>
+TASK=$(aws ecs list-tasks --cluster "$CLUSTER" --service-name cabal-prometheus --query 'taskArns[0]' --output text)
+aws ecs execute-command --cluster "$CLUSTER" --task "$TASK" --container prometheus --interactive --command "/bin/sh"
+# inside the container:
+wget -qO- http://localhost:9090/api/v1/targets | head
+```
+
+Every target listed in `prometheus.yml` should be `health: up`. Targets to expect: 1× prometheus self-scrape, 1× alertmanager, 1× cloudwatch-exporter, 4× blackbox probes (HTTP + 3× TCP), 1+× node-exporter (one per cluster EC2 in the daemon).
+
+## 19. Acceptance checklist for Phase 3
+
+- [ ] `https://metrics.<control-domain>/` is unreachable without a Cognito session.
+- [ ] All four provisioned dashboards exist under the **Cabalmail** folder in Grafana.
+- [ ] `cloudwatch_exporter` scrape target shows `up` in Prometheus.
+- [ ] `node_exporter` shows one target per cluster EC2 instance.
+- [ ] `blackbox_exporter` HTTP probe to `https://<control-domain>/` is `up`.
+- [ ] Synthetic alert: tighten one warning rule (e.g. `EFSBurstCreditsLow` to `< 100e9`) in `docker/prometheus/rules/alerts.yml`, rebuild + redeploy, and confirm the Alertmanager → `alert_sink` chain produces a ntfy push within ~5 min.
+- [ ] Add a one-hour silence in Alertmanager (UI is at port 9093 inside the cluster; reach via Grafana's Alertmanager data source — currently configured pointing at the cluster-internal URL — or ECS Exec port-forwarding) and confirm the silence suppresses the alert.
+
+## Phase 3 — deferred items
+
+The §3 plan calls for two mail-tier-specific alert rules (`MailQueueGrowing`, `MailDeliveryFailureRate`) and four sidecar exporters (`node_exporter` per tier, `dovecot_exporter`, `postfix_exporter`, `opendkim_exporter`). These are **deliberately not part of Phase 3** for two reasons:
+
+- `postfix_exporter` parses Postfix log lines; Cabalmail uses Sendmail with a different log format. Making `postfix_exporter` work usefully against `/var/log/maillog` needs a per-line adapter or a fork. That design pass is more naturally addressed alongside Phase 4 log aggregation, where a Loki+LogQL approach can replace the exporter entirely.
+- The plan framed `node_exporter` as a per-tier sidecar in each of the three mail-tier task definitions. We deviated and made it a single DAEMON-strategy ECS service so each EC2 host reports one set of host metrics rather than three duplicates. This produces cleaner dashboards and avoids changing the mail-tier task definitions (a destructive operation — see [monitoring-plan.md §6](./0.7.0/monitoring-plan.md) on stable-flag discipline for sidecars).
+
+The mail-tier alert rules will land in a follow-up pass that ships either log-derived metrics or per-tier sidecars, after the trade-off is settled.
+
+## What populates when
+
+Some Grafana panels are blank for several minutes after the stack starts; some are blank by design. Useful expectations to set before you go diagnostic-hunting:
+
+- **1–2 min: probe panels** (Mail Tiers TCP/TLS, Frontend HTTP probe). Blackbox-driven; Prometheus scrapes blackbox every 30s.
+- **3–5 min: AWS-side metrics that always have a value** (EFS BurstCreditBalance / PercentIOLimit, ECS RunningTaskCount, ACM days to expiry). cloudwatch_exporter polls every 60s with a built-in 120s `delay_seconds` lag (CloudWatch metrics aren't immediately consistent), so first datapoint arrives ~3 min after the exporter starts.
+- **Empty until something happens (correct behavior)**: DynamoDB ThrottledRequests, Lambda errors / throttles, API Gateway 5xx rate. These are alert signals; flat-empty in steady state is what you want.
+- **Empty unless someone is using the system**: DynamoDB ConsumedRead/Write CU, API Gateway request count, Lambda duration p95. Use the admin app once and these populate within the next minute.
+- **Permanently empty with the current config**: CloudFront panels on the Frontend dashboard. CloudFront metrics live exclusively in `us-east-1`, and a single cloudwatch_exporter task scrapes one region. Either enable the AWS/CloudFront block in [docker/cloudwatch-exporter/config.yml](../docker/cloudwatch-exporter/config.yml) and run a second exporter pinned to `us-east-1`, or strip the panels — Phase 1's Kuma already covers the React app end-to-end so they're nice-to-have rather than load-bearing.
+
+If a panel is still blank after ~10 min and isn't in one of the categories above, dig in — start with `wget -qO- http://localhost:9090/api/v1/label/__name__/values` from inside the Prometheus task to confirm whether the metric series even exists.
+
+## Phase 3 troubleshooting
+
+The notes below are lessons from the actual deploy, in roughly the order they were tripped over. Each is also reflected in code on `0.7.0`; this list is for future readers and re-deployers.
+
+- **Cloud Map service replacement cycle.** Every `terraform apply` was scheduling a forced replacement of all five awsvpc-mode Cloud Map services and the destroy step was failing with `ResourceInUse: Service contains registered instances`. Operators were having to manually `aws servicediscovery deregister-instance` after each apply. Root cause: AWS deprecated the `failure_threshold` field on `health_check_custom_config` and pins it to `1` server-side regardless. An empty `health_check_custom_config {}` block reads back as drift on every plan. Fix in [terraform/infra/modules/monitoring/discovery.tf](../terraform/infra/modules/monitoring/discovery.tf) is to set `failure_threshold = 1` explicitly and add `lifecycle { ignore_changes = [health_check_custom_config] }`. With that fix in place, manual deregistration should never be needed.
+- **node_exporter ECS service rejected with `containerName/containerPort must be specified`.** The DAEMON service uses `network_mode = "host"`. With awsvpc, ECS infers the ENI mapping from the task definition; with host or bridge, `service_registries.container_name` and `container_port` must be explicit.
+- **node_exporter ECS service rejected with `serviceRegistries value is configured to use a type 'A' DNS record, which is not supported when specifying 'host' or 'bridge' for networkMode`.** A host can run multiple containers on different ports, so ECS can't infer the port from an A-record alone. node_exporter's Cloud Map service registers SRV records instead; the awsvpc-mode services keep type A. Prometheus's scrape config follows: `type: SRV` on the `node` job, `type: A` everywhere else.
+- **node_exporter ECS service rejected with `Specifying a capacity provider strategy is not supported when you create a service using the DAEMON scheduling strategy`.** DAEMON places exactly one task per container instance regardless of which capacity provider supplied it; AWS rejects any `capacity_provider_strategy` block, even an inherited cluster default. Use `launch_type = "EC2"` instead.
+- **Grafana task fails to start with `failed to chown /var/lib/ecs/volumes/...: operation not permitted`.** Same family as the Phase 1 Kuma chown gotcha. The upstream `grafana/grafana` image creates `/var/lib/grafana` with explicit ownership, so binding an EFS access point at that path makes dockerd's copy-up try to chown the host volume mount and the access point's `posix_user` rejects it. Fix mirrors Phase 2 Healthchecks: mount EFS at a path that doesn't exist in the image (`/grafana-data`) and override `GF_PATHS_DATA` to match, so dockerd has nothing to copy-up. The same fix will apply to any future upstream image that pre-creates its data directory.
+- **cloudwatch_exporter container exits immediately with the JVM logging `NumberFormatException`.** The Java cloudwatch_exporter takes its config path positionally (`<port> <config-path>`); the `--config.file=` flag is a Go/Prometheus convention. The flag was being parsed as the listen port and the JVM crashed at startup. The Dockerfile `CMD` now passes `/config/config.yml` directly.
+- **Grafana comes up but the four bootstrap dashboards don't appear under the Cabalmail folder.** Two distinct problems hit at once. First: the provisioned Prometheus datasource didn't pin a `uid`, so Grafana auto-generated one — and the dashboards reference `datasource.uid: "prometheus"`, so the binding silently failed. Second: Grafana 11.x silently rejects provisioned dashboard JSON without a top-level `"id": null` field. Both fixes shipped together in [docker/grafana/provisioning/datasources/prometheus.yml](../docker/grafana/provisioning/datasources/prometheus.yml) and the dashboard JSONs.
+- **Alertmanager's webhook calls fail with `403 Forbidden` from the `alert_sink` Lambda.** The Lambda accepts both `X-Alert-Secret: <secret>` and `Authorization: Bearer <secret>`. Alertmanager's `http_config.authorization` sets the Bearer header; if the header arrives with leading whitespace or the secret in the wrong env var, the HMAC compare fails. Check `/cabal/lambda/alert_sink` log group and confirm the SSM secret matches what the entrypoint substituted into `/etc/alertmanager-rendered/alertmanager.yml`.
+- **Prometheus reports `cloudwatch-exporter` target as `down`.** Most likely a stale image tag (the JVM crash above). After ruling that out, check the IAM task role policy `cabal-cloudwatch-exporter-task-policy` includes `cloudwatch:GetMetricData`, `cloudwatch:GetMetricStatistics`, and `cloudwatch:ListMetrics` on `Resource: "*"`. Region-mismatched metric scrapes fail silently — the exporter doesn't error, it just returns no data; confirm `AWS_REGION` env var on the task matches the region of the metrics you're scraping.
+- **`node_exporter` daemon tasks don't start.** The daemon-strategy service requires the ECS cluster instance role to allow daemon-strategy task placement (the existing `AmazonEC2ContainerServiceforEC2Role` covers this) and for the host's SG to allow inbound TCP 9100 from the Prometheus task SG. The mail-tier `aws_security_group.ecs_instance` already permits all VPC traffic; if you ever scope it down, add an explicit ingress rule for 9100 from the Prometheus SG.
+- **Grafana "Data source is failing" against Prometheus, but Prometheus is healthy from Exec.** The Grafana SG allows broad egress; the Prometheus SG only allows ingress on 9090 from Grafana's SG (intentional — Prometheus has no public surface). If you switched the Grafana SG mid-apply, the security group rule may not have been recreated. `aws ecs update-service --cluster <cluster> --service cabal-grafana --force-new-deployment` to roll the task and re-resolve.
+- **Grafana dashboards still empty after the provisioning fixes above.** Three remaining causes, in order of likelihood: cloudwatch_exporter has not yet scraped (give it 10 min after first start; see "What populates when"); region mismatch on the cloudwatch_exporter task; the metric panel queries reference statistics not enabled in [docker/cloudwatch-exporter/config.yml](../docker/cloudwatch-exporter/config.yml) (e.g. asking for `p99` when only `Average` is exported). Check Prometheus `/api/v1/label/__name__/values` for the `aws_*` series the dashboard expects.

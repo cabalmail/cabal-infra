@@ -37,3 +37,47 @@ output "ntfy_service_name" {
   value       = aws_ecs_service.ntfy.name
   description = "ECS service name for ntfy, used by the bootstrap runbook."
 }
+
+output "heartbeat_url" {
+  value       = "https://heartbeat.${var.control_domain}/"
+  description = "Cognito-authenticated URL for the Healthchecks UI."
+}
+
+output "healthchecks_service_name" {
+  value       = aws_ecs_service.healthchecks.name
+  description = "ECS service name for Healthchecks, used by the bootstrap runbook."
+}
+
+output "healthcheck_ping_parameter_names" {
+  value = {
+    for k, p in aws_ssm_parameter.healthcheck_ping : k => p.name
+  }
+  description = "Map of job key to SSM Parameter Store name for the Healthchecks ping URL. Operator populates each value out-of-band after creating the corresponding check."
+}
+
+# ── Phase 3 outputs ────────────────────────────────────────────
+
+output "metrics_url" {
+  value       = "https://metrics.${var.control_domain}/"
+  description = "Cognito-authenticated URL for the Grafana UI (Phase 3)."
+}
+
+output "grafana_admin_password_parameter_name" {
+  value       = aws_ssm_parameter.grafana_admin_password.name
+  description = "SSM Parameter Store name holding the Grafana local-admin password (auto-generated on first apply)."
+}
+
+output "prometheus_service_name" {
+  value       = aws_ecs_service.prometheus.name
+  description = "ECS service name for Prometheus, used by the operator runbook for ECS Exec port-forwarding."
+}
+
+output "alertmanager_service_name" {
+  value       = aws_ecs_service.alertmanager.name
+  description = "ECS service name for Alertmanager, used by the operator runbook."
+}
+
+output "grafana_service_name" {
+  value       = aws_ecs_service.grafana.name
+  description = "ECS service name for Grafana."
+}

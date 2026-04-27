@@ -5,6 +5,8 @@ import gzip
 import io
 import json
 import os
+import urllib.error
+import urllib.request
 import xml.etree.ElementTree as ET
 import zipfile
 import boto3  # pylint: disable=import-error
@@ -13,12 +15,38 @@ import imapclient  # pylint: disable=import-error
 control_domain = os.environ['CONTROL_DOMAIN']
 table_name = os.environ['DMARC_TABLE_NAME']
 dmarc_user = os.environ.get('DMARC_USER', 'dmarc')
+ping_param = os.environ.get('HEALTHCHECK_PING_PARAM', '')
 
 ssm = boto3.client('ssm')
 ddb = boto3.resource('dynamodb')
 table = ddb.Table(table_name)
 
 PROCESSED_FOLDER = 'INBOX.Processed'
+
+_PING_URL = None
+
+
+def _ping_healthcheck():
+    '''Best-effort heartbeat to Healthchecks. Silent on failure.'''
+    global _PING_URL  # pylint: disable=global-statement
+    if _PING_URL is None:
+        if not ping_param:
+            _PING_URL = ''
+        else:
+            try:
+                resp = ssm.get_parameter(Name=ping_param, WithDecryption=True)
+                value = resp['Parameter']['Value']
+                _PING_URL = value if value.startswith('http') else ''
+            except Exception as err:  # pylint: disable=broad-exception-caught
+                print(f'healthcheck ping URL fetch failed: {err}')
+                _PING_URL = ''
+    if not _PING_URL:
+        return
+    try:
+        with urllib.request.urlopen(_PING_URL, timeout=5) as resp:
+            print(f'healthcheck ping -> {resp.status}')
+    except (urllib.error.URLError, urllib.error.HTTPError, OSError) as err:
+        print(f'healthcheck ping failed: {err}')
 
 
 def get_master_password():
@@ -212,6 +240,7 @@ def handler(_event, _context):
 
         if not messages:
             print('No messages to process')
+            _ping_healthcheck()
             return {
                 'statusCode': 200,
                 'body': json.dumps({'processed': 0, 'records': 0})
@@ -238,6 +267,8 @@ def handler(_event, _context):
 
     finally:
         client.logout()
+
+    _ping_healthcheck()
 
     return {
         'statusCode': 200,

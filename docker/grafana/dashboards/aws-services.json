@@ -1,0 +1,155 @@
+{
+  "id": null,
+  "title": "AWS Services",
+  "uid": "cabal-aws-services",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "60s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "tags": [
+    "cabalmail",
+    "phase3"
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "EFS BurstCreditBalance",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "aws_efs_burst_credit_balance_average",
+          "refId": "A",
+          "legendFormat": "{{file_system_id}}"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "EFS PercentIOLimit",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "aws_efs_percent_io_limit_average",
+          "refId": "A",
+          "legendFormat": "{{file_system_id}}"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "DynamoDB ConsumedReadCapacityUnits / WriteCapacityUnits",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by (table_name) (rate(aws_dynamodb_consumed_read_capacity_units_sum[5m]))",
+          "refId": "A",
+          "legendFormat": "read {{table_name}}"
+        },
+        {
+          "expr": "sum by (table_name) (rate(aws_dynamodb_consumed_write_capacity_units_sum[5m]))",
+          "refId": "B",
+          "legendFormat": "write {{table_name}}"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "DynamoDB ThrottledRequests",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by (table_name) (increase(aws_dynamodb_throttled_requests_sum[5m]))",
+          "refId": "A",
+          "legendFormat": "{{table_name}}"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "ECS RunningTaskCount per service",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "aws_ecs_running_task_count_average",
+          "refId": "A",
+          "legendFormat": "{{service_name}}"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "ACM days to expiry (min)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "min by (domain_name) (aws_certificatemanager_days_to_expiry_minimum)",
+          "refId": "A",
+          "legendFormat": "{{domain_name}}"
+        }
+      ],
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      }
+    }
+  ]
+}

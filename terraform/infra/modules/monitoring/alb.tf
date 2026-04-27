@@ -60,3 +60,72 @@ resource "aws_lb_listener_rule" "ntfy" {
     }
   }
 }
+
+# Healthchecks UI sits behind the same Cognito challenge as Kuma. Per-host
+# rule (not the default action) so we can give it its own Cognito client
+# with its own callback URL.
+#tfsec:ignore:aws-elb-http-not-used
+resource "aws_lb_listener_rule" "healthchecks" {
+  listener_arn = aws_lb_listener.https.arn
+  priority     = 110
+
+  action {
+    type  = "authenticate-cognito"
+    order = 1
+
+    authenticate_cognito {
+      user_pool_arn              = var.user_pool_arn
+      user_pool_client_id        = aws_cognito_user_pool_client.healthchecks.id
+      user_pool_domain           = var.user_pool_domain
+      scope                      = "openid email profile"
+      on_unauthenticated_request = "authenticate"
+      session_timeout            = 43200
+    }
+  }
+
+  action {
+    type             = "forward"
+    order            = 2
+    target_group_arn = aws_lb_target_group.healthchecks.arn
+  }
+
+  condition {
+    host_header {
+      values = ["heartbeat.${var.control_domain}"]
+    }
+  }
+}
+
+# Grafana (Phase 3) — same Cognito-auth pattern as Healthchecks. Local
+# Grafana admin password is still required for admin actions.
+#tfsec:ignore:aws-elb-http-not-used
+resource "aws_lb_listener_rule" "grafana" {
+  listener_arn = aws_lb_listener.https.arn
+  priority     = 120
+
+  action {
+    type  = "authenticate-cognito"
+    order = 1
+
+    authenticate_cognito {
+      user_pool_arn              = var.user_pool_arn
+      user_pool_client_id        = aws_cognito_user_pool_client.grafana.id
+      user_pool_domain           = var.user_pool_domain
+      scope                      = "openid email profile"
+      on_unauthenticated_request = "authenticate"
+      session_timeout            = 43200
+    }
+  }
+
+  action {
+    type             = "forward"
+    order            = 2
+    target_group_arn = aws_lb_target_group.grafana.arn
+  }
+
+  condition {
+    host_header {
+      values = ["metrics.${var.control_domain}"]
+    }
+  }
+}

@@ -23,3 +23,8 @@ output "sms_phone_number" {
   value       = module.pool.sms_phone_number
   description = "Toll-free phone number used for SMS verification."
 }
+
+output "alert_sink_function_url" {
+  value       = module.monitoring[0].alert_sink_function_url
+  description = "Webhook URL for monitoring. Add to Kuma."
+}

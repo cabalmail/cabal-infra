@@ -32,45 +32,50 @@ EOF
 }
 
 resource "aws_iam_role_policy" "lambda" {
-  name   = "assign_osid_policy"
-  role   = aws_iam_role.for_lambda.id
-  policy = <<RUNPOLICY
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": "cognito-idp:AdminUpdateUserAttributes",
-      "Resource": "arn:aws:cognito-idp:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:userpool/${local.wildcard}"
-    },
-    {
-      "Effect": "Allow",
-      "Action": "dynamodb:UpdateItem",
-      "Resource": "${aws_dynamodb_table.counter.arn}"
-    },
-    {
-      "Effect": "Allow",
-      "Action": "logs:CreateLogGroup",
-      "Resource": "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:${local.wildcard}"
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "logs:CreateLogStream",
-        "logs:PutLogEvents"
+  name = "assign_osid_policy"
+  role = aws_iam_role.for_lambda.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = concat(
+      [
+        {
+          Effect   = "Allow"
+          Action   = "cognito-idp:AdminUpdateUserAttributes"
+          Resource = "arn:aws:cognito-idp:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:userpool/${local.wildcard}"
+        },
+        {
+          Effect   = "Allow"
+          Action   = "dynamodb:UpdateItem"
+          Resource = aws_dynamodb_table.counter.arn
+        },
+        {
+          Effect   = "Allow"
+          Action   = "logs:CreateLogGroup"
+          Resource = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:${local.wildcard}"
+        },
+        {
+          Effect = "Allow"
+          Action = [
+            "logs:CreateLogStream",
+            "logs:PutLogEvents",
+          ]
+          Resource = [
+            "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/assign_osid:${local.wildcard}",
+          ]
+        },
+        {
+          Effect   = "Allow"
+          Action   = "ecs:UpdateService"
+          Resource = "arn:aws:ecs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:service/${var.ecs_cluster_name}/${local.wildcard}"
+        },
       ],
-      "Resource": [
-        "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/assign_osid:${local.wildcard}"
-      ]
-    },
-    {
-      "Effect": "Allow",
-      "Action": "ecs:UpdateService",
-      "Resource": "arn:aws:ecs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:service/${var.ecs_cluster_name}/${local.wildcard}"
-    }
-  ]
-}
-RUNPOLICY
+      var.healthcheck_ping_param != "" ? [{
+        Effect   = "Allow"
+        Action   = "ssm:GetParameter"
+        Resource = "arn:aws:ssm:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:parameter${var.healthcheck_ping_param}"
+      }] : []
+    )
+  })
 }
 
 resource "aws_lambda_function" "assign_osid" {
@@ -86,7 +91,8 @@ resource "aws_lambda_function" "assign_osid" {
 
   environment {
     variables = {
-      ECS_CLUSTER_NAME = var.ecs_cluster_name
+      ECS_CLUSTER_NAME       = var.ecs_cluster_name
+      HEALTHCHECK_PING_PARAM = var.healthcheck_ping_param
     }
   }
 }
@@ -112,9 +118,9 @@ resource "aws_dynamodb_table" "counter" {
 resource "aws_dynamodb_table_item" "seed" {
   table_name = aws_dynamodb_table.counter.name
   hash_key   = "counter"
-  item       = jsonencode({
-    counter = { S    = "counter" }
-    osid    = { N    = "65535" }
+  item = jsonencode({
+    counter = { S = "counter" }
+    osid    = { N = "65535" }
     enabled = { BOOL = false }
   })
   lifecycle {

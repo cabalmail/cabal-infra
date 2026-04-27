@@ -30,7 +30,20 @@ jobs:
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     strategy:
       matrix:
-        tier: [imap, smtp-in, smtp-out, uptime-kuma, ntfy]
+        tier:
+          - imap
+          - smtp-in
+          - smtp-out
+          - uptime-kuma
+          - ntfy
+          - healthchecks
+          # Phase 3 monitoring stack
+          - prometheus
+          - alertmanager
+          - grafana
+          - cloudwatch-exporter
+          - blackbox-exporter
+          - node-exporter
     steps:
     - name: checkout
       uses: actions/checkout@v5
