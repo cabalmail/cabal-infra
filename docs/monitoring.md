@@ -487,3 +487,67 @@ These thresholds are starting points. Expect them to move once we see what real 
 - [ ] cloudwatch_exporter exposes `aws_cabalmail_logs_sendmail_deferred_sum`, `aws_cabalmail_logs_sendmail_bounced_sum`, `aws_cabalmail_logs_imap_auth_failures_sum` in Prometheus (`http://localhost:9090/api/v1/label/__name__/values` from inside the Prometheus task).
 - [ ] Synthetic test: log a fake `stat=Deferred` line into `/ecs/cabal-imap` (e.g. via `aws ecs execute-command` and `logger -t sm-mta`) 12 times in 1 minute and confirm `SendmailDeferredSpike` fires within ~17 min (10 min window + 15 min `for` clause).
 - [ ] `LambdaErrors` rule with the extended regex catches an injected error in the `assign_osid` Lambda (e.g. by temporarily raising in the function and triggering a sign-up).
+
+## 26. Phase 4 §3 — IaC for Healthchecks (and the deferral of Kuma IaC)
+
+The Phase 4 plan called for declarative IaC over both Kuma monitors and Healthchecks checks. This release ships **Healthchecks only**, via a small reconciler Lambda. Kuma stays manual.
+
+### 26.1 Healthchecks IaC
+
+The `cabal-healthchecks-iac` Lambda reads desired state from [`lambda/api/healthchecks_iac/config.py`](../lambda/api/healthchecks_iac/config.py) and reconciles against the running Healthchecks instance. On each invocation it:
+
+1. Lists existing checks via the v3 API.
+2. Upserts each entry in `config.py` using `unique=["name"]` so existing-by-name updates rather than duplicates.
+3. Pulls each check's ping URL from the API response and writes it to the corresponding `/cabal/healthcheck_ping_*` SSM parameter (only if the value differs — no churn).
+4. Logs a warning for any check present in Healthchecks but absent from `config.py`. Does **not** auto-delete; deliberate operator action via the UI is required to drop a check.
+
+The Lambda runs in private subnets and reaches Healthchecks via a Cloud Map A record (`healthchecks.cabal-monitoring.cabal.internal:8000`), bypassing the Cognito-fronted ALB. The v3 API key is sufficient auth and lives in `/cabal/healthchecks_api_key` (SSM `SecureString`).
+
+The Terraform `aws_lambda_invocation` resource re-fires whenever the Lambda's `source_code_hash` changes — i.e. when `config.py` is edited and the build pipeline pushes a new zip. So a typical workflow for adding a new check is:
+
+1. Edit `lambda/api/healthchecks_iac/config.py` — add an entry.
+2. *Optional but recommended*: add a matching SSM parameter in [`monitoring/ssm.tf`](../terraform/infra/modules/monitoring/ssm.tf) `local.heartbeat_jobs` and reference it from the consumer (Lambda env var, ECS secrets, etc.).
+3. Open a PR. CI runs `lambda_api_python.yml` (rebuilds the zip), then `terraform.yml` (applies → invokes the Lambda).
+4. Confirm the new check appears in the Healthchecks dashboard.
+
+### 26.2 One-time bootstrap
+
+Before the first reconciliation can happen, the operator must:
+
+1. **Create the API key** in the Healthchecks UI: log in (Cognito → Healthchecks magic-link), open Project Settings → API Access, create a read+write key, copy the value. The v3 API has no endpoint to create keys, so this stays manual.
+2. **Seed SSM**:
+   ```sh
+   aws ssm put-parameter --name /cabal/healthchecks_api_key --type SecureString --overwrite --value '<key-from-step-1>'
+   ```
+3. **Force a reconcile** (the Lambda's auto-invocation already ran with the placeholder and returned `skipped`; manually trigger it now that the key is real):
+   ```sh
+   aws lambda invoke --function-name cabal-healthchecks-iac /tmp/out.json && cat /tmp/out.json
+   ```
+   Expected response: `{"status":"ok","reconciled":6,"failed":0,"extras":[],"checks":[...]}`.
+4. **Wire up notifications**: see [§13](#13-wire-healthchecks-alerts-back-to-alert_sink). Integrations are still manually managed — assign the existing Webhook integration to every check after first reconcile. (The v3 API doesn't expose channel CRUD.)
+
+After bootstrap, ongoing changes follow the §26.1 workflow with no manual steps.
+
+### 26.3 Why Kuma IaC is deferred
+
+Kuma exposes only a Socket.IO API in the version we pin. There is no first-class REST API for monitor CRUD; the unofficial `uptime-kuma-api` Python library uses an internal Socket.IO message format that has shifted between Kuma minor versions. Building reconciliation around it would couple our Terraform apply path to Kuma's UI implementation details — a maintenance liability for the eight Phase 1 monitors we'd be managing.
+
+The trade-off:
+
+- **Pro of Kuma IaC**: parity with Healthchecks; no Phase 1 setup footgun for Kuma.
+- **Con of Kuma IaC**: pinned to `uptime-kuma-api`'s upstream cadence; breaks on Kuma upgrades; the alternative (custom Socket.IO client) is more code than the eight monitors are worth.
+
+Decision: keep Kuma manual. Mitigations:
+- The Phase 1 monitor table in [§9](#9-create-the-phase-1-monitor-set) is explicit and copy-paste-ready.
+- The [§22 quarterly review](#22-quarterly-monitoring-review) prompts an operator pass over Kuma config every 90 days — drift gets caught.
+- The `_RUNBOOK_MAP` in [`alert_sink/function.py`](../lambda/api/alert_sink/function.py) is keyed on Kuma's monitor names; renaming a monitor without updating the map silently drops the runbook link, which is recoverable.
+
+Revisit when Kuma ships a stable REST API (tracked in [louislam/uptime-kuma#1170](https://github.com/louislam/uptime-kuma/issues/1170)).
+
+### 26.4 Acceptance for Phase 4 §3
+
+- [ ] After applying Terraform with the API key seeded, `aws lambda invoke --function-name cabal-healthchecks-iac /tmp/out.json` returns `status: ok` with `reconciled = 6`.
+- [ ] All six checks visible in Healthchecks UI under the operator's project.
+- [ ] All six `/cabal/healthcheck_ping_*` SSM parameters are populated with `https://heartbeat.<control-domain>/ping/...` URLs (not placeholders).
+- [ ] Editing `config.py` (e.g. adjusting a grace period), re-running the build pipeline, and applying Terraform causes a re-invocation — confirm via `aws logs tail /cabal/lambda/healthchecks_iac --since 5m`.
+- [ ] Bootstrap-ahead test: with the API key still placeholder, the Lambda's first invocation returns `status: skipped` (and Terraform apply succeeds anyway).

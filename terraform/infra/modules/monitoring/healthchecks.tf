@@ -270,4 +270,12 @@ resource "aws_ecs_service" "healthchecks" {
     container_name   = "healthchecks"
     container_port   = 8000
   }
+
+  # Phase 4 §3 — registers the task in cabal-monitoring.cabal.internal
+  # so the healthchecks_iac Lambda can reach the API directly without
+  # going through the Cognito-fronted public ALB. The API key on the
+  # Lambda is sufficient auth.
+  service_registries {
+    registry_arn = aws_service_discovery_service.monitoring["healthchecks"].arn
+  }
 }

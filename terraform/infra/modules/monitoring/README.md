@@ -169,3 +169,41 @@ module passes it from `module.ecs.tier_log_group_names`.
 - Prometheus exposes `aws_cabalmail_logs_*_sum` series.
 - A synthetic test (12 forged `stat=Deferred` lines into `/ecs/cabal-imap`
   in <1 min) fires `SendmailDeferredSpike` within ~17 min.
+
+## What Phase 4 §3 adds
+
+IaC reconciler for Healthchecks check definitions. Kuma config stays
+manual (see [`docs/monitoring.md`](../../../../docs/monitoring.md) §26.3).
+
+- **`cabal-healthchecks-iac` Lambda**, source in
+  [`lambda/api/healthchecks_iac/`](../../../../lambda/api/healthchecks_iac/).
+  Reads desired checks from `config.py`, upserts via Healthchecks v3
+  API on a Cloud Map private DNS name, populates the corresponding
+  `/cabal/healthcheck_ping_*` SSM parameters from the API response.
+- **Cloud Map registration for Healthchecks** —
+  [`discovery.tf`](./discovery.tf) adds `healthchecks` to
+  `local.monitoring_services`; [`healthchecks.tf`](./healthchecks.tf)
+  registers the ECS service.
+- **`cabal-healthchecks-iac` SG** allows egress on 8000 to the
+  Healthchecks task SG, plus 53/udp for VPC Resolver and 443/tcp for
+  SSM/CloudWatch APIs.
+- **`/cabal/healthchecks_api_key` SSM parameter** —
+  [`ssm.tf`](./ssm.tf). Placeholder; operator seeds via UI key creation
+  + `aws ssm put-parameter`.
+- **`aws_lambda_invocation` resource** with `lifecycle_scope = "CRUD"`
+  and trigger on `source_code_hash` re-invokes whenever
+  `config.py` changes.
+
+The Lambda gracefully no-ops (returns `status: skipped`) when the API
+key is still placeholder, so first apply doesn't fail before the
+operator bootstraps the key.
+
+## Acceptance (Phase 4 §3)
+
+- After API key bootstrap, `aws lambda invoke --function-name
+  cabal-healthchecks-iac /tmp/out.json` returns `status: ok` with
+  `reconciled = 6`.
+- All six `/cabal/healthcheck_ping_*` SSM parameters populated with
+  real ping URLs (not placeholders).
+- Editing `config.py` and re-running the build pipeline + Terraform
+  re-invokes the Lambda automatically.
