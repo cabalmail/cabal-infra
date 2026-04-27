@@ -164,7 +164,10 @@ resource "aws_ecs_task_definition" "healthchecks" {
       # Healthchecks magic-link FROM. Local part is free to vary.
       { name = "DEFAULT_FROM_EMAIL", value = "noreply@mail-admin.${var.mail_domains[0]}" },
       { name = "DEBUG", value = "False" },
-      { name = "REGISTRATION_OPEN", value = "True" },
+      # Django expects the Title-Cased form ("True"/"False"), not the
+      # Terraform/JSON lower-case form (true/false), so we render the
+      # bool by hand rather than tostring(...).
+      { name = "REGISTRATION_OPEN", value = var.healthchecks_registration_open ? "True" : "False" },
       { name = "USE_PAYMENTS", value = "False" },
       # SMTP wired to the IMAP tier's local-delivery sendmail via Cloud
       # Map service discovery. We're not relaying outbound — every
