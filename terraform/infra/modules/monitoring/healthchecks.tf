@@ -155,7 +155,24 @@ resource "aws_ecs_task_definition" "healthchecks" {
       { name = "DEBUG", value = "False" },
       { name = "REGISTRATION_OPEN", value = "True" },
       { name = "USE_PAYMENTS", value = "False" },
-      { name = "EMAIL_HOST", value = "" },
+      # SMTP wired to the IMAP tier's local-delivery sendmail via Cloud
+      # Map service discovery. We're not relaying outbound — every
+      # address Healthchecks emails is itself a Cabalmail-hosted
+      # address, so we deliver inbound to ourselves. That's why no
+      # auth, no DKIM, no Cognito service user is needed: inbound MX
+      # accepts mail for hosted domains from any source, and IMAP's
+      # /etc/mail/access has explicit OK entries for every configured
+      # address (see docker/shared/generate-config.sh:gen_imap_access).
+      # Plain port 25 (no STARTTLS) because the wildcard cert is for
+      # `*.${var.control_domain}`, not `*.cabal.internal`, and the hop
+      # is task-to-task in private subnets — no public network in
+      # between. Limitation: Healthchecks can only email Cabalmail
+      # addresses; magic links to e.g. gmail won't deliver. Acceptable
+      # for a single-operator setup.
+      { name = "EMAIL_HOST", value = "imap.cabal.internal" },
+      { name = "EMAIL_PORT", value = "25" },
+      { name = "EMAIL_USE_TLS", value = "False" },
+      { name = "EMAIL_USE_SSL", value = "False" },
       { name = "SECURE_PROXY_SSL_HEADER", value = "HTTP_X_FORWARDED_PROTO,https" },
     ]
 

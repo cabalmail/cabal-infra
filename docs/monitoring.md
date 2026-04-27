@@ -179,17 +179,26 @@ Phase 2 adds Healthchecks for the scheduled jobs that Phase 1 cannot see (cron-s
 
 `https://heartbeat.<control-domain>/` sits behind Cognito. The Cabalmail Cognito user pool is the front door; Healthchecks itself uses its own local accounts (Cognito gates whether you can _reach_ the UI, Healthchecks gates whether you can _change_ checks).
 
-1. Open `https://heartbeat.<control-domain>/` in a browser. Cognito challenges you. Sign in.
-2. On the Healthchecks landing page, click **Sign Up** (Healthchecks ships with `REGISTRATION_OPEN=True` so the first apply lets you create the operator account). Use a real email address (Healthchecks sends confirmation links and password-reset emails — see step 13 if you want email notifications wired up).
-3. Confirm the email if your inbox is reachable. If not, you can mark the user verified directly in the SQLite store via ECS Exec:
-   ```
-   aws ecs execute-command --cluster <cluster> \
-     --task $(aws ecs list-tasks --cluster <cluster> --service-name cabal-healthchecks --query 'taskArns[0]' --output text) \
-     --container healthchecks --interactive --command /bin/sh
-   # inside the container:
-   ./manage.py shell -c "from accounts.models import Profile; p=Profile.objects.first(); p.user.is_active=True; p.user.save()"
-   ```
-4. Once registration is complete, lock the door: set `REGISTRATION_OPEN=False` in [healthchecks.tf](../terraform/infra/modules/monitoring/healthchecks.tf) and apply. (You can also flip it via ECS Exec by editing the env var on the running task definition for a quick fix; the next Terraform run will reconcile.)
+The Healthchecks task is wired to deliver mail through the IMAP tier's local-delivery sendmail (`EMAIL_HOST=imap.cabal.internal`, port 25, no TLS, no auth) — see [healthchecks.tf](../terraform/infra/modules/monitoring/healthchecks.tf). This means magic-link signup and password reset work natively, **as long as you sign up with a Cabalmail-hosted address whose mailbox you can read**. Mail destined for non-Cabalmail addresses (gmail, etc.) won't deliver from this Healthchecks instance — it can only relay inbound to itself.
+
+1. Pick a Cabalmail address you own to use as the operator login (e.g. `admin@<one-of-your-mail-domains>`). It needs to be a real address in `cabal-addresses`; if it isn't, IMAP's sendmail will TEMPFAIL the magic-link delivery.
+2. Open `https://heartbeat.<control-domain>/` in a browser. Cognito challenges you. Sign in.
+3. On the Healthchecks landing page, click **Sign Up** and enter the address from step 1. Healthchecks emails a magic link; the link arrives in your Cabalmail inbox within seconds. Click it to set a password.
+4. Lock the door: set `REGISTRATION_OPEN=False` in [healthchecks.tf](../terraform/infra/modules/monitoring/healthchecks.tf) and re-apply.
+
+**Fallback if mail delivery doesn't work** (e.g. you want to bootstrap before adding a Cabalmail address, or the IMAP tier is down): create a superuser via ECS Exec and log in with the password form:
+
+```
+aws ecs execute-command --cluster <cluster> \
+  --task $(aws ecs list-tasks --cluster <cluster> --service-name cabal-healthchecks --query 'taskArns[0]' --output text) \
+  --container healthchecks --interactive --command /bin/sh
+# inside the container:
+cd /opt/healthchecks
+./manage.py shell -c "from django.contrib.auth.models import User; User.objects.filter(email='you@example.com').delete()"
+./manage.py createsuperuser
+```
+
+Then log in at `https://heartbeat.<control-domain>/accounts/login/` using the password field (next to the magic-link button).
 
 ## 12. Create one check per scheduled job
 
