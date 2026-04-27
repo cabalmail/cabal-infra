@@ -1,12 +1,25 @@
 '''Universal alert sink: accepts webhook payloads from monitoring tools and
 fans them out to push-notification transports (Pushover and self-hosted ntfy).
 
-Callers authenticate with a shared secret in the X-Alert-Secret header (read
-from SSM Parameter Store at cold start). Severity routing:
+Callers authenticate with a shared secret. Two header forms are accepted:
+- `X-Alert-Secret: <secret>` (Kuma, Healthchecks)
+- `Authorization: Bearer <secret>` (Alertmanager's `http_config.authorization`)
+
+The shared secret is read from SSM Parameter Store at cold start. Severity
+routing:
 
     critical -> Pushover priority 1 + ntfy priority 5
     warning  -> ntfy priority 3 only
     info     -> dropped
+
+Two body shapes are accepted:
+- Direct: `{"severity": "...", "summary": "...", "source": "..."}` — used
+  by Kuma and Healthchecks where the operator hand-crafts the body.
+- Alertmanager native v4: `{"alerts": [...], "status": "firing|resolved", ...}`
+  — Alertmanager's webhook config doesn't allow custom JSON bodies, so we
+  translate here by reading severity/summary/source off the first alert's
+  labels and annotations. `status: resolved` flips severity to "warning"
+  so a recovery still pushes to ntfy without waking anyone up.
 
 A partial failure (e.g. Pushover up but ntfy down on a critical) still returns
 a 207 so the caller does not retry-storm. A total failure returns 502.
@@ -121,13 +134,71 @@ def _dispatch(payload):
     return sent, errors
 
 
+def _extract_secret(headers):
+    '''Pulls the shared secret out of either X-Alert-Secret or
+    Authorization: Bearer. Alertmanager's webhook config can only set
+    a Bearer token; Kuma and Healthchecks set X-Alert-Secret directly.'''
+    direct = headers.get('x-alert-secret', '')
+    if direct:
+        return direct
+    auth = headers.get('authorization', '')
+    if auth.lower().startswith('bearer '):
+        return auth[7:]
+    return ''
+
+
+def _translate_alertmanager(payload):
+    '''Converts Alertmanager's native webhook v4 payload to the
+    {severity, summary, source} shape the rest of this Lambda expects.
+
+    Alertmanager doesn't allow custom JSON bodies in webhook_configs;
+    its body is fixed at `{status, alerts, groupLabels, ...}`. We read
+    the first alert's labels/annotations and synthesize a single push.
+
+    Resolved alerts are downgraded to "warning" severity so the recovery
+    pings ntfy but doesn't re-page on Pushover.
+
+    Returns None if the payload doesn't look like an Alertmanager body
+    so callers can fall back to the direct format.'''
+    if not isinstance(payload, dict) or 'alerts' not in payload:
+        return None
+    alerts = payload.get('alerts') or []
+    if not alerts:
+        return None
+    first = alerts[0]
+    labels = first.get('labels') or {}
+    annotations = first.get('annotations') or {}
+    status = (payload.get('status') or first.get('status') or 'firing').lower()
+
+    severity = (labels.get('severity') or 'warning').lower()
+    if status == 'resolved':
+        severity = 'warning'
+
+    alertname = labels.get('alertname') or 'unknown'
+    instance = labels.get('instance', '')
+    source = f'alertmanager/{alertname}'
+    if instance:
+        source += f'/{instance}'
+
+    summary = annotations.get('summary') or annotations.get('description') or alertname
+    prefix = '[RESOLVED] ' if status == 'resolved' else ''
+    extra = ''
+    if len(alerts) > 1:
+        extra = f' (+{len(alerts) - 1} more)'
+    return {
+        'severity': severity,
+        'summary': f'{prefix}{summary}{extra}',
+        'source': source,
+    }
+
+
 def handler(event, _context):  # pylint: disable=too-many-return-statements
     '''Validates the shared secret and fans out the alert.'''
     headers = _headers(event)
-    provided = headers.get('x-alert-secret', '')
+    provided = _extract_secret(headers)
     expected = _get_secret(SHARED_SECRET_PARAM)
     if not provided or not hmac.compare_digest(provided, expected):
-        return _reply(401, 'invalid or missing X-Alert-Secret header')
+        return _reply(401, 'invalid or missing X-Alert-Secret / Authorization header')
 
     try:
         body = event.get('body') or '{}'
@@ -136,6 +207,10 @@ def handler(event, _context):  # pylint: disable=too-many-return-statements
         payload = json.loads(body)
     except (ValueError, TypeError) as err:
         return _reply(400, f'invalid JSON body: {err}')
+
+    translated = _translate_alertmanager(payload)
+    if translated is not None:
+        payload = translated
 
     severity = payload.get('severity', 'info').lower()
     if severity == 'info':

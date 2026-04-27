@@ -1,0 +1,169 @@
+# cloudwatch_exporter config — translates CloudWatch metrics into the
+# Prometheus exposition format. Region is templated by the entrypoint
+# (the upstream image already supports `--region` flag and AWS_REGION
+# env var).
+#
+# Coverage tuned to the §"Golden Signals per Tier" table in
+# docs/0.7.0/monitoring-plan.md, focusing on metrics the Phase 3 alert
+# rules depend on. Keeping the metric set small holds the
+# GetMetricStatistics call rate down (each metric * statistic *
+# dimension is one API call per scrape).
+
+# `region` is intentionally absent — set via the `--region` flag /
+# AWS_REGION env var by the entrypoint so the same image works in any
+# region.
+
+period_seconds: 60
+range_seconds: 600
+delay_seconds: 120
+
+metrics:
+  # ── API Gateway ───────────────────────────────────────────────
+  - aws_namespace: AWS/ApiGateway
+    aws_metric_name: 5XXError
+    aws_dimensions: [ApiName, Stage]
+    aws_statistics: [Sum]
+
+  - aws_namespace: AWS/ApiGateway
+    aws_metric_name: 4XXError
+    aws_dimensions: [ApiName, Stage]
+    aws_statistics: [Sum]
+
+  - aws_namespace: AWS/ApiGateway
+    aws_metric_name: Count
+    aws_dimensions: [ApiName, Stage]
+    aws_statistics: [Sum]
+
+  - aws_namespace: AWS/ApiGateway
+    aws_metric_name: IntegrationLatency
+    aws_dimensions: [ApiName, Stage]
+    aws_statistics: [Average, p95, p99]
+
+  # ── Lambda ────────────────────────────────────────────────────
+  - aws_namespace: AWS/Lambda
+    aws_metric_name: Duration
+    aws_dimensions: [FunctionName]
+    aws_statistics: [Average, p95, p99]
+
+  - aws_namespace: AWS/Lambda
+    aws_metric_name: Errors
+    aws_dimensions: [FunctionName]
+    aws_statistics: [Sum]
+
+  - aws_namespace: AWS/Lambda
+    aws_metric_name: Throttles
+    aws_dimensions: [FunctionName]
+    aws_statistics: [Sum]
+
+  - aws_namespace: AWS/Lambda
+    aws_metric_name: Invocations
+    aws_dimensions: [FunctionName]
+    aws_statistics: [Sum]
+
+  - aws_namespace: AWS/Lambda
+    aws_metric_name: ConcurrentExecutions
+    aws_statistics: [Maximum]
+
+  # ── DynamoDB ──────────────────────────────────────────────────
+  - aws_namespace: AWS/DynamoDB
+    aws_metric_name: ThrottledRequests
+    aws_dimensions: [TableName, Operation]
+    aws_statistics: [Sum]
+
+  - aws_namespace: AWS/DynamoDB
+    aws_metric_name: SystemErrors
+    aws_dimensions: [TableName]
+    aws_statistics: [Sum]
+
+  - aws_namespace: AWS/DynamoDB
+    aws_metric_name: SuccessfulRequestLatency
+    aws_dimensions: [TableName, Operation]
+    aws_statistics: [Average, p95]
+
+  - aws_namespace: AWS/DynamoDB
+    aws_metric_name: ConsumedReadCapacityUnits
+    aws_dimensions: [TableName]
+    aws_statistics: [Sum]
+
+  - aws_namespace: AWS/DynamoDB
+    aws_metric_name: ConsumedWriteCapacityUnits
+    aws_dimensions: [TableName]
+    aws_statistics: [Sum]
+
+  # ── EFS ───────────────────────────────────────────────────────
+  - aws_namespace: AWS/EFS
+    aws_metric_name: BurstCreditBalance
+    aws_dimensions: [FileSystemId]
+    aws_statistics: [Average]
+
+  - aws_namespace: AWS/EFS
+    aws_metric_name: PercentIOLimit
+    aws_dimensions: [FileSystemId]
+    aws_statistics: [Average]
+
+  - aws_namespace: AWS/EFS
+    aws_metric_name: ClientConnections
+    aws_dimensions: [FileSystemId]
+    aws_statistics: [Sum]
+
+  # ── ECS ───────────────────────────────────────────────────────
+  - aws_namespace: AWS/ECS
+    aws_metric_name: CPUUtilization
+    aws_dimensions: [ClusterName, ServiceName]
+    aws_statistics: [Average, Maximum]
+
+  - aws_namespace: AWS/ECS
+    aws_metric_name: MemoryUtilization
+    aws_dimensions: [ClusterName, ServiceName]
+    aws_statistics: [Average, Maximum]
+
+  - aws_namespace: AWS/ECS
+    aws_metric_name: RunningTaskCount
+    aws_dimensions: [ClusterName, ServiceName]
+    aws_statistics: [Average]
+
+  - aws_namespace: AWS/ECS
+    aws_metric_name: DesiredTaskCount
+    aws_dimensions: [ClusterName, ServiceName]
+    aws_statistics: [Average]
+
+  # ── ALB / NLB ─────────────────────────────────────────────────
+  - aws_namespace: AWS/ApplicationELB
+    aws_metric_name: HTTPCode_Target_5XX_Count
+    aws_dimensions: [LoadBalancer]
+    aws_statistics: [Sum]
+
+  - aws_namespace: AWS/ApplicationELB
+    aws_metric_name: HTTPCode_ELB_5XX_Count
+    aws_dimensions: [LoadBalancer]
+    aws_statistics: [Sum]
+
+  - aws_namespace: AWS/ApplicationELB
+    aws_metric_name: TargetResponseTime
+    aws_dimensions: [LoadBalancer]
+    aws_statistics: [Average, p95]
+
+  # ── ACM ───────────────────────────────────────────────────────
+  - aws_namespace: AWS/CertificateManager
+    aws_metric_name: DaysToExpiry
+    aws_dimensions: [CertificateArn]
+    aws_statistics: [Minimum]
+
+  # ── CloudFront (global only — region must be us-east-1) ───────
+  # Disabled by default; CloudFront metrics live in us-east-1 and require
+  # a separate exporter instance. Enable when needed.
+  # - aws_namespace: AWS/CloudFront
+  #   aws_metric_name: 5xxErrorRate
+  #   aws_dimensions: [DistributionId, Region]
+  #   aws_statistics: [Average]
+
+  # ── Cognito ───────────────────────────────────────────────────
+  - aws_namespace: AWS/Cognito
+    aws_metric_name: SignInSuccesses
+    aws_dimensions: [UserPool, UserPoolClient]
+    aws_statistics: [Sum]
+
+  - aws_namespace: AWS/Cognito
+    aws_metric_name: SignInThrottles
+    aws_dimensions: [UserPool, UserPoolClient]
+    aws_statistics: [Sum]

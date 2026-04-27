@@ -73,6 +73,41 @@ variable "healthchecks_ecr_repository_url" {
   description = "ECR repository URL for the Healthchecks image."
 }
 
+variable "prometheus_ecr_repository_url" {
+  type        = string
+  description = "ECR repository URL for the Prometheus image (Phase 3)."
+}
+
+variable "alertmanager_ecr_repository_url" {
+  type        = string
+  description = "ECR repository URL for the Alertmanager image (Phase 3)."
+}
+
+variable "grafana_ecr_repository_url" {
+  type        = string
+  description = "ECR repository URL for the Grafana image (Phase 3)."
+}
+
+variable "cloudwatch_exporter_ecr_repository_url" {
+  type        = string
+  description = "ECR repository URL for the cloudwatch_exporter image (Phase 3)."
+}
+
+variable "blackbox_exporter_ecr_repository_url" {
+  type        = string
+  description = "ECR repository URL for the blackbox_exporter image (Phase 3)."
+}
+
+variable "node_exporter_ecr_repository_url" {
+  type        = string
+  description = "ECR repository URL for the node_exporter image (Phase 3)."
+}
+
+variable "environment" {
+  type        = string
+  description = "Environment name (prod/stage/dev). Used as an external label on Prometheus metrics so multi-env Grafana dashboards can filter."
+}
+
 variable "image_tag" {
   type        = string
   description = "Image tag to deploy for the monitoring services, shared with the mail tiers."
