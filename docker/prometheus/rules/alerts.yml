@@ -1,0 +1,190 @@
+# Alert rules for Cabalmail Phase 3.
+#
+# All severities map to alert_sink Lambda routing:
+#   - critical -> Pushover priority 1 + ntfy priority 5
+#   - warning  -> ntfy priority 3
+#
+# Thresholds match docs/0.7.0/monitoring-plan.md §"Golden Signals per
+# Tier" but are starting points only — every threshold is expected to
+# move once real traffic data lands. See the §"Tuning discipline"
+# guidance for the review cadence.
+#
+# Mail-tier-specific rules (MailQueueGrowing, MailDeliveryFailureRate)
+# are intentionally omitted from this file: they require log-derived
+# metrics or sidecar exporters that are deferred from Phase 3. See
+# CHANGELOG and docs/monitoring.md §"Phase 3 — deferred items".
+
+groups:
+
+  - name: aws-services
+    rules:
+
+      - alert: Lambda5xxSpike
+        # API Gateway 5XX for any of the cabal-* Lambdas, > 5% over 5 min
+        # (rate over a 10 min window for stability).
+        expr: |
+          sum by (apiname, stage) (
+            rate(aws_apigateway_5_xx_error_sum{apiname=~"cabal-.+"}[10m])
+          )
+          /
+          clamp_min(
+            sum by (apiname, stage) (
+              rate(aws_apigateway_count_sum{apiname=~"cabal-.+"}[10m])
+            ),
+            1
+          )
+          > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "API 5xx > 5% on {{ $labels.apiname }} for 5 min"
+          description: "API Gateway 5XX rate exceeded 5% over 10 minutes on {{ $labels.apiname }}/{{ $labels.stage }}."
+
+      - alert: LambdaThrottles
+        expr: sum by (function_name) (rate(aws_lambda_throttles_sum{function_name=~"cabal-.+"}[5m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Lambda throttling on {{ $labels.function_name }}"
+          description: "Lambda throttles observed in the last 5 minutes — concurrency limit may need raising."
+
+      - alert: LambdaErrors
+        expr: sum by (function_name) (increase(aws_lambda_errors_sum{function_name=~"cabal-.+"}[15m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Lambda errors on {{ $labels.function_name }}"
+          description: "{{ $labels.function_name }} produced one or more invocation errors in the last 15 minutes."
+
+      - alert: DynamoDBThrottling
+        expr: sum by (table_name) (increase(aws_dynamodb_throttled_requests_sum[5m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "DynamoDB throttling on {{ $labels.table_name }}"
+          description: "Throttled requests on table {{ $labels.table_name }} in the last 5 minutes."
+
+      - alert: DynamoDBSystemErrors
+        expr: sum by (table_name) (increase(aws_dynamodb_system_errors_sum[5m])) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "DynamoDB SystemErrors on {{ $labels.table_name }}"
+          description: "AWS-side DynamoDB errors are not retriable from the application; investigate AWS service health."
+
+      - alert: EFSBurstCreditsLow
+        expr: aws_efs_burst_credit_balance_average < 20e9
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "EFS burst credits low on {{ $labels.file_system_id }}"
+          description: "EFS burst credit balance below 20% of baseline for 1 hour. Sustained read/write will start throttling."
+
+      - alert: ContainerRestartLoop
+        # AWS/ECS exposes RunningTaskCount per service; a sustained drop
+        # below DesiredTaskCount for one service over an hour signals a
+        # crash loop. Exact thresholds will need tuning once we see what
+        # normal task-replacement noise looks like.
+        expr: |
+          (
+            avg_over_time(aws_ecs_running_task_count_average[1h])
+            <
+            avg_over_time(aws_ecs_desired_task_count_average[1h])
+          )
+          and
+          (
+            avg_over_time(aws_ecs_desired_task_count_average[1h]) > 0
+          )
+        for: 30m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ECS service {{ $labels.service_name }} below desired task count"
+          description: "{{ $labels.service_name }} on cluster {{ $labels.cluster_name }} has been below its desired task count for 30 minutes — likely a crash loop."
+
+      - alert: CertExpiringSoonWarning
+        expr: aws_certificatemanager_days_to_expiry_minimum < 21
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ACM cert {{ $labels.domain_name }} expires in <21 days"
+          description: "ACM auto-renewal usually happens around 30 days out. <21 days suggests the renewal is stuck."
+
+      - alert: CertExpiringSoonCritical
+        expr: aws_certificatemanager_days_to_expiry_minimum < 7
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ACM cert {{ $labels.domain_name }} expires in <7 days"
+          description: "Manual intervention required — the certbot Lambda or ACM auto-renew has not refreshed this cert."
+
+  - name: blackbox
+    rules:
+
+      - alert: BlackboxProbeFailure
+        # Duplicates Kuma's TCP/HTTP probes. Kuma is the primary uptime
+        # signal; this rule lets Prometheus group multiple probes and
+        # correlate with cluster-internal metrics.
+        expr: probe_success == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Blackbox probe to {{ $labels.instance }} failing"
+          description: "Probe via {{ $labels.job }} for {{ $labels.instance }} has failed for 2 minutes."
+
+      - alert: BlackboxTLSCertExpiringSoon
+        # blackbox_exporter exposes seconds-to-cert-expiry on https probes.
+        # Independent confirmation against the AWS-side ACM metric.
+        expr: probe_ssl_earliest_cert_expiry - time() < 21 * 24 * 3600
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "TLS cert at {{ $labels.instance }} expires in <21 days"
+
+  - name: platform
+    rules:
+
+      - alert: NodeHighCPU
+        # node_exporter daemon reports per-host CPU. mode!=idle gives the
+        # combined utilization. Scope the alert to monitoring DaemonSet
+        # tasks (host-level view), not to per-tier sidecars.
+        expr: |
+          100 * (1 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m]))) > 85
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host {{ $labels.instance }} CPU > 85% for 15 min"
+
+      - alert: NodeHighMemory
+        expr: |
+          100 * (
+            1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)
+          ) > 85
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host {{ $labels.instance }} memory > 85% for 15 min"
+
+      - alert: NodeDiskSpaceLow
+        expr: |
+          100 * (
+            1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"}
+                 / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"})
+          ) > 85
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host {{ $labels.instance }} disk {{ $labels.mountpoint }} > 85% used"

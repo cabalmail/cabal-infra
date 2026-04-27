@@ -1,0 +1,96 @@
+# Prometheus scrape and alerting configuration for Cabalmail.
+#
+# Scrape targets are discovered via Cloud Map private DNS A records under
+# the `cabal-monitoring.cabal.internal` namespace. Each ECS service in
+# the monitoring module registers itself there, so Prometheus picks up
+# new task IPs automatically as services scale or replace.
+#
+# DNS-SD `type: A` is required (not SRV); Cloud Map registers a single
+# A record per task with no service-side port info, so the port has to
+# be set explicitly per scrape config.
+
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+  external_labels:
+    cluster: cabalmail
+    # Replaced at runtime by the entrypoint with the actual environment
+    # name (prod/stage/dev) so multi-env Grafana dashboards can filter.
+    environment: __ENVIRONMENT__
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+alerting:
+  alertmanagers:
+    - dns_sd_configs:
+        - names:
+            - alertmanager.cabal-monitoring.cabal.internal
+          type: A
+          port: 9093
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: alertmanager
+    dns_sd_configs:
+      - names:
+          - alertmanager.cabal-monitoring.cabal.internal
+        type: A
+        port: 9093
+
+  - job_name: cloudwatch
+    # CloudWatch API calls are slow; scrape less often to stay under the
+    # GetMetricStatistics rate limit.
+    scrape_interval: 60s
+    scrape_timeout: 30s
+    dns_sd_configs:
+      - names:
+          - cloudwatch-exporter.cabal-monitoring.cabal.internal
+        type: A
+        port: 9106
+
+  - job_name: blackbox-http
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+          # Front-end React app (CloudFront-fronted)
+          - https://__CONTROL_DOMAIN__/
+          # Self-hosted ntfy health endpoint (publicly reachable; token-auth not enforced for /v1/health)
+          - https://ntfy.__CONTROL_DOMAIN__/v1/health
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter.cabal-monitoring.cabal.internal:9115
+
+  - job_name: blackbox-tcp
+    metrics_path: /probe
+    params:
+      module: [tcp_connect]
+    static_configs:
+      - targets:
+          - imap.__CONTROL_DOMAIN__:993
+          - smtp-in.__CONTROL_DOMAIN__:25
+          - smtp-out.__CONTROL_DOMAIN__:465
+          - smtp-out.__CONTROL_DOMAIN__:587
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter.cabal-monitoring.cabal.internal:9115
+
+  - job_name: node
+    dns_sd_configs:
+      - names:
+          - node-exporter.cabal-monitoring.cabal.internal
+        type: A
+        port: 9100

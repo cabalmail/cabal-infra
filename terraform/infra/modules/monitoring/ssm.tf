@@ -115,3 +115,26 @@ resource "aws_ssm_parameter" "healthcheck_ping" {
     ignore_changes = [value]
   }
 }
+
+# ── Grafana admin password (Phase 3) ───────────────────────────
+#
+# Generated at first apply; rotation via `terraform taint
+# random_password.grafana_admin_password` followed by an apply (Grafana
+# reads GF_SECURITY_ADMIN_PASSWORD on every boot, so the new value
+# takes effect on the next task replacement).
+
+resource "random_password" "grafana_admin_password" {
+  length  = 32
+  special = false
+}
+
+resource "aws_ssm_parameter" "grafana_admin_password" {
+  name        = "/cabal/grafana_admin_password"
+  description = "Grafana local-admin password. Used to log in for admin actions; viewer access comes via Cognito at the ALB."
+  type        = "SecureString"
+  value       = random_password.grafana_admin_password.result
+
+  lifecycle {
+    ignore_changes = [value]
+  }
+}

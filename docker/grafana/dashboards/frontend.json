@@ -1,0 +1,43 @@
+{
+  "title": "Frontend",
+  "uid": "cabal-frontend",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "60s",
+  "time": {"from": "now-24h", "to": "now"},
+  "tags": ["cabalmail", "phase3"],
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "CloudFront request count",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum (rate(aws_cloudfront_requests_sum[5m]))", "refId": "A", "legendFormat": "requests/s"}],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "CloudFront 5xx rate",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum (rate(aws_cloudfront_5_xx_error_rate_average[5m]))", "refId": "A"}],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "HTTP probe (CloudFront origin)",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "probe_success{job=\"blackbox-http\"}", "refId": "A", "legendFormat": "{{instance}}"}],
+      "gridPos": {"h": 4, "w": 12, "x": 0, "y": 8}
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Probe HTTP duration",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "probe_http_duration_seconds{job=\"blackbox-http\"}", "refId": "A", "legendFormat": "{{instance}} {{phase}}"}],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+    }
+  ]
+}

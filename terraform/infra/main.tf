@@ -139,8 +139,20 @@ module "efs" {
 # so the Docker workflow can push images unconditionally; only the ECS
 # services are gated by the flag.
 module "ecr" {
-  source             = "./modules/ecr"
-  extra_repositories = ["uptime-kuma", "ntfy", "healthchecks"]
+  source = "./modules/ecr"
+  extra_repositories = [
+    # Phase 1 / Phase 2 monitoring services
+    "uptime-kuma",
+    "ntfy",
+    "healthchecks",
+    # Phase 3 monitoring stack
+    "prometheus",
+    "alertmanager",
+    "grafana",
+    "cloudwatch-exporter",
+    "blackbox-exporter",
+    "node-exporter",
+  ]
 }
 
 # ECS cluster, services, and task definitions for containerized mail tiers.
@@ -220,10 +232,17 @@ module "monitoring" {
   ecs_cluster_capacity_provider = module.ecs.capacity_provider_name
   efs_id                        = module.efs.efs_id
 
-  kuma_ecr_repository_url         = module.ecr.repository_urls["uptime-kuma"]
-  ntfy_ecr_repository_url         = module.ecr.repository_urls["ntfy"]
-  healthchecks_ecr_repository_url = module.ecr.repository_urls["healthchecks"]
-  image_tag                       = data.aws_ssm_parameter.deployed_image_tag.value
+  kuma_ecr_repository_url                = module.ecr.repository_urls["uptime-kuma"]
+  ntfy_ecr_repository_url                = module.ecr.repository_urls["ntfy"]
+  healthchecks_ecr_repository_url        = module.ecr.repository_urls["healthchecks"]
+  prometheus_ecr_repository_url          = module.ecr.repository_urls["prometheus"]
+  alertmanager_ecr_repository_url        = module.ecr.repository_urls["alertmanager"]
+  grafana_ecr_repository_url             = module.ecr.repository_urls["grafana"]
+  cloudwatch_exporter_ecr_repository_url = module.ecr.repository_urls["cloudwatch-exporter"]
+  blackbox_exporter_ecr_repository_url   = module.ecr.repository_urls["blackbox-exporter"]
+  node_exporter_ecr_repository_url       = module.ecr.repository_urls["node-exporter"]
+  image_tag                              = data.aws_ssm_parameter.deployed_image_tag.value
+  environment                            = var.environment
 
   user_pool_id     = module.pool.user_pool_id
   user_pool_arn    = module.pool.user_pool_arn

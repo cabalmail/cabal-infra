@@ -1,0 +1,51 @@
+{
+  "title": "Mail Tiers",
+  "uid": "cabal-mail-tiers",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {"from": "now-6h", "to": "now"},
+  "tags": ["cabalmail", "phase3"],
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "TCP probe — IMAP 993",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "probe_success{instance=~\".*:993\"}", "refId": "A"}],
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0}
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "TCP probe — SMTP-IN 25",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "probe_success{instance=~\".*:25\"}", "refId": "A"}],
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0}
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "TCP probe — Submission 465/587",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "min(probe_success{instance=~\".*:(465|587)\"})", "refId": "A"}],
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0}
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "TLS days to expiry — IMAP 993",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "(probe_ssl_earliest_cert_expiry{instance=~\".*:993\"} - time()) / 86400", "refId": "A"}],
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0}
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Probe duration p95 (5m)",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "probe_duration_seconds", "refId": "A", "legendFormat": "{{instance}}"}],
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 4}
+    }
+  ]
+}

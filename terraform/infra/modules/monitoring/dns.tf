@@ -74,3 +74,30 @@ resource "aws_route53_record" "heartbeat_private" {
     evaluate_target_health = true
   }
 }
+
+# Phase 3: Grafana at metrics.<control-domain>. Mirrored into the
+# private zone so VPC-internal callers (not currently any, but
+# consistent with the uptime/ntfy/heartbeat pattern) can resolve it.
+resource "aws_route53_record" "metrics" {
+  zone_id = var.zone_id
+  name    = "metrics.${var.control_domain}"
+  type    = "A"
+
+  alias {
+    name                   = aws_lb.uptime.dns_name
+    zone_id                = aws_lb.uptime.zone_id
+    evaluate_target_health = true
+  }
+}
+
+resource "aws_route53_record" "metrics_private" {
+  zone_id = var.private_zone_id
+  name    = "metrics.${var.control_domain}"
+  type    = "A"
+
+  alias {
+    name                   = aws_lb.uptime.dns_name
+    zone_id                = aws_lb.uptime.zone_id
+    evaluate_target_health = true
+  }
+}

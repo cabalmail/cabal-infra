@@ -272,3 +272,91 @@ To silence one heartbeat without disabling the entire monitoring stack: pause th
 - **Heartbeat misfires immediately after enabling monitoring.** Each consumer caches the SSM ping URL at cold start (Lambdas) or task start (containers). After populating a placeholder, force a refresh: `aws lambda invoke --function-name cabal-certbot-renewal /tmp/out.json` for Lambdas; `aws ecs update-service --cluster <cluster> --service cabal-imap --force-new-deployment` (and the smtp tiers) for the reconfigure heartbeat.
 - **`backup_heartbeat` Lambda silent.** Confirm `var.backup = true` in the environment — without the AWS Backup plan, no `Backup Job State Change` events fire and the EventBridge rule has nothing to invoke. The Lambda existing without the backup plan is harmless but useless.
 - **Healthchecks task is up and serving but the ALB target stays unhealthy.** Look at the uwsgi log: if `GET /` from the VPC subnet IPs returns HTTP 400 in single-digit ms, Django is rejecting the probe with `DisallowedHost`. ALB target-group health checks can't set a custom Host header — they send `Host: <target-ip>:<port>`, which fails Django's `ALLOWED_HOSTS` check. The task definition uses `ALLOWED_HOSTS=*` for this reason; the ALB listener rule for `heartbeat.<control-domain>` is the only public path to the target group, and the task SG only accepts traffic from the ALB SG, so hostname validation is enforced at the ALB layer. If you change `ALLOWED_HOSTS` away from `*` you also need to either accept the 4xx in the matcher (don't) or front the health check with something that can rewrite the Host header (don't).
+
+---
+
+# Phase 3: Metrics stack
+
+Phase 3 adds a Prometheus / Alertmanager / Grafana stack and a small set of cluster-scope exporters. Like Phases 1 and 2, it's gated by `TF_VAR_MONITORING=true` — there is no separate switch.
+
+When enabled the apply adds:
+
+- **Prometheus** — TSDB on EFS at `/prometheus`. Not exposed publicly; reach via Grafana's data-source proxy or `aws ecs execute-command` port-forwarding.
+- **Alertmanager** — silences and notification log on EFS at `/alertmanager`. Not exposed publicly. Posts to the `alert_sink` Lambda for both critical and warning severities.
+- **Grafana** — UI on EFS at `/grafana` (sqlite). Reachable at `https://metrics.<control-domain>/` behind Cognito. Cognito-authenticated users land as anonymous Viewers; admin actions (data sources, dashboards beyond what's provisioned) require the local admin password from `/cabal/grafana_admin_password`.
+- **`cloudwatch_exporter`** — single ECS service translating AWS/Lambda, AWS/DynamoDB, AWS/EFS, AWS/ECS, AWS/ApiGateway, AWS/ApplicationELB, AWS/CertificateManager, and AWS/Cognito metrics for Prometheus.
+- **`blackbox_exporter`** — single ECS service for synthetic HTTP/TCP/TLS probes (mail tier ports + the React app).
+- **`node_exporter`** — DaemonSet ECS service (one task per cluster instance), bind-mounting host `/proc` and `/sys` to report host CPU/memory/disk per EC2.
+- **Cloud Map private DNS namespace `cabal-monitoring.cabal.internal`** — Prometheus uses this to discover scrape targets.
+- A new ALB listener rule on `metrics.<control-domain>` with its own Cognito client (priority 120, after Phase 1's ntfy=100 / heartbeat=110).
+
+## 15. Bake images and apply
+
+Prometheus, Alertmanager, Grafana, and the three exporters all ship as their own ECR images built by the existing Docker workflow. The first time you toggle `TF_VAR_MONITORING=true` after the Phase 3 PR lands, run the **Build and Push Container Images** workflow first — this populates the new ECR repos with `sha-<first-8>` tags. Then run the Terraform workflow, which will pick the freshly-pushed tag from `/cabal/deployed_image_tag` and create the new ECS services.
+
+If you flip `TF_VAR_MONITORING` to `true` without the images present, ECS will keep the services in pending state until the images appear; nothing else breaks.
+
+## 16. Set the Grafana admin password (optional)
+
+Terraform auto-generates a random Grafana admin password on first apply (`/cabal/grafana_admin_password`, `ignore_changes` so subsequent applies don't rotate it). Read it with:
+
+```
+aws ssm get-parameter --name /cabal/grafana_admin_password --with-decryption --query Parameter.Value --output text
+```
+
+Or set your own:
+
+```
+aws ssm put-parameter --name /cabal/grafana_admin_password --type SecureString --overwrite --value '<your-password>'
+```
+
+Grafana picks up the value at task start (`GF_SECURITY_ADMIN_PASSWORD`); a `force-new-deployment` rolls in any change.
+
+## 17. First-boot configuration in Grafana
+
+1. Open `https://metrics.<control-domain>/`. Cognito challenges; sign in.
+2. You arrive as an anonymous Viewer. Navigate to **Cabalmail → Dashboards** in the side menu — four provisioned dashboards (`Mail Tiers`, `AWS Services`, `API Gateway & Lambda`, `Frontend`) are already there. Initial charts will be empty for ~5 min until cloudwatch_exporter has scraped.
+3. To make changes — add a panel, edit a datasource, install a plugin — sign in to the local admin account at `/login`. The username is `admin`; the password is the SSM value from §16.
+4. The Prometheus datasource is provisioned read-only at `http://prometheus.cabal-monitoring.cabal.internal:9090`. To verify, **Connections → Data sources → Prometheus → Test**.
+
+## 18. Verify Prometheus scrape targets
+
+Prometheus has no public UI by default. To inspect scrape state:
+
+```
+CLUSTER=<cluster-name>
+TASK=$(aws ecs list-tasks --cluster "$CLUSTER" --service-name cabal-prometheus --query 'taskArns[0]' --output text)
+aws ecs execute-command --cluster "$CLUSTER" --task "$TASK" --container prometheus --interactive --command "/bin/sh"
+# inside the container:
+wget -qO- http://localhost:9090/api/v1/targets | head
+```
+
+Every target listed in `prometheus.yml` should be `health: up`. Targets to expect: 1× prometheus self-scrape, 1× alertmanager, 1× cloudwatch-exporter, 4× blackbox probes (HTTP + 3× TCP), 1+× node-exporter (one per cluster EC2 in the daemon).
+
+## 19. Acceptance checklist for Phase 3
+
+- [ ] `https://metrics.<control-domain>/` is unreachable without a Cognito session.
+- [ ] All four provisioned dashboards exist under the **Cabalmail** folder in Grafana.
+- [ ] `cloudwatch_exporter` scrape target shows `up` in Prometheus.
+- [ ] `node_exporter` shows one target per cluster EC2 instance.
+- [ ] `blackbox_exporter` HTTP probe to `https://<control-domain>/` is `up`.
+- [ ] Synthetic alert: tighten one warning rule (e.g. `EFSBurstCreditsLow` to `< 100e9`) in `docker/prometheus/rules/alerts.yml`, rebuild + redeploy, and confirm the Alertmanager → `alert_sink` chain produces a ntfy push within ~5 min.
+- [ ] Add a one-hour silence in Alertmanager (UI is at port 9093 inside the cluster; reach via Grafana's Alertmanager data source — currently configured pointing at the cluster-internal URL — or ECS Exec port-forwarding) and confirm the silence suppresses the alert.
+
+## Phase 3 — deferred items
+
+The §3 plan calls for two mail-tier-specific alert rules (`MailQueueGrowing`, `MailDeliveryFailureRate`) and four sidecar exporters (`node_exporter` per tier, `dovecot_exporter`, `postfix_exporter`, `opendkim_exporter`). These are **deliberately not part of Phase 3** for two reasons:
+
+- `postfix_exporter` parses Postfix log lines; Cabalmail uses Sendmail with a different log format. Making `postfix_exporter` work usefully against `/var/log/maillog` needs a per-line adapter or a fork. That design pass is more naturally addressed alongside Phase 4 log aggregation, where a Loki+LogQL approach can replace the exporter entirely.
+- The plan framed `node_exporter` as a per-tier sidecar in each of the three mail-tier task definitions. We deviated and made it a single DAEMON-strategy ECS service so each EC2 host reports one set of host metrics rather than three duplicates. This produces cleaner dashboards and avoids changing the mail-tier task definitions (a destructive operation — see [monitoring-plan.md §6](./0.7.0/monitoring-plan.md) on stable-flag discipline for sidecars).
+
+The mail-tier alert rules will land in a follow-up pass that ships either log-derived metrics or per-tier sidecars, after the trade-off is settled.
+
+## Phase 3 troubleshooting
+
+- **Grafana fails to start with `permission denied` on `/var/lib/grafana/grafana.db`.** Same family as the Kuma `chown` issue. The Grafana EFS access point is created with `posix_user = 472:472` (the upstream image's `grafana` user). If you ever bumped the image to a major version that changed the user, the old EFS files at `/grafana` retain the old uid. Either roll back, or `aws efs delete-access-point` and let Terraform recreate it (this also wipes the dashboards-edited-via-UI state — provisioning-baked dashboards come back on next boot).
+- **Alertmanager's webhook calls fail with `403 Forbidden` from the `alert_sink` Lambda.** The Lambda accepts both `X-Alert-Secret: <secret>` and `Authorization: Bearer <secret>`. Alertmanager's `http_config.authorization` sets the Bearer header; if the header arrives with leading whitespace or the secret in the wrong env var, the HMAC compare fails. Check `/cabal/lambda/alert_sink` log group and confirm the SSM secret matches what the entrypoint substituted into `/etc/alertmanager-rendered/alertmanager.yml`.
+- **Prometheus reports `cloudwatch-exporter` target as `down`.** Almost always an IAM problem at the cloudwatch-exporter task role. Re-check `cabal-cloudwatch-exporter-task-policy` includes `cloudwatch:GetMetricData`, `cloudwatch:GetMetricStatistics`, and `cloudwatch:ListMetrics` on `Resource: "*"`. Region-mismatched metric scrapes fail silently — the exporter doesn't error, it just returns no data. Confirm `AWS_REGION` env var on the task matches the region of the metrics you're scraping.
+- **`node_exporter` daemon tasks don't start.** The daemon-strategy service requires the ECS cluster instance role to allow daemon-strategy task placement (the existing `AmazonEC2ContainerServiceforEC2Role` covers this) and for the host's SG to allow inbound TCP 9100 from the Prometheus task SG. The mail-tier `aws_security_group.ecs_instance` already permits all VPC traffic; if you ever scope it down, add an explicit ingress rule for 9100 from the Prometheus SG.
+- **Grafana "Data source is failing" against Prometheus, but Prometheus is healthy from Exec.** The Grafana SG allows broad egress; the Prometheus SG only allows ingress on 9090 from Grafana's SG (intentional — Prometheus has no public surface). If you switched the Grafana SG mid-apply, the security group rule may not have been recreated. `aws ecs update-service --cluster <cluster> --service cabal-grafana --force-new-deployment` to roll the task and re-resolve.
+- **Grafana dashboards are empty.** Three causes, in order of likelihood: cloudwatch_exporter has not yet scraped (give it 10 min after first start; it polls at 60s with a 120s lag); region mismatch (see above); the metric panel queries reference statistics not enabled in `docker/cloudwatch-exporter/config.yml` (e.g. asking for `p99` when only `Average` is exported). Check Prometheus `/api/v1/label/__name__/values` for the `aws_*` series the dashboard expects.

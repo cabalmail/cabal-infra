@@ -1,6 +1,6 @@
 # monitoring
 
-Phase 1 of the 0.7.0 monitoring & alerting stack.
+Phases 1, 2, and 3 of the 0.7.0 monitoring & alerting stack.
 
 Deployed only when `var.monitoring = true` at the root module. See
 `docs/0.7.0/monitoring-plan.md` for the overall design and
@@ -54,3 +54,44 @@ See `docs/monitoring.md` for detailed steps. Summary:
 - Kuma's recovery notification sends a follow-up push.
 - `https://uptime.<control-domain>/` is reachable only after Cognito login.
 - `https://ntfy.<control-domain>/` rejects anonymous requests with 401.
+
+## What this module adds in Phase 3
+
+- Cloud Map private DNS namespace `cabal-monitoring.cabal.internal`
+  with one service per metrics component (Prometheus uses it for
+  scrape-target discovery).
+- Prometheus ECS service (TSDB on EFS access point `/prometheus`,
+  config and rules baked into `docker/prometheus/`).
+- Alertmanager ECS service (state on EFS access point
+  `/alertmanager`). Posts to the existing `alert_sink` Lambda for both
+  critical and warning severities; uses Authorization Bearer for the
+  shared secret. The Lambda accepts both `X-Alert-Secret` (Phase 1/2)
+  and `Authorization: Bearer` (Phase 3) headers.
+- Grafana ECS service (sqlite on EFS access point `/grafana`),
+  reachable at `https://metrics.<control-domain>/` behind a new
+  Cognito client. Datasource and four dashboards baked in via
+  provisioning.
+- Three exporters as ECS services:
+  - `cloudwatch_exporter` — single task pulling Lambda, DynamoDB, EFS,
+    ECS, ApiGateway, ApplicationELB, CertificateManager, Cognito.
+  - `blackbox_exporter` — single task for synthetic HTTP/TCP probes.
+  - `node_exporter` — DaemonSet (one per cluster instance) with host
+    `/proc` and `/sys` bind-mounts and `network_mode = host` so it
+    reports the EC2 host's metrics, not the container's.
+- New ALB listener rule on `metrics.<control-domain>` (priority 120)
+  with its own Cognito client.
+- New SSM `SecureString` `/cabal/grafana_admin_password` (auto-generated
+  on first apply; `ignore_changes` so rotation sticks).
+
+The Phase 3 plan also calls for tier-specific exporters (dovecot,
+postfix, opendkim) as sidecars in the mail-tier task definitions.
+These are intentionally deferred — see `docs/monitoring.md` §
+"Phase 3 — deferred items" for the rationale.
+
+## Acceptance (Phase 3)
+
+- `https://metrics.<control-domain>/` is reachable only after Cognito login.
+- All four provisioned dashboards exist under the **Cabalmail** folder.
+- `cloudwatch_exporter` and `node_exporter` targets are `up` in Prometheus.
+- A tightened threshold rule produces a ntfy push via Alertmanager →
+  `alert_sink` within ~5 min.
