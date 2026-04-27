@@ -41,6 +41,12 @@ When a Pushover or ntfy push includes a `Runbook:` link, it points to one of the
 - [node-high-memory.md](./node-high-memory.md)
 - [node-disk-space-low.md](./node-disk-space-low.md)
 
+### Log-derived alerts (Prometheus rules over CloudWatch metric filters)
+
+- [sendmail-deferred-spike.md](./sendmail-deferred-spike.md)
+- [sendmail-bounced-spike.md](./sendmail-bounced-spike.md)
+- [imap-auth-failure-spike.md](./imap-auth-failure-spike.md)
+
 ### Heartbeats (missed Healthchecks pings)
 
 - [heartbeat-certbot-renewal.md](./heartbeat-certbot-renewal.md)

@@ -103,7 +103,7 @@ locals {
     # Phase 4 §5 — operator-driven 90-day review heartbeat. No automation
     # pings this; the operator pings it manually after completing the
     # quarterly monitoring review (see docs/operations/runbooks/heartbeat-quarterly-review.md).
-    quarterly_review  = "Quarterly monitoring review (manual operator ping)."
+    quarterly_review = "Quarterly monitoring review (manual operator ping)."
   }
 }
 
