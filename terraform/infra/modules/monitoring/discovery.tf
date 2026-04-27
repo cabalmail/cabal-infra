@@ -7,9 +7,16 @@
 #
 # We use a separate namespace from the mail tiers — `cabal-monitoring`
 # — so monitoring DNS records live alongside but never collide with
-# mail-tier DNS. Each service registers an A record per task; Prometheus
-# resolves the name with `dns_sd_configs` and scrapes every IP it gets
-# back.
+# mail-tier DNS.
+#
+# The awsvpc-mode services register A records: Prometheus resolves the
+# name with a `dns_sd_configs` type-A query and scrapes every IP it
+# gets back at the configured port. node_exporter is the exception —
+# it runs as a DAEMON with `network_mode = host`, and ECS rejects
+# A-record service registrations in that mode (the host could have
+# multiple tasks on different ports, so the port-from-A-record
+# inference doesn't work). It registers SRV records instead, and
+# Prometheus scrapes it via a `type: SRV` query.
 
 resource "aws_service_discovery_private_dns_namespace" "monitoring" {
   name        = "cabal-monitoring.cabal.internal"
@@ -24,7 +31,6 @@ locals {
     grafana             = { description = "Grafana — Prometheus dashboards." }
     cloudwatch-exporter = { description = "CloudWatch exporter — translates AWS metrics for Prometheus." }
     blackbox-exporter   = { description = "Blackbox exporter — synthetic HTTP/TCP probes." }
-    node-exporter       = { description = "Node exporter — host CPU/memory/disk per cluster instance (DaemonSet)." }
   }
 }
 
@@ -46,5 +52,27 @@ resource "aws_service_discovery_service" "monitoring" {
 
   # ECS-managed custom health check; AWS deprecated the
   # `failure_threshold` argument and pins it at 1.
+  health_check_custom_config {}
+}
+
+# node_exporter daemon — SRV record because ECS won't accept A-record
+# registrations from host/bridge network-mode services (see comment at
+# top of this file). Cloud Map auto-creates a paired A record for the
+# SRV target, but Prometheus uses the SRV query so it picks up the
+# host port directly without us hard-coding 9100 in prometheus.yml.
+resource "aws_service_discovery_service" "node_exporter" {
+  name        = "node-exporter"
+  description = "Node exporter — host CPU/memory/disk per cluster instance (DaemonSet)."
+
+  dns_config {
+    namespace_id   = aws_service_discovery_private_dns_namespace.monitoring.id
+    routing_policy = "MULTIVALUE"
+
+    dns_records {
+      ttl  = 10
+      type = "SRV"
+    }
+  }
+
   health_check_custom_config {}
 }
