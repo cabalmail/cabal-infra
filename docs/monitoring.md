@@ -453,3 +453,37 @@ Run the table top once after each Phase 4 ship, and again at every quarterly rev
 - [ ] An Alertmanager test alert (e.g. via `amtool alert add testing severity=warning runbook_url=https://example.test/r.md ...`) round-trips with the runbook URL preserved.
 - [ ] The `quarterly-review` check is configured in Healthchecks and shows green after the initial bootstrap ping.
 - [ ] Tabletop exercise from §23 runs cleanly for at least the certbot scenario; mail-queue and cert-expiry scenarios run cleanly once Phase 4 §2 lands.
+
+## 25. Phase 4 §2 — log-derived metrics & alerts
+
+The Phase 4 plan calls out four log-derived metrics — sendmail deferred, sendmail bounced, IMAP auth failures, and Cognito post-confirmation errors. The first three ship as **CloudWatch metric filters** in [terraform/infra/modules/monitoring/log_metrics.tf](../terraform/infra/modules/monitoring/log_metrics.tf); the Cognito case is folded into the existing `LambdaErrors` alert by extending its function-name regex.
+
+| Filter | Log group(s) | Pattern | Metric (in `Cabalmail/Logs`) |
+| --- | --- | --- | --- |
+| `cabal-sendmail-deferred-{tier}` | `/ecs/cabal-imap`, `/ecs/cabal-smtp-in`, `/ecs/cabal-smtp-out` | `"stat=Deferred"` | `SendmailDeferred` |
+| `cabal-sendmail-bounced-{tier}` | same three | `"dsn=5"` | `SendmailBounced` |
+| `cabal-imap-auth-failures` | `/ecs/cabal-imap` | `"imap-login" "auth failed"` | `IMAPAuthFailures` |
+
+All metrics emit value=1 per matching log line, default 0. CloudWatch aggregates per-minute. cloudwatch_exporter scrapes the `Sum` statistic and exposes `aws_cabalmail_logs_<metric>_sum` to Prometheus.
+
+The Prometheus alert rules in the new `log-derived` group of [docker/prometheus/rules/alerts.yml](../docker/prometheus/rules/alerts.yml) start at:
+
+| Alert | Threshold | Severity | Runbook |
+| --- | --- | --- | --- |
+| `SendmailDeferredSpike` | >10 deferreds/10 min, sustained 15 min | warning | [sendmail-deferred-spike.md](./operations/runbooks/sendmail-deferred-spike.md) |
+| `SendmailBouncedSpike` | >15 bounces/30 min, sustained 15 min | critical | [sendmail-bounced-spike.md](./operations/runbooks/sendmail-bounced-spike.md) |
+| `IMAPAuthFailureSpike` | >25 auth-fails/5 min, sustained 5 min | warning | [imap-auth-failure-spike.md](./operations/runbooks/imap-auth-failure-spike.md) |
+
+These thresholds are starting points. Expect them to move once we see what real traffic looks like; record the rationale in the alert's GitHub issue per the [tuning discipline](./0.7.0/monitoring-plan.md#tuning-discipline).
+
+### What's deferred
+
+- **fail2ban metrics**: `[program:fail2ban]` is currently commented out in every mail-tier `supervisord.conf`. A metric filter today would publish flat-zero forever and mask the disabled state. Add the filter when fail2ban is re-enabled. The [imap-auth-failure-spike runbook](./operations/runbooks/imap-auth-failure-spike.md) calls out the absence of fail2ban as the reason this alert is the only signal for brute-force activity.
+- **Cognito post-confirmation log-derived metric**: rolled into `LambdaErrors` instead. The existing `function_name=~"cabal-.+"` regex is extended to `cabal-.+|assign_osid` so the post-confirmation Lambda's invocation errors fire the existing alert. A separate log-filter approach was rejected to avoid adopting the Lambda-auto-created `/aws/lambda/assign_osid` log group (which would force a `terraform import` on existing stacks).
+
+### Acceptance for Phase 4 §2
+
+- [ ] After applying Terraform with `var.monitoring=true`, `aws logs describe-metric-filters --log-group-name /ecs/cabal-imap` lists three Cabalmail filters.
+- [ ] cloudwatch_exporter exposes `aws_cabalmail_logs_sendmail_deferred_sum`, `aws_cabalmail_logs_sendmail_bounced_sum`, `aws_cabalmail_logs_imap_auth_failures_sum` in Prometheus (`http://localhost:9090/api/v1/label/__name__/values` from inside the Prometheus task).
+- [ ] Synthetic test: log a fake `stat=Deferred` line into `/ecs/cabal-imap` (e.g. via `aws ecs execute-command` and `logger -t sm-mta`) 12 times in 1 minute and confirm `SendmailDeferredSpike` fires within ~17 min (10 min window + 15 min `for` clause).
+- [ ] `LambdaErrors` rule with the extended regex catches an injected error in the `assign_osid` Lambda (e.g. by temporarily raising in the function and triggering a sign-up).

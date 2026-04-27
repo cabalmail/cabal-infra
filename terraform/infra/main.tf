@@ -231,6 +231,7 @@ module "monitoring" {
   ecs_cluster_id                = module.ecs.cluster_arn
   ecs_cluster_capacity_provider = module.ecs.capacity_provider_name
   efs_id                        = module.efs.efs_id
+  tier_log_group_names          = module.ecs.tier_log_group_names
 
   kuma_ecr_repository_url                = module.ecr.repository_urls["uptime-kuma"]
   ntfy_ecr_repository_url                = module.ecr.repository_urls["ntfy"]
