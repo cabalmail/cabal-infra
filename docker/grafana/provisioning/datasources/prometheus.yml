@@ -2,6 +2,11 @@ apiVersion: 1
 
 datasources:
   - name: Prometheus
+    # Pinned uid so the baked-in dashboard JSONs can reference it
+    # deterministically. Without this, Grafana auto-generates a uid
+    # at first provisioning and dashboards referencing `uid:
+    # "prometheus"` silently load with no datasource bound.
+    uid: prometheus
     type: prometheus
     access: proxy
     url: http://prometheus.cabal-monitoring.cabal.internal:9090
