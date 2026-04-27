@@ -1,25 +1,49 @@
 {
+  "id": null,
   "title": "API Gateway & Lambda",
   "uid": "cabal-api-gateway",
   "schemaVersion": 39,
   "version": 1,
   "refresh": "60s",
-  "time": {"from": "now-6h", "to": "now"},
-  "tags": ["cabalmail", "phase3"],
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "tags": [
+    "cabalmail",
+    "phase3"
+  ],
   "panels": [
     {
       "id": 1,
       "type": "timeseries",
       "title": "API Gateway request count",
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"expr": "sum by (apiname) (rate(aws_apigateway_count_sum[5m]))", "refId": "A", "legendFormat": "{{apiname}}"}],
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by (apiname) (rate(aws_apigateway_count_sum[5m]))",
+          "refId": "A",
+          "legendFormat": "{{apiname}}"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      }
     },
     {
       "id": 2,
       "type": "timeseries",
       "title": "API Gateway 5xx rate",
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "sum by (apiname) (rate(aws_apigateway_5_xx_error_sum[5m])) / clamp_min(sum by (apiname) (rate(aws_apigateway_count_sum[5m])), 1)",
@@ -27,26 +51,61 @@
           "legendFormat": "{{apiname}}"
         }
       ],
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      }
     },
     {
       "id": 3,
       "type": "timeseries",
       "title": "Lambda duration p95 (ms)",
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "targets": [{"expr": "aws_lambda_duration_average{function_name=~\"cabal-.+\"}", "refId": "A", "legendFormat": "{{function_name}}"}],
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "aws_lambda_duration_average{function_name=~\"cabal-.+\"}",
+          "refId": "A",
+          "legendFormat": "{{function_name}}"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      }
     },
     {
       "id": 4,
       "type": "timeseries",
       "title": "Lambda errors / throttles",
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
-        {"expr": "sum by (function_name) (rate(aws_lambda_errors_sum{function_name=~\"cabal-.+\"}[5m]))", "refId": "A", "legendFormat": "errors {{function_name}}"},
-        {"expr": "sum by (function_name) (rate(aws_lambda_throttles_sum{function_name=~\"cabal-.+\"}[5m]))", "refId": "B", "legendFormat": "throttles {{function_name}}"}
+        {
+          "expr": "sum by (function_name) (rate(aws_lambda_errors_sum{function_name=~\"cabal-.+\"}[5m]))",
+          "refId": "A",
+          "legendFormat": "errors {{function_name}}"
+        },
+        {
+          "expr": "sum by (function_name) (rate(aws_lambda_throttles_sum{function_name=~\"cabal-.+\"}[5m]))",
+          "refId": "B",
+          "legendFormat": "throttles {{function_name}}"
+        }
       ],
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      }
     }
   ]
 }
