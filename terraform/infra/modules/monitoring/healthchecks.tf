@@ -119,13 +119,27 @@ resource "aws_ecs_task_definition" "healthchecks" {
     memoryReservation = 256
     memory            = 512
 
+    # Force the container to run as the same uid/gid the EFS access
+    # point translates I/O to. The upstream image creates a `hc` system
+    # user (uid ~999) and runs as it; without this override, every
+    # write to the mounted data dir fails with EACCES because EFS
+    # exposes files as 1000:1000.
+    user = "1000:1000"
+
     portMappings = [
       { containerPort = 8000, protocol = "tcp" }
     ]
 
     environment = [
       { name = "DB", value = "sqlite" },
-      { name = "DB_NAME", value = "/data/hc.sqlite" },
+      # Mount target deliberately not /data: the upstream image runs
+      # `mkdir /data && chown hc /data`, so dockerd's copy-up tries to
+      # chown the host EFS mount path to hc's uid (~999) at container
+      # creation time. EFS access points reject the chown regardless of
+      # caller, and the task fails with CannotCreateContainerError.
+      # /var/local/healthchecks-data does not exist in the image, so no
+      # copy-up runs.
+      { name = "DB_NAME", value = "/var/local/healthchecks-data/hc.sqlite" },
       { name = "ALLOWED_HOSTS", value = "heartbeat.${var.control_domain}" },
       { name = "SITE_ROOT", value = "https://heartbeat.${var.control_domain}" },
       { name = "SITE_NAME", value = "Cabalmail Healthchecks" },
@@ -143,7 +157,7 @@ resource "aws_ecs_task_definition" "healthchecks" {
 
     mountPoints = [{
       sourceVolume  = "healthchecks-data"
-      containerPath = "/data"
+      containerPath = "/var/local/healthchecks-data"
     }]
 
     logConfiguration = {
