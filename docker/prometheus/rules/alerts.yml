@@ -9,6 +9,12 @@
 # move once real traffic data lands. See the §"Tuning discipline"
 # guidance for the review cadence.
 #
+# Each alert has a runbook_url annotation pointing into
+# docs/operations/runbooks/. The Phase 4 alert_sink Lambda picks this up
+# from the Alertmanager payload and surfaces it on Pushover (as a tap
+# action) and ntfy (as a Click header) so the on-call phone can jump
+# straight to the runbook.
+#
 # Mail-tier-specific rules (MailQueueGrowing, MailDeliveryFailureRate)
 # are intentionally omitted from this file: they require log-derived
 # metrics or sidecar exporters that are deferred from Phase 3. See
@@ -40,6 +46,7 @@ groups:
         annotations:
           summary: "API 5xx > 5% on {{ $labels.apiname }} for 5 min"
           description: "API Gateway 5XX rate exceeded 5% over 10 minutes on {{ $labels.apiname }}/{{ $labels.stage }}."
+          runbook_url: "https://github.com/cabalmail/cabal-infra/blob/main/docs/operations/runbooks/lambda-5xx-spike.md"
 
       - alert: LambdaThrottles
         expr: sum by (function_name) (rate(aws_lambda_throttles_sum{function_name=~"cabal-.+"}[5m])) > 0
@@ -49,6 +56,7 @@ groups:
         annotations:
           summary: "Lambda throttling on {{ $labels.function_name }}"
           description: "Lambda throttles observed in the last 5 minutes — concurrency limit may need raising."
+          runbook_url: "https://github.com/cabalmail/cabal-infra/blob/main/docs/operations/runbooks/lambda-throttles.md"
 
       - alert: LambdaErrors
         expr: sum by (function_name) (increase(aws_lambda_errors_sum{function_name=~"cabal-.+"}[15m])) > 0
@@ -58,6 +66,7 @@ groups:
         annotations:
           summary: "Lambda errors on {{ $labels.function_name }}"
           description: "{{ $labels.function_name }} produced one or more invocation errors in the last 15 minutes."
+          runbook_url: "https://github.com/cabalmail/cabal-infra/blob/main/docs/operations/runbooks/lambda-errors.md"
 
       - alert: DynamoDBThrottling
         expr: sum by (table_name) (increase(aws_dynamodb_throttled_requests_sum[5m])) > 0
@@ -67,6 +76,7 @@ groups:
         annotations:
           summary: "DynamoDB throttling on {{ $labels.table_name }}"
           description: "Throttled requests on table {{ $labels.table_name }} in the last 5 minutes."
+          runbook_url: "https://github.com/cabalmail/cabal-infra/blob/main/docs/operations/runbooks/dynamodb-throttling.md"
 
       - alert: DynamoDBSystemErrors
         expr: sum by (table_name) (increase(aws_dynamodb_system_errors_sum[5m])) > 0
@@ -76,6 +86,7 @@ groups:
         annotations:
           summary: "DynamoDB SystemErrors on {{ $labels.table_name }}"
           description: "AWS-side DynamoDB errors are not retriable from the application; investigate AWS service health."
+          runbook_url: "https://github.com/cabalmail/cabal-infra/blob/main/docs/operations/runbooks/dynamodb-system-errors.md"
 
       - alert: EFSBurstCreditsLow
         expr: aws_efs_burst_credit_balance_average < 20e9
@@ -85,6 +96,7 @@ groups:
         annotations:
           summary: "EFS burst credits low on {{ $labels.file_system_id }}"
           description: "EFS burst credit balance below 20% of baseline for 1 hour. Sustained read/write will start throttling."
+          runbook_url: "https://github.com/cabalmail/cabal-infra/blob/main/docs/operations/runbooks/efs-burst-credits-low.md"
 
       - alert: ContainerRestartLoop
         # AWS/ECS exposes RunningTaskCount per service; a sustained drop
@@ -107,6 +119,7 @@ groups:
         annotations:
           summary: "ECS service {{ $labels.service_name }} below desired task count"
           description: "{{ $labels.service_name }} on cluster {{ $labels.cluster_name }} has been below its desired task count for 30 minutes — likely a crash loop."
+          runbook_url: "https://github.com/cabalmail/cabal-infra/blob/main/docs/operations/runbooks/container-restart-loop.md"
 
       - alert: CertExpiringSoonWarning
         expr: aws_certificatemanager_days_to_expiry_minimum < 21
@@ -116,6 +129,7 @@ groups:
         annotations:
           summary: "ACM cert {{ $labels.domain_name }} expires in <21 days"
           description: "ACM auto-renewal usually happens around 30 days out. <21 days suggests the renewal is stuck."
+          runbook_url: "https://github.com/cabalmail/cabal-infra/blob/main/docs/operations/runbooks/cert-expiring.md"
 
       - alert: CertExpiringSoonCritical
         expr: aws_certificatemanager_days_to_expiry_minimum < 7
@@ -125,6 +139,7 @@ groups:
         annotations:
           summary: "ACM cert {{ $labels.domain_name }} expires in <7 days"
           description: "Manual intervention required — the certbot Lambda or ACM auto-renew has not refreshed this cert."
+          runbook_url: "https://github.com/cabalmail/cabal-infra/blob/main/docs/operations/runbooks/cert-expiring.md"
 
   - name: blackbox
     rules:
@@ -140,6 +155,7 @@ groups:
         annotations:
           summary: "Blackbox probe to {{ $labels.instance }} failing"
           description: "Probe via {{ $labels.job }} for {{ $labels.instance }} has failed for 2 minutes."
+          runbook_url: "https://github.com/cabalmail/cabal-infra/blob/main/docs/operations/runbooks/probe-failure.md"
 
       - alert: BlackboxTLSCertExpiringSoon
         # blackbox_exporter exposes seconds-to-cert-expiry on https probes.
@@ -150,6 +166,7 @@ groups:
           severity: warning
         annotations:
           summary: "TLS cert at {{ $labels.instance }} expires in <21 days"
+          runbook_url: "https://github.com/cabalmail/cabal-infra/blob/main/docs/operations/runbooks/cert-expiring.md"
 
   - name: platform
     rules:
@@ -165,6 +182,7 @@ groups:
           severity: warning
         annotations:
           summary: "Host {{ $labels.instance }} CPU > 85% for 15 min"
+          runbook_url: "https://github.com/cabalmail/cabal-infra/blob/main/docs/operations/runbooks/node-high-cpu.md"
 
       - alert: NodeHighMemory
         expr: |
@@ -176,6 +194,7 @@ groups:
           severity: warning
         annotations:
           summary: "Host {{ $labels.instance }} memory > 85% for 15 min"
+          runbook_url: "https://github.com/cabalmail/cabal-infra/blob/main/docs/operations/runbooks/node-high-memory.md"
 
       - alert: NodeDiskSpaceLow
         expr: |
@@ -188,3 +207,4 @@ groups:
           severity: warning
         annotations:
           summary: "Host {{ $labels.instance }} disk {{ $labels.mountpoint }} > 85% used"
+          runbook_url: "https://github.com/cabalmail/cabal-infra/blob/main/docs/operations/runbooks/node-disk-space-low.md"

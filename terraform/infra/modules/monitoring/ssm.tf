@@ -100,6 +100,10 @@ locals {
     dmarc_ingest      = "Hourly DMARC report ingestion Lambda (process_dmarc)."
     ecs_reconfigure   = "ECS reconfigure loop in the mail tier containers."
     cognito_user_sync = "Cognito post-confirmation Lambda (assign_osid)."
+    # Phase 4 §5 — operator-driven 90-day review heartbeat. No automation
+    # pings this; the operator pings it manually after completing the
+    # quarterly monitoring review (see docs/operations/runbooks/heartbeat-quarterly-review.md).
+    quarterly_review  = "Quarterly monitoring review (manual operator ping)."
   }
 }
 

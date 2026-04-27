@@ -1,6 +1,6 @@
 # monitoring
 
-Phases 1, 2, and 3 of the 0.7.0 monitoring & alerting stack.
+Phases 1, 2, 3, and the first wave of Phase 4 of the 0.7.0 monitoring & alerting stack.
 
 Deployed only when `var.monitoring = true` at the root module. See
 `docs/0.7.0/monitoring-plan.md` for the overall design and
@@ -95,3 +95,45 @@ These are intentionally deferred — see `docs/monitoring.md` §
 - `cloudwatch_exporter` and `node_exporter` targets are `up` in Prometheus.
 - A tightened threshold rule produces a ntfy push via Alertmanager →
   `alert_sink` within ~5 min.
+
+## What Phase 4 §1 + §4 + §5 add
+
+Phase 4's first wave is mostly docs, alert-rule annotations, and a single
+SSM parameter — no new ECS services. The shippable units:
+
+- **Runbooks** for every Phase 1-3 alert in `docs/operations/runbooks/`,
+  indexed by [`README.md`](../../../../docs/operations/runbooks/README.md).
+- **`runbook_url` annotations** on every rule in
+  [`docker/prometheus/rules/alerts.yml`](../../../../docker/prometheus/rules/alerts.yml).
+  Alertmanager forwards them; the `alert_sink` Lambda surfaces them on
+  Pushover (tap-action `url`) and ntfy (`Click` header).
+- **Static runbook map** in
+  [`lambda/api/alert_sink/function.py`](../../../../lambda/api/alert_sink/function.py)
+  (`_RUNBOOK_MAP`) for sources that can't carry `runbook_url` in their
+  webhook body — Kuma monitors and Healthchecks checks. Update the keys
+  if you rename a monitor or check.
+- **`quarterly-review` Healthchecks check** — a 90-day operator-driven
+  heartbeat. New SSM parameter `/cabal/healthcheck_ping_quarterly_review`
+  in [`ssm.tf`](./ssm.tf). The runbook documents what the review
+  entails.
+- **"Stay on CloudWatch Logs" decision** captured in
+  [`docs/monitoring.md`](../../../../docs/monitoring.md) §21. Phase 4 §2
+  (log-derived metrics + alerts) follows in a later ship.
+
+The remaining Phase 4 work — log-derived metrics & alerts (§2) and IaC
+for Kuma + Healthchecks config (§3) — ships separately. See
+[`docs/0.7.0/monitoring-plan.md`](../../../../docs/0.7.0/monitoring-plan.md)
+§"Phase 4: Logs + Tuning" for the roadmap.
+
+## Acceptance (Phase 4 first wave)
+
+- Every Prometheus rule has a `runbook_url` annotation that resolves to
+  a markdown file under `docs/operations/runbooks/`.
+- `_RUNBOOK_MAP` covers every Kuma monitor name in
+  [`docs/monitoring.md`](../../../../docs/monitoring.md) §9 and every
+  Healthchecks check in §12.
+- A test push from Kuma and from Healthchecks arrives with a tappable
+  runbook link.
+- `quarterly-review` check exists in Healthchecks and shows green after
+  the bootstrap ping documented in
+  [`docs/monitoring.md`](../../../../docs/monitoring.md) §22.
