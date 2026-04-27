@@ -31,6 +31,10 @@ locals {
     grafana             = { description = "Grafana — Prometheus dashboards." }
     cloudwatch-exporter = { description = "CloudWatch exporter — translates AWS metrics for Prometheus." }
     blackbox-exporter   = { description = "Blackbox exporter — synthetic HTTP/TCP probes." }
+    # Phase 4 §3 — needed so the healthchecks_iac Lambda can reach the
+    # Healthchecks API on a stable private DNS name, bypassing the
+    # Cognito-fronted public ALB (the API key is sufficient auth).
+    healthchecks = { description = "Self-hosted Healthchecks — heartbeat dashboard." }
   }
 }
 

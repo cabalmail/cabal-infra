@@ -120,6 +120,27 @@ resource "aws_ssm_parameter" "healthcheck_ping" {
   }
 }
 
+# ── Healthchecks API key (Phase 4 §3) ─────────────────────────
+#
+# Created manually in the Healthchecks UI on the Project Settings →
+# API Access page (the v3 API has no endpoint to create projects or
+# keys, so this is a one-time bootstrap). Operator pastes the key
+# value here with `aws ssm put-parameter --overwrite`. The
+# healthchecks_iac Lambda treats the placeholder value as "skip
+# reconciliation" so the chicken-and-egg of "Lambda can't run before
+# key is set, but Terraform invokes Lambda" doesn't block apply.
+
+resource "aws_ssm_parameter" "healthchecks_api_key" {
+  name        = "/cabal/healthchecks_api_key"
+  description = "Healthchecks v3 API read+write key. Populate after creating the project + API key in the UI."
+  type        = "SecureString"
+  value       = "placeholder-set-via-aws-ssm-put-parameter"
+
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
+
 # ── Grafana admin password (Phase 3) ───────────────────────────
 #
 # Generated at first apply; rotation via `terraform taint
