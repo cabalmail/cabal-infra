@@ -340,8 +340,12 @@ resource "aws_ecs_service" "node_exporter" {
 
   # network_mode = host means no awsvpc → no security_groups block; the
   # task uses the host's SG. `service_registries` still works for host
-  # network mode and registers the host's primary IP.
+  # network mode and registers the host's primary IP, but ECS requires
+  # `container_name` + `container_port` to be explicit (with awsvpc the
+  # ENI mapping is unambiguous; with host/bridge ECS won't infer).
   service_registries {
-    registry_arn = aws_service_discovery_service.monitoring["node-exporter"].arn
+    registry_arn   = aws_service_discovery_service.monitoring["node-exporter"].arn
+    container_name = "node-exporter"
+    container_port = 9100
   }
 }
