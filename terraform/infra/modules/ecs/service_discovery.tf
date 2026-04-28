@@ -4,7 +4,7 @@
 * The IMAP container accepts mail for local delivery on port 25.  SMTP-IN
 * and SMTP-OUT need to reach it by hostname (via the sendmail mailertable).
 * The public NLB cannot be used because its port 25 listener routes to the
-* relay (SMTP-IN) target group, not IMAP — creating a loop.
+* relay (SMTP-IN) target group, not IMAP - creating a loop.
 *
 * Cloud Map registers the IMAP task's ENI IP directly in a private DNS
 * namespace so that smtp-in and smtp-out can connect to it without going

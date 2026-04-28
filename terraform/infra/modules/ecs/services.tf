@@ -8,7 +8,7 @@
 * SMTP-OUT tier is the most likely bottleneck.
 */
 
-# ── IMAP service ──────────────────────────────────────────────
+# -- IMAP service ----------------------------------------------
 
 resource "aws_ecs_service" "imap" {
   name            = "cabal-imap"
@@ -20,7 +20,7 @@ resource "aws_ecs_service" "imap" {
 
   health_check_grace_period_seconds = var.health_check_grace_period
 
-  # No extra task during deploy — only one IMAP container at a time.
+  # No extra task during deploy - only one IMAP container at a time.
   deployment_maximum_percent         = 100
   deployment_minimum_healthy_percent = 0
 
@@ -47,7 +47,7 @@ resource "aws_ecs_service" "imap" {
   depends_on = [aws_ecs_cluster_capacity_providers.mail]
 }
 
-# ── SMTP-IN service ───────────────────────────────────────────
+# -- SMTP-IN service -------------------------------------------
 
 resource "aws_ecs_service" "smtp_in" {
   name            = "cabal-smtp-in"
@@ -79,7 +79,7 @@ resource "aws_ecs_service" "smtp_in" {
   depends_on = [aws_ecs_cluster_capacity_providers.mail]
 }
 
-# ── SMTP-OUT service ──────────────────────────────────────────
+# -- SMTP-OUT service ------------------------------------------
 
 resource "aws_ecs_service" "smtp_out" {
   name            = "cabal-smtp-out"
@@ -117,7 +117,7 @@ resource "aws_ecs_service" "smtp_out" {
   depends_on = [aws_ecs_cluster_capacity_providers.mail]
 }
 
-# ── Auto-scaling: SMTP-IN ────────────────────────────────────
+# -- Auto-scaling: SMTP-IN ------------------------------------
 
 resource "aws_appautoscaling_target" "smtp_in" {
   max_capacity       = 3
@@ -142,7 +142,7 @@ resource "aws_appautoscaling_policy" "smtp_in_cpu" {
   }
 }
 
-# ── Auto-scaling: SMTP-OUT ───────────────────────────────────
+# -- Auto-scaling: SMTP-OUT -----------------------------------
 
 resource "aws_appautoscaling_target" "smtp_out" {
   max_capacity       = 3

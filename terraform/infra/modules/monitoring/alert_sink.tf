@@ -1,4 +1,4 @@
-# ── alert_sink Lambda ──────────────────────────────────────────
+# -- alert_sink Lambda ------------------------------------------
 #
 # Built by .github/scripts/build-api.sh from lambda/api/alert_sink/.
 # Exposed via a Lambda Function URL (no API Gateway) so it is reachable

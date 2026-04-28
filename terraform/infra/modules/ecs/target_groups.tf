@@ -33,5 +33,5 @@ resource "aws_lb_target_group" "tier" {
   # group names cause naming collisions during replacement.
 }
 
-# Staging NLB listeners removed — production listeners in the ELB module
+# Staging NLB listeners removed - production listeners in the ELB module
 # now forward directly to these ECS target groups (Phase 7 cutover).

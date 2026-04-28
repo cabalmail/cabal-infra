@@ -62,7 +62,7 @@ resource "aws_cognito_user_pool_client" "users" {
 
 # Hosted-UI domain prefix used by the ALB authenticate-oidc action in the
 # monitoring module. Creating it here (singleton per pool) lets it exist
-# even when `var.monitoring = false` — inexpensive and avoids the need
+# even when `var.monitoring = false` - inexpensive and avoids the need
 # to destroy-and-recreate it when monitoring is toggled.
 resource "aws_cognito_user_pool_domain" "users" {
   domain       = "cabal-${data.aws_caller_identity.current.account_id}"

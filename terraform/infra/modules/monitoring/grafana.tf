@@ -1,4 +1,4 @@
-# ── Grafana ECS service ────────────────────────────────────────
+# -- Grafana ECS service ----------------------------------------
 #
 # Public dashboards UI behind the same Cognito challenge as Kuma /
 # Healthchecks. Single task; SQLite store on EFS so user-edited
@@ -116,7 +116,7 @@ resource "aws_ecs_task_definition" "grafana" {
     environment = [
       # Cognito sits at the ALB layer and authenticates every request
       # before it reaches Grafana, so Grafana's own anonymous-access
-      # mode is enabled — the Cognito email is propagated as the
+      # mode is enabled - the Cognito email is propagated as the
       # X-WEBAUTH-USER header for visibility, but admin operations
       # still require the local admin password.
       { name = "GF_SERVER_ROOT_URL", value = "https://metrics.${var.control_domain}" },
@@ -128,7 +128,7 @@ resource "aws_ecs_task_definition" "grafana" {
       # The upstream image creates /var/lib/grafana with explicit
       # ownership; bind-mounting EFS onto that path makes dockerd's
       # copy-up try to chown the host volume mount, which the access
-      # point rejects (`operation not permitted`) — same family as
+      # point rejects (`operation not permitted`) - same family as
       # the Kuma and Healthchecks chown gotchas. Mounting at a path
       # that doesn't exist in the image skips copy-up entirely.
       # Provisioning files live under /etc/grafana/provisioning,
