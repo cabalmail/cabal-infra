@@ -179,9 +179,9 @@ Shared infrastructure:
 | 0.4.1   | Move cert renewal from Terraform to Lambda; Modernize web client.                                   | Done        |
 | 0.5.0   | User management dashboard.                                                                          | Done        |
 | 0.6.0   | Native app for iOS.                                                                                 | Done        |
-| 0.7.0   | Monitoring and alerting.                                                                            | In Progress |
-| 0.8.0   | Overhaul web UX.                                                                                    | Planning    |
-| 0.9.0   | Stabilize.                                                                                          |             |
+| 0.7.0   | Monitoring and alerting.                                                                            | Done        |
+| 0.8.0   | Overhaul web UX.                                                                                    | Done        |
+| 0.9.0   | Stabilize.                                                                                          | Planning    |
 | 1.0.0   | Production-ready release.                                                                           |             |
 | 1.1.0   | Native app for Android.                                                                             |             |
 | 1.2.0   | Quotas.                                                                                             |             |
