@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Copy, Plus, Search, X } from 'lucide-react';
 import useApi from '../hooks/useApi';
 import { ADDRESS_LIST } from '../constants';
@@ -18,6 +18,8 @@ function Addresses({ domains, setMessage, selectedAddress, onSelectAddress }) {
   const [addresses, setAddresses] = useState([]);
   const [query, setQuery] = useState('');
   const [showRequest, setShowRequest] = useState(false);
+  const [pendingScroll, setPendingScroll] = useState(null);
+  const listRef = useRef(null);
 
   const refresh = useCallback(() => {
     api.getAddresses().then((data) => {
@@ -61,8 +63,24 @@ function Addresses({ domains, setMessage, selectedAddress, onSelectAddress }) {
     setShowRequest(false);
     localStorage.removeItem(ADDRESS_LIST);
     refresh();
+    setPendingScroll(newAddress);
     if (typeof onSelectAddress === 'function') onSelectAddress(newAddress);
   }, [refresh, onSelectAddress]);
+
+  // After a successful new-address request, scroll the new row into view
+  // once the refreshed list lands in state. block:'nearest' means we only
+  // scroll if the row isn't already visible.
+  useEffect(() => {
+    if (!pendingScroll) return;
+    if (!addresses.some((a) => a.address === pendingScroll)) return;
+    const container = listRef.current;
+    if (!container) { setPendingScroll(null); return; }
+    const row = container.querySelector(`[data-address="${CSS.escape(pendingScroll)}"]`);
+    if (row && typeof row.scrollIntoView === 'function') {
+      row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+    setPendingScroll(null);
+  }, [addresses, pendingScroll]);
 
   const copyAddress = useCallback((e, a) => {
     e.stopPropagation();
@@ -132,7 +150,7 @@ function Addresses({ domains, setMessage, selectedAddress, onSelectAddress }) {
         )}
       </div>
 
-      <ul className="addresses-rail__list">
+      <ul className="addresses-rail__list" ref={listRef}>
         {filtered.length === 0 && query && (
           <li className="addresses-rail__empty">No matches</li>
         )}
@@ -144,6 +162,7 @@ function Addresses({ domains, setMessage, selectedAddress, onSelectAddress }) {
               id={a.address}
               className={`addresses-rail__row${isActive ? ' is-active' : ''}`}
               title={a.comment ? undefined : a.address}
+              data-address={a.address}
               data-comment={a.comment || undefined}
               onClick={() => handleSelect(a.address)}
               role="button"
