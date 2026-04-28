@@ -1,6 +1,6 @@
 # DMARC report ingestion pipeline: DynamoDB table, Lambda, IAM, and EventBridge schedule.
 
-# ── DynamoDB table for parsed DMARC report records ──────────
+# -- DynamoDB table for parsed DMARC report records ----------
 
 #tfsec:ignore:aws-dynamodb-table-customer-key
 resource "aws_dynamodb_table" "dmarc_reports" {
@@ -26,7 +26,7 @@ resource "aws_dynamodb_table" "dmarc_reports" {
   }
 }
 
-# ── IAM role for the process_dmarc Lambda ───────────────────
+# -- IAM role for the process_dmarc Lambda -------------------
 
 resource "aws_iam_role" "process_dmarc" {
   name = "process_dmarc_role"
@@ -86,7 +86,7 @@ resource "aws_iam_role_policy" "process_dmarc" {
   })
 }
 
-# ── Lambda function ─────────────────────────────────────────
+# -- Lambda function -----------------------------------------
 
 resource "aws_cloudwatch_log_group" "process_dmarc" {
   name              = "/cabal/lambda/process_dmarc"
@@ -129,7 +129,7 @@ resource "aws_lambda_function" "process_dmarc" {
   depends_on = [aws_cloudwatch_log_group.process_dmarc]
 }
 
-# ── EventBridge Scheduler (every 6 hours) ───────────────────
+# -- EventBridge Scheduler (every 6 hours) -------------------
 
 resource "aws_iam_role" "dmarc_scheduler" {
   name = "cabal-dmarc-scheduler"

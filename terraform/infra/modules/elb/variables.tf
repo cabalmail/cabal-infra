@@ -23,7 +23,7 @@ variable "cert_arn" {
   description = "ARN of AWS Certificate Manager certificate."
 }
 
-# ── ECS target group ARNs ────────────────────────────────────
+# -- ECS target group ARNs ------------------------------------
 
 variable "ecs_imap_target_group_arn" {
   type        = string
@@ -45,7 +45,7 @@ variable "ecs_starttls_target_group_arn" {
   description = "ARN of the ECS STARTTLS target group."
 }
 
-# ── Private DNS ─────────────────────────────────────────────────
+# -- Private DNS -------------------------------------------------
 
 variable "private_zone_id" {
   type        = string

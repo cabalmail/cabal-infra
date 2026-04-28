@@ -1,10 +1,10 @@
-# ── Prometheus ECS service ─────────────────────────────────────
+# -- Prometheus ECS service -------------------------------------
 #
 # Single task; TSDB on EFS so retained metrics survive task replacement.
 # Like Kuma and Healthchecks, Prometheus is single-writer at this size,
 # so desired_count stays at 1 and the deployment cycles in place.
 #
-# Not exposed publicly — Grafana proxies queries through the data source
+# Not exposed publicly - Grafana proxies queries through the data source
 # proxy and Alertmanager pulls alerts via the in-cluster DNS name.
 # Operators reach the Prometheus UI through `aws ecs execute-command`
 # port-forwarding when needed.

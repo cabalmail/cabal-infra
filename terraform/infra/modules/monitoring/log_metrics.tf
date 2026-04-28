@@ -1,14 +1,14 @@
-# ── Phase 4 §2: log-derived CloudWatch metric filters ──────────
+# -- Phase 4 section 2: log-derived CloudWatch metric filters ----------
 #
 # CloudWatch metric filters scan log lines as they arrive and emit a
 # custom metric in the `Cabalmail/Logs` namespace. cloudwatch_exporter
 # scrapes those metrics; Prometheus alerts on the rates. This is the
-# "stay on CloudWatch Logs" path described in docs/monitoring.md §21.
+# "stay on CloudWatch Logs" path described in docs/monitoring.md section 21.
 #
 # Why log-derived metrics, not exporters: Sendmail's log format is
 # not what postfix_exporter expects, and a per-tier sidecar exporter
 # pass would force a destructive change to every mail-tier task
-# definition (see docs/0.7.0/monitoring-plan.md §6 on stable-flag
+# definition (see docs/0.7.0/monitoring-plan.md section 6 on stable-flag
 # discipline). Metric filters skip both problems and add zero new
 # moving parts in the data path.
 #
@@ -27,7 +27,7 @@ locals {
   # any temporary delivery failure (4xx dsn, queue retry pending).
   pattern_sendmail_deferred = "\"stat=Deferred\""
 
-  # Match any 5.x.y dsn — sendmail's permanent-failure indicator. The
+  # Match any 5.x.y dsn - sendmail's permanent-failure indicator. The
   # pattern is a substring match for "dsn=5"; in real sendmail logs
   # the field is always followed by `.N.M`, so false positives
   # (e.g. message-id containing "dsn=5") are negligible.
@@ -39,7 +39,7 @@ locals {
   pattern_imap_auth_failed = "\"imap-login\" \"auth failed\""
 }
 
-# ── Sendmail Deferred (3 mail tiers → one metric) ──────────────
+# -- Sendmail Deferred (3 mail tiers -> one metric) --------------
 
 resource "aws_cloudwatch_log_metric_filter" "sendmail_deferred" {
   for_each = var.tier_log_group_names
@@ -57,7 +57,7 @@ resource "aws_cloudwatch_log_metric_filter" "sendmail_deferred" {
   }
 }
 
-# ── Sendmail Bounced (3 mail tiers → one metric) ──────────────
+# -- Sendmail Bounced (3 mail tiers -> one metric) --------------
 
 resource "aws_cloudwatch_log_metric_filter" "sendmail_bounced" {
   for_each = var.tier_log_group_names
@@ -75,7 +75,7 @@ resource "aws_cloudwatch_log_metric_filter" "sendmail_bounced" {
   }
 }
 
-# ── IMAP auth failures (imap tier only) ────────────────────────
+# -- IMAP auth failures (imap tier only) ------------------------
 
 resource "aws_cloudwatch_log_metric_filter" "imap_auth_failures" {
   name           = "cabal-imap-auth-failures"

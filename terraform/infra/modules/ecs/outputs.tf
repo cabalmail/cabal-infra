@@ -33,7 +33,7 @@ output "smtp_out_service_name" {
   description = "Name of the SMTP-OUT ECS service."
 }
 
-# Target group ARNs — used to switch NLB listeners during cutover (Phase 7).
+# Target group ARNs - used to switch NLB listeners during cutover (Phase 7).
 
 output "imap_target_group_arn" {
   value       = aws_lb_target_group.tier["imap"].arn
@@ -57,5 +57,5 @@ output "starttls_target_group_arn" {
 
 output "tier_log_group_names" {
   value       = { for k, v in aws_cloudwatch_log_group.tier : k => v.name }
-  description = "Map of mail-tier CloudWatch log group names keyed by tier (imap | smtp-in | smtp-out). Phase 4 §2 metric filters target these."
+  description = "Map of mail-tier CloudWatch log group names keyed by tier (imap | smtp-in | smtp-out). Phase 4 section 2 metric filters target these."
 }

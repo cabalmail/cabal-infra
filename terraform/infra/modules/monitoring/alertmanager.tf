@@ -1,4 +1,4 @@
-# ── Alertmanager ECS service ───────────────────────────────────
+# -- Alertmanager ECS service -----------------------------------
 #
 # Receives alerts from Prometheus and posts to the alert_sink Lambda
 # (which fans out to Pushover / ntfy). Single task; silences and the

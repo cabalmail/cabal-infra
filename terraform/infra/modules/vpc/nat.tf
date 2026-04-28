@@ -136,7 +136,7 @@ resource "aws_instance" "nat" {
     iptables-save > /etc/sysconfig/iptables
 
     # Create a systemd service to restore rules on boot (replaces iptables-services
-    # which requires yum and can't be installed during first boot — the instance has
+    # which requires yum and can't be installed during first boot - the instance has
     # no public IP until the EIP is associated after creation).
     # Uses printf instead of a nested heredoc to avoid delimiter issues
     # inside Terraform's <<-EOF.

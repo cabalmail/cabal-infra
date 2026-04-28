@@ -1,4 +1,4 @@
-# ── SSM parameters for the alert_sink Lambda ───────────────────
+# -- SSM parameters for the alert_sink Lambda -------------------
 #
 # alert_secret: shared secret callers (Kuma, Alertmanager) send in the
 # X-Alert-Secret header. Generated at first apply; rotate via
@@ -62,7 +62,7 @@ resource "aws_ssm_parameter" "ntfy_publisher_token" {
   }
 }
 
-# ── Healthchecks Django secret key ─────────────────────────────
+# -- Healthchecks Django secret key -----------------------------
 #
 # Generated at first apply. Rotate via `terraform taint
 # random_password.healthchecks_secret_key` (will invalidate active
@@ -84,7 +84,7 @@ resource "aws_ssm_parameter" "healthchecks_secret_key" {
   }
 }
 
-# ── Healthcheck ping URLs (Phase 2 heartbeats) ─────────────────
+# -- Healthcheck ping URLs (Phase 2 heartbeats) -----------------
 #
 # One placeholder per scheduled job. After Healthchecks is up, the
 # operator creates a check per job in the UI and pastes its ping URL
@@ -100,7 +100,7 @@ locals {
     dmarc_ingest      = "Hourly DMARC report ingestion Lambda (process_dmarc)."
     ecs_reconfigure   = "ECS reconfigure loop in the mail tier containers."
     cognito_user_sync = "Cognito post-confirmation Lambda (assign_osid)."
-    # Phase 4 §5 — operator-driven 90-day review heartbeat. No automation
+    # Phase 4 section 5 - operator-driven 90-day review heartbeat. No automation
     # pings this; the operator pings it manually after completing the
     # quarterly monitoring review (see docs/operations/runbooks/heartbeat-quarterly-review.md).
     quarterly_review = "Quarterly monitoring review (manual operator ping)."
@@ -120,9 +120,9 @@ resource "aws_ssm_parameter" "healthcheck_ping" {
   }
 }
 
-# ── Healthchecks API key (Phase 4 §3) ─────────────────────────
+# -- Healthchecks API key (Phase 4 section 3) -------------------------
 #
-# Created manually in the Healthchecks UI on the Project Settings →
+# Created manually in the Healthchecks UI on the Project Settings ->
 # API Access page (the v3 API has no endpoint to create projects or
 # keys, so this is a one-time bootstrap). Operator pastes the key
 # value here with `aws ssm put-parameter --overwrite`. The
@@ -141,7 +141,7 @@ resource "aws_ssm_parameter" "healthchecks_api_key" {
   }
 }
 
-# ── Grafana admin password (Phase 3) ───────────────────────────
+# -- Grafana admin password (Phase 3) ---------------------------
 #
 # Generated at first apply; rotation via `terraform taint
 # random_password.grafana_admin_password` followed by an apply (Grafana
