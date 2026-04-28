@@ -86,6 +86,14 @@ describe('Addresses rail', () => {
     expect(row).toHaveAttribute('aria-current', 'true');
   });
 
+  it('toggles the filter off when the active address is clicked again', async () => {
+    const onSelectAddress = vi.fn();
+    renderAddresses({ selectedAddress: 'chris@main.cabalmail.com', onSelectAddress });
+    await waitFor(() => expect(screen.getByText('chris@main.cabalmail.com')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('chris@main.cabalmail.com').closest('li'));
+    expect(onSelectAddress).toHaveBeenCalledWith(null);
+  });
+
   it('does not render a colored swatch for address rows', async () => {
     renderAddresses();
     await waitFor(() => expect(screen.getByText('me@inbox.cabalmail.com')).toBeInTheDocument());

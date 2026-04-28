@@ -47,8 +47,9 @@ function Addresses({ domains, setMessage, selectedAddress, onSelectAddress }) {
   const hiddenCount = addresses.length - filtered.length;
 
   const handleSelect = useCallback((address) => {
-    if (typeof onSelectAddress === 'function') onSelectAddress(address);
-  }, [onSelectAddress]);
+    if (typeof onSelectAddress !== 'function') return;
+    onSelectAddress(selectedAddress === address ? null : address);
+  }, [onSelectAddress, selectedAddress]);
 
   const openRequest = useCallback((e) => {
     if (e) e.stopPropagation();
