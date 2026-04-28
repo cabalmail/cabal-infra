@@ -13,24 +13,6 @@
   gap: 14px;
 }
 
-.requestHidden,
-.requestVisible {
-  display: flex;
-  overflow: hidden;
-}
-
-.requestHidden {
-  max-height: 0;
-  padding-top: 0;
-  transition: max-height 250ms ease-out, padding-top 250ms ease-out;
-}
-
-.requestVisible {
-  max-height: 24em;
-  padding-top: 4px;
-  transition: max-height 250ms ease-in, padding-top 250ms ease-in;
-}
-
 /* Fieldsets ----------------------------------------------------------- */
 
 .request .request__group {

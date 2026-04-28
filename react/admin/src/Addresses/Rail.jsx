@@ -230,7 +230,6 @@ function Addresses({ domains, setMessage, selectedAddress, onSelectAddress }) {
             </div>
             <Request
               domains={domains}
-              showRequest={true}
               setMessage={setMessage}
               callback={onRequested}
             />

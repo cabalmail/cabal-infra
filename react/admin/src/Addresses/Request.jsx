@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import useApi from '../hooks/useApi';
 import './Request.css';
 
-function Request({ domains, showRequest, callback, setMessage }) {
+function Request({ domains, callback, setMessage }) {
   const api = useApi();
   const [username, setUsername] = useState('');
   const [subdomain, setSubdomain] = useState('');
@@ -95,7 +95,7 @@ function Request({ domains, showRequest, callback, setMessage }) {
   };
 
   return (
-    <div className={`request ${showRequest ? "requestVisible" : "requestHidden"}`}>
+    <div className="request">
       <fieldset className="request__group request__address">
         <legend className="request__legend">Address</legend>
         <input

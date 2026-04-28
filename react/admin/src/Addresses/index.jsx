@@ -137,7 +137,6 @@ function AdminAddresses({ domains, setMessage }) {
         <div className="admin-addresses__new">
           <Request
             domains={domains}
-            showRequest={true}
             setMessage={setMessage}
             callback={handleRequested}
           />
