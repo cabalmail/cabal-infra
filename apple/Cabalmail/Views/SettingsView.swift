@@ -91,6 +91,10 @@ struct SettingsView: View {
                 Text("Ask").tag(LoadRemoteContentPolicy.ask)
                 Text("Always").tag(LoadRemoteContentPolicy.always)
             }
+            Picker("Default view", selection: $preferences.defaultBodyRenderMode) {
+                Text("Original").tag(BodyRenderMode.original)
+                Text("Reader").tag(BodyRenderMode.reader)
+            }
         }
     }
 

@@ -18,12 +18,27 @@ struct HTMLBodyView: View {
     let html: String
     let inlineImages: [String: URL]
     let allowRemote: Bool
+    /// When true, a reader-view stylesheet is injected ahead of the author's
+    /// HTML to normalize typography, cap line length, and respect the system
+    /// light/dark appearance. When false, the author's CSS renders as-is
+    /// against a pinned-light WebKit page.
+    let readerMode: Bool
 
     var body: some View {
         #if os(macOS)
-        MacHTMLView(html: html, inlineImages: inlineImages, allowRemote: allowRemote)
+        MacHTMLView(
+            html: html,
+            inlineImages: inlineImages,
+            allowRemote: allowRemote,
+            readerMode: readerMode
+        )
         #else
-        MobileHTMLView(html: html, inlineImages: inlineImages, allowRemote: allowRemote)
+        MobileHTMLView(
+            html: html,
+            inlineImages: inlineImages,
+            allowRemote: allowRemote,
+            readerMode: readerMode
+        )
         #endif
     }
 }
@@ -35,6 +50,7 @@ private struct MobileHTMLView: UIViewRepresentable {
     let html: String
     let inlineImages: [String: URL]
     let allowRemote: Bool
+    let readerMode: Bool
 
     func makeCoordinator() -> HTMLBodyCoordinator {
         HTMLBodyCoordinator(allowRemote: allowRemote)
@@ -49,19 +65,24 @@ private struct MobileHTMLView: UIViewRepresentable {
         let view = WKWebView(frame: .zero, configuration: configuration)
         view.navigationDelegate = context.coordinator
         view.isOpaque = true
-        view.backgroundColor = .white
-        // Force WebKit's light defaults regardless of the system appearance.
-        // Email HTML is written assuming a white page; rendering it against
-        // a dark inherited palette produces unreadable low-contrast text
-        // (the author's `color: black` on our `background: dark` surface).
-        view.overrideUserInterfaceStyle = .light
         return view
     }
 
     func updateUIView(_ uiView: WKWebView, context: Context) {
         context.coordinator.allowRemote = allowRemote
         context.coordinator.apply(allowRemote: allowRemote, to: uiView)
-        let rewritten = rewrite(html: html, inlineImages: inlineImages)
+        // In reader mode the injected stylesheet owns the palette and is
+        // written against `prefers-color-scheme`, so let the system
+        // appearance through. In original mode we still have to pin light —
+        // author CSS assumes a white page and renders unreadably against a
+        // dark inherited palette.
+        uiView.overrideUserInterfaceStyle = readerMode ? .unspecified : .light
+        uiView.backgroundColor = readerMode ? nil : .white
+        let rewritten = rewrite(
+            html: html,
+            inlineImages: inlineImages,
+            readerMode: readerMode
+        )
         uiView.loadHTMLString(rewritten, baseURL: nil)
     }
 }
@@ -74,6 +95,7 @@ private struct MacHTMLView: NSViewRepresentable {
     let html: String
     let inlineImages: [String: URL]
     let allowRemote: Bool
+    let readerMode: Bool
 
     func makeCoordinator() -> HTMLBodyCoordinator {
         HTMLBodyCoordinator(allowRemote: allowRemote)
@@ -87,17 +109,21 @@ private struct MacHTMLView: NSViewRepresentable {
         configuration.defaultWebpagePreferences = preferences
         let view = WKWebView(frame: .zero, configuration: configuration)
         view.navigationDelegate = context.coordinator
-        // See the iOS equivalent — pin WebKit to its default light
-        // appearance so author stylesheets that assume a white page don't
-        // render black-on-dark.
-        view.appearance = NSAppearance(named: .aqua)
         return view
     }
 
     func updateNSView(_ nsView: WKWebView, context: Context) {
         context.coordinator.allowRemote = allowRemote
         context.coordinator.apply(allowRemote: allowRemote, to: nsView)
-        let rewritten = rewrite(html: html, inlineImages: inlineImages)
+        // See the iOS equivalent for why original mode pins .aqua: author
+        // CSS assumes a white page. Reader mode owns the palette via its
+        // `prefers-color-scheme` stylesheet, so it tracks the system.
+        nsView.appearance = readerMode ? nil : NSAppearance(named: .aqua)
+        let rewritten = rewrite(
+            html: html,
+            inlineImages: inlineImages,
+            readerMode: readerMode
+        )
         nsView.loadHTMLString(rewritten, baseURL: nil)
     }
 }
@@ -210,8 +236,14 @@ final class HTMLBodyCoordinator: NSObject, WKNavigationDelegate {
 
 /// Walks the HTML and rewrites `cid:` URLs (case-insensitive) to local
 /// `file://` URLs pulled from the inline-image map. Purely string-level so
-/// we never need to run a JS context.
-func rewrite(html: String, inlineImages: [String: URL]) -> String {
+/// we never need to run a JS context. In `readerMode`, prepends a reset +
+/// typography stylesheet that overrides author CSS for a Safari Reader-
+/// style presentation.
+func rewrite(
+    html: String,
+    inlineImages: [String: URL],
+    readerMode: Bool = false
+) -> String {
     var result = html
     for (cid, url) in inlineImages {
         let patterns = [
@@ -223,5 +255,70 @@ func rewrite(html: String, inlineImages: [String: URL]) -> String {
             result = result.replacingOccurrences(of: pattern, with: url.absoluteString)
         }
     }
+    if readerMode {
+        result = readerStylesheet + result
+    }
     return result
 }
+
+/// Prepended in reader mode. Every rule uses `!important` because most
+/// author mail CSS ships as inline `style=` attributes, and we need to win
+/// the cascade against both inline styles and higher-specificity selectors.
+///
+/// Design goals: system font, capped reading width, transparent author
+/// backgrounds so colored wrappers don't clash with the system surface, and
+/// a `prefers-color-scheme: dark` branch so the page follows the user's
+/// system appearance (which is why `readerMode` also drops the `.light`
+/// WebKit override in the host view).
+private let readerStylesheet = """
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #1c1c1e !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif !important;
+    font-size: 17px !important;
+    line-height: 1.6 !important;
+  }
+  body {
+    padding: 20px !important;
+    max-width: 680px !important;
+    margin: 0 auto !important;
+  }
+  *, *::before, *::after {
+    background-color: transparent !important;
+    background-image: none !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  img, video { height: auto !important; }
+  a { color: #0a84ff !important; text-decoration: underline !important; }
+  blockquote {
+    margin: 1em 0 !important;
+    padding: 0 1em !important;
+    border-left: 3px solid rgba(127,127,127,0.35) !important;
+    color: inherit !important;
+  }
+  table { border-collapse: collapse !important; width: auto !important; }
+  td, th { padding: 4px 8px !important; border: none !important; }
+  pre, code {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace !important;
+    font-size: 0.9em !important;
+    background: rgba(127,127,127,0.12) !important;
+    border-radius: 4px !important;
+    padding: 2px 4px !important;
+  }
+  pre { padding: 12px !important; overflow-x: auto !important; }
+  h1, h2, h3, h4, h5, h6 { color: inherit !important; }
+  hr { border: none !important; border-top: 1px solid rgba(127,127,127,0.3) !important; }
+  @media (prefers-color-scheme: dark) {
+    html, body {
+      background: #1c1c1e !important;
+      color: #f2f2f7 !important;
+    }
+    a { color: #0a84ff !important; }
+  }
+</style>
+"""

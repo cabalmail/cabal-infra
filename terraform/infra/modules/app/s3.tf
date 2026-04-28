@@ -97,3 +97,20 @@ resource "aws_s3_bucket_public_access_block" "this" {
   ignore_public_acls      = true
   restrict_public_buckets = true
 }
+
+# Allow the admin web client to XHR-fetch cached .eml bodies for the reader's
+# View-source modal. Attachments and inline images don't need this (they are
+# loaded via top-level navigation or <img>, neither of which is CORS-gated),
+# but axios.get(signedUrl) in ViewSourceModal is an XHR that the browser
+# blocks without an Access-Control-Allow-Origin response header.
+resource "aws_s3_bucket_cors_configuration" "cache" {
+  bucket = aws_s3_bucket.cache.bucket
+
+  cors_rule {
+    allowed_methods = ["GET"]
+    allowed_origins = ["https://admin.${var.control_domain}"]
+    allowed_headers = ["*"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3000
+  }
+}
