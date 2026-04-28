@@ -9,7 +9,6 @@
   flex-direction: column;
   min-height: 0;
   flex: 1 1 auto;
-  border-top: 1px solid var(--border);
   padding: 4px 0 8px;
   color: var(--ink-soft);
   font-family: var(--font-ui);
@@ -145,10 +144,10 @@
 
 .addresses-rail__row {
   display: grid;
-  grid-template-columns: 8px 1fr auto;
+  grid-template-columns: 1fr auto;
   gap: 10px;
   align-items: center;
-  padding: 6px 10px;
+  padding: 6px 12px;
   border-radius: 5px;
   color: var(--ink-soft);
   font-size: 12px;
@@ -176,21 +175,6 @@
   width: 2px;
   border-radius: 1px;
   background: var(--accent);
-}
-
-.addresses-rail__swatch {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  justify-self: center;
-}
-
-.addresses-rail__swatch--ghost {
-  background: transparent !important;
-  border: 1px dashed var(--ink-quiet);
-  box-sizing: border-box;
-  width: 8px;
-  height: 8px;
 }
 
 .addresses-rail__address {

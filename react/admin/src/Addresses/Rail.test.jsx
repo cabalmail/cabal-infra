@@ -86,17 +86,22 @@ describe('Addresses rail', () => {
     expect(row).toHaveAttribute('aria-current', 'true');
   });
 
-  it('gives each address a stable deterministic swatch colour', async () => {
+  it('does not render a colored swatch for address rows', async () => {
     renderAddresses();
     await waitFor(() => expect(screen.getByText('me@inbox.cabalmail.com')).toBeInTheDocument());
-    const rows = SAMPLE_ADDRESSES.map((a) =>
-      screen.getByText(a.address).closest('li')
-    );
-    for (const row of rows) {
-      const swatch = row.querySelector('.addresses-rail__swatch');
-      expect(swatch).not.toBeNull();
-      expect(swatch.style.background).not.toBe('');
-    }
+    expect(document.querySelector('.addresses-rail__swatch')).toBeNull();
+  });
+
+  it('copies an address to the clipboard via the row copy action', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const setMessage = vi.fn();
+    renderAddresses({ setMessage });
+    await waitFor(() => expect(screen.getByText('chris@main.cabalmail.com')).toBeInTheDocument());
+    const btn = screen.getByRole('button', { name: /copy chris@main\.cabalmail\.com/i });
+    await act(async () => { fireEvent.click(btn); });
+    expect(writeText).toHaveBeenCalledWith('chris@main.cabalmail.com');
+    expect(setMessage).toHaveBeenCalledWith('Address copied to clipboard.', false);
   });
 
   it('opens the request modal from the "+ New address" row', async () => {

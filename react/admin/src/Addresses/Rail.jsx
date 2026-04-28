@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Plus, Search, X } from 'lucide-react';
+import { Copy, Plus, Search, X } from 'lucide-react';
 import useApi from '../hooks/useApi';
 import { ADDRESS_LIST } from '../constants';
-import { swatchFor } from '../utils/addressSwatch';
 import Request from './Request';
 import './Addresses.css';
 
@@ -64,6 +63,20 @@ function Addresses({ domains, setMessage, selectedAddress, onSelectAddress }) {
     refresh();
     if (typeof onSelectAddress === 'function') onSelectAddress(newAddress);
   }, [refresh, onSelectAddress]);
+
+  const copyAddress = useCallback((e, a) => {
+    e.stopPropagation();
+    const done = (ok) => {
+      if (!setMessage) return;
+      if (ok) setMessage('Address copied to clipboard.', false);
+      else setMessage('Failed to copy address.', true);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(a.address).then(() => done(true), () => done(false));
+    } else {
+      done(false);
+    }
+  }, [setMessage]);
 
   const revoke = useCallback((e, a) => {
     e.stopPropagation();
@@ -137,13 +150,17 @@ function Addresses({ domains, setMessage, selectedAddress, onSelectAddress }) {
               onKeyDown={(e) => { if (e.key === 'Enter') handleSelect(a.address); }}
               aria-current={isActive ? 'true' : undefined}
             >
-              <span
-                className="addresses-rail__swatch"
-                style={{ background: swatchFor(a.address) }}
-                aria-hidden="true"
-              />
               <span className="addresses-rail__address">{a.address}</span>
               <span className="addresses-rail__row-actions" onClick={(e) => e.stopPropagation()}>
+                <button
+                  type="button"
+                  className="addresses-rail__row-action"
+                  title="Copy address"
+                  aria-label={`Copy ${a.address}`}
+                  onClick={(e) => copyAddress(e, a)}
+                >
+                  <Copy size={12} aria-hidden="true" />
+                </button>
                 <button
                   type="button"
                   className="addresses-rail__row-action"
@@ -166,7 +183,6 @@ function Addresses({ domains, setMessage, selectedAddress, onSelectAddress }) {
             tabIndex={0}
             onKeyDown={(e) => { if (e.key === 'Enter') openRequest(); }}
           >
-            <span className="addresses-rail__swatch addresses-rail__swatch--ghost" aria-hidden="true" />
             <span className="addresses-rail__new-label">+ New address…</span>
           </li>
         )}

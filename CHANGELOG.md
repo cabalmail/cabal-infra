@@ -83,6 +83,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - **No default domain in the inline Create form.** The domain `<select>` opens on a disabled placeholder (`"domain"`, or `"(no domains)"` when the user has none); Create & use stays disabled until `username`, `subdomain`, and `domain` are all set.
     - **Password-manager autofill suppressed** on the three Create-form inputs. A `username` input next to a second text field reads as a credentials form to 1Password / LastPass / Bitwarden, so each input (and the domain select) got `autoComplete="off"`, neutral `name` values (`cabal-local-part` / `cabal-subdomain` / `cabal-domain`), and the vendor-specific `data-1p-ignore` / `data-lpignore` / `data-bwignore` / `data-form-type="other"` attributes.
 - **Logo vector refresh.** `react/admin/src/assets/logo.svg` replaced with the smooth paths from `apple/handoff/cabalmail-mark.svg` (circle-with-flag + envelope). The prior SVG was traced from a raster source, so its vectors followed the stair-step of the original pixels and rendered visibly jagged at the brand-tile size. ViewBox set to `0 80 400 200` to match the 2:1 brand tile; `fill="currentColor"` preserved so the existing Nav / AuthShell light/dark behavior (`--accent` background, `--surface` / `#0b0b0b` foreground) carries through unchanged.
+- **Resizable panes + address-rail polish.**
+  - **Three draggable boundaries, all percentage-based.** New `Email/useSplit.js` hook backs three independent splits, each persisted to its own localStorage key and clamped at the JS layer:
+    - Folders / Addresses inside the left rail (50% default, 15-85% clamp; rendered in-flow on desktop and inside the drawer on tablet/phone).
+    - Folders rail / middle pane (22% default, 15-30% clamp; desktop only — on tablet the rail is a fixed-position drawer).
+    - Message list / reader (46% default, 25-65% clamp; tablet+; suppressed on phone where the panes swap rather than share).
+  - Each splitter is a 7px hit zone with `role="separator"`, pointer-event drag (`touch-action: none`), keyboard nav (Arrow keys / Home / End / Enter to reset), and double-click reset. The visible 1px line on the leading edge replaces the static `border-right` that used to separate rail from middle and msglist from reader.
+  - Widths flow from React state into the DOM as inline `flex-basis` (rail aside, rail panes) and a `--msglist-width` CSS variable consumed by `div.msglist` at the tablet+ media query. Because every persisted value is a percentage of its container, the layout reflows continuously on window resize and crosses the 768/1200 breakpoints without stranding pixel widths that no longer fit. The msglist's prior `flex: 0 0 min(46%, 490px)` cap was dropped — user clamp + drag now shapes the same range.
+  - **Address rail polish.**
+    - Removed the per-row colored swatch dot (the `swatchFor` utility stays for the compose From picker, which still uses the swatch chip).
+    - Added a Copy icon (lucide `Copy`, two overlapping squares) right-aligned on each address row, hover/focus-revealed alongside the existing Revoke action. Click writes the address via `navigator.clipboard.writeText` and toasts via `setMessage`.
+    - Row grid simplified to `1fr auto`; stale `.addresses-rail__swatch` / `.addresses-rail__swatch--ghost` rules removed; `border-top` on `.addresses-rail` dropped (the new horizontal splitter is now the visible boundary).
 
 ### Changed
 

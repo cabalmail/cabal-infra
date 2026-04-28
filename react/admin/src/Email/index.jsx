@@ -6,6 +6,7 @@ import ComposeOverlay from './ComposeOverlay';
 import Folders from '../Folders';
 import AddressesRail from '../Addresses/Rail';
 import useMediaQuery from '../hooks/useMediaQuery';
+import useSplit from './useSplit';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppMessage } from '../contexts/AppMessageContext';
 
@@ -14,6 +15,33 @@ const EMPTY_ENVELOPE = {
   to: [],
   subject: ""
 };
+
+function Splitter({ split, orientation, ariaLabel }) {
+  const className = orientation === 'horizontal'
+    ? 'email__rail-splitter'
+    : 'email__col-splitter';
+  const gripClassName = orientation === 'horizontal'
+    ? 'email__rail-splitter-grip'
+    : 'email__col-splitter-grip';
+  return (
+    <div
+      className={className}
+      role="separator"
+      aria-orientation={orientation}
+      aria-valuemin={split.min}
+      aria-valuemax={split.max}
+      aria-valuenow={Math.round(split.pct)}
+      aria-label={ariaLabel}
+      tabIndex={0}
+      onPointerDown={split.onPointerDown}
+      onKeyDown={split.onKeyDown}
+      onDoubleClick={split.reset}
+      title="Drag to resize (double-click to reset)"
+    >
+      <span className={gripClassName} aria-hidden="true" />
+    </div>
+  );
+}
 
 function prepBody(body, envelope) {
   let sanitizedBody = body;
@@ -55,6 +83,19 @@ function Email({
   const isDesktop = useMediaQuery('(min-width: 1200px)');
   const isTabletUp = useMediaQuery('(min-width: 768px)');
   const layout = isDesktop ? 'desktop' : isTabletUp ? 'tablet' : 'phone';
+
+  const railSplit = useSplit({
+    storageKey: 'cabal-rail-split',
+    defaultPct: 50, min: 15, max: 85, axis: 'y',
+  });
+  const colRailSplit = useSplit({
+    storageKey: 'cabal-col-rail-split',
+    defaultPct: 22, min: 15, max: 30, axis: 'x',
+  });
+  const colMiddleSplit = useSplit({
+    storageKey: 'cabal-col-middle-split',
+    defaultPct: 46, min: 25, max: 65, axis: 'x',
+  });
 
   const [folder, setFolder] = useState("INBOX");
   const [addressFilter, setAddressFilter] = useState(null);
@@ -184,22 +225,54 @@ function Email({
   const middleMode = layout === 'phone' && overlayVisible ? 'reader' : 'list';
 
   return (
-    <div className="email" data-layout={layout} data-middle={middleMode}>
+    <div
+      className="email"
+      data-layout={layout}
+      data-middle={middleMode}
+      ref={colRailSplit.containerRef}
+    >
       {layout === 'desktop' ? (
-        <aside className="email__rail" aria-label="Folders and addresses">
-          <Folders
-            folder={folder}
-            setFolder={selectFolder}
-            setMessage={setMessage}
-            onNewMessage={newEmail}
+        <>
+          <aside
+            className="email__rail"
+            aria-label="Folders and addresses"
+            ref={railSplit.containerRef}
+            style={{ flexBasis: `${colRailSplit.pct}%` }}
+          >
+            <div
+              className="email__rail-pane"
+              style={{ flexBasis: `${railSplit.pct}%` }}
+            >
+              <Folders
+                folder={folder}
+                setFolder={selectFolder}
+                setMessage={setMessage}
+                onNewMessage={newEmail}
+              />
+            </div>
+            <Splitter
+              split={railSplit}
+              orientation="horizontal"
+              ariaLabel="Resize folder list"
+            />
+            <div
+              className="email__rail-pane"
+              style={{ flexBasis: `${100 - railSplit.pct}%` }}
+            >
+              <AddressesRail
+                domains={domains}
+                setMessage={setMessage}
+                selectedAddress={addressFilter}
+                onSelectAddress={selectAddress}
+              />
+            </div>
+          </aside>
+          <Splitter
+            split={colRailSplit}
+            orientation="vertical"
+            ariaLabel="Resize folders sidebar"
           />
-          <AddressesRail
-            domains={domains}
-            setMessage={setMessage}
-            selectedAddress={addressFilter}
-            onSelectAddress={selectAddress}
-          />
-        </aside>
+        </>
       ) : (
         drawerOpen && (
           <>
@@ -211,27 +284,49 @@ function Email({
             <aside
               className="email__rail email__rail--drawer"
               aria-label="Folders and addresses"
+              ref={railSplit.containerRef}
             >
-              <Folders
-                folder={folder}
-                setFolder={selectFolder}
-                setMessage={setMessage}
-                onNewMessage={() => { setDrawerOpen(false); newEmail(); }}
-                asDrawer
-                onClose={closeDrawer}
+              <div
+                className="email__rail-pane"
+                style={{ flexBasis: `${railSplit.pct}%` }}
+              >
+                <Folders
+                  folder={folder}
+                  setFolder={selectFolder}
+                  setMessage={setMessage}
+                  onNewMessage={() => { setDrawerOpen(false); newEmail(); }}
+                  asDrawer
+                  onClose={closeDrawer}
+                />
+              </div>
+              <Splitter
+                split={railSplit}
+                orientation="horizontal"
+                ariaLabel="Resize folder list"
               />
-              <AddressesRail
-                domains={domains}
-                setMessage={setMessage}
-                selectedAddress={addressFilter}
-                onSelectAddress={(a) => { setAddressFilter(a); setDrawerOpen(false); }}
-              />
+              <div
+                className="email__rail-pane"
+                style={{ flexBasis: `${100 - railSplit.pct}%` }}
+              >
+                <AddressesRail
+                  domains={domains}
+                  setMessage={setMessage}
+                  selectedAddress={addressFilter}
+                  onSelectAddress={(a) => { setAddressFilter(a); setDrawerOpen(false); }}
+                />
+              </div>
             </aside>
           </>
         )
       )}
 
-      <div className="email__middle">
+      <div
+        className="email__middle"
+        ref={colMiddleSplit.containerRef}
+        style={layout !== 'phone'
+          ? { '--msglist-width': `${colMiddleSplit.pct}%` }
+          : undefined}
+      >
         <Messages
           token={token}
           api_url={api_url}
@@ -255,6 +350,13 @@ function Email({
           onOpenDrawer={openDrawer}
           onCompose={newEmail}
         />
+        {layout !== 'phone' && (
+          <Splitter
+            split={colMiddleSplit}
+            orientation="vertical"
+            ariaLabel="Resize message list"
+          />
+        )}
         <MessageOverlay
           token={token}
           api_url={api_url}

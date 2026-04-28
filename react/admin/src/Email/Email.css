@@ -75,6 +75,94 @@ div.email {
   to   { opacity: 1; }
 }
 
+/* Resizable split between Folders and Addresses ------------------------ */
+
+.email__rail-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 50%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.email__rail-splitter {
+  flex: 0 0 7px;
+  position: relative;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  cursor: row-resize;
+  outline: none;
+  touch-action: none;
+}
+
+.email__rail-splitter:hover,
+.email__rail-splitter:focus-visible {
+  border-top-color: var(--accent);
+  border-bottom-color: var(--accent);
+  background: color-mix(in oklch, var(--accent) 12%, transparent);
+}
+
+.email__rail-splitter-grip {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 24px;
+  height: 1px;
+  border-radius: 1px;
+  background: var(--ink-quiet);
+  opacity: 0;
+  transition: opacity 120ms ease;
+  pointer-events: none;
+}
+
+.email__rail-splitter:hover .email__rail-splitter-grip,
+.email__rail-splitter:focus-visible .email__rail-splitter-grip {
+  opacity: 1;
+}
+
+/* Vertical splitter — between rail|middle and msglist|reader. Drag axis
+   is horizontal; the visible 1px line is on the left edge so it doubles
+   as the column separator that used to be on rail/msglist borders. */
+
+.email__col-splitter {
+  flex: 0 0 7px;
+  position: relative;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid transparent;
+  background: transparent;
+  cursor: col-resize;
+  outline: none;
+  touch-action: none;
+}
+
+.email__col-splitter:hover,
+.email__col-splitter:focus-visible {
+  border-left-color: var(--accent);
+  border-right-color: var(--accent);
+  background: color-mix(in oklch, var(--accent) 12%, transparent);
+}
+
+.email__col-splitter-grip {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 1px;
+  height: 24px;
+  border-radius: 1px;
+  background: var(--ink-quiet);
+  opacity: 0;
+  transition: opacity 120ms ease;
+  pointer-events: none;
+}
+
+.email__col-splitter:hover .email__col-splitter-grip,
+.email__col-splitter:focus-visible .email__col-splitter-grip {
+  opacity: 1;
+}
+
 /* Middle pane container — holds msglist + reader ----------------------- */
 
 div.email__middle {
@@ -107,10 +195,10 @@ div.reader {
 /* Tablet ---------------------------------------------------------------- */
 
 @media (min-width: 768px) {
-  /* Two-pane: list (fixed 42ch ish) + reader. */
+  /* Two-pane: msglist + reader. Width is user-resizable via the column
+     splitter; CSS variable carries the percentage from React state. */
   div.msglist {
-    flex: 0 0 min(46%, 490px);
-    border-right: 1px solid var(--border);
+    flex: 0 0 var(--msglist-width, 46%);
   }
   div.reader {
     flex: 1 1 auto;
@@ -124,12 +212,12 @@ div.reader {
 /* Desktop -------------------------------------------------------------- */
 
 @media (min-width: 1200px) {
-  /* Rail becomes in-flow; cancel drawer positioning if it sneaks in. */
+  /* Rail becomes in-flow; cancel drawer positioning if it sneaks in. The
+     flex-basis is set inline from React state (col splitter); 22% is the
+     fallback for the brief moment before that style applies. */
   .email__rail {
     position: static;
-    width: 280px;
-    flex: 0 0 280px;
-    border-right: 1px solid var(--border);
+    flex: 0 0 22%;
     box-shadow: none;
     animation: none;
   }
