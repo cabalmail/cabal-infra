@@ -84,7 +84,7 @@ resource "aws_cloudwatch_log_group" "healthchecks_iac" {
 # Healthchecks resolves and the SG-to-SG rule applies. Egress only.
 resource "aws_security_group" "healthchecks_iac" {
   name        = "cabal-healthchecks-iac"
-  description = "healthchecks_iac Lambda — reaches the Healthchecks API on the private Cloud Map name."
+  description = "healthchecks_iac Lambda - reaches the Healthchecks API on the private Cloud Map name."
   vpc_id      = var.vpc_id
 }
 
