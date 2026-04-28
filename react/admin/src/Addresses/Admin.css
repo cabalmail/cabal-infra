@@ -1,0 +1,253 @@
+/* =========================================================================
+   Admin Addresses page — full-width admin view rendered at the "Addresses"
+   top-level route. Lists every address in the system with its assigned
+   users and lets an admin assign/unassign users, create new addresses, and
+   revoke. Distinct from the rail component (Rail.jsx / .addresses-rail__*)
+   rendered inside the Email view.
+   ========================================================================= */
+
+.admin-addresses {
+  max-width: 64em;
+  margin: 0 auto;
+  padding: 1.2em 1.4em 2em;
+  color: var(--ink);
+  /* Match Dmarc.css: body is pinned to the viewport with overflow:hidden
+     (see Email.css), so the page must scroll itself. */
+  overflow: auto;
+  max-height: calc(100vh - 7em);
+}
+
+.admin-addresses__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1em;
+  margin-bottom: 0.8em;
+}
+
+.admin-addresses__header h2 {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.admin-addresses__reload {
+  font-size: 140%;
+  padding: 0.2em 0.5em;
+  width: auto;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.admin-addresses__reload:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+
+.admin-addresses__new-toggle {
+  width: auto;
+  padding: 0.3em 0.8em;
+  margin: 0.3em 0 0.6em;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+}
+
+.admin-addresses__new-toggle:hover {
+  background: var(--surface-hover);
+}
+
+.admin-addresses__new {
+  padding: 0.5em 0;
+  margin-bottom: 0.6em;
+}
+
+.admin-addresses__controls {
+  display: flex;
+  gap: 0.75em;
+  align-items: center;
+  margin-bottom: 0.6em;
+}
+
+.admin-addresses__filter {
+  flex: 1;
+  max-width: 30em;
+  padding: 0.4em 0.6em;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+
+.admin-addresses__filter:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.admin-addresses__count {
+  color: var(--ink-quiet);
+  font-size: 13px;
+}
+
+.admin-addresses__empty {
+  color: var(--ink-quiet);
+  font-style: italic;
+  padding: 1em 0;
+}
+
+.admin-addresses__list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.admin-addresses__row {
+  list-style: none;
+  display: grid;
+  grid-template-columns: minmax(16em, 1fr) minmax(18em, 2fr) auto;
+  grid-column-gap: 1em;
+  align-items: center;
+  padding: 0.55em 0;
+  border-bottom: 1px solid var(--border-faint);
+}
+
+.admin-addresses__main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15em;
+  min-width: 0;
+}
+
+.admin-addresses__address {
+  font-weight: 600;
+  color: var(--ink);
+  word-break: break-word;
+}
+
+.admin-addresses__comment {
+  font-size: 12px;
+  color: var(--ink-quiet);
+}
+
+.admin-addresses__users {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35em;
+  align-items: center;
+}
+
+.admin-addresses__none {
+  color: var(--ink-quiet);
+  font-style: italic;
+  font-size: 13px;
+}
+
+.admin-addresses__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  height: 1.9em;
+  padding: 0 0.65em;
+  border: 1px solid var(--border);
+  border-radius: 0.95em;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1;
+  box-sizing: border-box;
+}
+
+.admin-addresses__chip-remove {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  width: 1em;
+  height: 1em;
+  font-size: 120%;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: inherit;
+}
+
+.admin-addresses__chip-remove:hover {
+  color: var(--ink-danger);
+}
+
+.admin-addresses__add-user {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 1.9em;
+  padding: 0 0.65em;
+  border: 1px dashed var(--border);
+  border-radius: 0.95em;
+  background: none;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  width: auto;
+}
+
+.admin-addresses__add-user:hover {
+  color: var(--ink);
+  border-color: var(--accent);
+}
+
+.admin-addresses__picker {
+  display: inline-flex;
+  gap: 0.35em;
+  align-items: center;
+}
+
+.admin-addresses__picker select {
+  width: auto;
+  padding: 0.2em 0.4em;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.admin-addresses__picker button {
+  width: auto;
+  padding: 0.25em 0.7em;
+  line-height: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.admin-addresses__picker button:hover {
+  background: var(--surface-hover);
+}
+
+.admin-addresses__revoke {
+  justify-self: end;
+  width: auto;
+  padding: 0.35em 0.8em;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--ink-danger);
+  cursor: pointer;
+  font: inherit;
+}
+
+.admin-addresses__revoke:hover {
+  background: var(--surface-hover);
+}

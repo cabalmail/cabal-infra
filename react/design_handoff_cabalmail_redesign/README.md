@@ -2,7 +2,7 @@
 
 ## Overview
 
-This package contains a complete redesign for **Cabalmail**, a subdomain-based email client. The designs cover:
+This package contains a complete redesign for **Cabalmail**, a subdomain-based web email client. (Apple clients out of scope.) The designs cover:
 
 1. **The full inbox application** — folder nav, message list, reader pane, compose window, bulk selection, search, address book, keyboard-first interactions
 2. **Pre-auth flows** — login, signup, forgot password

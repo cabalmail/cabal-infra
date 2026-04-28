@@ -1,240 +1,340 @@
-div#root div.Addresses div.content {
-  position: absolute;
-  top: 3.2em;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  overflow: scroll;
-}
+/* =========================================================================
+   Addresses — §4b bottom-half of the left rail.
+   Address-book section: filter input, swatch-dotted rows, "+ New address",
+   and the Request-modal scrim that opens from the "+" action.
+   ========================================================================= */
 
-/* List Addresses */
-
-#filter {
-  max-width: 30em;
-  width: auto;
-}
-
-#reload {
-  font-size: 140%;
-  display: block;
-  width: auto;
-  float: right;
-  padding: 0.2em 0.5em;
-  margin: 0;
-}
-
-ul.address-list {
-  list-style: none;
-  padding-left: 0;
-  clear: both;
-  overflow: scroll;
-}
-
-ul.address-list li.address {
-  list-style: none;
-  border-bottom: 1px solid #888;
-  display: grid;
-  grid-template-columns: 50% 30% 7% 7%;
-  grid-column-gap: 2%;
-  align-items: baseline;
-  min-height: 4em;
-}
-
-ul.address-list li.address span.address, ul.address-list button {
-  display: block;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-div.Addresses div.content {
-  max-width: 60em;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-/* Tabs */
-
-div.address-tabs {
-  display: flex;
-  gap: 0;
-  margin-bottom: 0.5em;
-  border-bottom: 1px solid #888;
-}
-
-button.address-tab {
-  background: none;
-  border: 1px solid transparent;
-  border-bottom: none;
-  padding: 0.5em 1.2em;
-  cursor: pointer;
-  margin-bottom: -1px;
-  border-top-left-radius: 0.3em;
-  border-top-right-radius: 0.3em;
-  width: auto;
-}
-
-button.address-tab.active {
-  border-color: #888;
-  border-bottom: 1px solid #000;
-  font-weight: bold;
-}
-
-/* Admin Addresses View */
-
-div.admin-addresses fieldset.assign-field,
-div.admin-addresses fieldset.address-fields,
-div.admin-addresses fieldset.comment-field,
-div.admin-addresses fieldset.button-fields {
-  margin: 0.4em 0;
-}
-
-div.admin-addresses div.assign-checkboxes {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3em 1em;
-  align-items: center;
-}
-
-div.admin-addresses label.user-checkbox {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3em;
-  width: auto;
-}
-
-div.admin-addresses label.user-checkbox input[type="checkbox"] {
-  width: auto;
-  margin: 0;
-}
-
-div.admin-addresses div.admin-new-wrapper {
-  overflow: hidden;
-  transition: max-height 0.5s ease;
-}
-
-div.admin-addresses div.admin-new-wrapper.hidden {
-  max-height: 0;
-}
-
-div.admin-addresses div.admin-new-wrapper.visible {
-  max-height: 40em;
-}
-
-div.admin-addresses div.admin-controls {
-  display: flex;
-  gap: 0.5em;
-  align-items: center;
-  margin-bottom: 0.5em;
-}
-
-div.admin-addresses div.admin-controls input#filter {
-  flex: 1;
-  max-width: 30em;
-  width: auto;
-}
-
-ul.admin-address-list {
-  list-style: none;
-  padding-left: 0;
-}
-
-ul.admin-address-list li.admin-address-row {
-  list-style: none;
-  border-bottom: 1px solid #888;
-  padding: 0.5em 0;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-column-gap: 1em;
-  align-items: center;
-}
-
-div.admin-address-main {
+.addresses-rail {
   display: flex;
   flex-direction: column;
-}
-
-div.admin-address-main span.address {
-  font-weight: bold;
-}
-
-div.admin-address-main span.comment {
-  font-size: 90%;
-  color: #888;
-}
-
-div.admin-address-users {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3em;
-  align-items: center;
-}
-
-span.user-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.2em;
-  height: 1.8em;
-  padding: 0 0.6em;
-  border: 1px solid #888;
-  border-radius: 0.9em;
-  font: inherit;
-  font-size: 90%;
-  line-height: 1;
-  box-sizing: border-box;
-}
-
-span.user-chip button.chip-remove {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-  margin: 0;
-  width: 1em;
-  height: 1em;
-  font-size: 110%;
-  line-height: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: inherit;
-}
-
-button.add-user {
-  -webkit-appearance: none;
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 1.8em;
   min-height: 0;
-  padding: 0 0.6em;
-  margin: 0;
-  border: 1px dashed #888;
-  border-radius: 0.9em;
-  background: none;
-  color: inherit;
-  font: inherit;
-  font-size: 90%;
-  line-height: 1;
-  cursor: pointer;
-  width: auto;
-  box-sizing: border-box;
-  vertical-align: middle;
+  flex: 1 1 auto;
+  padding: 4px 0 8px;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
 }
 
-span.user-picker-inline {
-  display: inline-flex;
-  gap: 0.3em;
+.addresses-rail__header {
+  display: flex;
   align-items: center;
+  gap: 6px;
+  padding: 10px 10px 6px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-quiet);
+  user-select: none;
 }
 
-span.user-picker-inline select {
-  width: auto;
-  padding: 0.2em 0.4em;
+.addresses-rail__label {
+  flex: 1;
 }
 
-span.user-picker-inline button {
-  width: auto;
-  padding: 0.25em 0.6em;
-  line-height: 1;
+.addresses-rail__actions {
+  display: inline-flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.addresses-rail__header:hover .addresses-rail__actions,
+.addresses-rail__header:focus-within .addresses-rail__actions {
+  opacity: 1;
+}
+
+.addresses-rail__action {
+  width: 20px;
+  height: 20px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-quiet);
+  cursor: pointer;
+}
+
+.addresses-rail__action:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+
+/* Filter input --------------------------------------------------------- */
+
+.addresses-rail__search {
+  position: relative;
+  padding: 2px 12px 8px;
+  flex: 0 0 auto;
+}
+
+.addresses-rail__search-input {
+  width: 100%;
+  height: 28px;
+  box-sizing: border-box;
+  padding: 0 26px 0 26px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--surface-hover);
+  font: inherit;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--ink);
+  outline: none;
+}
+
+.addresses-rail__search-input:focus {
+  border-color: var(--accent);
+  background: var(--surface);
+}
+
+.addresses-rail__search-input::placeholder {
+  color: var(--ink-quiet);
+  font-style: normal;
+}
+
+.addresses-rail__search-icon {
+  position: absolute;
+  left: 20px;
+  top: 50%;
+  transform: translateY(-30%);
+  color: var(--ink-quiet);
+  pointer-events: none;
+}
+
+.addresses-rail__search-clear {
+  position: absolute;
+  right: 18px;
+  top: 50%;
+  transform: translateY(-30%);
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--ink-quiet);
+  cursor: pointer;
+}
+
+.addresses-rail__search-clear:hover {
+  color: var(--ink);
+  background: var(--surface-hover);
+}
+
+/* Rows ---------------------------------------------------------------- */
+
+.addresses-rail__list {
+  list-style: none;
+  margin: 0;
+  padding: 0 8px 8px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.addresses-rail__row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 5px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  cursor: pointer;
+  position: relative;
+}
+
+.addresses-rail__row:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+
+.addresses-rail__row.is-active {
+  background: var(--surface-hover);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.addresses-rail__row.is-active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+}
+
+/* Comment tooltip — appears under the row on hover/focus when the address
+   has a comment attached. Uses data-comment so empty comments don't render
+   an empty bubble. */
+
+.addresses-rail__row[data-comment]::after {
+  content: attr(data-comment);
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: 100%;
+  margin-top: 2px;
+  padding: 4px 8px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-menu);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity 100ms ease 200ms, transform 100ms ease 200ms;
+  z-index: 5;
+}
+
+.addresses-rail__row[data-comment]:hover::after,
+.addresses-rail__row[data-comment]:focus-visible::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.addresses-rail__address {
+  font-family: var(--font-display);
+  font-size: 13px;
+  color: inherit;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.addresses-rail__row-actions {
+  display: inline-flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.addresses-rail__row:hover .addresses-rail__row-actions,
+.addresses-rail__row:focus-within .addresses-rail__row-actions {
+  opacity: 1;
+}
+
+.addresses-rail__row-action {
+  width: 20px;
+  height: 20px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-quiet);
+  cursor: pointer;
+}
+
+.addresses-rail__row-action:hover {
+  background: var(--surface);
+  color: var(--ink-danger, var(--ink));
+}
+
+.addresses-rail__row--new {
+  color: var(--ink-quiet);
+  cursor: pointer;
+}
+
+.addresses-rail__new-label {
+  font-size: 12px;
+  color: var(--ink-quiet);
+}
+
+.addresses-rail__empty {
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--ink-quiet);
+  text-align: center;
+  font-style: italic;
+  list-style: none;
+}
+
+.addresses-rail__hint {
+  padding: 6px 14px;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--ink-quiet);
+  list-style: none;
+}
+
+/* Request modal scrim ------------------------------------------------- */
+
+.addresses-rail__modal-scrim {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in oklch, var(--ink) 40%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100001;
+}
+
+.addresses-rail__modal {
+  min-width: 420px;
+  max-width: min(640px, calc(100vw - 32px));
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-modal);
+  padding: 20px 24px 24px;
+}
+
+.addresses-rail__modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.addresses-rail__modal-close {
+  width: 28px;
+  height: 28px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-quiet);
+  cursor: pointer;
+}
+
+.addresses-rail__modal-close:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
 }

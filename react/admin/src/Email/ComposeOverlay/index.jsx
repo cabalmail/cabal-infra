@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import {
+  Minus, Maximize2, Minimize2, X,
+} from 'lucide-react';
 import './ComposeOverlay.css';
-import Request from '../../Addresses/Request';
 import { ADDRESS_LIST } from '../../constants';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -10,6 +12,7 @@ import { marked } from 'marked';
 import useApi from '../../hooks/useApi';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAppMessage } from '../../contexts/AppMessageContext';
+import FromPicker from './FromPicker';
 
 const turndown = new TurndownService({ headingStyle: 'atx', hr: '---' });
 
@@ -79,26 +82,59 @@ function isEditorEmpty(editor) {
   return !html || html === '<p></p>';
 }
 
+function formatSaved(ts) {
+  if (!ts) return 'Draft not saved';
+  const diff = Math.max(0, Math.round((Date.now() - ts) / 1000));
+  if (diff < 5) return 'Saved just now';
+  if (diff < 60) return `Saved ${diff}s ago`;
+  return `Saved ${Math.round(diff / 60)}m ago`;
+}
+
 function ComposeOverlay({
-  hide, body, recipient: propRecipient, envelope, subject: propSubject,
-  type, other_headers, smtp_host, domains
+  hide,
+  body,
+  recipient: propRecipient,
+  envelope,
+  subject: propSubject,
+  type,
+  other_headers,
+  smtp_host,
+  domains: propDomains,
+  stackIndex = 0,
+  composeFromAddress,
+  setComposeFromAddress,
+  layout = 'desktop',
 }) {
-  const { token, api_url, host } = useAuth();
+  const { smtp_host: ctxSmtpHost, domains: ctxDomains } = useAuth();
   const { setMessage } = useAppMessage();
   const api = useApi();
 
-  const [addresses, setAddresses] = useState([]);
-  const [address, setAddress] = useState("");
+  const effectiveSmtpHost = smtp_host || ctxSmtpHost;
+  const effectiveDomains = propDomains || ctxDomains || [];
+
+  const [addressItems, setAddressItems] = useState([]);
+  const [address, setAddress] = useState(composeFromAddress || "");
   const [recipient, setRecipient] = useState("");
   const [validationFail, setValidationFail] = useState(false);
   const [To, setTo] = useState([]);
   const [CC, setCC] = useState([]);
   const [BCC, setBCC] = useState([]);
   const [Subject, setSubject] = useState("");
-  const [showRequest, setShowRequest] = useState(false);
   const [editorMode, setEditorMode] = useState("rich");
   const [markdownContent, setMarkdownContent] = useState("");
+  const [showCcBcc, setShowCcBcc] = useState(false);
+  const [windowState, setWindowState] = useState('normal'); // 'normal' | 'minimized' | 'expanded'
+  const [sending, setSending] = useState(false);
+  const [savedAt, setSavedAt] = useState(null);
+  const [, setSavedTick] = useState(0); // forces re-render for "Saved just now" label
   const markdownRef = useRef(null);
+  const rootRef = useRef(null);
+  const autosaveRef = useRef(null);
+
+  const addresses = useMemo(
+    () => addressItems.map((a) => a.address),
+    [addressItems]
+  );
 
   const editor = useEditor({
     extensions: [
@@ -126,7 +162,7 @@ function ComposeOverlay({
         ])];
         const i = toList.indexOf(propRecipient);
         if (i > -1) toList.splice(i, 1);
-        let ccList = envelope.cc.slice();
+        let ccList = envelope.cc ? envelope.cc.slice() : [];
         const j = ccList.indexOf(propRecipient);
         if (j > -1) ccList.splice(j, 1);
         if (i === -1 && j === -1) {
@@ -135,6 +171,7 @@ function ComposeOverlay({
         setAddress(propRecipient);
         setTo(toList);
         setCC(ccList);
+        if (ccList.length > 0) setShowCcBcc(true);
         setSubject(propSubject);
         break;
       }
@@ -150,15 +187,36 @@ function ComposeOverlay({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Fetch addresses on mount
-  useEffect(() => {
+  const loadAddresses = useCallback(() => (
     api.getAddresses().then(data => {
       try {
         localStorage.setItem(ADDRESS_LIST, JSON.stringify(data));
       } catch (e) {
         console.log(e);
       }
-      setAddresses(data.data.Items.map(a => a.address).sort());
+      const items = (data?.data?.Items || [])
+        .slice()
+        .sort((a, b) => (a.address > b.address ? 1 : a.address < b.address ? -1 : 0));
+      setAddressItems(items);
+      return items;
+    })
+  ), [api]);
+
+  // Fetch addresses on mount
+  useEffect(() => {
+    loadAddresses().then((items) => {
+      const list = items.map((a) => a.address);
+      // Respect explicit reply-derived `address` (set above in reply/replyAll/forward)
+      // and a user-picked `composeFromAddress`. Otherwise the From picker stays
+      // empty — the user must explicitly choose (or create) a From address
+      // before Send is allowed.
+      setAddress(prev => {
+        if (prev) return prev;
+        if (composeFromAddress && list.includes(composeFromAddress)) {
+          return composeFromAddress;
+        }
+        return "";
+      });
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -166,7 +224,7 @@ function ComposeOverlay({
   // Convert pasted rich text to markdown in the markdown editor
   useEffect(() => {
     const el = markdownRef.current;
-    if (!el) return;
+    if (!el) return undefined;
     const handlePaste = (e) => {
       const html = e.clipboardData.getData('text/html');
       if (!html) return;
@@ -185,6 +243,26 @@ function ComposeOverlay({
     el.addEventListener('paste', handlePaste);
     return () => el.removeEventListener('paste', handlePaste);
   }, []);
+
+  // Refresh the "Saved just now" label once a minute so it ages in place.
+  useEffect(() => {
+    const id = window.setInterval(() => setSavedTick(t => t + 1), 30000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  // Autosave stub — §4e calls for every 2s of idleness. There is no server-
+  // side draft endpoint yet, so for now we debounce a local timestamp that
+  // powers the "Saved just now" label. When a draft API lands, hook into it
+  // here instead of the timestamp-only placeholder.
+  useEffect(() => {
+    if (autosaveRef.current) window.clearTimeout(autosaveRef.current);
+    autosaveRef.current = window.setTimeout(() => {
+      setSavedAt(Date.now());
+    }, 2000);
+    return () => {
+      if (autosaveRef.current) window.clearTimeout(autosaveRef.current);
+    };
+  }, [To, CC, BCC, Subject, markdownContent, address]);
 
   const importFromRich = useCallback(() => {
     if (markdownContent.trim()) {
@@ -248,12 +326,24 @@ function ComposeOverlay({
     return false;
   };
 
-  const handleSend = useCallback((e) => {
-    e.preventDefault();
-    const sendButton = e.target;
-    const oh = other_headers;
+  const pickAddress = useCallback((addr) => {
+    setAddress(addr);
+    if (typeof setComposeFromAddress === 'function') {
+      setComposeFromAddress(addr);
+    }
+  }, [setComposeFromAddress]);
+
+  const onAddressCreated = useCallback(() => {
+    // The create call invalidates the ADDRESS_LIST cache via ApiClient.newAddress;
+    // re-fetch so the newly-created row (with its comment/label) surfaces in the
+    // picker immediately.
+    loadAddresses().catch(() => { /* non-fatal */ });
+  }, [loadAddresses]);
+
+  const handleSend = useCallback(() => {
+    const oh = other_headers || {};
     const irt = oh.message_id || [];
-    const msgid = ['<' + randomString(30) + '@' + smtp_host + '>'];
+    const msgid = ['<' + randomString(30) + '@' + effectiveSmtpHost + '>'];
     const ref = [...new Set([
       ...(oh.references || []),
       ...(oh.message_id || []),
@@ -279,7 +369,7 @@ function ComposeOverlay({
       setMessage("Please select an address from which to send.", true);
       return;
     }
-    sendButton.classList.add('sending');
+    setSending(true);
 
     const richEmpty = isEditorEmpty(editor);
     const mdEmpty = !markdownContent.trim();
@@ -289,56 +379,35 @@ function ComposeOverlay({
       htmlBody = '';
       textBody = '';
     } else if (!richEmpty && mdEmpty) {
-      // Only rich has content: auto-generate markdown
       htmlBody = editor.getHTML();
       textBody = turndown.turndown(htmlBody);
     } else if (richEmpty && !mdEmpty) {
-      // Only markdown has content: auto-generate HTML
       textBody = markdownContent;
       htmlBody = marked.parse(markdownContent);
     } else {
-      // Both have content: send as-is
       htmlBody = editor.getHTML();
       textBody = markdownContent;
     }
 
     api.sendMessage(
-      smtp_host, address, To, CC, BCC, Subject, headers,
+      effectiveSmtpHost, address, To, CC, BCC, Subject, headers,
       htmlBody, textBody, false
     ).then(() => {
       setMessage("Email sent", false);
-      setAddress("");
-      setRecipient("");
-      setTo([]);
-      setCC([]);
-      setBCC([]);
-      setSubject("");
-      setMarkdownContent("");
-      editor.commands.clearContent();
+      setSending(false);
       hide();
-      sendButton.classList.remove('sending');
     }).catch((err) => {
       setMessage("Error sending email", true);
-      sendButton.classList.remove('sending');
+      setSending(false);
       console.log(err);
     });
-  }, [other_headers, smtp_host, recipient, To, CC, BCC, Subject, address, addresses,
+  }, [other_headers, effectiveSmtpHost, recipient, To, CC, BCC, Subject, address, addresses,
       editor, markdownContent, api, hide, setMessage, addRecipient, randomString]);
 
-  const handleCancel = (e) => {
+  const handleDiscard = useCallback((e) => {
     e.preventDefault();
     hide();
-  };
-
-  const onSelectChange = (e) => {
-    if (e.target.value === "new") {
-      setAddress(e.target.value);
-      setShowRequest(true);
-      return;
-    }
-    setAddress(e.target.value);
-    setShowRequest(false);
-  };
+  }, [hide]);
 
   const onRecipientChange = (e) => {
     setRecipient(e.target.value);
@@ -355,149 +424,268 @@ function ComposeOverlay({
     }
   };
 
-  const requestCallback = (addr) => {
-    setAddresses(prev => [...prev, addr].sort());
-    setAddress(addr);
-    setShowRequest(false);
-  };
-
   const removeRecipient = useCallback((list, setList, e) => {
     const addr = e.target.value;
     setList(prev => prev.filter(a => a !== addr));
     setRecipient(addr);
   }, []);
 
-  const moveAddress = useCallback((e) => {
-    const addr = e.target.getAttribute('data-address');
-    const list = e.target.value;
-    setTo(prev => prev.filter(a => a !== addr));
-    setCC(prev => prev.filter(a => a !== addr));
-    setBCC(prev => prev.filter(a => a !== addr));
-    switch (list) {
-      case "To": setTo(prev => [...prev, addr]); break;
-      case "CC": setCC(prev => [...prev, addr]); break;
-      case "BCC": setBCC(prev => [...prev, addr]); break;
-      default: setTo(prev => [...prev, addr]);
+  // Root-level keyboard handler: Cmd/Ctrl+Enter sends, Esc minimizes.
+  const onRootKeyDown = useCallback((e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation();
+      handleSend();
+      return;
     }
-  }, []);
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      setWindowState('minimized');
+    }
+  }, [handleSend]);
 
-  const obscureEmail = (addr) => {
-    return addr.split('').map((c, idx) => {
-      switch (c) {
-        case '.': return <span key={idx} className="dot"></span>;
-        case '@': return <span key={idx} className="amphora"></span>;
-        default: return <span key={idx}>{c}</span>;
-      }
-    });
-  };
+  // §4e: multiple compose windows stack horizontally with 8px gaps.
+  // Each window is 600px wide, pinned bottom-right, offset by its index.
+  // Sheet mode (phone) ignores stackIndex — the sheet always fills the
+  // viewport, so stacking would just hide prior windows anyway.
+  const style = useMemo(() => {
+    if (layout === 'phone') return {};
+    const width = 600;
+    const gap = 8;
+    const offset = 24 + stackIndex * (width + gap);
+    return { right: `${offset}px` };
+  }, [stackIndex, layout]);
 
-  const getOptions = () => {
-    if (!addresses) return <option key="loading">Loading...</option>;
-    return addresses.map((a) => <option value={a} key={a}>{a}</option>);
-  };
+  const savedLabel = savedAt ? formatSaved(savedAt) : 'Draft not saved';
 
-  const renderRecipientList = (list, listName, removeHandler) => {
-    return list.sort().map((a) => (
-      <li key={a} className={listName}>
-        <div>
-          <label>
-            <select value={listName} data-address={a} onChange={moveAddress}>
-              <option>To</option>
-              <option>CC</option>
-              <option>BCC</option>
-            </select>&#9660;
-          </label>
-          {obscureEmail(a)}
-          <button onClick={(e) => removeHandler(e)} value={a}>&#9746;</button>
-        </div>
-      </li>
-    ));
-  };
+  const renderRecipientChip = (addr, listName, setList) => (
+    <span className={`recipient-chip recipient-chip--${listName.toLowerCase()}`} key={`${listName}-${addr}`}>
+      <span className="recipient-chip__address">{addr}</span>
+      <button
+        type="button"
+        className="recipient-chip__remove"
+        onClick={(e) => removeRecipient(
+          listName === 'To' ? To : listName === 'CC' ? CC : BCC,
+          setList, e
+        )}
+        value={addr}
+        aria-label={`Remove ${addr}`}
+      >
+        <X size={12} />
+      </button>
+    </span>
+  );
+
+  const isSheet = layout === 'phone';
 
   return (
-    <form className="compose-overlay" onSubmit={handleSubmit}>
-      <div className="compose-from-old">
-        <label htmlFor="address-from-old" className="address-from-old">From</label>
-        <select
-          type="text"
-          id="address-from-old"
-          name="address-from-old"
-          className="address-from-old"
-          placeholder="Find existing address"
-          onChange={onSelectChange}
-          value={address}
-        >
-          <option value="">Select an address</option>
-          <option value="new">Create a new address</option>
-          {getOptions()}
-        </select>
-        <Request
-          token={token}
-          domains={domains}
-          api_url={api_url}
-          setMessage={setMessage}
-          showRequest={showRequest}
-          host={host}
-          callback={requestCallback}
-        />
-      </div>
-      <label htmlFor="recipient-address">Recipients</label>
-      <div
-        className="recipients"
-        onClick={() => document.getElementById('recipient-address').focus()}
-      >
-        <ul className="recipient-list" id="recipient-list" tabIndex="0">
-          {renderRecipientList(To, "To", (e) => removeRecipient(To, setTo, e))}
-          {renderRecipientList(CC, "CC", (e) => removeRecipient(CC, setCC, e))}
-          {renderRecipientList(BCC, "BCC", (e) => removeRecipient(BCC, setBCC, e))}
-          <li className="recipient-entry">
+    <form
+      ref={rootRef}
+      className={`compose-overlay compose-overlay--${windowState}${isSheet ? ' compose-overlay--sheet' : ''}`}
+      data-layout={isSheet ? 'sheet' : undefined}
+      style={style}
+      onSubmit={handleSubmit}
+      onKeyDown={onRootKeyDown}
+    >
+      {isSheet ? (
+        <div className="compose-chrome compose-chrome--sheet">
+          <button
+            type="button"
+            className="compose-chrome__text compose-chrome__text--cancel"
+            onClick={(e) => handleDiscard(e)}
+          >
+            Cancel
+          </button>
+          <span className="compose-chrome__title">New message</span>
+          <button
+            type="button"
+            className="compose-chrome__text compose-chrome__text--send"
+            onClick={handleSend}
+            disabled={sending}
+          >
+            {sending ? 'Sending…' : 'Send'}
+          </button>
+        </div>
+      ) : (
+        <div className="compose-chrome">
+          <span className="compose-chrome__title">New message</span>
+          <div className="compose-chrome__actions">
+            <button
+              type="button"
+              className="compose-chrome__btn"
+              aria-label="Minimize"
+              onClick={() => setWindowState(s => s === 'minimized' ? 'normal' : 'minimized')}
+            >
+              <Minus size={14} />
+            </button>
+            <button
+              type="button"
+              className="compose-chrome__btn"
+              aria-label={windowState === 'expanded' ? 'Restore' : 'Expand'}
+              onClick={() => setWindowState(s => s === 'expanded' ? 'normal' : 'expanded')}
+            >
+              {windowState === 'expanded' ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+            </button>
+            <button
+              type="button"
+              className="compose-chrome__btn"
+              aria-label="Close"
+              onClick={(e) => handleDiscard(e)}
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="compose-body">
+        <div className="compose-row">
+          <label
+            className="compose-row__label"
+            htmlFor={`from-picker-trigger-${stackIndex}`}
+          >From</label>
+          <div className="compose-row__field">
+            <FromPicker
+              items={addressItems}
+              domains={effectiveDomains}
+              selected={address}
+              onSelect={pickAddress}
+              onCreated={onAddressCreated}
+              stackIndex={stackIndex}
+              setMessage={setMessage}
+            />
+          </div>
+        </div>
+
+        <div className="compose-row">
+          <label className="compose-row__label" htmlFor={`compose-to-${stackIndex}`}>To</label>
+          <div
+            className="compose-row__field compose-recipients"
+            onClick={() => document.getElementById(`compose-to-${stackIndex}`)?.focus()}
+          >
+            {To.map(a => renderRecipientChip(a, 'To', setTo))}
             <input
+              id={`compose-to-${stackIndex}`}
               type="email"
-              id="recipient-address"
-              name="address-to"
+              aria-label="Recipients"
               onChange={onRecipientChange}
               onKeyDown={handleKeyDown}
               value={recipient}
-              className={`recipient-address${validationFail ? " invalid" : ""}`}
+              className={`recipient-input${validationFail ? " recipient-input--invalid" : ""}`}
             />
-          </li>
-        </ul>
-      </div>
-      <label htmlFor="subject">Subject</label>
-      <input
-        type="text"
-        id="subject"
-        name="subject"
-        onChange={(e) => setSubject(e.target.value)}
-        value={Subject}
-      />
-      <div className="editor-mode-tabs">
-        <button type="button"
-          className={`editor-mode-tab ${editorMode === 'rich' ? 'active' : ''}`}
-          onClick={() => setEditorMode('rich')}>Rich Text</button>
-        <button type="button"
-          className={`editor-mode-tab ${editorMode === 'markdown' ? 'active' : ''}`}
-          onClick={() => setEditorMode('markdown')}>Markdown</button>
-      </div>
-      <div className={`editor-pane ${editorMode === 'rich' ? '' : 'editor-pane-hidden'}`}>
-        <MenuBar editor={editor} onImportMarkdown={importFromMarkdown} />
-        <EditorContent editor={editor} className="wysiwyg-editor" />
-      </div>
-      <div className={`editor-pane ${editorMode === 'markdown' ? '' : 'editor-pane-hidden'}`}>
-        <div className="editor-import-bar">
-          <button type="button" className="import-button" onClick={importFromRich}
-            title="Replace Markdown content with converted Rich Text content"
-          >Import from Rich Text</button>
+          </div>
+          <button
+            type="button"
+            className="compose-cc-toggle"
+            onClick={() => setShowCcBcc(v => !v)}
+            aria-pressed={showCcBcc}
+          >Cc Bcc</button>
         </div>
-        <textarea
-          ref={markdownRef}
-          className="markdown-editor"
-          value={markdownContent}
-          onChange={(e) => setMarkdownContent(e.target.value)}
-        />
+
+        {showCcBcc && (
+          <>
+            <div className="compose-row">
+              <label className="compose-row__label" htmlFor={`compose-cc-${stackIndex}`}>Cc</label>
+              <div
+                className="compose-row__field compose-recipients"
+                onClick={() => document.getElementById(`compose-cc-${stackIndex}`)?.focus()}
+              >
+                {CC.map(a => renderRecipientChip(a, 'CC', setCC))}
+                <input
+                  id={`compose-cc-${stackIndex}`}
+                  type="email"
+                  onChange={onRecipientChange}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ' || e.key === ';' || e.key === ',') {
+                      e.preventDefault();
+                      addRecipient({ target: { id: 'recipient-cc' } });
+                    }
+                  }}
+                  value={recipient}
+                  className="recipient-input"
+                />
+              </div>
+            </div>
+            <div className="compose-row">
+              <label className="compose-row__label" htmlFor={`compose-bcc-${stackIndex}`}>Bcc</label>
+              <div
+                className="compose-row__field compose-recipients"
+                onClick={() => document.getElementById(`compose-bcc-${stackIndex}`)?.focus()}
+              >
+                {BCC.map(a => renderRecipientChip(a, 'BCC', setBCC))}
+                <input
+                  id={`compose-bcc-${stackIndex}`}
+                  type="email"
+                  onChange={onRecipientChange}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ' || e.key === ';' || e.key === ',') {
+                      e.preventDefault();
+                      addRecipient({ target: { id: 'recipient-bcc' } });
+                    }
+                  }}
+                  value={recipient}
+                  className="recipient-input"
+                />
+              </div>
+            </div>
+          </>
+        )}
+
+        <div className="compose-row compose-row--subject">
+          <input
+            id={`compose-subject-${stackIndex}`}
+            aria-label="Subject"
+            type="text"
+            className="compose-subject"
+            placeholder="Subject"
+            onChange={(e) => setSubject(e.target.value)}
+            value={Subject}
+          />
+        </div>
+
+        <div className="compose-editor">
+          <div className="editor-mode-tabs">
+            <button type="button"
+              className={`editor-mode-tab ${editorMode === 'rich' ? 'is-active' : ''}`}
+              onClick={() => setEditorMode('rich')}>Rich Text</button>
+            <button type="button"
+              className={`editor-mode-tab ${editorMode === 'markdown' ? 'is-active' : ''}`}
+              onClick={() => setEditorMode('markdown')}>Markdown</button>
+          </div>
+          <div className={`editor-pane ${editorMode === 'rich' ? '' : 'editor-pane-hidden'}`}>
+            <MenuBar editor={editor} onImportMarkdown={importFromMarkdown} />
+            <EditorContent editor={editor} className="wysiwyg-editor" />
+          </div>
+          <div className={`editor-pane ${editorMode === 'markdown' ? '' : 'editor-pane-hidden'}`}>
+            <div className="editor-import-bar">
+              <button type="button" className="import-button" onClick={importFromRich}
+                title="Replace Markdown content with converted Rich Text content"
+              >Import from Rich Text</button>
+            </div>
+            <textarea
+              ref={markdownRef}
+              className="markdown-editor"
+              value={markdownContent}
+              onChange={(e) => setMarkdownContent(e.target.value)}
+            />
+          </div>
+        </div>
       </div>
-      <button onClick={handleSend} className="default" id="compose-send">Send</button>
-      <button onClick={handleCancel} id="compose-cancel">Cancel</button>
+
+      <div className="compose-bottom">
+        <div className="compose-bottom__left">
+          <button
+            type="button"
+            className={`compose-send${sending ? ' is-sending' : ''}`}
+            onClick={handleSend}
+            disabled={sending}
+          >{sending ? 'Sending…' : 'Send'}</button>
+        </div>
+        <div className="compose-bottom__right">
+          <span className="compose-saved" aria-live="polite">{savedLabel}</span>
+        </div>
+      </div>
     </form>
   );
 }

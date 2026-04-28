@@ -43,7 +43,7 @@ variable "relay_ips" {
 }
 
 variable "domains" {
-  type = list
+  type = list(any)
 }
 
 variable "repo" {

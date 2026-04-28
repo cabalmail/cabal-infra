@@ -7,15 +7,30 @@ Cabalmail has been stable in production, but the pace of AI-assisted development
 - Detects user-visible failures (IMAP/SMTP/HTTPS down, certificates expiring, API errors) before users do.
 - Surfaces internal-service degradation (queue depth, mail delivery latency, container restarts, disk pressure on EFS/EC2).
 - Catches silent failures of scheduled jobs (certbot renewal, weekly Terraform run, DMARC ingestion, backups).
-- Routes alerts via SMS (reusing the SNS infrastructure stood up for 0.5.0) for the smallest set of pages that actually need waking someone up, with email/dashboard for the rest.
+- Routes alerts through push-notification channels that bypass the Cabalmail email system (so an outage is still reachable), with a Pushover/ntfy dual-send on critical and ntfy-only on warning.
 
-All components must be open source or in-house. The target deployment is the existing ECS EC2 cluster — no new managed services beyond what AWS already provides (SNS, CloudWatch).
+All components must be open source or in-house. The target deployment is the existing ECS EC2 cluster — no new managed services beyond what AWS already provides (CloudWatch). The alerting path deliberately does **not** depend on AWS SNS SMS (provisioning is slow and opaque) or on SES email (can't alert on our own mail outage).
+
+### Alert transports
+
+Two independent push channels, chosen for deliverability and automation-friendliness:
+
+- **Pushover** (critical only) — paid mobile app ($5 one-time per platform) with per-app tokens. Priority-1 pushes bypass quiet hours on the user's phone, which makes it our "wake someone up" channel. Account + application must be created manually once; runbook documents the steps. The application token and user key live in SSM Parameter Store.
+- **Self-hosted ntfy** (critical + warning) — open-source push server ([ntfy.sh](https://ntfy.sh)), deployed as a new ECS service on the existing cluster. Uses its own token-based auth (not Cognito) so both the publisher Lambda and the subscriber phone can reach it without an OAuth dance. Exposed at `ntfy.<control-domain>` through a host-header listener rule on the Kuma ALB.
+
+The "universal sink" Lambda (`alert_sink`, formerly `alert_sms`) accepts the same `{severity, source, summary}` webhook payload from every monitoring component and fans out to the transports per the routing table:
+
+| Severity  | Pushover     | ntfy priority | Notes |
+| --------- | ------------ | ------------- | ----- |
+| critical  | priority 1–2 | 5             | Dual-send for redundancy; Pushover handles DND-bypass, ntfy is the record of the event. |
+| warning   | —            | 3             | ntfy only; shows a normal notification, no wake-up. |
+| info      | —            | —             | Dropped at the Lambda; available for dashboard annotations only. |
 
 ## Approach
 
 Four phases, each independently shippable and useful on its own:
 
-1. **SMS sink + black-box uptime monitoring** — fastest user-visible win, smallest blast radius.
+1. **Alert sink + ntfy push service + black-box uptime monitoring** — fastest user-visible win, smallest blast radius.
 2. **Heartbeat monitoring for scheduled jobs** — closes the "silent cron" gap.
 3. **Metrics stack (Prometheus / Alertmanager / Grafana) with exporters** — depth and trending.
 4. **Log aggregation + alert rule tuning** — the long tail.
@@ -35,7 +50,7 @@ The monitoring stack should not deploy to every environment. Dev needs it someti
 ```hcl
 variable "monitoring" {
   type        = bool
-  description = "Whether to deploy the monitoring & alerting stack (Uptime Kuma, Healthchecks, Prometheus/Alertmanager/Grafana, alert_sms Lambda). Defaults to false."
+  description = "Whether to deploy the monitoring & alerting stack (Uptime Kuma, ntfy, Healthchecks, Prometheus/Alertmanager/Grafana, alert_sink Lambda). Defaults to false."
   default     = false
 }
 ```
@@ -52,7 +67,7 @@ module "monitoring" {
 }
 ```
 
-Downstream wiring (exporter sidecars in existing mail-tier task definitions, Healthchecks pings in scheduled Lambdas, the `alert_sms` Lambda registration in `supported_lambdas`) all consult `var.monitoring` and no-op when false. Exporter sidecars in ECS task definitions are the one place that needs care — adding/removing a container from a task definition causes a task replacement, so the flag must be stable for a given environment rather than toggled casually.
+Downstream wiring (exporter sidecars in existing mail-tier task definitions, Healthchecks pings in scheduled Lambdas, the `alert_sink` Lambda) all consult `var.monitoring` and no-op when false. Exporter sidecars in ECS task definitions are the one place that needs care — adding/removing a container from a task definition causes a task replacement, so the flag must be stable for a given environment rather than toggled casually.
 
 ### CI wiring
 
@@ -70,7 +85,7 @@ Set in GitHub Actions environment variables per environment, not in code:
 | ----------- | ------------------- | ----------------------------------------------- |
 | prod        | `true`              | Always on. The whole point of the project.      |
 | stage       | `false` by default  | Flip to `true` when actively testing alert flows or rehearsing a prod change. |
-| dev         | `false` by default  | Flip to `true` for alert-rule development; flip back when done to save cluster capacity and SNS SMS spend. |
+| dev         | `false` by default  | Flip to `true` for alert-rule development; flip back when done to save cluster capacity. |
 
 ### Granularity trade-off
 
@@ -79,13 +94,13 @@ A single bool is coarse but matches how the system is actually used. Alternative
 - **Per-phase flags** (`monitoring_uptime`, `monitoring_heartbeats`, etc.) — over-granular; no real use case for enabling Prometheus without Kuma.
 - **Per-component flags within the `monitoring` module** — useful for cost tuning later (e.g., skip Grafana if we lean on CloudWatch dashboards), but premature. Revisit if any single component turns out to dominate cost.
 
-### SMS routing under the flag
+### Independence from user-facing SMS
 
-When `monitoring = false`, the `alert_sms` Lambda is not deployed and the SNS alerts topic is not created. The phone-number verification flow added in 0.5.0 uses its **own** SNS topic (not the alerts topic), so disabling monitoring does not break user-visible SMS. This separation is intentional — verify during Phase 1 that the two topics and IAM paths are fully independent.
+The 0.5.0 phone-verification SMS path uses its own AWS Pinpoint/SNS resources and is unrelated to alerting. The alerting stack does not depend on SMS at all (see [Alert transports](#alert-transports)), so disabling `var.monitoring` has no impact on user-visible SMS.
 
 ### Acceptance
 
-- `terraform plan` with `monitoring = false` shows zero resources from the `monitoring` module, no sidecars attached to mail-tier tasks, and no new Lambda in `supported_lambdas`.
+- `terraform plan` with `monitoring = false` shows zero resources from the `monitoring` module and no sidecars attached to mail-tier tasks.
 - Toggling `monitoring` from `false` → `true` in dev produces a clean apply; toggling back to `false` produces a clean destroy with no orphan resources.
 - The phone-verification SMS path in 0.5.0 continues to work in both states.
 
@@ -206,42 +221,60 @@ Conventions: *p95* unless noted, *over 5 min* unless noted. "—" means the sign
 
 ---
 
-## Phase 1: SMS Sink + Uptime Monitoring
+## Phase 1: Alert Sink + ntfy + Uptime Monitoring
 
-### 1. SMS sink Lambda
+### 1. Alert sink Lambda
 
-A single Lambda that accepts a webhook payload and publishes to SNS. Becomes the universal alerting endpoint for every monitoring component added in later phases.
+A single Lambda (`alert_sink`) accepts a webhook payload and fans out to Pushover and/or ntfy. Becomes the universal alerting endpoint for every monitoring component added in later phases.
 
-**`lambda/api/alert_sms/`** — new function:
-- POST endpoint behind API Gateway, authenticated with a shared secret in a header (read from SSM at cold start).
+**`lambda/api/alert_sink/`** — new function (formerly `alert_sms`):
+- Behind a Lambda Function URL (not API Gateway — Kuma's webhook provider posts directly).
+- Authenticates callers by shared secret in the `X-Alert-Secret` header (read from SSM at cold start; validated with `hmac.compare_digest`).
 - Accepts `{ "summary": "...", "severity": "critical|warning|info", "source": "..." }`.
-- Formats a short SMS (160-char budget, truncates if needed) and calls `sns:Publish` to the alerts topic.
+- Fan-out per the severity table in [Alert transports](#alert-transports): critical → Pushover priority 1 + ntfy priority 5; warning → ntfy priority 3; info → drop.
+- Outbound calls go over plain HTTPS (`urllib.request`) — no boto3 SNS/SES dependencies.
 - Returns `204` on success.
 
-**`terraform/infra/modules/app/locals.tf`** — register `alert_sms` in `supported_lambdas` (POST, no cache, no auth — uses shared secret instead of Cognito).
+The Pushover application token and user key, and the ntfy publisher token, all live in SSM Parameter Store (`SecureString`) and are read at cold start.
 
-**`terraform/infra/modules/monitoring/`** — new module containing:
-- `aws_sns_topic "alerts"` and `aws_sns_topic_subscription` per on-call phone number (numbers as a `tfvars` list).
-- IAM policy granting the `alert_sms` Lambda `sns:Publish` to that topic.
-- SSM parameter for the shared secret (rotated manually for now).
+### 2. Self-hosted ntfy deployment
 
-Severity-to-recipient routing lives in the Lambda for now (critical → SMS, warning → email-only via SES, info → drop). Keeps the SNS topic structure flat.
+Run [ntfy](https://ntfy.sh) as a fourth ECS service (alongside the three mail tiers).
 
-### 2. Uptime Kuma deployment
+**`docker/ntfy/`** — thin `Dockerfile` over `binwiederhier/ntfy`, exposing port 80 for the HTTP API. No TLS termination in the container (ALB handles that).
 
-Run [Uptime Kuma](https://github.com/louislam/uptime-kuma) as a fourth ECS service.
+**`terraform/infra/modules/monitoring/ntfy.tf`**:
+- `aws_ecs_task_definition` with one container. Config via `NTFY_*` env vars (no YAML file). Key settings: `NTFY_BASE_URL=https://ntfy.<control-domain>`, `NTFY_LISTEN_HTTP=:80`, `NTFY_CACHE_FILE=/var/cache/ntfy/cache.db`, `NTFY_AUTH_FILE=/var/cache/ntfy/user.db`, `NTFY_AUTH_DEFAULT_ACCESS=deny-all`, `NTFY_BEHIND_PROXY=true`.
+- EFS access point at `/ntfy` for `/var/cache/ntfy` (message cache + auth DB survive task replacement).
+- `aws_ecs_service` with `desired_count = 1`.
+- Target group on the existing Kuma ALB, selected by **host-header listener rule** `ntfy.<control-domain>` (default rule still forwards to Kuma with Cognito auth). The ntfy rule has no authenticate-cognito action — ntfy enforces its own token auth.
+- Route 53 A record `ntfy.<control-domain>` pointing at the same ALB.
+- A dedicated security group; egress open, ingress only from the ALB SG on port 80.
 
-**`docker/uptime-kuma/`** — `Dockerfile` based on the upstream `louislam/uptime-kuma` image plus our standard entrypoint shim (TLS cert wiring is not needed; CloudFront fronts the UI).
+**First-boot bootstrap (manual, via ECS Exec):**
+1. `ntfy user add --role=admin admin` — prompts for a password. Store in password manager.
+2. `ntfy token add admin` — returns a publisher token. Store in SSM as `/cabal/ntfy_publisher_token` (SecureString).
+3. `ntfy access admin '*' rw` — admin gets full access (default for `role=admin`, no-op but explicit).
+4. On the user's phone: install the ntfy app, add `https://ntfy.<control-domain>` as a server, log in with `admin` + password, subscribe to the `alerts` topic.
+
+Phase 4 replaces this with declarative user/ACL provisioning via a small bootstrap Lambda.
+
+### 3. Uptime Kuma deployment
+
+Run [Uptime Kuma](https://github.com/louislam/uptime-kuma) as a fifth ECS service.
+
+**`docker/uptime-kuma/`** — `Dockerfile` based on the upstream `louislam/uptime-kuma` image. TLS cert wiring is not needed; the ALB fronts the UI.
 
 **`terraform/infra/modules/monitoring/kuma.tf`**:
 - `aws_ecs_task_definition` with one container, EFS volume mount for `/app/data` (Kuma's SQLite store) so state survives task replacement.
 - `aws_ecs_service` with `desired_count = 1`, placed on the same cluster as the mail tiers.
-- ALB target group + listener rule on a new subdomain (`uptime.<control-domain>`), Cognito authorizer in front.
-- Webhook notification provider configured to POST to the `alert_sms` Lambda URL.
+- ALB target group; the listener's **default action** (authenticate-cognito + forward) points here.
+- Route 53 record `uptime.<control-domain>` (same ALB as ntfy).
+- Webhook notification provider configured in Kuma to POST to the `alert_sink` Lambda URL.
 
-### 3. Initial monitor set
+### 4. Initial monitor set
 
-Configured in Kuma at first boot (manually for Phase 1; phase 4 considers IaC for Kuma config):
+Configured in Kuma at first boot (manually for Phase 1; Phase 4 considers IaC for Kuma config):
 
 | Monitor                          | Type           | Severity |
 | -------------------------------- | -------------- | -------- |
@@ -250,14 +283,40 @@ Configured in Kuma at first boot (manually for Phase 1; phase 4 considers IaC fo
 | Submission TLS (port 587 + 465)  | TCP + cert     | critical |
 | `https://<control>/` (React app) | HTTP 200       | critical |
 | API Gateway `/list` round-trip   | HTTP, auth'd   | critical |
+| ntfy server probe                | HTTP 200 on `https://ntfy.<control-domain>/v1/health` | critical |
 | Control-domain ACM cert          | cert expiry    | warning  |
-| Mail-domain certs (each)         | cert expiry    | warning  |
 
-### 4. Acceptance for Phase 1
+### 5. Acceptance for Phase 1
 
-- A deliberately broken health check (e.g., temporarily blocking port 993 in a security group on the dev account) produces an SMS within 2 minutes.
-- Resolution sends a "recovered" SMS.
+- A deliberately broken health check (e.g., temporarily blocking port 993 in a security group on the dev account) produces a Pushover push **and** an ntfy push within 2 minutes.
+- Resolution sends a "recovered" push (ntfy only — recoveries are `info`-severity in Kuma and we may promote them to `warning` in the Lambda formatter; tune during Phase 1 based on feel).
 - Kuma UI is reachable behind Cognito at `uptime.<control-domain>`.
+- ntfy UI/app is reachable (with token auth) at `ntfy.<control-domain>`.
+
+### 6. Implementation notes (lessons from the prod deploy)
+
+The Phase 1 deploy turned up several non-obvious things worth recording so Phase 2 doesn't re-trip them. Each is reflected in code on `0.7.0`; this list is for future readers.
+
+- **Monitoring ALB needs ≥2 AZs.** The mail-tier NLB is happy in a single AZ, but ALBs are not. Prod has two AZs in `TF_VAR_AVAILABILITY_ZONES`; dev and stage have one each. Phase 1 was deployed directly to prod for that reason. Restoring dev/stage parity would require adding a second public subnet to the existing single-AZ VPCs (the per-AZ `cidrsubnet` math means simply adding another AZ to the list rebuilds every subnet — destructive). The monitoring module owning a small extra subnet just for the ALB is the right pattern when we get back to it.
+- **EFS access points reject `chown`.** The upstream `louislam/uptime-kuma` entrypoint runs `chown -R node:node /app/data`, which EFS access points refuse regardless of caller. Fix: override `entryPoint` and `user` in the task definition so Kuma starts directly as 1000:1000 without the shim. ntfy's image doesn't have this problem, but the same workaround applies to any upstream image that chowns at boot.
+- **ALB SG needs egress to Cognito.** The `authenticate-cognito` action calls Cognito's hosted UI domain to swap the auth code for tokens. Without an HTTPS egress rule on the ALB SG, the call drops and the ALB returns 500 on `/oauth2/idpresponse`. Egress to `0.0.0.0/0:443` is the minimum.
+- **Lambda Function URLs need TWO resource-policy statements.** With `authorization_type = NONE`, AWS requires both `lambda:InvokeFunctionUrl` (auth-layer check) and `lambda:InvokeFunction` scoped to URL callers via `lambda:InvokedViaFunctionUrl=true` (execute layer). Missing either returns 403 at the URL gateway. The aws Terraform provider ≥ **6.28.0** added `invoked_via_function_url = true` on `aws_lambda_permission`; earlier versions can't express this condition declaratively.
+- **The VPC private hosted zone shadows the public zone for the control domain.** Records that exist only in the public zone don't resolve from inside the VPC. Phase 1 mirrors `admin.`, `uptime.`, `ntfy.` into the private zone (CloudFront/ALB targets resolve globally so the alias targets work fine from inside). Mail-tier hosts (`imap.`, `smtp-in.`, `smtp-out.`) are intentionally **not** mirrored — Kuma's TCP probes for those tiers point at the NLB's public DNS name directly, which resolves cleanly via the public zone. Phase 2/3 monitors that need to talk to the mail tiers should follow the same pattern.
+- **Kuma webhook templating is Liquid, not Handlebars.** Use {% raw %}`{% if … %}…{% endif %}`{% endraw %} and {% raw %}`{{ … }}`{% endraw %}. Handlebars {% raw %}`{{#if}}…{{/if}}`{% endraw %} raises a `TokenizationError`.
+- **ntfy admin role doesn't bypass `deny-all` ACLs in older releases — but in 2.14+ it does.** Confirmed in our deploy: `ntfy access admin "*" rw` is a no-op because admin has implicit access. The mobile app failures we hit were instead authentication issues (bcrypt truncates passwords at 72 bytes; non-ASCII or trailing-newline copies fail silently). Operationally: keep the admin password short, ASCII, and pasted carefully.
+- **GitHub Actions masks `AWS_REGION`** in workflow logs, including the `alert_sink` Function URL output. The masked URL with literal `***` is unusable; fetch the real URL via `aws lambda get-function-url-config --function-name alert_sink` from a shell with unmasked region.
+- **Mail domains have no certs.** Entries in `TF_VAR_MAIL_DOMAINS` are address namespaces only; only the control domain has an ACM cert. Don't add per-mail-domain cert-expiry monitors.
+
+### 7. Manual prerequisites and post-apply steps
+
+Captured in full in [docs/monitoring.md](../monitoring.md). Brief:
+
+1. Pushover account + `cabalmail-alerts` application, manually created on pushover.net (one-time).
+2. After Terraform apply: `aws ssm put-parameter` the Pushover user key and app token, ECS-Exec into the ntfy task to create the admin user and a publisher token, `aws ssm put-parameter` the ntfy publisher token.
+3. Kuma admin user is created on first browser hit (Cognito-authenticated), separate from the Cognito identity.
+4. Kuma webhook notification provider points at the `alert_sink_function_url` with `X-Alert-Secret` header from `/cabal/alert_sink_secret`.
+
+The Pushover/ntfy SSM parameters are TF-managed with placeholder values + `ignore_changes = [value]`. Folding them into "real" Terraform inputs is queued for [docs/0.9.0/state-encryption-plan.md](../0.9.0/state-encryption-plan.md), which gates that on encrypted Terraform state.
 
 ---
 
@@ -273,7 +332,7 @@ Run [Healthchecks](https://github.com/healthchecks/healthchecks) (Django app) as
 - ECS task definition + service.
 - SQLite on EFS for Phase 2 (avoid standing up RDS just for this; revisit if write volume becomes a problem).
 - ALB target group + listener rule on `heartbeat.<control-domain>`, Cognito authorizer.
-- Webhook integration pointed at the `alert_sms` Lambda.
+- Webhook integration pointed at the `alert_sink` Lambda.
 
 ### 2. Instrument scheduled jobs
 
@@ -282,17 +341,18 @@ Each scheduled component pings a unique URL on success. A missing ping past the 
 | Job                                  | Where to add the ping                                            | Schedule          |
 | ------------------------------------ | ---------------------------------------------------------------- | ----------------- |
 | Certbot renewal Lambda               | End of `lambda/certbot-renewal/function.py`                      | Daily             |
-| Weekly Terraform `apply`             | End of `.github/workflows/terraform.yml` (Wednesday job)         | Weekly            |
 | DynamoDB / EFS AWS Backup            | EventBridge rule → tiny Lambda that pings on `BACKUP_JOB` success | Daily             |
 | DMARC report ingestion               | End of `process_dmarc` Lambda                                    | Hourly            |
 | ECS reconfigure (`reconfigure.sh`)   | Successful end of each loop iteration                            | On SQS message    |
 | Cognito user-sync Lambda             | End of function                                                  | On invocation     |
 
+(The original Phase 2 plan also listed a "Weekly Terraform `apply`" heartbeat. It was dropped during implementation: the Terraform workflow doesn't run on a cron schedule, only on push / manual dispatch / the post-Docker `repository_dispatch`, so a missed heartbeat would have been ambiguous between "Terraform is broken" and "no one has dispatched a run lately.")
+
 Ping URLs are stored as SSM parameters per job; Lambdas read at cold start.
 
 ### 3. Acceptance for Phase 2
 
-- Disabling the certbot renewal schedule in dev produces a heartbeat-missed SMS within the configured grace window.
+- Disabling the certbot renewal schedule in dev produces a heartbeat-missed push notification within the configured grace window.
 - Healthchecks dashboard shows green for every registered job in steady state.
 
 ---
@@ -337,13 +397,13 @@ Tuned for low noise — the goal is not to recreate Kuma's alerts but to add mul
 - **`ContainerRestartLoop`**: ECS task restarted > 3 times in 1 h — critical.
 - **`CertExpiringSoon`**: any cert < 21 days from expiry — warning (redundant with Kuma but Prom can group + escalate).
 
-Alertmanager routes critical → `alert_sms` Lambda, warning → SES email, both → Grafana annotation.
+Alertmanager routes critical → `alert_sink` Lambda (Pushover + ntfy), warning → `alert_sink` Lambda (ntfy only), both → Grafana annotation.
 
 ### 4. Acceptance for Phase 3
 
 - Grafana dashboards exist for: Mail Tiers, AWS Services, API Gateway, Frontend.
-- Each rule above has been triggered at least once on the dev account (synthetically or by load) and produced the expected SMS or email.
-- Alertmanager is configured with at least one silence window (e.g., the weekly Wednesday Terraform apply) to validate silencing works.
+- Each rule above has been triggered at least once on the dev account (synthetically or by load) and produced the expected Pushover and/or ntfy notification.
+- Alertmanager is configured with at least one silence window (e.g., during a planned maintenance dispatch of the Terraform workflow) to validate silencing works.
 
 ---
 
@@ -380,7 +440,7 @@ Alertmanager and Kuma both support a `runbook_url` field — populate it.
 
 ### 5. Acceptance for Phase 4
 
-- Every alert that can fire SMS has a linked runbook.
+- Every alert that can fire a push notification has a linked runbook.
 - A quarterly "monitoring review" task is scheduled (Healthchecks) that prompts a human to confirm dashboards, silences, and on-call numbers are still correct.
 - Tabletop exercise: simulate three failure modes (mail queue backup, IMAP cert expiry, certbot Lambda silently disabled) and confirm each produces the expected alert with a runbook link.
 
@@ -390,7 +450,7 @@ Alertmanager and Kuma both support a `runbook_url` field — populate it.
 
 ### Cost
 
-All components run on the existing ECS cluster. Expected new spend: incremental EC2 capacity for the monitoring services (likely one extra `t3.small`-sized worker), EFS storage for state (negligible), SNS SMS at per-message rates. No managed-service costs beyond what's already present.
+All components run on the existing ECS cluster. Expected new spend: incremental EC2 capacity for the monitoring services (likely one extra `t3.small`-sized worker), EFS storage for state (negligible). Pushover is a one-time $5 per mobile platform. ntfy is self-hosted — no per-message cost. No managed-service costs beyond what's already present.
 
 ### Secrets
 
@@ -408,4 +468,4 @@ Monitoring state on EFS is included in the existing AWS Backup plan (extend the 
 
 - Distributed tracing (Tempo / OpenTelemetry).
 - APM for the React app (Sentry self-hosted is plausible but defers to a later release).
-- PagerDuty-style on-call rotation (single on-call for now; SNS topic with a list of numbers is sufficient).
+- PagerDuty-style on-call rotation (single on-call for now; Pushover + ntfy to one device is sufficient).

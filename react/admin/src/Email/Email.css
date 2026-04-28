@@ -1,3 +1,11 @@
+/* =========================================================================
+   Email — Phase 8 responsive layout.
+   Mobile-first: single pane, full-width msglist. The reader slides over the
+   list on phones; on tablets the reader docks next to the list; on desktop
+   the left rail (Folders + Addresses) becomes in-flow.
+   Breakpoints: 768px (tablet), 1200px (desktop).
+   ========================================================================= */
+
 body {
   position: absolute;
   top: 0;
@@ -9,115 +17,213 @@ body {
 
 div.email {
   position: absolute;
-  top: 3.2em;
+  top: 56px;
   bottom: 0;
   left: 0;
   right: 0;
+  background: var(--bg);
+  display: flex;
+  flex-direction: row;
+  min-width: 0;
+  min-height: 0;
 }
 
-div.email_list, div.message_overlay {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  overflow: scroll;
-  z-index: 99999;
-}
+/* Drawer rail (phone + tablet) -------------------------------------------
+   Slides over content from the left at 82% width, with a scrim behind.
+   Uses position: fixed so it covers the middle pane completely. */
 
-div.message_list {
-  position: relative;
-}
-
-@media (min-width: 900px) {
-  div.email_list {
-    left: 0;
-    width: 490px;
-  }
-
-  div.message_overlay {
-    left: 500px;
-    right: 0;
-  }
-
-  button.close_overlay {
-    display: none;
-  }
-}
-
-@media (max-width: 899px) {
-  div.email_list, div.message_overlay {
-    left: 0;
-    right: 0;
-  }
-  button.action span.wide-screen {
-    display: none;
-  }
-  body div.content div.filters span.filter button.action {
-    padding-left: 2em;
-    padding-right: 2em;
-  }
-}
-
-/* Composer view */
-
-.compose-button {
-  position: absolute;
-  bottom: 1em;
-  right: 1em;
-  z-index: 99999;
-}
-
-body div.compose-blackout {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background-color: rgba(0,0,0,0.7);
-  z-index: 99999;
-}
-.compose-wrapper {
-  position: absolute;
-  top: 1em;
-  bottom: 1em;
-  right: 0;
-  left: 0;
-  width: 49em;
+.email__rail {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--ink);
   box-sizing: border-box;
-  margin-right: auto;
-  margin-left: auto;
-  border-radius: 1em;
-  border: 1px solid;
-  border-color: inherit;
-  overflow: scroll;
+  overflow: hidden;
+  z-index: 110;
 }
 
-.show-compose,
-div.compose-from-old label.address-from-old,
-div.compose-from-old select.address-from-old,
-div.compose-from-new label.address-from-new,
-div.compose-from-new input.address-from-new {
-  display: block;
+.email__rail--drawer {
+  position: fixed;
+  top: 56px;
+  bottom: 0;
+  left: 0;
+  width: 82%;
+  max-width: 320px;
+  border-right: 1px solid var(--border);
+  box-shadow: 0 20px 40px oklch(0 0 0 / 0.25);
+  animation: email-drawer-in 180ms ease-out;
 }
 
-.hide-compose,
-div.compose-from-old label.address-from-new,
-div.compose-from-old input.address-from-new,
-div.compose-from-new label.address-from-old,
-div.compose-from-new select.address-from-old  {
-  display: none;
+.email__scrim {
+  position: fixed;
+  top: 56px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: oklch(0 0 0 / 0.35);
+  z-index: 105;
+  animation: email-scrim-in 180ms ease-out;
 }
 
-*:not(.wysiwyg-editor *, .wysiwyg-toolbar *) {
-  font-family: 'Tahoma', 'Verdana', 'Trebuchet MS', 'Arial';
-  font-size: small;
+@keyframes email-drawer-in {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
 }
 
-button, button * {
-  font-size: x-small !important;
+@keyframes email-scrim-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
-@media (max-width: 899px) {
-  .compose-wrapper {
-    width: 30em;
+/* Resizable split between Folders and Addresses ------------------------ */
+
+.email__rail-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 50%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.email__rail-splitter {
+  flex: 0 0 7px;
+  position: relative;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  cursor: row-resize;
+  outline: none;
+  touch-action: none;
+}
+
+.email__rail-splitter:hover,
+.email__rail-splitter:focus-visible {
+  border-top-color: var(--accent);
+  border-bottom-color: var(--accent);
+  background: color-mix(in oklch, var(--accent) 12%, transparent);
+}
+
+.email__rail-splitter-grip {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 24px;
+  height: 1px;
+  border-radius: 1px;
+  background: var(--ink-quiet);
+  opacity: 0;
+  transition: opacity 120ms ease;
+  pointer-events: none;
+}
+
+.email__rail-splitter:hover .email__rail-splitter-grip,
+.email__rail-splitter:focus-visible .email__rail-splitter-grip {
+  opacity: 1;
+}
+
+/* Vertical splitter — between rail|middle and msglist|reader. Drag axis
+   is horizontal; the visible 1px line is on the left edge so it doubles
+   as the column separator that used to be on rail/msglist borders. */
+
+.email__col-splitter {
+  flex: 0 0 7px;
+  position: relative;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid transparent;
+  background: transparent;
+  cursor: col-resize;
+  outline: none;
+  touch-action: none;
+}
+
+.email__col-splitter:hover,
+.email__col-splitter:focus-visible {
+  border-left-color: var(--accent);
+  border-right-color: var(--accent);
+  background: color-mix(in oklch, var(--accent) 12%, transparent);
+}
+
+.email__col-splitter-grip {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 1px;
+  height: 24px;
+  border-radius: 1px;
+  background: var(--ink-quiet);
+  opacity: 0;
+  transition: opacity 120ms ease;
+  pointer-events: none;
+}
+
+.email__col-splitter:hover .email__col-splitter-grip,
+.email__col-splitter:focus-visible .email__col-splitter-grip {
+  opacity: 1;
+}
+
+/* Middle pane container — holds msglist + reader ----------------------- */
+
+div.email__middle {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  background: var(--pane-bg);
+  display: flex;
+  flex-direction: row;
+}
+
+/* Phone only: list and reader share the middle pane, so show one at a time.
+   Tablet/desktop render both side-by-side regardless of data-middle. */
+.email[data-layout="phone"][data-middle="reader"] .msglist { display: none; }
+.email[data-layout="phone"][data-middle="list"] .reader:not(.overlay_hidden) { display: none; }
+
+div.msglist,
+div.reader {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+/* On phone the reader hides its close-X in favor of the back button in
+   Messages header — but when the reader is up it needs its own back arrow.
+   That's handled inline in MessageOverlay via layout prop. */
+
+/* Tablet ---------------------------------------------------------------- */
+
+@media (min-width: 768px) {
+  /* Two-pane: msglist + reader. Width is user-resizable via the column
+     splitter; CSS variable carries the percentage from React state. */
+  div.msglist {
+    flex: 0 0 var(--msglist-width, 46%);
+  }
+  div.reader {
+    flex: 1 1 auto;
+  }
+
+  .reader .close_overlay {
+    display: none;
   }
 }
+
+/* Desktop -------------------------------------------------------------- */
+
+@media (min-width: 1200px) {
+  /* Rail becomes in-flow; cancel drawer positioning if it sneaks in. The
+     flex-basis is set inline from React state (col splitter); 22% is the
+     fallback for the brief moment before that style applies. */
+  .email__rail {
+    position: static;
+    flex: 0 0 22%;
+    box-shadow: none;
+    animation: none;
+  }
+  .email__rail--drawer { display: none; }
+  .email__scrim        { display: none; }
+}
+
+/* Composer view is now a floating card rendered by Email/ComposeOverlay —
+   see that component's CSS. */

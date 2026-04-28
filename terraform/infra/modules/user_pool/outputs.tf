@@ -22,3 +22,8 @@ output "sms_phone_number" {
   value       = aws_pinpointsmsvoicev2_phone_number.sms.phone_number
   description = "Toll-free phone number used for SMS verification"
 }
+
+output "user_pool_domain" {
+  value       = aws_cognito_user_pool_domain.users.domain
+  description = "Hosted-UI domain prefix for the Cognito user pool."
+}

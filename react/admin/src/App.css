@@ -1,20 +1,43 @@
+/* =========================================================================
+   Stately direction — non-theme tokens
+   Fonts, radii, and density vars live alongside the theme tokens in
+   AppLight.css / AppDark.css. These are theme-independent.
+   ========================================================================= */
+:root[data-direction="stately"] {
+  --font-display: "Source Serif 4", Georgia, serif;
+  --font-reader:  "Source Serif 4", Georgia, serif;
+  --font-ui:      "Inter", system-ui, sans-serif;
+  --font-mono:    "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --radius-sm:   4px;
+  --radius-md:   6px;
+  --radius-lg:   10px;
+  --radius-xl:   14px;
+  --radius-pill: 999px;
+}
+
+:root[data-density="compact"] { --density-row-py: 6px;  --density-leading: 1.55; }
+:root[data-density="normal"]  { --density-row-py: 10px; --density-leading: 1.65; }
+:root[data-density="roomy"]   { --density-row-py: 14px; --density-leading: 1.75; }
+
+/* Document chrome keyed to the token system, authoritative over the legacy
+   prefers-color-scheme rules so user theme choice always wins. */
+:root[data-direction="stately"] body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
 body {
   margin: 0;
 }
 
-*:not(.wysiwyg-editor *, .wysiwyg-toolbar *) {
-  font-family: 'Tahoma', 'Verdana', 'Trebuchet MS', 'Arial';
-  font-size: small;
-  text-size-adjust: none !important;
-  -webkit-text-size-adjust: none !important;
-}
-
-* {
-  border-radius: 0.2em
-}
-
-img {
-  border-radius: 0;
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 /* Thank you https://css-tricks.com/copy-the-browsers-native-focus-styles/ */
@@ -45,23 +68,9 @@ hr {
   }
 }
 
-input, select, button, option, ul.recipient-list {
-  padding: 0.5em;
-  border-width: 1px;
-  border-style: solid;
-}
-
 input::placeholder {
   font-style: italic;
   color: #888;
-}
-
-button, button * {
-  font-size: x-small;
-}
-
-input, select, option {
-  width: 30em;
 }
 
 body form div.wysiwyg-toolbar input, ul.recipient-list {
@@ -72,18 +81,6 @@ select {
   -webkit-appearance: none;
   -moz-appearance: none;
   appearance: none;
-}
-
-label {
-  display: block;
-  margin-top: 1em;
-}
-
-button {
-  display: block;
-  width: 10em;
-  margin-top: 1em;
-  border-radius: 4px;
 }
 
 fieldset {

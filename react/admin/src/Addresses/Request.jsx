@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import useApi from '../hooks/useApi';
 import './Request.css';
 
-function Request({ domains, showRequest, callback, setMessage }) {
+function Request({ domains, callback, setMessage }) {
   const api = useApi();
   const [username, setUsername] = useState('');
   const [subdomain, setSubdomain] = useState('');
@@ -95,9 +95,9 @@ function Request({ domains, showRequest, callback, setMessage }) {
   };
 
   return (
-    <div className={`request ${showRequest ? "requestVisible" : "requestHidden"}`}>
-      <fieldset className="address-fields">
-        <legend>Address</legend>
+    <div className="request">
+      <fieldset className="request__group request__address">
+        <legend className="request__legend">Address</legend>
         <input
           type="text"
           autoComplete="off"
@@ -108,7 +108,10 @@ function Request({ domains, showRequest, callback, setMessage }) {
           id="username"
           name="username"
           placeholder="username"
-        /><span id="amphora">@</span><input
+          className="request__input request__input--username"
+        />
+        <span className="request__sep" aria-hidden="true">@</span>
+        <input
           type="text"
           autoComplete="off"
           autoCorrect="off"
@@ -118,17 +121,21 @@ function Request({ domains, showRequest, callback, setMessage }) {
           id="subdomain"
           name="subdomain"
           placeholder="subdomain"
-        /><span id="dot">.</span><select
+          className="request__input request__input--subdomain"
+        />
+        <span className="request__sep" aria-hidden="true">.</span>
+        <select
           name="domain"
           value={domain}
           onChange={doInputChange}
+          className="request__select"
         >
-          <option>Select a domain</option>
+          <option value="">Select a domain</option>
           {getOptions()}
         </select>
       </fieldset>
-      <fieldset className="comment-field">
-        <legend>Comment</legend>
+      <fieldset className="request__group request__comment">
+        <legend className="request__legend">Comment</legend>
         <input
           type="text"
           autoComplete="off"
@@ -138,13 +145,28 @@ function Request({ domains, showRequest, callback, setMessage }) {
           onChange={doInputChange}
           id="comment"
           name="comment"
-          placeholder="comment"
+          placeholder="optional note"
+          className="request__input request__input--comment"
         />
       </fieldset>
-      <fieldset className="button-fields">
-        <button id="request" className="default" onClick={handleSubmit}>Request {address}</button>
-        <button onClick={generateRandom}>Random</button>
-        <button onClick={doClear}>Clear</button>
+      <fieldset className="request__group request__buttons">
+        <button
+          type="button"
+          className="request__submit"
+          onClick={handleSubmit}
+        >
+          Request {address}
+        </button>
+        <button
+          type="button"
+          className="request__secondary"
+          onClick={generateRandom}
+        >Random</button>
+        <button
+          type="button"
+          className="request__secondary"
+          onClick={doClear}
+        >Clear</button>
       </fieldset>
     </div>
   );

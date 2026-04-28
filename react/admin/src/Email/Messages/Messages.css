@@ -1,112 +1,394 @@
-span.filter button.sort-order {
-  width: 2em;
+/* =========================================================================
+   Message list middle pane — §4c header + sort strip + bulk toolbar.
+   The list body lives in Envelopes.css; this file owns the chrome.
+   ========================================================================= */
+
+.msglist {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--pane-bg);
+  color: var(--ink);
+  font-family: var(--font-ui, inherit);
+  box-sizing: border-box;
+  overflow: hidden;
+  min-width: 360px;
 }
 
-span.filter select,
-span.filter button,
-span.filter label {
+.msglist-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--pane-bg);
+  border-bottom: 1px solid var(--border);
+}
+
+/* --- Regular header ---------------------------------------------------- */
+.msglist-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px 10px;
+  min-height: 60px;
+  box-sizing: border-box;
+}
+
+.msglist-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.msglist-phone-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
   margin: 0;
-  font-size: 9pt;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  flex: 0 0 auto;
 }
 
-span.filter button.sort-order {
-  border-radius: 0 4px 4px 0;
-  border-width: 1px;
+.msglist-phone-btn:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
 }
 
-body span.filter select.sort-by {
-  border-radius: 0;
-  border-width: 1px 0px 1px 1px;
-  width: auto;
-  padding: 0.5em;
+.msglist-phone-back { margin-left: -6px; }
+.msglist-phone-compose { margin-right: -6px; }
+
+.msglist-title {
+  font-family: var(--font-display, Georgia, serif);
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-span.filter select {
-  border-radius: 0 4px 4px 0;
-  border-width: 1px;
-  width: auto;
-  padding: 0.5em;
+.msglist-meta {
+  font-size: 12px;
+  color: var(--ink-quiet);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
-span.filter label {
-  border-radius: 4px 0 0 4px;
-  border-width: 1px 0 1px 1px;
-  border-style: solid;
-  width: auto;
-  padding: 0.5em;
+/* --- Filter pill tabs -------------------------------------------------- */
+.msglist-tabs {
+  display: flex;
+  gap: 2px;
+  margin-top: 4px;
 }
 
-div.filters {
-  width: 100%;
+.msglist-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink-quiet);
+  font: inherit;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 80ms ease, color 80ms ease;
 }
 
-div.filters-dropdowns {
-  display: grid;
-  grid-template-columns: auto auto;
-  grid-auto-flow: column dense;
+.msglist-tab:hover {
+  color: var(--ink);
+  background: var(--surface-hover);
 }
 
-div.filters-dropdowns span.filter {
-  display: inline;
-  width: auto;
+.msglist-tab.active {
+  color: var(--ink) !important;
+  background: var(--surface-hover) !important;
+  border-color: transparent !important;
 }
 
-div.filters-dropdowns div ~ div {
-  text-align: right;
+.msglist-tab-count {
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: var(--ink-quiet);
+}
+.msglist-tab.active .msglist-tab-count { color: var(--accent); }
+
+/* --- Sort + select strip ---------------------------------------------- */
+.msglist-sort {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--ink-quiet);
 }
 
-span.filter select, span.filter label, span.filter button {
-  display: inline-block;
-  max-width: 9em;
+.msglist-sort-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
-body div.content div.email div.email_list div.ascending button#ascending,
-body div.content div.email div.email_list div.descending button#descending {
-  display: none;
+.msglist-sort-sep {
+  opacity: 0.5;
 }
 
-button.sort-order {
-  width: 1em;
-  height: 3em;
-  top: -0.1em;
+.msglist-sort-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--ink-soft);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+.msglist-sort-select:hover { background: var(--surface-hover); color: var(--ink); }
+.msglist-sort-select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.msglist-sort-dir {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background 80ms ease, transform 120ms ease;
+}
+.msglist-sort-dir:hover { background: var(--surface-hover); color: var(--ink); }
+.msglist-sort-dir.ascending { transform: rotate(180deg); }
+
+.msglist-select-toggle {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 80ms ease, color 80ms ease, border-color 80ms ease;
+}
+.msglist-select-toggle:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+.msglist-select-toggle.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}
+
+/* --- Bulk toolbar ------------------------------------------------------ */
+.msglist-header.bulk {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  min-height: 60px;
+  background: color-mix(in oklch, var(--accent) 8%, var(--pane-bg));
+}
+
+.msglist-bulk-count {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0 4px;
+}
+.msglist-bulk-num {
+  font-family: var(--font-display, Georgia, serif);
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+  color: var(--accent);
+}
+.msglist-bulk-label {
+  font-size: 11px;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+
+.msglist-bulk-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: wrap;
+  min-width: 0;
+  flex: 1;
+}
+
+.msglist .tool-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 80ms ease, color 80ms ease;
+}
+.msglist .tool-btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+.msglist .tool-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.msglist .tool-btn.danger { color: var(--ink-danger); }
+.msglist .tool-btn .icon { color: currentColor; }
+
+.msglist .tool-btn-group {
   position: relative;
-  padding-top: 0;
-  padding-bottom: 0;
+  display: inline-flex;
 }
 
-button.sort-order hr {
+.msglist-move-picker {
   position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 10;
+  padding: 6px;
+  min-width: 220px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 10px);
+  box-shadow: var(--shadow-menu);
+}
+.msglist-move-picker .filter-folder { width: 100%; }
+.msglist-move-picker select { width: 100%; }
+
+.msglist-bulk-exit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background 80ms ease, color 80ms ease;
+}
+.msglist-bulk-exit:hover { background: var(--surface-hover); color: var(--ink); }
+
+/* --- Loading shimmer --------------------------------------------------- */
+.msglist-loading {
+  padding: 0;
+  color: var(--ink-quiet);
+  font-family: var(--font-ui);
+}
+
+.msglist-skel {
+  list-style: none;
   margin: 0;
-  border-top: 1px solid;
-  border-bottom: 0;
-  left: 0.2em;
+  padding: 8px 0;
 }
 
-button.sort-order hr.first {
-  top: 30%;
+.msglist-skel-row {
+  display: grid;
+  grid-template-columns: 24px 1fr 60px;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-faint);
 }
 
-button.sort-order hr.second {
-  top: 50%;
+.msglist-skel-dot,
+.msglist-skel-line,
+.msglist-skel-date {
+  display: block;
+  background: var(--surface-hover);
+  border-radius: 4px;
+  background-image: linear-gradient(
+    90deg,
+    var(--surface-hover) 0%,
+    color-mix(in oklch, var(--surface-hover) 60%, var(--border-faint)) 50%,
+    var(--surface-hover) 100%
+  );
+  background-size: 200% 100%;
+  animation: msglist-shimmer 1.2s linear infinite;
 }
 
-button.sort-order hr.third {
-  bottom: 25%;
+.msglist-skel-dot   { width: 8px; height: 8px; border-radius: 50%; justify-self: center; }
+.msglist-skel-lines { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.msglist-skel-line { height: 12px; }
+.msglist-skel-line-from    { width: 38%; }
+.msglist-skel-line-subject { width: 80%; }
+.msglist-skel-date { height: 10px; width: 40px; justify-self: end; }
+
+@keyframes msglist-shimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
 }
 
-button.sort-order hr.medium {
-  right: 0.7em;
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
 }
 
-button.sort-order hr.long {
-  right: 0.2em;
+/* --- Viewport scroll --------------------------------------------------- */
+.msglist > :not(.msglist-sticky) {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
-button.sort-order hr.short {
-  right: 1.2em;
+/* Responsive -------------------------------------------------------------
+   Mobile-first base styles above. These two guards — 768 (tablet) and 1200
+   (desktop) — match the Phase 8 responsive strategy. */
+
+@media (max-width: 767px) {
+  .msglist-header.bulk { flex-wrap: wrap; }
+  .msglist .tool-btn-label { display: none; }
+  .msglist .tool-btn { padding: 0 8px; }
+  .msglist-title { font-size: 20px; }
 }
 
-div.email_list button.reply, div.email_list button.replyall,
-div.email_list button.forward {
-  display: none;
+@media (min-width: 768px) {
+  .msglist-phone-back,
+  .msglist-phone-compose { /* shown in JSX only when layout!=desktop */ }
+}
+
+@media (min-width: 1200px) {
+  .msglist-phone-back,
+  .msglist-phone-compose { display: none; }
 }

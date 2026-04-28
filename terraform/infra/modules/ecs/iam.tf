@@ -1,16 +1,16 @@
 /**
 * IAM roles for the ECS module:
 *
-* 1. ECS task execution role — used by the ECS agent to pull images from ECR
+* 1. ECS task execution role - used by the ECS agent to pull images from ECR
 *    and inject secrets from SSM Parameter Store.
 *
-* 2. ECS task role — assumed by the running container. Grants access to
+* 2. ECS task role - assumed by the running container. Grants access to
 *    DynamoDB, Cognito, and SQS.
 *
-* 3. ECS instance role — allows EC2 instances to join the ECS cluster.
+* 3. ECS instance role - allows EC2 instances to join the ECS cluster.
 */
 
-# ── ECS task execution role ────────────────────────────────────
+# -- ECS task execution role ------------------------------------
 
 resource "aws_iam_role" "ecs_execution" {
   name = "cabal-ecs-execution-role"
@@ -52,7 +52,7 @@ resource "aws_iam_role_policy_attachment" "ecs_execution_secrets" {
   policy_arn = aws_iam_policy.ecs_execution_secrets.arn
 }
 
-# ── ECS task role ──────────────────────────────────────────────
+# -- ECS task role ----------------------------------------------
 
 resource "aws_iam_role" "ecs_task" {
   name = "cabal-ecs-task-role"
@@ -128,7 +128,7 @@ resource "aws_iam_role_policy_attachment" "ecs_task" {
   policy_arn = aws_iam_policy.ecs_task.arn
 }
 
-# ── ECS container instance role ───────────────────────────────
+# -- ECS container instance role -------------------------------
 
 resource "aws_iam_role" "ecs_instance" {
   name = "cabal-ecs-instance-role"

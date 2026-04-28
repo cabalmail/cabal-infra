@@ -83,4 +83,16 @@ variable "backup" {
   default     = false
 }
 
+variable "monitoring" {
+  type        = bool
+  description = "Whether to deploy the monitoring & alerting stack (Uptime Kuma, self-hosted ntfy, alert_sink Lambda). Defaults to false."
+  default     = false
+}
+
+variable "healthchecks_registration_open" {
+  type        = bool
+  description = "Whether the Healthchecks signup form is open. Set to true at bootstrap so the operator can sign up the first user via the magic-link flow, then flip back to false. Has no effect when var.monitoring is false (no Healthchecks task is deployed)."
+  default     = false
+}
+
 

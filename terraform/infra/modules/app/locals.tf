@@ -1,55 +1,55 @@
 locals {
   supported_lambdas = {
-    list_folders       = {
-      runtime   = "python3.13"
+    list_folders = {
+      runtime = "python3.13"
 
       method    = "GET"
       memory    = 128
       cache     = true
       cache_ttl = 60
     },
-    list_messages      = {
-      runtime   = "python3.13"
+    list_messages = {
+      runtime = "python3.13"
 
       method    = "GET"
       memory    = 128
       cache     = true
       cache_ttl = 15
     },
-    list_envelopes     = {
-      runtime   = "python3.13"
+    list_envelopes = {
+      runtime = "python3.13"
 
       method    = "GET"
       memory    = 128
       cache     = true
       cache_ttl = 3600
     },
-    fetch_message      = {
-      runtime   = "python3.13"
+    fetch_message = {
+      runtime = "python3.13"
 
       method    = "GET"
       memory    = 1024
       cache     = true
       cache_ttl = 3600
     },
-    fetch_bimi         = {
-      runtime   = "python3.13"
+    fetch_bimi = {
+      runtime = "python3.13"
 
       method    = "GET"
       memory    = 1024
       cache     = true
       cache_ttl = 3600
     },
-    list_attachments   = {
-      runtime   = "python3.13"
+    list_attachments = {
+      runtime = "python3.13"
 
       method    = "GET"
       memory    = 1024
       cache     = true
       cache_ttl = 3600
     },
-    fetch_attachment   = {
-      runtime   = "python3.13"
+    fetch_attachment = {
+      runtime = "python3.13"
 
       method    = "GET"
       memory    = 1024
@@ -57,39 +57,39 @@ locals {
       cache_ttl = 3600
     },
     fetch_inline_image = {
-      runtime   = "python3.13"
+      runtime = "python3.13"
 
       method    = "GET"
       memory    = 1024
       cache     = true
       cache_ttl = 3600
     },
-    set_flag           = {
-      runtime   = "python3.13"
+    set_flag = {
+      runtime = "python3.13"
 
       method    = "PUT"
       memory    = 128
       cache     = true
       cache_ttl = 0
     },
-    new_folder         = {
-      runtime   = "python3.13"
+    new_folder = {
+      runtime = "python3.13"
 
       method    = "PUT"
       memory    = 128
       cache     = true
       cache_ttl = 0
     },
-    delete_folder      = {
-      runtime   = "python3.13"
+    delete_folder = {
+      runtime = "python3.13"
 
       method    = "DELETE"
       memory    = 128
       cache     = true
       cache_ttl = 0
     },
-    subscribe_folder   = {
-      runtime   = "python3.13"
+    subscribe_folder = {
+      runtime = "python3.13"
 
       method    = "PUT"
       memory    = 128
@@ -97,87 +97,87 @@ locals {
       cache_ttl = 0
     },
     unsubscribe_folder = {
-      runtime   = "python3.13"
+      runtime = "python3.13"
 
       method    = "PUT"
       memory    = 128
       cache     = true
       cache_ttl = 0
     },
-    move_messages      = {
-      runtime   = "python3.13"
+    move_messages = {
+      runtime = "python3.13"
 
       method    = "PUT"
       memory    = 128
       cache     = true
       cache_ttl = 0
     },
-    send               = {
-      runtime   = "python3.13"
+    send = {
+      runtime = "python3.13"
 
       method    = "PUT"
       memory    = 128
       cache     = true
       cache_ttl = 0
     },
-    list               = {
-      runtime   = "python3.13"
+    list = {
+      runtime = "python3.13"
 
       method    = "GET"
       memory    = 128
       cache     = false
       cache_ttl = 0
     },
-    new                = {
-      runtime   = "python3.13"
+    new = {
+      runtime = "python3.13"
 
       method    = "POST"
       memory    = 128
       cache     = false
       cache_ttl = 0
     },
-    revoke             = {
-      runtime   = "python3.13"
+    revoke = {
+      runtime = "python3.13"
 
       method    = "DELETE"
       memory    = 128
       cache     = false
       cache_ttl = 0
     },
-    list_users         = {
-      runtime   = "python3.13"
+    list_users = {
+      runtime = "python3.13"
 
       method    = "GET"
       memory    = 128
       cache     = false
       cache_ttl = 0
     },
-    confirm_user       = {
-      runtime   = "python3.13"
+    confirm_user = {
+      runtime = "python3.13"
 
       method    = "PUT"
       memory    = 128
       cache     = false
       cache_ttl = 0
     },
-    disable_user       = {
-      runtime   = "python3.13"
+    disable_user = {
+      runtime = "python3.13"
 
       method    = "PUT"
       memory    = 128
       cache     = false
       cache_ttl = 0
     },
-    enable_user        = {
-      runtime   = "python3.13"
+    enable_user = {
+      runtime = "python3.13"
 
       method    = "PUT"
       memory    = 128
       cache     = false
       cache_ttl = 0
     },
-    delete_user        = {
-      runtime   = "python3.13"
+    delete_user = {
+      runtime = "python3.13"
 
       method    = "DELETE"
       memory    = 128
@@ -185,7 +185,7 @@ locals {
       cache_ttl = 0
     },
     list_dmarc_reports = {
-      runtime   = "python3.13"
+      runtime = "python3.13"
 
       method    = "GET"
       memory    = 128
@@ -193,6 +193,38 @@ locals {
       cache_ttl = 0
     },
     list_addresses_admin = {
+      runtime = "python3.13"
+
+      method    = "GET"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    assign_address = {
+      runtime = "python3.13"
+
+      method    = "PUT"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    unassign_address = {
+      runtime = "python3.13"
+
+      method    = "PUT"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    new_address_admin = {
+      runtime = "python3.13"
+
+      method    = "POST"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    get_preferences      = {
       runtime   = "python3.13"
 
       method    = "GET"
@@ -200,26 +232,10 @@ locals {
       cache     = false
       cache_ttl = 0
     },
-    assign_address       = {
+    set_preferences      = {
       runtime   = "python3.13"
 
       method    = "PUT"
-      memory    = 128
-      cache     = false
-      cache_ttl = 0
-    },
-    unassign_address     = {
-      runtime   = "python3.13"
-
-      method    = "PUT"
-      memory    = 128
-      cache     = false
-      cache_ttl = 0
-    },
-    new_address_admin    = {
-      runtime   = "python3.13"
-
-      method    = "POST"
       memory    = 128
       cache     = false
       cache_ttl = 0
@@ -236,7 +252,7 @@ data "aws_s3_objects" "check" {
 locals {
   lambdas = {
     for l in keys(local.supported_lambdas) :
-      l => local.supported_lambdas[l]
-      if length(data.aws_s3_objects.check[l].keys) > 0
+    l => local.supported_lambdas[l]
+    if length(data.aws_s3_objects.check[l].keys) > 0
   }
 }

@@ -341,6 +341,14 @@ export default class ApiClient {
     return response;
   };
   
+  getRawMessage(signedUrl) {
+    return axios.get(signedUrl, {
+      responseType: 'text',
+      transformResponse: [(v) => v],
+      timeout: ONE_SECOND * 30,
+    });
+  }
+
   getAttachment(a, folder, id, seen) {
     const response = axios.get('/fetch_attachment',
       {
@@ -510,6 +518,31 @@ export default class ApiClient {
       }
     );
     return response;
+  }
+
+  // User preferences (theme / accent / density)
+
+  getPreferences() {
+    return axios.get('/get_preferences', {
+      baseURL: this.baseURL,
+      headers: {
+        'Authorization': this.token
+      },
+      timeout: TIMEOUT
+    });
+  }
+
+  putPreferences(prefs) {
+    return axios.put('/set_preferences',
+      JSON.stringify(prefs),
+      {
+        baseURL: this.baseURL,
+        headers: {
+          'Authorization': this.token
+        },
+        timeout: TIMEOUT
+      }
+    );
   }
 
   getAttachments(folder, id, seen) {

@@ -1,147 +1,222 @@
-div.sticky {
-  position: -webkit-sticky;
-  position: sticky;
-  top: 0;
-  z-index: 1000;
-}
+/* =========================================================================
+   Envelope row — §4c. 56px tall at compact density. 8px leading rail with
+   a 6px unread dot that swaps to a checkbox in bulk mode. Two lines of
+   content (from/date, then subject) with trailing meta icons.
+   ========================================================================= */
 
-div.message-list, div.message-list div.message-row {
+.envelope-list {
   list-style: none;
+  margin: 0;
   padding: 0;
-  line-height: 1.75em;
-  -webkit-user-select: none;
+  background: var(--pane-bg);
   user-select: none;
+  -webkit-user-select: none;
 }
 
-div.message-list {
-  box-sizing: border-box;
-  border-bottom: 5em solid transparent;
+.envelope-list .swipeable-list-item {
+  border-bottom: 1px solid var(--border-faint);
 }
 
-div.message-list div.message-row {
-  border-bottom: 1px solid #888;
-  align-items: baseline;
+.envelope-row .swipeable-list-item__content {
+  background: var(--pane-bg);
 }
 
-div.message-list div.message-row div.message-line-1 {
+.envelope-content {
   display: grid;
-  grid-template-columns: auto max-content;
-  height: 1.75em;
-  padding: .25em;
+  grid-template-columns: 20px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  min-height: 56px;
+  padding: var(--density-row-py, 10px) 12px;
+  cursor: pointer;
+  transition: background 80ms ease;
+  position: relative;
+  color: var(--ink);
+  outline: none;
 }
 
-div.message-list div {
-  display: block;
-}
+[data-density="roomy"] .envelope-content { min-height: 64px; }
+[data-density="compact"] .envelope-content { min-height: 56px; }
 
-div.message-list div.message-subject {
-  font-size: 115%;
-  font-weight: 900;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding: .25em;
+.envelope-row:hover .swipeable-list-item__content,
+.envelope-row:hover .envelope-content { background: var(--surface-hover); }
+.envelope-row.selected .swipeable-list-item__content,
+.envelope-row.selected .envelope-content {
+  background: var(--surface-hover);
 }
-
-div.message-list div.Seen div.message-subject {
-  font-weight: 400;
-}
-
-div.message-list div.Recent div.message-subject {
-  font-style: italic;
-}
-
-div.message-list div.message-subject span.subject:hover {
-  text-decoration: underline;
-}
-
-div.message-list div.message-subject input[type=checkbox],
-div.message-list div.message-subject input[type=checkbox]:not(:checked) ~ label .checked,
-div.message-list div.message-subject input[type=checkbox]:checked ~ label .unchecked {
-  display: none;
-}
-
-div.message-list div.message-subject label {
-  display: inline;
-}
-
-div.message-list div.message-subject input[type=checkbox]:not(:checked) ~ label .unchecked,
-div.message-list div.message-subject input[type=checkbox]:checked ~ label .checked {
-  display: inline-block;
-  font-family: arial;
-  font-size: 150%;
-  width: 0.9em;
-  height: 0.9em;
-  border-width: 1px;
-  border-style: solid;
-  border-radius: 0.1em;
-  text-align: center;
-  overflow: visible;
-}
-
-div.message-list div.message-from {
-  height: 1.75em;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  overflow: hidden;
-}
-
-div.message-list div.message-date {
-  font-style: italic;
-  text-align: right;
-  font-size: x-small;
-}
-
-div.message-list div.loading {
-  background: #000;
-  width: 3em;
-  height: 3em;
-  border-radius: 1.5em;
-  border-left: auto;
-  border-right: auto;
-  animation-name: ripple;
-  animation-duration: 0.5s;
-  animation-iteration-count: infinite;
-  border-bottom: 0;
-}
-
-div.message-list div.loading div.message-subject::before {
+.envelope-row.selected .envelope-content::before {
   content: '';
-  display: none;
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.envelope-row.checked .envelope-content {
+  background: color-mix(in oklch, var(--accent) 10%, var(--surface));
+}
+.envelope-row.checked:hover .envelope-content {
+  background: color-mix(in oklch, var(--accent) 14%, var(--surface));
 }
 
-div.message-list div.loading {
-  display: none;
+/* ---- Leading column: unread dot / bulk checkbox ---- */
+.envelope-leading {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  position: relative;
+  align-self: center;
 }
+.envelope-leading.as-checkbox { cursor: pointer; }
 
-div.archived {
+.envelope-dot {
+  grid-area: 1 / 1;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
   opacity: 0;
-  max-height: 0;
-  overflow: hidden;
-  transition-property: opacity, max-height;
-  transition-duration: 1s;
-  transition-timing-function: ease-out;
+  transition: opacity 100ms ease;
+}
+.envelope-row.unread .envelope-dot { opacity: 1; }
+
+.envelope-checkbox {
+  grid-area: 1 / 1;
+  width: 15px;
+  height: 15px;
+  border-radius: 3px;
+  border: 1.5px solid var(--ink-quiet);
+  background: var(--surface);
+  display: inline-grid;
+  place-items: center;
+  opacity: 0;
+  transform: scale(0.85);
+  transition: opacity 100ms ease, transform 100ms ease, background 80ms ease, border-color 80ms ease;
+  color: var(--accent-fg);
+}
+.envelope-checkbox.checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.envelope-checkbox.checked svg { stroke-width: 3; }
+
+.envelope-list.bulk-mode .envelope-dot { opacity: 0; }
+.envelope-list.bulk-mode .envelope-checkbox { opacity: 1; transform: scale(1); }
+.envelope-leading:hover .envelope-checkbox { border-color: var(--ink-soft); }
+
+/* ---- Main content ---- */
+.envelope-main { min-width: 0; }
+
+.envelope-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
 }
 
-/* Swipes */
-
-.swipeable-list-item__leading-actions {
-  background-color: #080 !important;
-  color: #fff;
-}
-
-.swipeable-list-item__leading-actions span, .swipeable-list-item__trailing-actions span {
+.envelope-from {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--ink-soft);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.003em;
+}
+.envelope-row.unread .envelope-from {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.envelope-date {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--ink-quiet);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-ui, inherit);
+}
+
+.envelope-subject {
+  font-family: var(--font-reader, Georgia, serif);
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.005em;
+  line-height: 1.45;
+}
+.envelope-row.unread .envelope-subject {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+/* ---- Trailing indicator cluster ---- */
+.envelope-indicators {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-quiet);
+  flex: 0 0 auto;
+}
+.envelope-indicators .icon { opacity: 0.75; }
+.envelope-row.flagged .indicator-flagged { color: var(--accent); opacity: 1; }
+.envelope-row.important .indicator-important { color: var(--ink-danger); opacity: 1; }
+
+/* ---- Important rail (priority) ---- */
+.envelope-row.important .envelope-content::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--ink-danger);
+}
+.envelope-row.important.selected .envelope-content::after { display: none; }
+
+/* ---- Empty state ---- */
+.envelopes-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 48px 24px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 13px;
+  color: var(--ink-quiet);
   text-align: center;
-  width: 80%;
-  padding-top: 1.7em;
 }
+.envelopes-empty-hint { font-size: 12px; }
 
-.swipeable-list-item__trailing-actions span {
-  padding-left: 15%;
+/* ---- Swipe actions ---- */
+.envelope-list .swipeable-list-item__leading-actions {
+  background: color-mix(in oklch, var(--accent) 65%, transparent) !important;
+  color: var(--accent-fg);
 }
-
-.swipeable-list-item__trailing-actions {
-  background-color: #800 !important;
-  color: #ff9;
+.envelope-list .swipeable-list-item__trailing-actions {
+  background: var(--ink-danger) !important;
+  color: var(--accent-fg);
+}
+.envelope-list .swipeable-list-item__leading-actions span,
+.envelope-list .swipeable-list-item__trailing-actions span {
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
 }

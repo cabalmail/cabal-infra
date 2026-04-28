@@ -2,7 +2,7 @@
 * Input variables for the ECS module.
 */
 
-# ── Networking ─────────────────────────────────────────────────
+# -- Networking -------------------------------------------------
 
 variable "private_subnets" {
   type        = list(any)
@@ -24,14 +24,14 @@ variable "region" {
   description = "AWS region."
 }
 
-# ── Domain / TLS ───────────────────────────────────────────────
+# -- Domain / TLS -----------------------------------------------
 
 variable "control_domain" {
   type        = string
   description = "Control domain (e.g. example.com). Used for CERT_DOMAIN env var."
 }
 
-# ── Data stores ────────────────────────────────────────────────
+# -- Data stores ------------------------------------------------
 
 variable "table_arn" {
   type        = string
@@ -43,7 +43,7 @@ variable "efs_id" {
   description = "EFS file system ID for the mailstore."
 }
 
-# ── Cognito ────────────────────────────────────────────────────
+# -- Cognito ----------------------------------------------------
 
 variable "user_pool_arn" {
   type        = string
@@ -60,7 +60,7 @@ variable "client_id" {
   description = "Cognito app client ID."
 }
 
-# ── Container images ──────────────────────────────────────────
+# -- Container images ------------------------------------------
 
 variable "ecr_repository_urls" {
   type        = map(string)
@@ -72,7 +72,7 @@ variable "image_tag" {
   description = "Docker image tag (e.g. sha-abc12345)."
 }
 
-# ── Secrets ────────────────────────────────────────────────────
+# -- Secrets ----------------------------------------------------
 
 variable "master_password" {
   type        = string
@@ -80,7 +80,7 @@ variable "master_password" {
   sensitive   = true
 }
 
-# ── Instance sizing ───────────────────────────────────────────
+# -- Instance sizing -------------------------------------------
 
 variable "instance_type" {
   type        = string
@@ -88,7 +88,7 @@ variable "instance_type" {
   default     = "m6g.medium"
 }
 
-# ── Health checks ────────────────────────────────────────────
+# -- Health checks --------------------------------------------
 
 variable "health_check_grace_period" {
   type        = number
@@ -106,4 +106,12 @@ variable "unhealthy_threshold" {
   type        = number
   description = "Consecutive failed NLB health checks before a target is marked unhealthy."
   default     = 2
+}
+
+# -- Heartbeat monitoring --------------------------------------
+
+variable "healthcheck_ping_param" {
+  type        = string
+  description = "SSM Parameter Store name holding the Healthchecks ping URL for the reconfigure.sh loop. Empty string disables the heartbeat (used when var.monitoring is false in the parent stack)."
+  default     = ""
 }

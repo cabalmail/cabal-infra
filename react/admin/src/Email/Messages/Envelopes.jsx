@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import Observer from './Observer';
 import { SwipeableList, Type } from 'react-swipeable-list';
 import 'react-swipeable-list/dist/styles.css';
@@ -7,10 +7,36 @@ import useApi from '../../hooks/useApi';
 import { PAGE_SIZE } from '../../constants';
 import './Envelopes.css';
 
+function matchesFilter(envelope, filter) {
+  if (!envelope) return false;
+  if (filter === 'unread') return !envelope.flags.includes('\\Seen');
+  if (filter === 'flagged') return envelope.flags.includes('\\Flagged');
+  return true;
+}
+
+function matchesAddress(envelope, addressFilter) {
+  if (!addressFilter) return true;
+  const needle = addressFilter.toLowerCase();
+  const recipients = [].concat(envelope.to || [], envelope.cc || []);
+  return recipients.some((r) => String(r || '').toLowerCase().includes(needle));
+}
+
 function Envelopes({
-  message_ids, folder, selected_messages, showOverlay,
-  handleCheck: handleCheckProp, handleSelect: handleSelectProp,
-  markUnread: markUnreadProp, markRead: markReadProp, archive: archiveProp
+  message_ids,
+  folder,
+  showOverlay,
+  selected,
+  setSelected,
+  lastSelectedRef,
+  bulkMode,
+  setBulkMode,
+  filter,
+  addressFilter,
+  emptyLabel,
+  onVisibleEnvelopesChange,
+  markUnread: markUnreadProp,
+  markRead: markReadProp,
+  archive: archiveProp,
 }) {
   const api = useApi();
 
@@ -18,8 +44,8 @@ function Envelopes({
   const [pages, setPages] = useState([]);
 
   const loadPages = useCallback((pageNums) => {
-    setPages(currentPages => {
-      setEnvelopes(prev => {
+    setPages((currentPages) => {
+      setEnvelopes((prev) => {
         let merged = { ...prev };
         for (const p of pageNums) {
           if (currentPages[p]) {
@@ -41,24 +67,22 @@ function Envelopes({
       const ids = message_ids.slice(i, i + PAGE_SIZE);
       const page = Math.floor(i / PAGE_SIZE);
 
-      api.getEnvelopes(folder, ids).then(data => {
+      api.getEnvelopes(folder, ids).then((data) => {
         if (cancelled) return;
 
-        // Use functional update to avoid race condition
-        setPages(prev => {
+        setPages((prev) => {
           const next = prev.slice();
           next[page] = data.data.envelopes;
           return next;
         });
 
-        // Auto-load first few pages into the visible envelopes
         if (page < 4) {
-          setEnvelopes(prev => ({
+          setEnvelopes((prev) => ({
             ...prev,
-            ...data.data.envelopes
+            ...data.data.envelopes,
           }));
         }
-      }).catch(e => {
+      }).catch((e) => {
         console.log(e);
       });
     }
@@ -68,66 +92,118 @@ function Envelopes({
     };
   }, [api, folder, message_ids]);
 
-  const handleClick = useCallback((envelope, id) => {
-    showOverlay(envelope);
-    handleSelectProp(id);
-  }, [showOverlay, handleSelectProp]);
+  // Clear envelopes and pages when folder changes so stale data doesn't leak.
+  useEffect(() => {
+    setEnvelopes({});
+    setPages([]);
+  }, [folder]);
 
-  const handleCheck = useCallback((id, checked) => {
-    handleCheckProp(id, checked);
-  }, [handleCheckProp]);
-
-  const markRead = useCallback((id) => {
-    setEnvelopes(prev => {
-      const next = JSON.parse(JSON.stringify(prev));
-      if (next[id.toString()]) {
-        next[id.toString()].flags.push("\\Seen");
-      }
-      return next;
-    });
-    markReadProp(id);
-  }, [markReadProp]);
-
-  const markUnread = useCallback((id) => {
-    setEnvelopes(prev => {
-      const next = JSON.parse(JSON.stringify(prev));
-      const envelope = next[id.toString()];
-      if (envelope) {
-        envelope.flags.splice(envelope.flags.indexOf("\\Seen"), 1);
-      }
-      return next;
-    });
-    markUnreadProp(id);
-  }, [markUnreadProp]);
-
-  const archive = useCallback((id) => {
-    archiveProp(id);
-  }, [archiveProp]);
-
-  let i = 0;
-  const message_list = message_ids.filter(k => {
-    return envelopes.hasOwnProperty(k.toString());
-  }).map(k => {
-    return envelopes[k.toString()];
-  }).map(e => {
-    let first_of_page = false;
-    let observer = null;
-    const page = Math.floor(i / PAGE_SIZE);
-    if (i % PAGE_SIZE === 0) {
-      first_of_page = true;
-      observer = (
-        <Observer
-          pageLoader={loadPages}
-          page={page + 2}
-          key={page + 2}
-        />
-      );
+  const shownIds = useMemo(() => {
+    const list = [];
+    for (const id of message_ids) {
+      const env = envelopes[id.toString()];
+      if (!env) continue;
+      if (!matchesAddress(env, addressFilter)) continue;
+      if (!matchesFilter(env, filter)) continue;
+      list.push(id);
     }
-    i++;
+    return list;
+  }, [message_ids, envelopes, filter, addressFilter]);
+
+  // Tell parent what's currently visible (for header "N of M" + pill counts)
+  useEffect(() => {
+    if (typeof onVisibleEnvelopesChange !== 'function') return;
+    const loaded = [];
+    for (const id of message_ids) {
+      const env = envelopes[id.toString()];
+      if (env) loaded.push(env);
+    }
+    onVisibleEnvelopesChange({
+      loaded,
+      totalIds: message_ids.length,
+      shownIds,
+    });
+  }, [message_ids, envelopes, shownIds, onVisibleEnvelopesChange]);
+
+  const toggleSelect = useCallback(
+    (id, { shift, meta } = {}) => {
+      const next = new Set(selected);
+      if (shift && lastSelectedRef.current != null && shownIds.length) {
+        const a = shownIds.indexOf(Number(lastSelectedRef.current));
+        const b = shownIds.indexOf(Number(id));
+        if (a !== -1 && b !== -1) {
+          const [lo, hi] = a < b ? [a, b] : [b, a];
+          for (let i = lo; i <= hi; i++) next.add(shownIds[i]);
+        } else {
+          next.add(Number(id));
+        }
+      } else if (meta) {
+        const num = Number(id);
+        if (next.has(num)) next.delete(num);
+        else next.add(num);
+      } else {
+        const num = Number(id);
+        if (next.has(num)) next.delete(num);
+        else next.add(num);
+      }
+      setSelected(next);
+      lastSelectedRef.current = Number(id);
+      if (!bulkMode && next.size > 0) setBulkMode(true);
+    },
+    [selected, setSelected, shownIds, lastSelectedRef, bulkMode, setBulkMode],
+  );
+
+  const handleClick = useCallback(
+    (envelope, id) => {
+      showOverlay(envelope);
+      lastSelectedRef.current = Number(id);
+    },
+    [showOverlay, lastSelectedRef],
+  );
+
+  const markRead = useCallback(
+    (id) => {
+      setEnvelopes((prev) => {
+        const key = id.toString();
+        const envelope = prev[key];
+        if (!envelope || envelope.flags.includes('\\Seen')) return prev;
+        const next = { ...prev, [key]: { ...envelope, flags: [...envelope.flags, '\\Seen'] } };
+        return next;
+      });
+      markReadProp(id);
+    },
+    [markReadProp],
+  );
+
+  const markUnread = useCallback(
+    (id) => {
+      setEnvelopes((prev) => {
+        const key = id.toString();
+        const envelope = prev[key];
+        if (!envelope) return prev;
+        const flags = envelope.flags.filter((f) => f !== '\\Seen');
+        return { ...prev, [key]: { ...envelope, flags } };
+      });
+      markUnreadProp(id);
+    },
+    [markUnreadProp],
+  );
+
+  const archive = useCallback((id) => archiveProp(id), [archiveProp]);
+
+  const rows = shownIds.map((k, idx) => {
+    const e = envelopes[k.toString()];
+    let observer = null;
+    const page = Math.floor(idx / PAGE_SIZE);
+    if (idx % PAGE_SIZE === 0) {
+      observer = <Observer pageLoader={loadPages} page={page + 2} key={page + 2} />;
+    }
+    const id = Number(e.id);
     return (
       <Envelope
+        key={e.id}
         handleClick={handleClick}
-        handleCheck={handleCheck}
+        toggleSelect={toggleSelect}
         archive={archive}
         markRead={markRead}
         markUnread={markUnread}
@@ -136,27 +212,31 @@ function Envelopes({
         priority={e.priority}
         date={e.date}
         from={e.from}
-        to={e.to}
-        cc={e.cc}
         flags={e.flags}
         struct={e.struct}
-        is_checked={selected_messages.includes(parseInt(e.id))}
+        is_checked={selected.has(id)}
         dom_id={e.id}
-        page={page}
-        first_of_page={first_of_page}
+        bulkMode={bulkMode}
+        selected={false}
         observer={observer}
-        key={e.id}
       />
     );
   });
 
+  if (rows.length === 0) {
+    return (
+      <div className={`envelopes-empty ${bulkMode ? 'in-bulk' : ''}`} role="status">
+        <span className="envelopes-empty-line">{emptyLabel || 'Inbox zero.'}</span>
+        {(filter !== 'all' || addressFilter) && (
+          <span className="envelopes-empty-hint">Clear filter to see more →</span>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <SwipeableList
-      fullSwipe={true}
-      type={Type.IOS}
-      className="message-list"
-    >
-      {message_list}
+    <SwipeableList fullSwipe={true} type={Type.IOS} className={`envelope-list ${bulkMode ? 'bulk-mode' : ''}`}>
+      {rows}
     </SwipeableList>
   );
 }

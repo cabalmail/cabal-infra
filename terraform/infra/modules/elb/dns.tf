@@ -11,18 +11,18 @@ resource "aws_route53_record" "cname" {
   }
 }
 
-# ── Private zone records ────────────────────────────────────────
+# -- Private zone records ----------------------------------------
 #
 # The VPC has a private Route 53 zone for the control domain.
 # When a query for e.g. imap.<control_domain> originates inside the
 # VPC, Route 53 Resolver checks the private zone first and returns
-# NXDOMAIN if the record is missing — it never falls through to the
+# NXDOMAIN if the record is missing - it never falls through to the
 # public zone.  These records mirror the public aliases above so
 # that containers (and anything else in the VPC) can resolve the
 # tier hostnames.
 
 resource "aws_route53_record" "private" {
-  # imap is intentionally excluded — its NLB port 25 listener routes to
+  # imap is intentionally excluded - its NLB port 25 listener routes to
   # smtp-in, not imap, so an NLB alias here would misdirect mail delivery.
   # Internal access to the IMAP container uses Cloud Map (imap.cabal.internal)
   # instead.  See modules/ecs/service_discovery.tf.

@@ -1,12 +1,41 @@
 '''Assigns an OS user ID to a newly created Cognito user'''
 import os
+import urllib.error
+import urllib.request
 import boto3  # pylint: disable=import-error
 
 region = os.environ['AWS_REGION']
 ecs_cluster_name = os.environ.get('ECS_CLUSTER_NAME', '')
+ping_param = os.environ.get('HEALTHCHECK_PING_PARAM', '')
 
 cognito = boto3.client('cognito-idp', region_name=region)
 ddb = boto3.client('dynamodb', region_name=region)
+ssm = boto3.client('ssm', region_name=region)
+
+_PING_URL = None
+
+
+def _ping_healthcheck():
+    '''Best-effort heartbeat to Healthchecks. Silent on failure.'''
+    global _PING_URL  # pylint: disable=global-statement
+    if _PING_URL is None:
+        if not ping_param:
+            _PING_URL = ''
+        else:
+            try:
+                resp = ssm.get_parameter(Name=ping_param, WithDecryption=True)
+                value = resp['Parameter']['Value']
+                _PING_URL = value if value.startswith('http') else ''
+            except Exception as err:  # pylint: disable=broad-exception-caught
+                print(f'healthcheck ping URL fetch failed: {err}')
+                _PING_URL = ''
+    if not _PING_URL:
+        return
+    try:
+        with urllib.request.urlopen(_PING_URL, timeout=5) as resp:
+            print(f'healthcheck ping -> {resp.status}')
+    except (urllib.error.URLError, urllib.error.HTTPError, OSError) as err:
+        print(f'healthcheck ping failed: {err}')
 
 
 def handler(event, _context):
@@ -14,6 +43,7 @@ def handler(event, _context):
     osid = get_counter()
     update_user(event['userPoolId'], event['userName'], osid)
     refresh_containers()
+    _ping_healthcheck()
     return event
 
 

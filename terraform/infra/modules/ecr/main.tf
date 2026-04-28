@@ -3,7 +3,7 @@
 */
 
 resource "aws_ecr_repository" "tier" {
-  for_each             = toset(var.tiers)
+  for_each             = toset(concat(var.tiers, var.extra_repositories))
   name                 = "cabal-${each.key}"
   image_tag_mutability = "IMMUTABLE"
   force_delete         = false
@@ -27,10 +27,10 @@ resource "aws_ecr_lifecycle_policy" "tier" {
         rulePriority = 1
         description  = "Keep last 10 tagged images"
         selection = {
-          tagStatus   = "tagged"
+          tagStatus     = "tagged"
           tagPrefixList = ["sha-"]
-          countType   = "imageCountMoreThan"
-          countNumber = 10
+          countType     = "imageCountMoreThan"
+          countNumber   = 10
         }
         action = {
           type = "expire"

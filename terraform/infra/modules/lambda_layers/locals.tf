@@ -15,7 +15,7 @@ data "aws_s3_objects" "check" {
 locals {
   lambda_layers = {
     for l in keys(local.supported_lambda_layers) :
-      l => local.supported_lambda_layers[l]
-      if length(data.aws_s3_objects.check[l].keys) > 0
+    l => local.supported_lambda_layers[l]
+    if length(data.aws_s3_objects.check[l].keys) > 0
   }
 }

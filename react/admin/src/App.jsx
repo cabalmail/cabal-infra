@@ -1,7 +1,8 @@
 // Third party libs
 
-import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo, Suspense } from 'react';
 import axios from 'axios';
+import ApiClient from './ApiClient';
 import {
   CognitoUser,
   CognitoUserPool,
@@ -11,7 +12,6 @@ import {
 
 // Lazy-loaded view components
 const Email = React.lazy(() => import('./Email'));
-const Folders = React.lazy(() => import('./Folders'));
 const Addresses = React.lazy(() => import('./Addresses'));
 const Users = React.lazy(() => import('./Users'));
 const Dmarc = React.lazy(() => import('./Dmarc'));
@@ -26,6 +26,7 @@ import ResetPassword from './ResetPassword';
 // Persistent Components
 import AppMessage from './AppMessage';
 import Nav from './Nav';
+import KeyboardHelp from './KeyboardHelp';
 
 // Error Boundary
 import ErrorBoundary from './ErrorBoundary';
@@ -34,10 +35,17 @@ import ErrorBoundary from './ErrorBoundary';
 import AuthContext from './contexts/AuthContext';
 import AppMessageContext from './contexts/AppMessageContext';
 
-// Site-wide and Theme-specific style
-import './AppDark.css';
+// Hooks
+import useTheme from './hooks/useTheme';
+import useKeyboardShortcuts from './hooks/useKeyboardShortcuts';
+
+// Site-wide and Theme-specific style.
+// AppLight.css defines unconditional default tokens; AppDark.css overrides
+// them inside @media (prefers-color-scheme: dark). Load light first so the
+// media-gated dark rules win by source order at equal specificity.
 import './AppLight.css';
-import { ADDRESS_LIST, FOLDER_LIST } from './constants';
+import './AppDark.css';
+import { ADDRESS_LIST, FOLDER_LIST, DATE, DESC } from './constants';
 import './App.css';
 
 // Module-level token storage (never persisted to localStorage)
@@ -85,6 +93,49 @@ function App() {
   const [error, setError] = useState(false);
   const [hideMessage, setHideMessage] = useState(true);
   const hideTimerRef = useRef(null);
+
+  // ApiClient for preference hydration. Only usable once login has populated
+  // `api_url` and the module-level `_token`. Re-created when those inputs
+  // change so useTheme picks up the fresh token.
+  const prefsApi = useMemo(() => (
+    state.loggedIn && state.api_url && _token
+      ? new ApiClient(state.api_url, _token, state.imap_host)
+      : null
+  ), [state.loggedIn, state.api_url, state.imap_host]);
+  const prefs = useTheme(prefsApi);
+
+  // Message-list state bags per §4c / State Management. Lifted here so that
+  // future phases (reader selection, keyboard shortcuts) can read the same
+  // source of truth. `selected` is a Set of numeric message IDs.
+  const [filter, setFilter] = useState('all');
+  const [sortKey, setSortKey] = useState(DATE);
+  const [sortDir, setSortDir] = useState(DESC);
+  const [bulkMode, setBulkMode] = useState(false);
+  const [selected, setSelected] = useState(() => new Set());
+
+  // Reader format preference per §4d. 'rich' renders HTML in a sandboxed
+  // iframe; 'plain' falls back to the text/plain alternative. The reader
+  // itself clamps to 'plain' for messages with no HTML part.
+  const [readerFormat, setReaderFormat] = useState('rich');
+
+  // Compose "From" preference per §4e. Newly-opened compose windows default
+  // to this address; the From picker writes back so the next window inherits
+  // the user's last choice. `null` defers to the first address the compose
+  // window loads.
+  const [composeFromAddress, setComposeFromAddress] = useState(null);
+
+  // Phase 7 §3: controls the ForgotPassword success state. Set on Cognito
+  // `forgotPassword` success; cleared when the user leaves the screen.
+  const [forgotPasswordSent, setForgotPasswordSent] = useState(false);
+
+  // Phase 7 §Interactions: `?` toggles the keyboard-shortcut overlay.
+  const [helpOpen, setHelpOpen] = useState(false);
+
+  // Bridge for keys whose handlers live inside the Email view (compose,
+  // folder navigation, j/k cursor, etc.). Child components register
+  // handlers on mount; the shortcut hook proxies through this ref so
+  // App doesn't need to lift Email's internals.
+  const shortcutHandlersRef = useRef({});
 
   const setState = useCallback((updates) => {
     setAppState(prev => {
@@ -173,6 +224,15 @@ function App() {
     };
   }, []);
 
+  // Bounce non-admins away from admin-only views (e.g. "Addresses" persisted
+  // in localStorage from a prior admin session, or a deep-link).
+  useEffect(() => {
+    const adminOnlyViews = ["Addresses", "Users", "DMARC"];
+    if (state.loggedIn && !isAdmin && adminOnlyViews.includes(state.view)) {
+      setState({ view: "Email" });
+    }
+  }, [state.loggedIn, state.view, isAdmin, setState]);
+
   const doRegister = useCallback((e) => {
     e.preventDefault();
     const attributeUsername = new CognitoUserAttribute({
@@ -224,18 +284,18 @@ function App() {
     });
     cognitoUser.forgotPassword({
       onSuccess: () => {
-        setState({ view: "ResetPassword" });
+        setForgotPasswordSent(true);
         setMessage("A reset code has been sent to your phone.", false);
       },
       onFailure: () => {
         setMessage("Failed to send reset code. Please try again.", true);
       },
       inputVerificationCode: () => {
-        setState({ view: "ResetPassword" });
+        setForgotPasswordSent(true);
         setMessage("A reset code has been sent to your phone.", false);
       }
     });
-  }, [state.userName, setState, setMessage]);
+  }, [state.userName, setMessage]);
 
   const doResetPassword = useCallback((e) => {
     e.preventDefault();
@@ -326,22 +386,7 @@ function App() {
         return (
           <ErrorBoundary name="Addresses">
             <Addresses
-              token={_token}
-              api_url={state.api_url}
-              host={state.imap_host}
               domains={state.domains}
-              setMessage={setMessage}
-              isAdmin={isAdmin}
-            />
-          </ErrorBoundary>
-        );
-      case "Folders":
-        return (
-          <ErrorBoundary name="Folders">
-            <Folders
-              token={_token}
-              api_url={state.api_url}
-              host={state.imap_host}
               setMessage={setMessage}
             />
           </ErrorBoundary>
@@ -352,6 +397,7 @@ function App() {
             onSubmit={doVerify}
             onCodeChange={doInputChange}
             code={state.verificationCode}
+            onBackToSignIn={(e) => { e.preventDefault(); setState({ view: "Login" }); }}
           />
         );
       case "ForgotPassword":
@@ -360,7 +406,17 @@ function App() {
             onSubmit={doForgotPassword}
             onUsernameChange={doInputChange}
             username={state.userName}
-            onCancel={(e) => { e.preventDefault(); setState({ view: "Login" }); }}
+            submitted={forgotPasswordSent}
+            onBackToSignIn={(e) => {
+              e.preventDefault();
+              setForgotPasswordSent(false);
+              setState({ view: "Login" });
+            }}
+            onProceed={(e) => {
+              e.preventDefault();
+              setForgotPasswordSent(false);
+              setState({ view: "ResetPassword" });
+            }}
           />
         );
       case "ResetPassword":
@@ -371,6 +427,7 @@ function App() {
             onPasswordChange={doInputChange}
             code={state.verificationCode}
             password={state.password}
+            onBackToSignIn={(e) => { e.preventDefault(); setState({ view: "Login" }); }}
           />
         );
       case "SignUp":
@@ -383,6 +440,7 @@ function App() {
             username={state.userName}
             password={state.password}
             phone={state.phone}
+            onSignIn={(e) => { e.preventDefault(); setState({ view: "Login" }); }}
           />
         );
       case "Email":
@@ -395,6 +453,21 @@ function App() {
               smtp_host={`smtp-out.${state.control_domain}`}
               domains={state.domains}
               setMessage={setMessage}
+              filter={filter}
+              setFilter={setFilter}
+              sortKey={sortKey}
+              setSortKey={setSortKey}
+              sortDir={sortDir}
+              setSortDir={setSortDir}
+              bulkMode={bulkMode}
+              setBulkMode={setBulkMode}
+              selected={selected}
+              setSelected={setSelected}
+              readerFormat={readerFormat}
+              setReaderFormat={setReaderFormat}
+              composeFromAddress={composeFromAddress}
+              setComposeFromAddress={setComposeFromAddress}
+              shortcutHandlersRef={shortcutHandlersRef}
             />
           </ErrorBoundary>
         );
@@ -408,7 +481,8 @@ function App() {
             onPasswordChange={doInputChange}
             username={state.userName}
             password={state.password}
-            onForgotPassword={(e) => { e.preventDefault(); setState({ view: "ForgotPassword" }); }}
+            onForgotPassword={(e) => { e.preventDefault(); setForgotPasswordSent(false); setState({ view: "ForgotPassword" }); }}
+            onSignUp={(e) => { e.preventDefault(); setState({ view: "SignUp" }); }}
           />
         );
     }
@@ -422,17 +496,54 @@ function App() {
     domains: state.domains
   };
 
+  const isPreLoginView = ["Login", "SignUp", "Verify", "ForgotPassword", "ResetPassword"]
+    .includes(state.view);
+
+  const shortcutCallbacks = useMemo(() => ({
+    onToggleHelp: () => setHelpOpen(prev => !prev),
+    onFocusSearch: () => {
+      const el = document.querySelector('.nav__search-input');
+      if (el && el.focus) el.focus();
+    },
+    onEscape: () => {
+      setHelpOpen(false);
+      if (bulkMode) setBulkMode(false);
+      shortcutHandlersRef.current.onEscape?.();
+    },
+    onToggleBulk: () => setBulkMode(prev => !prev),
+    onCompose:    () => shortcutHandlersRef.current.onCompose?.(),
+    onGoToFolder: (f) => shortcutHandlersRef.current.onGoToFolder?.(f),
+    onNext:       () => shortcutHandlersRef.current.onNext?.(),
+    onPrev:       () => shortcutHandlersRef.current.onPrev?.(),
+    onOpen:       () => shortcutHandlersRef.current.onOpen?.(),
+    onArchive:    () => shortcutHandlersRef.current.onArchive?.(),
+    onDelete:     () => shortcutHandlersRef.current.onDelete?.(),
+    onReply:      () => shortcutHandlersRef.current.onReply?.(),
+    onReplyAll:   () => shortcutHandlersRef.current.onReplyAll?.(),
+    onForward:    () => shortcutHandlersRef.current.onForward?.(),
+    onFlag:       () => shortcutHandlersRef.current.onFlag?.(),
+    onMarkUnread: () => shortcutHandlersRef.current.onMarkUnread?.(),
+  }), [bulkMode]);
+
+  useKeyboardShortcuts(shortcutCallbacks, state.loggedIn && !isPreLoginView);
+
   return (
     <AuthContext.Provider value={authValue}>
       <AppMessageContext.Provider value={{ setMessage }}>
-        <div className={`App ${state.view}`}>
-          <Nav
-            onClick={updateView}
-            loggedIn={state.loggedIn}
-            view={state.view}
-            doLogout={doLogout}
-            isAdmin={isAdmin}
-          />
+        <div className={`App ${state.view}${isPreLoginView ? ' pre-login' : ''}`}>
+          {!isPreLoginView && (
+            <Nav
+              onClick={updateView}
+              loggedIn={state.loggedIn}
+              view={state.view}
+              doLogout={doLogout}
+              isAdmin={isAdmin}
+              userName={state.userName}
+              accent={prefs.accent}
+              onSelectAccent={prefs.setAccent}
+              accents={prefs.accents}
+            />
+          )}
           <div className="content">
             <Suspense fallback={<div className="loading">Loading...</div>}>
               {renderContent()}
@@ -443,6 +554,7 @@ function App() {
             hide={hideMessage}
             error={error}
           />
+          <KeyboardHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
         </div>
       </AppMessageContext.Provider>
     </AuthContext.Provider>
