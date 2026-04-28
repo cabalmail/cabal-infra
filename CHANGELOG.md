@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.7.0] - 2026-04-26
+## [0.7.0] - 2026-04-27
 
 This release adds an optional monitoring and alerting stack. All components run on the existing ECS cluster and EFS file system. Gated by `var.monitoring` so dev and stage can leave it off; prod always has it on. Push notifications go to the operator's phone via Pushover (priority 1, bypasses Do Not Disturb) and a self-hosted ntfy server, deliberately bypassing Cabalmail's own mail tier so an outage is still reachable.
 
