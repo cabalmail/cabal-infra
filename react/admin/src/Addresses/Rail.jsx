@@ -143,7 +143,8 @@ function Addresses({ domains, setMessage, selectedAddress, onSelectAddress }) {
               key={a.address}
               id={a.address}
               className={`addresses-rail__row${isActive ? ' is-active' : ''}`}
-              title={a.comment || a.address}
+              title={a.comment ? undefined : a.address}
+              data-comment={a.comment || undefined}
               onClick={() => handleSelect(a.address)}
               role="button"
               tabIndex={0}
