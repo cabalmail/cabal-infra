@@ -15,7 +15,7 @@ locals {
   ] : []
 }
 
-# ── IMAP task definition ──────────────────────────────────────
+# -- IMAP task definition --------------------------------------
 
 resource "aws_ecs_task_definition" "imap" {
   family                   = "cabal-imap"
@@ -86,7 +86,7 @@ resource "aws_ecs_task_definition" "imap" {
   }
 }
 
-# ── SMTP-IN task definition ───────────────────────────────────
+# -- SMTP-IN task definition -----------------------------------
 
 resource "aws_ecs_task_definition" "smtp_in" {
   family                   = "cabal-smtp-in"
@@ -142,7 +142,7 @@ resource "aws_ecs_task_definition" "smtp_in" {
   }])
 }
 
-# ── SMTP-OUT task definition ──────────────────────────────────
+# -- SMTP-OUT task definition ----------------------------------
 
 resource "aws_ecs_task_definition" "smtp_out" {
   family                   = "cabal-smtp-out"

@@ -38,7 +38,7 @@ resource "aws_route53_record" "heartbeat" {
 # Kuma probes from the private subnet can resolve them. The private zone
 # shadows the public zone for the control domain, so without these
 # records, VPC-internal lookups for uptime/ntfy/heartbeat fail. (Phase 1
-# implementation note in docs/0.7.0/monitoring-plan.md §6.)
+# implementation note in docs/0.7.0/monitoring-plan.md section 6.)
 resource "aws_route53_record" "uptime_private" {
   zone_id = var.private_zone_id
   name    = "uptime.${var.control_domain}"

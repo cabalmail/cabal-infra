@@ -1,4 +1,4 @@
-# ── Public ALB fronting Kuma (Cognito-auth) and ntfy (no auth) ─
+# -- Public ALB fronting Kuma (Cognito-auth) and ntfy (no auth) -
 #
 # Default listener action forwards to Kuma with Cognito authenticate-oidc.
 # A host-header listener rule peels off requests to ntfy.<control-domain>
@@ -96,7 +96,7 @@ resource "aws_lb_listener_rule" "healthchecks" {
   }
 }
 
-# Grafana (Phase 3) — same Cognito-auth pattern as Healthchecks. Local
+# Grafana (Phase 3) - same Cognito-auth pattern as Healthchecks. Local
 # Grafana admin password is still required for admin actions.
 #tfsec:ignore:aws-elb-http-not-used
 resource "aws_lb_listener_rule" "grafana" {

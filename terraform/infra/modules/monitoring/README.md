@@ -1,139 +1,92 @@
 # monitoring
 
-Phases 1, 2, 3, and the first wave of Phase 4 of the 0.7.0 monitoring & alerting stack.
-
-Deployed only when `var.monitoring = true` at the root module. See
-`docs/0.7.0/monitoring-plan.md` for the overall design and
-`docs/monitoring.md` for the operator runbook.
+Optional monitoring and alerting stack for the 0.7.0 release. Deployed only when `var.monitoring = true` at the root module. See [docs/0.7.0/monitoring-plan.md](../../../../docs/0.7.0/monitoring-plan.md) for the design rationale and [docs/monitoring.md](../../../../docs/monitoring.md) for the operator runbook.
 
 ## What this module creates
 
-- SSM `SecureString` parameters:
-  - `/cabal/alert_sink_secret` — shared webhook secret (auto-generated
-    on first apply; `ignore_changes` so rotation sticks).
-  - `/cabal/pushover_user_key` — operator populates after creating a
-    Pushover account.
-  - `/cabal/pushover_app_token` — operator populates after creating the
-    Cabalmail Pushover application.
-  - `/cabal/ntfy_publisher_token` — operator populates after
-    bootstrapping the ntfy admin user.
-- `alert_sink` Lambda fronted by a Lambda Function URL. Authenticates
-  callers with the shared secret in `X-Alert-Secret`. Routes by
-  severity: `critical` → Pushover priority 1 + ntfy priority 5,
-  `warning` → ntfy priority 3, `info` → drop.
-- Self-hosted ntfy ECS service (one task, EFS-backed cache + auth DB
-  at access point `/ntfy`).
-- Uptime Kuma ECS service (one task, EFS-backed SQLite at access point
-  `/uptime-kuma`).
+### SSM SecureString parameters
+
+All managed with `ignore_changes = [value]` so out-of-band rotation sticks:
+
+- `/cabal/alert_sink_secret` -- shared webhook secret (auto-generated on first apply).
+- `/cabal/pushover_user_key`, `/cabal/pushover_app_token` -- operator populates from the Pushover account + application.
+- `/cabal/ntfy_publisher_token` -- operator populates after bootstrapping the ntfy admin user.
+- `/cabal/healthchecks_secret_key` -- Django `SECRET_KEY` (auto-generated, rotatable via `terraform taint`).
+- `/cabal/healthchecks_api_key` -- v3 read-write API key for the IaC Lambda. Operator creates in the UI and seeds.
+- `/cabal/healthcheck_ping_*` -- six placeholders, populated automatically by the IaC Lambda after the API key is seeded.
+- `/cabal/grafana_admin_password` -- Grafana local-admin password (auto-generated, `ignore_changes` so rotation sticks).
+
+### Lambdas
+
+- `alert_sink` -- universal webhook sink fronted by a Lambda Function URL. Authenticates callers with `X-Alert-Secret` (Kuma, Healthchecks) or `Authorization: Bearer` (Alertmanager). Routes by severity: `critical` -> Pushover priority 1 + ntfy priority 5, `warning` -> ntfy priority 3, `info` -> drop. Translates Alertmanager's native webhook v4 body into the `{severity, summary, source, runbook_url}` shape expected downstream. Surfaces runbook URLs as Pushover tap-action `url` and ntfy `Click` header.
+- `cabal-backup-heartbeat` -- invoked by EventBridge on AWS Backup `JOB_COMPLETED` events; pings the corresponding Healthchecks check.
+- `cabal-healthchecks-iac` -- reconciles Healthchecks check definitions from [`lambda/api/healthchecks_iac/config.py`](../../../../lambda/api/healthchecks_iac/config.py) against the running instance. Auto-invoked by Terraform when the Lambda's `source_code_hash` changes (i.e. when `config.py` is edited). Returns `status: skipped` when the API key is still placeholder so first apply doesn't fail before bootstrap. Reaches the Healthchecks API via the private Cloud Map A record; the API key in SSM is sufficient auth.
+
+### ECS services
+
+All services share the existing ECS cluster:
+
+- `cabal-uptime-kuma` -- Uptime Kuma (one task, EFS-backed SQLite at access point `/uptime-kuma`).
+- `cabal-ntfy` -- self-hosted ntfy (one task, EFS-backed cache + auth DB at access point `/ntfy`).
+- `cabal-healthchecks` -- self-hosted Healthchecks (one task, EFS SQLite at `/healthchecks`).
+- `cabal-prometheus` -- Prometheus TSDB on EFS at `/prometheus` (uid/gid 65534).
+- `cabal-alertmanager` -- silences and notification log on EFS at `/alertmanager`.
+- `cabal-grafana` -- Grafana SQLite on EFS at `/grafana` (uid/gid 472). Mounts at `/grafana-data` to dodge the dockerd copy-up chown gotcha.
+- `cabal-cloudwatch-exporter`, `cabal-blackbox-exporter` -- single-task Prometheus exporters.
+- `cabal-node-exporter` -- DAEMON service (one task per cluster instance), `network_mode = "host"`.
+
+### ALB and DNS
+
 - Shared public ALB:
-  - Default action → Kuma, fronted by Cognito authenticate-oidc.
-  - Host-header rule on `ntfy.<control-domain>` → ntfy (no ALB auth;
-    ntfy enforces its own token auth).
-- Route 53 records `uptime.<control-domain>` and `ntfy.<control-domain>`.
+  - Default action -> Kuma, fronted by Cognito `authenticate-oidc`.
+  - Host-header rule on `ntfy.<control-domain>` -> ntfy (no ALB auth; ntfy enforces its own token auth).
+  - Host-header rule on `heartbeat.<control-domain>` -> Healthchecks (Cognito).
+  - Host-header rule on `metrics.<control-domain>` -> Grafana (Cognito, separate client).
+- Route 53 records for `uptime`, `ntfy`, `heartbeat`, `metrics` in both the public zone and the VPC private zone (the private zone shadows the public zone for the control domain, so VPC-internal callers can't resolve unless we mirror).
 
-## Post-apply manual steps (Phase 1)
+### Cloud Map
 
-See `docs/monitoring.md` for detailed steps. Summary:
+- Private DNS namespace `cabal-monitoring.cabal.internal` with one service per metrics component. Prometheus uses DNS-SD `type: A` queries against the awsvpc-mode services and `type: SRV` against `node-exporter` (host-mode tasks can't register A records).
+- The IaC Lambda reaches Healthchecks via `healthchecks.cabal-monitoring.cabal.internal:8000`, bypassing the Cognito-fronted ALB.
 
-1. Create a Pushover account + Cabalmail application; put the user key
-   and application token into the SSM parameters above.
-2. Open an ECS Exec session into the ntfy task; run
-   `ntfy user add --role=admin admin` and `ntfy token add admin`; put
-   the returned token into `/cabal/ntfy_publisher_token`.
-3. Install the Pushover and ntfy mobile apps on the on-call phone; log
-   in to ntfy with the admin credentials and subscribe to the `alerts`
-   topic.
-4. Open `https://uptime.<control-domain>/` (Cognito login), create the
-   Kuma admin account, add the Phase 1 monitor set, and wire the
-   Webhook notification provider to the `alert_sink_function_url`.
+### CloudWatch metric filters
 
-## Acceptance (Phase 1)
+Three filters per mail tier, emitting to a `Cabalmail/Logs` namespace:
 
-- Breaking a health check on dev (e.g. temporarily blocking port 993)
-  produces a Pushover **and** ntfy push within ~2 min.
-- Kuma's recovery notification sends a follow-up push.
-- `https://uptime.<control-domain>/` is reachable only after Cognito login.
-- `https://ntfy.<control-domain>/` rejects anonymous requests with 401.
+- `cabal-sendmail-deferred-{tier}` matching `"stat=Deferred"` -> `SendmailDeferred` metric.
+- `cabal-sendmail-bounced-{tier}` matching `"dsn=5"` -> `SendmailBounced` metric.
+- `cabal-imap-auth-failures` (imap tier only) matching `"imap-login" "auth failed"` -> `IMAPAuthFailures` metric.
 
-## What this module adds in Phase 3
+cloudwatch_exporter scrapes these as `aws_cabalmail_logs_*_sum`; Prometheus rules in the `log-derived` group of [`docker/prometheus/rules/alerts.yml`](../../../../docker/prometheus/rules/alerts.yml) alert on the rates.
 
-- Cloud Map private DNS namespace `cabal-monitoring.cabal.internal`
-  with one service per metrics component (Prometheus uses it for
-  scrape-target discovery).
-- Prometheus ECS service (TSDB on EFS access point `/prometheus`,
-  config and rules baked into `docker/prometheus/`).
-- Alertmanager ECS service (state on EFS access point
-  `/alertmanager`). Posts to the existing `alert_sink` Lambda for both
-  critical and warning severities; uses Authorization Bearer for the
-  shared secret. The Lambda accepts both `X-Alert-Secret` (Phase 1/2)
-  and `Authorization: Bearer` (Phase 3) headers.
-- Grafana ECS service (sqlite on EFS access point `/grafana`),
-  reachable at `https://metrics.<control-domain>/` behind a new
-  Cognito client. Datasource and four dashboards baked in via
-  provisioning.
-- Three exporters as ECS services:
-  - `cloudwatch_exporter` — single task pulling Lambda, DynamoDB, EFS,
-    ECS, ApiGateway, ApplicationELB, CertificateManager, Cognito.
-  - `blackbox_exporter` — single task for synthetic HTTP/TCP probes.
-  - `node_exporter` — DaemonSet (one per cluster instance) with host
-    `/proc` and `/sys` bind-mounts and `network_mode = host` so it
-    reports the EC2 host's metrics, not the container's.
-- New ALB listener rule on `metrics.<control-domain>` (priority 120)
-  with its own Cognito client.
-- New SSM `SecureString` `/cabal/grafana_admin_password` (auto-generated
-  on first apply; `ignore_changes` so rotation sticks).
+### Prometheus alert rules
 
-The Phase 3 plan also calls for tier-specific exporters (dovecot,
-postfix, opendkim) as sidecars in the mail-tier task definitions.
-These are intentionally deferred — see `docs/monitoring.md` §
-"Phase 3 — deferred items" for the rationale.
+Defined in [`docker/prometheus/rules/alerts.yml`](../../../../docker/prometheus/rules/alerts.yml), grouped by domain (aws-services, blackbox, platform, log-derived). Every rule carries a `runbook_url` annotation that resolves to a markdown file under [`docs/operations/runbooks/`](../../../../docs/operations/runbooks/). Alertmanager forwards the annotation; the alert_sink Lambda surfaces it as a tappable link.
 
-## Acceptance (Phase 3)
+## Variables
 
-- `https://metrics.<control-domain>/` is reachable only after Cognito login.
-- All four provisioned dashboards exist under the **Cabalmail** folder.
-- `cloudwatch_exporter` and `node_exporter` targets are `up` in Prometheus.
-- A tightened threshold rule produces a ntfy push via Alertmanager →
-  `alert_sink` within ~5 min.
+| Variable | Required | Notes |
+| --- | --- | --- |
+| `control_domain` | yes | Used to derive the four hostnames (`uptime`, `ntfy`, `heartbeat`, `metrics`). |
+| `region` | yes | AWS region. |
+| `vpc_id`, `vpc_cidr_block`, `public_subnet_ids`, `private_subnet_ids` | yes | VPC inputs. |
+| `zone_id`, `private_zone_id` | yes | Public + private hosted zones for the control domain. |
+| `cert_arn` | yes | ACM cert ARN for `*.<control-domain>`. |
+| `ecs_cluster_id`, `ecs_cluster_capacity_provider`, `efs_id` | yes | Cluster + EFS inputs. |
+| `tier_log_group_names` | yes | Map of mail-tier CloudWatch log group names from `module.ecs.tier_log_group_names`; metric filters target these. |
+| `*_ecr_repository_url` | yes | ECR URLs for every image the module deploys. |
+| `image_tag` | yes | Same image tag the mail tiers use; sourced from `/cabal/deployed_image_tag`. |
+| `environment` | yes | Used as a Prometheus external label. |
+| `user_pool_id`, `user_pool_arn`, `user_pool_domain` | yes | Cognito inputs for the `authenticate-cognito` actions. |
+| `lambda_bucket` | yes | S3 bucket holding the Lambda zips built by `build-api.sh`. |
+| `mail_domains` | yes | First entry is used as the From: domain for Healthchecks-originated mail. |
+| `ntfy_topic` | no | Default `alerts`. |
+| `healthchecks_registration_open` | no | Default `false`. Flip to `true` for the bootstrap signup, then back. |
 
-## What Phase 4 §1 + §4 + §5 add
+## Operational notes
 
-Phase 4's first wave is mostly docs, alert-rule annotations, and a single
-SSM parameter — no new ECS services. The shippable units:
-
-- **Runbooks** for every Phase 1-3 alert in `docs/operations/runbooks/`,
-  indexed by [`README.md`](../../../../docs/operations/runbooks/README.md).
-- **`runbook_url` annotations** on every rule in
-  [`docker/prometheus/rules/alerts.yml`](../../../../docker/prometheus/rules/alerts.yml).
-  Alertmanager forwards them; the `alert_sink` Lambda surfaces them on
-  Pushover (tap-action `url`) and ntfy (`Click` header).
-- **Static runbook map** in
-  [`lambda/api/alert_sink/function.py`](../../../../lambda/api/alert_sink/function.py)
-  (`_RUNBOOK_MAP`) for sources that can't carry `runbook_url` in their
-  webhook body — Kuma monitors and Healthchecks checks. Update the keys
-  if you rename a monitor or check.
-- **`quarterly-review` Healthchecks check** — a 90-day operator-driven
-  heartbeat. New SSM parameter `/cabal/healthcheck_ping_quarterly_review`
-  in [`ssm.tf`](./ssm.tf). The runbook documents what the review
-  entails.
-- **"Stay on CloudWatch Logs" decision** captured in
-  [`docs/monitoring.md`](../../../../docs/monitoring.md) §21. Phase 4 §2
-  (log-derived metrics + alerts) follows in a later ship.
-
-The remaining Phase 4 work — log-derived metrics & alerts (§2) and IaC
-for Kuma + Healthchecks config (§3) — ships separately. See
-[`docs/0.7.0/monitoring-plan.md`](../../../../docs/0.7.0/monitoring-plan.md)
-§"Phase 4: Logs + Tuning" for the roadmap.
-
-## Acceptance (Phase 4 first wave)
-
-- Every Prometheus rule has a `runbook_url` annotation that resolves to
-  a markdown file under `docs/operations/runbooks/`.
-- `_RUNBOOK_MAP` covers every Kuma monitor name in
-  [`docs/monitoring.md`](../../../../docs/monitoring.md) §9 and every
-  Healthchecks check in §12.
-- A test push from Kuma and from Healthchecks arrives with a tappable
-  runbook link.
-- `quarterly-review` check exists in Healthchecks and shows green after
-  the bootstrap ping documented in
-  [`docs/monitoring.md`](../../../../docs/monitoring.md) §22.
+- **First-time enable**: build images first (Docker workflow), then apply Terraform. Without the images present, ECS keeps the new services pending. See [docs/monitoring.md](../../../../docs/monitoring.md) step 3 for the full procedure.
+- **EFS state survives stack disable**: setting `var.monitoring = false` cleanly destroys the ECS services, ALB, Lambdas, and SSM parameters, but leaves the EFS access-point directories. Re-enabling picks up the existing state. ECR repositories also persist (cheap, not flag-gated).
+- **Kuma config stays manual**: Kuma exposes only a Socket.IO API in this release. Building IaC around Socket.IO is fragile across Kuma upgrades and offers little value for the eight monitors. The monitor set is documented in [docs/monitoring.md](../../../../docs/monitoring.md) step 10. Revisit when Kuma ships a stable REST API ([louislam/uptime-kuma#1170](https://github.com/louislam/uptime-kuma/issues/1170)).
+- **`_RUNBOOK_MAP` is hand-maintained**: a static dict in [`alert_sink/function.py`](../../../../lambda/api/alert_sink/function.py) maps Kuma monitor names and Healthchecks check names to runbook URLs. Renaming a monitor or check without updating the map drops the runbook link from its push. PRs that change one without the other should fail review.
+- **fail2ban metrics deferred**: `[program:fail2ban]` is currently commented out in every mail-tier `supervisord.conf`. Add a metric filter for it when fail2ban is re-enabled.

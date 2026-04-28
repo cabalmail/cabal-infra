@@ -1,11 +1,11 @@
-# ── Healthchecks ECS service (Phase 2 heartbeat monitoring) ────
+# -- Healthchecks ECS service (Phase 2 heartbeat monitoring) ----
 #
 # Self-hosted Healthchecks (Django + uWSGI). One task; SQLite state on
 # EFS so it survives task replacement. Cycles in place because SQLite is
 # single-writer.
 #
 # Bootstrap (once, via the web UI behind Cognito):
-#   1. Visit https://heartbeat.<control-domain>/ — Cognito challenges.
+#   1. Visit https://heartbeat.<control-domain>/ - Cognito challenges.
 #   2. Sign up the first account inside Healthchecks (REGISTRATION_OPEN
 #      stays true on first apply, then flip to false in SSM and bounce
 #      the task).
@@ -84,7 +84,7 @@ resource "aws_iam_role" "healthchecks_task" {
   })
 }
 
-# ECS Exec — needed to bootstrap the first admin account from the
+# ECS Exec - needed to bootstrap the first admin account from the
 # console (`manage.py createsuperuser`) and inspect the SQLite store.
 resource "aws_iam_role_policy" "healthchecks_task_exec" {
   name = "cabal-healthchecks-task-exec"
@@ -141,7 +141,7 @@ resource "aws_ecs_task_definition" "healthchecks" {
       # copy-up runs.
       { name = "DB_NAME", value = "/var/local/healthchecks-data/hc.sqlite" },
       # ALLOWED_HOSTS is `*` because the ALB target-group health check
-      # cannot set a custom Host header — it sends `Host: <target-ip>`,
+      # cannot set a custom Host header - it sends `Host: <target-ip>`,
       # which fails Django's host validation and 400s the probe. The
       # ECS task sits in a private subnet behind a security group that
       # only accepts the ALB SG, and the ALB listener rule for
@@ -157,7 +157,7 @@ resource "aws_ecs_task_definition" "healthchecks" {
       # MX, SPF, DKIM and DMARC records all land there as part of the
       # standard apply. Cabalmail does not allow addressing on the
       # apex of a mail domain by design, so neither <control-domain>
-      # nor mail_domains[0] itself resolves to MX/A — both fail
+      # nor mail_domains[0] itself resolves to MX/A - both fail
       # sendmail's check_mail with `Domain of sender ... does not
       # exist`. mail-admin.<first-mail-domain> has full DNS, so it's
       # the natural place for system-originated mail like the
@@ -170,7 +170,7 @@ resource "aws_ecs_task_definition" "healthchecks" {
       { name = "REGISTRATION_OPEN", value = var.healthchecks_registration_open ? "True" : "False" },
       { name = "USE_PAYMENTS", value = "False" },
       # SMTP wired to the IMAP tier's local-delivery sendmail via Cloud
-      # Map service discovery. We're not relaying outbound — every
+      # Map service discovery. We're not relaying outbound - every
       # address Healthchecks emails is itself a Cabalmail-hosted
       # address, so we deliver inbound to ourselves. That's why no
       # auth, no DKIM, no Cognito service user is needed: inbound MX
@@ -179,7 +179,7 @@ resource "aws_ecs_task_definition" "healthchecks" {
       # address (see docker/shared/generate-config.sh:gen_imap_access).
       # Plain port 25 (no STARTTLS) because the wildcard cert is for
       # `*.${var.control_domain}`, not `*.cabal.internal`, and the hop
-      # is task-to-task in private subnets — no public network in
+      # is task-to-task in private subnets - no public network in
       # between. Limitation: Healthchecks can only email Cabalmail
       # addresses; magic links to e.g. gmail won't deliver. Acceptable
       # for a single-operator setup.
@@ -269,5 +269,13 @@ resource "aws_ecs_service" "healthchecks" {
     target_group_arn = aws_lb_target_group.healthchecks.arn
     container_name   = "healthchecks"
     container_port   = 8000
+  }
+
+  # Phase 4 section 3 - registers the task in cabal-monitoring.cabal.internal
+  # so the healthchecks_iac Lambda can reach the API directly without
+  # going through the Cognito-fronted public ALB. The API key on the
+  # Lambda is sufficient auth.
+  service_registries {
+    registry_arn = aws_service_discovery_service.monitoring["healthchecks"].arn
   }
 }

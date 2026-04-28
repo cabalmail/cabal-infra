@@ -1,7 +1,7 @@
-# ── ntfy ECS service ───────────────────────────────────────────
+# -- ntfy ECS service -------------------------------------------
 #
 # Self-hosted push-notification server. One task; auth + cache state on
-# EFS so they survive task replacement. Token-auth only — Cognito would
+# EFS so they survive task replacement. Token-auth only - Cognito would
 # block the Lambda publisher and the mobile subscriber, both of which
 # need to reach ntfy without an OAuth dance.
 #

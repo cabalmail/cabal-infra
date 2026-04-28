@@ -58,6 +58,11 @@ variable "efs_id" {
   description = "EFS file system ID used for Kuma and ntfy persistent state."
 }
 
+variable "tier_log_group_names" {
+  type        = map(string)
+  description = "Map of mail-tier CloudWatch log group names keyed by tier (imap | smtp-in | smtp-out). Phase 4 section 2 attaches metric filters to these."
+}
+
 variable "kuma_ecr_repository_url" {
   type        = string
   description = "ECR repository URL for the uptime-kuma image."

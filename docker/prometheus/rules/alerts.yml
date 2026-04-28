@@ -59,7 +59,14 @@ groups:
           runbook_url: "https://github.com/cabalmail/cabal-infra/blob/main/docs/operations/runbooks/lambda-throttles.md"
 
       - alert: LambdaErrors
-        expr: sum by (function_name) (increase(aws_lambda_errors_sum{function_name=~"cabal-.+"}[15m])) > 0
+        # `cabal-.+` covers cabal-list, cabal-fetch-message, cabal-certbot-renewal,
+        # cabal-process-dmarc, cabal-backup-heartbeat, cabal-alert-sink, etc.
+        # `assign_osid` is the Cognito post-confirmation Lambda — included
+        # explicitly because it pre-dates the cabal- naming convention.
+        # Phase 4 §2 prefers extending this regex over a separate
+        # log-derived metric for Cognito errors; AWS/Lambda Errors covers
+        # the unhandled-exception path, which is most of what we'd catch.
+        expr: sum by (function_name) (increase(aws_lambda_errors_sum{function_name=~"cabal-.+|assign_osid"}[15m])) > 0
         for: 5m
         labels:
           severity: warning
@@ -208,3 +215,51 @@ groups:
         annotations:
           summary: "Host {{ $labels.instance }} disk {{ $labels.mountpoint }} > 85% used"
           runbook_url: "https://github.com/cabalmail/cabal-infra/blob/main/docs/operations/runbooks/node-disk-space-low.md"
+
+  - name: log-derived
+    # Phase 4 §2 — alerts driven by CloudWatch metric filters defined in
+    # terraform/infra/modules/monitoring/log_metrics.tf. Thresholds are
+    # starting points; expect tuning once we see real traffic. fail2ban
+    # metrics are intentionally not here — fail2ban is currently disabled
+    # in supervisord.conf across all mail tiers.
+    rules:
+
+      - alert: SendmailDeferredSpike
+        # Aggregate "stat=Deferred" rate across all three mail tiers.
+        # On smtp-out a sustained deferred rate means we're being
+        # graylisted or rate-limited by remote MXs. On smtp-in or imap
+        # tier it's typically an internal delivery problem.
+        expr: sum(increase(aws_cabalmail_logs_sendmail_deferred_sum[10m])) > 10
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Sendmail deferred-message rate > 1/min for 15 min"
+          description: "More than 10 \"stat=Deferred\" log lines aggregated across imap/smtp-in/smtp-out in the last 10 min, sustained 15 min. Investigate `mailq` on each tier."
+          runbook_url: "https://github.com/cabalmail/cabal-infra/blob/main/docs/operations/runbooks/sendmail-deferred-spike.md"
+
+      - alert: SendmailBouncedSpike
+        # "dsn=5" matches all 5.x.y permanent-failure DSN codes. On
+        # smtp-out this is a deliverability signal (remote rejection);
+        # on imap/smtp-in it's a local config issue (LDA / relay-to-IMAP).
+        expr: sum(increase(aws_cabalmail_logs_sendmail_bounced_sum[30m])) > 15
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Sendmail bounce rate > 0.5/min for 15 min"
+          description: "More than 15 \"dsn=5.x.y\" log lines aggregated across all mail tiers in the last 30 min, sustained 15 min. Identify the tier and inspect maillog."
+          runbook_url: "https://github.com/cabalmail/cabal-infra/blob/main/docs/operations/runbooks/sendmail-bounced-spike.md"
+
+      - alert: IMAPAuthFailureSpike
+        # Dovecot login failures on the imap tier. Most common cause is a
+        # brute-force attempt; expect fail2ban to dampen this when
+        # re-enabled. Until then, sustained spikes warrant manual SG block.
+        expr: sum(increase(aws_cabalmail_logs_imap_auth_failures_sum[5m])) > 25
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Dovecot auth-failed rate > 5/min for 5 min"
+          description: "More than 25 \"auth failed\" log lines on the imap tier in the last 5 min, sustained 5 min. Likely a brute-force attempt."
+          runbook_url: "https://github.com/cabalmail/cabal-infra/blob/main/docs/operations/runbooks/imap-auth-failure-spike.md"

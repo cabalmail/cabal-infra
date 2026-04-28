@@ -1,19 +1,19 @@
-# ── Cluster-scoped Prometheus exporters ────────────────────────
+# -- Cluster-scoped Prometheus exporters ------------------------
 #
 # Three ECS services that Prometheus scrapes. cloudwatch and blackbox
 # are single-task; node-exporter runs DAEMON (one task per cluster
 # instance) so each EC2's host metrics are reported independently.
 #
-# We deviate from the §3.2 plan, which framed node_exporter as a
+# We deviate from the section 3.2 plan, which framed node_exporter as a
 # per-tier sidecar in the mail-tier task definitions. A daemon service
 # yields one set of host metrics per EC2 instead of three duplicates,
 # and avoids the deployment churn of changing every mail-tier task
 # definition. tier-specific exporters (dovecot, postfix, opendkim) are
-# deferred — the postfix_exporter / sendmail mismatch needs its own
+# deferred - the postfix_exporter / sendmail mismatch needs its own
 # design pass and is more naturally addressed alongside Phase 4 log
 # aggregation. See CHANGELOG.
 
-# ── cloudwatch_exporter ───────────────────────────────────────
+# -- cloudwatch_exporter ---------------------------------------
 
 resource "aws_cloudwatch_log_group" "cloudwatch_exporter" {
   name              = "/ecs/cabal-cloudwatch-exporter"
@@ -132,7 +132,7 @@ resource "aws_ecs_service" "cloudwatch_exporter" {
   }
 }
 
-# ── blackbox_exporter ────────────────────────────────────────
+# -- blackbox_exporter ----------------------------------------
 
 resource "aws_cloudwatch_log_group" "blackbox_exporter" {
   name              = "/ecs/cabal-blackbox-exporter"
@@ -224,7 +224,7 @@ resource "aws_ecs_service" "blackbox_exporter" {
   }
 }
 
-# ── node_exporter (DAEMON: one per ECS container instance) ───
+# -- node_exporter (DAEMON: one per ECS container instance) ---
 
 resource "aws_cloudwatch_log_group" "node_exporter" {
   name              = "/ecs/cabal-node-exporter"
@@ -266,7 +266,7 @@ resource "aws_iam_role" "node_exporter_task" {
 # /sys read-only and runs node_exporter with --path.rootfs=/host so it
 # reports the host's view rather than the container's.
 #
-# Networking is `host` — daemon-strategy tasks need direct access to
+# Networking is `host` - daemon-strategy tasks need direct access to
 # the host's network namespace to expose meaningful network metrics
 # (interfaces, conntrack, etc.). Each container instance gets exactly
 # one node_exporter task, listening on the host's :9100. Prometheus
@@ -334,7 +334,7 @@ resource "aws_ecs_service" "node_exporter" {
   task_definition     = aws_ecs_task_definition.node_exporter.arn
   scheduling_strategy = "DAEMON"
 
-  # DAEMON services don't accept a capacity_provider_strategy — not
+  # DAEMON services don't accept a capacity_provider_strategy - not
   # even one inherited from the cluster default. They need an explicit
   # launch_type. The mail-tier cluster runs on EC2 instances managed
   # by an autoscaling-group capacity provider, but launch_type=EC2 is
@@ -343,7 +343,7 @@ resource "aws_ecs_service" "node_exporter" {
   # supplied it.
   launch_type = "EC2"
 
-  # network_mode = host means no awsvpc → no security_groups block; the
+  # network_mode = host means no awsvpc -> no security_groups block; the
   # task uses the host's SG. `service_registries` still works for host
   # network mode and registers the host's primary IP, but ECS requires
   # `container_name` + `container_port` to be explicit (with awsvpc the
