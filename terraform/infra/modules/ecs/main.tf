@@ -8,7 +8,7 @@
 
 data "aws_caller_identity" "current" {}
 
-# ── ECS-optimized AMI ──────────────────────────────────────────
+# -- ECS-optimized AMI ------------------------------------------
 
 data "aws_ami" "ecs_optimized" {
   most_recent = true
@@ -25,14 +25,14 @@ data "aws_ami" "ecs_optimized" {
   }
 }
 
-# ── ENI trunking (required for awsvpc tasks on Graviton) ──────
+# -- ENI trunking (required for awsvpc tasks on Graviton) ------
 
 resource "aws_ecs_account_setting_default" "awsvpc_trunking" {
   name  = "awsvpcTrunking"
   value = "enabled"
 }
 
-# ── ECS cluster ────────────────────────────────────────────────
+# -- ECS cluster ------------------------------------------------
 
 resource "aws_ecs_cluster" "mail" {
   name = "cabal-mail"
@@ -43,7 +43,7 @@ resource "aws_ecs_cluster" "mail" {
   }
 }
 
-# ── Launch template for ECS instances ──────────────────────────
+# -- Launch template for ECS instances --------------------------
 
 resource "aws_launch_template" "ecs" {
   name_prefix   = "cabal-ecs-"
@@ -84,7 +84,7 @@ resource "aws_launch_template" "ecs" {
   }
 }
 
-# ── ASG for ECS instances ─────────────────────────────────────
+# -- ASG for ECS instances -------------------------------------
 
 resource "aws_autoscaling_group" "ecs" {
   name_prefix               = "cabal-ecs-"
@@ -117,7 +117,7 @@ resource "aws_autoscaling_group" "ecs" {
   }
 }
 
-# ── Capacity provider ─────────────────────────────────────────
+# -- Capacity provider -----------------------------------------
 
 resource "aws_ecs_capacity_provider" "ec2" {
   name = "cabal-ec2"
@@ -143,7 +143,7 @@ resource "aws_ecs_cluster_capacity_providers" "mail" {
   }
 }
 
-# ── Security group for ECS container instances ─────────────────
+# -- Security group for ECS container instances -----------------
 #
 # This allows ECS tasks running in awsvpc mode to reach the
 # instance (for the ECS agent) and allows all outbound traffic.
@@ -175,7 +175,7 @@ resource "aws_security_group_rule" "ecs_instance_ingress_vpc" {
   security_group_id = aws_security_group.ecs_instance.id
 }
 
-# ── CloudWatch log groups ──────────────────────────────────────
+# -- CloudWatch log groups --------------------------------------
 
 resource "aws_cloudwatch_log_group" "tier" {
   for_each          = local.tiers

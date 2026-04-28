@@ -1,4 +1,4 @@
-# ── Cognito app client for ALB authenticate-oidc action ────────
+# -- Cognito app client for ALB authenticate-oidc action --------
 #
 # The existing user pool client (`cabal_admin_client`) is configured for
 # USER_PASSWORD_AUTH only; ALB needs an OAuth client with a hosted UI

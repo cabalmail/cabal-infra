@@ -1,4 +1,4 @@
-# ── Security groups for the monitoring ALB, Kuma task, ntfy task ─
+# -- Security groups for the monitoring ALB, Kuma task, ntfy task -
 
 resource "aws_security_group" "alb" {
   name        = "cabal-uptime-alb"
@@ -134,9 +134,9 @@ resource "aws_security_group_rule" "healthchecks_egress" {
   description       = "Outbound for DNS, ECR, CloudWatch, SSM (secrets, ECS Exec)."
 }
 
-# ── Phase 3: Grafana, Prometheus, Alertmanager, exporters ──────
+# -- Phase 3: Grafana, Prometheus, Alertmanager, exporters ------
 
-# Grafana ECS task — ALB ingress, broad egress (Prometheus
+# Grafana ECS task - ALB ingress, broad egress (Prometheus
 # data-source proxy, plugin downloads, ECR, CloudWatch, SSM).
 resource "aws_security_group" "grafana" {
   name        = "cabal-grafana"
@@ -174,7 +174,7 @@ resource "aws_security_group_rule" "grafana_egress" {
   description       = "Outbound for Prometheus proxy, ECR, CloudWatch, SSM."
 }
 
-# Prometheus ECS task — ingress only from Grafana (data-source proxy)
+# Prometheus ECS task - ingress only from Grafana (data-source proxy)
 # and Alertmanager (alertmanager itself doesn't scrape Prometheus, but
 # leaving the SG narrow is the right default). Egress is broad so
 # Prometheus can scrape exporters via Cloud Map.
@@ -204,8 +204,8 @@ resource "aws_security_group_rule" "prometheus_egress" {
   description       = "Outbound for scraping exporters (Cloud Map A records resolve to private subnet IPs), Alertmanager push, ECR, CloudWatch."
 }
 
-# Alertmanager — ingress from Prometheus (push) and self (cluster mode
-# — single replica today, but the port is allowed so adding a peer
+# Alertmanager - ingress from Prometheus (push) and self (cluster mode
+# - single replica today, but the port is allowed so adding a peer
 # doesn't require an SG rule change later). Egress: HTTPS to the
 # alert_sink Lambda Function URL, which is on the public Lambda URL
 # domain.
@@ -245,7 +245,7 @@ resource "aws_security_group_rule" "alertmanager_egress" {
   description       = "Outbound HTTPS to the alert_sink Lambda Function URL."
 }
 
-# Single SG shared by cloudwatch_exporter and blackbox_exporter — both
+# Single SG shared by cloudwatch_exporter and blackbox_exporter - both
 # are stateless scrape-only services with the same ingress (Prometheus)
 # and egress (CloudWatch / probes) shape.
 resource "aws_security_group" "exporters" {

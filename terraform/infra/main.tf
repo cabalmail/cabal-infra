@@ -4,7 +4,7 @@
 * This terraform stack stands up AWS infrastructure needed for a Cabalmail system. See [README.md](../../README.md) at the root of this repository for general information.
 */
 
-# ── Image tag resolution ────────────────────────────────────
+# -- Image tag resolution ------------------------------------
 #
 # The Docker build and Terraform workflows write the active image tag to SSM
 # Parameter Store after a successful deployment.  Terraform always reads the
@@ -15,7 +15,7 @@ data "aws_ssm_parameter" "deployed_image_tag" {
   name = "/cabal/deployed_image_tag"
 }
 
-# ── Phase 2 heartbeat parameter names ───────────────────────
+# -- Phase 2 heartbeat parameter names -----------------------
 #
 # When var.monitoring is true, the monitoring module creates these as
 # SSM SecureString placeholders and the operator populates each with a
@@ -177,7 +177,7 @@ module "ecs" {
 
   master_password = module.admin.master_password
 
-  # Health-check tuning — raise these to keep containers alive for debugging.
+  # Health-check tuning - raise these to keep containers alive for debugging.
   health_check_grace_period = 600
   deregistration_delay      = 120
   unhealthy_threshold       = 10

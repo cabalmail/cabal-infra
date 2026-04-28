@@ -1,4 +1,4 @@
-# ── Phase 4 §3: healthchecks_iac Lambda ────────────────────────
+# -- Phase 4 section 3: healthchecks_iac Lambda ------------------------
 #
 # Reconciles Healthchecks check definitions from
 # lambda/api/healthchecks_iac/config.py against the running
@@ -7,13 +7,13 @@
 # URLs into SSM).
 #
 # Reach the Healthchecks API on the private Cloud Map A record
-# (healthchecks.cabal-monitoring.cabal.internal:8000) — bypasses the
+# (healthchecks.cabal-monitoring.cabal.internal:8000) - bypasses the
 # Cognito-fronted public ALB. The API key in SSM is sufficient auth.
 #
 # Why no Kuma equivalent: Kuma exposes only a Socket.IO API in this
 # release, not REST. Building IaC around Socket.IO is fragile across
 # version upgrades and offers little value for the eight Phase 1
-# monitors. Kuma config stays manual; see docs/monitoring.md §27 for
+# monitors. Kuma config stays manual; see docs/monitoring.md section 27 for
 # the deferral rationale.
 
 data "aws_s3_object" "healthchecks_iac_hash" {

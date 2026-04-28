@@ -1,4 +1,4 @@
-# ── Uptime Kuma ECS service ────────────────────────────────────
+# -- Uptime Kuma ECS service ------------------------------------
 #
 # One task; SQLite state on EFS survives task replacement. Kuma
 # does not scale horizontally (single-writer sqlite), so

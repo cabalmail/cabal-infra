@@ -1,11 +1,11 @@
-# ── backup_heartbeat Lambda + EventBridge rule (Phase 2) ───────
+# -- backup_heartbeat Lambda + EventBridge rule (Phase 2) -------
 #
 # AWS Backup emits `Backup Job State Change` events to the default
 # event bus on completion (success and failure). EventBridge invokes
 # this Lambda only on the COMPLETED state, and the Lambda pings
 # Healthchecks if a ping URL is configured. If `var.backup` is false
 # in the parent stack, no Backup events ever fire, so this rule is
-# inert — no need to gate it independently.
+# inert - no need to gate it independently.
 
 data "aws_s3_object" "backup_heartbeat_hash" {
   bucket = var.lambda_bucket

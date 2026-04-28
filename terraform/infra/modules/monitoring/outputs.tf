@@ -55,7 +55,7 @@ output "healthcheck_ping_parameter_names" {
   description = "Map of job key to SSM Parameter Store name for the Healthchecks ping URL. Operator populates each value out-of-band after creating the corresponding check."
 }
 
-# ── Phase 3 outputs ────────────────────────────────────────────
+# -- Phase 3 outputs --------------------------------------------
 
 output "metrics_url" {
   value       = "https://metrics.${var.control_domain}/"
