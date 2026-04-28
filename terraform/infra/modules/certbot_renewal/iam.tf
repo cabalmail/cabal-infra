@@ -99,6 +99,22 @@ resource "aws_iam_role_policy" "ecs" {
   })
 }
 
+resource "aws_iam_role_policy" "healthcheck_ping" {
+  count = var.healthcheck_ping_param != "" ? 1 : 0
+
+  name = "ssm-healthcheck-ping"
+  role = aws_iam_role.certbot_lambda.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["ssm:GetParameter"]
+      Resource = "arn:aws:ssm:${var.region}:${local.account_id}:parameter${var.healthcheck_ping_param}"
+    }]
+  })
+}
+
 resource "aws_iam_role_policy" "logs" {
   name = "cloudwatch-logs"
   role = aws_iam_role.certbot_lambda.id

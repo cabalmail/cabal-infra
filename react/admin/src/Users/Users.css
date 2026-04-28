@@ -2,6 +2,8 @@ div.App div.Users {
   max-width: 60em;
   margin-left: auto;
   margin-right: auto;
+  overflow: auto;
+  max-height: calc(100vh - 7em);
 }
 
 div.App div.Users #reload {

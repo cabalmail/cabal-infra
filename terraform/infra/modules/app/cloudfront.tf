@@ -85,6 +85,18 @@ resource "aws_route53_record" "admin_cname" {
   records = [aws_cloudfront_distribution.cdn.domain_name]
 }
 
+# The VPC private zone shadows the public zone for the control domain;
+# without a sibling record, VPC-internal callers (e.g. Kuma probes) can't
+# resolve admin.<control-domain>. CloudFront's public DNS name resolves
+# globally, so the CNAME target works from inside the VPC.
+resource "aws_route53_record" "admin_cname_private" {
+  zone_id = var.private_zone_id
+  name    = "admin.${var.control_domain}"
+  type    = "CNAME"
+  ttl     = "300"
+  records = [aws_cloudfront_distribution.cdn.domain_name]
+}
+
 resource "aws_ssm_parameter" "cf_distribution" {
   name        = "/cabal/react-config/cf-distribution"
   description = "CloudFront Distribution ID for React deployment invalidation"

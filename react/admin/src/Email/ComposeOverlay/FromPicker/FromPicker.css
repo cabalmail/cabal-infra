@@ -1,0 +1,595 @@
+/* =========================================================================
+   Compose "From" picker — searchable dropdown with inline Create-address.
+
+   Tracks the mockup in `react/design_handoff_cabalmail_redesign/designs/
+   inbox-explorations.html` (ComposeOverlay) — Favorites / More addresses
+   sections, a bottom "Create a new address" CTA that expands into an
+   inline username @ subdomain . domain form, and keyboard nav.
+   ========================================================================= */
+
+.from-picker {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+}
+
+/* Trigger -------------------------------------------------------------- */
+
+.from-picker__trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  min-height: 32px;
+  padding: 4px 10px;
+  margin: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  box-sizing: border-box;
+}
+
+.from-picker__trigger:hover {
+  background: var(--surface-hover);
+}
+
+.from-picker__trigger.is-open {
+  background: var(--surface);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.from-picker__swatch {
+  flex: 0 0 auto;
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+.from-picker__swatch--trigger {
+  width: 12px;
+  height: 12px;
+}
+
+.from-picker__trigger-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow: hidden;
+}
+
+.from-picker__trigger-addr {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.from-picker__trigger-note {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-display);
+  font-size: 11.5px;
+  color: var(--ink-quiet);
+  font-style: italic;
+}
+
+.from-picker__caret {
+  flex: 0 0 auto;
+  color: var(--ink-quiet);
+}
+
+/* Menu ---------------------------------------------------------------- */
+
+.from-picker__menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  max-width: 420px;
+  max-height: 420px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  margin: 0;
+  padding: 6px;
+  background: var(--reader-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-menu);
+}
+
+.from-picker__search-row {
+  flex: 0 0 auto;
+  padding: 2px 2px 6px;
+  border-bottom: 1px solid var(--border-faint);
+  margin-bottom: 6px;
+}
+
+.from-picker__search {
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  margin: 0;
+  background: var(--surface);
+  border: 1px solid var(--border-faint);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.from-picker__search:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.from-picker__search::placeholder {
+  color: var(--ink-quiet);
+}
+
+.from-picker__results {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding-right: 2px;
+  min-height: 0;
+}
+
+.from-picker__section {
+  margin-bottom: 6px;
+}
+.from-picker__section:last-child { margin-bottom: 0; }
+
+.from-picker__section-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 8px 8px 4px;
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-quiet);
+}
+
+.from-picker__section-count {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--ink-quiet);
+}
+
+/* Option row ----------------------------------------------------------- */
+
+.from-picker__option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 8px;
+  margin: 0;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+
+.from-picker__option:hover,
+.from-picker__option.is-active {
+  background: var(--surface-hover);
+}
+
+.from-picker__option-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.from-picker__option-addr {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.from-picker__option-note {
+  font-family: var(--font-display);
+  font-size: 11px;
+  color: var(--ink-quiet);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.from-picker__option-star {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  color: var(--ink-quiet);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 80ms;
+}
+
+.from-picker__option:hover .from-picker__option-star {
+  opacity: 0.8;
+}
+
+.from-picker__option-star.is-on {
+  opacity: 1;
+  color: var(--accent);
+}
+
+.from-picker__option-star:hover {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.from-picker__option-star.is-on:hover {
+  color: var(--accent);
+}
+
+.from-picker__hl {
+  background: var(--accent-soft);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+.from-picker__hint {
+  padding: 8px 10px;
+  font-family: var(--font-display);
+  font-size: 11.5px;
+  color: var(--ink-quiet);
+  font-style: italic;
+}
+
+.from-picker__empty {
+  padding: 14px 10px;
+  text-align: center;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--ink-quiet);
+}
+
+/* Create-address CTA --------------------------------------------------- */
+
+.from-picker__create-cta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px;
+  margin-top: 6px;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--border-faint);
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.from-picker__create-cta:hover {
+  background: var(--accent-soft);
+}
+
+.from-picker__create-plus {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+
+.from-picker__create-label {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.from-picker__create-label strong {
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.from-picker__create-hint {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-quiet);
+}
+
+.from-picker__create-chev {
+  flex: 0 0 auto;
+  color: var(--ink-quiet);
+}
+
+/* Inline Create form --------------------------------------------------- */
+
+.from-picker__create {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 6px 4px 8px;
+}
+
+.from-picker__create-head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 4px;
+}
+
+.from-picker__create-back {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.from-picker__create-back:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+
+.from-picker__create-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.from-picker__create-title {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.from-picker__create-sub {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--ink-quiet);
+}
+
+.from-picker__create-random {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: auto;
+  height: 26px;
+  padding: 0 8px;
+  margin: 0;
+  background: transparent;
+  border: 1px solid var(--border-faint);
+  border-radius: var(--radius-sm);
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.from-picker__create-random:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+  border-color: var(--border);
+}
+
+.from-picker__composer {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto 1fr;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px;
+}
+
+.from-picker__ac-input,
+.from-picker__ac-select {
+  width: 100%;
+  height: 32px;
+  padding: 0 8px;
+  margin: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.from-picker__ac-input:focus,
+.from-picker__ac-select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.from-picker__ac-input.is-invalid {
+  border-color: var(--ink-danger);
+}
+
+.from-picker__ac-sep {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--ink-quiet);
+  padding: 0 2px;
+}
+
+.from-picker__ac-preview-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  margin: 0 4px;
+  background: var(--accent-soft);
+  border: 1px solid var(--border-faint);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink);
+  min-height: 20px;
+}
+
+.from-picker__ac-preview-label {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-quiet);
+}
+
+.from-picker__ac-preview {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink);
+  word-break: break-all;
+}
+
+.from-picker__ac-preview-empty {
+  font-family: var(--font-display);
+  font-style: italic;
+  color: var(--ink-quiet);
+  background: transparent;
+}
+
+.from-picker__ac-preview-row:has(.from-picker__ac-preview-empty) {
+  background: transparent;
+  border-style: dashed;
+}
+
+.from-picker__note-row {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px;
+}
+
+.from-picker__note-label {
+  justify-self: end;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-quiet);
+  margin: 0;
+}
+
+.from-picker__note-input {
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  margin: 0;
+  background: var(--surface);
+  border: 1px solid var(--border-faint);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.from-picker__note-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.from-picker__hint-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-style: italic;
+  color: var(--ink-quiet);
+}
+
+.from-picker__create-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 4px 4px 0;
+}
+
+.from-picker__btn {
+  height: 30px;
+  width: auto;
+  padding: 0 14px;
+  margin: 0;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.from-picker__btn:hover {
+  background: var(--surface-hover);
+}
+
+.from-picker__btn.is-primary {
+  background: var(--accent);
+  color: var(--accent-fg);
+  border-color: var(--accent);
+}
+
+.from-picker__btn.is-primary:hover {
+  filter: brightness(1.05);
+}
+
+.from-picker__btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

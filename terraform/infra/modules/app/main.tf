@@ -18,39 +18,39 @@ resource "aws_api_gateway_rest_api" "gateway" {
 
 # API calls must be authorized via Cognito
 resource "aws_api_gateway_authorizer" "api_auth" {
-  name                   = "cabal_pool"
-  rest_api_id            = aws_api_gateway_rest_api.gateway.id
-  type                   = "COGNITO_USER_POOLS"
-  provider_arns          = [ join("",[
+  name        = "cabal_pool"
+  rest_api_id = aws_api_gateway_rest_api.gateway.id
+  type        = "COGNITO_USER_POOLS"
+  provider_arns = [join("", [
     "arn:aws:cognito-idp:",
     var.region,
     ":",
     data.aws_caller_identity.current.account_id,
     ":userpool/",
     var.user_pool_id
-  ]) ]
+  ])]
 }
 
 module "cabal_method" {
-  for_each         = local.lambdas
-  source           = "./modules/call"
-  name             = each.key
-  runtime          = each.value.runtime
-  layer_arns       = [var.layers["python"]]
-  method           = each.value.method
-  memory           = each.value.memory
-  region           = var.region
-  account          = data.aws_caller_identity.current.account_id
-  gateway_id       = aws_api_gateway_rest_api.gateway.id
-  root_resource_id = aws_api_gateway_rest_api.gateway.root_resource_id
-  authorizer       = aws_api_gateway_authorizer.api_auth.id
-  control_domain   = var.control_domain
-  relay_ips                  = var.relay_ips
-  repo                       = var.repo
-  domains                    = var.domains
-  bucket                     = var.bucket
-  address_changed_topic_arn  = var.address_changed_topic_arn
-  user_pool_id               = var.user_pool_id
+  for_each                  = local.lambdas
+  source                    = "./modules/call"
+  name                      = each.key
+  runtime                   = each.value.runtime
+  layer_arns                = [var.layers["python"]]
+  method                    = each.value.method
+  memory                    = each.value.memory
+  region                    = var.region
+  account                   = data.aws_caller_identity.current.account_id
+  gateway_id                = aws_api_gateway_rest_api.gateway.id
+  root_resource_id          = aws_api_gateway_rest_api.gateway.root_resource_id
+  authorizer                = aws_api_gateway_authorizer.api_auth.id
+  control_domain            = var.control_domain
+  relay_ips                 = var.relay_ips
+  repo                      = var.repo
+  domains                   = var.domains
+  bucket                    = var.bucket
+  address_changed_topic_arn = var.address_changed_topic_arn
+  user_pool_id              = var.user_pool_id
 }
 
 resource "aws_api_gateway_deployment" "deployment" {
@@ -143,7 +143,7 @@ resource "aws_api_gateway_method_settings" "general_settings" {
     throttling_rate_limit  = 100
     throttling_burst_limit = 50
   }
-  depends_on  = [aws_api_gateway_account.apigw_account]
+  depends_on = [aws_api_gateway_account.apigw_account]
 }
 
 resource "aws_api_gateway_method_settings" "cache_settings" {

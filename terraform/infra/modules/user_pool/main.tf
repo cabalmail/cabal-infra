@@ -3,9 +3,9 @@
 */
 
 resource "aws_cognito_user_pool" "users" {
-  name                       = "cabal"
-  auto_verified_attributes   = ["phone_number"]
-  sms_verification_message   = "Your Cabalmail verification code is {####}"
+  name                     = "cabal"
+  auto_verified_attributes = ["phone_number"]
+  sms_verification_message = "Your Cabalmail verification code is {####}"
 
   sms_configuration {
     sns_caller_arn = aws_iam_role.users.arn
@@ -35,11 +35,11 @@ resource "aws_cognito_user_pool" "users" {
 }
 
 resource "aws_pinpointsmsvoicev2_phone_number" "sms" {
-  iso_country_code          = "US"
-  message_type              = "TRANSACTIONAL"
-  number_capabilities       = ["SMS"]
-  number_type               = "TOLL_FREE"
-  deletion_protection_enabled = false
+  iso_country_code            = "US"
+  message_type                = "TRANSACTIONAL"
+  number_capabilities         = ["SMS"]
+  number_type                 = "TOLL_FREE"
+  deletion_protection_enabled = true
 
   timeouts {
     create = "1m"
@@ -55,7 +55,16 @@ resource "aws_cognito_user_group" "admin" {
 resource "aws_cognito_user_pool_client" "users" {
   name                  = "cabal_admin_client"
   user_pool_id          = aws_cognito_user_pool.users.id
-  explicit_auth_flows   = [ "USER_PASSWORD_AUTH" ]
+  explicit_auth_flows   = ["USER_PASSWORD_AUTH"]
   access_token_validity = 12
   id_token_validity     = 12
+}
+
+# Hosted-UI domain prefix used by the ALB authenticate-oidc action in the
+# monitoring module. Creating it here (singleton per pool) lets it exist
+# even when `var.monitoring = false` - inexpensive and avoids the need
+# to destroy-and-recreate it when monitoring is toggled.
+resource "aws_cognito_user_pool_domain" "users" {
+  domain       = "cabal-${data.aws_caller_identity.current.account_id}"
+  user_pool_id = aws_cognito_user_pool.users.id
 }

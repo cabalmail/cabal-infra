@@ -26,7 +26,7 @@ locals {
   target_groups = {
     imap       = { port = 143 }
     relay      = { port = 25 }
-    submission = { port = 465 }  # Dovecot submission (implicit TLS); NLB passes through to container port 465
+    submission = { port = 465 } # Dovecot submission (implicit TLS); NLB passes through to container port 465
     starttls   = { port = 587 }
   }
 

@@ -3,11 +3,11 @@ data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
 variable "layers" {
-  type        = map
+  type        = map(any)
   description = "List of layer ARNs"
 }
 variable "user_pool_id" {
-  type = string
+  type        = string
   description = "ID of the Cognito user pool."
 }
 
@@ -41,8 +41,13 @@ variable "zone_id" {
   description = "Route 53 zone ID for the control domain."
 }
 
+variable "private_zone_id" {
+  type        = string
+  description = "Route 53 private zone ID for the control domain. The admin CNAME is mirrored here so VPC-internal callers (e.g. Kuma) can resolve admin.<control-domain>."
+}
+
 variable "domains" {
-  type        = list
+  type        = list(any)
   description = "List of email domains."
 }
 
@@ -85,4 +90,10 @@ variable "address_changed_topic_arn" {
 variable "admin_group_name" {
   type        = string
   description = "Name of the Cognito admin group."
+}
+
+variable "dmarc_healthcheck_ping_param" {
+  type        = string
+  description = "SSM Parameter Store name holding the Healthchecks ping URL for the process_dmarc Lambda. Empty string disables the heartbeat."
+  default     = ""
 }

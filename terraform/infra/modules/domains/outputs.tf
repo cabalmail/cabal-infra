@@ -1,5 +1,5 @@
 output "domains" {
-  value       = [
+  value = [
     for k, v in aws_route53_zone.mail_dns : {
       "domain"       = k,
       "zone_id"      = v.id

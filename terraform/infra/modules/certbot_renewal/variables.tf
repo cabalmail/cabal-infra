@@ -15,7 +15,7 @@ variable "email" {
 
 variable "image_tag" {
   type        = string
-  description = "Docker image tag for the certbot Lambda. Rotating this on each deploy is what actually updates the Lambda's container — a bare ':latest' reference looks unchanged to Terraform and leaves the Lambda running the previously-pushed image."
+  description = "Docker image tag for the certbot Lambda. Rotating this on each deploy is what actually updates the Lambda's container - a bare ':latest' reference looks unchanged to Terraform and leaves the Lambda running the previously-pushed image."
 }
 
 variable "region" {
@@ -31,4 +31,10 @@ variable "ecs_cluster_name" {
 variable "ecs_service_names" {
   type        = list(string)
   description = "Names of ECS services to restart after certificate renewal."
+}
+
+variable "healthcheck_ping_param" {
+  type        = string
+  description = "SSM Parameter Store name holding the Healthchecks ping URL for this Lambda. Empty string disables the heartbeat (used when var.monitoring is false in the parent stack)."
+  default     = ""
 }

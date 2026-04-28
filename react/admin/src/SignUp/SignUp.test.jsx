@@ -13,34 +13,44 @@ describe('SignUp', () => {
     phone: ''
   };
 
+  const validProps = {
+    username: 'alice',
+    phone: '+12125551234',
+    password: 'correct-horse-battery-staple',
+  };
+
   it('renders username, phone, and password fields', () => {
     render(<SignUp {...defaultProps} />);
-    expect(screen.getByLabelText('User Name')).toBeInTheDocument();
-    expect(screen.getByLabelText('Phone')).toBeInTheDocument();
+    expect(screen.getByLabelText('Username')).toBeInTheDocument();
+    expect(screen.getByLabelText('Phone number')).toBeInTheDocument();
     expect(screen.getByLabelText('Password')).toBeInTheDocument();
+    expect(screen.getByLabelText('Confirm password')).toBeInTheDocument();
   });
 
   it('renders a submit button', () => {
     render(<SignUp {...defaultProps} />);
-    expect(screen.getByRole('button', { name: 'Signup' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeInTheDocument();
   });
 
-  it('shows phone placeholder', () => {
+  it('disables submit until all fields are valid', () => {
     render(<SignUp {...defaultProps} />);
-    expect(screen.getByPlaceholderText('+12125555555')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeDisabled();
   });
 
   it('calls onPhoneChange when phone input changes', () => {
     const onPhoneChange = vi.fn();
     render(<SignUp {...defaultProps} onPhoneChange={onPhoneChange} />);
-    fireEvent.change(screen.getByLabelText('Phone'), { target: { value: '+1555' } });
+    fireEvent.change(screen.getByLabelText('Phone number'), { target: { value: '+1555' } });
     expect(onPhoneChange).toHaveBeenCalledTimes(1);
   });
 
-  it('calls onSubmit when form is submitted', () => {
+  it('calls onSubmit when the fully-valid form is submitted', () => {
     const onSubmit = vi.fn(e => e.preventDefault());
-    render(<SignUp {...defaultProps} onSubmit={onSubmit} />);
-    fireEvent.submit(screen.getByRole('button', { name: 'Signup' }));
+    render(<SignUp {...defaultProps} {...validProps} onSubmit={onSubmit} />);
+    fireEvent.change(screen.getByLabelText('Confirm password'), {
+      target: { value: validProps.password },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
     expect(onSubmit).toHaveBeenCalledTimes(1);
   });
 });
