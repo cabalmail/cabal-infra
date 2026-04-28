@@ -34,6 +34,12 @@ final class MessageDetailViewModel {
     /// message, which is the plan's "Ask" semantics.
     var remoteContentAllowed: Bool
 
+    /// Controls whether the HTML body is rendered with the reader-view
+    /// stylesheet injection. Seeded from `Preferences.defaultBodyRenderMode`;
+    /// the detail toolbar toggles it per-message without mutating the
+    /// preference.
+    var readerMode: Bool
+
     /// Pending mark-as-read task for the `.afterDelay` behavior. Cancelled
     /// if the user navigates away before the 2-second threshold or marks the
     /// message read manually in the meantime.
@@ -59,6 +65,7 @@ final class MessageDetailViewModel {
         self.preferences = preferences
         self.isSeen = envelope.flags.contains(.seen)
         self.remoteContentAllowed = preferences.loadRemoteContent == .always
+        self.readerMode = preferences.defaultBodyRenderMode == .reader
     }
 
     func load() async {
@@ -130,6 +137,10 @@ final class MessageDetailViewModel {
 
     func toggleRemoteContent() {
         remoteContentAllowed.toggle()
+    }
+
+    func toggleReaderMode() {
+        readerMode.toggle()
     }
 
     /// Dispose target mirrors `MessageListViewModel.dispose(_:)`: read
