@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.8.0] - Unreleased
+## [0.8.0] - 2026-04-28
 
 A ground-up redesign of the React webmail against the Stately design system (`docs/0.8.0/redesign-plan.md`). New token foundation, three-pane layout with resizable boundaries, lucide iconography, redrawn Reader and Compose surfaces, persisted user preferences, keyboard shortcuts, and a responsive mobile/tablet/desktop layout.
 
