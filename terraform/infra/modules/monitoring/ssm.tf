@@ -103,7 +103,7 @@ locals {
     # Phase 4 §5 — operator-driven 90-day review heartbeat. No automation
     # pings this; the operator pings it manually after completing the
     # quarterly monitoring review (see docs/operations/runbooks/heartbeat-quarterly-review.md).
-    quarterly_review  = "Quarterly monitoring review (manual operator ping)."
+    quarterly_review = "Quarterly monitoring review (manual operator ping)."
   }
 }
 
@@ -112,6 +112,27 @@ resource "aws_ssm_parameter" "healthcheck_ping" {
 
   name        = "/cabal/healthcheck_ping_${each.key}"
   description = "Healthchecks ping URL for ${each.value} Populate after creating the corresponding check in the Healthchecks UI."
+  type        = "SecureString"
+  value       = "placeholder-set-via-aws-ssm-put-parameter"
+
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
+
+# ── Healthchecks API key (Phase 4 §3) ─────────────────────────
+#
+# Created manually in the Healthchecks UI on the Project Settings →
+# API Access page (the v3 API has no endpoint to create projects or
+# keys, so this is a one-time bootstrap). Operator pastes the key
+# value here with `aws ssm put-parameter --overwrite`. The
+# healthchecks_iac Lambda treats the placeholder value as "skip
+# reconciliation" so the chicken-and-egg of "Lambda can't run before
+# key is set, but Terraform invokes Lambda" doesn't block apply.
+
+resource "aws_ssm_parameter" "healthchecks_api_key" {
+  name        = "/cabal/healthchecks_api_key"
+  description = "Healthchecks v3 API read+write key. Populate after creating the project + API key in the UI."
   type        = "SecureString"
   value       = "placeholder-set-via-aws-ssm-put-parameter"
 

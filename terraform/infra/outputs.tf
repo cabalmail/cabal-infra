@@ -25,6 +25,6 @@ output "sms_phone_number" {
 }
 
 output "alert_sink_function_url" {
-  value       = module.monitoring[0].alert_sink_function_url
+  value       = module.monitoring[*].alert_sink_function_url
   description = "Webhook URL for monitoring. Add to Kuma."
 }

@@ -120,8 +120,8 @@ SSM parameter — no new ECS services. The shippable units:
   [`docs/monitoring.md`](../../../../docs/monitoring.md) §21. Phase 4 §2
   (log-derived metrics + alerts) follows in a later ship.
 
-The remaining Phase 4 work — log-derived metrics & alerts (§2) and IaC
-for Kuma + Healthchecks config (§3) — ships separately. See
+The remaining Phase 4 work — IaC for Kuma + Healthchecks config (§3) —
+ships separately. See
 [`docs/0.7.0/monitoring-plan.md`](../../../../docs/0.7.0/monitoring-plan.md)
 §"Phase 4: Logs + Tuning" for the roadmap.
 
@@ -137,3 +137,73 @@ for Kuma + Healthchecks config (§3) — ships separately. See
 - `quarterly-review` check exists in Healthchecks and shows green after
   the bootstrap ping documented in
   [`docs/monitoring.md`](../../../../docs/monitoring.md) §22.
+
+## What Phase 4 §2 adds
+
+Log-derived metrics & alerts via CloudWatch metric filters — the
+"stay on CloudWatch Logs" path from
+[`docs/monitoring.md`](../../../../docs/monitoring.md) §21.
+
+- **CloudWatch metric filters** on the three mail-tier log groups
+  (`/ecs/cabal-imap`, `/ecs/cabal-smtp-in`, `/ecs/cabal-smtp-out`)
+  emitting to a new `Cabalmail/Logs` namespace. See [`log_metrics.tf`](./log_metrics.tf).
+  Three metrics: `SendmailDeferred`, `SendmailBounced`, `IMAPAuthFailures`.
+- **cloudwatch_exporter config** scrapes the new namespace —
+  [`docker/cloudwatch-exporter/config.yml`](../../../../docker/cloudwatch-exporter/config.yml).
+- **Three Prometheus alert rules** in the new `log-derived` group —
+  `SendmailDeferredSpike` (warning), `SendmailBouncedSpike` (critical),
+  `IMAPAuthFailureSpike` (warning). See
+  [`docker/prometheus/rules/alerts.yml`](../../../../docker/prometheus/rules/alerts.yml).
+- **`LambdaErrors` regex extended** to `cabal-.+|assign_osid` so the
+  Cognito post-confirmation Lambda is covered without a separate
+  log-derived metric. See the comment on the rule for the rationale.
+
+The variable `tier_log_group_names` is required as of this phase; root
+module passes it from `module.ecs.tier_log_group_names`.
+
+## Acceptance (Phase 4 §2)
+
+- `aws logs describe-metric-filters --log-group-name /ecs/cabal-imap`
+  lists `cabal-sendmail-deferred-imap`, `cabal-sendmail-bounced-imap`,
+  and `cabal-imap-auth-failures`.
+- Prometheus exposes `aws_cabalmail_logs_*_sum` series.
+- A synthetic test (12 forged `stat=Deferred` lines into `/ecs/cabal-imap`
+  in <1 min) fires `SendmailDeferredSpike` within ~17 min.
+
+## What Phase 4 §3 adds
+
+IaC reconciler for Healthchecks check definitions. Kuma config stays
+manual (see [`docs/monitoring.md`](../../../../docs/monitoring.md) §26.3).
+
+- **`cabal-healthchecks-iac` Lambda**, source in
+  [`lambda/api/healthchecks_iac/`](../../../../lambda/api/healthchecks_iac/).
+  Reads desired checks from `config.py`, upserts via Healthchecks v3
+  API on a Cloud Map private DNS name, populates the corresponding
+  `/cabal/healthcheck_ping_*` SSM parameters from the API response.
+- **Cloud Map registration for Healthchecks** —
+  [`discovery.tf`](./discovery.tf) adds `healthchecks` to
+  `local.monitoring_services`; [`healthchecks.tf`](./healthchecks.tf)
+  registers the ECS service.
+- **`cabal-healthchecks-iac` SG** allows egress on 8000 to the
+  Healthchecks task SG, plus 53/udp for VPC Resolver and 443/tcp for
+  SSM/CloudWatch APIs.
+- **`/cabal/healthchecks_api_key` SSM parameter** —
+  [`ssm.tf`](./ssm.tf). Placeholder; operator seeds via UI key creation
+  + `aws ssm put-parameter`.
+- **`aws_lambda_invocation` resource** with `lifecycle_scope = "CRUD"`
+  and trigger on `source_code_hash` re-invokes whenever
+  `config.py` changes.
+
+The Lambda gracefully no-ops (returns `status: skipped`) when the API
+key is still placeholder, so first apply doesn't fail before the
+operator bootstraps the key.
+
+## Acceptance (Phase 4 §3)
+
+- After API key bootstrap, `aws lambda invoke --function-name
+  cabal-healthchecks-iac /tmp/out.json` returns `status: ok` with
+  `reconciled = 6`.
+- All six `/cabal/healthcheck_ping_*` SSM parameters populated with
+  real ping URLs (not placeholders).
+- Editing `config.py` and re-running the build pipeline + Terraform
+  re-invokes the Lambda automatically.

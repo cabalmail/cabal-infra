@@ -167,3 +167,20 @@ metrics:
     aws_metric_name: SignInThrottles
     aws_dimensions: [UserPool, UserPoolClient]
     aws_statistics: [Sum]
+
+  # ── Cabalmail log-derived metrics (Phase 4 §2) ────────────────
+  # Source: CloudWatch metric filters defined in
+  # terraform/infra/modules/monitoring/log_metrics.tf. Each filter
+  # emits to one of these metrics with value=1 per matching log line;
+  # CloudWatch aggregates per-minute. Sum is the only useful statistic.
+  - aws_namespace: Cabalmail/Logs
+    aws_metric_name: SendmailDeferred
+    aws_statistics: [Sum]
+
+  - aws_namespace: Cabalmail/Logs
+    aws_metric_name: SendmailBounced
+    aws_statistics: [Sum]
+
+  - aws_namespace: Cabalmail/Logs
+    aws_metric_name: IMAPAuthFailures
+    aws_statistics: [Sum]

@@ -435,15 +435,16 @@ The runbook covers what the review entails. If you skip it, the worst that happe
 
 ## 23. Tabletop exercises
 
-Phase 4 §5 acceptance includes simulating three failure modes end-to-end:
+Phase 4 §5 acceptance includes simulating four failure modes end-to-end:
 
 | Scenario | How to simulate | Expected page | Expected runbook |
 | --- | --- | --- | --- |
-| Mail queue backup | On `smtp-out`, `mailq` and `sendmail -OQueueLA=0 -q` to artificially defer; the rule fires once Phase 4 §2 log-derived metrics land. *Until then, the closest equivalent is a Kuma probe failure on port 25 by blocking it in the SG.* | Probe failure → critical ntfy + Pushover | [probe-failure.md](./operations/runbooks/probe-failure.md) |
+| Mail queue backup (deferred) | ECS-Exec into the `smtp-out` task; inject 12 fake `stat=Deferred` log lines via `logger -t sm-mta 'XXX: stat=Deferred'` in <1 minute, then wait. | `SendmailDeferredSpike` (warning ntfy) within ~17 min (10 min window + 15 min `for`) | [sendmail-deferred-spike.md](./operations/runbooks/sendmail-deferred-spike.md) |
 | IMAP cert expiring (control-domain) | In dev: re-issue a short-lived cert and wait, or temporarily replace the listener cert with a deliberately near-expiry one. Don't do this in prod. | `BlackboxTLSCertExpiringSoon` (warning ntfy) and Kuma's "Control-domain cert" 21-day notification | [cert-expiring.md](./operations/runbooks/cert-expiring.md) |
 | Certbot Lambda silently disabled | Disable the EventBridge schedule on `cabal-certbot-renewal` in dev; wait past the 24 h grace | `healthchecks/certbot-renewal` missed → critical ntfy + Pushover | [heartbeat-certbot-renewal.md](./operations/runbooks/heartbeat-certbot-renewal.md) |
+| Healthchecks IaC drift | Add a check by hand in the Healthchecks UI without adding it to `config.py`. Re-invoke `cabal-healthchecks-iac`. | Lambda log line `WARNING: extras in Healthchecks not in config.py: [...]`. No alert fires (drift is a warning, not a paging event). | (no runbook — see §26.1) |
 
-Run the table top once after each Phase 4 ship, and again at every quarterly review. If the expected push doesn't arrive, fix the broken link before treating the tabletop as passing.
+Run the tabletop once after each Phase 4 ship, and again at every quarterly review. If the expected push doesn't arrive, fix the broken link before treating the tabletop as passing.
 
 ## 24. Acceptance for Phase 4
 
@@ -452,4 +453,102 @@ Run the table top once after each Phase 4 ship, and again at every quarterly rev
 - [ ] A test push from Kuma (any monitor) and from Healthchecks (any check) arrives on the operator's phone with a tappable runbook link.
 - [ ] An Alertmanager test alert (e.g. via `amtool alert add testing severity=warning runbook_url=https://example.test/r.md ...`) round-trips with the runbook URL preserved.
 - [ ] The `quarterly-review` check is configured in Healthchecks and shows green after the initial bootstrap ping.
-- [ ] Tabletop exercise from §23 runs cleanly for at least the certbot scenario; mail-queue and cert-expiry scenarios run cleanly once Phase 4 §2 lands.
+- [ ] Tabletop exercise from §23 runs cleanly for the certbot, mail-queue, cert-expiry, and IaC-drift scenarios.
+
+## 25. Phase 4 §2 — log-derived metrics & alerts
+
+The Phase 4 plan calls out four log-derived metrics — sendmail deferred, sendmail bounced, IMAP auth failures, and Cognito post-confirmation errors. The first three ship as **CloudWatch metric filters** in [terraform/infra/modules/monitoring/log_metrics.tf](../terraform/infra/modules/monitoring/log_metrics.tf); the Cognito case is folded into the existing `LambdaErrors` alert by extending its function-name regex.
+
+| Filter | Log group(s) | Pattern | Metric (in `Cabalmail/Logs`) |
+| --- | --- | --- | --- |
+| `cabal-sendmail-deferred-{tier}` | `/ecs/cabal-imap`, `/ecs/cabal-smtp-in`, `/ecs/cabal-smtp-out` | `"stat=Deferred"` | `SendmailDeferred` |
+| `cabal-sendmail-bounced-{tier}` | same three | `"dsn=5"` | `SendmailBounced` |
+| `cabal-imap-auth-failures` | `/ecs/cabal-imap` | `"imap-login" "auth failed"` | `IMAPAuthFailures` |
+
+All metrics emit value=1 per matching log line, default 0. CloudWatch aggregates per-minute. cloudwatch_exporter scrapes the `Sum` statistic and exposes `aws_cabalmail_logs_<metric>_sum` to Prometheus.
+
+The Prometheus alert rules in the new `log-derived` group of [docker/prometheus/rules/alerts.yml](../docker/prometheus/rules/alerts.yml) start at:
+
+| Alert | Threshold | Severity | Runbook |
+| --- | --- | --- | --- |
+| `SendmailDeferredSpike` | >10 deferreds/10 min, sustained 15 min | warning | [sendmail-deferred-spike.md](./operations/runbooks/sendmail-deferred-spike.md) |
+| `SendmailBouncedSpike` | >15 bounces/30 min, sustained 15 min | critical | [sendmail-bounced-spike.md](./operations/runbooks/sendmail-bounced-spike.md) |
+| `IMAPAuthFailureSpike` | >25 auth-fails/5 min, sustained 5 min | warning | [imap-auth-failure-spike.md](./operations/runbooks/imap-auth-failure-spike.md) |
+
+These thresholds are starting points. Expect them to move once we see what real traffic looks like; record the rationale in the alert's GitHub issue per the [tuning discipline](./0.7.0/monitoring-plan.md#tuning-discipline).
+
+### What's deferred
+
+- **fail2ban metrics**: `[program:fail2ban]` is currently commented out in every mail-tier `supervisord.conf`. A metric filter today would publish flat-zero forever and mask the disabled state. Add the filter when fail2ban is re-enabled. The [imap-auth-failure-spike runbook](./operations/runbooks/imap-auth-failure-spike.md) calls out the absence of fail2ban as the reason this alert is the only signal for brute-force activity.
+- **Cognito post-confirmation log-derived metric**: rolled into `LambdaErrors` instead. The existing `function_name=~"cabal-.+"` regex is extended to `cabal-.+|assign_osid` so the post-confirmation Lambda's invocation errors fire the existing alert. A separate log-filter approach was rejected to avoid adopting the Lambda-auto-created `/aws/lambda/assign_osid` log group (which would force a `terraform import` on existing stacks).
+
+### Acceptance for Phase 4 §2
+
+- [ ] After applying Terraform with `var.monitoring=true`, `aws logs describe-metric-filters --log-group-name /ecs/cabal-imap` lists three Cabalmail filters.
+- [ ] cloudwatch_exporter exposes `aws_cabalmail_logs_sendmail_deferred_sum`, `aws_cabalmail_logs_sendmail_bounced_sum`, `aws_cabalmail_logs_imap_auth_failures_sum` in Prometheus (`http://localhost:9090/api/v1/label/__name__/values` from inside the Prometheus task).
+- [ ] Synthetic test: log a fake `stat=Deferred` line into `/ecs/cabal-imap` (e.g. via `aws ecs execute-command` and `logger -t sm-mta`) 12 times in 1 minute and confirm `SendmailDeferredSpike` fires within ~17 min (10 min window + 15 min `for` clause).
+- [ ] `LambdaErrors` rule with the extended regex catches an injected error in the `assign_osid` Lambda (e.g. by temporarily raising in the function and triggering a sign-up).
+
+## 26. Phase 4 §3 — IaC for Healthchecks (and the deferral of Kuma IaC)
+
+The Phase 4 plan called for declarative IaC over both Kuma monitors and Healthchecks checks. This release ships **Healthchecks only**, via a small reconciler Lambda. Kuma stays manual.
+
+### 26.1 Healthchecks IaC
+
+The `cabal-healthchecks-iac` Lambda reads desired state from [`lambda/api/healthchecks_iac/config.py`](../lambda/api/healthchecks_iac/config.py) and reconciles against the running Healthchecks instance. On each invocation it:
+
+1. Lists existing checks via the v3 API.
+2. Upserts each entry in `config.py` using `unique=["name"]` so existing-by-name updates rather than duplicates.
+3. Pulls each check's ping URL from the API response and writes it to the corresponding `/cabal/healthcheck_ping_*` SSM parameter (only if the value differs — no churn).
+4. Logs a warning for any check present in Healthchecks but absent from `config.py`. Does **not** auto-delete; deliberate operator action via the UI is required to drop a check.
+
+The Lambda runs in private subnets and reaches Healthchecks via a Cloud Map A record (`healthchecks.cabal-monitoring.cabal.internal:8000`), bypassing the Cognito-fronted ALB. The v3 API key is sufficient auth and lives in `/cabal/healthchecks_api_key` (SSM `SecureString`).
+
+The Terraform `aws_lambda_invocation` resource re-fires whenever the Lambda's `source_code_hash` changes — i.e. when `config.py` is edited and the build pipeline pushes a new zip. So a typical workflow for adding a new check is:
+
+1. Edit `lambda/api/healthchecks_iac/config.py` — add an entry.
+2. *Optional but recommended*: add a matching SSM parameter in [`monitoring/ssm.tf`](../terraform/infra/modules/monitoring/ssm.tf) `local.heartbeat_jobs` and reference it from the consumer (Lambda env var, ECS secrets, etc.).
+3. Open a PR. CI runs `lambda_api_python.yml` (rebuilds the zip), then `terraform.yml` (applies → invokes the Lambda).
+4. Confirm the new check appears in the Healthchecks dashboard.
+
+### 26.2 One-time bootstrap
+
+Before the first reconciliation can happen, the operator must:
+
+1. **Create the API key** in the Healthchecks UI: log in (Cognito → Healthchecks magic-link), open Project Settings → API Access, create a read+write key, copy the value. The v3 API has no endpoint to create keys, so this stays manual.
+2. **Seed SSM**:
+   ```sh
+   aws ssm put-parameter --name /cabal/healthchecks_api_key --type SecureString --overwrite --value '<key-from-step-1>'
+   ```
+3. **Force a reconcile** (the Lambda's auto-invocation already ran with the placeholder and returned `skipped`; manually trigger it now that the key is real):
+   ```sh
+   aws lambda invoke --function-name cabal-healthchecks-iac /tmp/out.json && cat /tmp/out.json
+   ```
+   Expected response: `{"status":"ok","reconciled":6,"failed":0,"extras":[],"checks":[...]}`.
+4. **Wire up notifications**: see [§13](#13-wire-healthchecks-alerts-back-to-alert_sink). Integrations are still manually managed — assign the existing Webhook integration to every check after first reconcile. (The v3 API doesn't expose channel CRUD.)
+
+After bootstrap, ongoing changes follow the §26.1 workflow with no manual steps.
+
+### 26.3 Why Kuma IaC is deferred
+
+Kuma exposes only a Socket.IO API in the version we pin. There is no first-class REST API for monitor CRUD; the unofficial `uptime-kuma-api` Python library uses an internal Socket.IO message format that has shifted between Kuma minor versions. Building reconciliation around it would couple our Terraform apply path to Kuma's UI implementation details — a maintenance liability for the eight Phase 1 monitors we'd be managing.
+
+The trade-off:
+
+- **Pro of Kuma IaC**: parity with Healthchecks; no Phase 1 setup footgun for Kuma.
+- **Con of Kuma IaC**: pinned to `uptime-kuma-api`'s upstream cadence; breaks on Kuma upgrades; the alternative (custom Socket.IO client) is more code than the eight monitors are worth.
+
+Decision: keep Kuma manual. Mitigations:
+- The Phase 1 monitor table in [§9](#9-create-the-phase-1-monitor-set) is explicit and copy-paste-ready.
+- The [§22 quarterly review](#22-quarterly-monitoring-review) prompts an operator pass over Kuma config every 90 days — drift gets caught.
+- The `_RUNBOOK_MAP` in [`alert_sink/function.py`](../lambda/api/alert_sink/function.py) is keyed on Kuma's monitor names; renaming a monitor without updating the map silently drops the runbook link, which is recoverable.
+
+Revisit when Kuma ships a stable REST API (tracked in [louislam/uptime-kuma#1170](https://github.com/louislam/uptime-kuma/issues/1170)).
+
+### 26.4 Acceptance for Phase 4 §3
+
+- [ ] After applying Terraform with the API key seeded, `aws lambda invoke --function-name cabal-healthchecks-iac /tmp/out.json` returns `status: ok` with `reconciled = 6`.
+- [ ] All six checks visible in Healthchecks UI under the operator's project.
+- [ ] All six `/cabal/healthcheck_ping_*` SSM parameters are populated with `https://heartbeat.<control-domain>/ping/...` URLs (not placeholders).
+- [ ] Editing `config.py` (e.g. adjusting a grace period), re-running the build pipeline, and applying Terraform causes a re-invocation — confirm via `aws logs tail /cabal/lambda/healthchecks_iac --since 5m`.
+- [ ] Bootstrap-ahead test: with the API key still placeholder, the Lambda's first invocation returns `status: skipped` (and Terraform apply succeeds anyway).
