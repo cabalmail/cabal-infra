@@ -34,3 +34,9 @@ variable "nat_instance_type" {
   description = "Instance type for NAT instances (when use_nat_instance = true)."
   default     = "t3.micro"
 }
+
+variable "quiesced" {
+  type        = bool
+  description = "When true, do not provision NAT instances. Private-subnet egress goes away while the environment is quiesced; ECS tasks needing egress are also at zero, so this is safe. NAT EIPs and the public Route 53 record for them are kept so SMTP relay IP allow-lists do not need to be re-issued on resume."
+  default     = false
+}

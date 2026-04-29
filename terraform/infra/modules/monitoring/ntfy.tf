@@ -167,7 +167,7 @@ resource "aws_ecs_service" "ntfy" {
   name            = "cabal-ntfy"
   cluster         = var.ecs_cluster_id
   task_definition = aws_ecs_task_definition.ntfy.arn
-  desired_count   = 1
+  desired_count   = var.quiesced ? 0 : 1
 
   enable_execute_command = true
 

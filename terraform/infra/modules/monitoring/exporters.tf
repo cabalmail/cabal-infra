@@ -112,7 +112,7 @@ resource "aws_ecs_service" "cloudwatch_exporter" {
   name            = "cabal-cloudwatch-exporter"
   cluster         = var.ecs_cluster_id
   task_definition = aws_ecs_task_definition.cloudwatch_exporter.arn
-  desired_count   = 1
+  desired_count   = var.quiesced ? 0 : 1
 
   deployment_maximum_percent         = 200
   deployment_minimum_healthy_percent = 100
@@ -204,7 +204,7 @@ resource "aws_ecs_service" "blackbox_exporter" {
   name            = "cabal-blackbox-exporter"
   cluster         = var.ecs_cluster_id
   task_definition = aws_ecs_task_definition.blackbox_exporter.arn
-  desired_count   = 1
+  desired_count   = var.quiesced ? 0 : 1
 
   deployment_maximum_percent         = 200
   deployment_minimum_healthy_percent = 100

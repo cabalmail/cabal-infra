@@ -87,12 +87,15 @@ resource "aws_launch_template" "ecs" {
 # -- ASG for ECS instances -------------------------------------
 
 resource "aws_autoscaling_group" "ecs" {
-  name_prefix               = "cabal-ecs-"
-  vpc_zone_identifier       = var.private_subnets[*].id
-  desired_capacity          = 1
-  max_size                  = 3
-  min_size                  = 1
-  protect_from_scale_in     = true
+  name_prefix         = "cabal-ecs-"
+  vpc_zone_identifier = var.private_subnets[*].id
+  desired_capacity    = var.quiesced ? 0 : 1
+  max_size            = var.quiesced ? 0 : 3
+  min_size            = var.quiesced ? 0 : 1
+  # Disabled while quiesced so the running instance can actually be
+  # terminated. Re-enabled on resume so the capacity provider's
+  # managed termination protection has its required precondition.
+  protect_from_scale_in     = !var.quiesced
   wait_for_capacity_timeout = "0" # ECS capacity provider manages health
 
   launch_template {
@@ -123,8 +126,11 @@ resource "aws_ecs_capacity_provider" "ec2" {
   name = "cabal-ec2"
 
   auto_scaling_group_provider {
-    auto_scaling_group_arn         = aws_autoscaling_group.ecs.arn
-    managed_termination_protection = "ENABLED"
+    auto_scaling_group_arn = aws_autoscaling_group.ecs.arn
+    # AWS requires ASG instance scale-in protection to be enabled
+    # before this can be ENABLED, so it tracks aws_autoscaling_group.ecs
+    # protect_from_scale_in.
+    managed_termination_protection = var.quiesced ? "DISABLED" : "ENABLED"
 
     managed_scaling {
       status          = "ENABLED"

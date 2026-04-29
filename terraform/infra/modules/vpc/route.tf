@@ -7,7 +7,10 @@ resource "aws_route_table" "private" {
 }
 
 resource "aws_route" "private" {
-  count                  = length(var.az_list)
+  # The route's target (NAT instance NIC or NAT gateway) is gone while
+  # the env is quiesced, so the route is removed too. Private subnets
+  # have no internet egress when quiesced; nothing runs in them.
+  count                  = var.quiesced ? 0 : length(var.az_list)
   route_table_id         = aws_route_table.private[count.index].id
   destination_cidr_block = "0.0.0.0/0"
   nat_gateway_id         = var.use_nat_instance ? null : aws_nat_gateway.nat[count.index].id

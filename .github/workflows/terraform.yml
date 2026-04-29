@@ -176,6 +176,7 @@ jobs:
         echo "monitoring = ${{ vars.TF_VAR_MONITORING }}" >> terraform.tfvars
         echo "healthchecks_registration_open = ${{ vars.TF_VAR_HEALTHCHECKS_REGISTRATION_OPEN || 'false' }}" >> terraform.tfvars
         echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
+        echo "quiesced = ${{ vars.TF_VAR_QUIESCED || 'false' }}" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
     - name: plan-terraform
@@ -226,6 +227,7 @@ jobs:
         echo "monitoring = ${{ vars.TF_VAR_MONITORING }}" >> terraform.tfvars
         echo "healthchecks_registration_open = ${{ vars.TF_VAR_HEALTHCHECKS_REGISTRATION_OPEN || 'false' }}" >> terraform.tfvars
         echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
+        echo "quiesced = ${{ vars.TF_VAR_QUIESCED || 'false' }}" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
     - name: apply-terraform

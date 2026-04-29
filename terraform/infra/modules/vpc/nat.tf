@@ -34,7 +34,7 @@ resource "aws_eip_domain_name" "smtp" {
 # =============================================================================
 
 resource "aws_nat_gateway" "nat" {
-  count         = var.use_nat_instance ? 0 : length(var.az_list)
+  count         = var.use_nat_instance || var.quiesced ? 0 : length(var.az_list)
   allocation_id = aws_eip.nat_eip[count.index].id
   subnet_id     = aws_subnet.public[count.index].id
   tags = {
@@ -112,7 +112,7 @@ resource "aws_iam_instance_profile" "nat" {
 }
 
 resource "aws_instance" "nat" {
-  count                  = var.use_nat_instance ? length(var.az_list) : 0
+  count                  = var.use_nat_instance && !var.quiesced ? length(var.az_list) : 0
   ami                    = data.aws_ami.amazon_linux_2[0].id
   instance_type          = var.nat_instance_type
   subnet_id              = aws_subnet.public[count.index].id
@@ -170,7 +170,7 @@ resource "aws_instance" "nat" {
 }
 
 resource "aws_eip_association" "nat" {
-  count         = var.use_nat_instance ? length(var.az_list) : 0
+  count         = var.use_nat_instance && !var.quiesced ? length(var.az_list) : 0
   instance_id   = aws_instance.nat[count.index].id
   allocation_id = aws_eip.nat_eip[count.index].id
 }

@@ -1,0 +1,121 @@
+---
+# Scale a non-prod environment's running compute (ECS services, the
+# ECS-instance ASG, and NAT instances) to zero - or restore it. Refuses
+# to run against prod. State-bearing resources (DynamoDB, EFS, S3,
+# Cognito, Route 53, ACM, NLB, EFS, EIPs) are left alone.
+#
+# After running with action=down, set TF_VAR_QUIESCED=true on the
+# matching GitHub Environment so the regular terraform workflow does
+# not resurrect the compute. See docs/quiesce.md.
+
+name: Quiesce Infrastructure
+
+permissions:
+  contents: read
+  actions: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment. Prod is not selectable."
+        required: true
+        type: choice
+        options:
+          - development
+          - stage
+      action:
+        description: "down: scale running compute to zero. up: restore."
+        required: true
+        type: choice
+        options:
+          - down
+          - up
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: refuse-prod-and-mismatched-branch
+        run: |
+          if [[ "${{ github.ref_name }}" == "main" ]]; then
+            echo "::error::quiesce.yml refuses to run from main (prod)."
+            exit 1
+          fi
+          DERIVED_ENV="${{ github.ref_name == 'stage' && 'stage' || 'development' }}"
+          if [[ "$DERIVED_ENV" != "${{ inputs.environment }}" ]]; then
+            echo "::error::Branch ${{ github.ref_name }} maps to '$DERIVED_ENV', but you selected '${{ inputs.environment }}'. Re-run from the correct branch."
+            exit 1
+          fi
+
+  build:
+    runs-on: ubuntu-latest
+    needs:
+      - guard
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: checkout
+        uses: actions/checkout@v5
+      - name: generate-versions
+        run: env TF_MODULE=infra TF_ENVIRONMENT="${{ vars.TF_VAR_ENVIRONMENT }}" ./.github/scripts/make-terraform.sh
+      - name: store-artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: backend.tf
+          path: ./terraform/infra/backend.tf
+
+  apply:
+    runs-on: ubuntu-latest
+    needs:
+      - build
+    defaults:
+      run:
+        working-directory: ./terraform/infra
+    environment: ${{ inputs.environment }}
+    env:
+      TF_API_TOKEN: ${{ secrets.TF_TOKEN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+    steps:
+      - name: checkout
+        uses: actions/checkout@v5
+      - name: retrieve-artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: backend.tf
+      - name: move
+        run: mv ../../backend.tf backend.tf
+      - name: install-terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          cli_config_credentials_token: ${{ secrets.TF_TOKEN }}
+      - name: tfvars-terraform
+        # Forced literal for `quiesced` regardless of the env-level
+        # TF_VAR_QUIESCED, so down/up always applies the requested state.
+        run: |
+          echo "availability_zones = ${{ vars.TF_VAR_AVAILABILITY_ZONES }}" > terraform.tfvars
+          echo "aws_region = \"${{ vars.TF_VAR_AWS_REGION }}\"" >> terraform.tfvars
+          echo "cidr_block = \"${{ vars.TF_VAR_CIDR_BLOCK }}\"" >> terraform.tfvars
+          echo "control_domain = \"${{ vars.TF_VAR_CONTROL_DOMAIN }}\"" >> terraform.tfvars
+          echo "email = \"${{ vars.TF_VAR_EMAIL }}\"" >> terraform.tfvars
+          echo "environment = \"${{ vars.TF_VAR_ENVIRONMENT }}\"" >> terraform.tfvars
+          echo "mail_domains = ${{ vars.TF_VAR_MAIL_DOMAINS }}" >> terraform.tfvars
+          echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
+          echo "backup = ${{ vars.TF_VAR_BACKUP }}" >> terraform.tfvars
+          echo "monitoring = ${{ vars.TF_VAR_MONITORING }}" >> terraform.tfvars
+          echo "healthchecks_registration_open = ${{ vars.TF_VAR_HEALTHCHECKS_REGISTRATION_OPEN || 'false' }}" >> terraform.tfvars
+          echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
+          echo "quiesced = ${{ inputs.action == 'down' && 'true' || 'false' }}" >> terraform.tfvars
+      - name: init-terraform
+        run: terraform init
+      - name: apply-terraform
+        run: terraform apply -auto-approve -lock-timeout=30m -var-file="terraform.tfvars"
+      - name: durability-reminder
+        if: inputs.action == 'down'
+        run: |
+          echo "::warning::Quiesce applied to ${{ inputs.environment }}. For durability across other terraform workflow runs, set TF_VAR_QUIESCED=true on the '${{ inputs.environment }}' GitHub Environment. Otherwise the next terraform.yml run will resurrect compute. See docs/quiesce.md."
+      - name: resume-reminder
+        if: inputs.action == 'up'
+        run: |
+          echo "::warning::Resume applied to ${{ inputs.environment }}. Remember to clear TF_VAR_QUIESCED on the '${{ inputs.environment }}' GitHub Environment (set to false or remove the variable) so subsequent terraform.yml runs do not re-quiesce."
