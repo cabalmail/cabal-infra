@@ -10,6 +10,10 @@
 
 name: Quiesce Infrastructure
 
+permissions:
+  contents: read
+  actions: read
+
 on:
   workflow_dispatch:
     inputs:
