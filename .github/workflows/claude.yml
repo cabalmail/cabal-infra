@@ -1,0 +1,110 @@
+name: Claude Automation
+
+# Two trigger paths:
+#   1. An issue gets the `claude` label  -> Claude drafts a PR.
+#   2. Someone @-mentions claude in a PR comment, inline review comment,
+#      or review body  -> Claude responds in-thread and can push follow-up
+#      commits to the PR branch.
+on:
+  issues:
+    types: [labeled]
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  pull_request_review:
+    types: [submitted]
+
+# Avoid stacking concurrent runs on the same issue/PR.
+concurrency:
+  group: claude-${{ github.event.issue.number || github.event.pull_request.number }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Job 1: New issue labeled `claude` -> draft a PR.
+  # ---------------------------------------------------------------------------
+  on-labeled-issue:
+    if: github.event_name == 'issues' && github.event.label.name == 'claude'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      id-token: write
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Claude Code
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+
+          # NOTE: confirm the exact model string at
+          # https://docs.claude.com/en/docs/about-claude/models
+          claude_args: "--model claude-opus-4-7 --max-turns 25"
+
+          prompt: |
+            A new issue was filed in this repository and labeled `claude`,
+            which is our convention for "please attempt a fix."
+
+            Issue #${{ github.event.issue.number }}: ${{ github.event.issue.title }}
+
+            Body:
+            ${{ github.event.issue.body }}
+
+            Your job:
+              1. Read the issue and explore the repo enough to understand the problem.
+              2. If the issue is not actionable as a code change (e.g. it's a
+                 design discussion, a question, or too vague), comment on the
+                 issue explaining what additional information you'd need, and
+                 stop. Do NOT open a speculative PR.
+              3. Otherwise, create a new branch named `claude/issue-${{ github.event.issue.number }}`,
+                 implement the change, run any relevant tests or linters, and
+                 open a pull request that:
+                   - Targets the default branch.
+                   - Includes `Closes #${{ github.event.issue.number }}` in the body.
+                   - Summarizes what you changed and why.
+                   - Calls out anything you were uncertain about so a human reviewer
+                     knows where to focus.
+                   - Adds an appropriate entry to the CHANGELOG.
+              4. Treat this PR as a draft proposal, not a final answer. Be honest
+                 about limitations.
+
+  # ---------------------------------------------------------------------------
+  # Job 2: @claude mention in a comment or review -> respond / iterate.
+  # The Action handles @claude mentions natively, so we don't need a custom
+  # prompt here -- it picks up the comment context and the PR diff on its own.
+  # ---------------------------------------------------------------------------
+  on-mention:
+    if: |
+      (github.event_name == 'issue_comment'             && contains(github.event.comment.body, '@claude'))
+      || (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude'))
+      || (github.event_name == 'pull_request_review'         && contains(github.event.review.body,  '@claude'))
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      id-token: write
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Claude Code
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+
+          # Tighter turn cap for iteration: comment threads should be focused.
+          # Bump if you find Claude running out of room on substantive changes.
+          claude_args: "--model claude-opus-4-7 --max-turns 10"

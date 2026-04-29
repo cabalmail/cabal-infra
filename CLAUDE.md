@@ -165,7 +165,9 @@ Shared infrastructure:
   - Environment variable validation at script entry
   - Comments explaining non-obvious configuration choices
 
-# Wiki Home
+## CHANGELOG
+
+Use semantic versioning. Create a new version when appropriate. Only record what shipped, not trials or blind alleys.
 
 ## Roadmap
 
