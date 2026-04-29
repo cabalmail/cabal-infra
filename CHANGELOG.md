@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.2] - 2026-04-29
+
+### Added
+- Confirmation modal before address revocation in the React app. The
+  Addresses rail (email client sidebar) previously revoked immediately
+  on click; it now opens an `alertdialog` modal with a destructive
+  "Revoke" button. The admin "All Addresses" view replaces its
+  `window.confirm()` with the same styled modal for consistency. New
+  shared `ConfirmDialog` component under `src/ConfirmDialog/`. The
+  Apple client already had a `confirmationDialog` for revocation and
+  is unchanged. Closes #333.
+
 ## [0.8.1] - 2026-04-28
 
 ### Added

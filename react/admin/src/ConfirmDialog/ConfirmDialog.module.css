@@ -1,0 +1,109 @@
+.scrim {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in oklch, var(--ink) 40%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100002;
+}
+
+.dialog {
+  min-width: 360px;
+  max-width: min(520px, calc(100vw - 32px));
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-modal);
+  padding: 20px 24px 20px;
+  font-family: var(--font-ui);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.close {
+  width: 28px;
+  height: 28px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-quiet);
+  cursor: pointer;
+}
+
+.close:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+
+.body {
+  font-size: 14px;
+  color: var(--ink-soft, var(--ink));
+  line-height: 1.5;
+  margin-bottom: 20px;
+  word-wrap: break-word;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.cancel,
+.confirm,
+.confirmDestructive {
+  padding: 8px 16px;
+  border-radius: var(--radius-md, 6px);
+  border: 1px solid var(--border);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  min-width: 80px;
+}
+
+.cancel {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.cancel:hover {
+  background: var(--surface-hover);
+}
+
+.confirm {
+  background: var(--accent);
+  color: var(--accent-fg);
+  border-color: color-mix(in oklch, var(--accent) 70%, black);
+}
+
+.confirm:hover {
+  background: color-mix(in oklch, var(--accent) 88%, black);
+}
+
+.confirmDestructive {
+  background: var(--ink-danger, oklch(0.48 0.17 25));
+  color: oklch(0.99 0.003 60);
+  border-color: color-mix(in oklch, var(--ink-danger, oklch(0.48 0.17 25)) 70%, black);
+}
+
+.confirmDestructive:hover {
+  background: color-mix(in oklch, var(--ink-danger, oklch(0.48 0.17 25)) 88%, black);
+}
