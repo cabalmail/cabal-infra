@@ -47,7 +47,7 @@ jobs:
 
           # NOTE: confirm the exact model string at
           # https://docs.claude.com/en/docs/about-claude/models
-          claude_args: "--model claude-opus-4-7 --max-turns 25"
+          claude_args: "--model claude-opus-4-7 --max-turns 75"
 
           prompt: |
             A new issue was filed in this repository and labeled `claude`,
@@ -107,4 +107,4 @@ jobs:
 
           # Tighter turn cap for iteration: comment threads should be focused.
           # Bump if you find Claude running out of room on substantive changes.
-          claude_args: "--model claude-opus-4-7 --max-turns 10"
+          claude_args: "--model claude-opus-4-7 --max-turns 25"
