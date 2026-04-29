@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Copy, Plus, Search, X } from 'lucide-react';
 import useApi from '../hooks/useApi';
 import { ADDRESS_LIST } from '../constants';
+import ConfirmDialog from '../ConfirmDialog';
 import Request from './Request';
 import './Addresses.css';
 
@@ -18,6 +19,7 @@ function Addresses({ domains, setMessage, selectedAddress, onSelectAddress }) {
   const [addresses, setAddresses] = useState([]);
   const [query, setQuery] = useState('');
   const [showRequest, setShowRequest] = useState(false);
+  const [pendingRevoke, setPendingRevoke] = useState(null);
   const [pendingScroll, setPendingScroll] = useState(null);
   const listRef = useRef(null);
 
@@ -97,8 +99,19 @@ function Addresses({ domains, setMessage, selectedAddress, onSelectAddress }) {
     }
   }, [setMessage]);
 
-  const revoke = useCallback((e, a) => {
+  const requestRevoke = useCallback((e, a) => {
     e.stopPropagation();
+    setPendingRevoke(a);
+  }, []);
+
+  const cancelRevoke = useCallback(() => {
+    setPendingRevoke(null);
+  }, []);
+
+  const confirmRevoke = useCallback(() => {
+    const a = pendingRevoke;
+    if (!a) return;
+    setPendingRevoke(null);
     api.deleteAddress(a.address, a.subdomain, a.tld, a.public_key).then(() => {
       setMessage && setMessage('Successfully revoked address.', false);
       localStorage.removeItem(ADDRESS_LIST);
@@ -109,7 +122,7 @@ function Addresses({ domains, setMessage, selectedAddress, onSelectAddress }) {
     }).catch(() => {
       setMessage && setMessage('Request to revoke address failed.', true);
     });
-  }, [api, setMessage, selectedAddress, onSelectAddress]);
+  }, [api, pendingRevoke, setMessage, selectedAddress, onSelectAddress]);
 
   return (
     <section className="addresses-rail" aria-label="Addresses">
@@ -187,7 +200,7 @@ function Addresses({ domains, setMessage, selectedAddress, onSelectAddress }) {
                   className="addresses-rail__row-action"
                   title="Revoke address"
                   aria-label={`Revoke ${a.address}`}
-                  onClick={(e) => revoke(e, a)}
+                  onClick={(e) => requestRevoke(e, a)}
                 >
                   <X size={12} aria-hidden="true" />
                 </button>
@@ -237,6 +250,22 @@ function Addresses({ domains, setMessage, selectedAddress, onSelectAddress }) {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={pendingRevoke !== null}
+        title="Revoke address?"
+        message={pendingRevoke ? (
+          <>
+            Mail sent to <strong>{pendingRevoke.address}</strong> will be rejected.
+            {' '}This can&rsquo;t be undone.
+          </>
+        ) : null}
+        confirmLabel="Revoke"
+        cancelLabel="Cancel"
+        destructive
+        onConfirm={confirmRevoke}
+        onCancel={cancelRevoke}
+      />
     </section>
   );
 }

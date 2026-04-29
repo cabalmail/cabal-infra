@@ -125,17 +125,37 @@ describe('Addresses rail', () => {
     expect(screen.getByText('New address')).toBeInTheDocument();
   });
 
-  it('revokes an address via the row remove action', async () => {
+  it('opens a confirmation dialog before revoking and revokes on confirm', async () => {
     mockDeleteAddress.mockResolvedValue({});
     renderAddresses();
     await waitFor(() => expect(screen.getByText('chris@main.cabalmail.com')).toBeInTheDocument());
     const btn = screen.getByRole('button', { name: /revoke chris@main\.cabalmail\.com/i });
     await act(async () => { fireEvent.click(btn); });
+    // Dialog open, no API call yet
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+    expect(screen.getByText(/revoke address\?/i)).toBeInTheDocument();
+    expect(mockDeleteAddress).not.toHaveBeenCalled();
+    // Confirm
+    const confirmBtn = screen.getAllByRole('button', { name: /^revoke$/i })[0];
+    await act(async () => { fireEvent.click(confirmBtn); });
     expect(mockDeleteAddress).toHaveBeenCalledWith(
       'chris@main.cabalmail.com',
       'main',
       'cabalmail.com',
       'pk2'
     );
+  });
+
+  it('does not revoke when the confirmation dialog is cancelled', async () => {
+    mockDeleteAddress.mockResolvedValue({});
+    renderAddresses();
+    await waitFor(() => expect(screen.getByText('chris@main.cabalmail.com')).toBeInTheDocument());
+    const btn = screen.getByRole('button', { name: /revoke chris@main\.cabalmail\.com/i });
+    await act(async () => { fireEvent.click(btn); });
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+    const cancelBtn = screen.getByRole('button', { name: /^cancel$/i });
+    await act(async () => { fireEvent.click(cancelBtn); });
+    expect(mockDeleteAddress).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
   });
 });

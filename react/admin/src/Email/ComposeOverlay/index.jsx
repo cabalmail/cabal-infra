@@ -12,6 +12,7 @@ import { marked } from 'marked';
 import useApi from '../../hooks/useApi';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAppMessage } from '../../contexts/AppMessageContext';
+import ConfirmDialog from '../../ConfirmDialog';
 import FromPicker from './FromPicker';
 
 const turndown = new TurndownService({ headingStyle: 'atx', hr: '---' });
@@ -127,6 +128,7 @@ function ComposeOverlay({
   const [sending, setSending] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
   const [, setSavedTick] = useState(0); // forces re-render for "Saved just now" label
+  const [pendingImport, setPendingImport] = useState(null); // 'fromRich' | 'fromMarkdown' | null
   const markdownRef = useRef(null);
   const rootRef = useRef(null);
   const autosaveRef = useRef(null);
@@ -264,24 +266,41 @@ function ComposeOverlay({
     };
   }, [To, CC, BCC, Subject, markdownContent, address]);
 
-  const importFromRich = useCallback(() => {
-    if (markdownContent.trim()) {
-      if (!window.confirm("This will replace your current Markdown content. Continue?")) {
-        return;
-      }
-    }
+  const performImportFromRich = useCallback(() => {
     setMarkdownContent(turndown.turndown(editor.getHTML()));
-  }, [editor, markdownContent]);
+  }, [editor]);
 
-  const importFromMarkdown = useCallback(() => {
-    if (!isEditorEmpty(editor)) {
-      if (!window.confirm("This will replace your current Rich Text content. Continue?")) {
-        return;
-      }
-    }
+  const performImportFromMarkdown = useCallback(() => {
     const html = marked.parse(markdownContent, { async: false });
     editor.commands.setContent(html, { emitUpdate: true });
   }, [editor, markdownContent]);
+
+  const importFromRich = useCallback(() => {
+    if (markdownContent.trim()) {
+      setPendingImport('fromRich');
+      return;
+    }
+    performImportFromRich();
+  }, [markdownContent, performImportFromRich]);
+
+  const importFromMarkdown = useCallback(() => {
+    if (!isEditorEmpty(editor)) {
+      setPendingImport('fromMarkdown');
+      return;
+    }
+    performImportFromMarkdown();
+  }, [editor, performImportFromMarkdown]);
+
+  const cancelImport = useCallback(() => {
+    setPendingImport(null);
+  }, []);
+
+  const confirmImport = useCallback(() => {
+    const which = pendingImport;
+    setPendingImport(null);
+    if (which === 'fromRich') performImportFromRich();
+    else if (which === 'fromMarkdown') performImportFromMarkdown();
+  }, [pendingImport, performImportFromRich, performImportFromMarkdown]);
 
   const randomString = useCallback((length) => {
     let str = '';
@@ -686,6 +705,18 @@ function ComposeOverlay({
           <span className="compose-saved" aria-live="polite">{savedLabel}</span>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={pendingImport !== null}
+        title={pendingImport === 'fromRich' ? 'Replace Markdown content?' : 'Replace Rich Text content?'}
+        message={pendingImport === 'fromRich'
+          ? 'This will replace your current Markdown content with the imported version. Continue?'
+          : 'This will replace your current Rich Text content with the imported version. Continue?'}
+        confirmLabel="Replace"
+        cancelLabel="Cancel"
+        onConfirm={confirmImport}
+        onCancel={cancelImport}
+      />
     </form>
   );
 }

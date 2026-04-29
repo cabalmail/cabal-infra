@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import useApi from '../hooks/useApi';
 import { ADDRESS_LIST } from '../constants';
+import ConfirmDialog from '../ConfirmDialog';
 import Request from './Request';
 import './Admin.css';
 
@@ -13,6 +14,8 @@ function AdminAddresses({ domains, setMessage }) {
   const [showNew, setShowNew] = useState(false);
   const [pickerFor, setPickerFor] = useState(null);
   const [pickerUser, setPickerUser] = useState('');
+  const [pendingRevoke, setPendingRevoke] = useState(null);
+  const [pendingUnassign, setPendingUnassign] = useState(null);
 
   const loadData = useCallback(() => {
     setLoading(true);
@@ -83,7 +86,18 @@ function AdminAddresses({ domains, setMessage }) {
   }, [api, setMessage, loadData]);
 
   const handleUnassign = useCallback((address, username) => {
-    if (!window.confirm(`Remove "${username}" from "${address}"?`)) return;
+    setPendingUnassign({ address, username });
+  }, []);
+
+  const cancelUnassign = useCallback(() => {
+    setPendingUnassign(null);
+  }, []);
+
+  const confirmUnassign = useCallback(() => {
+    const target = pendingUnassign;
+    if (!target) return;
+    setPendingUnassign(null);
+    const { address, username } = target;
     api.unassignAddress(address, username).then(
       () => {
         setMessage && setMessage(`Removed "${username}" from "${address}".`, false);
@@ -94,10 +108,20 @@ function AdminAddresses({ domains, setMessage }) {
         setMessage && setMessage('Failed to remove user: ' + msg, true);
       }
     );
-  }, [api, setMessage, loadData]);
+  }, [api, pendingUnassign, setMessage, loadData]);
 
   const handleRevoke = useCallback((a) => {
-    if (!window.confirm(`Revoke "${a.address}"? This cannot be undone.`)) return;
+    setPendingRevoke(a);
+  }, []);
+
+  const cancelRevoke = useCallback(() => {
+    setPendingRevoke(null);
+  }, []);
+
+  const confirmRevoke = useCallback(() => {
+    const a = pendingRevoke;
+    if (!a) return;
+    setPendingRevoke(null);
     api.deleteAddress(a.address, a.subdomain, a.tld, a.public_key).then(
       () => {
         setMessage && setMessage(`Revoked "${a.address}".`, false);
@@ -109,7 +133,7 @@ function AdminAddresses({ domains, setMessage }) {
         setMessage && setMessage('Failed to revoke address: ' + msg, true);
       }
     );
-  }, [api, setMessage, loadData]);
+  }, [api, pendingRevoke, setMessage, loadData]);
 
   if (loading) {
     return <div className="admin-addresses"><div className="loading">Loading addresses…</div></div>;
@@ -155,6 +179,38 @@ function AdminAddresses({ domains, setMessage }) {
           {filteredAddresses.length} of {addresses.length}
         </span>
       </div>
+
+      <ConfirmDialog
+        open={pendingRevoke !== null}
+        title="Revoke address?"
+        message={pendingRevoke ? (
+          <>
+            Mail sent to <strong>{pendingRevoke.address}</strong> will be rejected.
+            {' '}This can&rsquo;t be undone.
+          </>
+        ) : null}
+        confirmLabel="Revoke"
+        cancelLabel="Cancel"
+        destructive
+        onConfirm={confirmRevoke}
+        onCancel={cancelRevoke}
+      />
+
+      <ConfirmDialog
+        open={pendingUnassign !== null}
+        title="Remove user from address?"
+        message={pendingUnassign ? (
+          <>
+            Remove <strong>{pendingUnassign.username}</strong> from{' '}
+            <strong>{pendingUnassign.address}</strong>?
+          </>
+        ) : null}
+        confirmLabel="Remove"
+        cancelLabel="Cancel"
+        destructive
+        onConfirm={confirmUnassign}
+        onCancel={cancelUnassign}
+      />
 
       {filteredAddresses.length === 0 ? (
         <p className="admin-addresses__empty">
