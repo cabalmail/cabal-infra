@@ -115,3 +115,11 @@ variable "healthcheck_ping_param" {
   description = "SSM Parameter Store name holding the Healthchecks ping URL for the reconfigure.sh loop. Empty string disables the heartbeat (used when var.monitoring is false in the parent stack)."
   default     = ""
 }
+
+# -- Quiesce ----------------------------------------------------
+
+variable "quiesced" {
+  type        = bool
+  description = "When true, set ECS service desired_count and the ECS-instance ASG to zero. Capacity-provider managed termination protection and ASG instance scale-in protection are also disabled so the running instance can be terminated."
+  default     = false
+}

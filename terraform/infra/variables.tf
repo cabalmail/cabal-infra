@@ -95,4 +95,10 @@ variable "healthchecks_registration_open" {
   default     = false
 }
 
+variable "quiesced" {
+  type        = bool
+  description = "When true, scale all running compute (ECS service desired counts, the ECS-instance ASG, and NAT instances) to zero to save cost. State-bearing resources (DynamoDB, EFS, S3, Cognito, Route 53, ACM, NLB) are unaffected. Intended for non-prod environments only; the quiesce workflow refuses to run against prod."
+  default     = false
+}
+
 

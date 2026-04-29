@@ -108,6 +108,7 @@ module "vpc" {
   control_domain   = var.control_domain
   az_list          = var.availability_zones
   zone_id          = data.terraform_remote_state.zone.outputs.control_domain_zone_id
+  quiesced         = var.quiesced
 }
 
 # Creates a network load balancer shared by machines in the stack
@@ -184,6 +185,8 @@ module "ecs" {
 
   healthcheck_ping_param = local.hc_ping_ecs_reconfigure
 
+  quiesced = var.quiesced
+
   depends_on = [module.cert]
 }
 
@@ -253,4 +256,6 @@ module "monitoring" {
 
   mail_domains                   = var.mail_domains
   healthchecks_registration_open = var.healthchecks_registration_open
+
+  quiesced = var.quiesced
 }

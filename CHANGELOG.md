@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-04-29
+
+### Added
+- `quiesce` GitHub workflow (`.github/workflows/quiesce.yml`)
+  scales a non-prod environment's running compute to zero to save
+  cost, or restores it. `workflow_dispatch` only, with `environment`
+  (development | stage) and `action` (down | up) inputs. Refuses to
+  run from `main` and refuses any branch/environment mismatch. New
+  root-level Terraform variable `quiesced` (default `false`) is
+  threaded through the `ecs`, `monitoring`, and `vpc` modules and
+  gates: every mail-tier and monitoring ECS service `desired_count`,
+  the `smtp_in` and `smtp_out` Application Auto Scaling target
+  bounds, the ECS-instance ASG `min_size`/`desired_capacity`/
+  `max_size` and `protect_from_scale_in`, the ECS capacity provider
+  `managed_termination_protection`, the NAT instances and NAT
+  gateway counts, and the private subnet default route. State-bearing
+  resources (DynamoDB, EFS, S3, Cognito, Route 53, ACM, NLB,
+  CloudFront, Lambda) are unaffected. New operations doc at
+  `docs/quiesce.md`, linked from `docs/operations.md`.
+- `terraform.yml` tfvars step now writes `quiesced = ${{ vars.TF_VAR_QUIESCED || 'false' }}`,
+  so setting `TF_VAR_QUIESCED=true` on a GitHub Environment makes the
+  quiesced state durable across pushes and other terraform workflow
+  runs.
+
 ## [0.8.2] - 2026-04-29
 
 ### Added

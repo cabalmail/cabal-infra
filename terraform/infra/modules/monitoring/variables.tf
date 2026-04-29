@@ -154,3 +154,9 @@ variable "healthchecks_registration_open" {
   description = "Whether the Healthchecks signup form is open. True at bootstrap to let the operator sign up the first user via the magic-link flow; false the rest of the time."
   default     = false
 }
+
+variable "quiesced" {
+  type        = bool
+  description = "When true, set every monitoring ECS service desired_count to zero. The DAEMON node-exporter naturally goes to zero with the underlying ASG and is not gated explicitly."
+  default     = false
+}

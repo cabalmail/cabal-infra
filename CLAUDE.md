@@ -23,6 +23,10 @@ docs/               Architecture docs, migration plans, setup guides
 .github/scripts/    Shared build/deploy helper scripts
 ```
 
+### Docs convention
+
+Versioned subdirectories of `docs/` (e.g. `docs/0.4.0/`, `docs/0.7.0/`, `docs/0.9.0/`) are forward-looking plans for the corresponding roadmap version - design proposals written before or during implementation. Once a feature ships, its as-implemented documentation lives at the top level of `docs/`, not inside the version directory. When you write operator-facing or reference documentation for something that has already shipped, put it in `docs/<topic>.md` and link it from the relevant index (`docs/operations.md`, `docs/setup.md`, etc.). Leave the version directory alone; it is part of the historical planning record.
+
 ## Build/Lint/Test Commands
 
 ### React App (`react/admin`)
@@ -59,8 +63,9 @@ docs/               Architecture docs, migration plans, setup guides
 | `lambda_api_python.yml` | `lambda/api/**` | Pylint, build zips, upload to S3, trigger terraform |
 | `lambda_counter.yml` | `lambda/counter/**` | Pylint, build zip, upload to S3, trigger terraform |
 | `docker.yml` | `docker/**` | Build 3 mail tier images + certbot, push to ECR, trigger terraform |
-| `terraform.yml` | `terraform/infra/**` | Checkov/tflint/tfsec, plan, apply. Also runs weekly (Wednesday) |
+| `terraform.yml` | `terraform/infra/**` | Checkov/tflint/tfsec, plan, apply |
 | `bootstrap.yml` | Manual/workflow_call | Applies `terraform/dns` stack (Route 53 zone) |
+| `quiesce.yml` | Manual (`workflow_dispatch`) | Scales a non-prod env's ECS services, ECS-instance ASG, and NAT instances to zero (or restores them). Refuses to run against prod. See `docs/quiesce.md`. |
 All workflows select environment based on branch: `main`=prod, `stage`=stage, other=development.
 
 ## Architecture Details

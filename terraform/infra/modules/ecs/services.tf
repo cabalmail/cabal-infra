@@ -14,7 +14,7 @@ resource "aws_ecs_service" "imap" {
   name            = "cabal-imap"
   cluster         = aws_ecs_cluster.mail.id
   task_definition = aws_ecs_task_definition.imap.arn
-  desired_count   = 1
+  desired_count   = var.quiesced ? 0 : 1
 
   enable_execute_command = true
 
@@ -53,7 +53,7 @@ resource "aws_ecs_service" "smtp_in" {
   name            = "cabal-smtp-in"
   cluster         = aws_ecs_cluster.mail.id
   task_definition = aws_ecs_task_definition.smtp_in.arn
-  desired_count   = 1
+  desired_count   = var.quiesced ? 0 : 1
 
   enable_execute_command = true
 
@@ -85,7 +85,7 @@ resource "aws_ecs_service" "smtp_out" {
   name            = "cabal-smtp-out"
   cluster         = aws_ecs_cluster.mail.id
   task_definition = aws_ecs_task_definition.smtp_out.arn
-  desired_count   = 1
+  desired_count   = var.quiesced ? 0 : 1
 
   enable_execute_command = true
 
@@ -120,8 +120,11 @@ resource "aws_ecs_service" "smtp_out" {
 # -- Auto-scaling: SMTP-IN ------------------------------------
 
 resource "aws_appautoscaling_target" "smtp_in" {
-  max_capacity       = 3
-  min_capacity       = 1
+  # When quiesced, both bounds are zero so target tracking can't pull
+  # the service's desired_count back up off zero. Kept as attribute
+  # changes (not count) to avoid resource recreation on resume.
+  max_capacity       = var.quiesced ? 0 : 3
+  min_capacity       = var.quiesced ? 0 : 1
   resource_id        = "service/${aws_ecs_cluster.mail.name}/${aws_ecs_service.smtp_in.name}"
   scalable_dimension = "ecs:service:DesiredCount"
   service_namespace  = "ecs"
@@ -145,8 +148,8 @@ resource "aws_appautoscaling_policy" "smtp_in_cpu" {
 # -- Auto-scaling: SMTP-OUT -----------------------------------
 
 resource "aws_appautoscaling_target" "smtp_out" {
-  max_capacity       = 3
-  min_capacity       = 1
+  max_capacity       = var.quiesced ? 0 : 3
+  min_capacity       = var.quiesced ? 0 : 1
   resource_id        = "service/${aws_ecs_cluster.mail.name}/${aws_ecs_service.smtp_out.name}"
   scalable_dimension = "ecs:service:DesiredCount"
   service_namespace  = "ecs"
