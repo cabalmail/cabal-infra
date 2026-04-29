@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.1] - 2026-04-29
+
+### Changed
+- Phase 1 of the build/deploy simplification plan
+  (`docs/0.9.0/build-deploy-simplification-plan.md`): every
+  `aws_ecs_task_definition` resource in `terraform/infra/modules/ecs`
+  and `terraform/infra/modules/monitoring` (12 task defs across the
+  three mail tiers and nine monitoring tiers) now has
+  `lifecycle { ignore_changes = [container_definitions] }`. This is a
+  no-op in steady state and prepares for phase 3, when application
+  deploys will mutate task-def container definitions out-of-band via
+  `aws ecs register-task-definition` instead of going through Terraform.
+
+### Added
+- `.github/scripts/refresh-ssm-from-running.sh` reconciles
+  `/cabal/deployed_image_tag` with the image tag actually running on
+  the canonical mail-tier service (`cabal-imap`) before the Terraform
+  plan job runs. Wired into `terraform.yml`'s plan job before the
+  existing `update-image-tag-in-ssm` step so a topology-only apply
+  that regenerates `container_definitions` cannot silently roll back
+  an out-of-band app deploy. Exits 0 cleanly when the cluster or
+  service does not yet exist (first-run case), so the script is safe
+  on a brand-new environment.
+
 ## [0.9.0] - 2026-04-29
 
 ### Added

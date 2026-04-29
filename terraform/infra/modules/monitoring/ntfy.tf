@@ -141,6 +141,13 @@ resource "aws_ecs_task_definition" "ntfy" {
       }
     }
   }
+
+  # See docs/0.9.0/build-deploy-simplification-plan.md. App deploys mutate
+  # the image tag out-of-band via aws ecs register-task-definition; Terraform
+  # must not roll those forward updates back on a topology-only apply.
+  lifecycle {
+    ignore_changes = [container_definitions]
+  }
 }
 
 resource "aws_lb_target_group" "ntfy" {

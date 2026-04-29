@@ -24,6 +24,7 @@ on:
       - '.github/workflows/terraform.yml'
       - '.github/scripts/make-terraform.sh'
       - '.github/scripts/plan-terraform.sh'
+      - '.github/scripts/refresh-ssm-from-running.sh'
 
 jobs:
   build:
@@ -154,6 +155,14 @@ jobs:
       with:
         cli_config_credentials_token: ${{ secrets.TF_TOKEN }}
         terraform_wrapper: false
+    - name: refresh-ssm-from-running
+      # Reconciles /cabal/deployed_image_tag with the image tag actually
+      # running on cabal-imap before plan, so a topology-only apply that
+      # regenerates container_definitions does not roll back an
+      # out-of-band app deploy. See phase 1 of
+      # docs/0.9.0/build-deploy-simplification-plan.md. Steady-state
+      # no-op until phase 3 introduces out-of-band deploys.
+      run: ../../.github/scripts/refresh-ssm-from-running.sh
     - name: update-image-tag-in-ssm
       if: inputs.image_tag != ''
       run: |
