@@ -17,6 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Apple client already had a `confirmationDialog` for revocation and
   is unchanged. Closes #333.
 
+### Changed
+- Replaced the remaining browser-native `window.confirm()` prompts on
+  destructive actions across the React app with the shared
+  `ConfirmDialog` so all confirmations share a single styled
+  presentation: user delete and address-unassign in the Users admin
+  view, address-unassign in the All Addresses admin view, and the
+  Markdown/Rich Text replace prompts in the compose editor.
+
 ## [0.8.1] - 2026-04-28
 
 ### Added

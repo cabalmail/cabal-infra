@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import useApi from '../hooks/useApi';
 import { useAppMessage } from '../contexts/AppMessageContext';
+import ConfirmDialog from '../ConfirmDialog';
 import './Users.css';
 
 function Users() {
@@ -13,6 +14,8 @@ function Users() {
   const [pickerAddress, setPickerAddress] = useState('');
   const [hoveredAddr, setHoveredAddr] = useState(null);
   const [stickyAddr, setStickyAddr] = useState(null);
+  const [pendingDelete, setPendingDelete] = useState(null);
+  const [pendingUnassign, setPendingUnassign] = useState(null);
   const highlighted = hoveredAddr || stickyAddr;
 
   const loadUsers = useCallback(() => {
@@ -88,9 +91,17 @@ function Users() {
   }, [api, setMessage, loadUsers]);
 
   const handleDelete = useCallback((username) => {
-    if (!window.confirm(`Delete user "${username}"? This cannot be undone.`)) {
-      return;
-    }
+    setPendingDelete(username);
+  }, []);
+
+  const cancelDelete = useCallback(() => {
+    setPendingDelete(null);
+  }, []);
+
+  const confirmDelete = useCallback(() => {
+    const username = pendingDelete;
+    if (!username) return;
+    setPendingDelete(null);
     api.deleteUser(username).then(
       () => {
         setMessage(`User "${username}" deleted.`, false);
@@ -100,7 +111,7 @@ function Users() {
         setMessage("Failed to delete user: " + (err.message || err), true);
       }
     );
-  }, [api, setMessage, loadUsers]);
+  }, [api, pendingDelete, setMessage, loadUsers]);
 
   const handleAssign = useCallback((username, address) => {
     if (!address) {
@@ -122,7 +133,18 @@ function Users() {
   }, [api, setMessage, loadUsers]);
 
   const handleUnassign = useCallback((username, address) => {
-    if (!window.confirm(`Remove "${username}" from "${address}"?`)) return;
+    setPendingUnassign({ username, address });
+  }, []);
+
+  const cancelUnassign = useCallback(() => {
+    setPendingUnassign(null);
+  }, []);
+
+  const confirmUnassign = useCallback(() => {
+    const target = pendingUnassign;
+    if (!target) return;
+    setPendingUnassign(null);
+    const { username, address } = target;
     api.unassignAddress(address, username).then(
       () => {
         setMessage(`Removed "${username}" from "${address}".`, false);
@@ -133,7 +155,7 @@ function Users() {
         setMessage('Failed to remove assignment: ' + msg, true);
       }
     );
-  }, [api, setMessage, loadUsers]);
+  }, [api, pendingUnassign, setMessage, loadUsers]);
 
   const nonSystemUsers = users.filter(u => !['master', 'dmarc'].includes(u.username));
   const pendingUsers = nonSystemUsers.filter(u => u.status !== 'CONFIRMED');
@@ -146,6 +168,38 @@ function Users() {
   return (
     <div className="Users">
       <button id="reload" onClick={loadUsers}>&#x21bb;</button>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Delete user?"
+        message={pendingDelete ? (
+          <>
+            User <strong>{pendingDelete}</strong> will be permanently deleted.
+            {' '}This can&rsquo;t be undone.
+          </>
+        ) : null}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        destructive
+        onConfirm={confirmDelete}
+        onCancel={cancelDelete}
+      />
+
+      <ConfirmDialog
+        open={pendingUnassign !== null}
+        title="Remove user from address?"
+        message={pendingUnassign ? (
+          <>
+            Remove <strong>{pendingUnassign.username}</strong> from{' '}
+            <strong>{pendingUnassign.address}</strong>?
+          </>
+        ) : null}
+        confirmLabel="Remove"
+        cancelLabel="Cancel"
+        destructive
+        onConfirm={confirmUnassign}
+        onCancel={cancelUnassign}
+      />
 
       <h2>Pending Users</h2>
       {pendingUsers.length === 0 ? (

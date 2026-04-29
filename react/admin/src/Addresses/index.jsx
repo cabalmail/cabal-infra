@@ -15,6 +15,7 @@ function AdminAddresses({ domains, setMessage }) {
   const [pickerFor, setPickerFor] = useState(null);
   const [pickerUser, setPickerUser] = useState('');
   const [pendingRevoke, setPendingRevoke] = useState(null);
+  const [pendingUnassign, setPendingUnassign] = useState(null);
 
   const loadData = useCallback(() => {
     setLoading(true);
@@ -85,7 +86,18 @@ function AdminAddresses({ domains, setMessage }) {
   }, [api, setMessage, loadData]);
 
   const handleUnassign = useCallback((address, username) => {
-    if (!window.confirm(`Remove "${username}" from "${address}"?`)) return;
+    setPendingUnassign({ address, username });
+  }, []);
+
+  const cancelUnassign = useCallback(() => {
+    setPendingUnassign(null);
+  }, []);
+
+  const confirmUnassign = useCallback(() => {
+    const target = pendingUnassign;
+    if (!target) return;
+    setPendingUnassign(null);
+    const { address, username } = target;
     api.unassignAddress(address, username).then(
       () => {
         setMessage && setMessage(`Removed "${username}" from "${address}".`, false);
@@ -96,7 +108,7 @@ function AdminAddresses({ domains, setMessage }) {
         setMessage && setMessage('Failed to remove user: ' + msg, true);
       }
     );
-  }, [api, setMessage, loadData]);
+  }, [api, pendingUnassign, setMessage, loadData]);
 
   const handleRevoke = useCallback((a) => {
     setPendingRevoke(a);
@@ -182,6 +194,22 @@ function AdminAddresses({ domains, setMessage }) {
         destructive
         onConfirm={confirmRevoke}
         onCancel={cancelRevoke}
+      />
+
+      <ConfirmDialog
+        open={pendingUnassign !== null}
+        title="Remove user from address?"
+        message={pendingUnassign ? (
+          <>
+            Remove <strong>{pendingUnassign.username}</strong> from{' '}
+            <strong>{pendingUnassign.address}</strong>?
+          </>
+        ) : null}
+        confirmLabel="Remove"
+        cancelLabel="Cancel"
+        destructive
+        onConfirm={confirmUnassign}
+        onCancel={cancelUnassign}
       />
 
       {filteredAddresses.length === 0 ? (
