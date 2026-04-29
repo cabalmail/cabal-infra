@@ -120,7 +120,7 @@ resource "aws_instance" "nat" {
   source_dest_check      = false
   iam_instance_profile   = aws_iam_instance_profile.nat[0].name
 
-  user_data = base64encode(<<-EOF
+  user_data = <<-EOF
     #!/bin/bash
     # Enable IP forwarding (persists across reboots via sysctl.d)
     echo "net.ipv4.ip_forward = 1" > /etc/sysctl.d/nat.conf
@@ -157,7 +157,6 @@ resource "aws_instance" "nat" {
     systemctl daemon-reload
     systemctl enable restore-iptables.service
   EOF
-  )
 
   metadata_options {
     http_tokens   = "required"
@@ -166,6 +165,13 @@ resource "aws_instance" "nat" {
 
   tags = {
     Name = "cabal-nat-${count.index}"
+  }
+
+  # The EIP association overwrites the instance's public_ip/public_dns
+  # out-of-band, which the AWS provider re-reports as drift on every
+  # plan. Ignore those computed attributes so plans are idempotent.
+  lifecycle {
+    ignore_changes = [public_ip, public_dns]
   }
 }
 

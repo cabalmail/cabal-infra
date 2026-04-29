@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.2] - Unreleased
+
+### Fixed
+- NAT-instance Terraform plan is now idempotent. `aws_instance.nat` in
+  `terraform/infra/modules/vpc/nat.tf` ignores changes to its computed
+  `public_ip` / `public_dns`, which the EIP association overwrites
+  out-of-band and the AWS provider reported as drift on every plan.
+  Also dropped the explicit `base64encode(...)` wrapper around the
+  cleartext NAT-instance `user_data` heredoc; the provider now base64-
+  encodes internally, silencing the deprecation warning about a
+  base64-encoded value passed to the cleartext `user_data` argument.
+
 ## [0.9.1] - 2026-04-29
 
 ### Changed
