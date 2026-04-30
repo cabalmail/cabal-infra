@@ -26,4 +26,12 @@ resource "aws_lambda_function" "certbot" {
     log_group  = aws_cloudwatch_log_group.certbot.name
     log_format = "Text"
   }
+
+  # Phase 2 of docs/0.9.0/build-deploy-simplification-plan.md: out-of-band
+  # Lambda deploys mutate the container image via aws lambda
+  # update-function-code --image-uri; ignore image_uri so a topology-only
+  # Terraform apply does not roll the update back.
+  lifecycle {
+    ignore_changes = [image_uri]
+  }
 }

@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.9.2] - Unreleased
 
+### Changed
+- Phase 2 of the build/deploy simplification plan
+  (`docs/0.9.0/build-deploy-simplification-plan.md`): every S3-source
+  `aws_lambda_function` resource (the api `cabal_method` calls, the
+  `process_dmarc` ingester, the `assign_osid` Cognito post-confirmation
+  trigger, and the `alert_sink` and `backup_heartbeat` monitoring
+  Lambdas) now has `lifecycle { ignore_changes = [s3_key,
+  s3_object_version, source_code_hash] }`. The container-image
+  `cabal-certbot-renewal` Lambda has `lifecycle { ignore_changes =
+  [image_uri] }`. `healthchecks_iac` is intentionally excluded -
+  `aws_lambda_invocation` triggers on its `source_code_hash` and
+  freezing that trigger would block config.py changes from
+  propagating; phase 3 will replace its in-Terraform invocation flow
+  with an explicit out-of-band `aws lambda invoke` after a code
+  deploy. Steady-state no-op until phase 3 introduces out-of-band
+  Lambda deploys; protects forward updates from being rolled back by
+  topology-only applies once they do.
+
+### Added
+- `.github/scripts/record-lambda-hashes.sh` queries every S3-source
+  Lambda function in the account via `aws lambda list-functions` and
+  writes their `CodeSha256` values to
+  `terraform/infra/.terraform/lambda-pinned.tfvars` as the
+  `lambda_pinned_hashes` map variable. Wired into the `terraform.yml`
+  plan and apply jobs after `terraform init` so plan and apply both
+  receive a consistent snapshot of running code identity. The new
+  variable is declared in `terraform/infra/variables.tf` with default
+  `{}`; it is reserved for phase 3 wiring and not yet consumed by
+  individual Lambda resources, so the script is a steady-state no-op
+  on the legacy pipeline.
+
 ### Fixed
 - NAT-instance Terraform plan is now idempotent. `aws_instance.nat` in
   `terraform/infra/modules/vpc/nat.tf` ignores changes to its computed
