@@ -38,7 +38,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `{}`; it is reserved for phase 3 wiring and not yet consumed by
   individual Lambda resources, so the script is a steady-state no-op
   on the legacy pipeline.
->>>>>>> claude/eager-benz-0596bf
 
 ### Fixed
 - NAT-instance Terraform plan is now idempotent. `aws_instance.nat` in
