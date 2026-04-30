@@ -5,6 +5,68 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.4] - 2026-04-30
+
+### Added
+- Phase 5 of the build/deploy simplification plan
+  (`docs/0.9.0/build-deploy-simplification-plan.md`): new
+  `.github/workflows/infra.yml` replaces `terraform.yml` +
+  `bootstrap.yml` as the canonical infrastructure pipeline. It owns
+  both the bootstrap (`terraform/dns`) stage and the main
+  (`terraform/infra`) stage in a single workflow gated by a
+  `dorny/paths-filter@v3` step: a push that only touches
+  `terraform/infra/**` skips the bootstrap jobs in 0s, and a push
+  that touches `terraform/dns/**` runs bootstrap before the main
+  apply. `workflow_dispatch` exposes a `bootstrap` boolean input that
+  forces the bootstrap stage when neither path filter would. Inherits
+  the per-branch `environment:` mapping (`main`->prod,
+  `stage`->stage, other->development) on every AWS-touching job, so
+  the existing required-reviewer gate on `prod` carries over
+  unchanged. Adds `concurrency: { group: infra-${{ github.ref }},
+  cancel-in-progress: false }` so back-to-back applies serialise on
+  the state lock instead of racing.
+- `.github/scripts/post-apply-update-services.sh` and a `post_apply`
+  job in `infra.yml` that runs it. Phase 1 (shipped in 0.9.3) added
+  `lifecycle { ignore_changes = [task_definition] }` to every
+  `aws_ecs_service` so out-of-band app deploys are not rolled back by
+  topology-only Terraform applies; the trade-off was that a Terraform
+  topology change (cpu/memory/env/IAM) registers a new task-def
+  revision but the service stays pinned to the old one. The script
+  walks every service on `cabal-mail`, compares the family head
+  against the service's current revision, and calls `aws ecs
+  update-service` to roll forward only when the head has advanced.
+  Steady-state no-op; closes the gap noted in 0.9.3 between
+  Terraform-driven topology changes and out-of-band deploys.
+
+### Changed
+- `.github/workflows/terraform.yml` renamed to
+  `.github/workflows/terraform-legacy.yml`. The `push` trigger is
+  stripped so a push to `terraform/infra/**` now drives `infra.yml`
+  rather than re-entering Terraform via the legacy file.
+  `workflow_dispatch` and `repository_dispatch` are kept as manual
+  escape hatches for one release cycle in case `infra.yml` needs to
+  be rolled back. `workflow_call` is preserved for the same window so
+  the still-existing chain from `docker.yml` /
+  `lambda_api_python.yml` / `lambda_counter.yml` keeps working; phase
+  6 deletes those callers and phase 7 deletes the now-unused
+  `workflow_call` interface here.
+- `docker.yml`, `lambda_api_python.yml`, and `lambda_counter.yml`
+  updated their `uses:` references from
+  `./.github/workflows/terraform.yml` to
+  `./.github/workflows/terraform-legacy.yml` so the legacy
+  build->terraform chain keeps working through the dual-pipeline
+  window. These files are deleted in phase 6.
+
+### Deprecated
+- `.github/workflows/terraform-legacy.yml` is the renamed legacy
+  Terraform pipeline, kept only as a manual escape hatch in case
+  `infra.yml` needs to be rolled back during the dual-pipeline
+  window. It will be removed in the next release alongside phase 6's
+  cutover (which also deletes `docker.yml`, `lambda_api_python.yml`,
+  `lambda_counter.yml`, `react.yml`, and `bootstrap.yml`). Do not
+  invoke it for routine deploys: push-driven infra changes flow
+  through `infra.yml` and app deploys flow through `app.yml`.
+
 ## [0.9.3] - 2026-04-30
 
 ### Changed
