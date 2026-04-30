@@ -1,7 +1,9 @@
 #!/bin/bash
 
 set +e
-terraform plan -lock-timeout=30m -detailed-exitcode -var-file="terraform.tfvars"
+terraform plan -lock-timeout=30m -detailed-exitcode \
+  -var-file="terraform.tfvars" \
+  -var-file=".terraform/lambda-pinned.tfvars"
 EXIT_CODE=$?
 echo ">$EXIT_CODE<"
 echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"

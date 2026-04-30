@@ -11,7 +11,7 @@ output "relay_ips" {
     addresses = module.vpc.relay_ips
     domain    = "smtp.${var.control_domain}"
   }
-  description = "IP addresses that will be used for outbound mail. See README.md section on PTR records for important instructions."
+  description = "IP addresses that will be used for outbound mail."
 }
 
 output "domains" {

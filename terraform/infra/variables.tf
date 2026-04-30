@@ -101,4 +101,14 @@ variable "quiesced" {
   default     = false
 }
 
-
+# Populated by .github/scripts/record-lambda-hashes.sh at CI time and
+# fed into terraform plan/apply as -var-file=.terraform/lambda-pinned.tfvars.
+# See phase 2 of docs/0.9.0/build-deploy-simplification-plan.md. Reserved
+# for phase 3 wiring; not consumed by Lambda resources yet, so the
+# default {} keeps local plans (and the steady-state CI flow) working.
+# tflint-ignore: terraform_unused_declarations
+variable "lambda_pinned_hashes" {
+  type        = map(string)
+  description = "Map of Lambda function name to currently-deployed CodeSha256, recorded from AWS at CI time so a topology-only Terraform apply can plan against running code identities once phase 3 introduces out-of-band Lambda deploys."
+  default     = {}
+}
