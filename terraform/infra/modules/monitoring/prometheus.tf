@@ -167,4 +167,9 @@ resource "aws_ecs_service" "prometheus" {
   service_registries {
     registry_arn = aws_service_discovery_service.monitoring["prometheus"].arn
   }
+
+  # See aws_ecs_service.imap in modules/ecs/services.tf for rationale.
+  lifecycle {
+    ignore_changes = [task_definition]
+  }
 }

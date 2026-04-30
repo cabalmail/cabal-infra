@@ -229,4 +229,9 @@ resource "aws_ecs_service" "grafana" {
   service_registries {
     registry_arn = aws_service_discovery_service.monitoring["grafana"].arn
   }
+
+  # See aws_ecs_service.imap in modules/ecs/services.tf for rationale.
+  lifecycle {
+    ignore_changes = [task_definition]
+  }
 }

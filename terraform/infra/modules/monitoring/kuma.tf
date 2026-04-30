@@ -178,4 +178,9 @@ resource "aws_ecs_service" "kuma" {
     container_name   = "uptime-kuma"
     container_port   = 3001
   }
+
+  # See aws_ecs_service.imap in modules/ecs/services.tf for rationale.
+  lifecycle {
+    ignore_changes = [task_definition]
+  }
 }
