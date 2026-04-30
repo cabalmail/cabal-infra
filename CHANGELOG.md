@@ -5,7 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.9.2] - 2026-04-29
+## [0.9.3] - 2026-04-29
+
+### Added
+- Phase 3 of the build/deploy simplification plan
+  (`docs/0.9.0/build-deploy-simplification-plan.md`): new
+  `.github/workflows/app.yml` builds every application artifact in
+  parallel and deploys directly to running infrastructure via the AWS
+  CLI - no Terraform on the deploy path. Triggered on
+  `workflow_dispatch` only at this phase, with an `areas` input
+  (default `all`) that scopes the run to any subset of `docker`,
+  `lambda_api`, `lambda_counter`, `lambda_certbot`, `react`. The
+  legacy `docker.yml`, `lambda_api_python.yml`, `lambda_counter.yml`,
+  and `react.yml` keep running unchanged so both pipelines coexist
+  during validation; phase 6 cuts the legacy workflows over and adds
+  push triggers to `app.yml`. The docker matrix already drops the
+  nine monitoring tiers when `vars.TF_VAR_MONITORING != 'true'` so
+  manual validation does not pay arm64 build minutes for images
+  nothing deploys. `concurrency: { group: app-${{ github.ref }},
+  cancel-in-progress: false }` serialises overlapping app deploys per
+  ref so back-to-back runs roll services in order rather than racing.
+- `.github/scripts/deploy-ecs-service.sh` is the ECS half of the
+  out-of-band deploy path. Given a tier and an image tag it clones
+  the running task definition for `cabal-<tier>` on the `cabal-mail`
+  cluster, rewrites every container whose ECR repo basename is
+  `cabal-<tier>` to point at the new tag, registers a new revision
+  via `aws ecs register-task-definition`, and rolls the service via
+  `aws ecs update-service`. Phase 1's lifecycle clause
+  (`ignore_changes = [container_definitions]`) keeps a topology-only
+  Terraform apply from clobbering the new revision; phase 1's
+  `refresh-ssm-from-running.sh` keeps `/cabal/deployed_image_tag` in
+  lockstep with whatever the script just deployed.
+- `.github/scripts/deploy-lambda-zip.sh` and
+  `.github/scripts/deploy-lambda-image.sh` are the Lambda half. The
+  zip helper assumes `build-api.sh` / `build-counter.sh` has
+  uploaded `<func>.zip` and `<func>.zip.base64sha256` to
+  `s3://admin.${TF_VAR_CONTROL_DOMAIN}/lambda/`, then calls
+  `aws lambda update-function-code --s3-bucket ... --s3-key ...` and
+  waits for the update to settle. The image helper does the
+  equivalent for `cabal-certbot-renewal` via `--image-uri`. Both
+  refuse to deploy a function that does not yet exist in the account
+  so misconfigured runs fail loudly. The `lambda-api` deploy step in
+  `app.yml` walks every directory in `lambda/api/` except `python`
+  (the shared layer) and `healthchecks_iac` (kept on the legacy
+  in-Terraform invocation flow per phase 2's note).
+
+
 
 ### Changed
 - Phase 2 of the build/deploy simplification plan
