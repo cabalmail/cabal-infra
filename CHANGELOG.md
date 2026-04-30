@@ -77,7 +77,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (the shared layer) and `healthchecks_iac` (kept on the legacy
   in-Terraform invocation flow per phase 2's note).
 
-
+## 0.9.2 - 2026-04-29
 
 ### Changed
 - Phase 2 of the build/deploy simplification plan
