@@ -33,7 +33,7 @@ jobs:
         TF_VAR_CONTROL_DOMAIN: ${{ vars.TF_VAR_CONTROL_DOMAIN }}
       run: ./.github/scripts/build-counter.sh
   deploy:
-    uses: ./.github/workflows/terraform.yml
+    uses: ./.github/workflows/terraform-legacy.yml
     secrets: inherit
     needs:
     - build
