@@ -29,6 +29,13 @@
 #   - LC_ALL=C sort: locale-stable filename ordering inside the zip.
 #   - touch -h: sets every entry's mtime to SOURCE_DATE_EPOCH without
 #     following symlinks.
+#
+# `./python` is wiped before every pip install so that stale files from
+# a previous build cannot leak into the layer. The shared layer
+# (lambda/api/python) keeps its own first-party module sources under
+# ./src/ so that the wipe only removes pip-managed artefacts; ./src/.
+# is copied into ./python/ after pip install so the layer ends up with
+# both the third-party deps and helper.py side-by-side.
 
 set -euo pipefail
 
@@ -44,6 +51,10 @@ for FUNC in * ; do
   pushd "${FUNC}" >/dev/null
   rm -rf ./python
   pip install --no-compile -r requirements.txt -t ./python 2>/dev/null || true
+  if [ -d ./src ]; then
+    mkdir -p ./python
+    cp -a ./src/. ./python/
+  fi
   find . -depth -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
   find . -name '*.pyc' -delete 2>/dev/null || true
   find . -name 'direct_url.json' -delete 2>/dev/null || true
