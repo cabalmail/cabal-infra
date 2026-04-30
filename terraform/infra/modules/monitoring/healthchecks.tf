@@ -151,6 +151,7 @@ resource "aws_ecs_task_definition" "healthchecks" {
       { name = "ALLOWED_HOSTS", value = "*" },
       { name = "SITE_ROOT", value = "https://heartbeat.${var.control_domain}" },
       { name = "SITE_NAME", value = "Cabalmail Healthchecks" },
+      { name = "SITE_LOGO_URL", value = "https://admin.cabalmail.net/logo192.png" },
       # From: domain piggy-backs on the `mail-admin.<first-mail-domain>`
       # subdomain that the DMARC ingestion infrastructure already
       # provisions (see terraform/infra/modules/app/dmarc_user.tf):

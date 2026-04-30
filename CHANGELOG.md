@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.9.2] - Unreleased
 
+### Added
+- Value for `SITE_LOGO_URL` to heartbeat service configuration.
+
 ### Fixed
 - NAT-instance Terraform plan is now idempotent. `aws_instance.nat` in
   `terraform/infra/modules/vpc/nat.tf` ignores changes to its computed
