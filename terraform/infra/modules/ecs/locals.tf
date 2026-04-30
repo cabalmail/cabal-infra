@@ -21,6 +21,21 @@ locals {
     }
   }
 
+  # Phase 4 of docs/0.9.0/build-deploy-simplification-plan.md.
+  # When /cabal/deployed_image_tag is the bootstrap sentinel, the ECR
+  # repos are still empty (infra.yml is responsible for the very first
+  # apply, before app.yml has ever pushed an image), so the task defs
+  # point at a public-ECR placeholder so the cluster comes up cleanly.
+  # The phase 1 lifecycle clause keeps subsequent app.yml deploys from
+  # being clobbered.
+  placeholder_image_tag = "bootstrap-placeholder"
+  placeholder_image     = "public.ecr.aws/nginx/nginx:stable"
+
+  tier_image = {
+    for tier, _ in local.tiers :
+    tier => var.image_tag == local.placeholder_image_tag ? local.placeholder_image : "${var.ecr_repository_urls[tier]}:${var.image_tag}"
+  }
+
   # Target groups are keyed by function, not tier, because smtp-out
   # maps to two target groups (submission + starttls).
   target_groups = {

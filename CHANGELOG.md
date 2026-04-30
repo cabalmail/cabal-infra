@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.9.4] - 2026-04-30
 
+### Added
+- Phase 4 of the build/deploy simplification plan
+  (`docs/0.9.0/build-deploy-simplification-plan.md`): bootstrap
+  placeholders so a brand-new environment can apply
+  `terraform/infra` end-to-end without `app.yml` having ever pushed
+  an image or zip. Every `aws_ecs_task_definition` (the three mail
+  tiers in `modules/ecs` and the nine monitoring tiers in
+  `modules/monitoring`) now resolves its container image through a
+  per-tier `local.<...>_image` map: when `var.image_tag` equals the
+  sentinel `bootstrap-placeholder`, the task def points at
+  `public.ecr.aws/nginx/nginx:stable` instead of the empty ECR repo.
+  `cabal-certbot-renewal` (container-image Lambda) follows the same
+  pattern with `public.ecr.aws/lambda/python:3.13-arm64` as the
+  placeholder. Phase 1's `ignore_changes = [container_definitions]`
+  and phase 2's `ignore_changes = [image_uri]` keep the next
+  `app.yml` deploy from being rolled back on a topology-only apply.
+- `.github/scripts/upload-stub-lambdas.sh` materialises
+  `lambda/<func>.zip` and the `.base64sha256` sidecar in S3 for any
+  function whose pair is missing - the rest of the
+  `terraform/infra` Lambda fleet (api `cabal_method` calls,
+  `process_dmarc`, `assign_osid`, `alert_sink`,
+  `backup_heartbeat`, `healthchecks_iac`, the shared `python`
+  layer) reads the sidecar at plan time, so the very first apply
+  needs *something* in S3 even though no real build has run. The
+  stub is a deterministic zip whose handler raises
+  `NotImplementedError` so a forgotten "real deploy" surfaces in
+  CloudWatch instead of returning success. Steady-state behaviour
+  is a no-op: every function's pair is already in S3, every
+  `head-object` is a hit, nothing is uploaded. The script is laid
+  down here for phase 5's `infra.yml` to call as a pre-apply step.
+
 ### Fixed
 - `app.yml`'s `setup` job now declares `environment: ${{ ... }}`
   matching the per-branch dev/stage/prod mapping the rest of the

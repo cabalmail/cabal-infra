@@ -104,7 +104,7 @@ resource "aws_ecs_task_definition" "grafana" {
 
   container_definitions = jsonencode([{
     name              = "grafana"
-    image             = "${var.grafana_ecr_repository_url}:${var.image_tag}"
+    image             = local.service_image["grafana"]
     essential         = true
     memoryReservation = 256
     memory            = 512

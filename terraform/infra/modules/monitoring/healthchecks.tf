@@ -114,7 +114,7 @@ resource "aws_ecs_task_definition" "healthchecks" {
 
   container_definitions = jsonencode([{
     name              = "healthchecks"
-    image             = "${var.healthchecks_ecr_repository_url}:${var.image_tag}"
+    image             = local.service_image["healthchecks"]
     essential         = true
     memoryReservation = 256
     memory            = 512

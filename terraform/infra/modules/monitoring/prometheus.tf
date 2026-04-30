@@ -92,7 +92,7 @@ resource "aws_ecs_task_definition" "prometheus" {
 
   container_definitions = jsonencode([{
     name              = "prometheus"
-    image             = "${var.prometheus_ecr_repository_url}:${var.image_tag}"
+    image             = local.service_image["prometheus"]
     essential         = true
     memoryReservation = 384
     memory            = 768

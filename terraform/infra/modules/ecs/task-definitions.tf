@@ -26,7 +26,7 @@ resource "aws_ecs_task_definition" "imap" {
 
   container_definitions = jsonencode([{
     name      = "imap"
-    image     = "${var.ecr_repository_urls["imap"]}:${var.image_tag}"
+    image     = local.tier_image["imap"]
     essential = true
 
     memoryReservation = 384
@@ -104,7 +104,7 @@ resource "aws_ecs_task_definition" "smtp_in" {
 
   container_definitions = jsonencode([{
     name      = "smtp-in"
-    image     = "${var.ecr_repository_urls["smtp-in"]}:${var.image_tag}"
+    image     = local.tier_image["smtp-in"]
     essential = true
 
     memoryReservation = 384
@@ -164,7 +164,7 @@ resource "aws_ecs_task_definition" "smtp_out" {
 
   container_definitions = jsonencode([{
     name      = "smtp-out"
-    image     = "${var.ecr_repository_urls["smtp-out"]}:${var.image_tag}"
+    image     = local.tier_image["smtp-out"]
     essential = true
 
     memoryReservation = 448
