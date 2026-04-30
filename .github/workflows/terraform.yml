@@ -25,6 +25,7 @@ on:
       - '.github/scripts/make-terraform.sh'
       - '.github/scripts/plan-terraform.sh'
       - '.github/scripts/refresh-ssm-from-running.sh'
+      - '.github/scripts/record-lambda-hashes.sh'
 
 jobs:
   build:
@@ -188,6 +189,15 @@ jobs:
         echo "quiesced = ${{ vars.TF_VAR_QUIESCED || 'false' }}" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
+    - name: record-lambda-hashes
+      # Records currently-deployed Lambda CodeSha256 values into
+      # .terraform/lambda-pinned.tfvars so terraform plan can pin
+      # against running code identity after phase 3 introduces
+      # out-of-band Lambda deploys. See phase 2 of
+      # docs/0.9.0/build-deploy-simplification-plan.md. Steady-state
+      # no-op until phase 3 lands. Runs after init so .terraform/
+      # exists.
+      run: ../../.github/scripts/record-lambda-hashes.sh
     - name: plan-terraform
       id: plan-terraform
       run: ../../.github/scripts/plan-terraform.sh
@@ -239,11 +249,16 @@ jobs:
         echo "quiesced = ${{ vars.TF_VAR_QUIESCED || 'false' }}" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
+    - name: record-lambda-hashes
+      # See plan job for rationale. Re-records the deployed Lambda
+      # CodeSha256 values in this fresh apply-job workspace so the
+      # -var-file value seen by plan is also seen by apply.
+      run: ../../.github/scripts/record-lambda-hashes.sh
     - name: apply-terraform
       id: apply-terraform
       run: |
         set +e
-        terraform apply -auto-approve -lock-timeout=30m -var-file="terraform.tfvars" 2>&1 | tee /tmp/tf-apply.log
+        terraform apply -auto-approve -lock-timeout=30m -var-file="terraform.tfvars" -var-file=".terraform/lambda-pinned.tfvars" 2>&1 | tee /tmp/tf-apply.log
         TF_EXIT=${PIPESTATUS[0]}
         set -e
         if [ $TF_EXIT -ne 0 ]; then

@@ -138,6 +138,15 @@ resource "aws_security_group_rule" "healthchecks_from_iac_lambda" {
   description              = "Healthchecks accepts API calls from the healthchecks_iac Lambda."
 }
 
+# Phase 2 of docs/0.9.0/build-deploy-simplification-plan.md adds
+# lifecycle { ignore_changes = [s3_key, s3_object_version,
+# source_code_hash] } to the rest of the Lambda fleet. We deliberately
+# do NOT add it here: aws_lambda_invocation.healthchecks_iac below
+# triggers on aws_lambda_function.healthchecks_iac.source_code_hash,
+# and ignore_changes would freeze that trigger in state - a config.py
+# edit would not propagate to Healthchecks until phase 3 replaces this
+# whole flow with an explicit aws lambda invoke after an out-of-band
+# deploy. Revisit at phase 3.
 #tfsec:ignore:aws-lambda-enable-tracing
 resource "aws_lambda_function" "healthchecks_iac" {
   s3_bucket        = var.lambda_bucket

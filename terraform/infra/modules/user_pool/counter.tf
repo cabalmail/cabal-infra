@@ -95,6 +95,14 @@ resource "aws_lambda_function" "assign_osid" {
       HEALTHCHECK_PING_PARAM = var.healthcheck_ping_param
     }
   }
+
+  # Phase 2 of docs/0.9.0/build-deploy-simplification-plan.md: out-of-band
+  # Lambda deploys mutate code via aws lambda update-function-code; ignore
+  # these attributes so a topology-only Terraform apply does not roll the
+  # update back.
+  lifecycle {
+    ignore_changes = [s3_key, s3_object_version, source_code_hash]
+  }
 }
 
 resource "aws_lambda_permission" "allow_cognito" {
