@@ -137,6 +137,11 @@ resource "aws_ecs_service" "cloudwatch_exporter" {
   service_registries {
     registry_arn = aws_service_discovery_service.monitoring["cloudwatch-exporter"].arn
   }
+
+  # See aws_ecs_service.imap in modules/ecs/services.tf for rationale.
+  lifecycle {
+    ignore_changes = [task_definition]
+  }
 }
 
 # -- blackbox_exporter ----------------------------------------
@@ -235,6 +240,11 @@ resource "aws_ecs_service" "blackbox_exporter" {
 
   service_registries {
     registry_arn = aws_service_discovery_service.monitoring["blackbox-exporter"].arn
+  }
+
+  # See aws_ecs_service.imap in modules/ecs/services.tf for rationale.
+  lifecycle {
+    ignore_changes = [task_definition]
   }
 }
 
@@ -373,5 +383,10 @@ resource "aws_ecs_service" "node_exporter" {
     registry_arn   = aws_service_discovery_service.node_exporter.arn
     container_name = "node-exporter"
     container_port = 9100
+  }
+
+  # See aws_ecs_service.imap in modules/ecs/services.tf for rationale.
+  lifecycle {
+    ignore_changes = [task_definition]
   }
 }

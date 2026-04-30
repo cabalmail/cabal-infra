@@ -196,4 +196,9 @@ resource "aws_ecs_service" "ntfy" {
     container_name   = "ntfy"
     container_port   = 80
   }
+
+  # See aws_ecs_service.imap in modules/ecs/services.tf for rationale.
+  lifecycle {
+    ignore_changes = [task_definition]
+  }
 }

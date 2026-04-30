@@ -45,6 +45,20 @@ resource "aws_ecs_service" "imap" {
   }
 
   depends_on = [aws_ecs_cluster_capacity_providers.mail]
+
+  # Phase 1 follow-up of docs/0.9.0/build-deploy-simplification-plan.md:
+  # app.yml registers a new task-def revision out-of-band and rolls
+  # the service to it via aws ecs update-service. Without this clause
+  # Terraform sees AWS on revision N+1 and the (state-bound) reference
+  # aws_ecs_task_definition.imap.arn at revision N, and plans to roll
+  # the service back. Trade-off: a Terraform-driven topology change
+  # (cpu/memory/env/IAM) that registers a new revision will not
+  # auto-roll the service either; phase 5's infra.yml will add a
+  # post-apply update-service step keyed off the freshly-registered
+  # revision.
+  lifecycle {
+    ignore_changes = [task_definition]
+  }
 }
 
 # -- SMTP-IN service -------------------------------------------
@@ -77,6 +91,11 @@ resource "aws_ecs_service" "smtp_in" {
   }
 
   depends_on = [aws_ecs_cluster_capacity_providers.mail]
+
+  # See aws_ecs_service.imap for rationale.
+  lifecycle {
+    ignore_changes = [task_definition]
+  }
 }
 
 # -- SMTP-OUT service ------------------------------------------
@@ -115,6 +134,11 @@ resource "aws_ecs_service" "smtp_out" {
   }
 
   depends_on = [aws_ecs_cluster_capacity_providers.mail]
+
+  # See aws_ecs_service.imap for rationale.
+  lifecycle {
+    ignore_changes = [task_definition]
+  }
 }
 
 # -- Auto-scaling: SMTP-IN ------------------------------------

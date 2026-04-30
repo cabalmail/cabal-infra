@@ -5,7 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.9.3] - 2026-04-29
+## [0.9.3] - 2026-04-30
+
+### Changed
+- Phase 1 follow-up: every `aws_ecs_service` (3 mail-tier services in
+  `terraform/infra/modules/ecs/services.tf` plus 9 monitoring
+  services across `modules/monitoring/`) now has `lifecycle {
+  ignore_changes = [task_definition] }`. Phase 1 ignored
+  `container_definitions` on the task-def resources, but the
+  services still referenced `aws_ecs_task_definition.<name>.arn`,
+  so after `app.yml` registered a new revision out-of-band and
+  rolled the service forward, every subsequent Terraform plan
+  wanted to roll the service back to the (state-bound) revision the
+  task-def resource was last applied at. Trade-off: a Terraform
+  topology change (cpu/memory/env/IAM) that registers a new
+  revision will not auto-roll the service either; phase 5's
+  `infra.yml` will add a post-apply `update-service` step keyed off
+  the freshly-registered revision.
+- `build-api.sh` and `build-counter.sh` now produce byte-stable zips
+  for the same source tree across runs. The python Lambda layer
+  (`lambda/api/python/`) was the chokepoint: a non-deterministic
+  zip meant the layer's `source_code_hash` changed on every CI run,
+  forcing a new `aws_lambda_layer_version` and a 30+ Lambda
+  in-place update on the next Terraform plan to rotate every
+  function's `layers` attribute. Build now sets
+  `SOURCE_DATE_EPOCH`, passes `pip install --no-compile`, scrubs
+  `__pycache__/*.pyc/direct_url.json`, normalises file modes
+  (0755 dirs / 0644 files), and sorts under `LC_ALL=C`. Same
+  source-and-pinned-deps now yields the same zip bytes.
 
 ### Added
 - Phase 3 of the build/deploy simplification plan
