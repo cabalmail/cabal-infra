@@ -1,0 +1,336 @@
+---
+name: Build and Deploy Application
+
+# Phase 3 of docs/0.9.0/build-deploy-simplification-plan.md introduces
+# this workflow alongside the legacy docker.yml / lambda_api_python.yml
+# / lambda_counter.yml / react.yml pipeline. It builds every
+# application artifact in parallel and deploys directly to running
+# infrastructure via the AWS CLI - no Terraform on the deploy path.
+#
+# Trigger is workflow_dispatch only at this phase: the operator runs
+# this manually on dev to validate end-to-end behavior. Phase 6 will
+# add push triggers and delete the legacy workflows. Both pipelines
+# coexist briefly in between.
+
+on:
+  workflow_dispatch:
+    inputs:
+      areas:
+        description: >-
+          Comma-separated areas to build and deploy. Allowed values:
+          all, docker, lambda_api, lambda_counter, lambda_certbot,
+          react. Defaults to "all".
+        required: false
+        default: all
+        type: string
+
+permissions:
+  contents: read
+
+# Serialize per-ref so back-to-back app deploys roll services in order
+# rather than racing each other. Phase 3 of
+# docs/0.9.0/build-deploy-simplification-plan.md.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.tag.outputs.image_tag }}
+      tiers: ${{ steps.matrix.outputs.tiers }}
+      docker: ${{ steps.areas.outputs.docker }}
+      lambda_api: ${{ steps.areas.outputs.lambda_api }}
+      lambda_counter: ${{ steps.areas.outputs.lambda_counter }}
+      lambda_certbot: ${{ steps.areas.outputs.lambda_certbot }}
+      react: ${{ steps.areas.outputs.react }}
+    steps:
+    - name: compute-tag
+      id: tag
+      run: echo "image_tag=sha-${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
+
+    # Build only the docker tiers actually consumed by the current
+    # environment. Per phase 3 of the simplification plan, the
+    # monitoring stack (9 tiers) is dropped from the matrix when
+    # vars.TF_VAR_MONITORING != 'true' so we stop spending arm64 build
+    # minutes on images nothing deploys.
+    - name: compute-matrix
+      id: matrix
+      env:
+        MONITORING: ${{ vars.TF_VAR_MONITORING }}
+      run: |
+        CORE='["imap","smtp-in","smtp-out"]'
+        MON='["uptime-kuma","ntfy","healthchecks","prometheus","alertmanager","grafana","cloudwatch-exporter","blackbox-exporter","node-exporter"]'
+        if [ "${MONITORING}" = "true" ]; then
+          tiers="$(jq -cn --argjson c "$CORE" --argjson m "$MON" '$c + $m')"
+        else
+          tiers="$CORE"
+        fi
+        echo "tiers=${tiers}" >> "$GITHUB_OUTPUT"
+        echo "matrix tiers: ${tiers}"
+
+    - name: resolve-areas
+      id: areas
+      env:
+        AREAS: ${{ inputs.areas }}
+      run: |
+        set -euo pipefail
+        normalised="$(echo "${AREAS}" | tr -d '[:space:]')"
+        wanted=",${normalised},"
+        is_on() {
+          [ "${normalised}" = "all" ] && return 0
+          case "${wanted}" in *",$1,"*) return 0 ;; *) return 1 ;; esac
+        }
+        for a in docker lambda_api lambda_counter lambda_certbot react; do
+          if is_on "${a}"; then
+            echo "${a}=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "${a}=false" >> "$GITHUB_OUTPUT"
+          fi
+        done
+
+  docker:
+    needs: setup
+    if: needs.setup.outputs.docker == 'true'
+    runs-on: ubuntu-24.04-arm
+    environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
+    strategy:
+      fail-fast: false
+      matrix:
+        tier: ${{ fromJson(needs.setup.outputs.tiers) }}
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+    steps:
+    - name: checkout
+      uses: actions/checkout@v5
+
+    - name: login-to-ecr
+      id: ecr
+      run: |
+        ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+        REGION=${{ secrets.AWS_REGION }}
+        REGISTRY="${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com"
+        aws ecr get-login-password --region "${REGION}" \
+          | docker login --username AWS --password-stdin "${REGISTRY}"
+        echo "registry=${REGISTRY}" >> "$GITHUB_OUTPUT"
+
+    - name: set-up-buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: build-and-push
+      run: |
+        IMAGE="${{ steps.ecr.outputs.registry }}/cabal-${{ matrix.tier }}"
+        TAG="${{ needs.setup.outputs.image_tag }}"
+        docker buildx build \
+          --platform linux/arm64 \
+          --provenance=false \
+          -f docker/${{ matrix.tier }}/Dockerfile \
+          -t "${IMAGE}:${TAG}" \
+          --push \
+          docker/
+
+    # Out-of-band ECS deploy: clones running task def, rewrites the
+    # image tag for cabal-${tier}, registers a new revision, and rolls
+    # the service. See .github/scripts/deploy-ecs-service.sh.
+    - name: deploy
+      run: |
+        ./.github/scripts/deploy-ecs-service.sh \
+          "${{ matrix.tier }}" \
+          "${{ needs.setup.outputs.image_tag }}"
+
+  lambda-certbot:
+    needs: setup
+    if: needs.setup.outputs.lambda_certbot == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+    steps:
+    - name: checkout
+      uses: actions/checkout@v5
+
+    - name: login-to-ecr
+      id: ecr
+      run: |
+        ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+        REGION=${{ secrets.AWS_REGION }}
+        REGISTRY="${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com"
+        aws ecr get-login-password --region "${REGION}" \
+          | docker login --username AWS --password-stdin "${REGISTRY}"
+        echo "registry=${REGISTRY}" >> "$GITHUB_OUTPUT"
+
+    - name: set-up-buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: build-and-push
+      id: image
+      run: |
+        IMAGE="${{ steps.ecr.outputs.registry }}/cabal/certbot-renewal"
+        TAG="${{ needs.setup.outputs.image_tag }}"
+        docker buildx build \
+          --platform linux/arm64 \
+          --provenance=false \
+          -t "${IMAGE}:${TAG}" \
+          -t "${IMAGE}:latest" \
+          --push \
+          lambda/certbot-renewal/
+        echo "uri=${IMAGE}:${TAG}" >> "$GITHUB_OUTPUT"
+
+    - name: deploy
+      run: |
+        ./.github/scripts/deploy-lambda-image.sh \
+          cabal-certbot-renewal \
+          "${{ steps.image.outputs.uri }}"
+
+  lambda-api:
+    needs: setup
+    if: needs.setup.outputs.lambda_api == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+    steps:
+    - name: checkout
+      uses: actions/checkout@v5
+
+    - name: pylint
+      run: pip install pylint && cd ./lambda/api && pylint --rcfile .pylintrc */function.py
+
+    - name: configure-aws
+      run: |
+        aws configure --profile deploy_lambda <<-EOF > /dev/null 2>&1
+        ${{ secrets.AWS_ACCESS_KEY_ID }}
+        ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        ${{ secrets.AWS_REGION }}
+        json
+        EOF
+
+    - name: build
+      env:
+        TF_VAR_CONTROL_DOMAIN: ${{ vars.TF_VAR_CONTROL_DOMAIN }}
+      run: ./.github/scripts/build-api.sh
+
+    # Out-of-band Lambda deploy. The api functions are registered with
+    # function_name == directory name (see modules/app/modules/call), so
+    # the dir name doubles as the AWS function name. The 'python' dir
+    # is the shared Lambda layer, not a function. healthchecks_iac is
+    # excluded for now: phase 2 left it on the legacy in-Terraform
+    # invocation flow because aws_lambda_invocation triggers on its
+    # source_code_hash and freezing that trigger would block config.py
+    # changes from propagating. Phase 3 leaves Terraform as the deploy
+    # path for healthchecks_iac (build-api.sh still uploads its zip);
+    # a follow-on swaps it to an explicit aws lambda invoke after a
+    # code deploy. Functions whose Terraform module is gated off in
+    # this environment (e.g. alert_sink and backup_heartbeat when
+    # vars.TF_VAR_MONITORING != 'true') do not exist in AWS; we skip
+    # them with a warning rather than fail the run, since build-api.sh
+    # uploads a zip for every directory unconditionally.
+    - name: deploy
+      env:
+        TF_VAR_CONTROL_DOMAIN: ${{ vars.TF_VAR_CONTROL_DOMAIN }}
+      run: |
+        BUCKET="admin.${TF_VAR_CONTROL_DOMAIN}"
+        FAILED=()
+        SKIPPED=()
+        for FUNC_DIR in lambda/api/*/ ; do
+          FUNC=$(basename "${FUNC_DIR}")
+          case "${FUNC}" in
+            python|healthchecks_iac) continue ;;
+          esac
+          if ! aws lambda get-function --function-name "${FUNC}" >/dev/null 2>&1; then
+            echo "::warning::function ${FUNC} not deployed in this environment; skipping"
+            SKIPPED+=("${FUNC}")
+            continue
+          fi
+          if ! ./.github/scripts/deploy-lambda-zip.sh "${FUNC}" "${BUCKET}"; then
+            FAILED+=("${FUNC}")
+          fi
+        done
+        if [ "${#SKIPPED[@]}" -gt 0 ]; then
+          echo "skipped (not deployed in this environment): ${SKIPPED[*]}"
+        fi
+        if [ "${#FAILED[@]}" -gt 0 ]; then
+          echo "::error::failed to deploy: ${FAILED[*]}"
+          exit 1
+        fi
+
+  lambda-counter:
+    needs: setup
+    if: needs.setup.outputs.lambda_counter == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+    steps:
+    - name: checkout
+      uses: actions/checkout@v5
+
+    - name: pylint
+      run: pip install pylint && pylint --rcfile ./lambda/api/.pylintrc ./lambda/counter/*/function.py
+
+    - name: configure-aws
+      run: |
+        aws configure --profile deploy_lambda <<-EOF > /dev/null 2>&1
+        ${{ secrets.AWS_ACCESS_KEY_ID }}
+        ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        ${{ secrets.AWS_REGION }}
+        json
+        EOF
+
+    - name: build
+      env:
+        TF_VAR_CONTROL_DOMAIN: ${{ vars.TF_VAR_CONTROL_DOMAIN }}
+      run: ./.github/scripts/build-counter.sh
+
+    - name: deploy
+      env:
+        TF_VAR_CONTROL_DOMAIN: ${{ vars.TF_VAR_CONTROL_DOMAIN }}
+      run: |
+        BUCKET="admin.${TF_VAR_CONTROL_DOMAIN}"
+        ./.github/scripts/deploy-lambda-zip.sh assign_osid "${BUCKET}"
+
+  react:
+    needs: setup
+    if: needs.setup.outputs.react == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+    steps:
+    - name: checkout
+      uses: actions/checkout@v5
+
+    - name: build
+      env:
+        NODE_ENV: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
+      run: cd react/admin && npm ci && npm run build
+
+    - name: upload
+      env:
+        TF_VAR_CONTROL_DOMAIN: ${{ vars.TF_VAR_CONTROL_DOMAIN }}
+      run: aws s3 sync react/admin/dist "s3://admin.${TF_VAR_CONTROL_DOMAIN}" --no-progress
+
+    - name: invalidate-cache
+      run: |
+        DIST_ID=$(aws ssm get-parameter \
+          --name "/cabal/react-config/cf-distribution" \
+          --query 'Parameter.Value' --output text)
+        aws cloudfront create-invalidation \
+          --distribution-id "${DIST_ID}" \
+          --paths '/*' >/dev/null
