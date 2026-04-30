@@ -37,6 +37,13 @@ concurrency:
 jobs:
   setup:
     runs-on: ubuntu-latest
+    # Bind to the per-branch environment so vars.TF_VAR_MONITORING (set
+    # on the GitHub prod / stage / development environments, not at
+    # the repo level) is visible to compute-matrix below. Without this
+    # the matrix collapsed to the three core tiers on prod even though
+    # monitoring was enabled, because the unbound job only saw
+    # repo-scoped vars and the conditional fell through.
+    environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     outputs:
       image_tag: ${{ steps.tag.outputs.image_tag }}
       tiers: ${{ steps.matrix.outputs.tiers }}
@@ -235,12 +242,22 @@ jobs:
     # vars.TF_VAR_MONITORING != 'true') do not exist in AWS; we skip
     # them with a warning rather than fail the run, since build-api.sh
     # uploads a zip for every directory unconditionally.
+    # Eligibility (skip layer/healthchecks_iac, skip functions whose
+    # module is gated off in this environment) is decided serially
+    # against aws lambda get-function. The actual update-function-code
+    # + wait function-updated calls are then dispatched under
+    # xargs -P so the wall time is dominated by the slowest single
+    # function rather than the sum of ~30 sequential waits. AWS does
+    # not rate-limit update-function-code across distinct functions
+    # at any level we'd hit here.
     - name: deploy
       env:
         TF_VAR_CONTROL_DOMAIN: ${{ vars.TF_VAR_CONTROL_DOMAIN }}
+        DEPLOY_JOBS: '8'
       run: |
+        set -euo pipefail
         BUCKET="admin.${TF_VAR_CONTROL_DOMAIN}"
-        FAILED=()
+        TARGETS=()
         SKIPPED=()
         for FUNC_DIR in lambda/api/*/ ; do
           FUNC=$(basename "${FUNC_DIR}")
@@ -252,17 +269,16 @@ jobs:
             SKIPPED+=("${FUNC}")
             continue
           fi
-          if ! ./.github/scripts/deploy-lambda-zip.sh "${FUNC}" "${BUCKET}"; then
-            FAILED+=("${FUNC}")
-          fi
+          TARGETS+=("${FUNC}")
         done
         if [ "${#SKIPPED[@]}" -gt 0 ]; then
           echo "skipped (not deployed in this environment): ${SKIPPED[*]}"
         fi
-        if [ "${#FAILED[@]}" -gt 0 ]; then
-          echo "::error::failed to deploy: ${FAILED[*]}"
-          exit 1
+        if [ "${#TARGETS[@]}" -eq 0 ]; then
+          echo "no api functions to deploy"
+          exit 0
         fi
+        printf '%s\n' "${TARGETS[@]}" | xargs -P "${DEPLOY_JOBS}" -I {} ./.github/scripts/deploy-lambda-zip.sh {} "${BUCKET}"
 
   lambda-counter:
     needs: setup

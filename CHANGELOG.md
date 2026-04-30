@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.4] - 2026-04-30
+
+### Fixed
+- `app.yml`'s `setup` job now declares `environment: ${{ ... }}`
+  matching the per-branch dev/stage/prod mapping the rest of the
+  workflow already uses, so its `compute-matrix` step can read
+  `vars.TF_VAR_MONITORING`. The flag is set on the GitHub
+  environment, not at the repo level; without the binding, the
+  unbound `setup` job saw an empty value and the `if` fell through
+  to just the three core docker tiers - so prod runs were quietly
+  skipping all nine monitoring tier builds even with monitoring
+  enabled.
+
+### Changed
+- `lambda-api` build and deploy are now parallel. `build-api.sh` was
+  refactored into a thin driver that enumerates `lambda/api/*` dirs
+  and dispatches a new `build-api-one.sh` per dir under `xargs -P
+  ${BUILD_JOBS:-8}`; `app.yml`'s deploy step does the same with
+  `xargs -P ${DEPLOY_JOBS:-8}` over the eligible-function list,
+  calling `deploy-lambda-zip.sh` per function. Eligibility checks
+  (skipping the shared `python` layer dir, the `healthchecks_iac`
+  legacy path, and any function whose Terraform module is gated off
+  in this environment) stay serial since they're a tight sequence
+  of cheap `aws lambda get-function` calls. AWS does not rate-limit
+  `update-function-code` across distinct function names at the
+  scale we'd hit, so the deploy half is dominated by the slowest
+  single `wait function-updated` rather than their sum. Drops the
+  `lambda-api` job from ~15 min to roughly the slowest function's
+  build-and-deploy time.
+
 ## [0.9.3] - 2026-04-30
 
 ### Changed
