@@ -124,6 +124,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.9.3] - 2026-04-30
 
+### Fixed
+- Webmail message list (and every other IMAP-backed endpoint) was
+  failing because the deterministic-build follow-up to phase 2
+  (`bff24dcf`) added `rm -rf ./python` before each `pip install` in
+  `.github/scripts/build-api.sh`. For the shared Lambda layer at
+  `lambda/api/python/`, that wipe also deleted the layer's only
+  first-party module - `python/python/helper.py` - leaving the
+  rebuilt layer zip with only the third-party deps. Every Lambda
+  that does `from helper import …` (`list_messages`,
+  `list_envelopes`, `fetch_message`, `send`, the folder/flag/move
+  endpoints, and the IMAP-touching `revoke`) then crashed at import
+  with `ModuleNotFoundError`, while the dedicated IMAP/SMTP servers
+  - which never touched this code path - kept working. Fix moves
+  the layer's first-party sources to a sibling `lambda/api/python/src/`
+  directory that the wipe never sees and copies `./src/.` into
+  `./python/` after `pip install` finishes, so the layer ships both
+  third-party deps and `helper.py`. Issue #346.
+
 ### Changed
 - Phase 1 follow-up: every `aws_ecs_service` (3 mail-tier services in
   `terraform/infra/modules/ecs/services.tf` plus 9 monitoring
