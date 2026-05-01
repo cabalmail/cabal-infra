@@ -93,7 +93,7 @@ resource "aws_ecs_task_definition" "ntfy" {
 
   container_definitions = jsonencode([{
     name              = "ntfy"
-    image             = "${var.ntfy_ecr_repository_url}:${var.image_tag}"
+    image             = local.service_image["ntfy"]
     essential         = true
     memoryReservation = 128
     memory            = 256

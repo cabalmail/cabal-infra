@@ -221,25 +221,30 @@ Each phase is independently mergeable and reversible. Phases 1-3 are pure Terraf
 
 ### Phase 5: New `infra.yml` (replacing `terraform.yml` + `bootstrap.yml`)
 
+Shipped in 0.9.4.
+
 - Author `.github/workflows/infra.yml` with `bootstrap` and `apply` jobs. Bootstrap is gated on path filter for `terraform/dns/**` or explicit `workflow_dispatch` input.
 - Add the concurrency block.
-- Initially deployed alongside `terraform.yml` (renamed to `terraform-legacy.yml` and stripped of all push and workflow_call triggers, kept as a manual escape hatch for one release cycle in case rollback is needed).
+- Add a `post_apply` job that runs `.github/scripts/post-apply-update-services.sh` to roll every ECS service to its task-def family head, closing the gap left by the phase 1 `ignore_changes = [task_definition]` clause for topology-only Terraform changes.
+- Initially deployed alongside `terraform.yml` (renamed to `terraform-legacy.yml` and stripped of its `push` trigger, kept as a manual escape hatch for one release cycle in case rollback is needed).
+
+**Deviation from the original plan as written.** The original phase 5 said "stripped of all push and workflow_call triggers." `workflow_call` was *not* stripped from `terraform-legacy.yml` because `docker.yml` / `lambda_api_python.yml` / `lambda_counter.yml` still reference it via `uses:`; their `uses:` was redirected from `terraform.yml` to `terraform-legacy.yml`. Stripping `workflow_call` would have surfaced as workflow validation errors in those callers until phase 6 deletes them. The trade-off: during the dual-pipeline window, a push to `docker/**` / `lambda/**` still chains into a Terraform apply via the legacy file, so phase 5 does *not* yet achieve the "at-most-one Terraform run per push" goal - that goal is only reached in phase 6 once the callers are gone.
 
 ### Phase 6: Cutover
 
-- Remove `workflow_call` blocks from the legacy app workflows.
 - Add `app.yml` push triggers for `docker/**`, `lambda/**`, `react/admin/**`.
-- Delete `docker.yml`, `lambda_api_python.yml`, `lambda_counter.yml`, `react.yml`, `bootstrap.yml`.
-- Delete `terraform-legacy.yml` after one operating week without rollback.
+- Delete `docker.yml`, `lambda_api_python.yml`, `lambda_counter.yml`, `react.yml`, `bootstrap.yml`. The `workflow_call` chain into `terraform-legacy.yml` goes away with these files - there are no longer any callers, so step "Remove `workflow_call` blocks from the legacy app workflows" from the original plan is satisfied automatically.
+- Delete `terraform-legacy.yml`. Phase 5 deferred this for "one release cycle" as a rollback escape hatch; the 0.9.4 CHANGELOG `Deprecated` section announced removal in the next release, so phase 6 is the next release. Removing `terraform-legacy.yml` simultaneously removes its `workflow_call` interface, so phase 7's "Delete unused fields in `terraform.yml` `workflow_call` interface" is also moot.
+- Remove the `repository_dispatch` listener that lived on `terraform.yml` (now `terraform-legacy.yml`) when that file is deleted. Originally listed under phase 7 but folded forward since deleting the file is the same action.
 - Land monitoring matrix filter and `prevent_destroy` on monitoring ECR repos.
 - Update [`CLAUDE.md`](../../CLAUDE.md) workflow table.
 
 ### Phase 7: Cleanup
 
-- Remove `repository_dispatch` listeners that are no longer used.
-- Delete unused fields in `terraform.yml` `workflow_call` interface (no callers remain).
 - Audit and remove any cron triggers on legacy workflows.
 - Update `docs/operations/` runbooks that reference deleted workflows.
+
+(Two items from the original phase 7 - removing `repository_dispatch` listeners and deleting unused `workflow_call` interface fields - were folded into phase 6 because deleting `terraform-legacy.yml` outright accomplishes both.)
 
 ## Risks and mitigations
 

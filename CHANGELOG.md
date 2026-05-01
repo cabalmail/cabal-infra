@@ -5,6 +5,123 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.4] - Unreleased
+
+### Added
+- Phase 4 of the build/deploy simplification plan
+  (`docs/0.9.0/build-deploy-simplification-plan.md`): bootstrap
+  placeholders so a brand-new environment can apply
+  `terraform/infra` end-to-end without `app.yml` having ever pushed
+  an image or zip. Every `aws_ecs_task_definition` (the three mail
+  tiers in `modules/ecs` and the nine monitoring tiers in
+  `modules/monitoring`) now resolves its container image through a
+  per-tier `local.<...>_image` map: when `var.image_tag` equals the
+  sentinel `bootstrap-placeholder`, the task def points at
+  `public.ecr.aws/nginx/nginx:stable` instead of the empty ECR repo.
+  `cabal-certbot-renewal` (container-image Lambda) follows the same
+  pattern with `public.ecr.aws/lambda/python:3.13-arm64` as the
+  placeholder. Phase 1's `ignore_changes = [container_definitions]`
+  and phase 2's `ignore_changes = [image_uri]` keep the next
+  `app.yml` deploy from being rolled back on a topology-only apply.
+- `.github/scripts/upload-stub-lambdas.sh` materialises
+  `lambda/<func>.zip` and the `.base64sha256` sidecar in S3 for any
+  function whose pair is missing - the rest of the
+  `terraform/infra` Lambda fleet (api `cabal_method` calls,
+  `process_dmarc`, `assign_osid`, `alert_sink`,
+  `backup_heartbeat`, `healthchecks_iac`, the shared `python`
+  layer) reads the sidecar at plan time, so the very first apply
+  needs *something* in S3 even though no real build has run. The
+  stub is a deterministic zip whose handler raises
+  `NotImplementedError` so a forgotten "real deploy" surfaces in
+  CloudWatch instead of returning success. Steady-state behaviour
+  is a no-op: every function's pair is already in S3, every
+  `head-object` is a hit, nothing is uploaded. The script is laid
+  down here for phase 5's `infra.yml` to call as a pre-apply step.
+- Phase 5 of the build/deploy simplification plan
+  (`docs/0.9.0/build-deploy-simplification-plan.md`): new
+  `.github/workflows/infra.yml` replaces `terraform.yml` +
+  `bootstrap.yml` as the canonical infrastructure pipeline. It owns
+  both the bootstrap (`terraform/dns`) stage and the main
+  (`terraform/infra`) stage in a single workflow gated by a
+  `dorny/paths-filter@v3` step: a push that only touches
+  `terraform/infra/**` skips the bootstrap jobs in 0s, and a push
+  that touches `terraform/dns/**` runs bootstrap before the main
+  apply. `workflow_dispatch` exposes a `bootstrap` boolean input that
+  forces the bootstrap stage when neither path filter would. Inherits
+  the per-branch `environment:` mapping (`main`->prod,
+  `stage`->stage, other->development) on every AWS-touching job, so
+  the existing required-reviewer gate on `prod` carries over
+  unchanged. Adds `concurrency: { group: infra-${{ github.ref }},
+  cancel-in-progress: false }` so back-to-back applies serialise on
+  the state lock instead of racing.
+- `.github/scripts/post-apply-update-services.sh` and a `post_apply`
+  job in `infra.yml` that runs it. Phase 1 (shipped in 0.9.3) added
+  `lifecycle { ignore_changes = [task_definition] }` to every
+  `aws_ecs_service` so out-of-band app deploys are not rolled back by
+  topology-only Terraform applies; the trade-off was that a Terraform
+  topology change (cpu/memory/env/IAM) registers a new task-def
+  revision but the service stays pinned to the old one. The script
+  walks every service on `cabal-mail`, compares the family head
+  against the service's current revision, and calls `aws ecs
+  update-service` to roll forward only when the head has advanced.
+  Steady-state no-op; closes the gap noted in 0.9.3 between
+  Terraform-driven topology changes and out-of-band deploys.
+
+### Fixed
+- `app.yml`'s `setup` job now declares `environment: ${{ ... }}`
+  matching the per-branch dev/stage/prod mapping the rest of the
+  workflow already uses, so its `compute-matrix` step can read
+  `vars.TF_VAR_MONITORING`. The flag is set on the GitHub
+  environment, not at the repo level; without the binding, the
+  unbound `setup` job saw an empty value and the `if` fell through
+  to just the three core docker tiers - so prod runs were quietly
+  skipping all nine monitoring tier builds even with monitoring
+  enabled.
+
+### Changed
+- `lambda-api` build and deploy are now parallel. `build-api.sh` was
+  refactored into a thin driver that enumerates `lambda/api/*` dirs
+  and dispatches a new `build-api-one.sh` per dir under `xargs -P
+  ${BUILD_JOBS:-8}`; `app.yml`'s deploy step does the same with
+  `xargs -P ${DEPLOY_JOBS:-8}` over the eligible-function list,
+  calling `deploy-lambda-zip.sh` per function. Eligibility checks
+  (skipping the shared `python` layer dir, the `healthchecks_iac`
+  legacy path, and any function whose Terraform module is gated off
+  in this environment) stay serial since they're a tight sequence
+  of cheap `aws lambda get-function` calls. AWS does not rate-limit
+  `update-function-code` across distinct function names at the
+  scale we'd hit, so the deploy half is dominated by the slowest
+  single `wait function-updated` rather than their sum. Drops the
+  `lambda-api` job from ~15 min to roughly the slowest function's
+  build-and-deploy time.
+- `.github/workflows/terraform.yml` renamed to
+  `.github/workflows/terraform-legacy.yml`. The `push` trigger is
+  stripped so a push to `terraform/infra/**` now drives `infra.yml`
+  rather than re-entering Terraform via the legacy file.
+  `workflow_dispatch` and `repository_dispatch` are kept as manual
+  escape hatches for one release cycle in case `infra.yml` needs to
+  be rolled back. `workflow_call` is preserved for the same window so
+  the still-existing chain from `docker.yml` /
+  `lambda_api_python.yml` / `lambda_counter.yml` keeps working; phase
+  6 deletes those callers and phase 7 deletes the now-unused
+  `workflow_call` interface here.
+- `docker.yml`, `lambda_api_python.yml`, and `lambda_counter.yml`
+  updated their `uses:` references from
+  `./.github/workflows/terraform.yml` to
+  `./.github/workflows/terraform-legacy.yml` so the legacy
+  build->terraform chain keeps working through the dual-pipeline
+  window. These files are deleted in phase 6.
+
+### Deprecated
+- `.github/workflows/terraform-legacy.yml` is the renamed legacy
+  Terraform pipeline, kept only as a manual escape hatch in case
+  `infra.yml` needs to be rolled back during the dual-pipeline
+  window. It will be removed in the next release alongside phase 6's
+  cutover (which also deletes `docker.yml`, `lambda_api_python.yml`,
+  `lambda_counter.yml`, `react.yml`, and `bootstrap.yml`). Do not
+  invoke it for routine deploys: push-driven infra changes flow
+  through `infra.yml` and app deploys flow through `app.yml`.
+
 ## [0.9.3] - 2026-04-30
 
 ### Fixed

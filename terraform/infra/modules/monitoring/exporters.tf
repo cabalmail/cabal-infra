@@ -83,7 +83,7 @@ resource "aws_ecs_task_definition" "cloudwatch_exporter" {
 
   container_definitions = jsonencode([{
     name              = "cloudwatch-exporter"
-    image             = "${var.cloudwatch_exporter_ecr_repository_url}:${var.image_tag}"
+    image             = local.service_image["cloudwatch-exporter"]
     essential         = true
     memoryReservation = 192
     memory            = 384
@@ -191,7 +191,7 @@ resource "aws_ecs_task_definition" "blackbox_exporter" {
 
   container_definitions = jsonencode([{
     name              = "blackbox-exporter"
-    image             = "${var.blackbox_exporter_ecr_repository_url}:${var.image_tag}"
+    image             = local.service_image["blackbox-exporter"]
     essential         = true
     memoryReservation = 64
     memory            = 128
@@ -304,7 +304,7 @@ resource "aws_ecs_task_definition" "node_exporter" {
 
   container_definitions = jsonencode([{
     name              = "node-exporter"
-    image             = "${var.node_exporter_ecr_repository_url}:${var.image_tag}"
+    image             = local.service_image["node-exporter"]
     essential         = true
     memoryReservation = 32
     memory            = 96

@@ -126,7 +126,7 @@ jobs:
 
   deploy:
     needs: [set-tag, build, build-certbot]
-    uses: ./.github/workflows/terraform.yml
+    uses: ./.github/workflows/terraform-legacy.yml
     with:
       image_tag: ${{ needs.set-tag.outputs.image_tag }}
     secrets: inherit

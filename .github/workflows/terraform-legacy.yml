@@ -1,5 +1,16 @@
 ---
-name: Build and Deploy Terraform Infrastructure
+name: Build and Deploy Terraform Infrastructure (legacy)
+
+# Phase 5 of docs/0.9.0/build-deploy-simplification-plan.md replaces
+# this workflow with .github/workflows/infra.yml as the canonical
+# infrastructure pipeline. The push trigger has been stripped so a
+# push to terraform/infra/** drives infra.yml, not this file. The
+# workflow_call entry is preserved as long as docker.yml /
+# lambda_api_python.yml / lambda_counter.yml still chain into it -
+# phase 6 deletes those callers and phase 7 deletes the now-unused
+# workflow_call interface here. workflow_dispatch and
+# repository_dispatch remain as manual escape hatches in case
+# infra.yml needs to be rolled back during the dual-pipeline window.
 
 on:
   workflow_dispatch:
@@ -16,16 +27,6 @@ on:
         type: string
   repository_dispatch:
     types: [trigger_build]
-  push:
-    paths:
-      - 'terraform/infra'
-      - 'terraform/infra/*'
-      - 'terraform/infra/*/**'
-      - '.github/workflows/terraform.yml'
-      - '.github/scripts/make-terraform.sh'
-      - '.github/scripts/plan-terraform.sh'
-      - '.github/scripts/refresh-ssm-from-running.sh'
-      - '.github/scripts/record-lambda-hashes.sh'
 
 jobs:
   build:

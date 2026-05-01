@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 #
-# Build a deterministic zip per lambda/api/<func> dir and upload it
-# to s3://admin.${TF_VAR_CONTROL_DOMAIN}/lambda/<func>.zip alongside
-# a base64sha256 sidecar.
+# Build and upload every lambda/api/<func>.zip in parallel. The
+# per-function logic lives in build-api-one.sh; this driver just
+# enumerates dirs and dispatches them under xargs -P. The python dir
+# is the shared Lambda layer source - it gets the same per-function
+# treatment so the layer's source_code_hash stays byte-stable across
+# CI runs (see build-api-one.sh and the 0.9.3 follow-up CHANGELOG
+# entry for why determinism matters there).
 #
 # The "python" dir is the shared Lambda layer; its zip becomes a new
 # aws_lambda_layer_version every time its sha256 changes, which then
@@ -40,13 +44,12 @@
 set -euo pipefail
 
 cd ./lambda/api
-AWS_S3_BUCKET="admin.${TF_VAR_CONTROL_DOMAIN}"
 
-# 2000-01-01 00:00 UTC. Any value past 1980 (zip's lower bound) works.
-export SOURCE_DATE_EPOCH=946684800
-export PYTHONDONTWRITEBYTECODE=1
+JOBS="${BUILD_JOBS:-8}"
 
-for FUNC in * ; do
+funcs=()
+for FUNC in */ ; do
+  FUNC="${FUNC%/}"
   [ -d "${FUNC}" ] || continue
   pushd "${FUNC}" >/dev/null
   rm -rf ./python
@@ -67,3 +70,10 @@ for FUNC in * ; do
   aws s3 cp "${FUNC}.zip.base64sha256" "s3://${AWS_S3_BUCKET}/lambda/${FUNC}.zip.base64sha256" --profile deploy_lambda --no-progress --acl private --content-type text/plain
   aws s3 cp "${FUNC}.zip" "s3://${AWS_S3_BUCKET}/lambda/${FUNC}.zip" --profile deploy_lambda --no-progress --acl private
 done
+
+if [ "${#funcs[@]}" -eq 0 ]; then
+  echo "[build-api] no function dirs under lambda/api/"
+  exit 0
+fi
+
+printf '%s\n' "${funcs[@]}" | LC_ALL=C sort | xargs -P "${JOBS}" -I {} ../../.github/scripts/build-api-one.sh {}
