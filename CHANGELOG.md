@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.5] - Unreleased
+
+### Changed
+- Phase 6 of the build/deploy simplification plan
+  (`docs/0.9.0/build-deploy-simplification-plan.md`): cutover. The
+  legacy `docker.yml`, `lambda_api_python.yml`, `lambda_counter.yml`,
+  `react.yml`, and `bootstrap.yml` workflows are deleted. Pushes to
+  `docker/**`, `lambda/**`, and `react/admin/**` now drive `app.yml`
+  exclusively, which builds artifacts in parallel and deploys
+  out-of-band via the AWS CLI without re-entering Terraform.
+  `terraform-legacy.yml` (the renamed legacy Terraform pipeline kept
+  as a one-release escape hatch in 0.9.4) is also deleted, taking the
+  `repository_dispatch: trigger_build` listener with it. Phase 7
+  housekeeping items from the original plan (removing `workflow_call`
+  callers and the legacy interface) are satisfied automatically by
+  the file deletions.
+- `app.yml` gains push triggers and a `dorny/paths-filter@v3` step in
+  its `setup` job that scopes per-push runs to only the changed areas
+  (`docker`, `lambda_api`, `lambda_counter`, `lambda_certbot`,
+  `react`). The `workflow_dispatch` `areas` input is preserved as a
+  manual override so an operator can still force a partial or full
+  re-deploy without a fresh push. Per-branch `environment:` bindings
+  on every AWS-touching job are unchanged, so the existing required-
+  reviewer gate on prod carries over.
+- Monitoring tier ECR repositories (`cabal-uptime-kuma`, `cabal-ntfy`,
+  `cabal-healthchecks`, `cabal-prometheus`, `cabal-alertmanager`,
+  `cabal-grafana`, `cabal-cloudwatch-exporter`,
+  `cabal-blackbox-exporter`, `cabal-node-exporter`) are now created by
+  a dedicated `aws_ecr_repository.monitoring` resource in
+  `terraform/infra/modules/ecr/main.tf` with `lifecycle {
+  prevent_destroy = true }`. Toggling `var.monitoring` off or trimming
+  the docker matrix in `app.yml` is now a no-op against these repos
+  rather than a destroy, so historical images cannot be deleted by
+  accident. State migration is handled by `moved {}` blocks; the
+  resource rename is state-only.
+- `CLAUDE.md` workflow table updated to reflect the two-workflow model
+  (`app.yml` + `infra.yml`) plus the surviving manual / scheduled
+  workflows.
+
 ## [0.9.4] - 2026-04-30
 
 ### Added

@@ -1,16 +1,15 @@
 ---
 name: Build and Deploy Application
 
-# Phase 3 of docs/0.9.0/build-deploy-simplification-plan.md introduces
-# this workflow alongside the legacy docker.yml / lambda_api_python.yml
-# / lambda_counter.yml / react.yml pipeline. It builds every
-# application artifact in parallel and deploys directly to running
-# infrastructure via the AWS CLI - no Terraform on the deploy path.
-#
-# Trigger is workflow_dispatch only at this phase: the operator runs
-# this manually on dev to validate end-to-end behavior. Phase 6 will
-# add push triggers and delete the legacy workflows. Both pipelines
-# coexist briefly in between.
+# Phase 6 of docs/0.9.0/build-deploy-simplification-plan.md cuts this
+# workflow over to be the canonical app-deploy pipeline. The legacy
+# docker.yml / lambda_api_python.yml / lambda_counter.yml / react.yml
+# files are deleted in the same change, so a push to any of
+# docker/**, lambda/**, or react/admin/** drives this workflow
+# directly and never re-enters Terraform. The setup job's
+# resolve-areas step uses dorny/paths-filter to figure out which jobs
+# need to run for a given push; workflow_dispatch keeps the manual
+# `areas` input as an override.
 
 on:
   workflow_dispatch:
@@ -23,6 +22,18 @@ on:
         required: false
         default: all
         type: string
+  push:
+    paths:
+      - 'docker/**'
+      - 'lambda/**'
+      - 'react/admin/**'
+      - '.github/workflows/app.yml'
+      - '.github/scripts/build-api.sh'
+      - '.github/scripts/build-api-one.sh'
+      - '.github/scripts/build-counter.sh'
+      - '.github/scripts/deploy-ecs-service.sh'
+      - '.github/scripts/deploy-lambda-image.sh'
+      - '.github/scripts/deploy-lambda-zip.sh'
 
 permissions:
   contents: read
@@ -53,6 +64,9 @@ jobs:
       lambda_certbot: ${{ steps.areas.outputs.lambda_certbot }}
       react: ${{ steps.areas.outputs.react }}
     steps:
+    - name: checkout
+      uses: actions/checkout@v5
+
     - name: compute-tag
       id: tag
       run: echo "image_tag=sha-${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
@@ -77,25 +91,77 @@ jobs:
         echo "tiers=${tiers}" >> "$GITHUB_OUTPUT"
         echo "matrix tiers: ${tiers}"
 
+    # Phase 6: per-area path filter for push events. workflow_dispatch
+    # keeps the manual `areas` input as an override so an operator can
+    # force a partial or full re-deploy without a fresh push.
+    - name: changed-paths
+      id: filter
+      if: github.event_name == 'push'
+      uses: dorny/paths-filter@v3
+      with:
+        filters: |
+          docker:
+            - 'docker/**'
+            - '.github/workflows/app.yml'
+            - '.github/scripts/deploy-ecs-service.sh'
+          lambda_api:
+            - 'lambda/api/**'
+            - '.github/workflows/app.yml'
+            - '.github/scripts/build-api.sh'
+            - '.github/scripts/build-api-one.sh'
+            - '.github/scripts/deploy-lambda-zip.sh'
+          lambda_counter:
+            - 'lambda/counter/**'
+            - '.github/workflows/app.yml'
+            - '.github/scripts/build-counter.sh'
+            - '.github/scripts/deploy-lambda-zip.sh'
+          lambda_certbot:
+            - 'lambda/certbot-renewal/**'
+            - '.github/workflows/app.yml'
+            - '.github/scripts/deploy-lambda-image.sh'
+          react:
+            - 'react/admin/**'
+            - '.github/workflows/app.yml'
+
     - name: resolve-areas
       id: areas
       env:
+        EVENT_NAME: ${{ github.event_name }}
         AREAS: ${{ inputs.areas }}
+        DOCKER: ${{ steps.filter.outputs.docker }}
+        LAMBDA_API: ${{ steps.filter.outputs.lambda_api }}
+        LAMBDA_COUNTER: ${{ steps.filter.outputs.lambda_counter }}
+        LAMBDA_CERTBOT: ${{ steps.filter.outputs.lambda_certbot }}
+        REACT: ${{ steps.filter.outputs.react }}
       run: |
         set -euo pipefail
-        normalised="$(echo "${AREAS}" | tr -d '[:space:]')"
-        wanted=",${normalised},"
-        is_on() {
-          [ "${normalised}" = "all" ] && return 0
-          case "${wanted}" in *",$1,"*) return 0 ;; *) return 1 ;; esac
-        }
-        for a in docker lambda_api lambda_counter lambda_certbot react; do
-          if is_on "${a}"; then
-            echo "${a}=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "${a}=false" >> "$GITHUB_OUTPUT"
-          fi
-        done
+        if [ "${EVENT_NAME}" = "push" ]; then
+          # Push: trust dorny/paths-filter results.
+          for pair in "docker:${DOCKER}" "lambda_api:${LAMBDA_API}" "lambda_counter:${LAMBDA_COUNTER}" "lambda_certbot:${LAMBDA_CERTBOT}" "react:${REACT}"; do
+            name="${pair%%:*}"
+            val="${pair#*:}"
+            if [ "${val}" = "true" ]; then
+              echo "${name}=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "${name}=false" >> "$GITHUB_OUTPUT"
+            fi
+          done
+        else
+          # workflow_dispatch: parse the comma-separated areas input.
+          normalised="$(echo "${AREAS}" | tr -d '[:space:]')"
+          wanted=",${normalised},"
+          is_on() {
+            [ "${normalised}" = "all" ] && return 0
+            case "${wanted}" in *",$1,"*) return 0 ;; *) return 1 ;; esac
+          }
+          for a in docker lambda_api lambda_counter lambda_certbot react; do
+            if is_on "${a}"; then
+              echo "${a}=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "${a}=false" >> "$GITHUB_OUTPUT"
+            fi
+          done
+        fi
 
   docker:
     needs: setup

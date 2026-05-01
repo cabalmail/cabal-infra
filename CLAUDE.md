@@ -41,31 +41,31 @@ Versioned subdirectories of `docs/` (e.g. `docs/0.4.0/`, `docs/0.7.0/`, `docs/0.
 - Local test: `cd lambda/api/[function_dir] && python -m function`
 
 ### Terraform
-- Terraform is applied via CI/CD only (`.github/workflows/terraform.yml`)
-- Two stacks: `terraform/dns` (bootstrap) and `terraform/infra` (main)
+- Terraform is applied via CI/CD only (`.github/workflows/infra.yml`)
+- Two stacks: `terraform/dns` (bootstrap) and `terraform/infra` (main), both owned by `infra.yml`
 - Backend: S3 (`cabal-tf-backend` bucket), key pattern `{environment}-{module}`
 - Environment determined by branch: `main`=prod, `stage`=stage, other=development
 - Backend config is generated at CI time by `.github/scripts/make-terraform.sh`
 - Security scanning: Checkov, tflint, tfsec all run in the terraform workflow
 
 ### Docker Images
-- Built and pushed via `.github/workflows/docker.yml`
-- Three tiers built in matrix: `imap`, `smtp-in`, `smtp-out`
+- Built and pushed via `.github/workflows/app.yml` (the `docker` job)
+- Three core tiers built in matrix: `imap`, `smtp-in`, `smtp-out`. When `vars.TF_VAR_MONITORING == 'true'` the matrix also builds `uptime-kuma`, `ntfy`, `healthchecks`, `prometheus`, `alertmanager`, `grafana`, `cloudwatch-exporter`, `blackbox-exporter`, `node-exporter`
 - Images tagged `sha-{first8}` and pushed to ECR (`cabal-{tier}`)
-- A certbot-renewal image is also built (arm64, for Lambda container)
-- After build, the workflow triggers `terraform.yml` to deploy
+- A certbot-renewal image is also built (arm64, for Lambda container) by the `lambda-certbot` job in `app.yml`
+- Each `docker` matrix job deploys directly to ECS via `aws ecs register-task-definition` + `aws ecs update-service` (see `.github/scripts/deploy-ecs-service.sh`); no Terraform on the deploy path
 
 ## CI/CD Workflows (`.github/workflows/`)
 
 | Workflow | Trigger (path) | What it does |
 |---|---|---|
-| `react.yml` | `react/admin/**` | Build Vite app, sync to S3, invalidate CloudFront |
-| `lambda_api_python.yml` | `lambda/api/**` | Pylint, build zips, upload to S3, trigger terraform |
-| `lambda_counter.yml` | `lambda/counter/**` | Pylint, build zip, upload to S3, trigger terraform |
-| `docker.yml` | `docker/**` | Build 3 mail tier images + certbot, push to ECR, trigger terraform |
-| `terraform.yml` | `terraform/infra/**` | Checkov/tflint/tfsec, plan, apply |
-| `bootstrap.yml` | Manual/workflow_call | Applies `terraform/dns` stack (Route 53 zone) |
+| `app.yml` | `docker/**`, `lambda/**`, `react/admin/**` | Per-area path-filtered parallel build + out-of-band deploy: ECS update-service for docker tiers and certbot, `aws lambda update-function-code` for api/counter zips, `s3 sync` + CloudFront invalidation for the React bundle. Does not touch Terraform. |
+| `infra.yml` | `terraform/dns/**`, `terraform/infra/**` | Owns both the bootstrap (`terraform/dns`) and main (`terraform/infra`) stages. Bootstrap is gated on a `dorny/paths-filter` step or a `workflow_dispatch` boolean. Runs Checkov/tflint/tfsec, plans, applies, then `post-apply-update-services.sh` to roll any ECS services whose task-def family advanced. |
 | `quiesce.yml` | Manual (`workflow_dispatch`) | Scales a non-prod env's ECS services, ECS-instance ASG, and NAT instances to zero (or restores them). Refuses to run against prod. See `docs/quiesce.md`. |
+| `destroy_terraform.yml` | Manual (`workflow_dispatch`) | Tears down `terraform/infra` for the selected environment. |
+| `apple.yml` | `apple/**` | Builds and tests the iOS app on a macOS runner. Deploys nothing to AWS. |
+| `dependabot.yml` | Schedule (daily) | Dependency update PRs. |
+| `claude.yml` | `@claude` mention | Claude Code action for PR review. |
 All workflows select environment based on branch: `main`=prod, `stage`=stage, other=development.
 
 ## Architecture Details
