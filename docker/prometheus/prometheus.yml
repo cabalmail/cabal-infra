@@ -52,6 +52,18 @@ scrape_configs:
         type: A
         port: 9106
 
+  - job_name: cloudwatch-us-east-1
+    # Second cloudwatch_exporter task pinned to us-east-1 for CloudFront
+    # (whose metrics are emitted only in that region). Same scrape
+    # cadence; small metric set so it stays well under the GMS limit.
+    scrape_interval: 60s
+    scrape_timeout: 30s
+    dns_sd_configs:
+      - names:
+          - cloudwatch-exporter-us-east-1.cabal-monitoring.cabal.internal
+        type: A
+        port: 9106
+
   - job_name: blackbox-http
     metrics_path: /probe
     params:
@@ -71,15 +83,38 @@ scrape_configs:
         replacement: blackbox-exporter.cabal-monitoring.cabal.internal:9115
 
   - job_name: blackbox-tcp
+    # Plaintext / STARTTLS ports - we only verify the TCP handshake.
+    # Port 25 (SMTP) is plaintext on the wire from the relay perspective.
+    # Port 587 (Submission) advertises STARTTLS but blackbox tcp_connect
+    # does not initiate it; for that we'd need a custom probe. The TLS
+    # cert at the edge is observed via Kuma's port-587 monitor.
     metrics_path: /probe
     params:
       module: [tcp_connect]
     static_configs:
       - targets:
-          - imap.__CONTROL_DOMAIN__:993
           - smtp-in.__CONTROL_DOMAIN__:25
-          - smtp-out.__CONTROL_DOMAIN__:465
           - smtp-out.__CONTROL_DOMAIN__:587
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter.cabal-monitoring.cabal.internal:9115
+
+  - job_name: blackbox-tls
+    # Implicit-TLS ports - blackbox does the full TLS handshake, which
+    # is what populates probe_ssl_earliest_cert_expiry for the Mail
+    # Tiers dashboard's "TLS days to expiry" panels and the
+    # BlackboxTLSCertExpiringSoon alert.
+    metrics_path: /probe
+    params:
+      module: [tcp_tls]
+    static_configs:
+      - targets:
+          - imap.__CONTROL_DOMAIN__:993
+          - smtp-out.__CONTROL_DOMAIN__:465
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target

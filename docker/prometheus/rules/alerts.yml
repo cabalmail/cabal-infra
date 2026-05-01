@@ -29,13 +29,13 @@ groups:
         # API Gateway 5XX for any of the cabal-* Lambdas, > 5% over 5 min
         # (rate over a 10 min window for stability).
         expr: |
-          sum by (apiname, stage) (
-            rate(aws_apigateway_5_xx_error_sum{apiname=~"cabal-.+"}[10m])
+          sum by (api_name, stage) (
+            rate(aws_apigateway_5_xx_error_sum{api_name=~"cabal-.+"}[10m])
           )
           /
           clamp_min(
-            sum by (apiname, stage) (
-              rate(aws_apigateway_count_sum{apiname=~"cabal-.+"}[10m])
+            sum by (api_name, stage) (
+              rate(aws_apigateway_count_sum{api_name=~"cabal-.+"}[10m])
             ),
             1
           )
@@ -44,8 +44,8 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "API 5xx > 5% on {{ $labels.apiname }} for 5 min"
-          description: "API Gateway 5XX rate exceeded 5% over 10 minutes on {{ $labels.apiname }}/{{ $labels.stage }}."
+          summary: "API 5xx > 5% on {{ $labels.api_name }} for 5 min"
+          description: "API Gateway 5XX rate exceeded 5% over 10 minutes on {{ $labels.api_name }}/{{ $labels.stage }}."
           runbook_url: "https://github.com/cabalmail/cabal-infra/blob/main/docs/operations/runbooks/lambda-5xx-spike.md"
 
       - alert: LambdaThrottles
@@ -106,19 +106,21 @@ groups:
           runbook_url: "https://github.com/cabalmail/cabal-infra/blob/main/docs/operations/runbooks/efs-burst-credits-low.md"
 
       - alert: ContainerRestartLoop
-        # AWS/ECS exposes RunningTaskCount per service; a sustained drop
-        # below DesiredTaskCount for one service over an hour signals a
-        # crash loop. Exact thresholds will need tuning once we see what
-        # normal task-replacement noise looks like.
+        # ECS/ContainerInsights exposes RunningTaskCount/DesiredTaskCount
+        # per service (these are NOT in the AWS/ECS namespace - common
+        # gotcha). A sustained drop below DesiredTaskCount for one
+        # service over an hour signals a crash loop. Exact thresholds
+        # will need tuning once we see what normal task-replacement
+        # noise looks like.
         expr: |
           (
-            avg_over_time(aws_ecs_running_task_count_average[1h])
+            avg_over_time(aws_ecs_containerinsights_running_task_count_average[1h])
             <
-            avg_over_time(aws_ecs_desired_task_count_average[1h])
+            avg_over_time(aws_ecs_containerinsights_desired_task_count_average[1h])
           )
           and
           (
-            avg_over_time(aws_ecs_desired_task_count_average[1h]) > 0
+            avg_over_time(aws_ecs_containerinsights_desired_task_count_average[1h]) > 0
           )
         for: 30m
         labels:

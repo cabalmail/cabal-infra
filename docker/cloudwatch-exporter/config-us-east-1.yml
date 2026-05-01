@@ -1,0 +1,53 @@
+# cloudwatch_exporter config for the us-east-1-pinned exporter instance.
+#
+# CloudFront metrics live exclusively in us-east-1 - a global service
+# whose dimensions only resolve in that region. cloudwatch_exporter
+# v0.16.0 has no per-metric region override, so a second exporter task
+# is pinned to us-east-1 via AWS_REGION on the task definition and only
+# scrapes CloudFront here. The primary exporter
+# (docker/cloudwatch-exporter/config.yml) covers everything else in the
+# infra's home region.
+#
+# Keep this list narrow - every metric * statistic * dimension is one
+# GetMetricStatistics call per scrape, and the GetMetricStatistics rate
+# limit is shared across exporters in the account.
+
+period_seconds: 60
+range_seconds: 600
+delay_seconds: 120
+
+metrics:
+  # ── CloudFront ────────────────────────────────────────────────
+  # AWS/CloudFront emits with two dimensions, DistributionId + Region.
+  # Region is always "Global" (no other value). We include it so the
+  # exporter discovers the series; it falls out as a label on the
+  # Prometheus side and dashboards ignore it.
+  - aws_namespace: AWS/CloudFront
+    aws_metric_name: Requests
+    aws_dimensions: [DistributionId, Region]
+    aws_statistics: [Sum]
+
+  - aws_namespace: AWS/CloudFront
+    aws_metric_name: BytesDownloaded
+    aws_dimensions: [DistributionId, Region]
+    aws_statistics: [Sum]
+
+  - aws_namespace: AWS/CloudFront
+    aws_metric_name: BytesUploaded
+    aws_dimensions: [DistributionId, Region]
+    aws_statistics: [Sum]
+
+  - aws_namespace: AWS/CloudFront
+    aws_metric_name: 4xxErrorRate
+    aws_dimensions: [DistributionId, Region]
+    aws_statistics: [Average]
+
+  - aws_namespace: AWS/CloudFront
+    aws_metric_name: 5xxErrorRate
+    aws_dimensions: [DistributionId, Region]
+    aws_statistics: [Average]
+
+  - aws_namespace: AWS/CloudFront
+    aws_metric_name: TotalErrorRate
+    aws_dimensions: [DistributionId, Region]
+    aws_statistics: [Average]

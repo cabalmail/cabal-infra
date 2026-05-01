@@ -46,7 +46,7 @@
       },
       "targets": [
         {
-          "expr": "sum (rate(aws_cloudfront_5_xx_error_rate_average[5m]))",
+          "expr": "sum (rate(aws_cloudfront_5xx_error_rate_average[5m]))",
           "refId": "A"
         }
       ],

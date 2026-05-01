@@ -39,16 +39,22 @@
     {
       "id": 2,
       "type": "timeseries",
-      "title": "EFS PercentIOLimit",
+      "title": "EFS I/O bytes (read+write, 5m rate)",
+      "description": "Works in both bursting and elastic throughput modes. PercentIOLimit only emits in generalPurpose performance mode.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
       "targets": [
         {
-          "expr": "aws_efs_percent_io_limit_average",
+          "expr": "sum by (file_system_id) (rate(aws_efs_data_read_io_bytes_sum[5m]))",
           "refId": "A",
-          "legendFormat": "{{file_system_id}}"
+          "legendFormat": "read {{file_system_id}}"
+        },
+        {
+          "expr": "sum by (file_system_id) (rate(aws_efs_data_write_io_bytes_sum[5m]))",
+          "refId": "B",
+          "legendFormat": "write {{file_system_id}}"
         }
       ],
       "gridPos": {
@@ -117,7 +123,7 @@
       },
       "targets": [
         {
-          "expr": "aws_ecs_running_task_count_average",
+          "expr": "aws_ecs_containerinsights_running_task_count_average",
           "refId": "A",
           "legendFormat": "{{service_name}}"
         }
