@@ -135,13 +135,18 @@ module "efs" {
   private_subnet_ids = module.vpc.private_subnets[*].id
 }
 
-# Creates ECR repositories for containerized mail services. The monitoring
-# repos (uptime-kuma, ntfy, healthchecks) exist regardless of var.monitoring
-# so the Docker workflow can push images unconditionally; only the ECS
-# services are gated by the flag.
+# Creates ECR repositories for containerized mail services. Monitoring
+# repos exist regardless of var.monitoring so the docker matrix can
+# push images unconditionally; only the ECS services that consume them
+# are gated by the flag. Phase 6 of the build/deploy simplification
+# plan (docs/0.9.0/build-deploy-simplification-plan.md) routes them
+# through monitoring_repositories so the underlying resource gets
+# lifecycle { prevent_destroy = true } - toggling var.monitoring off
+# (or trimming the docker matrix in app.yml) is now a no-op against
+# the ECR repos rather than a destroy.
 module "ecr" {
   source = "./modules/ecr"
-  extra_repositories = [
+  monitoring_repositories = [
     # Phase 1 / Phase 2 monitoring services
     "uptime-kuma",
     "ntfy",

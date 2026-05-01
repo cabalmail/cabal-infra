@@ -1,15 +1,15 @@
 ---
 name: Build and Deploy Infrastructure
 
-# Phase 5 of docs/0.9.0/build-deploy-simplification-plan.md replaces
-# the legacy terraform.yml + bootstrap.yml workflows with a single
+# Phase 5 of docs/0.9.0/build-deploy-simplification-plan.md replaced
+# the legacy terraform.yml + bootstrap.yml workflows with this single
 # infra.yml that owns both the bootstrap (terraform/dns) stage and the
 # main (terraform/infra) stage. Bootstrap is gated on whether
 # terraform/dns/** changed or on a workflow_dispatch input, so a
 # steady-state push that only touches terraform/infra/** runs the
 # bootstrap job in 0s and proceeds straight to plan/apply.
 #
-# Phase 5 also adds a post-apply step that rolls every ECS service to
+# Phase 5 also added a post-apply step that rolls every ECS service to
 # the latest ACTIVE revision in its task-definition family. Phase 1
 # (shipped in 0.9.3) added ignore_changes = [task_definition] to every
 # aws_ecs_service so out-of-band app deploys are not rolled back, but
@@ -17,10 +17,9 @@ name: Build and Deploy Infrastructure
 # registers a new task-def revision and the service stays pinned to
 # the old one. The post-apply step closes that gap.
 #
-# This workflow is initially deployed alongside terraform-legacy.yml
-# (the renamed terraform.yml stripped of push and workflow_call
-# triggers, kept as a manual escape hatch for one release cycle).
-# Phase 6 cuts over and deletes the legacy file.
+# Phase 6 (shipped in 0.9.5) deleted the dual-pipeline escape hatch
+# (terraform-legacy.yml) and the legacy app workflows that chained
+# into it; infra.yml is now the only Terraform pipeline.
 
 on:
   workflow_dispatch:
@@ -198,8 +197,21 @@ jobs:
         name: infra-backend.tf
         path: ./terraform/infra/backend.tf
 
+  # The chekov / tflint / tfsec / plan / apply / post_apply jobs each
+  # prefix their `if:` with `!cancelled() &&`. GitHub Actions auto-
+  # skips a downstream job whenever ANY transitive predecessor was
+  # skipped, REGARDLESS of an explicit `if:` clause - unless the
+  # `if:` includes `!cancelled()` or `always()` to force evaluation.
+  # On the common push path (terraform/dns/** unchanged),
+  # bootstrap_apply is skipped, build runs via `always()`, and
+  # without the `!cancelled()` guard everything past build is auto-
+  # skipped even though build's actual result is 'success'. The
+  # `!cancelled() && needs.<upstream>.result == 'success'` form pins
+  # each job to its immediate upstream's result and ignores the
+  # transitive chain.
   chekov:
     needs: build
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
     - name: checkout
@@ -221,6 +233,7 @@ jobs:
 
   tflint:
     needs: build
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -243,6 +256,7 @@ jobs:
 
   tfsec:
     needs: build
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
     - name: checkout
@@ -261,6 +275,7 @@ jobs:
 
   plan:
     needs: build
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     outputs:
       exit_code: ${{ steps.plan-terraform.outputs.exit_code }}
@@ -333,7 +348,7 @@ jobs:
     - chekov
     - tflint
     - tfsec
-    if: needs.plan.outputs.exit_code == '2'
+    if: ${{ !cancelled() && needs.plan.outputs.exit_code == '2' }}
     runs-on: ubuntu-latest
     outputs:
       applied: ${{ steps.apply-terraform.outcome }}
@@ -398,7 +413,7 @@ jobs:
 
   post_apply:
     needs: apply
-    if: needs.apply.result == 'success'
+    if: ${{ !cancelled() && needs.apply.result == 'success' }}
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     env:
