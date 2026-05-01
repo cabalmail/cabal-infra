@@ -184,19 +184,19 @@ Use semantic versioning. Create a new version when appropriate. When creating a 
 | 0.3.1   | Update documentation with new UI features.                                                          | Done        |
 | 0.4.0   | Migrate from EC2 instances to containers.                                                           | Done        |
 | 0.4.1   | Move cert renewal from Terraform to Lambda; Modernize web client.                                   | Done        |
-| 0.5.0   | User management dashboard.                                                                          | Done        |
-| 0.6.0   | Native app for iOS.                                                                                 | Done        |
-| 0.7.0   | Monitoring and alerting.                                                                            | Done        |
-| 0.8.0   | Overhaul web UX.                                                                                    | Done        |
-| 0.9.0   | Stabilize.                                                                                          | Planning    |
-| 1.0.0   | Production-ready release.                                                                           |             |
-| 1.1.0   | Native app for Android.                                                                             |             |
-| 1.2.0   | Quotas.                                                                                             |             |
-| 1.3.0   | Framework for developing procmail-like features (forwarding, marking-read, etc.).                   |             |
-| 1.3.1   | Expose UI for auto-forwarding.                                                                      |             |
-| 1.4.0   | iOS App Store release.                                                                              |             |
-| 1.5.0   | Google Play or other Android store release.                                                         |             |
-| 1.6.0   | Stabilize.                                                                                          |             |
-| 2.0.0   | RSS reader for web client.                                                                          |             |
-| 2.1.0   | RSS reader for iOS app.                                                                             |             |
-| 2.2.0   | RSS reader for Android app.                                                                         |             |
+| 0.5.x   | User management dashboard.                                                                          | Done        |
+| 0.6.x   | Native app for iOS.                                                                                 | Done        |
+| 0.7.x   | Monitoring and alerting.                                                                            | Done        |
+| 0.8.x   | Overhaul web UX.                                                                                    | Done        |
+| 0.9.x   | Stabilize.                                                                                          | In Progress |
+| 1.0.x   | Production-ready release.                                                                           |             |
+| 1.1.x   | Native app for Android.                                                                             |             |
+| 1.2.x   | Quotas.                                                                                             |             |
+| 1.3.x   | Framework for developing procmail-like features (forwarding, marking-read, etc.).                   |             |
+| 1.3.x   | Expose UI for auto-forwarding.                                                                      |             |
+| 1.4.x   | iOS App Store release.                                                                              |             |
+| 1.5.x   | Google Play or other Android store release.                                                         |             |
+| 1.6.x   | Stabilize.                                                                                          |             |
+| 2.0.x   | RSS reader for web client.                                                                          |             |
+| 2.1.x   | RSS reader for iOS app.                                                                             |             |
+| 2.2.x   | RSS reader for Android app.                                                                         |             |

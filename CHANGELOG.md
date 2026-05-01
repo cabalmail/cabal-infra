@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.6] - Unreleased
 
 ### Changed
+- Updated CLAUDE.md to reflect 0.9.x as in progress.
 - Phase 7 of the build/deploy simplification plan
   (`docs/0.9.0/build-deploy-simplification-plan.md`): operator-facing
   documentation that referenced the deleted workflows now points at
