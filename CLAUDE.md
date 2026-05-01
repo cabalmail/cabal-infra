@@ -172,7 +172,7 @@ Shared infrastructure:
 
 ## CHANGELOG
 
-Use semantic versioning. Create a new version when appropriate. Only record what shipped, not trials or blind alleys.
+Use semantic versioning. Create a new version when appropriate. When creating a new version, use "Unreleased" instead of a date, since you don't know when it's going to be released. Only record what shipped, not trials or blind alleys.
 
 ## Roadmap
 
