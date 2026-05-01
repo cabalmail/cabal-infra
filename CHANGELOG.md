@@ -5,9 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.9.5] - 2026-05-01
+## [0.9.6] - 2026-05-01
+
+### Fixed
+- Restored the shared Lambda layer's first-party module (`helper.py`)
+  in CI builds. The 0.9.5 lambda-api parallelisation extracted the
+  per-function build into `build-api-one.sh` but only carried over the
+  `rm -rf ./python` + `pip install -t ./python` steps; the `./src/.`
+  -> `./python/` copy that 0.9.4 added (so the wipe couldn't delete
+  helper.py) was left behind in the now-defunct sequential loop in
+  `build-api.sh`. Once that loop was removed in the build-api.sh
+  leftover-loop fix, every published layer shipped third-party deps
+  only, and every IMAP-backed Lambda (`list_messages`, `list_envelopes`,
+  `fetch_message`, `send`, the folder/flag/move endpoints, the
+  IMAP-touching `revoke`) crashed at import with `ModuleNotFoundError:
+  helper`. The webmail surfaced this as "Unable to load list of
+  messages."; dedicated IMAP/SMTP servers were unaffected because they
+  don't share that code path. The copy step now lives in
+  `build-api-one.sh` itself, where the wipe and pip install live.
 
 ### Changed
+- Updated CLAUDE.md to reflect 0.9.x as in progress.
+- Phase 7 of the build/deploy simplification plan
+  (`docs/0.9.0/build-deploy-simplification-plan.md`): operator-facing
+  documentation that referenced the deleted workflows now points at
+  the new pipeline. `docs/quiesce.md`, `docs/monitoring.md`, the
+  `lambda-errors` and `container-restart-loop` runbooks under
+  `docs/operations/runbooks/`, the comment in
+  `terraform/infra/modules/lambda_layers/main.tf`, the path comment
+  in `.github/scripts/record-lambda-hashes.sh`, and the durability /
+  resume warning strings in `.github/workflows/quiesce.yml` all
+  rename `terraform.yml` -> `infra.yml`, `lambda_api_python.yml` ->
+  the `lambda-api` job in `app.yml`, `docker.yml` -> the `docker`
+  job in `app.yml`, and so on. The container-restart-loop runbook's
+  rollback recipe is rewritten to call `deploy-ecs-service.sh`
+  directly rather than the now-deleted SSM-then-Terraform path.
 - Phase 6 of the build/deploy simplification plan
   (`docs/0.9.0/build-deploy-simplification-plan.md`): cutover. The
   legacy `docker.yml`, `lambda_api_python.yml`, `lambda_counter.yml`,

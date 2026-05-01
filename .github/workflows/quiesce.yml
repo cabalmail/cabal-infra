@@ -114,8 +114,8 @@ jobs:
       - name: durability-reminder
         if: inputs.action == 'down'
         run: |
-          echo "::warning::Quiesce applied to ${{ inputs.environment }}. For durability across other terraform workflow runs, set TF_VAR_QUIESCED=true on the '${{ inputs.environment }}' GitHub Environment. Otherwise the next terraform.yml run will resurrect compute. See docs/quiesce.md."
+          echo "::warning::Quiesce applied to ${{ inputs.environment }}. For durability across other terraform workflow runs, set TF_VAR_QUIESCED=true on the '${{ inputs.environment }}' GitHub Environment. Otherwise the next infra.yml run will resurrect compute. See docs/quiesce.md."
       - name: resume-reminder
         if: inputs.action == 'up'
         run: |
-          echo "::warning::Resume applied to ${{ inputs.environment }}. Remember to clear TF_VAR_QUIESCED on the '${{ inputs.environment }}' GitHub Environment (set to false or remove the variable) so subsequent terraform.yml runs do not re-quiesce."
+          echo "::warning::Resume applied to ${{ inputs.environment }}. Remember to clear TF_VAR_QUIESCED on the '${{ inputs.environment }}' GitHub Environment (set to false or remove the variable) so subsequent infra.yml runs do not re-quiesce."

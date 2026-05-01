@@ -23,7 +23,7 @@ A Lambda function raised an unhandled exception (or otherwise returned an error 
    ```sh
    aws logs tail /aws/lambda/<function-name> --since 30m --filter-pattern '?ERROR ?Exception ?Traceback' | head -50
    ```
-2. **Is it a deploy or runtime issue?** Cross-reference recent Lambda deploys (`lambda_api_python.yml` workflow runs on the relevant branch). A first-error-after-deploy is a regression; an error after weeks of stability points to upstream (DDB, IMAP, Cognito) or data-shape (a malformed request).
+2. **Is it a deploy or runtime issue?** Cross-reference recent Lambda deploys (the `lambda-api` or `lambda-counter` job in `app.yml` runs on the relevant branch). A first-error-after-deploy is a regression; an error after weeks of stability points to upstream (DDB, IMAP, Cognito) or data-shape (a malformed request).
 3. **Is it user-visible?** For API Lambdas this overlaps `Lambda5xxSpike` and a critical may already be queued — confirm in Alertmanager. For non-API Lambdas (counter / certbot / dmarc / heartbeat) the user impact is delayed — the related heartbeat or feature works until the next scheduled run.
 
 ## Escalation

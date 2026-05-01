@@ -28,6 +28,13 @@ export PYTHONDONTWRITEBYTECODE=1
 pushd "${FUNC}" >/dev/null
 rm -rf ./python
 pip install --no-compile -r requirements.txt -t ./python 2>/dev/null || true
+# The shared layer (lambda/api/python) keeps its first-party module sources
+# under ./src/ so they survive the wipe above; copy them into ./python/
+# alongside the pip-installed third-party deps. See build-api.sh header.
+if [ -d ./src ]; then
+  mkdir -p ./python
+  cp -a ./src/. ./python/
+fi
 find . -depth -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
 find . -name '*.pyc' -delete 2>/dev/null || true
 find . -name 'direct_url.json' -delete 2>/dev/null || true
