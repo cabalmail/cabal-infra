@@ -215,6 +215,20 @@ jobs:
           "${{ matrix.tier }}" \
           "${{ needs.setup.outputs.image_tag }}"
 
+    # The cloudwatch-exporter image is consumed by two ECS services:
+    # the primary (cabal-cloudwatch-exporter) handles the home region,
+    # and the us-east-1-pinned task (cabal-cloudwatch-exporter-us-east-1)
+    # picks up CloudFront. Roll the second service with the same image
+    # tag so they don't drift.
+    - name: deploy-cloudwatch-exporter-us-east-1
+      if: matrix.tier == 'cloudwatch-exporter'
+      run: |
+        ./.github/scripts/deploy-ecs-service.sh \
+          "${{ matrix.tier }}" \
+          "${{ needs.setup.outputs.image_tag }}" \
+          cabal-mail \
+          cabal-cloudwatch-exporter-us-east-1
+
   lambda-certbot:
     needs: setup
     if: needs.setup.outputs.lambda_certbot == 'true'

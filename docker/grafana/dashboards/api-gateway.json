@@ -24,9 +24,9 @@
       },
       "targets": [
         {
-          "expr": "sum by (apiname) (rate(aws_apigateway_count_sum[5m]))",
+          "expr": "sum by (api_name) (rate(aws_apigateway_count_sum[5m]))",
           "refId": "A",
-          "legendFormat": "{{apiname}}"
+          "legendFormat": "{{api_name}}"
         }
       ],
       "gridPos": {
@@ -46,9 +46,9 @@
       },
       "targets": [
         {
-          "expr": "sum by (apiname) (rate(aws_apigateway_5_xx_error_sum[5m])) / clamp_min(sum by (apiname) (rate(aws_apigateway_count_sum[5m])), 1)",
+          "expr": "sum by (api_name) (rate(aws_apigateway_5_xx_error_sum[5m])) / clamp_min(sum by (api_name) (rate(aws_apigateway_count_sum[5m])), 1)",
           "refId": "A",
-          "legendFormat": "{{apiname}}"
+          "legendFormat": "{{api_name}}"
         }
       ],
       "gridPos": {

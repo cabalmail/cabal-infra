@@ -16,13 +16,19 @@
 # rather than to a stale SSM value.
 #
 # Usage:
-#   deploy-ecs-service.sh <tier> <image_tag> [cluster]
+#   deploy-ecs-service.sh <tier> <image_tag> [cluster] [service_override]
 #
 # Args:
-#   tier       e.g. imap, smtp-in, prometheus. Maps to ECS service
-#              cabal-<tier> and ECR repo cabal-<tier>.
-#   image_tag  e.g. sha-abc12345. Must already exist in ECR.
-#   cluster    Optional; defaults to cabal-mail.
+#   tier              e.g. imap, smtp-in, prometheus. Maps to ECS
+#                     service cabal-<tier> and ECR repo cabal-<tier>.
+#   image_tag         e.g. sha-abc12345. Must already exist in ECR.
+#   cluster           Optional; defaults to cabal-mail.
+#   service_override  Optional; defaults to cabal-<tier>. Use this when
+#                     a second ECS service consumes the same image
+#                     under a different service name (e.g. the
+#                     us-east-1-pinned cloudwatch-exporter task uses
+#                     the cabal-cloudwatch-exporter image but runs as
+#                     cabal-cloudwatch-exporter-us-east-1).
 #
 # Exit codes:
 #   0  rolled the service successfully (or service already up to date)
@@ -35,7 +41,7 @@ set -euo pipefail
 TIER="${1:?tier required}"
 TAG="${2:?image_tag required}"
 CLUSTER="${3:-cabal-mail}"
-SERVICE="cabal-${TIER}"
+SERVICE="${4:-cabal-${TIER}}"
 REPO_BASENAME="cabal-${TIER}"
 
 log() { echo "[deploy-ecs-service] $*"; }

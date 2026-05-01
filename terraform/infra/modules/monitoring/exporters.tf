@@ -144,6 +144,92 @@ resource "aws_ecs_service" "cloudwatch_exporter" {
   }
 }
 
+# -- cloudwatch_exporter (CloudFront, us-east-1) --------------
+#
+# CloudFront emits metrics exclusively in us-east-1 regardless of where
+# the rest of the infra lives (AWS API constraint - see
+# local.cloudfront_metrics_region). cloudwatch_exporter v0.16.0 has no
+# per-metric region override, so a second task is pinned to that region
+# via AWS_REGION and runs against /config/config-us-east-1.yml. Same
+# image, same IAM role (cloudwatch:* is region-agnostic on the
+# principal side - the SDK just talks to the us-east-1 endpoint).
+# Registered separately in Cloud Map so Prometheus has its own scrape
+# job and target.
+
+resource "aws_cloudwatch_log_group" "cloudwatch_exporter_us_east_1" {
+  name              = "/ecs/cabal-cloudwatch-exporter-us-east-1"
+  retention_in_days = 30
+}
+
+resource "aws_ecs_task_definition" "cloudwatch_exporter_us_east_1" {
+  family                   = "cabal-cloudwatch-exporter-us-east-1"
+  requires_compatibilities = ["EC2"]
+  network_mode             = "awsvpc"
+  execution_role_arn       = aws_iam_role.cloudwatch_exporter_execution.arn
+  task_role_arn            = aws_iam_role.cloudwatch_exporter_task.arn
+
+  container_definitions = jsonencode([{
+    name              = "cloudwatch-exporter"
+    image             = local.service_image["cloudwatch-exporter"]
+    essential         = true
+    memoryReservation = 192
+    memory            = 384
+
+    # Override the image's default CMD to pick the us-east-1 config.
+    command = ["/config/config-us-east-1.yml"]
+
+    portMappings = [
+      { containerPort = 9106, protocol = "tcp" }
+    ]
+
+    environment = [
+      { name = "AWS_REGION", value = local.cloudfront_metrics_region },
+    ]
+
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        "awslogs-group"         = aws_cloudwatch_log_group.cloudwatch_exporter_us_east_1.name
+        "awslogs-region"        = var.region
+        "awslogs-stream-prefix" = "cloudwatch-exporter"
+        "mode"                  = "non-blocking"
+      }
+    }
+  }])
+
+  lifecycle {
+    ignore_changes = [container_definitions]
+  }
+}
+
+resource "aws_ecs_service" "cloudwatch_exporter_us_east_1" {
+  name            = "cabal-cloudwatch-exporter-us-east-1"
+  cluster         = var.ecs_cluster_id
+  task_definition = aws_ecs_task_definition.cloudwatch_exporter_us_east_1.arn
+  desired_count   = var.quiesced ? 0 : 1
+
+  deployment_maximum_percent         = 200
+  deployment_minimum_healthy_percent = 100
+
+  capacity_provider_strategy {
+    capacity_provider = var.ecs_cluster_capacity_provider
+    weight            = 100
+  }
+
+  network_configuration {
+    subnets         = var.private_subnet_ids
+    security_groups = [aws_security_group.exporters.id]
+  }
+
+  service_registries {
+    registry_arn = aws_service_discovery_service.monitoring["cloudwatch-exporter-us-east-1"].arn
+  }
+
+  lifecycle {
+    ignore_changes = [task_definition]
+  }
+}
+
 # -- blackbox_exporter ----------------------------------------
 
 resource "aws_cloudwatch_log_group" "blackbox_exporter" {
