@@ -5,6 +5,71 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- Grafana panels that had been "no data" since the monitoring stack
+  shipped now populate. Five separate bugs:
+  - **API Gateway alerts and per-API-name aggregation**: the `apiname`
+    label filter in `Lambda5xxSpike` and the API Gateway dashboard
+    didn't match anything. cloudwatch_exporter v0.16.0 snake_cases
+    dimension labels (`ApiName` -> `api_name`); only the unrelated
+    aggregation by a non-existent label kept the request-count panel
+    from looking blank. Renamed every reference to `api_name`.
+  - **AWS Services dashboard "ECS RunningTaskCount per service"**: the
+    metric was scraped from `AWS/ECS`, but `RunningTaskCount` /
+    `DesiredTaskCount` / `PendingTaskCount` actually live in the
+    `ECS/ContainerInsights` namespace (Container Insights is enabled
+    on the cluster). Moved the three metrics to that namespace in
+    `docker/cloudwatch-exporter/config.yml`, updated the dashboard to
+    `aws_ecs_containerinsights_running_task_count_average`, and fixed
+    the `ContainerRestartLoop` alert to match.
+  - **Frontend dashboard CloudFront panels**: covered by a new
+    cloudwatch_exporter task pinned to `us-east-1`
+    (`cabal-cloudwatch-exporter-us-east-1`), since CloudFront emits
+    metrics exclusively in that region and v0.16.0 has no per-metric
+    region override. New ECS task definition + service in
+    `terraform/infra/modules/monitoring/exporters.tf`, new Cloud Map
+    registration, new Prometheus `cloudwatch-us-east-1` scrape job,
+    and a new minimal CloudFront-only config
+    (`docker/cloudwatch-exporter/config-us-east-1.yml`) baked into
+    the existing image. App-deploy script
+    (`.github/scripts/deploy-ecs-service.sh`) now accepts a service-
+    name override so the same image tag rolls onto both services;
+    `app.yml` calls it twice for the cloudwatch-exporter tier. Also
+    fixed the dashboard's `aws_cloudfront_5_xx_error_rate_average` ->
+    `aws_cloudfront_5xx_error_rate_average` (the CloudWatch metric is
+    `5xxErrorRate`, lowercase, which snake-cases without the extra
+    underscore that `5XXError` produces).
+  - **Mail Tiers "TLS days to expiry - IMAP 993"**: the blackbox
+    `tcp_connect` probe never initiates a TLS handshake, so
+    `probe_ssl_earliest_cert_expiry` was permanently absent. Split
+    the Prometheus blackbox jobs in two: `blackbox-tcp` keeps port 25
+    (plaintext) and 587 (STARTTLS, blackbox doesn't drive STARTTLS),
+    while a new `blackbox-tls` job using the existing `tcp_tls`
+    blackbox module covers the implicit-TLS ports 993 (IMAP) and 465
+    (SMTP submission), populating the cert-expiry metric.
+- Updated `docs/monitoring.md` accordingly: the "What populates when"
+  section no longer marks CloudFront panels as permanently empty, the
+  scrape-target inventory in step 18 reflects the second
+  cloudwatch-exporter and the split blackbox jobs, and a new
+  "Verifying the data pipeline" section documents how to confirm
+  CloudWatch -> exporter -> Prometheus -> Grafana is sound and how to
+  inject synthetic data into each "no data" panel to prove it lights
+  up.
+
+### Changed
+- Broadened `docker/cloudwatch-exporter/config.yml` EFS coverage with
+  `StorageBytes`, `TotalIOBytes`, `DataReadIOBytes`, and
+  `DataWriteIOBytes`. AWS recently changed the default EFS throughput
+  mode to `elastic`, which doesn't emit `BurstCreditBalance` or
+  `PercentIOLimit`; the new metrics are throughput-mode-agnostic so
+  the AWS Services dashboard has a working saturation signal
+  regardless of which mode the file system is in. The dashboard's
+  former "EFS PercentIOLimit" panel is now "EFS I/O bytes
+  (read+write, 5m rate)" sourced from `DataReadIOBytes` /
+  `DataWriteIOBytes`.
+
 ## [0.9.6] - 2026-05-01
 
 ### Fixed

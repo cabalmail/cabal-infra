@@ -91,6 +91,17 @@ metrics:
     aws_statistics: [Sum]
 
   # ── EFS ───────────────────────────────────────────────────────
+  # BurstCreditBalance and PercentIOLimit only emit when the filesystem
+  # is in the corresponding mode: BurstCreditBalance requires bursting
+  # throughput mode (AWS recently flipped the default to elastic, so
+  # this is empty for newer file systems); PercentIOLimit requires
+  # generalPurpose performance mode (the default; non-empty here).
+  # Verify the current mode with:
+  #   aws efs describe-file-systems \
+  #     --query 'FileSystems[*].{id:FileSystemId,throughput:ThroughputMode,perf:PerformanceMode}'
+  # StorageBytes and the I/O byte counters work in both throughput
+  # modes, so they are the reliable saturation/traffic signal regardless
+  # of how the FS was provisioned.
   - aws_namespace: AWS/EFS
     aws_metric_name: BurstCreditBalance
     aws_dimensions: [FileSystemId]
@@ -106,7 +117,31 @@ metrics:
     aws_dimensions: [FileSystemId]
     aws_statistics: [Sum]
 
+  - aws_namespace: AWS/EFS
+    aws_metric_name: StorageBytes
+    aws_dimensions: [FileSystemId, StorageClass]
+    aws_statistics: [Average]
+
+  - aws_namespace: AWS/EFS
+    aws_metric_name: TotalIOBytes
+    aws_dimensions: [FileSystemId]
+    aws_statistics: [Sum]
+
+  - aws_namespace: AWS/EFS
+    aws_metric_name: DataReadIOBytes
+    aws_dimensions: [FileSystemId]
+    aws_statistics: [Sum]
+
+  - aws_namespace: AWS/EFS
+    aws_metric_name: DataWriteIOBytes
+    aws_dimensions: [FileSystemId]
+    aws_statistics: [Sum]
+
   # ── ECS ───────────────────────────────────────────────────────
+  # CPU/Memory utilization come from the AWS/ECS namespace. Task-count
+  # metrics (Running/Desired/Pending) live in ECS/ContainerInsights, not
+  # AWS/ECS - a common gotcha. Container Insights is enabled on the
+  # cluster (modules/ecs/main.tf), so these emit per-service.
   - aws_namespace: AWS/ECS
     aws_metric_name: CPUUtilization
     aws_dimensions: [ClusterName, ServiceName]
@@ -117,13 +152,18 @@ metrics:
     aws_dimensions: [ClusterName, ServiceName]
     aws_statistics: [Average, Maximum]
 
-  - aws_namespace: AWS/ECS
+  - aws_namespace: ECS/ContainerInsights
     aws_metric_name: RunningTaskCount
     aws_dimensions: [ClusterName, ServiceName]
     aws_statistics: [Average]
 
-  - aws_namespace: AWS/ECS
+  - aws_namespace: ECS/ContainerInsights
     aws_metric_name: DesiredTaskCount
+    aws_dimensions: [ClusterName, ServiceName]
+    aws_statistics: [Average]
+
+  - aws_namespace: ECS/ContainerInsights
+    aws_metric_name: PendingTaskCount
     aws_dimensions: [ClusterName, ServiceName]
     aws_statistics: [Average]
 
@@ -149,13 +189,14 @@ metrics:
     aws_dimensions: [CertificateArn]
     aws_statistics: [Minimum]
 
-  # ── CloudFront (global only — region must be us-east-1) ───────
-  # Disabled by default; CloudFront metrics live in us-east-1 and require
-  # a separate exporter instance. Enable when needed.
-  # - aws_namespace: AWS/CloudFront
-  #   aws_metric_name: 5xxErrorRate
-  #   aws_dimensions: [DistributionId, Region]
-  #   aws_statistics: [Average]
+  # ── CloudFront (us-east-1 only) ───────────────────────────────
+  # CloudFront metrics live exclusively in us-east-1. cloudwatch_exporter
+  # v0.16.0 has no per-metric region override (the region is set via the
+  # top-level --region flag / AWS_REGION env var), so a second exporter
+  # task pinned to us-east-1 scrapes these. See
+  # docker/cloudwatch-exporter/config-us-east-1.yml and the
+  # cloudwatch_exporter_us_east_1 ECS service in
+  # terraform/infra/modules/monitoring/exporters.tf.
 
   # ── Cognito ───────────────────────────────────────────────────
   - aws_namespace: AWS/Cognito

@@ -26,11 +26,12 @@ resource "aws_service_discovery_private_dns_namespace" "monitoring" {
 
 locals {
   monitoring_services = {
-    prometheus          = { description = "Prometheus TSDB scraper." }
-    alertmanager        = { description = "Alertmanager - receives alerts from Prometheus." }
-    grafana             = { description = "Grafana - Prometheus dashboards." }
-    cloudwatch-exporter = { description = "CloudWatch exporter - translates AWS metrics for Prometheus." }
-    blackbox-exporter   = { description = "Blackbox exporter - synthetic HTTP/TCP probes." }
+    prometheus                    = { description = "Prometheus TSDB scraper." }
+    alertmanager                  = { description = "Alertmanager - receives alerts from Prometheus." }
+    grafana                       = { description = "Grafana - Prometheus dashboards." }
+    cloudwatch-exporter           = { description = "CloudWatch exporter - translates AWS metrics for Prometheus." }
+    cloudwatch-exporter-us-east-1 = { description = "CloudWatch exporter pinned to us-east-1 (CloudFront only)." }
+    blackbox-exporter             = { description = "Blackbox exporter - synthetic HTTP/TCP probes." }
     # Phase 4 section 3 - needed so the healthchecks_iac Lambda can reach the
     # Healthchecks API on a stable private DNS name, bypassing the
     # Cognito-fronted public ALB (the API key is sufficient auth).
