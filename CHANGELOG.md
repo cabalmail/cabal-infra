@@ -5,7 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.9.5] - Unreleased
+## [0.9.6] - Unreleased
+
+### Changed
+- Phase 7 of the build/deploy simplification plan
+  (`docs/0.9.0/build-deploy-simplification-plan.md`): operator-facing
+  documentation that referenced the deleted workflows now points at
+  the new pipeline. `docs/quiesce.md`, `docs/monitoring.md`, the
+  `lambda-errors` and `container-restart-loop` runbooks under
+  `docs/operations/runbooks/`, the comment in
+  `terraform/infra/modules/lambda_layers/main.tf`, the path comment
+  in `.github/scripts/record-lambda-hashes.sh`, and the durability /
+  resume warning strings in `.github/workflows/quiesce.yml` all
+  rename `terraform.yml` -> `infra.yml`, `lambda_api_python.yml` ->
+  the `lambda-api` job in `app.yml`, `docker.yml` -> the `docker`
+  job in `app.yml`, and so on. The container-restart-loop runbook's
+  rollback recipe is rewritten to call `deploy-ecs-service.sh`
+  directly rather than the now-deleted SSM-then-Terraform path.
+
+## [0.9.5] - 2026-05-01
 
 ### Changed
 - Phase 6 of the build/deploy simplification plan
@@ -43,20 +61,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `CLAUDE.md` workflow table updated to reflect the two-workflow model
   (`app.yml` + `infra.yml`) plus the surviving manual / scheduled
   workflows.
-- Phase 7 of the build/deploy simplification plan
-  (`docs/0.9.0/build-deploy-simplification-plan.md`): operator-facing
-  documentation that referenced the deleted workflows now points at
-  the new pipeline. `docs/quiesce.md`, `docs/monitoring.md`, the
-  `lambda-errors` and `container-restart-loop` runbooks under
-  `docs/operations/runbooks/`, the comment in
-  `terraform/infra/modules/lambda_layers/main.tf`, the path comment
-  in `.github/scripts/record-lambda-hashes.sh`, and the durability /
-  resume warning strings in `.github/workflows/quiesce.yml` all
-  rename `terraform.yml` -> `infra.yml`, `lambda_api_python.yml` ->
-  the `lambda-api` job in `app.yml`, `docker.yml` -> the `docker`
-  job in `app.yml`, and so on. The container-restart-loop runbook's
-  rollback recipe is rewritten to call `deploy-ecs-service.sh`
-  directly rather than the now-deleted SSM-then-Terraform path.
 
 ## [0.9.4] - 2026-04-30
 
