@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.9.6] - 2026-05-01
 
+### Fixed
+- Restored the shared Lambda layer's first-party module (`helper.py`)
+  in CI builds. The 0.9.5 lambda-api parallelisation extracted the
+  per-function build into `build-api-one.sh` but only carried over the
+  `rm -rf ./python` + `pip install -t ./python` steps; the `./src/.`
+  -> `./python/` copy that 0.9.4 added (so the wipe couldn't delete
+  helper.py) was left behind in the now-defunct sequential loop in
+  `build-api.sh`. Once that loop was removed in the build-api.sh
+  leftover-loop fix, every published layer shipped third-party deps
+  only, and every IMAP-backed Lambda (`list_messages`, `list_envelopes`,
+  `fetch_message`, `send`, the folder/flag/move endpoints, the
+  IMAP-touching `revoke`) crashed at import with `ModuleNotFoundError:
+  helper`. The webmail surfaced this as "Unable to load list of
+  messages."; dedicated IMAP/SMTP servers were unaffected because they
+  don't share that code path. The copy step now lives in
+  `build-api-one.sh` itself, where the wipe and pip install live.
+
 ### Changed
 - Updated CLAUDE.md to reflect 0.9.x as in progress.
 - Phase 7 of the build/deploy simplification plan
