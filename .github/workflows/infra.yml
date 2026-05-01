@@ -197,8 +197,16 @@ jobs:
         name: infra-backend.tf
         path: ./terraform/infra/backend.tf
 
+  # The chekov / tflint / tfsec / plan jobs each carry an explicit
+  # `if: needs.build.result == 'success'`. Without it, GitHub Actions
+  # propagates the SKIPPED status of bootstrap_apply (skipped on the
+  # common path where terraform/dns/** did not change) transitively
+  # past `build` (which uses `always()` to run anyway) and silently
+  # skips every downstream job. The explicit condition pins each job
+  # to its actual upstream's result rather than the transitive chain.
   chekov:
     needs: build
+    if: needs.build.result == 'success'
     runs-on: ubuntu-latest
     steps:
     - name: checkout
@@ -220,6 +228,7 @@ jobs:
 
   tflint:
     needs: build
+    if: needs.build.result == 'success'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -242,6 +251,7 @@ jobs:
 
   tfsec:
     needs: build
+    if: needs.build.result == 'success'
     runs-on: ubuntu-latest
     steps:
     - name: checkout
@@ -260,6 +270,7 @@ jobs:
 
   plan:
     needs: build
+    if: needs.build.result == 'success'
     runs-on: ubuntu-latest
     outputs:
       exit_code: ${{ steps.plan-terraform.outputs.exit_code }}
