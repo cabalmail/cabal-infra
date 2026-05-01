@@ -1,13 +1,15 @@
 # IaC Quality Gates Plan
 
+> **Note (post-simplification update):** this plan was originally written against the pre-`infra.yml` workflow layout. Phase 6 of [`build-deploy-simplification-plan.md`](./build-deploy-simplification-plan.md) (shipped in 0.9.5) replaced `terraform.yml` + `bootstrap.yml` with a single `infra.yml` that owns both the `terraform/infra` stage and the `terraform/dns` (bootstrap) stage as gated jobs. References below have been updated to the post-simplification names; the scanner configurations (broken tflint loop, soft-failing Checkov, deprecated tfsec, no scanners on the DNS stack) carried over verbatim from the legacy workflow, so the substantive findings here are unchanged.
+
 ## Context
 
-The `terraform.yml` workflow has run three Terraform-targeted scanners on every push to `terraform/infra/**` for years: Checkov (broad cloud-config policy), tflint (Terraform-specific lint + provider rules), and tfsec (security-focused HCL scanner). The intent at the time was sound: catch misconfigurations before they land. The execution has drifted in ways that mean today these scanners are mostly noise generators, not gates:
+The `infra.yml` workflow has run three Terraform-targeted scanners on every push to `terraform/infra/**` for years: Checkov (broad cloud-config policy), tflint (Terraform-specific lint + provider rules), and tfsec (security-focused HCL scanner). The intent at the time was sound: catch misconfigurations before they land. The execution has drifted in ways that mean today these scanners are mostly noise generators, not gates:
 
-- **Checkov** runs with `soft_fail: true` ([`terraform.yml:71`](../../.github/workflows/terraform.yml:71)). The job always succeeds. Findings are visible only by reading the raw log of a successful workflow — no one does.
-- **tfsec** runs with `soft_fail: false` ([`terraform.yml:97`](../../.github/workflows/terraform.yml:97)) and is a real gate. But tfsec itself was merged into [Trivy](https://github.com/aquasecurity/tfsec#tfsec-is-joining-the-trivy-family) in 2023 and the standalone project is in maintenance mode; the action we use (`aquasecurity/tfsec-action@v1.0.0`) is the same code under a deprecated wrapper.
-- **tflint** runs but its loop is silently broken: `for i in ./ modules/* modules/*/modules/* ; do tflint ; done` ([`terraform.yml:91`](../../.github/workflows/terraform.yml:91)) never `cd`s into `$i`, so `tflint` is invoked N times in the same root directory and the modules are never scanned. The pinned AWS ruleset version in [`terraform/.tflint.hcl`](../../terraform/.tflint.hcl) is `0.20.0` — the current ruleset is at the 0.40 line.
-- The `terraform/dns` (bootstrap) stack runs through [`bootstrap.yml`](../../.github/workflows/bootstrap.yml) and has **no scanners at all**.
+- **Checkov** runs with `soft_fail: true` (in the `chekov` job of [`infra.yml`](../../.github/workflows/infra.yml)). The job always succeeds. Findings are visible only by reading the raw log of a successful workflow — no one does.
+- **tfsec** runs with `soft_fail: false` (in the `tfsec` job of [`infra.yml`](../../.github/workflows/infra.yml)) and is a real gate. But tfsec itself was merged into [Trivy](https://github.com/aquasecurity/tfsec#tfsec-is-joining-the-trivy-family) in 2023 and the standalone project is in maintenance mode; the action we use (`aquasecurity/tfsec-action@v1.0.0`) is the same code under a deprecated wrapper.
+- **tflint** runs but its loop is silently broken: `for i in ./ modules/* modules/*/modules/* ; do tflint ; done` (in the `tflint` job of [`infra.yml`](../../.github/workflows/infra.yml)) never `cd`s into `$i`, so `tflint` is invoked N times in the same root directory and the modules are never scanned. The pinned AWS ruleset version in [`terraform/.tflint.hcl`](../../terraform/.tflint.hcl) is `0.20.0` — the current ruleset is at the 0.40 line.
+- The `terraform/dns` (bootstrap) stage of `infra.yml` (the `bootstrap_build` / `bootstrap_plan` / `bootstrap_apply` jobs) has **no scanners at all**.
 - All three tools are loosely pinned: Checkov action at `@master`, tflint installer is `curl ... master/install_linux.sh`, tfsec action at `v1.0.0`. Gate strictness drifts silently as upstream ships new rules.
 
 This plan does two separable things, in order:
@@ -51,12 +53,12 @@ Other tools considered and rejected:
 
 ## Current state (audit)
 
-- `terraform.yml` jobs: `chekov` (sic, the job name has a typo), `tflint`, `tfsec`. All three depend on `build` (which writes `backend.tf`) and feed into `apply` via `needs`. The `apply` job won't run if `tflint` or `tfsec` fails; Checkov is bypassed because of `soft_fail: true`.
-- `bootstrap.yml`: `build → plan → apply`. No scanner jobs at all.
+- `infra.yml` infra-stage jobs: `chekov` (sic, the job name has a typo), `tflint`, `tfsec`. All three depend on `build` (which writes `backend.tf`) and feed into `apply` via `needs`. The `apply` job won't run if `tflint` or `tfsec` fails; Checkov is bypassed because of `soft_fail: true`.
+- `infra.yml` bootstrap-stage jobs: `bootstrap_build → bootstrap_plan → bootstrap_apply`, gated on a path filter for `terraform/dns/**`. No scanner jobs at all.
 - No baseline files: `find . -maxdepth 4 -name '.checkov*' -o -name '.tfsec*'` is empty.
 - No `Makefile` or developer-side runner for these scans.
 - `.tflint.hcl` lives at [`terraform/.tflint.hcl`](../../terraform/.tflint.hcl) (one level above both stacks) and only enables the AWS plugin. No `terraform_*` rules, no `terraform_module_pinned_source`, no `terraform_required_version` enforcement.
-- Workflow path triggers on `terraform.yml` are `terraform/infra` and `terraform/infra/*` and `terraform/infra/*/**`. The bootstrap stack would need a separate trigger or a unification.
+- `infra.yml`'s `push` trigger covers `terraform/dns/**` and `terraform/infra/**` plus its helper scripts; the bootstrap and infra stages are gated downstream by a `dorny/paths-filter@v3` step rather than by separate workflow triggers, so adding scanners against `terraform/dns` is a new sibling job rather than a new workflow.
 
 A short investigation step to bake into Phase 0: collect a current finding count from each tool against the current `main` to set expectations for the size of the initial baseline.
 
@@ -183,10 +185,10 @@ This phase doesn't touch CI. Pure reconnaissance.
 
 ### Phase 1 — Replace tfsec with Trivy IaC, scan both stacks, still soft-fail
 
-Single PR:
+Single PR against `infra.yml`:
 
 - Remove the `tfsec` job; add a `trivy` job using `aquasecurity/trivy-action@<sha>` with `scan-type: config` on `terraform/infra`.
-- Add a parallel `trivy-dns` job (and `checkov-dns`, `tflint-dns`) that runs against `terraform/dns`. Wire it into `bootstrap.yml`'s `apply` `needs`.
+- Add parallel `*-dns` scanner jobs (`checkov-dns`, `tflint-dns`, `trivy-dns`) that run against `terraform/dns`. Gate them on `needs.bootstrap_apply` (or, more precisely, on a `!cancelled() && needs.changes.outputs.dns == 'true'` condition that mirrors how the existing infra-stage scanners are reached only when the infra stage is exercised) and wire them into `bootstrap_apply`'s `needs` so the bootstrap apply blocks on them in the same way the infra apply blocks on the infra-stage scanners.
 - All scanners set to soft-fail in this phase (yes, including Trivy — we are *intentionally* relaxing the one current gate while we re-establish the baseline). This is the riskiest single moment in the rollout, in the sense that we lose the existing tfsec gate for the duration of Phases 1–3. Mitigation: keep this window short (one to two weeks), and the prior gate's coverage is preserved in the new tool's findings — they don't disappear, they just don't fail CI yet.
 - Pin all three actions to commit SHA. Pin tflint AWS ruleset to a current version.
 - Fix the broken tflint loop (use `--recursive`).
@@ -260,7 +262,7 @@ Ongoing, but with structure rather than vibes:
 | Phase | Rollback |
 | ----- | -------- |
 | 0     | None needed — pure measurement. |
-| 1     | Revert the `terraform.yml` and `bootstrap.yml` changes. tfsec returns; trivy/checkov/tflint scope on dns disappears. |
+| 1     | Revert the `infra.yml` changes. tfsec returns; trivy/checkov/tflint scope on dns disappears. |
 | 2     | Delete the baseline files and `BASELINE.md`. CI continues to soft-fail (no behavioural change since Phase 1 was already soft-fail). |
 | 2.5   | Each fix PR is independently revertable. Reverting them all returns the codebase to its Phase 2 state with the original baseline. Generally we wouldn't roll these back wholesale — the fixes are correctness improvements regardless of whether the gate flips. |
 | 3     | Re-add `soft_fail: true` (or equivalent per tool) and remove the drift-detection step. The baseline files stay; gates revert to noise. |
@@ -270,8 +272,7 @@ The window of weakened security posture is Phase 1–3, during which tfsec's har
 
 ## CI changes
 
-- `.github/workflows/terraform.yml`: Trivy job replaces tfsec; Checkov and tflint pinned and corrected; SARIF uploads added; drift-detection step added in Phase 3.
-- `.github/workflows/bootstrap.yml`: gain `checkov`, `tflint`, `trivy` jobs paralleling the infra workflow; `apply` gains `needs` on all three.
+- `.github/workflows/infra.yml`: Trivy job replaces tfsec on the infra stage; Checkov and tflint pinned and corrected; SARIF uploads added on every scanner; drift-detection step added in Phase 3. Sibling `checkov-dns` / `tflint-dns` / `trivy-dns` jobs added against the bootstrap stage and wired into `bootstrap_apply`'s `needs` so the bootstrap apply gates on them the same way the infra apply gates on the infra-stage scanners.
 - `.github/scripts/baseline-diff.py`: new helper, one place per tool. Reads the tool's current JSON output, reads the baseline, diffs, exits non-zero on either "new finding not in baseline" or "baseline entry not in current findings."
 - `.github/scripts/check-suppression-justifications.sh`: new helper, grep-based.
 - `.github/dependabot.yml` (or Renovate config if we adopt it): pin-bump rules for `bridgecrewio/checkov-action`, `aquasecurity/trivy-action`, `terraform-linters/setup-tflint`, and the tflint AWS ruleset version inside `.tflint.hcl`.
