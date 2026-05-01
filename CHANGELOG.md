@@ -7,26 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.9.5] - Unreleased
 
-### Fixed
-- `infra.yml` was silently skipping `chekov`, `tflint`, `tfsec`, and
-  `plan` (and therefore `apply` / `post_apply` too) on the common
-  push path where `terraform/dns/**` did not change. The `build` job
-  uses `always()` to run regardless of whether `bootstrap_apply` was
-  skipped, but downstream jobs that depended on `build` had no
-  explicit `if:` and inherited the SKIPPED status of
-  `bootstrap_apply` transitively through GitHub Actions' default
-  `success()` evaluation. Each scanner / plan job now carries
-  `if: needs.build.result == 'success'`, pinning evaluation to the
-  immediate upstream's actual result.
-- `build-api.sh` was failing with `SOURCE_DATE_EPOCH: unbound
-  variable` on every run. The 0.9.4 refactor that extracted
-  `build-api-one.sh` left the pre-refactor sequential per-function
-  loop in place ahead of the new `xargs -P` dispatch tail, so the
-  driver was running the (now-incomplete) inline build before
-  reaching the parallel call. Removed the leftover loop; the script
-  is now the thin enumerator-and-dispatcher described in the 0.9.4
-  CHANGELOG entry.
-
 ### Changed
 - Phase 6 of the build/deploy simplification plan
   (`docs/0.9.0/build-deploy-simplification-plan.md`): cutover. The
