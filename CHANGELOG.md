@@ -40,6 +40,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   job in `app.yml`, and so on. The container-restart-loop runbook's
   rollback recipe is rewritten to call `deploy-ecs-service.sh`
   directly rather than the now-deleted SSM-then-Terraform path.
+  
+## [0.9.5] - 2026-05-01
+
+### Changed
 - Phase 6 of the build/deploy simplification plan
   (`docs/0.9.0/build-deploy-simplification-plan.md`): cutover. The
   legacy `docker.yml`, `lambda_api_python.yml`, `lambda_counter.yml`,
