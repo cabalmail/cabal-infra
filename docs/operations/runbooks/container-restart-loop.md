@@ -40,7 +40,7 @@ The label `service_name` identifies the service. For Cabalmail:
 
 ## Escalation
 
-- **Crash loop on a mail tier after a Docker image push**: roll back. The image tag in `/cabal/deployed_image_tag` lags the ECR repo state; previous tag is on the prior `docker.yml` workflow run. Set the SSM parameter back manually and re-apply Terraform, or push a corrective image.
+- **Crash loop on a mail tier after a Docker image push**: roll back. The previous image tag is on the prior `app.yml` workflow run (the `docker` job). The fastest rollback is to call `.github/scripts/deploy-ecs-service.sh <tier> sha-<previous-8>` against the running cluster — the script clones the live task definition, swaps in the older tag, registers a new revision, and rolls the service.
 - **EFS access-point related crash** (`failed to chown`): see the Phase 1/2/3 troubleshooting notes in [docs/monitoring.md](../../monitoring.md). A new image that adds a chown-on-start shim recreates the family of bug we've already hit on Kuma, Healthchecks, and Grafana.
 - **Capacity exhaustion**: scale the ASG up by one and confirm placement; consider a larger instance type if memory pressure is the issue (the monitoring stack is memory-bound, not CPU-bound).
 - This is `critical`. If multiple services are in restart loops simultaneously, suspect the cluster instance role / EFS / network — not the services themselves.

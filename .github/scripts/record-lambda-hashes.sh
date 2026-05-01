@@ -35,7 +35,7 @@
 set -euo pipefail
 
 # Path is relative to the working directory of the calling step, which
-# in terraform.yml is ./terraform/infra. Override with the OUTPUT env
+# in infra.yml is ./terraform/infra. Override with the OUTPUT env
 # var when invoking from elsewhere.
 OUTPUT="${OUTPUT:-.terraform/lambda-pinned.tfvars}"
 

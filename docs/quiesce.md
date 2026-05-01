@@ -39,18 +39,18 @@ The workflow is in [.github/workflows/quiesce.yml](../../.github/workflows/quies
 2. From the GitHub Actions UI, run **Quiesce Infrastructure** with:
    - `environment` = `development` or `stage`
    - `action` = `down` to scale to zero, or `up` to restore
-3. The job validates that the branch matches the chosen environment, generates the same backend config and tfvars that `terraform.yml` does, and runs `terraform apply` with `quiesced = true|false` written directly into the tfvars file.
+3. The job validates that the branch matches the chosen environment, generates the same backend config and tfvars that `infra.yml` does, and runs `terraform apply` with `quiesced = true|false` written directly into the tfvars file.
 
 ## Durability across other Terraform runs
 
-`terraform.yml` runs on any push that touches `terraform/infra/**`, on `workflow_dispatch`, and on `repository_dispatch`. It writes `quiesced = ${{ vars.TF_VAR_QUIESCED || 'false' }}` to its tfvars, so by default it un-quiesces.
+`infra.yml` runs on any push that touches `terraform/infra/**` (or `terraform/dns/**`) and on `workflow_dispatch`. It writes `quiesced = ${{ vars.TF_VAR_QUIESCED || 'false' }}` to its tfvars, so by default it un-quiesces.
 
 To keep an environment quiesced across other runs:
 
 - After running `quiesce` with `action: down`, set `TF_VAR_QUIESCED=true` on the matching GitHub Environment (`development` or `stage`) under **Settings -> Environments**.
 - After running `quiesce` with `action: up`, clear `TF_VAR_QUIESCED` (set to `false` or remove the variable).
 
-Forgetting this step is recoverable: the next `terraform.yml` run will simply restore compute. The state-bearing resources are unaffected either way.
+Forgetting this step is recoverable: the next `infra.yml` run will simply restore compute. The state-bearing resources are unaffected either way.
 
 ## Caveats
 

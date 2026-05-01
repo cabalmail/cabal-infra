@@ -38,15 +38,15 @@ In your GitHub repository settings, go to **Settings -> Environments -> _environ
 
 ## 3. Build container images (first time only)
 
-Prometheus, Alertmanager, Grafana, the three Prometheus exporters, Uptime Kuma, ntfy, and Healthchecks all ship as ECR images built by `.github/workflows/docker.yml`. The first time you toggle `TF_VAR_MONITORING=true` after this release lands, run the **Build and Push Container Images** workflow first -- this populates the new ECR repositories with `sha-<first-8>` tags. Then run the Terraform workflow.
+Prometheus, Alertmanager, Grafana, the three Prometheus exporters, Uptime Kuma, ntfy, and Healthchecks all ship as ECR images built by the `docker` job in `.github/workflows/app.yml`. The first time you toggle `TF_VAR_MONITORING=true` after this release lands, run **Build and Deploy Application** with `areas: docker` first -- this populates the new ECR repositories with `sha-<first-8>` tags. Then run the Terraform workflow.
 
 If you flip `TF_VAR_MONITORING` to `true` without the images present, ECS keeps the new services in `pending` state until the images appear; nothing else breaks, but no progress is made until the build runs.
 
 ## 4. Apply Terraform
 
-Kick off the **Build and Deploy Terraform Infrastructure** workflow (same process as in [setup.md](./setup.md)). The apply creates:
+Kick off the **Build and Deploy Infrastructure** workflow (same process as in [setup.md](./setup.md)). The apply creates:
 
-- ECR repositories: `cabal-uptime-kuma`, `cabal-ntfy`, `cabal-healthchecks`, `cabal-prometheus`, `cabal-alertmanager`, `cabal-grafana`, `cabal-cloudwatch-exporter`, `cabal-blackbox-exporter`, `cabal-node-exporter` (always, regardless of the flag, so the Docker workflow can push unconditionally).
+- ECR repositories: `cabal-uptime-kuma`, `cabal-ntfy`, `cabal-healthchecks`, `cabal-prometheus`, `cabal-alertmanager`, `cabal-grafana`, `cabal-cloudwatch-exporter`, `cabal-blackbox-exporter`, `cabal-node-exporter` (always, regardless of the flag, so `app.yml`'s docker matrix can push unconditionally).
 - SSM `SecureString` parameters with `ignore_changes = [value]` so out-of-band rotation sticks: `/cabal/alert_sink_secret` (auto-generated), `/cabal/pushover_user_key`, `/cabal/pushover_app_token`, `/cabal/ntfy_publisher_token`, `/cabal/healthchecks_api_key`, six `/cabal/healthcheck_ping_*` placeholders, `/cabal/grafana_admin_password` (auto-generated), and `/cabal/healthchecks_secret_key` (auto-generated Django secret).
 - The `alert_sink` Lambda with a Function URL.
 - ECS services for ntfy, Uptime Kuma, Healthchecks, Prometheus, Alertmanager, Grafana, cloudwatch_exporter, blackbox_exporter, and the node_exporter DAEMON.
@@ -405,7 +405,7 @@ To add a new Healthchecks check via IaC:
 1. Edit [`lambda/api/healthchecks_iac/config.py`](../lambda/api/healthchecks_iac/config.py) -- add an entry with `name`, `kind`, `timeout`, `grace`, `desc`, `tags`, and `ssm_param`.
 2. Add a matching SSM parameter to [`monitoring/ssm.tf`](../terraform/infra/modules/monitoring/ssm.tf) `local.heartbeat_jobs` and reference it from the consumer (Lambda env var, ECS secrets, etc.).
 3. If the check needs a runbook (most do), add a markdown file under [`docs/operations/runbooks/`](./operations/runbooks/) and update the static `_RUNBOOK_MAP` in [`alert_sink/function.py`](../lambda/api/alert_sink/function.py) so the push includes a tappable link.
-4. Open a PR. CI runs `lambda_api_python.yml` (rebuilds the IaC Lambda zip and the alert_sink zip), then `terraform.yml` (applies and re-invokes the IaC Lambda since the source_code_hash changed).
+4. Open a PR. CI runs the `lambda-api` job in `app.yml` (rebuilds the IaC Lambda zip and the alert_sink zip), then `infra.yml` (applies and re-invokes the IaC Lambda since the source_code_hash changed).
 5. Confirm the new check appears in the Healthchecks dashboard. Assign the existing Webhook integration to it (still manual; the v3 API doesn't expose channel CRUD).
 
 ## Disabling the stack

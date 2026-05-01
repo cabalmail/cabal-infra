@@ -1,7 +1,7 @@
 /**
 * Creates a Lambda layer for use by other modules.
 * Zip files are built with Github actions; see
-* [lambda_api_python.yml](/.github/workflows/lambda_api_python.yml).
+* [app.yml](/.github/workflows/app.yml) (the `lambda-api` job).
 */
 
 # Get previously computed hash for zip file.
