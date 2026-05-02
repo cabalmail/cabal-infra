@@ -9,6 +9,19 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     steps:
+    # Only the three named branches map to an environment. Refuse to run
+    # from anything else so a feature-branch invocation cannot fall
+    # through to development. See CLAUDE.md "Branches and environments".
+    - name: require-known-branch
+      run: |
+        REF="${{ github.ref_name }}"
+        case "$REF" in
+          main|stage|development) ;;
+          *)
+            echo "::error::destroy_terraform.yml must run from main, stage, or development (got '$REF')."
+            exit 1
+            ;;
+        esac
     - name: checkout
       uses: actions/checkout@v5
     - name: generate-versions

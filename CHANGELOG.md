@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- CI/CD deploy workflows (`app.yml`, `infra.yml`) now only fire on the
+  three named branches: `main` (prod), `stage` (stage), and
+  `development` (development). Pushes from feature branches or tags no
+  longer trigger an automatic deploy to development. The manual
+  `destroy_terraform.yml` and `quiesce.yml` workflows refuse to run
+  from any other branch as well.
+- The `claude` issue-label automation now opens PRs against `stage`
+  rather than the default branch, so promotion to prod is always a
+  deliberate second step.
+
 ### Fixed
 - Grafana panels that had been "no data" since the monitoring stack
   shipped now populate. Five separate bugs:
