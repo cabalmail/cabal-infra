@@ -34,6 +34,13 @@ on:
         required: false
         type: string
   push:
+    # Only the three named branches deploy. Pushes from feature branches
+    # or tags do not trigger this workflow. See CLAUDE.md "Branches and
+    # environments".
+    branches:
+      - main
+      - stage
+      - development
     paths:
       - 'terraform/dns/**'
       - 'terraform/infra/**'

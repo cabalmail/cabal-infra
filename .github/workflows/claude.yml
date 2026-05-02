@@ -72,7 +72,7 @@ jobs:
               3. Otherwise, create a new branch named `claude/issue-${{ github.event.issue.number }}`,
                  implement the change, run any relevant tests or linters, and
                  open a pull request that:
-                   - Targets the default branch.
+                   - Targets the `stage` branch (never `main` directly; promotion to prod is a deliberate second step performed by the human).
                    - Includes `Closes #${{ github.event.issue.number }}` in the body.
                    - Summarizes what you changed and why.
                    - Calls out anything you were uncertain about so a human reviewer
