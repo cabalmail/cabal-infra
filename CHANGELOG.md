@@ -65,10 +65,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mode to `elastic`, which doesn't emit `BurstCreditBalance` or
   `PercentIOLimit`; the new metrics are throughput-mode-agnostic so
   the AWS Services dashboard has a working saturation signal
-  regardless of which mode the file system is in. The dashboard's
-  former "EFS PercentIOLimit" panel is now "EFS I/O bytes
-  (read+write, 5m rate)" sourced from `DataReadIOBytes` /
-  `DataWriteIOBytes`.
+  regardless of which mode the file system is in.
+- Enabled ECS Exec on `cabal-cloudwatch-exporter`,
+  `cabal-cloudwatch-exporter-us-east-1`, and `cabal-blackbox-exporter`
+  so an operator can drop into a shell on those tasks for
+  data-pipeline debugging. Same `enable_execute_command = true` plus
+  `ssmmessages:*` IAM grant pattern that Prometheus, Grafana, Kuma,
+  and Healthchecks already used. After Terraform apply, existing
+  tasks need a `--force-new-deployment` to pick up the flag (the
+  flag only applies at task-launch time).
 
 ## [0.9.6] - 2026-05-01
 
