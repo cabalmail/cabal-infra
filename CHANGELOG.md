@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
      response as a recoverable cache-desync, drops the cache, and
      retries the operation once before surfacing the error.
 
+## [Unreleased]
+
 ## [0.9.7] - 2026-05-03
 
 ### Changed
