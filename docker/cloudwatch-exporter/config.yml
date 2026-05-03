@@ -93,15 +93,15 @@ metrics:
   # ── EFS ───────────────────────────────────────────────────────
   # BurstCreditBalance and PercentIOLimit only emit when the filesystem
   # is in the corresponding mode: BurstCreditBalance requires bursting
-  # throughput mode (AWS recently flipped the default to elastic, so
-  # this is empty for newer file systems); PercentIOLimit requires
-  # generalPurpose performance mode (the default; non-empty here).
-  # Verify the current mode with:
+  # throughput mode; PercentIOLimit requires generalPurpose performance
+  # mode. AWS recently changed the throughput-mode default to elastic
+  # for new filesystems, so check the mode if BurstCreditBalance looks
+  # empty:
   #   aws efs describe-file-systems \
   #     --query 'FileSystems[*].{id:FileSystemId,throughput:ThroughputMode,perf:PerformanceMode}'
-  # StorageBytes and the I/O byte counters work in both throughput
-  # modes, so they are the reliable saturation/traffic signal regardless
-  # of how the FS was provisioned.
+  # StorageBytes and the I/O byte counters below work in both throughput
+  # modes, providing a saturation/traffic signal independent of how the
+  # FS was provisioned.
   - aws_namespace: AWS/EFS
     aws_metric_name: BurstCreditBalance
     aws_dimensions: [FileSystemId]

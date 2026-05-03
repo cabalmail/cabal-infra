@@ -5,7 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.9.7] - 2026-05-03
+
+### Changed
+- CI/CD deploy workflows (`app.yml`, `infra.yml`) now only fire on the
+  three named branches: `main` (prod), `stage` (stage), and
+  `development` (development). Pushes from feature branches or tags no
+  longer trigger an automatic deploy to development. The manual
+  `destroy_terraform.yml` and `quiesce.yml` workflows refuse to run
+  from any other branch as well.
+- The `claude` issue-label automation now opens PRs against `stage`
+  rather than the default branch, so promotion to prod is always a
+  deliberate second step.
 
 ### Fixed
 - Grafana panels that had been "no data" since the monitoring stack
@@ -65,10 +76,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mode to `elastic`, which doesn't emit `BurstCreditBalance` or
   `PercentIOLimit`; the new metrics are throughput-mode-agnostic so
   the AWS Services dashboard has a working saturation signal
-  regardless of which mode the file system is in. The dashboard's
-  former "EFS PercentIOLimit" panel is now "EFS I/O bytes
-  (read+write, 5m rate)" sourced from `DataReadIOBytes` /
-  `DataWriteIOBytes`.
+  regardless of which mode the file system is in.
+- Enabled ECS Exec on `cabal-cloudwatch-exporter`,
+  `cabal-cloudwatch-exporter-us-east-1`, and `cabal-blackbox-exporter`
+  so an operator can drop into a shell on those tasks for
+  data-pipeline debugging. Same `enable_execute_command = true` plus
+  `ssmmessages:*` IAM grant pattern that Prometheus, Grafana, Kuma,
+  and Healthchecks already used. After Terraform apply, existing
+  tasks need a `--force-new-deployment` to pick up the flag (the
+  flag only applies at task-launch time).
 
 ## [0.9.6] - 2026-05-01
 

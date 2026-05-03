@@ -392,14 +392,22 @@ wget -qO- http://localhost:9090/api/v1/targets \
 
 If `aws_apigateway_count_sum` is in the list but `aws_lambda_duration_average` is not, the exporter is reaching CloudWatch but Lambda specifically has no recent invocations to emit. If neither shows up, the cloudwatch-exporter target is `down` or the IAM/network path to CloudWatch is broken.
 
-From inside the cloudwatch-exporter task itself:
+From inside the Prometheus task -- which can already reach the exporter on its Cloud Map name -- you can scrape /metrics directly without exec'ing into the exporter:
 
 ```sh
-# What the exporter is currently emitting -- the source of truth.
-wget -qO- http://localhost:9106/metrics | grep '^aws_' | head -40
+wget -qO- http://cloudwatch-exporter.cabal-monitoring.cabal.internal:9106/metrics \
+  | grep '^aws_' | head -40
+wget -qO- http://cloudwatch-exporter-us-east-1.cabal-monitoring.cabal.internal:9106/metrics \
+  | grep '^aws_cloudfront' | head -20
 ```
 
-Empty `aws_*` block here means the exporter is alive but failing CloudWatch calls (check the task logs at `/ecs/cabal-cloudwatch-exporter` for `AccessDenied`, throttling, or `NoSuchKey` errors).
+Empty `aws_*` block here means the exporter is alive but failing CloudWatch calls. Check the task logs at `/ecs/cabal-cloudwatch-exporter` (or `-us-east-1`) for `AccessDenied`, throttling, or `NoSuchKey` errors:
+
+```sh
+aws logs tail /ecs/cabal-cloudwatch-exporter --since 30m --follow
+```
+
+The cloudwatch-exporter and blackbox-exporter services are also exec-enabled. Note that `enable_execute_command` only applies to tasks launched after the flag was set, so on a freshly-applied infra you may need to force a service redeploy (`aws ecs update-service --cluster cabal-mail --service cabal-cloudwatch-exporter --force-new-deployment`) before `aws ecs execute-command` works against an existing task.
 
 ### 2. Confirm the EFS throughput-mode caveat
 
@@ -415,21 +423,28 @@ If throughput is `elastic`, the EFS BurstCreditBalance panel will stay empty by 
 
 ### 3. Inject synthetic data to verify each "no data" panel
 
-Each of these produces a single datapoint that should appear in Grafana within ~3 min (60s exporter scrape + 120s `delay_seconds` lag).
+Each of these produces a single datapoint that should appear in Grafana within ~3 min (60s exporter scrape + 120s `delay_seconds` lag). Confirm the datapoint with a Prometheus query rather than waiting for the panel to refresh -- e.g. from inside the Prometheus task, `wget -qO- 'http://localhost:9090/api/v1/query?query=aws_lambda_errors_sum'` returns the raw series.
+
+**Two confusables worth pinning down before reading the table.**
+
+*The HTTP 200 from `aws lambda invoke`*: that's the status of the AWS Lambda API call (request accepted), not the function's success. Function failure shows up as `FunctionError: Unhandled` in the invoke response JSON and a non-empty `errorType` in the response payload file. A successful invocation that produced a function-level error still increments the `AWS/Lambda Errors` metric.
+
+*Lambda invoke vs API Gateway*: `aws lambda invoke` calls the Lambda API directly. It does **not** traverse API Gateway, so it never increments `AWS/ApiGateway 5XXError` no matter what payload you send. To move that metric you need an actual HTTP request to the API Gateway URL.
 
 | Panel | Synthetic-data trigger |
 | --- | --- |
-| **API Gateway 5xx rate** | Force a Lambda exception. e.g. `aws lambda invoke --function-name cabal-list --payload '"not a json object"' --cli-binary-format raw-in-base64-out /tmp/out.json` -- the malformed payload makes the function fail before the API Gateway integration completes, surfacing as a 5xx. Roll back to a clean state by re-invoking with a valid payload (`'{}'`). |
-| **Lambda errors / throttles** | The `Errors` metric: same malformed-payload trick above. The `Throttles` metric: lower the function's reserved concurrency to 0 with `aws lambda put-function-concurrency --function-name cabal-alert-sink --reserved-concurrent-executions 0`, invoke it once, observe one throttle, then `aws lambda delete-function-concurrency --function-name cabal-alert-sink` to restore. Don't do this on a Lambda that's serving real traffic. |
-| **Lambda duration p95** | Just invoke any Lambda. `aws lambda invoke --function-name cabal-list --payload '{}' /tmp/out.json` populates one datapoint; refresh five times to give p95 something to compute against. |
+| **Lambda errors** | Pick any cabal-* Lambda. They all dereference `event['requestContext']['authorizer']['claims']['cognito:username']` at the top of `handler`, so an empty payload raises `KeyError: 'requestContext'` before any try/except. `aws lambda invoke --function-name cabal-list --payload '{}' /tmp/out.json` -- the invoke response will include `"FunctionError": "Unhandled"` and `/tmp/out.json` will contain the traceback. That counts as one error. Repeat 3 more times to give the dashboard's `rate(...[5m])` something to integrate. Verify in CloudWatch first if you want to be sure: `aws cloudwatch get-metric-statistics --namespace AWS/Lambda --metric-name Errors --dimensions Name=FunctionName,Value=cabal-list --start-time "$(date -u -v-15M +%FT%TZ 2>/dev/null \|\| date -u -d '15 min ago' +%FT%TZ)" --end-time "$(date -u +%FT%TZ)" --period 60 --statistics Sum`. |
+| **Lambda throttles** | Lower the function's reserved concurrency to 0: `aws lambda put-function-concurrency --function-name cabal-alert-sink --reserved-concurrent-executions 0`. Invoke once: `aws lambda invoke --function-name cabal-alert-sink --payload '{}' /tmp/out.json`. The invoke returns a throttle error (visible in `/tmp/out.json` and as `FunctionError`). **Restore immediately** with `aws lambda delete-function-concurrency --function-name cabal-alert-sink`. Don't try this on a Lambda that's serving real traffic. |
+| **Lambda duration p95** | Just invoke any Lambda repeatedly so the dashboard has something to compute p95 against: `for i in $(seq 1 5); do aws lambda invoke --function-name cabal-list --payload '{}' /tmp/out.json >/dev/null ; done`. Errors are fine here -- duration is recorded for both successful and failed invocations. |
+| **API Gateway 5xx rate** | Has to go through API Gateway. The simplest natural way: use the admin app while a backend Lambda is misbehaving. To synthesise: temporarily revoke a Lambda's IAM access to its data store (e.g. detach `AWSLambdaDynamoDBExecutionRole` from `cabal-list-role`), then load the Addresses page in the admin app -- the Lambda will fail with a permission error, API Gateway will surface a 5xx, and the metric increments. **Re-attach the policy immediately** afterwards. If you'd rather not poke IAM, skip this; the Lambda-Errors path above exercises the same exporter code path, so a working Lambda Errors panel implies the API Gateway 5xx panel will also work when there's organic 5xx traffic. |
 | **DynamoDB ConsumedRead/WriteCapacityUnits** | Read: `aws dynamodb scan --table-name cabal-addresses --max-items 1 >/dev/null`. Write: any address-creation flow in the admin app, or a direct `put-item` against a throwaway PK. |
 | **DynamoDB ThrottledRequests** | Hard to trigger on-demand without sustained load. Skip unless you're explicitly testing throttling behavior. |
-| **EFS I/O bytes** (any mode) | ECS-Exec into an `imap` task and `dd if=/dev/zero of=/var/spool/mail/canary bs=1M count=10 oflag=direct ; rm /var/spool/mail/canary`. The 10 MiB write produces a visible spike on `DataWriteIOBytes`. |
+| **EFS I/O bytes** | ECS-Exec into an `imap` task and `dd if=/dev/zero of=/var/spool/mail/canary bs=1M count=10 oflag=direct ; rm /var/spool/mail/canary`. The 10 MiB write produces a visible spike on `DataWriteIOBytes`. |
 | **CloudFront request count / 5xx** | `for i in $(seq 1 20); do curl -fsS -o /dev/null https://<control-domain>/ ; done` for the request-count panel. CloudFront 5xx is harder; temporarily mis-configure the origin (e.g. block CloudFront's egress to S3 with a bucket policy deny for ~5 min) to force a real 5xx. Easier: just confirm the panel populates with `Requests` traffic before chasing the 5xx case. |
 | **TLS days to expiry -- IMAP 993** | No injection needed -- once the new `blackbox-tls` job runs, `probe_ssl_earliest_cert_expiry{instance=~".*:993"}` populates within one scrape (30 s). If still empty after 5 min, check that the `blackbox-tls` target is `up` and that the cert chain returned by port 993 is parseable. |
 | **ECS RunningTaskCount** | No injection needed once the namespace fix lands -- Container Insights reports running-task counts per service every minute regardless of activity. |
 
-If any of the synthetic triggers above produces CloudWatch data (visible in the AWS Console under Metrics) but Grafana still shows no data, the pipeline is broken between cloudwatch_exporter and Prometheus, not at CloudWatch. Re-run the §1 commands above to localize the gap.
+If any of the synthetic triggers above produces CloudWatch data (visible in the AWS Console under Metrics, or via the `aws cloudwatch get-metric-statistics` template above) but Grafana still shows no data, the pipeline is broken between cloudwatch_exporter and Prometheus, not at CloudWatch. Re-run the §1 commands above to localize the gap.
 
 ## Logs: CloudWatch metric filters
 

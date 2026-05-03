@@ -74,6 +74,29 @@ resource "aws_iam_role_policy" "cloudwatch_exporter_task" {
   })
 }
 
+# ECS Exec - so an operator can `aws ecs execute-command` into either
+# cloudwatch-exporter task to inspect /metrics, log output, or
+# IAM/network errors when a panel is "no data". Same four ssmmessages
+# actions every other exec-enabled monitoring service grants.
+resource "aws_iam_role_policy" "cloudwatch_exporter_task_exec" {
+  name = "cabal-cloudwatch-exporter-task-exec"
+  role = aws_iam_role.cloudwatch_exporter_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "ssmmessages:CreateControlChannel",
+        "ssmmessages:CreateDataChannel",
+        "ssmmessages:OpenControlChannel",
+        "ssmmessages:OpenDataChannel",
+      ]
+      Resource = "*"
+    }]
+  })
+}
+
 resource "aws_ecs_task_definition" "cloudwatch_exporter" {
   family                   = "cabal-cloudwatch-exporter"
   requires_compatibilities = ["EC2"]
@@ -120,6 +143,8 @@ resource "aws_ecs_service" "cloudwatch_exporter" {
   cluster         = var.ecs_cluster_id
   task_definition = aws_ecs_task_definition.cloudwatch_exporter.arn
   desired_count   = var.quiesced ? 0 : 1
+
+  enable_execute_command = true
 
   deployment_maximum_percent         = 200
   deployment_minimum_healthy_percent = 100
@@ -208,6 +233,8 @@ resource "aws_ecs_service" "cloudwatch_exporter_us_east_1" {
   task_definition = aws_ecs_task_definition.cloudwatch_exporter_us_east_1.arn
   desired_count   = var.quiesced ? 0 : 1
 
+  enable_execute_command = true
+
   deployment_maximum_percent         = 200
   deployment_minimum_healthy_percent = 100
 
@@ -268,6 +295,27 @@ resource "aws_iam_role" "blackbox_exporter_task" {
   })
 }
 
+# ECS Exec for the blackbox exporter task. Lets an operator inspect a
+# probe-failure case (curl http://localhost:9115/probe?... directly).
+resource "aws_iam_role_policy" "blackbox_exporter_task_exec" {
+  name = "cabal-blackbox-exporter-task-exec"
+  role = aws_iam_role.blackbox_exporter_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "ssmmessages:CreateControlChannel",
+        "ssmmessages:CreateDataChannel",
+        "ssmmessages:OpenControlChannel",
+        "ssmmessages:OpenDataChannel",
+      ]
+      Resource = "*"
+    }]
+  })
+}
+
 resource "aws_ecs_task_definition" "blackbox_exporter" {
   family                   = "cabal-blackbox-exporter"
   requires_compatibilities = ["EC2"]
@@ -310,6 +358,8 @@ resource "aws_ecs_service" "blackbox_exporter" {
   cluster         = var.ecs_cluster_id
   task_definition = aws_ecs_task_definition.blackbox_exporter.arn
   desired_count   = var.quiesced ? 0 : 1
+
+  enable_execute_command = true
 
   deployment_maximum_percent         = 200
   deployment_minimum_healthy_percent = 100

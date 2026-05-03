@@ -36,15 +36,21 @@ jobs:
   guard:
     runs-on: ubuntu-latest
     steps:
-      - name: refuse-prod-and-mismatched-branch
+      - name: require-non-prod-branch-matching-input
         run: |
-          if [[ "${{ github.ref_name }}" == "main" ]]; then
+          REF="${{ github.ref_name }}"
+          if [[ "$REF" == "main" ]]; then
             echo "::error::quiesce.yml refuses to run from main (prod)."
             exit 1
           fi
-          DERIVED_ENV="${{ github.ref_name == 'stage' && 'stage' || 'development' }}"
-          if [[ "$DERIVED_ENV" != "${{ inputs.environment }}" ]]; then
-            echo "::error::Branch ${{ github.ref_name }} maps to '$DERIVED_ENV', but you selected '${{ inputs.environment }}'. Re-run from the correct branch."
+          # Only the named non-prod branches are valid. A feature-branch
+          # invocation must not fall through to development.
+          if [[ "$REF" != "stage" && "$REF" != "development" ]]; then
+            echo "::error::quiesce.yml must run from stage or development (got '$REF')."
+            exit 1
+          fi
+          if [[ "$REF" != "${{ inputs.environment }}" ]]; then
+            echo "::error::Branch '$REF' does not match selected environment '${{ inputs.environment }}'. Re-run from the matching branch."
             exit 1
           fi
 

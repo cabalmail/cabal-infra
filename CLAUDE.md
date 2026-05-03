@@ -8,6 +8,49 @@ Cabalmail is a self-hosted email system running on AWS. This repository contains
 
 The mail tiers run as Docker containers on ECS (EC2 launch type). See `docs/0.4.0/containerization-plan.md` for the migration plan from the previous Chef/EC2 architecture.
 
+## Development Process
+
+These rules are evolving — they reflect the current solo-developer workflow and will change as patterns settle. Update them rather than working around them.
+
+### Collaboration
+
+- Commit locally as soon as a change is reasonably shippable. No need to wait for explicit go-ahead — local commits are cheap and the human reviews them at merge time.
+- Do not push to origin. The human merges from the worktree, studies the change locally, and pushes their own branch.
+
+### Branches and environments
+
+Three named branches map 1:1 to GitHub Environments and AWS accounts:
+
+| Branch        | Environment | Notes                                               |
+| ------------- | ----------- | --------------------------------------------------- |
+| `main`        | prod        | Protected. Merges via PR only.                      |
+| `stage`       | stage       | Direct push allowed.                                |
+| `development` | development | Direct push allowed. Quiesced by default.           |
+
+Pushes from any other branch (feature branches, tags) do not auto-deploy. CI/CD workflows only fire on the three named branches.
+
+The `development` environment is a warm spare. It runs only when:
+
+- A change is too risky for stage (destructive infra changes, security-sensitive surface), or
+- Infra changes need to be applied to be validated.
+
+Otherwise leave it quiesced. Most work goes `stage` -> `main` with one deliberate promotion step. See [docs/quiesce.md](docs/quiesce.md).
+
+### Direct-to-prod scaffolding
+
+Some features are too expensive to run in multiple environments and ship via a feature branch -> `main` PR, skipping stage. This is allowed only when **all** of the following are true:
+
+- No data plane impact (no schema changes, no message-flow changes, no DynamoDB writes).
+- No user-facing surface (no UI, API contract, or auth-flow changes).
+- No IAM or security implications (no new principals, no new permissions, no public surface).
+- The change is purely additive: new resources that no existing path references.
+
+If any of these is unclear, route through stage first.
+
+### Claude automation
+
+The `claude` issue label triggers an automated PR. PRs target `stage`, never `main`. Promotion to `main` is always a deliberate second step the human performs.
+
 ## Repository Structure
 
 ```
@@ -44,7 +87,7 @@ Versioned subdirectories of `docs/` (e.g. `docs/0.4.0/`, `docs/0.7.0/`, `docs/0.
 - Terraform is applied via CI/CD only (`.github/workflows/infra.yml`)
 - Two stacks: `terraform/dns` (bootstrap) and `terraform/infra` (main), both owned by `infra.yml`
 - Backend: S3 (`cabal-tf-backend` bucket), key pattern `{environment}-{module}`
-- Environment determined by branch: `main`=prod, `stage`=stage, other=development
+- Environment determined by branch: `main`=prod, `stage`=stage, `development`=development. Other branches do not trigger deploys.
 - Backend config is generated at CI time by `.github/scripts/make-terraform.sh`
 - Security scanning: Checkov, tflint, tfsec all run in the terraform workflow
 
@@ -66,7 +109,7 @@ Versioned subdirectories of `docs/` (e.g. `docs/0.4.0/`, `docs/0.7.0/`, `docs/0.
 | `apple.yml` | `apple/**` | Builds and tests the iOS app on a macOS runner. Deploys nothing to AWS. |
 | `dependabot.yml` | Schedule (daily) | Dependency update PRs. |
 | `claude.yml` | `@claude` mention | Claude Code action for PR review. |
-All workflows select environment based on branch: `main`=prod, `stage`=stage, other=development.
+Deploy workflows select environment based on branch: `main`=prod, `stage`=stage, `development`=development. Other branches do not trigger deploys (see "Branches and environments" above).
 
 ## Architecture Details
 
