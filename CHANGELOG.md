@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- Apple clients no longer surface a `"No mailbox selected"` error when
+  archiving from the message list or opening a message
+  ([#356](https://github.com/cabalmail/cabal-infra/issues/356)).
+  `LiveImapClient.select(...)` caches the SELECTed mailbox to skip
+  redundant SELECT round-trips, but the cache could go stale: per
+  RFC 3501 §6.3.1, a failed SELECT (folder deleted/renamed by another
+  client, transient server NO) leaves the connection in AUTHENTICATED
+  state, while the actor still believed it was selected on the prior
+  mailbox. The next operation in that folder skipped SELECT and the
+  server rejected the bare FETCH/STORE/MOVE.
+
+  Two changes:
+  1. `select(...)` now clears `selectedFolder` when the SELECT command
+     itself fails, matching the RFC-defined server transition.
+  2. `withTransportRetry` recognizes a `"No mailbox selected"` server
+     response as a recoverable cache-desync, drops the cache, and
+     retries the operation once before surfacing the error.
+
 ## [0.9.7] - 2026-05-03
 
 ### Changed
