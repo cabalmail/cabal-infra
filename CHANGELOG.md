@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.9] - Unreleased
+
+### Changed
+- The Apple client build workflow (`apple.yml`) no longer fires on tag
+  pushes. It still runs on pushes to any branch when paths under
+  `apple/**` or `.github/workflows/apple.yml` change, and on
+  `workflow_dispatch`.
+- Apple client archive steps (iOS and macOS) now derive
+  `MARKETING_VERSION` from the most recent entry in `CHANGELOG.md`
+  rather than the hard-coded `0.6.0`. TestFlight uploads will now
+  track the project version automatically as the CHANGELOG advances.
+
 ## [0.9.8] - 2026-05-03
 
 ### Changed
