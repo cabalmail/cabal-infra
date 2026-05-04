@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.8] - 2026-05-03
+
+### Changed
+- Cabalmail is now licensed under the GNU Affero General Public License,
+  version 3 (AGPL-3.0), replacing the prior "all rights reserved"
+  notice. Native client code under `apple/` (iOS, iPadOS, visionOS) is
+  carved out under Apache-2.0 so it remains distributable through the
+  Apple App Store and similar platforms whose terms of service are
+  incompatible with GPL-family licenses. The same Apache-2.0 carve-out
+  will cover a future `android/` directory. See `LICENSE.md` and
+  `apple/LICENSE`.
+
+### Added
+- React admin app generates `dist/third-party-notices.txt` at build
+  time via `rollup-plugin-license`, aggregating copyright statements
+  and license text for every bundled npm dependency. The Vite build
+  also copies the repo-root `LICENSE.md` into `dist/` so both files
+  ship as static assets and the admin app's deploy step (`s3 sync`
+  + CloudFront invalidation) picks them up automatically.
+- New "About" view in the React admin app, lazy-loaded, displaying the
+  Cabalmail license summary, the full LICENSE text, and the bundled-
+  dependency notices. Reachable from the account-menu in the top nav
+  (not admin-gated) and from a small footer link on the Login / SignUp
+  / ForgotPassword / Verify / ResetPassword screens.
+
+### Fixed
+- Apple clients no longer surface a `"No mailbox selected"` error when
+  archiving from the message list or opening a message
+  ([#356](https://github.com/cabalmail/cabal-infra/issues/356)).
+  `LiveImapClient.select(...)` caches the SELECTed mailbox to skip
+  redundant SELECT round-trips, but the cache could go stale: per
+  RFC 3501 §6.3.1, a failed SELECT (folder deleted/renamed by another
+  client, transient server NO) leaves the connection in AUTHENTICATED
+  state, while the actor still believed it was selected on the prior
+  mailbox. The next operation in that folder skipped SELECT and the
+  server rejected the bare FETCH/STORE/MOVE.
+
+  Two changes:
+  1. `select(...)` now clears `selectedFolder` when the SELECT command
+     itself fails, matching the RFC-defined server transition.
+  2. `withTransportRetry` recognizes a `"No mailbox selected"` server
+     response as a recoverable cache-desync, drops the cache, and
+     retries the operation once before surfacing the error.
+
 ## [0.9.7] - 2026-05-03
 
 ### Changed

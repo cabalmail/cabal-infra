@@ -8,6 +8,7 @@ const NAV_VIEWS = [
   { id: 'addresses', name: 'Addresses', label: 'Addresses', requiresAdmin: true  },
   { id: 'users',     name: 'Users',     label: 'Users',     requiresAdmin: true  },
   { id: 'dmarc',     name: 'DMARC',     label: 'DMARC',     requiresAdmin: true  },
+  { id: 'about',     name: 'About',     label: 'About',     requiresAdmin: false },
 ];
 
 function initialsFor(name) {

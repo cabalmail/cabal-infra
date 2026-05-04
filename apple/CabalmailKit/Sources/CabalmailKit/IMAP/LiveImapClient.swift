@@ -279,43 +279,16 @@ public actor LiveImapClient: ImapClient {
         }
     }
 
-    // MARK: - Transport retry
-
-    /// Runs `operation`, and on a `.transport` / `.network` failure from a
-    /// cached connection, invalidates + reconnects + runs it once more.
-    ///
-    /// The retry fires at most once. If the reconnect itself fails, or the
-    /// second attempt fails for any reason, the error surfaces unchanged —
-    /// no endless reconnect loops on a genuinely broken network. Non-transport
-    /// errors (auth, protocol, server rejections) bypass the retry entirely.
-    ///
-    /// The closure is actor-isolated (no `@Sendable`), so it can reference
-    /// `self` and mutate actor state freely.
-    private func withTransportRetry<T>(
-        _ operation: () async throws -> T
-    ) async throws -> T {
-        do {
-            return try await operation()
-        } catch let error as CabalmailError where Self.isRecoverableTransportError(error) {
-            await invalidate()
-            try await connectAndAuthenticate()
-            return try await operation()
-        }
-    }
-
-    private static func isRecoverableTransportError(_ error: CabalmailError) -> Bool {
-        switch error {
-        case .transport, .network: return true
-        default: return false
-        }
-    }
+    // Transport-retry helpers live in `LiveImapClient+TransportRetry.swift`
+    // to keep this file under SwiftLint's file_length cap.
 }
 
 // MARK: - Internals
 
-// Module-internal rather than `private` so the IDLE extension in
-// `LiveImapClient+Idle.swift` can reach `quoteAstring` and `toServerPath`
-// without re-implementing them. Not exposed publicly.
+// Module-internal rather than `private` so the sibling extension files
+// (`LiveImapClient+Idle.swift`, `LiveImapClient+TransportRetry.swift`)
+// can reach `quoteAstring`, `toServerPath`, `invalidateSelectedFolder`,
+// etc. without re-implementing them. Not exposed publicly.
 extension LiveImapClient {
     func requireConnection() throws -> ImapConnection {
         guard let connection else {
@@ -326,8 +299,28 @@ extension LiveImapClient {
 
     func select(folder: String, on conn: ImapConnection) async throws {
         if selectedFolder == folder { return }
-        _ = try await conn.sendCommand("SELECT \(quoteAstring(toServerPath(folder)))")
+        do {
+            _ = try await conn.sendCommand("SELECT \(quoteAstring(toServerPath(folder)))")
+        } catch {
+            // RFC 3501 §6.3.1: a failed SELECT puts the connection in
+            // AUTHENTICATED state — the server's previously-selected mailbox
+            // is no longer selected. Drop our cache so the next select()
+            // actually re-SELECTs instead of optimistically skipping based
+            // on a stale "we're still in <folder>" assumption (which is the
+            // shape of the "No mailbox selected" error from issue #356).
+            selectedFolder = nil
+            throw error
+        }
         selectedFolder = folder
+    }
+
+    /// Forces the actor's cached `selectedFolder` to nil so the next
+    /// `select(...)` call always re-issues SELECT. Used by the
+    /// "No mailbox selected" recovery path when a server has unselected the
+    /// mailbox unexpectedly (e.g., after another client deleted/renamed it,
+    /// or a transient server-side issue).
+    func invalidateSelectedFolder() {
+        selectedFolder = nil
     }
 
     func toServerPath(_ clientPath: String) -> String {

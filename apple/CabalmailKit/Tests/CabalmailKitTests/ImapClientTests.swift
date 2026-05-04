@@ -339,3 +339,7 @@ extension ImapClientTests {
         XCTAssertFalse(outbound.contains("FETCH"))
     }
 }
+
+// SELECTed-mailbox cache invalidation tests (regression coverage for issue
+// #356) live in `ImapClientSelectCacheTests.swift` to keep this file under
+// SwiftLint's file_length cap.

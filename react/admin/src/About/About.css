@@ -1,0 +1,157 @@
+/* =========================================================================
+   About / License & Notices view.
+   Reachable from the authenticated nav menu and from the auth-shell footer
+   on Login/SignUp/etc., so styles must work both inside .content and inside
+   the bare app shell.
+   ========================================================================= */
+
+.about {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 8px 0 48px;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  line-height: 1.55;
+}
+
+.about__header {
+  margin-bottom: 32px;
+}
+
+.about__title {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  margin: 0 0 8px;
+}
+
+.about__subtitle {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  line-height: 1.6;
+}
+
+.about__subtitle a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.about__subtitle a:hover {
+  text-decoration: underline;
+}
+
+.about__back {
+  font-size: 13px;
+  margin: 16px 0 0;
+}
+
+.about__back a {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.about__back a:hover {
+  text-decoration: underline;
+}
+
+.about__section {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+
+.about__h2 {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin: 0 0 12px;
+}
+
+.about__section p {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0 0 16px;
+}
+
+.about__section p a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.about__section p a:hover {
+  text-decoration: underline;
+}
+
+.about__section code {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  background: var(--surface-hover);
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+}
+
+.about__details {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  margin-top: 12px;
+}
+
+.about__details summary {
+  cursor: pointer;
+  padding: 12px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  user-select: none;
+}
+
+.about__details summary:hover {
+  color: var(--ink);
+}
+
+.about__details[open] summary {
+  border-bottom: 1px solid var(--border);
+  color: var(--ink);
+}
+
+.about__pre {
+  margin: 0;
+  padding: 16px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink);
+  background: var(--surface);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 480px;
+  overflow-y: auto;
+  border-bottom-left-radius: var(--radius-md);
+  border-bottom-right-radius: var(--radius-md);
+}
+
+.about__error {
+  padding: 12px 16px;
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin: 0;
+}
+
+.about__loading {
+  padding: 12px 16px;
+  font-size: 13px;
+  color: var(--ink-quiet);
+  margin: 0;
+  font-style: italic;
+}
+
+/* When About is rendered without Nav (pre-login), the App's `.content`
+   padding still wraps it. No extra margin handling needed. */
