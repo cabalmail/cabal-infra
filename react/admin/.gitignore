@@ -12,6 +12,11 @@
 /build
 /dist
 
+# Generated at build time from the repo-root LICENSE.md and bundled-deps
+# scan. Source of truth lives at ../../LICENSE.md; vite copies it here so
+# the About page can fetch it as a static asset.
+/public/LICENSE.md
+
 # misc
 .DS_Store
 .env.local
