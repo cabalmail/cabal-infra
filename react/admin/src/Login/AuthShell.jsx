@@ -33,6 +33,15 @@ export default function AuthShell({ headerRight, children, cardSize = 'default' 
           <a href="#">Terms</a>
           <a href="#">Privacy</a>
           <a href="#">Status</a>
+          <a
+            href="#"
+            onClick={(e) => {
+              e.preventDefault();
+              window.dispatchEvent(new CustomEvent('cabal:show-about'));
+            }}
+          >
+            About
+          </a>
         </div>
         <div className="auth__footer-right">Cabalmail</div>
       </footer>

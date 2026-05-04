@@ -15,6 +15,7 @@ const Email = React.lazy(() => import('./Email'));
 const Addresses = React.lazy(() => import('./Addresses'));
 const Users = React.lazy(() => import('./Users'));
 const Dmarc = React.lazy(() => import('./Dmarc'));
+const About = React.lazy(() => import('./About'));
 
 // Pre-login Components
 import SignUp from './SignUp';
@@ -152,8 +153,12 @@ function App() {
     }
     setAppState(prev => {
       const updates = {};
-      const preLoginViews = ["Login", "SignUp", "Verify", "ForgotPassword", "ResetPassword"];
-      if (!preLoginViews.includes(prev.view)) {
+      // About is reachable when logged out via the auth-shell footer link,
+      // so it must not be bounced back to Login here.
+      const allowedWhenLoggedOut = [
+        "Login", "SignUp", "Verify", "ForgotPassword", "ResetPassword", "About"
+      ];
+      if (!allowedWhenLoggedOut.includes(prev.view)) {
         updates.view = "Login";
       }
       if (prev.loggedIn !== false) {
@@ -211,6 +216,15 @@ function App() {
     window.addEventListener("focus", checkSession);
     return () => window.removeEventListener("focus", checkSession);
   }, [checkSession]);
+
+  // Cross-cutting About navigation. AuthShell's footer dispatches this
+  // event so pre-login screens can route to About without threading an
+  // onAbout callback through every auth view.
+  useEffect(() => {
+    const onShowAbout = () => setState({ view: "About" });
+    window.addEventListener("cabal:show-about", onShowAbout);
+    return () => window.removeEventListener("cabal:show-about", onShowAbout);
+  }, [setState]);
 
   // Check session on every render (mirrors componentDidUpdate)
   useEffect(() => {
@@ -370,6 +384,15 @@ function App() {
 
   function renderContent() {
     switch (state.view) {
+      case "About":
+        return (
+          <ErrorBoundary name="About">
+            <About
+              loggedIn={state.loggedIn}
+              onBackToLogin={(e) => { e.preventDefault(); setState({ view: "Login" }); }}
+            />
+          </ErrorBoundary>
+        );
       case "Users":
         return (
           <ErrorBoundary name="Users">
