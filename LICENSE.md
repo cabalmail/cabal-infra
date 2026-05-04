@@ -22,7 +22,8 @@ directory), it will fall under the same Apache-2.0 carve-out.
 
 ## Copyright
 
-Copyright (C) 2021-2026 Chris Carr and the Cabalmail contributors.
+Copyright (C) 2021-2026 John Christopher Carr, IV and the Cabalmail
+contributors.
 
 ------------------------------------------------------------------------
 
