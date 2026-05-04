@@ -309,12 +309,23 @@ jobs:
           # Release build, and hitting Apple's per-team Development cert
           # cap (2) fails the archive with a "choose a certificate to
           # revoke" error. Manual signing never touches Development.
+          # MARKETING_VERSION tracks the most recent CHANGELOG entry so it
+          # follows the rest of the project. App Store Connect accepts the
+          # same marketing version with many build numbers underneath, and
+          # only "freezes" a version when it's submitted for App Store
+          # release — not at TestFlight time.
+          MARKETING_VERSION=$(sed -nE '/^## \[([0-9]+\.[0-9]+\.[0-9]+)\].*/{ s//\1/p; q; }' "$GITHUB_WORKSPACE/CHANGELOG.md")
+          if [ -z "$MARKETING_VERSION" ]; then
+            echo "::error::Could not parse a marketing version from CHANGELOG.md"
+            exit 1
+          fi
           # CFBundleVersion must be strictly monotonic per marketing version,
           # across *everything* that ever uploaded to this App Store Connect
           # record (not just CI). A Unix timestamp is simple, always
           # increases, and survives `github.run_number` resets between
           # workflow renames / repo transfers.
           BUILD_NUMBER="$(date -u +%s)"
+          echo "Marketing version: $MARKETING_VERSION" >> "$GITHUB_STEP_SUMMARY"
           echo "Build number: $BUILD_NUMBER" >> "$GITHUB_STEP_SUMMARY"
           xcodebuild archive \
             -workspace Cabalmail.xcworkspace \
@@ -326,7 +337,7 @@ jobs:
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="Apple Distribution" \
             PROVISIONING_PROFILE_SPECIFIER="$IOS_APP_STORE_PROFILE_UUID" \
-            MARKETING_VERSION=0.6.0 \
+            MARKETING_VERSION="$MARKETING_VERSION" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             | xcbeautify --renderer github-actions
 
@@ -551,8 +562,14 @@ jobs:
         run: |
           set -o pipefail
           # Manual signing — see the same block in the iOS job for rationale.
-          # See the iOS archive step for why this is a Unix timestamp.
+          # MARKETING_VERSION / BUILD_NUMBER derivation matches the iOS job.
+          MARKETING_VERSION=$(sed -nE '/^## \[([0-9]+\.[0-9]+\.[0-9]+)\].*/{ s//\1/p; q; }' "$GITHUB_WORKSPACE/CHANGELOG.md")
+          if [ -z "$MARKETING_VERSION" ]; then
+            echo "::error::Could not parse a marketing version from CHANGELOG.md"
+            exit 1
+          fi
           BUILD_NUMBER="$(date -u +%s)"
+          echo "Marketing version: $MARKETING_VERSION" >> "$GITHUB_STEP_SUMMARY"
           echo "Build number: $BUILD_NUMBER" >> "$GITHUB_STEP_SUMMARY"
           xcodebuild archive \
             -workspace Cabalmail.xcworkspace \
@@ -564,7 +581,7 @@ jobs:
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="Apple Distribution" \
             PROVISIONING_PROFILE_SPECIFIER="$MAC_APP_STORE_PROFILE_UUID" \
-            MARKETING_VERSION=0.6.0 \
+            MARKETING_VERSION="$MARKETING_VERSION" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             | xcbeautify --renderer github-actions
 
