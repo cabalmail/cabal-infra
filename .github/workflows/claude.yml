@@ -77,6 +77,7 @@ jobs:
                    - Summarizes what you changed and why.
                    - Calls out anything you were uncertain about so a human reviewer
                      knows where to focus.
+                   - Requests a review from the human "darth-sipid".
                  Don't forget to add an appropriate entry to the CHANGELOG.
               4. Treat this PR as a draft proposal, not a final answer. Be honest
                  about limitations.
