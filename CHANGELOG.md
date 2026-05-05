@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.9.11] - Unreleased
+## [0.9.12] - Unreleased
 
 ### Changed
 - `terraform/infra` `required_version` raised from `>= 1.1.2` to
@@ -19,6 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   prior behavior was a mid-apply failure once the ALB resource was
   reached. Documented as a top-level prerequisite in
   [docs/monitoring.md](docs/monitoring.md#requirements).
+
+## [0.9.11] - 2026-05-05
+
+### Security
+- Update `axios` version to `1.15.2` to address CVE-2026-42033, CVE-2026-42035,
+  CVE-2026-42264, and CVE-2026-42043.
 
 ## [0.9.10] - 2026-05-05
 
