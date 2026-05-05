@@ -83,6 +83,16 @@ function isEditorEmpty(editor) {
   return !html || html === '<p></p>';
 }
 
+// Mirror the editor's tight paragraph spacing on the wire so the recipient's
+// mail client doesn't fall back to its default <p> margin (typically ~1em).
+// Skips paragraphs that already carry a style attribute.
+function styleParagraphs(html) {
+  return html.replace(/<p(\s[^>]*)?>/g, (match, attrs) => {
+    if (attrs && /\sstyle\s*=/i.test(attrs)) return match;
+    return `<p${attrs || ''} style="margin:0">`;
+  });
+}
+
 function formatSaved(ts) {
   if (!ts) return 'Draft not saved';
   const diff = Math.max(0, Math.round((Date.now() - ts) / 1000));
@@ -142,6 +152,7 @@ function ComposeOverlay({
     extensions: [
       StarterKit.configure({
         link: { openOnClick: false },
+        paragraph: { HTMLAttributes: { style: 'margin:0' } },
       }),
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
     ],
@@ -402,7 +413,7 @@ function ComposeOverlay({
       textBody = turndown.turndown(htmlBody);
     } else if (richEmpty && !mdEmpty) {
       textBody = markdownContent;
-      htmlBody = marked.parse(markdownContent);
+      htmlBody = styleParagraphs(marked.parse(markdownContent));
     } else {
       htmlBody = editor.getHTML();
       textBody = markdownContent;
