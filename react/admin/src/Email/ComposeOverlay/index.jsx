@@ -17,6 +17,20 @@ import FromPicker from './FromPicker';
 
 const turndown = new TurndownService({ headingStyle: 'atx', hr: '---' });
 
+// Round-trip with the editor: Enter inserts a hard break (<br>), not a new
+// paragraph, so a single newline in Markdown maps to a single newline in HTML.
+// Override turndown's defaults — which would otherwise wrap each <p> in blank
+// lines and emit two-space-newline for <br> — to keep paragraphs single-spaced
+// and <br>s as plain newlines.
+turndown.addRule('paragraph', {
+  filter: 'p',
+  replacement: (content) => `${content}\n`,
+});
+turndown.addRule('lineBreak', {
+  filter: 'br',
+  replacement: () => '\n',
+});
+
 const MESSAGE = {
   target: {
     id: "recipient-to"
@@ -93,6 +107,19 @@ function styleParagraphs(html) {
   });
 }
 
+// marked emits a fresh <p> for every blank-line-delimited block. The editor
+// uses Enter = hard break, so author intent is one continuous paragraph with
+// <br>s. Collapse each </p>…<p> boundary to <br><br> so blank lines in the
+// Markdown side become explicit empty visual lines in the HTML side instead
+// of an extra-spaced paragraph break.
+function flattenParagraphs(html) {
+  return html.replace(/<\/p>\s*<p[^>]*>/g, '<br><br>');
+}
+
+function markdownToHtml(md) {
+  return flattenParagraphs(marked.parse(md, { breaks: true, async: false }));
+}
+
 function formatSaved(ts) {
   if (!ts) return 'Draft not saved';
   const diff = Math.max(0, Math.round((Date.now() - ts) / 1000));
@@ -156,6 +183,28 @@ function ComposeOverlay({
       }),
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
     ],
+    editorProps: {
+      // Enter = hard break in plain paragraphs, so the document is one
+      // long flow of <br>-separated lines rather than a stack of <p>s.
+      // Lists, code blocks, and headings keep their default Enter handling
+      // (new list item / literal newline / exit-to-paragraph).
+      handleKeyDown: (view, event) => {
+        if (event.key !== 'Enter' || event.shiftKey || event.metaKey || event.ctrlKey) {
+          return false;
+        }
+        const { $from } = view.state.selection;
+        for (let depth = $from.depth; depth >= 0; depth--) {
+          const name = $from.node(depth).type.name;
+          if (name === 'listItem' || name === 'taskItem' || name === 'codeBlock' || name === 'heading') {
+            return false;
+          }
+        }
+        const { hardBreak } = view.state.schema.nodes;
+        if (!hardBreak) return false;
+        view.dispatch(view.state.tr.replaceSelectionWith(hardBreak.create()).scrollIntoView());
+        return true;
+      },
+    },
     content: body || '',
   });
 
@@ -282,8 +331,7 @@ function ComposeOverlay({
   }, [editor]);
 
   const performImportFromMarkdown = useCallback(() => {
-    const html = marked.parse(markdownContent, { async: false });
-    editor.commands.setContent(html, { emitUpdate: true });
+    editor.commands.setContent(markdownToHtml(markdownContent), { emitUpdate: true });
   }, [editor, markdownContent]);
 
   const importFromRich = useCallback(() => {
@@ -413,7 +461,7 @@ function ComposeOverlay({
       textBody = turndown.turndown(htmlBody);
     } else if (richEmpty && !mdEmpty) {
       textBody = markdownContent;
-      htmlBody = styleParagraphs(marked.parse(markdownContent));
+      htmlBody = styleParagraphs(markdownToHtml(markdownContent));
     } else {
       htmlBody = editor.getHTML();
       textBody = markdownContent;
