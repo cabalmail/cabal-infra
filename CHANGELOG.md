@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   prior behavior was a mid-apply failure once the ALB resource was
   reached. Documented as a top-level prerequisite in
   [docs/monitoring.md](docs/monitoring.md#requirements).
+- Styling of paragraphs in webmail rich text editor works more like normal
+  email text editors: no extra space between paragraphs.
 
 ## [0.9.11] - 2026-05-05
 
