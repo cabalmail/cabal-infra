@@ -7,6 +7,7 @@ import { ADDRESS_LIST } from '../../constants';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import TextAlign from '@tiptap/extension-text-align';
+import { Fragment, Slice } from '@tiptap/pm/model';
 import TurndownService from 'turndown';
 import { marked } from 'marked';
 import useApi from '../../hooks/useApi';
@@ -203,6 +204,30 @@ function ComposeOverlay({
         if (!hardBreak) return false;
         view.dispatch(view.state.tr.replaceSelectionWith(hardBreak.create()).scrollIntoView());
         return true;
+      },
+      // HTML paste: collapse </p>…<p> boundaries before TipTap parses, so
+      // pasted multi-paragraph blocks land as a single paragraph with
+      // <br><br>s — same shape as Enter-typed content.
+      transformPastedHTML: (html) => flattenParagraphs(html),
+      // Plain-text paste: by default ProseMirror creates one paragraph per
+      // newline-delimited line. Replace that with a single inline run of
+      // text + hardBreaks so each \n becomes one <br>, matching Enter.
+      clipboardTextParser: (text, _$context, _plain, view) => {
+        const { schema } = view.state;
+        const { hardBreak, paragraph } = schema.nodes;
+        if (!hardBreak || !paragraph) return Slice.empty;
+        const lines = text.split(/\r\n?|\n/);
+        const nodes = [];
+        lines.forEach((line, i) => {
+          if (line.length > 0) nodes.push(schema.text(line));
+          if (i < lines.length - 1) nodes.push(hardBreak.create());
+        });
+        if (nodes.length === 0) return Slice.empty;
+        // openStart/openEnd = 1 leaves the wrapping paragraph open at both
+        // sides so its inline content merges into the surrounding paragraph
+        // at the cursor instead of inserting a fresh block.
+        const para = paragraph.create(null, Fragment.fromArray(nodes));
+        return new Slice(Fragment.from(para), 1, 1);
       },
     },
     content: body || '',
