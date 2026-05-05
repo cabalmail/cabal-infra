@@ -21,6 +21,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `MARKETING_VERSION` from the most recent entry in `CHANGELOG.md`
   rather than the hard-coded `0.6.0`. TestFlight uploads will now
   track the project version automatically as the CHANGELOG advances.
+- `terraform/infra` `required_version` raised from `>= 1.1.2` to
+  `>= 1.9.0` to support cross-variable validation references.
+
+### Added
+- `var.monitoring` now validates against `var.availability_zones` at
+  plan time and fails with an explicit error when monitoring is
+  enabled in a single-AZ environment. The monitoring stack provisions
+  a public ALB, which AWS requires to span at least two AZs; the
+  prior behavior was a mid-apply failure once the ALB resource was
+  reached. Documented as a top-level prerequisite in
+  [docs/monitoring.md](docs/monitoring.md#requirements).
 
 ## [0.9.8] - 2026-05-03
 
