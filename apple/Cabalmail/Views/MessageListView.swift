@@ -120,7 +120,7 @@ struct MessageListView: View {
                 ProgressView("Fetching messages…")
             }
             ForEach(model.envelopes) { envelope in
-                row(for: envelope, model: model)
+                row(for: envelope, model: model, isSelected: envelope == selection)
             }
             if model.isLoadingMore {
                 ProgressView()
@@ -137,8 +137,12 @@ struct MessageListView: View {
     }
 
     @ViewBuilder
-    private func row(for envelope: Envelope, model: MessageListViewModel) -> some View {
-        MessageRow(envelope: envelope)
+    private func row(
+        for envelope: Envelope,
+        model: MessageListViewModel,
+        isSelected: Bool
+    ) -> some View {
+        MessageRow(envelope: envelope, isSelected: isSelected)
             .tag(envelope)
             #if os(visionOS)
             .contentShape(Rectangle())
@@ -213,11 +217,12 @@ struct MessageListView: View {
 
 private struct MessageRow: View {
     let envelope: Envelope
+    let isSelected: Bool
 
     var body: some View {
         HStack(alignment: .top) {
             Circle()
-                .fill(envelope.flags.contains(.seen) ? Color.clear : Color.accentColor)
+                .fill(unreadDotColor)
                 .frame(width: 8, height: 8)
                 .padding(.top, 6)
             VStack(alignment: .leading, spacing: 2) {
@@ -246,6 +251,17 @@ private struct MessageRow: View {
                     .foregroundStyle(.primary)
             }
         }
+    }
+
+    // Read/unread indicator. We deliberately avoid `Color.accentColor` here:
+    // on iOS the accent is system blue, which is also the row-selection
+    // highlight, so the dot becomes invisible the moment the user picks the
+    // message. A fixed `.blue` keeps the conventional look against the list
+    // background, and switching to `.white` when the row is selected keeps
+    // the dot legible against the highlight on every platform.
+    private var unreadDotColor: Color {
+        guard !envelope.flags.contains(.seen) else { return .clear }
+        return isSelected ? .white : .blue
     }
 
     private var senderLabel: String {
