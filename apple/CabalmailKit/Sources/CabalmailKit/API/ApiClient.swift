@@ -51,6 +51,12 @@ public protocol ApiClient: Sendable {
         sortField: String
     ) async throws -> [UInt32]
     func listEnvelopes(host: String, folder: String, ids: [UInt32]) async throws -> [ApiEnvelope]
+
+    /// Runs an IMAP SEARCH against `folder` with the supplied raw criteria
+    /// string and returns the matching UIDs. Backed by the `/search`
+    /// Lambda; matches the wire shape `LiveImapClient` used to send
+    /// (`UID SEARCH <query>`).
+    func searchMessageIds(host: String, folder: String, query: String) async throws -> [UInt32]
     func fetchMessage(
         host: String,
         folder: String,
