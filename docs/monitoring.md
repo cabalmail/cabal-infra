@@ -16,6 +16,14 @@ The stack is disabled by default. When enabled it deploys:
 - **`cloudwatch_exporter`, `blackbox_exporter`, `node_exporter`** -- Prometheus exporters. The first two are single-task ECS services; node_exporter is a DAEMON service (one task per cluster instance).
 - **CloudWatch metric filters** on the mail-tier log groups, emitting to a `Cabalmail/Logs` namespace. cloudwatch_exporter scrapes these and Prometheus alerts on the rates (sendmail deferred, sendmail bounced, IMAP auth failures).
 
+## Requirements
+
+**The monitoring stack requires at least two availability zones in `TF_VAR_AVAILABILITY_ZONES`.** The stack provisions a public ALB for the Kuma / ntfy / Healthchecks / Grafana hostnames, and AWS requires every ALB to span >= 2 subnets in distinct AZs. Single-AZ environments cannot host the monitoring stack.
+
+Terraform enforces this at plan time: setting `TF_VAR_MONITORING=true` against an environment whose `TF_VAR_AVAILABILITY_ZONES` list has only one entry fails the plan with an explicit error before any resource is touched.
+
+Adding a second AZ to an existing environment is destructive -- the per-AZ `cidrsubnet` math in the VPC module renumbers every subnet, which forces replacement of the NLB, NAT instances, EFS mount targets, and ECS-instance ASG. Plan a fresh environment (or accept the rebuild) rather than retrofitting AZs onto a live single-AZ stack. In the production topology this works out to two AZs in the primary region; dev and stage are typically single-AZ and therefore cannot run monitoring.
+
 ## 1. Create your Pushover account and application
 
 Pushover is the "wake someone up" channel -- priority-1 pushes bypass Do Not Disturb on iOS and Android. It is paid: **$5 one-time per mobile platform** you intend to receive alerts on, after a 30-day trial.

@@ -5,9 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.9.12] - Unreleased
 
 ### Changed
+- Apple clients (iOS, iPadOS, visionOS, macOS) now route mailbox
+  traffic through the same Lambda API the React admin app uses,
+  replacing the hand-rolled IMAP and SMTP socket implementations
+  (#371). Folder, envelope, message, flag, move, and send operations
+  all go via API Gateway; the production `CabalmailClient.make(...)`
+  factory wires `ApiBackedImapClient` instead of `LiveImapClient` and
+  `CabalmailClient.send(_:)` POSTs to `/send` instead of running its
+  own SMTP submission. `LiveImapClient`, `LiveSmtpClient`, and the
+  RFC 3501/5322 parsing/encoding code remain in the source tree for
+  now and can be deleted once the API path has soaked.
+- IDLE is replaced with a `/folder_status` poll (default 30s) for the
+  active mailbox; `MailboxWatcher` continues to coalesce bursts and
+  apply reconnect backoff so view-models keep observing the same
+  `WatchEvent` stream.
+- `terraform/infra` `required_version` raised from `>= 1.1.2` to
+  `>= 1.9.0` to support cross-variable validation references.
 - The `list_envelopes` Lambda now preserves the display name from each
   RFC 3501 ENVELOPE address. `from`, `to`, and `cc` entries are emitted
   in RFC 5322 mailbox form (`"Display Name" <user@host>`) when a name is
@@ -16,6 +32,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to compare addresses by extracted email so wrapped self-entries are
   still stripped. The Apple client is unaffected — it talks IMAP
   directly and already carries display names through `EmailAddress`.
+
+### Added
+- New `/folder_status` Lambda exposing IMAP STATUS attributes
+  (`MESSAGES`, `UNSEEN`, `UIDVALIDITY`, `UIDNEXT`) for a folder. Used
+  by the Apple client to drive cache invalidation and the inbox
+  unread badge; React doesn't currently consume it.
+- New `/search` Lambda that runs an IMAP SEARCH against a folder and
+  returns the matching UIDs. The Apple client's
+  `ApiBackedImapClient.search(folder:query:)` now hits this endpoint
+  instead of returning an empty list, restoring mailbox search on
+  the API path (#375).
+- `var.monitoring` now validates against `var.availability_zones` at
+  plan time and fails with an explicit error when monitoring is
+  enabled in a single-AZ environment. The monitoring stack provisions
+  a public ALB, which AWS requires to span at least two AZs; the
+  prior behavior was a mid-apply failure once the ALB resource was
+  reached. Documented as a top-level prerequisite in
+  [docs/monitoring.md](docs/monitoring.md#requirements).
+- Styling of paragraphs in webmail rich text editor works more like normal
+  email text editors: no extra space between paragraphs.
+
+### Known limitations
+- The Lambda's `/list_envelopes` flattens RFC 3501 ENVELOPE addresses
+  to bare `mailbox@host` strings, so display names disappear on the
+  API path. Messages routed through the new client render the bare
+  address in From/To/Cc lists.
+- The Lambda's `/send` endpoint does not yet accept attachments
+  (mirrors the existing React `TODO`), so attachment sends regress
+  on the Apple side until that lands.
 
 ## [0.9.11] - 2026-05-05
 
