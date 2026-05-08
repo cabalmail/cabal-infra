@@ -168,38 +168,38 @@ public actor ApiBackedImapClient: ImapClient {
         // The Lambda's `/set_flag` accepts a single flag and an op of
         // "set" / "unset" — see `lambda/api/set_flag/function.py`. Map the
         // protocol's set-of-flags shape onto sequential calls.
-        let op: String
+        let wireOp: String
         switch operation {
-        case .add:     op = "set"
-        case .remove:  op = "unset"
+        case .add:     wireOp = "set"
+        case .remove:  wireOp = "unset"
         case .replace:
             // The API has no atomic STORE FLAGS — best-effort emulate by
             // adding the requested flags. Replace semantics are only used
             // for niche admin paths today.
-            op = "set"
+            wireOp = "set"
         }
         for flag in flags {
-            _ = try await api.setFlag(
+            _ = try await api.setFlag(SetFlagRequest(
                 host: host,
                 folder: folder,
                 ids: uids,
                 flag: flag.wireValue,
-                op: op,
+                operation: wireOp,
                 sortOrder: defaultSortOrder,
                 sortField: defaultSortField
-            )
+            ))
         }
     }
 
     public func move(folder: String, uids: [UInt32], destination: String) async throws {
-        try await api.moveMessages(
+        try await api.moveMessages(MoveMessagesRequest(
             host: host,
             source: folder,
             destination: destination,
             ids: uids,
             sortOrder: defaultSortOrder,
             sortField: defaultSortField
-        )
+        ))
     }
 
     // MARK: - Search and append (unsupported)
@@ -297,11 +297,11 @@ public actor ApiBackedImapClient: ImapClient {
         if raw == "undisclosed-recipients" {
             return EmailAddress(name: nil, mailbox: "undisclosed-recipients", host: "")
         }
-        guard let at = raw.lastIndex(of: "@") else {
+        guard let atIndex = raw.lastIndex(of: "@") else {
             return EmailAddress(name: nil, mailbox: raw, host: "")
         }
-        let mailbox = String(raw[..<at])
-        let host = String(raw[raw.index(after: at)...])
+        let mailbox = String(raw[..<atIndex])
+        let host = String(raw[raw.index(after: atIndex)...])
         return EmailAddress(name: nil, mailbox: mailbox, host: host)
     }
 
