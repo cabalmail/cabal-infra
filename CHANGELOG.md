@@ -24,6 +24,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `WatchEvent` stream.
 - `terraform/infra` `required_version` raised from `>= 1.1.2` to
   `>= 1.9.0` to support cross-variable validation references.
+- The `list_envelopes` Lambda now preserves the display name from each
+  RFC 3501 ENVELOPE address. `from`, `to`, and `cc` entries are emitted
+  in RFC 5322 mailbox form (`"Display Name" <user@host>`) when a name is
+  set, and as bare `user@host` when it is not. The React admin client
+  already understands both forms; reply-all self-removal was tightened
+  to compare addresses by extracted email so wrapped self-entries are
+  still stripped. The Apple client is unaffected — it talks IMAP
+  directly and already carries display names through `EmailAddress`.
 
 ### Added
 - New `/folder_status` Lambda exposing IMAP STATUS attributes
