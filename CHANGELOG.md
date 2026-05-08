@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.12] - Unreleased
+
+### Fixed
+- Apple client message list: the unread-message indicator now uses a
+  fixed blue (rather than the system accent color) and switches to
+  white when the row is selected. Previously the dot tracked
+  `Color.accentColor`, which on iOS is the same blue as the row
+  selection highlight, so a selected message's read/unread state was
+  invisible.
+
 ## [0.9.11] - 2026-05-05
 
 ### Security
