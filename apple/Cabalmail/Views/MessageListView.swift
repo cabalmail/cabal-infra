@@ -249,7 +249,7 @@ private struct MessageRow: View {
     }
 
     private var senderLabel: String {
-        envelope.from.first?.name ?? envelope.from.first?.mailbox ?? "unknown"
+        envelope.from.first?.displayName ?? envelope.from.first?.mailbox ?? "unknown"
     }
 
     private var dateLabel: String {
