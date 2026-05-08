@@ -301,7 +301,7 @@ public actor CabalmailClient {
             inReplyTo: message.inReplyTo.map { [$0] } ?? [],
             references: message.references
         )
-        try await api.sendMessage(
+        try await api.sendMessage(SendMessageRequest(
             host: imapHost,
             smtpHost: smtpHost,
             sender: "\(message.from.mailbox)@\(message.from.host)",
@@ -313,7 +313,7 @@ public actor CabalmailClient {
             htmlBody: message.htmlBody ?? "",
             textBody: message.textBody ?? "",
             draft: false
-        )
+        ))
     }
 
     /// Activate or deactivate MetricKit diagnostic collection. The Settings

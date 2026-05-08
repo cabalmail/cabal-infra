@@ -234,7 +234,7 @@ final class ApiBackedImapClientTests: XCTestCase {
             authService: StubAuthService(),
             transport: http
         )
-        try await api.sendMessage(
+        try await api.sendMessage(SendMessageRequest(
             host: "imap.example.com",
             smtpHost: "smtp-out.example.com",
             sender: "alice@example.com",
@@ -246,7 +246,7 @@ final class ApiBackedImapClientTests: XCTestCase {
             htmlBody: "<p>Hi</p>",
             textBody: "Hi",
             draft: false
-        )
+        ))
         let requests = await http.requests
         XCTAssertEqual(requests.count, 1)
         let request = requests[0]
