@@ -8,6 +8,14 @@ locals {
       cache     = true
       cache_ttl = 60
     },
+    folder_status = {
+      runtime = "python3.13"
+
+      method    = "GET"
+      memory    = 128
+      cache     = true
+      cache_ttl = 15
+    },
     list_messages = {
       runtime = "python3.13"
 
