@@ -56,13 +56,26 @@ extension ImapParser {
                 return addresses
             }
             _ = tokenizer.next() // consume lparen
-            let name = readNString(&tokenizer).map(HeaderDecoder.decode)
+            let name = readNString(&tokenizer)
+                .map(HeaderDecoder.decode)
+                .map(stripSurroundingQuotes)
             _ = readNString(&tokenizer) // source-route, effectively obsolete
             let mailbox = readNString(&tokenizer) ?? ""
             let host = readNString(&tokenizer) ?? ""
             consumeClose(&tokenizer)
             addresses.append(EmailAddress(name: name, mailbox: mailbox, host: host))
         }
+    }
+
+    // Dovecot (and some other servers) return the RFC 5322 phrase verbatim in
+    // the ENVELOPE addr-name slot, so a `From: "Alice Smith" <a@x>` arrives
+    // here with literal `"` characters wrapping the name. Strip a balanced
+    // pair so display matches the React client's presentation.
+    static func stripSurroundingQuotes(_ value: String) -> String {
+        guard value.count >= 2,
+              value.first == "\"",
+              value.last == "\"" else { return value }
+        return String(value.dropFirst().dropLast())
     }
 }
 

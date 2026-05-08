@@ -12,10 +12,24 @@ public struct EmailAddress: Sendable, Codable, Hashable {
         self.host = host
     }
 
+    /// Display name with any wrapping double-quotes stripped. Some IMAP
+    /// servers return the RFC 5322 phrase verbatim in addr-name (Dovecot
+    /// for one), so a `From: "Alice Smith" <a@x>` would otherwise render
+    /// as `"Alice Smith"` in the UI. The parser also strips these on the
+    /// way in; this property is a defense for cached envelopes captured
+    /// before that change.
+    public var displayName: String? {
+        guard let name, !name.isEmpty else { return nil }
+        if name.count >= 2, name.first == "\"", name.last == "\"" {
+            return String(name.dropFirst().dropLast())
+        }
+        return name
+    }
+
     public var formatted: String {
         let addr = "\(mailbox)@\(host)"
-        if let name, !name.isEmpty {
-            return "\"\(name)\" <\(addr)>"
+        if let displayName {
+            return "\"\(displayName)\" <\(addr)>"
         }
         return addr
     }
