@@ -6,25 +6,30 @@ import Foundation
 // helpers (`get`, `post`, `put`, `delete`, `send`) declared on the actor
 // in that file.
 
+// MARK: - Decodable payload wrappers
+//
+// Kept at file scope rather than nested inside the extension so the
+// `CodingKeys` enums sit one level deep (the SwiftLint `nesting` rule
+// allows a single level of type nesting and counts the enclosing type
+// in the level depth).
+
+private struct MessageIdsPayload: Decodable {
+    let messageIds: [UInt32]
+
+    private enum CodingKeys: String, CodingKey {
+        case messageIds = "message_ids"
+    }
+}
+
+private struct MessageIdsOptionalPayload: Decodable {
+    let messageIds: [UInt32]?
+
+    private enum CodingKeys: String, CodingKey {
+        case messageIds = "message_ids"
+    }
+}
+
 extension URLSessionApiClient {
-    // MARK: - Decodable payload wrappers
-
-    fileprivate struct MessageIdsPayload: Decodable {
-        let messageIds: [UInt32]
-
-        private enum CodingKeys: String, CodingKey {
-            case messageIds = "message_ids"
-        }
-    }
-
-    fileprivate struct MessageIdsOptionalPayload: Decodable {
-        let messageIds: [UInt32]?
-
-        private enum CodingKeys: String, CodingKey {
-            case messageIds = "message_ids"
-        }
-    }
-
     // MARK: - Messages
 
     public func listMessageIds(
