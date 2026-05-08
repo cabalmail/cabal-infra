@@ -5,8 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-<<<<<<< claude/issue-371
-## [Unreleased]
+## [0.9.12] - Unreleased
 
 ### Changed
 - Apple clients (iOS, iPadOS, visionOS, macOS) now route mailbox
@@ -23,12 +22,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   active mailbox; `MailboxWatcher` continues to coalesce bursts and
   apply reconnect backoff so view-models keep observing the same
   `WatchEvent` stream.
+- `terraform/infra` `required_version` raised from `>= 1.1.2` to
+  `>= 1.9.0` to support cross-variable validation references.
 
 ### Added
 - New `/folder_status` Lambda exposing IMAP STATUS attributes
   (`MESSAGES`, `UNSEEN`, `UIDVALIDITY`, `UIDNEXT`) for a folder. Used
   by the Apple client to drive cache invalidation and the inbox
   unread badge; React doesn't currently consume it.
+- `var.monitoring` now validates against `var.availability_zones` at
+  plan time and fails with an explicit error when monitoring is
+  enabled in a single-AZ environment. The monitoring stack provisions
+  a public ALB, which AWS requires to span at least two AZs; the
+  prior behavior was a mid-apply failure once the ALB resource was
+  reached. Documented as a top-level prerequisite in
+  [docs/monitoring.md](docs/monitoring.md#requirements).
+- Styling of paragraphs in webmail rich text editor works more like normal
+  email text editors: no extra space between paragraphs.
 
 ### Known limitations
 - IMAP SEARCH has no Lambda equivalent; `ApiBackedImapClient.search`
@@ -41,24 +51,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The Lambda's `/send` endpoint does not yet accept attachments
   (mirrors the existing React `TODO`), so attachment sends regress
   on the Apple side until that lands.
-=======
-## [0.9.12] - Unreleased
-
-### Changed
-- `terraform/infra` `required_version` raised from `>= 1.1.2` to
-  `>= 1.9.0` to support cross-variable validation references.
-
-### Added
-- `var.monitoring` now validates against `var.availability_zones` at
-  plan time and fails with an explicit error when monitoring is
-  enabled in a single-AZ environment. The monitoring stack provisions
-  a public ALB, which AWS requires to span at least two AZs; the
-  prior behavior was a mid-apply failure once the ALB resource was
-  reached. Documented as a top-level prerequisite in
-  [docs/monitoring.md](docs/monitoring.md#requirements).
-- Styling of paragraphs in webmail rich text editor works more like normal
-  email text editors: no extra space between paragraphs.
->>>>>>> stage
 
 ## [0.9.11] - 2026-05-05
 
