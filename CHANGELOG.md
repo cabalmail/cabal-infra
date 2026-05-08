@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+<<<<<<< claude/issue-371
+## [Unreleased]
+
+### Changed
+- Apple clients (iOS, iPadOS, visionOS, macOS) now route mailbox
+  traffic through the same Lambda API the React admin app uses,
+  replacing the hand-rolled IMAP and SMTP socket implementations
+  (#371). Folder, envelope, message, flag, move, and send operations
+  all go via API Gateway; the production `CabalmailClient.make(...)`
+  factory wires `ApiBackedImapClient` instead of `LiveImapClient` and
+  `CabalmailClient.send(_:)` POSTs to `/send` instead of running its
+  own SMTP submission. `LiveImapClient`, `LiveSmtpClient`, and the
+  RFC 3501/5322 parsing/encoding code remain in the source tree for
+  now and can be deleted once the API path has soaked.
+- IDLE is replaced with a `/folder_status` poll (default 30s) for the
+  active mailbox; `MailboxWatcher` continues to coalesce bursts and
+  apply reconnect backoff so view-models keep observing the same
+  `WatchEvent` stream.
+
+### Added
+- New `/folder_status` Lambda exposing IMAP STATUS attributes
+  (`MESSAGES`, `UNSEEN`, `UIDVALIDITY`, `UIDNEXT`) for a folder. Used
+  by the Apple client to drive cache invalidation and the inbox
+  unread badge; React doesn't currently consume it.
+
+### Known limitations
+- IMAP SEARCH has no Lambda equivalent; `ApiBackedImapClient.search`
+  returns an empty list with a warning log. Search in the Apple
+  client is a no-op until/unless a `/search` Lambda lands.
+- The Lambda's `/list_envelopes` flattens RFC 3501 ENVELOPE addresses
+  to bare `mailbox@host` strings, so display names disappear on the
+  API path. Messages routed through the new client render the bare
+  address in From/To/Cc lists.
+- The Lambda's `/send` endpoint does not yet accept attachments
+  (mirrors the existing React `TODO`), so attachment sends regress
+  on the Apple side until that lands.
+=======
 ## [0.9.12] - Unreleased
 
 ### Changed
@@ -21,6 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [docs/monitoring.md](docs/monitoring.md#requirements).
 - Styling of paragraphs in webmail rich text editor works more like normal
   email text editors: no extra space between paragraphs.
+>>>>>>> stage
 
 ## [0.9.11] - 2026-05-05
 

@@ -77,6 +77,13 @@ public actor CabalmailClient {
     /// Production factory: hand a `Configuration` and a `SecureStore` and get
     /// back a client wired against the real Cognito, API Gateway, and mail
     /// tiers. Overrides let tests supply fakes for any of the pieces.
+    ///
+    /// As of issue #371 the IMAP and SMTP work happens behind the Lambda
+    /// API rather than via direct mail-protocol sockets — `imapClient` is
+    /// an `ApiBackedImapClient`, and `send(_:)` posts to `/send` instead
+    /// of running its own SMTP submission. `LiveSmtpClient` is still wired
+    /// as `smtpClient` so anything left calling that surface keeps working,
+    /// but the production send path no longer touches it.
     public static func make(
         configuration: Configuration,
         secureStore: SecureStore,
@@ -94,10 +101,7 @@ public actor CabalmailClient {
             authService: auth,
             transport: httpTransport
         )
-        let imap = LiveImapClient(
-            factory: NetworkImapConnectionFactory(host: configuration.imapHost),
-            authService: auth
-        )
+        let imap = ApiBackedImapClient(api: api, host: configuration.imapHost)
         let smtp = LiveSmtpClient(
             factory: NetworkSmtpConnectionFactory(host: configuration.smtpHost),
             authService: auth
@@ -160,11 +164,15 @@ public actor CabalmailClient {
             }
             let reach = Reachability()
             self.reachability = reach
-            // Sender closure retries the full send flow including Sent-folder
-            // APPEND so a queued message behaves identically to a fresh one.
-            let smtp = smtpClient
+            // Sender closure retries the same `/send` Lambda the foreground
+            // path uses, so a queued message behaves identically to a fresh
+            // one (Outbox APPEND + SMTP submission + Sent move all run
+            // server-side; see `lambda/api/send/function.py`).
+            let api = apiClient
+            let imapHost = configuration.imapHost
+            let smtpHost = configuration.smtpHost
             let queue = SendQueue(outbox: outbox) { message in
-                try await smtp.send(message)
+                try await Self.submit(message, api: api, imapHost: imapHost, smtpHost: smtpHost)
             }
             self.sendQueue = queue
             Task { await queue.bind(reachability: reach.changes()) }
@@ -217,35 +225,33 @@ public actor CabalmailClient {
         await addressCache.invalidate()
     }
 
-    /// Submits an outgoing message via SMTP and, on success, `APPEND`s an
-    /// identical copy to the `Sent` IMAP folder so the sender sees it in
-    /// their sent mailbox on every other client. Sendmail + Dovecot in the
-    /// Cabalmail container stack don't auto-append — the React app's backend
-    /// does the equivalent in the `send` Lambda (see
-    /// `lambda/api/send/function.py`). Mirroring that here keeps the Apple
-    /// client feature-parity with the web UI.
+    /// Submits an outgoing message via the Cabalmail `/send` Lambda.
     ///
-    /// A fresh Message-ID is generated once and stamped on both copies so
-    /// `In-Reply-To` / `References` chains stay intact across a later reply
-    /// composed from either the Sent folder or the recipient's copy.
+    /// Issue #371 — the same Lambda the React app uses now handles the
+    /// full submission flow: APPEND to the user's `Outbox`, SMTP submit,
+    /// and move into `Sent` all happen server-side (see
+    /// `lambda/api/send/function.py`). The Apple client used to do these
+    /// three steps itself over IMAP/SMTP sockets; centralizing them in the
+    /// Lambda eliminates the network-edge cases that motivated this issue
+    /// (sleep/wake, sparse-UID corruption, sendmail auth races).
     ///
-    /// The APPEND is best-effort: a succeeded-send with a failed Sent-folder
-    /// APPEND does *not* throw, because the user's message was delivered.
-    /// The tradeoff is a mailbox that eventually drifts from what recipients
-    /// see — acceptable because the alternative is reporting a send failure
-    /// for a message that was already accepted for relay.
+    /// A fresh Message-ID is still generated client-side so reply
+    /// threading stays intact whether the sender or a recipient composes
+    /// the next reply.
     ///
-    /// `sentFolder` defaults to `"Sent"` because that's the name the
-    /// Dovecot config creates. Phase 6 settings will let the user override.
+    /// `sentFolder` is accepted for source compatibility; the Lambda
+    /// hard-codes the `Sent` destination so the parameter is currently
+    /// unused. Wiring it through requires a Lambda change.
     ///
-    /// Phase 7: when SMTP fails with a transport-class error, the message
-    /// is persisted to the `Outbox` and `SendOutcome.queued(_)` is returned
-    /// instead of thrown — `SendQueue` drains it when reachability returns.
-    /// Application-level rejections (auth failure, recipient refusal) still
-    /// throw so the user can correct them immediately.
+    /// When the Lambda call fails with a transport-class error, the
+    /// message is persisted to the `Outbox` and `SendOutcome.queued(_)`
+    /// is returned instead of thrown — `SendQueue` drains it when
+    /// reachability returns. Application-level rejections (auth failure,
+    /// recipient refusal) still throw so the user can correct them
+    /// immediately.
     @discardableResult
     public func send(_ message: OutgoingMessage, sentFolder: String = "Sent") async throws -> SendOutcome {
-        let messageID = message.messageId ?? "\(UUID().uuidString)@\(message.from.host)"
+        let messageID = message.messageId ?? "<\(UUID().uuidString)@\(message.from.host)>"
         let stamped = OutgoingMessage(
             from: message.from,
             to: message.to,
@@ -261,26 +267,53 @@ public actor CabalmailClient {
             messageId: messageID
         )
         do {
-            try await smtpClient.send(stamped)
+            try await Self.submit(
+                stamped,
+                api: apiClient,
+                imapHost: configuration.imapHost,
+                smtpHost: configuration.smtpHost
+            )
         } catch let error as CabalmailError where Self.shouldQueue(error) {
             let entry = try await outbox.enqueue(stamped)
             CabalmailLog.warn(
                 "CabalmailClient",
-                "SMTP transport error; queued message \(entry.id)"
+                "transport error from /send; queued message \(entry.id)"
             )
             #if canImport(Network)
             await sendQueue?.kickDrain()
             #endif
             return .queued(entry.id)
         }
-        let payload = MessageBuilder.build(stamped, messageID: messageID)
-        try? await imapClient.connectAndAuthenticate()
-        try? await imapClient.append(
-            folder: sentFolder,
-            message: payload,
-            flags: [.seen]
-        )
         return .sent
+    }
+
+    /// Shared `/send` invocation used by both the foreground send path
+    /// and `SendQueue`'s retry closure. Lives on the type so the queue
+    /// closure doesn't capture `self`.
+    static func submit(
+        _ message: OutgoingMessage,
+        api: ApiClient,
+        imapHost: String,
+        smtpHost: String
+    ) async throws {
+        let headers = ApiSendOtherHeaders(
+            messageId: message.messageId.map { [$0] } ?? [],
+            inReplyTo: message.inReplyTo.map { [$0] } ?? [],
+            references: message.references
+        )
+        try await api.sendMessage(
+            host: imapHost,
+            smtpHost: smtpHost,
+            sender: "\(message.from.mailbox)@\(message.from.host)",
+            toList: message.to.map { "\($0.mailbox)@\($0.host)" },
+            ccList: message.cc.map { "\($0.mailbox)@\($0.host)" },
+            bccList: message.bcc.map { "\($0.mailbox)@\($0.host)" },
+            subject: message.subject,
+            otherHeaders: headers,
+            htmlBody: message.htmlBody ?? "",
+            textBody: message.textBody ?? "",
+            draft: false
+        )
     }
 
     /// Activate or deactivate MetricKit diagnostic collection. The Settings
