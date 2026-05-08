@@ -54,14 +54,51 @@ def decode_subject(data):
 
     return ''.join(subject_strings)
 
+def decode_name(raw):
+    '''Decodes an RFC 2047 encoded display name to a utf-8 string'''
+    if raw is None:
+        return ''
+    try:
+        if isinstance(raw, bytes):
+            raw = raw.decode()
+    except UnicodeDecodeError:
+        return ''
+    try:
+        parts = decode_header(raw)
+    except (UnicodeDecodeError, ValueError):
+        return raw
+    pieces = []
+    for value, charset in parts:
+        if isinstance(value, bytes):
+            try:
+                pieces.append(value.decode(charset or 'utf-8', errors='replace'))
+            except (LookupError, UnicodeDecodeError):
+                pieces.append(value.decode('utf-8', errors='replace'))
+        else:
+            pieces.append(value)
+    return ''.join(pieces).strip()
+
+def format_address(fragment):
+    '''Renders one ENVELOPE address in RFC 5322 mailbox form, including display name when set'''
+    mailbox = fragment.mailbox.decode()
+    host = fragment.host.decode()
+    addr = f"{mailbox}@{host}"
+    name = decode_name(fragment.name)
+    if name:
+        # Quote and escape the display name for safe RFC 5322 rendering. Existing
+        # clients parse `"Name" <addr@host>` via a `<...>` regex.
+        escaped = name.replace('\\', '\\\\').replace('"', '\\"')
+        return f'"{escaped}" <{addr}>'
+    return addr
+
 def decode_address(data):
-    '''Converts a tuple of Address objects to a simple list of strings'''
+    '''Converts a tuple of Address objects to a list of RFC 5322 mailbox strings'''
     return_value = []
     if isinstance(data, type(None)):
         return return_value
     for fragment in data:
         try:
-            return_value.append(f"{fragment.mailbox.decode()}@{fragment.host.decode()}")
+            return_value.append(format_address(fragment))
         except: # pylint: disable=bare-except
             return_value.append("undisclosed-recipients")
     return return_value

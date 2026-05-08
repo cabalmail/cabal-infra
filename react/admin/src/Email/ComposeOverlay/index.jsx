@@ -14,6 +14,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useAppMessage } from '../../contexts/AppMessageContext';
 import ConfirmDialog from '../../ConfirmDialog';
 import FromPicker from './FromPicker';
+import { extractEmail } from '../../utils/formatDate';
 
 const turndown = new TurndownService({ headingStyle: 'atx', hr: '---' });
 
@@ -158,14 +159,19 @@ function ComposeOverlay({
         setSubject(propSubject);
         break;
       case "replyAll": {
+        // Self-removal compares by bare email since list entries may carry
+        // a display-name wrapper (`"Name" <addr@host>`) while propRecipient
+        // is always a bare address.
+        const myEmail = (extractEmail(propRecipient) || propRecipient || '').toLowerCase();
+        const matchesSelf = (s) => (extractEmail(s) || s || '').toLowerCase() === myEmail;
         let toList = [...new Set([
           ...(envelope.from),
           ...(envelope.to || [])
         ])];
-        const i = toList.indexOf(propRecipient);
+        const i = toList.findIndex(matchesSelf);
         if (i > -1) toList.splice(i, 1);
         let ccList = envelope.cc ? envelope.cc.slice() : [];
-        const j = ccList.indexOf(propRecipient);
+        const j = ccList.findIndex(matchesSelf);
         if (j > -1) ccList.splice(j, 1);
         if (i === -1 && j === -1) {
           setMessage("Warning: You are replying to a blind copy.", true);
