@@ -160,6 +160,34 @@ describe('ComposeOverlay', () => {
     }
   });
 
+  it('strips self from replyAll recipients when entries carry display names', async () => {
+    const envelope = {
+      from: ['"Sender" <sender@example.com>'],
+      to: ['"Me" <me@test.com>', '"Other" <other@example.com>'],
+      cc: ['"Me Again" <me@test.com>', '"Cc Person" <cc@example.com>'],
+      subject: 'Test',
+    };
+    const { unmount } = renderCompose({
+      type: 'replyAll',
+      envelope,
+      recipient: 'me@test.com',
+      subject: 'Re: Test',
+    });
+    try {
+      await waitFor(() => {
+        expect(screen.getByLabelText('Cc')).toBeInTheDocument();
+      });
+      // Self should not appear in To or Cc; the wrapped non-self entries should.
+      expect(screen.queryByText('"Me" <me@test.com>')).not.toBeInTheDocument();
+      expect(screen.queryByText('"Me Again" <me@test.com>')).not.toBeInTheDocument();
+      expect(screen.getByText('"Sender" <sender@example.com>')).toBeInTheDocument();
+      expect(screen.getByText('"Other" <other@example.com>')).toBeInTheDocument();
+      expect(screen.getByText('"Cc Person" <cc@example.com>')).toBeInTheDocument();
+    } finally {
+      unmount();
+    }
+  });
+
   it('calls hide when the chrome close button is clicked', async () => {
     const hide = vi.fn();
     const { unmount } = renderCompose({ hide });

@@ -1,0 +1,335 @@
+import Foundation
+
+/// `ImapClient` implementation that talks to the Cabalmail Lambda API
+/// instead of speaking IMAP directly.
+///
+/// Issue #371: the hand-rolled IMAP stack proved unreliable across
+/// network transitions, sleep/wake, and provider quirks. The React client
+/// has been running off the same Lambda surface since 0.2.0 with no such
+/// trouble, so we route the Apple client through it as well. This actor
+/// adapts the React-shaped API onto the existing `ImapClient` protocol so
+/// view-models keep compiling unchanged.
+///
+/// Trade-offs vs. native IMAP:
+///   * No IDLE — `idle(folder:)` polls `/folder_status` every
+///     `pollInterval` seconds and yields `.exists(uidNext)` whenever the
+///     folder's `UIDNEXT` advances (or `.expunge(0)` when the message count
+///     drops). `MailboxWatcher` already coalesces bursts and applies
+///     reconnect backoff, so callers see the same observable contract.
+///   * SEARCH is mediated by the `/search` Lambda — the client passes
+///     the raw IMAP SEARCH criteria string through (matching what
+///     `LiveImapClient` used to send as `UID SEARCH <query>`) and the
+///     Lambda returns the matching UIDs.
+///   * No APPEND — `/send` already handles the Outbox + Sent shuffle
+///     server-side, so `CabalmailClient.send(_:)` no longer needs a
+///     client-side APPEND. `append(_:_:_:)` here throws `protocolError`
+///     to make accidental callers obvious.
+///   * Envelope display names are unavailable — the Lambda flattens RFC
+///     3501 ENVELOPE addresses to `"mailbox@host"`. Messages routed
+///     through the API show the bare address until/unless the Lambda
+///     surfaces the personal name.
+public actor ApiBackedImapClient: ImapClient {
+    private let api: ApiClient
+    private let host: String
+    private let pollInterval: TimeInterval
+
+    /// Cached folder subscription set, populated on the first
+    /// `listFolders()` call so `status` and other look-ups don't have to
+    /// re-fetch. Invalidated by subscribe/unsubscribe/create/delete.
+    private var subscriptionCache: Set<String>?
+
+    public init(api: ApiClient, host: String, pollInterval: TimeInterval = 30) {
+        self.api = api
+        self.host = host
+        self.pollInterval = pollInterval
+    }
+
+    // MARK: - Connection lifecycle (no-ops for HTTP)
+
+    /// No-op — `ApiClient` attaches the Cognito ID token on every request
+    /// and refreshes on 401.
+    public func connectAndAuthenticate() async throws {}
+
+    public func disconnect() async {}
+
+    public func invalidate() async {
+        subscriptionCache = nil
+    }
+
+    // MARK: - Folders
+
+    public func listFolders() async throws -> [Folder] {
+        let list = try await api.listFolders(host: host)
+        let subscribed = Set(list.subFolders)
+        subscriptionCache = subscribed
+        // The Lambda already returns folder paths with `.` → `/`, sorted.
+        return list.folders.map { path in
+            Folder(path: path, attributes: [], isSubscribed: subscribed.contains(path))
+        }
+    }
+
+    public func createFolder(name: String, parent: String?) async throws {
+        try await api.createFolder(host: host, parent: parent ?? "", name: name)
+        subscriptionCache = nil
+    }
+
+    public func deleteFolder(path: String) async throws {
+        try await api.deleteFolder(host: host, name: path)
+        subscriptionCache = nil
+    }
+
+    public func subscribe(path: String) async throws {
+        try await api.subscribeFolder(host: host, folder: path)
+        subscriptionCache?.insert(path)
+    }
+
+    public func unsubscribe(path: String) async throws {
+        try await api.unsubscribeFolder(host: host, folder: path)
+        subscriptionCache?.remove(path)
+    }
+
+    public func status(path: String) async throws -> FolderStatus {
+        let raw = try await api.folderStatus(host: host, folder: path)
+        return FolderStatus(
+            messages: raw.messages,
+            unseen: raw.unseen,
+            recent: nil,
+            uidValidity: raw.uidValidity,
+            uidNext: raw.uidNext
+        )
+    }
+
+    // MARK: - Envelopes
+
+    public func envelopes(folder: String, range: ClosedRange<UInt32>) async throws -> [Envelope] {
+        // The Lambda has no UID-range endpoint. Pull the sorted UID list,
+        // filter to the requested window, then fetch envelopes for that
+        // subset. For typical folder sizes the filter is the cheap part.
+        let allIds = try await api.listMessageIds(
+            host: host,
+            folder: folder,
+            sortOrder: defaultSortOrder,
+            sortField: defaultSortField
+        )
+        let windowed = allIds.filter { range.contains($0) }
+        guard !windowed.isEmpty else { return [] }
+        let raw = try await api.listEnvelopes(host: host, folder: folder, ids: windowed)
+        return raw.map { Self.makeEnvelope($0) }
+    }
+
+    public func topEnvelopes(folder: String, limit: UInt32, totalMessages: UInt32) async throws -> [Envelope] {
+        if totalMessages == 0 { return [] }
+        let allIds = try await api.listMessageIds(
+            host: host,
+            folder: folder,
+            sortOrder: defaultSortOrder,
+            sortField: defaultSortField
+        )
+        // The Lambda already applies REVERSE ARRIVAL — newest first — so
+        // the prefix is the top page. Trim to the requested page size.
+        let head = Array(allIds.prefix(Int(limit)))
+        guard !head.isEmpty else { return [] }
+        let raw = try await api.listEnvelopes(host: host, folder: folder, ids: head)
+        return raw.map { Self.makeEnvelope($0) }
+    }
+
+    // MARK: - Bodies and parts
+
+    public func fetchBody(folder: String, uid: UInt32) async throws -> RawMessage {
+        // `/fetch_message` returns a presigned S3 URL for the raw RFC 822;
+        // we follow it and surface the bytes alongside the UID. Flags are
+        // unavailable from this endpoint, so the returned set is empty —
+        // callers that need flags should consult the prior envelope fetch.
+        let body = try await api.fetchMessage(host: host, folder: folder, id: uid, markSeen: false)
+        guard let raw = body.messageRaw, let url = URL(string: raw) else {
+            throw CabalmailError.decoding("fetch_message returned no presigned URL")
+        }
+        let data = try await api.fetchPresignedData(url: url)
+        return RawMessage(uid: uid, bytes: data, flags: [])
+    }
+
+    public func fetchPart(folder: String, uid: UInt32, partId: String) async throws -> Data {
+        // No supported mapping exists from RFC 3501 part IDs ("1.2", "2") to
+        // the Lambda's integer attachment index. Callers that need a single
+        // MIME part should fetch the full body and parse client-side; the
+        // viewmodel that drives attachment download already does this.
+        throw CabalmailError.protocolError(
+            "fetchPart is not supported by the API-backed client; use fetchBody and parse MIME"
+        )
+    }
+
+    // MARK: - Flags and moves
+
+    public func setFlags(
+        folder: String,
+        uids: [UInt32],
+        flags: Set<Flag>,
+        operation: FlagOperation
+    ) async throws {
+        // The Lambda's `/set_flag` accepts a single flag and an op of
+        // "set" / "unset" — see `lambda/api/set_flag/function.py`. Map the
+        // protocol's set-of-flags shape onto sequential calls.
+        let wireOp: String
+        switch operation {
+        case .add:     wireOp = "set"
+        case .remove:  wireOp = "unset"
+        case .replace:
+            // The API has no atomic STORE FLAGS — best-effort emulate by
+            // adding the requested flags. Replace semantics are only used
+            // for niche admin paths today.
+            wireOp = "set"
+        }
+        for flag in flags {
+            _ = try await api.setFlag(SetFlagRequest(
+                host: host,
+                folder: folder,
+                ids: uids,
+                flag: flag.wireValue,
+                operation: wireOp,
+                sortOrder: defaultSortOrder,
+                sortField: defaultSortField
+            ))
+        }
+    }
+
+    public func move(folder: String, uids: [UInt32], destination: String) async throws {
+        try await api.moveMessages(MoveMessagesRequest(
+            host: host,
+            source: folder,
+            destination: destination,
+            ids: uids,
+            sortOrder: defaultSortOrder,
+            sortField: defaultSortField
+        ))
+    }
+
+    // MARK: - Search
+
+    public func search(folder: String, query: String) async throws -> [UInt32] {
+        try await api.searchMessageIds(host: host, folder: folder, query: query)
+    }
+
+    // MARK: - Append (unsupported)
+
+    public func append(folder: String, message: Data, flags: Set<Flag>) async throws {
+        throw CabalmailError.protocolError(
+            "append is not supported by the API-backed client; /send already handles Outbox + Sent"
+        )
+    }
+
+    // MARK: - IDLE (polling fallback)
+
+    public func idle(folder: String) async throws -> AsyncThrowingStream<IdleEvent, Error> {
+        let api = self.api
+        let host = self.host
+        let interval = self.pollInterval
+        return AsyncThrowingStream { continuation in
+            let task = Task {
+                var lastUidNext: UInt32?
+                var lastMessages: Int?
+                while !Task.isCancelled {
+                    do {
+                        let status = try await api.folderStatus(host: host, folder: folder)
+                        if let uidNext = status.uidNext, lastUidNext != nil, uidNext > (lastUidNext ?? 0) {
+                            continuation.yield(IdleEvent(kind: .exists(uidNext)))
+                        }
+                        if let messages = status.messages, let prior = lastMessages, messages < prior {
+                            continuation.yield(IdleEvent(kind: .expunge(0)))
+                        }
+                        lastUidNext = status.uidNext
+                        lastMessages = status.messages
+                    } catch {
+                        // Surface a transient error and let MailboxWatcher
+                        // apply its reconnect backoff. A persistent failure
+                        // (e.g. 401 → authExpired) finishes the stream and
+                        // the watcher tears itself down.
+                        continuation.finish(throwing: error)
+                        return
+                    }
+                    try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    // MARK: - Conversion helpers
+
+    private var defaultSortOrder: String { "REVERSE " }
+    private var defaultSortField: String { "ARRIVAL" }
+
+    /// Builds an `Envelope` from the simplified Lambda payload.
+    ///
+    /// Display names are not on the wire, so `EmailAddress.name` is always
+    /// nil. `messageId` is similarly unavailable — the Lambda doesn't
+    /// surface it from the ENVELOPE struct. `internalDate` and `size`
+    /// likewise omitted; the cache uses UID + UIDVALIDITY as keys, so no
+    /// behavior depends on these.
+    static func makeEnvelope(_ raw: ApiEnvelope) -> Envelope {
+        let date = parseLambdaDate(raw.date)
+        let flags = Set(raw.flags.map { Flag(wireValue: $0) })
+        return Envelope(
+            uid: raw.id,
+            messageId: nil,
+            date: date,
+            subject: raw.subject,
+            from: raw.from.compactMap(parseAddress),
+            sender: [],
+            replyTo: [],
+            to: raw.to.compactMap(parseAddress),
+            cc: raw.cc.compactMap(parseAddress),
+            bcc: [],
+            inReplyTo: nil,
+            flags: flags,
+            internalDate: date,
+            size: nil,
+            hasAttachments: raw.structure?.hasAttachments ?? false
+        )
+    }
+
+    /// Parses `"mailbox@host"` (the Lambda's flattened address shape).
+    /// Falls back to a placeholder `EmailAddress` when the input is the
+    /// literal sentinel `"undisclosed-recipients"` the Lambda emits for
+    /// addresses it couldn't decode.
+    static func parseAddress(_ raw: String) -> EmailAddress? {
+        if raw == "undisclosed-recipients" {
+            return EmailAddress(name: nil, mailbox: "undisclosed-recipients", host: "")
+        }
+        guard let atIndex = raw.lastIndex(of: "@") else {
+            return EmailAddress(name: nil, mailbox: raw, host: "")
+        }
+        let mailbox = String(raw[..<atIndex])
+        let host = String(raw[raw.index(after: atIndex)...])
+        return EmailAddress(name: nil, mailbox: mailbox, host: host)
+    }
+
+    /// Parses the Lambda's stringified date format. `imapclient` returns a
+    /// timezone-aware `datetime` and the Lambda calls `str()` on it, which
+    /// yields `"YYYY-MM-DD HH:MM:SS+00:00"`. A nil envelope date emits the
+    /// literal string `"None"`.
+    static func parseLambdaDate(_ raw: String?) -> Date? {
+        guard let raw, !raw.isEmpty, raw != "None" else { return nil }
+        let formatters: [DateFormatter] = [
+            Self.makeFormatter("yyyy-MM-dd HH:mm:ssXXXXX"),
+            Self.makeFormatter("yyyy-MM-dd HH:mm:ssZ"),
+            Self.makeFormatter("yyyy-MM-dd HH:mm:ss"),
+        ]
+        for formatter in formatters {
+            if let date = formatter.date(from: raw) { return date }
+        }
+        // Last-ditch ISO 8601 attempt — covers Lambda variants that emit
+        // `2024-01-15T10:30:45Z` instead of the space-separated form.
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime]
+        return iso.date(from: raw)
+    }
+
+    private static func makeFormatter(_ format: String) -> DateFormatter {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = format
+        return formatter
+    }
+}

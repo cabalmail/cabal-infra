@@ -87,6 +87,10 @@ variable "monitoring" {
   type        = bool
   description = "Whether to deploy the monitoring & alerting stack (Uptime Kuma, self-hosted ntfy, alert_sink Lambda). Defaults to false."
   default     = false
+  validation {
+    condition     = !var.monitoring || length(var.availability_zones) >= 2
+    error_message = "var.monitoring requires at least two availability_zones. The monitoring stack provisions a public ALB, which AWS requires to span >= 2 AZs. See docs/monitoring.md."
+  }
 }
 
 variable "healthchecks_registration_open" {
