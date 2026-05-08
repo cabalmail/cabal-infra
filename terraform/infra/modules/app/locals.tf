@@ -24,6 +24,14 @@ locals {
       cache     = true
       cache_ttl = 15
     },
+    search = {
+      runtime = "python3.13"
+
+      method    = "GET"
+      memory    = 128
+      cache     = true
+      cache_ttl = 15
+    },
     list_envelopes = {
       runtime = "python3.13"
 

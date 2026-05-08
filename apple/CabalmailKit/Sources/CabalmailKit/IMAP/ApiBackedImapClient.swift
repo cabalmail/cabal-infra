@@ -16,9 +16,10 @@ import Foundation
 ///     folder's `UIDNEXT` advances (or `.expunge(0)` when the message count
 ///     drops). `MailboxWatcher` already coalesces bursts and applies
 ///     reconnect backoff, so callers see the same observable contract.
-///   * No SEARCH — the Lambda doesn't expose `/search`. `search(folder:query:)`
-///     returns an empty list with a warning log; UI search is degraded
-///     until a Lambda is added.
+///   * SEARCH is mediated by the `/search` Lambda — the client passes
+///     the raw IMAP SEARCH criteria string through (matching what
+///     `LiveImapClient` used to send as `UID SEARCH <query>`) and the
+///     Lambda returns the matching UIDs.
 ///   * No APPEND — `/send` already handles the Outbox + Sent shuffle
 ///     server-side, so `CabalmailClient.send(_:)` no longer needs a
 ///     client-side APPEND. `append(_:_:_:)` here throws `protocolError`
@@ -202,15 +203,13 @@ public actor ApiBackedImapClient: ImapClient {
         ))
     }
 
-    // MARK: - Search and append (unsupported)
+    // MARK: - Search
 
     public func search(folder: String, query: String) async throws -> [UInt32] {
-        CabalmailLog.warn(
-            "ApiBackedImapClient",
-            "search() called but the Lambda has no /search endpoint; returning []"
-        )
-        return []
+        try await api.searchMessageIds(host: host, folder: folder, query: query)
     }
+
+    // MARK: - Append (unsupported)
 
     public func append(folder: String, message: Data, flags: Set<Flag>) async throws {
         throw CabalmailError.protocolError(

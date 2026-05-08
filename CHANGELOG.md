@@ -30,6 +30,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`MESSAGES`, `UNSEEN`, `UIDVALIDITY`, `UIDNEXT`) for a folder. Used
   by the Apple client to drive cache invalidation and the inbox
   unread badge; React doesn't currently consume it.
+- New `/search` Lambda that runs an IMAP SEARCH against a folder and
+  returns the matching UIDs. The Apple client's
+  `ApiBackedImapClient.search(folder:query:)` now hits this endpoint
+  instead of returning an empty list, restoring mailbox search on
+  the API path (#375).
 - `var.monitoring` now validates against `var.availability_zones` at
   plan time and fails with an explicit error when monitoring is
   enabled in a single-AZ environment. The monitoring stack provisions
@@ -41,9 +46,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   email text editors: no extra space between paragraphs.
 
 ### Known limitations
-- IMAP SEARCH has no Lambda equivalent; `ApiBackedImapClient.search`
-  returns an empty list with a warning log. Search in the Apple
-  client is a no-op until/unless a `/search` Lambda lands.
 - The Lambda's `/list_envelopes` flattens RFC 3501 ENVELOPE addresses
   to bare `mailbox@host` strings, so display names disappear on the
   API path. Messages routed through the new client render the bare
