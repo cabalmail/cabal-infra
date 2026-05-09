@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.13] - Unreleased
+
+### Fixed
+- macOS client message list: rows now claim the full width of the
+  message-list column. Previously, when the folder sidebar was
+  showing, the row content rendered at intrinsic width and the date
+  hugged the sender, leaving roughly half the column empty; hiding
+  the sidebar happened to trigger a relayout that masked the
+  problem (#385).
+
 ## [0.9.12] - 2006-05-08
 
 ### Fixed
