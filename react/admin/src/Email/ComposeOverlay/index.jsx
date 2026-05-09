@@ -7,6 +7,7 @@ import { ADDRESS_LIST } from '../../constants';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import TextAlign from '@tiptap/extension-text-align';
+import { Fragment, Slice } from '@tiptap/pm/model';
 import TurndownService from 'turndown';
 import { marked } from 'marked';
 import useApi from '../../hooks/useApi';
@@ -14,8 +15,34 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useAppMessage } from '../../contexts/AppMessageContext';
 import ConfirmDialog from '../../ConfirmDialog';
 import FromPicker from './FromPicker';
+import { extractEmail } from '../../utils/formatDate';
 
 const turndown = new TurndownService({ headingStyle: 'atx', hr: '---' });
+
+// Round-trip with the editor: Enter inserts a hard break (<br>), not a new
+// paragraph, so a single newline in Markdown maps to a single newline in HTML.
+// Override turndown's defaults — which would otherwise wrap each <p> in blank
+// lines and emit two-space-newline for <br> — to keep paragraphs single-spaced
+// and <br>s as plain newlines.
+//
+// The leading ​ (zero-width space) is a placeholder: turndown's internal
+// join() collapses adjacent newlines to the longer of (trailing-of-prev,
+// leading-of-next), so two <br>s each emitting plain "\n" would collapse to
+// a single "\n". Prefixing the newline with a non-newline character hides it
+// from the leading-newline detection so consecutive line breaks accumulate.
+// htmlToMarkdown() strips the placeholders before returning.
+turndown.addRule('paragraph', {
+  filter: 'p',
+  replacement: (content) => `${content}\u200B\n`,
+});
+turndown.addRule('lineBreak', {
+  filter: 'br',
+  replacement: () => '\u200B\n',
+});
+
+function htmlToMarkdown(html) {
+  return turndown.turndown(html).replace(/\u200B/g, '');
+}
 
 const MESSAGE = {
   target: {
@@ -83,6 +110,29 @@ function isEditorEmpty(editor) {
   return !html || html === '<p></p>';
 }
 
+// Mirror the editor's tight paragraph spacing on the wire so the recipient's
+// mail client doesn't fall back to its default <p> margin (typically ~1em).
+// Skips paragraphs that already carry a style attribute.
+function styleParagraphs(html) {
+  return html.replace(/<p(\s[^>]*)?>/g, (match, attrs) => {
+    if (attrs && /\sstyle\s*=/i.test(attrs)) return match;
+    return `<p${attrs || ''} style="margin:0">`;
+  });
+}
+
+// marked emits a fresh <p> for every blank-line-delimited block. The editor
+// uses Enter = hard break, so author intent is one continuous paragraph with
+// <br>s. Collapse each </p>…<p> boundary to <br><br> so blank lines in the
+// Markdown side become explicit empty visual lines in the HTML side instead
+// of an extra-spaced paragraph break.
+function flattenParagraphs(html) {
+  return html.replace(/<\/p>\s*<p[^>]*>/g, '<br><br>');
+}
+
+function markdownToHtml(md) {
+  return flattenParagraphs(marked.parse(md, { breaks: true, async: false }));
+}
+
 function formatSaved(ts) {
   if (!ts) return 'Draft not saved';
   const diff = Math.max(0, Math.round((Date.now() - ts) / 1000));
@@ -142,9 +192,56 @@ function ComposeOverlay({
     extensions: [
       StarterKit.configure({
         link: { openOnClick: false },
+        paragraph: { HTMLAttributes: { style: 'margin:0' } },
       }),
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
     ],
+    editorProps: {
+      // Enter = hard break in plain paragraphs, so the document is one
+      // long flow of <br>-separated lines rather than a stack of <p>s.
+      // Lists, code blocks, and headings keep their default Enter handling
+      // (new list item / literal newline / exit-to-paragraph).
+      handleKeyDown: (view, event) => {
+        if (event.key !== 'Enter' || event.shiftKey || event.metaKey || event.ctrlKey) {
+          return false;
+        }
+        const { $from } = view.state.selection;
+        for (let depth = $from.depth; depth >= 0; depth--) {
+          const name = $from.node(depth).type.name;
+          if (name === 'listItem' || name === 'taskItem' || name === 'codeBlock' || name === 'heading') {
+            return false;
+          }
+        }
+        const { hardBreak } = view.state.schema.nodes;
+        if (!hardBreak) return false;
+        view.dispatch(view.state.tr.replaceSelectionWith(hardBreak.create()).scrollIntoView());
+        return true;
+      },
+      // HTML paste: collapse </p>…<p> boundaries before TipTap parses, so
+      // pasted multi-paragraph blocks land as a single paragraph with
+      // <br><br>s — same shape as Enter-typed content.
+      transformPastedHTML: (html) => flattenParagraphs(html),
+      // Plain-text paste: by default ProseMirror creates one paragraph per
+      // newline-delimited line. Replace that with a single inline run of
+      // text + hardBreaks so each \n becomes one <br>, matching Enter.
+      clipboardTextParser: (text, _$context, _plain, view) => {
+        const { schema } = view.state;
+        const { hardBreak, paragraph } = schema.nodes;
+        if (!hardBreak || !paragraph) return Slice.empty;
+        const lines = text.split(/\r\n?|\n/);
+        const nodes = [];
+        lines.forEach((line, i) => {
+          if (line.length > 0) nodes.push(schema.text(line));
+          if (i < lines.length - 1) nodes.push(hardBreak.create());
+        });
+        if (nodes.length === 0) return Slice.empty;
+        // openStart/openEnd = 1 leaves the wrapping paragraph open at both
+        // sides so its inline content merges into the surrounding paragraph
+        // at the cursor instead of inserting a fresh block.
+        const para = paragraph.create(null, Fragment.fromArray(nodes));
+        return new Slice(Fragment.from(para), 1, 1);
+      },
+    },
     content: body || '',
   });
 
@@ -158,14 +255,19 @@ function ComposeOverlay({
         setSubject(propSubject);
         break;
       case "replyAll": {
+        // Self-removal compares by bare email since list entries may carry
+        // a display-name wrapper (`"Name" <addr@host>`) while propRecipient
+        // is always a bare address.
+        const myEmail = (extractEmail(propRecipient) || propRecipient || '').toLowerCase();
+        const matchesSelf = (s) => (extractEmail(s) || s || '').toLowerCase() === myEmail;
         let toList = [...new Set([
           ...(envelope.from),
           ...(envelope.to || [])
         ])];
-        const i = toList.indexOf(propRecipient);
+        const i = toList.findIndex(matchesSelf);
         if (i > -1) toList.splice(i, 1);
         let ccList = envelope.cc ? envelope.cc.slice() : [];
-        const j = ccList.indexOf(propRecipient);
+        const j = ccList.findIndex(matchesSelf);
         if (j > -1) ccList.splice(j, 1);
         if (i === -1 && j === -1) {
           setMessage("Warning: You are replying to a blind copy.", true);
@@ -231,7 +333,7 @@ function ComposeOverlay({
       const html = e.clipboardData.getData('text/html');
       if (!html) return;
       e.preventDefault();
-      const md = turndown.turndown(html);
+      const md = htmlToMarkdown(html);
       const { selectionStart, selectionEnd } = el;
       setMarkdownContent(prev =>
         prev.slice(0, selectionStart) + md + prev.slice(selectionEnd)
@@ -267,12 +369,11 @@ function ComposeOverlay({
   }, [To, CC, BCC, Subject, markdownContent, address]);
 
   const performImportFromRich = useCallback(() => {
-    setMarkdownContent(turndown.turndown(editor.getHTML()));
+    setMarkdownContent(htmlToMarkdown(editor.getHTML()));
   }, [editor]);
 
   const performImportFromMarkdown = useCallback(() => {
-    const html = marked.parse(markdownContent, { async: false });
-    editor.commands.setContent(html, { emitUpdate: true });
+    editor.commands.setContent(markdownToHtml(markdownContent), { emitUpdate: true });
   }, [editor, markdownContent]);
 
   const importFromRich = useCallback(() => {
@@ -399,10 +500,10 @@ function ComposeOverlay({
       textBody = '';
     } else if (!richEmpty && mdEmpty) {
       htmlBody = editor.getHTML();
-      textBody = turndown.turndown(htmlBody);
+      textBody = htmlToMarkdown(htmlBody);
     } else if (richEmpty && !mdEmpty) {
       textBody = markdownContent;
-      htmlBody = marked.parse(markdownContent);
+      htmlBody = styleParagraphs(markdownToHtml(markdownContent));
     } else {
       htmlBody = editor.getHTML();
       textBody = markdownContent;

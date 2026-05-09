@@ -102,6 +102,29 @@ final class ImapParserTests: XCTestCase {
         XCTAssertEqual(attrs.envelope?.from.first?.name, "Björn")
     }
 
+    func testFetchEnvelopeStripsWrappingQuotesFromAddressName() {
+        // Dovecot returns the RFC 5322 phrase verbatim in addr-name; the
+        // parser must strip the surrounding double-quotes so the React
+        // and Apple clients render the same display name.
+        let line = Data([
+            #"* 1 FETCH (UID 7 ENVELOPE (NIL "hi" "#,
+            #"(("\"Alice Smith\"" NIL "alice" "example.com")) "#,
+            #"NIL NIL NIL NIL NIL NIL NIL))"#,
+        ].joined().utf8)
+        guard case let .fetch(_, attrs) = ImapParser.parse(line: line, literals: []) else {
+            return XCTFail("Expected fetch response")
+        }
+        XCTAssertEqual(attrs.envelope?.from.first?.name, "Alice Smith")
+    }
+
+    func testEmailAddressDisplayNameStripsCachedQuotes() {
+        // Defends rendering against pre-fix cached envelopes whose `name`
+        // field still contains the wrapping double-quotes.
+        let address = EmailAddress(name: "\"Alice Smith\"", mailbox: "alice", host: "example.com")
+        XCTAssertEqual(address.displayName, "Alice Smith")
+        XCTAssertEqual(address.formatted, "\"Alice Smith\" <alice@example.com>")
+    }
+
     func testContinuationResponse() {
         let line = Data("+ OK continue".utf8)
         if case let .continuation(text) = ImapParser.parse(line: line, literals: []) {
