@@ -63,15 +63,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Styling of paragraphs in webmail rich text editor works more like normal
   email text editors: no extra space between paragraphs.
 
-### Known limitations
-- The Lambda's `/list_envelopes` flattens RFC 3501 ENVELOPE addresses
-  to bare `mailbox@host` strings, so display names disappear on the
-  API path. Messages routed through the new client render the bare
-  address in From/To/Cc lists.
-- The Lambda's `/send` endpoint does not yet accept attachments
-  (mirrors the existing React `TODO`), so attachment sends regress
-  on the Apple side until that lands.
-
 ## [0.9.11] - 2026-05-05
 
 ### Security
