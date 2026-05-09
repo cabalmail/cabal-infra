@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.9.12] - Unreleased
+## [0.9.12] - 2006-05-08
 
 ### Fixed
 - Apple client message list: the unread-message indicator now uses a
@@ -40,6 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to compare addresses by extracted email so wrapped self-entries are
   still stripped. The Apple client is unaffected — it talks IMAP
   directly and already carries display names through `EmailAddress`.
+- React rich text editor now inserts `<br />` instead of `<p>` on
+  return/enter key.
 
 ### Added
 - New `/folder_status` Lambda exposing IMAP STATUS attributes
