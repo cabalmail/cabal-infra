@@ -24,14 +24,25 @@ const turndown = new TurndownService({ headingStyle: 'atx', hr: '---' });
 // Override turndown's defaults — which would otherwise wrap each <p> in blank
 // lines and emit two-space-newline for <br> — to keep paragraphs single-spaced
 // and <br>s as plain newlines.
+//
+// The leading ​ (zero-width space) is a placeholder: turndown's internal
+// join() collapses adjacent newlines to the longer of (trailing-of-prev,
+// leading-of-next), so two <br>s each emitting plain "\n" would collapse to
+// a single "\n". Prefixing the newline with a non-newline character hides it
+// from the leading-newline detection so consecutive line breaks accumulate.
+// htmlToMarkdown() strips the placeholders before returning.
 turndown.addRule('paragraph', {
   filter: 'p',
-  replacement: (content) => `${content}\n`,
+  replacement: (content) => `${content}\u200B\n`,
 });
 turndown.addRule('lineBreak', {
   filter: 'br',
-  replacement: () => '\n',
+  replacement: () => '\u200B\n',
 });
+
+function htmlToMarkdown(html) {
+  return turndown.turndown(html).replace(/\u200B/g, '');
+}
 
 const MESSAGE = {
   target: {
@@ -322,7 +333,7 @@ function ComposeOverlay({
       const html = e.clipboardData.getData('text/html');
       if (!html) return;
       e.preventDefault();
-      const md = turndown.turndown(html);
+      const md = htmlToMarkdown(html);
       const { selectionStart, selectionEnd } = el;
       setMarkdownContent(prev =>
         prev.slice(0, selectionStart) + md + prev.slice(selectionEnd)
@@ -358,7 +369,7 @@ function ComposeOverlay({
   }, [To, CC, BCC, Subject, markdownContent, address]);
 
   const performImportFromRich = useCallback(() => {
-    setMarkdownContent(turndown.turndown(editor.getHTML()));
+    setMarkdownContent(htmlToMarkdown(editor.getHTML()));
   }, [editor]);
 
   const performImportFromMarkdown = useCallback(() => {
@@ -489,7 +500,7 @@ function ComposeOverlay({
       textBody = '';
     } else if (!richEmpty && mdEmpty) {
       htmlBody = editor.getHTML();
-      textBody = turndown.turndown(htmlBody);
+      textBody = htmlToMarkdown(htmlBody);
     } else if (richEmpty && !mdEmpty) {
       textBody = markdownContent;
       htmlBody = styleParagraphs(markdownToHtml(markdownContent));
