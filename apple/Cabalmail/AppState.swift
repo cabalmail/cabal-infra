@@ -55,6 +55,15 @@ final class AppState {
     var lastDisposedEnvelope: DisposedEnvelope?
     private var disposedTick = 0
 
+    /// Latest envelope-flag change driven from the detail view (currently:
+    /// `\Seen` toggles). `MessageListView` observes this so the row's bold
+    /// styling and unread dot flip the moment the user taps "Mark as read"
+    /// in the detail toolbar, without waiting for the next IDLE / pull-to-
+    /// refresh. `tick` is monotonic so a revert (after a server error) still
+    /// fires the observer when the same UID + flag flips back.
+    var lastEnvelopeFlagChange: EnvelopeFlagChange?
+    private var flagChangeTick = 0
+
     /// Authoritative Inbox unread count, refreshed by the badge poller.
     /// Exposed as an observable so future views (e.g. a sidebar indicator)
     /// can mirror what shows on the dock/home-screen badge.
@@ -71,6 +80,17 @@ final class AppState {
             folderPath: folderPath,
             uid: uid,
             tick: disposedTick
+        )
+    }
+
+    func signalFlagChange(folderPath: String, uid: UInt32, flag: Flag, added: Bool) {
+        flagChangeTick += 1
+        lastEnvelopeFlagChange = EnvelopeFlagChange(
+            folderPath: folderPath,
+            uid: uid,
+            flag: flag,
+            added: added,
+            tick: flagChangeTick
         )
     }
 
@@ -323,5 +343,18 @@ struct Toast: Equatable, Sendable {
 struct DisposedEnvelope: Equatable, Sendable {
     let folderPath: String
     let uid: UInt32
+    let tick: Int
+}
+
+/// Signal payload for a flag change driven from outside the list (currently:
+/// the detail view toggling `\Seen`). The list view applies this directly to
+/// its in-memory envelope so the row updates without a server round trip.
+/// `tick` is monotonic so toggling the same flag back and forth still fires
+/// the observer.
+struct EnvelopeFlagChange: Equatable, Sendable {
+    let folderPath: String
+    let uid: UInt32
+    let flag: Flag
+    let added: Bool
     let tick: Int
 }
