@@ -32,11 +32,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   hugged the sender, leaving roughly half the column empty; hiding
   the sidebar happened to trigger a relayout that masked the
   problem (#385).
-- `apple.yml` push trigger: branch pushes that touch `apple/**` build
-  again. The earlier `tags-ignore: ['**']` was added without a
-  matching `branches` filter, and GitHub treats the undefined ref
-  type as excluded, so every branch push silently skipped the
-  workflow and Apple builds had to be dispatched by hand.
+- `apple.yml` push trigger: pushes to `main` or `stage` that touch
+  `apple/**` build again. The earlier `tags-ignore: ['**']` was added
+  without a matching `branches` filter, and GitHub treats the
+  undefined ref type as excluded, so every branch push silently
+  skipped the workflow and Apple builds had to be dispatched by
+  hand. The fix lists `branches: [main, stage]` explicitly, which
+  also keeps tag pushes from triggering the workflow.
 
 ## [0.9.12] - 2006-05-08
 

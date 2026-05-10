@@ -7,13 +7,13 @@ permissions:
 on:
   workflow_dispatch:
   push:
-    # GitHub silently drops branch-push events when only tags/tags-ignore is
-    # defined ("the workflow won't run for events affecting the undefined Git
-    # ref"), so list both ref filters explicitly.
+    # Only the deploy branches build automatically; feature branches go
+    # through workflow_dispatch. An explicit branches filter also keeps
+    # tag pushes out (no branches: filter would skip branch pushes
+    # entirely - GitHub treats undefined ref types as excluded).
     branches:
-      - '**'
-    tags-ignore:
-      - '**'
+      - main
+      - stage
     paths:
       - 'apple/**'
       - '.github/workflows/apple.yml'
