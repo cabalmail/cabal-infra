@@ -21,12 +21,23 @@ struct SettingsView: View {
     @State private var signOutInFlight = false
 
     var body: some View {
+        #if os(macOS)
+        // macOS hosts this view inside the Settings scene's TabView, which
+        // already supplies the window chrome. A NavigationStack here would
+        // duplicate the chrome and prevent the Form from scrolling when the
+        // window is shorter than the content. Using `.formStyle(.grouped)`
+        // gives the standard System-Settings-style padded card layout.
+        form
+            .task { await loadAddresses() }
+            .refreshable { await loadAddresses(force: true) }
+        #else
         NavigationStack {
             form
                 .navigationTitle("Settings")
                 .task { await loadAddresses() }
                 .refreshable { await loadAddresses(force: true) }
         }
+        #endif
     }
 
     @ViewBuilder
@@ -41,6 +52,9 @@ struct SettingsView: View {
             diagnosticsSection(bindable: preferences)
             aboutSection
         }
+        #if os(macOS)
+        .formStyle(.grouped)
+        #endif
     }
 
     // MARK: - Sections

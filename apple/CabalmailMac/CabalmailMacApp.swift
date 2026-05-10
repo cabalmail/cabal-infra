@@ -42,7 +42,7 @@ struct CabalmailMacApp: App {
                 .environment(appState)
                 .environment(preferences)
                 .preferredColorScheme(colorScheme(for: preferences.theme))
-                .frame(minWidth: 520, minHeight: 480)
+                .frame(minWidth: 560, minHeight: 640)
         }
     }
 

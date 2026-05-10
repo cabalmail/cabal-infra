@@ -18,7 +18,15 @@ struct FoldersAdminView: View {
         NavigationStack {
             content
                 .navigationTitle("Folders")
+                #if os(macOS)
+                // See `AddressesView` — the macOS Settings TabView would
+                // hoist a `.toolbar` "+" button up next to the tab buttons,
+                // shifting their centering. Render the action below the tab
+                // row instead.
+                .safeAreaInset(edge: .top, spacing: 0) { actionBar }
+                #else
                 .toolbar { toolbarContent }
+                #endif
                 .refreshable { await model?.refresh() }
                 .task { await ensureModel() }
                 .sheet(isPresented: $showNewFolderSheet) { newFolderSheet }
@@ -31,6 +39,23 @@ struct FoldersAdminView: View {
                 )
         }
     }
+
+    #if os(macOS)
+    @ViewBuilder
+    private var actionBar: some View {
+        HStack {
+            Spacer()
+            Button {
+                showNewFolderSheet = true
+            } label: {
+                Label("New Folder", systemImage: "plus")
+            }
+            .disabled(model == nil)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+    }
+    #endif
 
     // MARK: - Subviews
 

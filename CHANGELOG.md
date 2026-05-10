@@ -14,9 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   main window therefore is just the mail UI, with no extra picker bar
   competing with `MailRootView`'s `NavigationSplitView` for column
   width — which had been crushing the message list whenever any
-  outer chooser was visible (#385). iPhone, iPad, and visionOS
-  continue to show every section in one `TabView` with
-  `.sidebarAdaptable`.
+  outer chooser was visible (#385). The General tab uses the
+  standard grouped Settings form layout, and the Addresses / Folders
+  "New" buttons render as a strip under the tab row so the tabs
+  themselves stay centered as the user moves between them. iPhone,
+  iPad, and visionOS continue to show every section in one
+  `TabView` with `.sidebarAdaptable`.
 
 ## [0.9.12] - 2006-05-08
 
