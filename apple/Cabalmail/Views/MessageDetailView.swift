@@ -43,6 +43,12 @@ struct MessageDetailView: View {
         .navigationTitle(envelope.subject ?? "(no subject)")
         #if os(iOS) || os(visionOS)
         .navigationBarTitleDisplayMode(.inline)
+        // Reading a message uses the full bottom edge for the action toolbar;
+        // the root `TabView`'s tab bar would otherwise occlude it. The tab
+        // bar reappears automatically when the user swipes back to the
+        // message list. iPad in regular width and visionOS render the tab
+        // chooser as a sidebar instead, so this is a no-op there.
+        .toolbar(.hidden, for: .tabBar)
         #endif
         .toolbar { toolbarContent }
         .sheet(item: $composeSeed) { seed in

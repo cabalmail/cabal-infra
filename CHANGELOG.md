@@ -16,7 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Apple clients: message detail action buttons moved to a bottom toolbar on
   iOS and visionOS so they no longer obscure the subject in the navigation
-  bar. macOS keeps the top toolbar.
+  bar. The Mail/Addresses/Folders/Settings tab bar hides while a message is
+  open so it doesn't sit on top of the action toolbar, and reappears when
+  the user navigates back. macOS keeps the top toolbar.
 
 ## [0.9.13] - 2026-05-10
 
