@@ -1,14 +1,20 @@
 import SwiftUI
 import CabalmailKit
 
-/// Signed-in tab root — Mail / Addresses / Folders / Settings.
+/// Signed-in root.
 ///
-/// Uses the SwiftUI 18 `TabView(selection:)` + `Tab { … }` surface with the
-/// `.sidebarAdaptable` style so iPhone gets a tab bar, iPad / visionOS get
-/// a sidebar that collapses to a tab bar in compact trait environments,
-/// and macOS shows a sidebar by default. The Settings tab is hidden on
-/// macOS because the Settings scene wired to ⌘, in `CabalmailMacApp`
-/// already covers that ground per the plan.
+/// iOS, iPadOS, and visionOS show every section (Mail / Addresses /
+/// Folders / Settings) inside a SwiftUI 18 `TabView` with the
+/// `.sidebarAdaptable` style: iPhone gets a tab bar, iPad / visionOS
+/// get a sidebar that collapses in compact trait environments.
+///
+/// macOS doesn't tab between sections — it follows the standard Mac
+/// idiom and puts each non-mail section in its own window scene
+/// (`AddressesScene`, `FoldersScene` in `CabalmailMacApp`), reachable
+/// from the Window menu and ⌘⌥1 / ⌘⌥2. The main window therefore is
+/// just `MailRootView`, with no extra picker bar competing with its
+/// own `NavigationSplitView`. Settings continues to live in the
+/// dedicated Settings scene wired to ⌘,.
 struct SignedInRootView: View {
     enum Section: Hashable {
         case mail
@@ -22,6 +28,20 @@ struct SignedInRootView: View {
     @State private var isOffline = false
 
     var body: some View {
+        platformBody
+            .overlay(alignment: .top) {
+                statusBanners
+                    .animation(.default, value: isOffline)
+                    .animation(.default, value: appState.toast)
+            }
+            .task { await observeReachability() }
+    }
+
+    @ViewBuilder
+    private var platformBody: some View {
+        #if os(macOS)
+        MailRootView()
+        #else
         TabView(selection: $selected) {
             Tab("Mail", systemImage: "tray", value: Section.mail) {
                 MailRootView()
@@ -32,19 +52,12 @@ struct SignedInRootView: View {
             Tab("Folders", systemImage: "folder", value: Section.folders) {
                 FoldersAdminView()
             }
-            #if !os(macOS)
             Tab("Settings", systemImage: "gear", value: Section.settings) {
                 SettingsView()
             }
-            #endif
         }
         .tabViewStyle(.sidebarAdaptable)
-        .overlay(alignment: .top) {
-            statusBanners
-                .animation(.default, value: isOffline)
-                .animation(.default, value: appState.toast)
-        }
-        .task { await observeReachability() }
+        #endif
     }
 
     @ViewBuilder

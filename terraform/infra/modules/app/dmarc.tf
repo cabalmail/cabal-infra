@@ -75,6 +75,11 @@ resource "aws_iam_role_policy" "process_dmarc" {
         Resource = aws_dynamodb_table.dmarc_reports.arn
       },
       {
+        Effect   = "Allow"
+        Action   = ["s3:PutObject"]
+        Resource = "arn:aws:s3:::cache.${var.control_domain}/dmarc/*"
+      },
+      {
         Effect = "Allow"
         Action = [
           "logs:CreateLogStream",

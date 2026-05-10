@@ -50,13 +50,28 @@ struct MessageDetailView: View {
         }
         .task {
             if model == nil, let client = appState.client {
-                model = MessageDetailViewModel(
+                let newModel = MessageDetailViewModel(
                     folder: folder,
                     envelope: envelope,
                     client: client,
                     preferences: preferences
                 )
-                await model?.load()
+                // Relay flag changes (\Seen toggles) up to AppState so the
+                // list view's `.onChange` handler can flip the row's bold
+                // styling and unread dot without waiting for the next
+                // IDLE / pull-to-refresh.
+                let folderPath = folder.path
+                let uid = envelope.uid
+                newModel.onFlagChanged = { [weak appState] flag, added in
+                    appState?.signalFlagChange(
+                        folderPath: folderPath,
+                        uid: uid,
+                        flag: flag,
+                        added: added
+                    )
+                }
+                model = newModel
+                await newModel.load()
             }
         }
         .onDisappear { model?.onDisappear() }
@@ -230,12 +245,27 @@ struct MessageDetailView: View {
             if let model {
                 Button(role: disposeRole(for: model.disposeAction)) {
                     Task {
-                        await model.dispose {
-                            appState.signalDisposed(
-                                folderPath: folder.path,
-                                uid: envelope.uid
-                            )
-                        }
+                        await model.dispose(
+                            onSuccess: {
+                                // Fires before the server round trip so the
+                                // list selection advances and the row vanishes
+                                // instantly.
+                                appState.signalDisposed(
+                                    folderPath: folder.path,
+                                    uid: envelope.uid
+                                )
+                            },
+                            onFailure: { error in
+                                // The optimistic prune has already happened
+                                // upstream; surface a toast so the user knows
+                                // the move didn't take and can retry on the
+                                // next refresh.
+                                appState.showToast(Toast(
+                                    kind: .error,
+                                    message: failureMessage(for: model.disposeAction, error: error)
+                                ))
+                            }
+                        )
                     }
                 } label: {
                     disposeToolbarLabel(for: model.disposeAction)
@@ -244,8 +274,13 @@ struct MessageDetailView: View {
         }
     }
 
+}
+
+// Dispose-button helpers split into an extension so the primary view body
+// stays under SwiftLint's 250-line cap.
+extension MessageDetailView {
     @ViewBuilder
-    private func disposeToolbarLabel(for action: DisposeAction) -> some View {
+    func disposeToolbarLabel(for action: DisposeAction) -> some View {
         switch action {
         case .archive:
             Image(systemName: "archivebox")
@@ -256,10 +291,19 @@ struct MessageDetailView: View {
         }
     }
 
-    private func disposeRole(for action: DisposeAction) -> ButtonRole? {
+    func disposeRole(for action: DisposeAction) -> ButtonRole? {
         switch action {
         case .archive: return nil
         case .trash:   return .destructive
         }
+    }
+
+    func failureMessage(for action: DisposeAction, error: Error) -> String {
+        let verb: String
+        switch action {
+        case .archive: verb = "archive"
+        case .trash:   verb = "delete"
+        }
+        return "Couldn't \(verb) message: \(error.localizedDescription)"
     }
 }

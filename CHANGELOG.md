@@ -5,6 +5,87 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.13] - 2026-05-10
+
+### Added
+- DMARC report dashboard now exposes investigation affordances per row.
+  Source IP cells link to the corresponding ARIN RDAP record so the
+  reporting party can be looked up in one click. Date cells link to a
+  modal that streams the original DMARC aggregate XML (the
+  `process_dmarc` Lambda now uploads each report's raw XML to
+  `cache.<control_domain>` under `dmarc/<date>/<org>-<id>.xml`, and
+  `list_dmarc_reports` returns a presigned `xml_url` per row). When
+  DKIM or SPF reports `fail`, the badge becomes a button that opens a
+  diagnostic modal showing the expected DNS record (the linking CNAME
+  to `cabal._domainkey.<control_domain>` for DKIM, the linking
+  `v=spf1 include:<control_domain> ~all` TXT for SPF) alongside what
+  is currently published. If the failing domain is a managed
+  subdomain of a Cabal mail domain and the linking record is missing
+  or wrong, a Repair button publishes the correct record via Route 53
+  (UPSERT). Two new admin-only API endpoints back this:
+  `GET /check_dns_record` and `PUT /repair_dns_record`. Apex domains
+  are flagged but never auto-repaired - the apex stays records-free
+  by design.
+
+### Changed
+- macOS client navigation: the Mail / Addresses / Folders chooser is
+  now a top tab bar instead of a left sidebar. Stacking that sidebar
+  next to `MailRootView`'s folder sidebar made SwiftUI's column
+  distribution leave the message list with too little room and a
+  reserved-but-empty band, so message rows wrapped one character at
+  a time while the detail pane hogged the window (#385). iPhone,
+  iPad, and visionOS continue to use `.sidebarAdaptable` because
+  they only have one split view at a time.
+- `claude.yml` now routes Apple-tier work to a `macos-15` runner so
+  Claude can build and test against Xcode/simulators when iterating
+  on iOS/iPadOS/visionOS/macOS code. A `pick-runner` job inspects
+  the trigger context (the `apple` label on issues; `apple/**` paths
+  in a PR's diff for `@claude` mentions) and selects `macos-15` when
+  Apple work is implicated and `ubuntu-latest` otherwise. The macOS
+  path also installs XcodeGen, SwiftLint, and xcbeautify and
+  generates the Xcode project, mirroring `apple.yml`.
+- macOS client navigation: addresses and folder administration moved
+  out of the main window into the Settings window (⌘,) as new
+  Addresses and Folders tabs alongside the existing General tab. The
+  main window therefore is just the mail UI, with no extra picker bar
+  competing with `MailRootView`'s `NavigationSplitView` for column
+  width — which had been crushing the message list whenever any
+  outer chooser was visible (#385). The General tab uses the
+  standard grouped Settings form layout, and the Addresses / Folders
+  "New" buttons render as a strip under the tab row so the tabs
+  themselves stay centered as the user moves between them. iPhone,
+  iPad, and visionOS continue to show every section in one
+  `TabView` with `.sidebarAdaptable`.
+- Apple clients (iOS, iPadOS, visionOS, macOS) now apply mailbox
+  affordances optimistically. Swipe-to-mark-read/unread, swipe-to-
+  archive/delete, the message-detail mark-as-read/unread toolbar
+  button, and the message-detail archive/delete toolbar button all
+  flip the in-memory state (and the row's bold styling and unread
+  dot, where applicable) before the IMAP round trip. State reverts
+  if the server rejects the operation; for archive/delete from the
+  detail view a toast surfaces the failure since the row has already
+  been pruned. Mark-read changes from the detail view propagate to
+  the message list so the row updates without waiting for a refresh.
+- Apple clients now select the Inbox immediately on sign-in, as soon
+  as the folder list arrives. The per-folder unread-count walk runs
+  afterwards in the background, so sidebar badges fill in without
+  blocking the message list from loading.
+
+### Fixed
+- macOS client message list: rows now claim the full width of the
+  message-list column. Previously, when the folder sidebar was
+  showing, the row content rendered at intrinsic width and the date
+  hugged the sender, leaving roughly half the column empty; hiding
+  the sidebar happened to trigger a relayout that masked the
+  problem (#385).
+- `apple.yml` push trigger: pushes to `main` or `stage` that touch
+  `apple/**` build again. The earlier `tags-ignore: ['**']` was added
+  without a matching `branches` filter, and GitHub treats the
+  undefined ref type as excluded, so every branch push silently
+  skipped the workflow and Apple builds had to be dispatched by
+  hand. The fix lists `branches: [main, stage]` explicitly, which
+  also keeps tag pushes from triggering the workflow.
+
 ## [0.9.12] - 2006-05-08
 
 ### Fixed

@@ -7,8 +7,13 @@ permissions:
 on:
   workflow_dispatch:
   push:
-    tags-ignore:
-      - '**'
+    # Only the deploy branches build automatically; feature branches go
+    # through workflow_dispatch. An explicit branches filter also keeps
+    # tag pushes out (no branches: filter would skip branch pushes
+    # entirely - GitHub treats undefined ref types as excluded).
+    branches:
+      - main
+      - stage
     paths:
       - 'apple/**'
       - '.github/workflows/apple.yml'

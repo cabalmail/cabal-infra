@@ -27,6 +27,30 @@ def get_mpw():
     """Returns the master password"""
     return mpw
 
+def admin_response_or_none(event):
+    """Returns a 403 response when the caller lacks the admin group, else None"""
+    groups = event['requestContext']['authorizer']['claims'].get('cognito:groups', '')
+    if 'admin' not in groups:
+        return {
+            'statusCode': 403,
+            'body': json.dumps({'Error': 'Admin access required'})
+        }
+    return None
+
+def find_managed_apex(domains_map, domain):
+    """Returns (apex, zone_id) for the longest managed apex that owns `domain`,
+    or (None, None) when `domain` is not managed."""
+    domain = (domain or '').lower().rstrip('.')
+    best_apex = None
+    best_zone = None
+    for apex, zone_id in domains_map.items():
+        apex_lower = apex.lower()
+        if domain == apex_lower or domain.endswith('.' + apex_lower):
+            if best_apex is None or len(apex_lower) > len(best_apex):
+                best_apex = apex_lower
+                best_zone = zone_id
+    return (best_apex, best_zone)
+
 def get_imap_client(host, user, folder, read_only=False):
     '''Returns an IMAP client for host/user with folder selected'''
     client = IMAPClient(host=host, use_uid=True, ssl=True)

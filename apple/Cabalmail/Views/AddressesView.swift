@@ -22,7 +22,16 @@ struct AddressesView: View {
         NavigationStack {
             content
                 .navigationTitle("Addresses")
+                #if os(macOS)
+                // On macOS this view sits inside the Settings window's
+                // TabView. Using `.toolbar` here would hoist the "+" button
+                // up next to the General/Addresses/Folders tab buttons,
+                // shifting their centering. Render it as a `safeAreaInset`
+                // strip below the tab row instead.
+                .safeAreaInset(edge: .top, spacing: 0) { actionBar }
+                #else
                 .toolbar { toolbarContent }
+                #endif
                 .refreshable { await model?.refresh(force: true) }
                 .task { await ensureModel() }
                 .sheet(isPresented: $showNewAddressSheet) { newAddressSheet }
@@ -35,6 +44,22 @@ struct AddressesView: View {
                 )
         }
     }
+
+    #if os(macOS)
+    @ViewBuilder
+    private var actionBar: some View {
+        HStack {
+            Spacer()
+            Button {
+                showNewAddressSheet = true
+            } label: {
+                Label("Request New Address", systemImage: "plus")
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+    }
+    #endif
 
     // MARK: - Subviews
 

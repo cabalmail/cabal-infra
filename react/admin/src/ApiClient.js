@@ -388,6 +388,38 @@ export default class ApiClient {
     return response;
   }
 
+  fetchDmarcXml(signedUrl) {
+    return axios.get(signedUrl, {
+      responseType: 'text',
+      transformResponse: [(v) => v],
+      timeout: ONE_SECOND * 30,
+    });
+  }
+
+  checkDnsRecord(domain, recordType) {
+    return axios.get('/check_dns_record', {
+      params: { domain: domain, record_type: recordType },
+      baseURL: this.baseURL,
+      headers: {
+        'Authorization': this.token
+      },
+      timeout: TIMEOUT
+    });
+  }
+
+  repairDnsRecord(domain, recordType) {
+    return axios.put('/repair_dns_record',
+      JSON.stringify({ domain: domain, record_type: recordType }),
+      {
+        baseURL: this.baseURL,
+        headers: {
+          'Authorization': this.token
+        },
+        timeout: TIMEOUT
+      }
+    );
+  }
+
   // Admin — User Management
 
   listUsers() {
