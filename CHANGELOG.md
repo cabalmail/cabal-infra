@@ -7,13 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.9.13] - Unreleased
 
-### Fixed
-- macOS client message list: rows now claim the full width of the
-  message-list column. Previously, when the folder sidebar was
-  showing, the row content rendered at intrinsic width and the date
-  hugged the sender, leaving roughly half the column empty; hiding
-  the sidebar happened to trigger a relayout that masked the
-  problem (#385).
+### Changed
+- macOS client navigation: the Mail / Addresses / Folders chooser is
+  now a top tab bar instead of a left sidebar. Stacking that sidebar
+  next to `MailRootView`'s folder sidebar made SwiftUI's column
+  distribution leave the message list with too little room and a
+  reserved-but-empty band, so message rows wrapped one character at
+  a time while the detail pane hogged the window (#385). iPhone,
+  iPad, and visionOS continue to use `.sidebarAdaptable` because
+  they only have one split view at a time.
 
 ## [0.9.12] - 2006-05-08
 

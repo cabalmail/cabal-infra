@@ -251,13 +251,6 @@ private struct MessageRow: View {
                     .foregroundStyle(.primary)
             }
         }
-        // Force the row to claim the full column width. Without this, on
-        // macOS the inner HStack's `Spacer()` doesn't always propagate an
-        // expand-horizontally hint through the surrounding VStack, so the
-        // row ends up at intrinsic width and the date hugs the sender. The
-        // symptom is most visible when the folder sidebar is showing — a
-        // layout pass triggered by hiding the sidebar happens to relayout
-        // the row to fill, masking the issue.
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 

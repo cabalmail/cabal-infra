@@ -3,12 +3,15 @@ import CabalmailKit
 
 /// Signed-in tab root — Mail / Addresses / Folders / Settings.
 ///
-/// Uses the SwiftUI 18 `TabView(selection:)` + `Tab { … }` surface with the
-/// `.sidebarAdaptable` style so iPhone gets a tab bar, iPad / visionOS get
-/// a sidebar that collapses to a tab bar in compact trait environments,
-/// and macOS shows a sidebar by default. The Settings tab is hidden on
-/// macOS because the Settings scene wired to ⌘, in `CabalmailMacApp`
-/// already covers that ground per the plan.
+/// Uses the SwiftUI 18 `TabView(selection:)` + `Tab { … }` surface. iOS,
+/// iPadOS, and visionOS use `.sidebarAdaptable` so iPhone gets a tab bar
+/// while iPad / visionOS get a sidebar that collapses in compact trait
+/// environments. macOS sticks with the default tab-bar style: showing a
+/// second sidebar at this level would compete with the folder sidebar
+/// inside `MailRootView`'s `NavigationSplitView` and squeeze the message
+/// list into a tiny column whenever both were visible (#385). The
+/// Settings tab is hidden on macOS because the Settings scene wired to
+/// ⌘, in `CabalmailMacApp` already covers that ground per the plan.
 struct SignedInRootView: View {
     enum Section: Hashable {
         case mail
@@ -38,7 +41,9 @@ struct SignedInRootView: View {
             }
             #endif
         }
+        #if !os(macOS)
         .tabViewStyle(.sidebarAdaptable)
+        #endif
         .overlay(alignment: .top) {
             statusBanners
                 .animation(.default, value: isOffline)
