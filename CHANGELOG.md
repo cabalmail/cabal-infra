@@ -24,6 +24,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Apple work is implicated and `ubuntu-latest` otherwise. The macOS
   path also installs XcodeGen, SwiftLint, and xcbeautify and
   generates the Xcode project, mirroring `apple.yml`.
+- macOS client navigation: addresses and folder administration moved
+  out of the main window into the Settings window (⌘,) as new
+  Addresses and Folders tabs alongside the existing General tab. The
+  main window therefore is just the mail UI, with no extra picker bar
+  competing with `MailRootView`'s `NavigationSplitView` for column
+  width — which had been crushing the message list whenever any
+  outer chooser was visible (#385). iPhone, iPad, and visionOS
+  continue to show every section in one `TabView` with
+  `.sidebarAdaptable`.
 
 ### Fixed
 - macOS client message list: rows now claim the full width of the

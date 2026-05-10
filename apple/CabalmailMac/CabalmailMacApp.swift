@@ -4,16 +4,19 @@ import CabalmailKit
 /// App entry point for the native macOS target.
 ///
 /// Shares the same observable roots as the iOS/iPadOS/visionOS target
-/// (`AppState`, `Preferences`) so the `Settings` scene wired to ⌘, can
-/// bind the same `Preferences` instance the main window uses. The iOS
-/// target hides the Settings tab on macOS since this scene replaces it.
+/// (`AppState`, `Preferences`) so every scene binds the same backing
+/// state. macOS gets two scenes: the main mail window and a tabbed
+/// Settings window (⌘,) with General / Addresses / Folders. Treating
+/// addresses and folders as configuration matches the standard Mac
+/// idiom and avoids the broken column distribution that crowding
+/// everything into a single window produced (#385).
 @main
 struct CabalmailMacApp: App {
     @State private var appState = AppState()
     @State private var preferences = Preferences(store: UbiquitousPreferenceStore())
 
     var body: some Scene {
-        WindowGroup {
+        WindowGroup("Cabalmail", id: "main") {
             ContentView()
                 .environment(appState)
                 .environment(preferences)
@@ -34,14 +37,13 @@ struct CabalmailMacApp: App {
         .commands {
             CabalmailCommands(appState: appState)
         }
-        #if os(macOS)
         Settings {
-            SettingsView()
+            SettingsTabsView()
                 .environment(appState)
                 .environment(preferences)
-                .frame(minWidth: 420, minHeight: 480)
+                .preferredColorScheme(colorScheme(for: preferences.theme))
+                .frame(minWidth: 520, minHeight: 480)
         }
-        #endif
     }
 
     private func colorScheme(for theme: AppTheme) -> ColorScheme? {
