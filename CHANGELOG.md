@@ -8,9 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.13] - Unreleased
 
 ### Changed
-- macOS client navigation: Addresses and Folders are now their own
-  windows reachable from the Window menu (and ⌘⌥1 / ⌘⌥2). The main
-  window therefore is just the mail UI, with no extra picker bar
+- macOS client navigation: addresses and folder administration moved
+  out of the main window into the Settings window (⌘,) as new
+  Addresses and Folders tabs alongside the existing General tab. The
+  main window therefore is just the mail UI, with no extra picker bar
   competing with `MailRootView`'s `NavigationSplitView` for column
   width — which had been crushing the message list whenever any
   outer chooser was visible (#385). iPhone, iPad, and visionOS

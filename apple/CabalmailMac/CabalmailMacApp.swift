@@ -5,11 +5,11 @@ import CabalmailKit
 ///
 /// Shares the same observable roots as the iOS/iPadOS/visionOS target
 /// (`AppState`, `Preferences`) so every scene binds the same backing
-/// state. macOS gets four scenes: the main mail window plus singleton
-/// Addresses and Folders windows reachable from the Window menu (and
-/// ⌘⌥1 / ⌘⌥2) — instead of crowding everything into one window via a
-/// tab picker (#385). The Settings scene wired to ⌘, replaces the iOS
-/// Settings tab.
+/// state. macOS gets two scenes: the main mail window and a tabbed
+/// Settings window (⌘,) with General / Addresses / Folders. Treating
+/// addresses and folders as configuration matches the standard Mac
+/// idiom and avoids the broken column distribution that crowding
+/// everything into a single window produced (#385).
 @main
 struct CabalmailMacApp: App {
     @State private var appState = AppState()
@@ -37,31 +37,12 @@ struct CabalmailMacApp: App {
         .commands {
             CabalmailCommands(appState: appState)
         }
-        Window("Addresses", id: "addresses") {
-            SecondaryWindowRoot {
-                AddressesView()
-            }
-            .environment(appState)
-            .environment(preferences)
-            .preferredColorScheme(colorScheme(for: preferences.theme))
-            .frame(minWidth: 480, minHeight: 360)
-        }
-        .keyboardShortcut("1", modifiers: [.command, .option])
-        Window("Folders", id: "folders") {
-            SecondaryWindowRoot {
-                FoldersAdminView()
-            }
-            .environment(appState)
-            .environment(preferences)
-            .preferredColorScheme(colorScheme(for: preferences.theme))
-            .frame(minWidth: 480, minHeight: 360)
-        }
-        .keyboardShortcut("2", modifiers: [.command, .option])
         Settings {
-            SettingsView()
+            SettingsTabsView()
                 .environment(appState)
                 .environment(preferences)
-                .frame(minWidth: 420, minHeight: 480)
+                .preferredColorScheme(colorScheme(for: preferences.theme))
+                .frame(minWidth: 520, minHeight: 480)
         }
     }
 
