@@ -34,6 +34,15 @@ struct CabalmailMacApp: App {
         .commands {
             CabalmailCommands(appState: appState)
         }
+        // Hide the OS title bar so the Mail / Addresses / Folders chooser
+        // in `SignedInRootView` can sit at the top of the window in a
+        // window-centered position. With the title bar visible, SwiftUI
+        // promotes the chooser into the toolbar's principal slot — which
+        // is centered between leading and trailing toolbar items, not the
+        // window itself, so the chooser drifts when those items change
+        // between tabs (#385). Traffic-light buttons still float in the
+        // top-left as macOS draws them independently.
+        .windowStyle(.hiddenTitleBar)
         #if os(macOS)
         Settings {
             SettingsView()
