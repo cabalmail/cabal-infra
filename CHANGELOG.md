@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.9.13] - Unreleased
 
+### Changed
+- `claude.yml` now routes Apple-tier work to a `macos-15` runner so
+  Claude can build and test against Xcode/simulators when iterating
+  on iOS/iPadOS/visionOS/macOS code. A `pick-runner` job inspects
+  the trigger context (the `apple` label on issues; `apple/**` paths
+  in a PR's diff for `@claude` mentions) and selects `macos-15` when
+  Apple work is implicated and `ubuntu-latest` otherwise. The macOS
+  path also installs XcodeGen, SwiftLint, and xcbeautify and
+  generates the Xcode project, mirroring `apple.yml`.
+
 ### Fixed
 - macOS client message list: rows now claim the full width of the
   message-list column. Previously, when the folder sidebar was
