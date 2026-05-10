@@ -208,6 +208,22 @@ locals {
       cache     = false
       cache_ttl = 0
     },
+    check_dns_record = {
+      runtime = "python3.13"
+
+      method    = "GET"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    repair_dns_record = {
+      runtime = "python3.13"
+
+      method    = "PUT"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
     list_addresses_admin = {
       runtime = "python3.13"
 
@@ -240,16 +256,16 @@ locals {
       cache     = false
       cache_ttl = 0
     },
-    get_preferences      = {
-      runtime   = "python3.13"
+    get_preferences = {
+      runtime = "python3.13"
 
       method    = "GET"
       memory    = 128
       cache     = false
       cache_ttl = 0
     },
-    set_preferences      = {
-      runtime   = "python3.13"
+    set_preferences = {
+      runtime = "python3.13"
 
       method    = "PUT"
       memory    = 128

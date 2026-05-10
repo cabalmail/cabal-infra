@@ -56,6 +56,32 @@ ul.report-list li.report-header span {
   white-space: nowrap;
 }
 
+ul.report-list a.ip-link,
+ul.report-list a.date-link {
+  color: inherit;
+  text-decoration: underline dotted;
+}
+
+ul.report-list a.ip-link:hover,
+ul.report-list a.date-link:hover {
+  text-decoration: underline;
+}
+
+ul.report-list button.date-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: underline dotted;
+}
+
+ul.report-list button.date-link:hover {
+  text-decoration: underline;
+}
+
 span.result.pass {
   color: #2e7d32;
   font-weight: bold;
@@ -64,6 +90,21 @@ span.result.pass {
 span.result.fail {
   color: #c62828;
   font-weight: bold;
+}
+
+button.result-fail {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-weight: bold;
+  color: #c62828;
+  cursor: pointer;
+  text-decoration: underline dotted;
+}
+
+button.result-fail:hover {
+  text-decoration: underline;
 }
 
 button.load-more {
@@ -76,4 +117,233 @@ button.load-more {
 p.empty {
   color: #888;
   font-style: italic;
+}
+
+/* --- Modal scaffold (shared by XML viewer and DNS check) --------------- */
+
+.source-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.source-window {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 880px;
+  max-height: 80vh;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+.source-window.dns-window {
+  max-width: 640px;
+}
+
+.source-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px 12px 18px;
+  background: #f5f5f5;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.source-header-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.source-header-label {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.source-header-subject {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: #666;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 48ch;
+}
+
+.source-header-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.source-tool {
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+  color: #333;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.source-tool:hover:not(:disabled) {
+  background: #eee;
+}
+
+.source-tool:disabled {
+  cursor: not-allowed;
+  color: #999;
+}
+
+.source-tool.dns-repair {
+  background: #1565c0;
+  border-color: #1565c0;
+  color: #fff;
+}
+
+.source-tool.dns-repair:hover:not(:disabled) {
+  background: #0d47a1;
+}
+
+.source-close {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  background: transparent;
+  color: #666;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.source-close:hover {
+  background: #eee;
+  color: #000;
+}
+
+.source-body {
+  flex: 1 1 auto;
+  overflow: auto;
+  margin: 0;
+  padding: 18px 22px;
+  background: #fafafa;
+  color: #222;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  tab-size: 2;
+}
+
+.source-status {
+  padding: 12px 0;
+  color: #666;
+  font-size: 12px;
+}
+
+/* --- DNS check modal --------------------------------------------------- */
+
+.dns-body {
+  font-family: inherit;
+  white-space: normal;
+  word-break: normal;
+  font-size: 13px;
+}
+
+.dns-status {
+  padding: 12px 0;
+  color: #666;
+}
+
+.dns-banner {
+  padding: 10px 12px;
+  border-radius: 4px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.dns-banner.ok {
+  background: #e8f5e9;
+  border: 1px solid #a5d6a7;
+  color: #1b5e20;
+}
+
+.dns-banner.warn {
+  background: #fff8e1;
+  border: 1px solid #ffe082;
+  color: #6d4c00;
+}
+
+.dns-banner.err {
+  background: #ffebee;
+  border: 1px solid #ef9a9a;
+  color: #b71c1c;
+}
+
+.dns-section {
+  margin-bottom: 14px;
+}
+
+.dns-section h4 {
+  margin: 0 0 6px 0;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #555;
+}
+
+.dns-kv {
+  display: grid;
+  grid-template-columns: 5em 1fr;
+  gap: 4px 12px;
+  margin: 0;
+}
+
+.dns-kv dt {
+  color: #666;
+  font-size: 12px;
+}
+
+.dns-kv dd {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.dns-kv dd.dns-value {
+  white-space: pre-wrap;
+}
+
+.dns-actual {
+  margin: 0;
+  padding: 8px 10px;
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.source-body-text {
+  display: block;
 }

@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.9.13] - Unreleased
 
+### Added
+- DMARC report dashboard now exposes investigation affordances per row.
+  Source IP cells link to the corresponding ARIN RDAP record so the
+  reporting party can be looked up in one click. Date cells link to a
+  modal that streams the original DMARC aggregate XML (the
+  `process_dmarc` Lambda now uploads each report's raw XML to
+  `cache.<control_domain>` under `dmarc/<date>/<org>-<id>.xml`, and
+  `list_dmarc_reports` returns a presigned `xml_url` per row). When
+  DKIM or SPF reports `fail`, the badge becomes a button that opens a
+  diagnostic modal showing the expected DNS record (the linking CNAME
+  to `cabal._domainkey.<control_domain>` for DKIM, the linking
+  `v=spf1 include:<control_domain> ~all` TXT for SPF) alongside what
+  is currently published. If the failing domain is a managed
+  subdomain of a Cabal mail domain and the linking record is missing
+  or wrong, a Repair button publishes the correct record via Route 53
+  (UPSERT). Two new admin-only API endpoints back this:
+  `GET /check_dns_record` and `PUT /repair_dns_record`. Apex domains
+  are flagged but never auto-repaired - the apex stays records-free
+  by design.
+
 ### Changed
 - macOS client navigation: the Mail / Addresses / Folders chooser is
   now a top tab bar instead of a left sidebar. Stacking that sidebar

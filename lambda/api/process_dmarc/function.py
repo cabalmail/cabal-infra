@@ -5,6 +5,7 @@ import gzip
 import io
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -16,10 +17,12 @@ control_domain = os.environ['CONTROL_DOMAIN']
 table_name = os.environ['DMARC_TABLE_NAME']
 dmarc_user = os.environ.get('DMARC_USER', 'dmarc')
 ping_param = os.environ.get('HEALTHCHECK_PING_PARAM', '')
+xml_bucket = f'cache.{control_domain}'
 
 ssm = boto3.client('ssm')
 ddb = boto3.resource('dynamodb')
 table = ddb.Table(table_name)
+s3 = boto3.client('s3')
 
 PROCESSED_FOLDER = 'INBOX.Processed'
 
@@ -148,12 +151,41 @@ def parse_dmarc_xml(xml_data):
     return records
 
 
-def write_records(records):
+def _safe_segment(value):
+    '''Sanitises a string for safe use as part of an S3 key'''
+    cleaned = re.sub(r'[^A-Za-z0-9._-]+', '_', value or '')
+    return cleaned.strip('_') or 'unknown'
+
+
+def xml_key_for(meta):
+    '''Builds the S3 key under which the raw XML is stored'''
+    return (
+        f"dmarc/{_safe_segment(meta['date_end'])}/"
+        f"{_safe_segment(meta['org_name'])}-{_safe_segment(meta['report_id'])}.xml"
+    )
+
+
+def upload_xml(xml_data, key):
+    '''Uploads the raw DMARC report XML to S3'''
+    try:
+        s3.put_object(
+            Bucket=xml_bucket,
+            Key=key,
+            Body=xml_data,
+            ContentType='application/xml'
+        )
+        return True
+    except Exception as err:  # pylint: disable=broad-exception-caught
+        print(f'Failed to upload XML to s3://{xml_bucket}/{key}: {err}')
+        return False
+
+
+def write_records(records, xml_key):
     '''Writes parsed DMARC records to DynamoDB'''
     written = 0
     with table.batch_writer() as batch:
         for rec in records:
-            batch.put_item(Item={
+            item = {
                 'pk': f"{rec['header_from']}#{rec['date_end']}",
                 'sk': f"{rec['source_ip']}#{rec['report_id']}",
                 'org_name': rec['org_name'],
@@ -166,7 +198,10 @@ def write_records(records):
                 'dkim_result': rec['dkim_result'],
                 'spf_result': rec['spf_result'],
                 'header_from': rec['header_from']
-            })
+            }
+            if xml_key:
+                item['xml_key'] = xml_key
+            batch.put_item(Item=item)
             written += 1
     return written
 
@@ -224,7 +259,9 @@ def process_message(msg_data):
 
         records = parse_dmarc_xml(xml_data)
         if records:
-            total += write_records(records)
+            key = xml_key_for(records[0])
+            stored = upload_xml(xml_data, key)
+            total += write_records(records, key if stored else '')
             print(f'Wrote {len(records)} records from {filename}')
 
     return total
