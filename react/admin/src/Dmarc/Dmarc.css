@@ -124,7 +124,12 @@ p.empty {
   font-style: italic;
 }
 
-/* --- Modal scaffold (shared by XML viewer and DNS check) --------------- */
+/* --- Modal scaffold (shared by XML viewer and DNS check) ---------------
+   Uses the stately theme tokens (AppLight.css / AppDark.css) so the
+   modal tracks the OS prefers-color-scheme without per-rule overrides.
+   Banner palettes (ok / warn / err) need explicit dark variants since
+   there are no semantic success/warning tokens; those live in the
+   @media block at the bottom of this file. */
 
 .source-scrim {
   position: fixed;
@@ -134,7 +139,7 @@ p.empty {
   align-items: center;
   justify-content: center;
   padding: 40px;
-  background: rgba(0, 0, 0, 0.45);
+  background: oklch(0 0 0 / 0.45);
 }
 
 .source-window {
@@ -143,10 +148,11 @@ p.empty {
   width: 100%;
   max-width: 880px;
   max-height: 80vh;
-  background: #fff;
-  border: 1px solid #ccc;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-modal);
   overflow: hidden;
 }
 
@@ -159,8 +165,8 @@ p.empty {
   align-items: center;
   gap: 12px;
   padding: 12px 14px 12px 18px;
-  background: #f5f5f5;
-  border-bottom: 1px solid #e0e0e0;
+  background: var(--pane-bg);
+  border-bottom: 1px solid var(--border-faint);
 }
 
 .source-header-title {
@@ -174,12 +180,13 @@ p.empty {
 .source-header-label {
   font-size: 13.5px;
   font-weight: 600;
+  color: var(--ink);
 }
 
 .source-header-subject {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px;
-  color: #666;
+  color: var(--ink-quiet);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -196,31 +203,34 @@ p.empty {
 .source-tool {
   height: 26px;
   padding: 0 10px;
-  border: 1px solid #ccc;
+  border: 1px solid var(--border);
   border-radius: 4px;
-  background: #fff;
-  color: #333;
+  background: var(--surface);
+  color: var(--ink-soft);
   font-size: 11.5px;
   cursor: pointer;
 }
 
 .source-tool:hover:not(:disabled) {
-  background: #eee;
+  background: var(--surface-hover);
+  color: var(--ink);
 }
 
 .source-tool:disabled {
   cursor: not-allowed;
-  color: #999;
+  color: var(--ink-quiet);
 }
 
 .source-tool.dns-repair {
-  background: #1565c0;
-  border-color: #1565c0;
-  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
 }
 
 .source-tool.dns-repair:hover:not(:disabled) {
-  background: #0d47a1;
+  background: color-mix(in oklch, var(--accent) 80%, black);
+  border-color: color-mix(in oklch, var(--accent) 80%, black);
+  color: var(--accent-fg);
 }
 
 .source-close {
@@ -230,15 +240,15 @@ p.empty {
   height: 28px;
   border: 0;
   background: transparent;
-  color: #666;
+  color: var(--ink-quiet);
   cursor: pointer;
   border-radius: 4px;
   font-size: 14px;
 }
 
 .source-close:hover {
-  background: #eee;
-  color: #000;
+  background: var(--surface-hover);
+  color: var(--ink);
 }
 
 .source-body {
@@ -246,8 +256,8 @@ p.empty {
   overflow: auto;
   margin: 0;
   padding: 18px 22px;
-  background: #fafafa;
-  color: #222;
+  background: var(--reader-bg);
+  color: var(--ink-soft);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
   line-height: 1.55;
@@ -258,7 +268,7 @@ p.empty {
 
 .source-status {
   padding: 12px 0;
-  color: #666;
+  color: var(--ink-quiet);
   font-size: 12px;
 }
 
@@ -269,11 +279,12 @@ p.empty {
   white-space: normal;
   word-break: normal;
   font-size: 13px;
+  color: var(--ink);
 }
 
 .dns-status {
   padding: 12px 0;
-  color: #666;
+  color: var(--ink-quiet);
 }
 
 .dns-banner {
@@ -284,22 +295,23 @@ p.empty {
   line-height: 1.45;
 }
 
+/* Light-mode banner palette (default). Dark overrides are at the bottom. */
 .dns-banner.ok {
-  background: #e8f5e9;
-  border: 1px solid #a5d6a7;
-  color: #1b5e20;
+  background: oklch(0.95 0.05 150);
+  border: 1px solid oklch(0.78 0.10 150);
+  color: oklch(0.32 0.12 150);
 }
 
 .dns-banner.warn {
-  background: #fff8e1;
-  border: 1px solid #ffe082;
-  color: #6d4c00;
+  background: oklch(0.96 0.07 85);
+  border: 1px solid oklch(0.82 0.11 85);
+  color: oklch(0.40 0.10 80);
 }
 
 .dns-banner.err {
-  background: #ffebee;
-  border: 1px solid #ef9a9a;
-  color: #b71c1c;
+  background: oklch(0.94 0.06 25);
+  border: 1px solid oklch(0.78 0.13 25);
+  color: oklch(0.40 0.15 25);
 }
 
 .dns-section {
@@ -311,7 +323,7 @@ p.empty {
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #555;
+  color: var(--ink-quiet);
 }
 
 .dns-kv {
@@ -322,7 +334,7 @@ p.empty {
 }
 
 .dns-kv dt {
-  color: #666;
+  color: var(--ink-quiet);
   font-size: 12px;
 }
 
@@ -330,6 +342,7 @@ p.empty {
   margin: 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
+  color: var(--ink-soft);
   word-break: break-all;
 }
 
@@ -340,15 +353,34 @@ p.empty {
 .dns-actual {
   margin: 0;
   padding: 8px 10px;
-  background: #f5f5f5;
-  border: 1px solid #ddd;
+  background: var(--pane-bg);
+  border: 1px solid var(--border);
   border-radius: 4px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
+  color: var(--ink-soft);
   white-space: pre-wrap;
   word-break: break-all;
 }
 
 .source-body-text {
   display: block;
+}
+
+@media (prefers-color-scheme: dark) {
+  .dns-banner.ok {
+    background: oklch(0.28 0.06 150);
+    border-color: oklch(0.45 0.10 150);
+    color: oklch(0.88 0.12 150);
+  }
+  .dns-banner.warn {
+    background: oklch(0.28 0.06 85);
+    border-color: oklch(0.45 0.10 85);
+    color: oklch(0.88 0.11 85);
+  }
+  .dns-banner.err {
+    background: oklch(0.28 0.07 25);
+    border-color: oklch(0.45 0.12 25);
+    color: oklch(0.85 0.13 25);
+  }
 }
