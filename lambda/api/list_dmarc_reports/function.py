@@ -7,7 +7,7 @@ from helper import sign_url  # pylint: disable=import-error
 
 table_name = os.environ.get('DMARC_TABLE_NAME', 'cabal-dmarc-reports')
 control_domain = os.environ['CONTROL_DOMAIN']
-xml_bucket = f'cache.{control_domain}'
+XML_BUCKET = f'cache.{control_domain}'
 
 ddb = boto3.resource('dynamodb')
 table = ddb.Table(table_name)
@@ -53,7 +53,7 @@ def handler(event, _context):
                 'dkim_result': item.get('dkim_result', ''),
                 'spf_result': item.get('spf_result', ''),
                 'header_from': item.get('header_from', ''),
-                'xml_url': sign_url(xml_bucket, xml_key) if xml_key else ''
+                'xml_url': sign_url(XML_BUCKET, xml_key) if xml_key else ''
             })
 
         result = {'Reports': reports}

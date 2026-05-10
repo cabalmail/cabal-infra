@@ -3,43 +3,19 @@ import json
 import os
 import dns.exception  # pylint: disable=import-error
 import dns.resolver  # pylint: disable=import-error
+from helper import admin_response_or_none, find_managed_apex  # pylint: disable=import-error
 
-domains = json.loads(os.environ['DOMAINS'])
-control_domain = os.environ['CONTROL_DOMAIN']
-
-
-def admin_check(event):
-    '''Returns a 403 response when the caller lacks the admin group'''
-    groups = event['requestContext']['authorizer']['claims'].get('cognito:groups', '')
-    if 'admin' not in groups:
-        return {
-            'statusCode': 403,
-            'body': json.dumps({'Error': 'Admin access required'})
-        }
-    return None
-
-
-def find_managed_apex(domain):
-    '''Returns the managed apex (and zone id) that owns `domain`, or (None, None)'''
-    domain = (domain or '').lower().rstrip('.')
-    best = None
-    for apex, zone_id in domains.items():
-        apex_lower = apex.lower()
-        if domain == apex_lower or domain.endswith('.' + apex_lower):
-            if best is None or len(apex_lower) > len(best[0]):
-                best = (apex_lower, zone_id)
-    if best is None:
-        return (None, None)
-    return best
+DOMAINS = json.loads(os.environ['DOMAINS'])
+CONTROL_DOMAIN = os.environ['CONTROL_DOMAIN']
 
 
 def expected_record(record_type, domain):
     '''Returns the expected (type, name, value) tuple for the record'''
     domain = domain.rstrip('.')
     if record_type == 'dkim':
-        return ('CNAME', f'cabal._domainkey.{domain}', f'cabal._domainkey.{control_domain}')
+        return ('CNAME', f'cabal._domainkey.{domain}', f'cabal._domainkey.{CONTROL_DOMAIN}')
     if record_type == 'spf':
-        return ('TXT', domain, f'v=spf1 include:{control_domain} ~all')
+        return ('TXT', domain, f'v=spf1 include:{CONTROL_DOMAIN} ~all')
     raise ValueError(f'Unsupported record_type: {record_type}')
 
 
@@ -69,45 +45,52 @@ def matches(record_type, expected_value, actual_values):
     if not actual_values:
         return False
     if record_type == 'dkim':
-        return expected_value.lower().rstrip('.') in [v.lower().rstrip('.') for v in actual_values]
+        wanted = expected_value.lower().rstrip('.')
+        return wanted in [v.lower().rstrip('.') for v in actual_values]
     if record_type == 'spf':
         return any(v.strip() == expected_value for v in actual_values)
     return False
 
 
-def handler(event, _context):
-    '''Checks the DKIM or SPF record published for a domain'''
-    denial = admin_check(event)
-    if denial:
-        return denial
+def summarise_actual(actual):
+    '''Normalises a lookup() return into the API response shape'''
+    if actual is None:
+        return {'status': 'nxdomain', 'values': []}
+    if not actual:
+        return {'status': 'no_records', 'values': []}
+    return {'status': 'found', 'values': actual}
+
+
+def parse_request(event):
+    '''Returns ((domain, record_type), None) on success or (None, error_response).'''
     params = event.get('queryStringParameters') or {}
     domain = (params.get('domain') or '').strip().lower().rstrip('.')
     record_type = (params.get('record_type') or '').strip().lower()
     if not domain or record_type not in ('dkim', 'spf'):
-        return {
+        return (None, {
             'statusCode': 400,
             'body': json.dumps({'Error': 'domain and record_type (dkim|spf) are required'})
-        }
+        })
+    return ((domain, record_type), None)
 
-    apex, _zone_id = find_managed_apex(domain)
+
+def handler(event, _context):
+    '''Checks the DKIM or SPF record published for a domain'''
+    denial = admin_response_or_none(event)
+    if denial:
+        return denial
+    parsed, err = parse_request(event)
+    if err:
+        return err
+    domain, record_type = parsed
+
+    apex, _zone_id = find_managed_apex(DOMAINS, domain)
     managed = apex is not None
     is_apex = managed and domain == apex
 
     rtype, name, expected = expected_record(record_type, domain)
     actual = lookup(name, rtype)
-
-    if actual is None:
-        actual_status = 'nxdomain'
-        actual_values = []
-    elif not actual:
-        actual_status = 'no_records'
-        actual_values = []
-    else:
-        actual_status = 'found'
-        actual_values = actual
-
     is_match = matches(record_type, expected, actual or [])
-    repairable = managed and not is_apex and not is_match
 
     return {
         'statusCode': 200,
@@ -117,16 +100,9 @@ def handler(event, _context):
             'managed': managed,
             'managed_apex': apex or '',
             'is_apex': is_apex,
-            'expected': {
-                'type': rtype,
-                'name': name,
-                'value': expected
-            },
-            'actual': {
-                'status': actual_status,
-                'values': actual_values
-            },
+            'expected': {'type': rtype, 'name': name, 'value': expected},
+            'actual': summarise_actual(actual),
             'matches': is_match,
-            'repairable': repairable
+            'repairable': managed and not is_apex and not is_match
         })
     }

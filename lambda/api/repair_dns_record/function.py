@@ -2,36 +2,12 @@
 import json
 import os
 import boto3  # pylint: disable=import-error
+from helper import admin_response_or_none, find_managed_apex  # pylint: disable=import-error
 
-domains = json.loads(os.environ['DOMAINS'])
-control_domain = os.environ['CONTROL_DOMAIN']
+DOMAINS = json.loads(os.environ['DOMAINS'])
+CONTROL_DOMAIN = os.environ['CONTROL_DOMAIN']
 
 r53 = boto3.client('route53')
-
-
-def admin_check(event):
-    '''Returns a 403 response when the caller lacks the admin group'''
-    groups = event['requestContext']['authorizer']['claims'].get('cognito:groups', '')
-    if 'admin' not in groups:
-        return {
-            'statusCode': 403,
-            'body': json.dumps({'Error': 'Admin access required'})
-        }
-    return None
-
-
-def find_managed_apex(domain):
-    '''Returns the managed apex (and zone id) that owns `domain`, or (None, None)'''
-    domain = (domain or '').lower().rstrip('.')
-    best = None
-    for apex, zone_id in domains.items():
-        apex_lower = apex.lower()
-        if domain == apex_lower or domain.endswith('.' + apex_lower):
-            if best is None or len(apex_lower) > len(best[0]):
-                best = (apex_lower, zone_id)
-    if best is None:
-        return (None, None)
-    return best
 
 
 def upsert_record(zone_id, name, value, record_type):
@@ -52,65 +28,56 @@ def upsert_record(zone_id, name, value, record_type):
     )
 
 
-def handler(event, _context):
-    '''Publishes the linking DKIM or SPF record for a managed subdomain'''
-    denial = admin_check(event)
-    if denial:
-        return denial
+def record_for(record_type, domain):
+    '''Returns the (type, name, value) tuple to publish for the linking record'''
+    if record_type == 'dkim':
+        return ('CNAME', f'cabal._domainkey.{domain}', f'cabal._domainkey.{CONTROL_DOMAIN}')
+    return ('TXT', domain, f'"v=spf1 include:{CONTROL_DOMAIN} ~all"')
+
+
+def _err(status, message):
+    '''Builds a JSON error response'''
+    return {'statusCode': status, 'body': json.dumps({'Error': message})}
+
+
+def validate(event):
+    '''Returns ((domain, record_type, zone_id), None) or (None, error_response).'''
     try:
         body = json.loads(event.get('body') or '{}')
     except json.JSONDecodeError:
-        return {
-            'statusCode': 400,
-            'body': json.dumps({'Error': 'Invalid JSON body'})
-        }
+        return (None, _err(400, 'Invalid JSON body'))
     domain = (body.get('domain') or '').strip().lower().rstrip('.')
     record_type = (body.get('record_type') or '').strip().lower()
     if not domain or record_type not in ('dkim', 'spf'):
-        return {
-            'statusCode': 400,
-            'body': json.dumps({'Error': 'domain and record_type (dkim|spf) are required'})
-        }
-
-    apex, zone_id = find_managed_apex(domain)
+        return (None, _err(400, 'domain and record_type (dkim|spf) are required'))
+    apex, zone_id = find_managed_apex(DOMAINS, domain)
     if not apex:
-        return {
-            'statusCode': 400,
-            'body': json.dumps({'Error': f'{domain} is not managed by Cabal'})
-        }
+        return (None, _err(400, f'{domain} is not managed by Cabal'))
     if domain == apex:
-        return {
-            'statusCode': 400,
-            'body': json.dumps({'Error': 'Apex records are not configured by design'})
-        }
+        return (None, _err(400, 'Apex records are not configured by design'))
+    return ((domain, record_type, zone_id), None)
 
-    if record_type == 'dkim':
-        rtype = 'CNAME'
-        name = f'cabal._domainkey.{domain}'
-        value = f'cabal._domainkey.{control_domain}'
-    else:
-        rtype = 'TXT'
-        name = domain
-        value = f'"v=spf1 include:{control_domain} ~all"'
 
+def handler(event, _context):
+    '''Publishes the linking DKIM or SPF record for a managed subdomain'''
+    denial = admin_response_or_none(event)
+    if denial:
+        return denial
+    parsed, err = validate(event)
+    if err:
+        return err
+    domain, record_type, zone_id = parsed
+    rtype, name, value = record_for(record_type, domain)
     try:
         upsert_record(zone_id, name, value, rtype)
-    except Exception as err:  # pylint: disable=broad-exception-caught
-        print(f'Failed to upsert {rtype} {name}: {err}')
-        return {
-            'statusCode': 500,
-            'body': json.dumps({'Error': str(err)})
-        }
-
+    except Exception as ex:  # pylint: disable=broad-exception-caught
+        print(f'Failed to upsert {rtype} {name}: {ex}')
+        return _err(500, str(ex))
     return {
         'statusCode': 200,
         'body': json.dumps({
             'domain': domain,
             'record_type': record_type,
-            'published': {
-                'type': rtype,
-                'name': name,
-                'value': value
-            }
+            'published': {'type': rtype, 'name': name, 'value': value}
         })
     }

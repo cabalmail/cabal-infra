@@ -17,7 +17,7 @@ control_domain = os.environ['CONTROL_DOMAIN']
 table_name = os.environ['DMARC_TABLE_NAME']
 dmarc_user = os.environ.get('DMARC_USER', 'dmarc')
 ping_param = os.environ.get('HEALTHCHECK_PING_PARAM', '')
-xml_bucket = f'cache.{control_domain}'
+XML_BUCKET = f'cache.{control_domain}'
 
 ssm = boto3.client('ssm')
 ddb = boto3.resource('dynamodb')
@@ -169,14 +169,14 @@ def upload_xml(xml_data, key):
     '''Uploads the raw DMARC report XML to S3'''
     try:
         s3.put_object(
-            Bucket=xml_bucket,
+            Bucket=XML_BUCKET,
             Key=key,
             Body=xml_data,
             ContentType='application/xml'
         )
         return True
     except Exception as err:  # pylint: disable=broad-exception-caught
-        print(f'Failed to upload XML to s3://{xml_bucket}/{key}: {err}')
+        print(f'Failed to upload XML to s3://{XML_BUCKET}/{key}: {err}')
         return False
 
 
