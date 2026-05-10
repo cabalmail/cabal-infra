@@ -93,14 +93,19 @@ span.result.fail {
 }
 
 button.result-fail {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
   background: none;
   border: 0;
-  padding: 0;
+  text-align: left;
   font: inherit;
   font-weight: bold;
   color: #c62828;
   cursor: pointer;
-  text-decoration: underline dotted;
+  text-decoration: none;
 }
 
 button.result-fail:hover {
