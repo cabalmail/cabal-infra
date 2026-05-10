@@ -1,26 +1,20 @@
 import SwiftUI
 import CabalmailKit
 
-/// Signed-in tab root — Mail / Addresses / Folders / Settings.
+/// Signed-in root.
 ///
-/// iOS, iPadOS, and visionOS use a SwiftUI 18 `TabView` with the
-/// `.sidebarAdaptable` style so iPhone gets a tab bar while iPad /
-/// visionOS get a sidebar that collapses in compact trait environments.
-/// macOS uses a custom segmented `Picker` pinned in a window-centered
-/// header bar instead, for two reasons:
-///   1. `.sidebarAdaptable` on macOS would render a second sidebar
-///      stacked next to `MailRootView`'s folder sidebar; SwiftUI's
-///      column distribution couldn't handle that and crushed the
-///      message list (#385).
-///   2. TabView's default macOS style puts the tabs in the toolbar's
-///      principal slot, which is centered between the leading and
-///      trailing toolbar items — so when the trailing items differ
-///      between tabs (Compose lives only on Mail), the chooser
-///      visibly shifts left/right as the user switches sections.
-/// The header-bar Picker is window-centered via `Spacer / Picker /
-/// Spacer` and stays put as the user navigates. The Settings tab is
-/// still hidden on macOS because `CabalmailMacApp` already wires the
-/// Settings scene to ⌘,.
+/// iOS, iPadOS, and visionOS show every section (Mail / Addresses /
+/// Folders / Settings) inside a SwiftUI 18 `TabView` with the
+/// `.sidebarAdaptable` style: iPhone gets a tab bar, iPad / visionOS
+/// get a sidebar that collapses in compact trait environments.
+///
+/// macOS doesn't tab between sections — it follows the standard Mac
+/// idiom and puts each non-mail section in its own window scene
+/// (`AddressesScene`, `FoldersScene` in `CabalmailMacApp`), reachable
+/// from the Window menu and ⌘⌥1 / ⌘⌥2. The main window therefore is
+/// just `MailRootView`, with no extra picker bar competing with its
+/// own `NavigationSplitView`. Settings continues to live in the
+/// dedicated Settings scene wired to ⌘,.
 struct SignedInRootView: View {
     enum Section: Hashable {
         case mail
@@ -46,24 +40,7 @@ struct SignedInRootView: View {
     @ViewBuilder
     private var platformBody: some View {
         #if os(macOS)
-        VStack(spacing: 0) {
-            HStack {
-                Spacer()
-                Picker("Section", selection: $selected) {
-                    Label("Mail", systemImage: "tray").tag(Section.mail)
-                    Label("Addresses", systemImage: "at").tag(Section.addresses)
-                    Label("Folders", systemImage: "folder").tag(Section.folders)
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .fixedSize()
-                Spacer()
-            }
-            .frame(height: 38)
-            .background(.regularMaterial)
-            Divider()
-            sectionContent
-        }
+        MailRootView()
         #else
         TabView(selection: $selected) {
             Tab("Mail", systemImage: "tray", value: Section.mail) {
@@ -81,16 +58,6 @@ struct SignedInRootView: View {
         }
         .tabViewStyle(.sidebarAdaptable)
         #endif
-    }
-
-    @ViewBuilder
-    private var sectionContent: some View {
-        switch selected {
-        case .mail:      MailRootView()
-        case .addresses: AddressesView()
-        case .folders:   FoldersAdminView()
-        case .settings:  EmptyView()
-        }
     }
 
     @ViewBuilder

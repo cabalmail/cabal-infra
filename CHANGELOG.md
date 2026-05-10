@@ -8,19 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.13] - Unreleased
 
 ### Changed
-- macOS client navigation: the Mail / Addresses / Folders chooser is
-  now a window-centered segmented picker pinned to the top of the
-  window, replacing the left sidebar. Stacking the chooser as a
-  sidebar next to `MailRootView`'s folder sidebar made SwiftUI's
-  column distribution leave the message list with too little room
-  and a reserved-but-empty band, so message rows wrapped one
-  character at a time while the detail pane hogged the window
-  (#385). The window's title bar is hidden so the picker can sit at
-  a fixed window-centered position regardless of which section is
-  selected; traffic-light buttons still appear at the top-left as
-  macOS draws them independently. iPhone, iPad, and visionOS continue
-  to use `.sidebarAdaptable` because they only have one split view
-  at a time.
+- macOS client navigation: Addresses and Folders are now their own
+  windows reachable from the Window menu (and ⌘⌥1 / ⌘⌥2). The main
+  window therefore is just the mail UI, with no extra picker bar
+  competing with `MailRootView`'s `NavigationSplitView` for column
+  width — which had been crushing the message list whenever any
+  outer chooser was visible (#385). iPhone, iPad, and visionOS
+  continue to show every section in one `TabView` with
+  `.sidebarAdaptable`.
 
 ## [0.9.12] - 2006-05-08
 

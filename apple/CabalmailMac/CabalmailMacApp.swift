@@ -4,16 +4,19 @@ import CabalmailKit
 /// App entry point for the native macOS target.
 ///
 /// Shares the same observable roots as the iOS/iPadOS/visionOS target
-/// (`AppState`, `Preferences`) so the `Settings` scene wired to ⌘, can
-/// bind the same `Preferences` instance the main window uses. The iOS
-/// target hides the Settings tab on macOS since this scene replaces it.
+/// (`AppState`, `Preferences`) so every scene binds the same backing
+/// state. macOS gets four scenes: the main mail window plus singleton
+/// Addresses and Folders windows reachable from the Window menu (and
+/// ⌘⌥1 / ⌘⌥2) — instead of crowding everything into one window via a
+/// tab picker (#385). The Settings scene wired to ⌘, replaces the iOS
+/// Settings tab.
 @main
 struct CabalmailMacApp: App {
     @State private var appState = AppState()
     @State private var preferences = Preferences(store: UbiquitousPreferenceStore())
 
     var body: some Scene {
-        WindowGroup {
+        WindowGroup("Cabalmail", id: "main") {
             ContentView()
                 .environment(appState)
                 .environment(preferences)
@@ -34,23 +37,32 @@ struct CabalmailMacApp: App {
         .commands {
             CabalmailCommands(appState: appState)
         }
-        // Hide the OS title bar so the Mail / Addresses / Folders chooser
-        // in `SignedInRootView` can sit at the top of the window in a
-        // window-centered position. With the title bar visible, SwiftUI
-        // promotes the chooser into the toolbar's principal slot — which
-        // is centered between leading and trailing toolbar items, not the
-        // window itself, so the chooser drifts when those items change
-        // between tabs (#385). Traffic-light buttons still float in the
-        // top-left as macOS draws them independently.
-        .windowStyle(.hiddenTitleBar)
-        #if os(macOS)
+        Window("Addresses", id: "addresses") {
+            SecondaryWindowRoot {
+                AddressesView()
+            }
+            .environment(appState)
+            .environment(preferences)
+            .preferredColorScheme(colorScheme(for: preferences.theme))
+            .frame(minWidth: 480, minHeight: 360)
+        }
+        .keyboardShortcut("1", modifiers: [.command, .option])
+        Window("Folders", id: "folders") {
+            SecondaryWindowRoot {
+                FoldersAdminView()
+            }
+            .environment(appState)
+            .environment(preferences)
+            .preferredColorScheme(colorScheme(for: preferences.theme))
+            .frame(minWidth: 480, minHeight: 360)
+        }
+        .keyboardShortcut("2", modifiers: [.command, .option])
         Settings {
             SettingsView()
                 .environment(appState)
                 .environment(preferences)
                 .frame(minWidth: 420, minHeight: 480)
         }
-        #endif
     }
 
     private func colorScheme(for theme: AppTheme) -> ColorScheme? {
