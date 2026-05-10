@@ -43,12 +43,18 @@ struct FolderListView: View {
         // state.
         .task {
             if model == nil, let client = appState.client {
-                model = FolderListViewModel(client: client)
-                await model?.refresh()
-                if !didNotifyLoad, let folders = model?.folders, !folders.isEmpty {
+                let newModel = FolderListViewModel(client: client)
+                model = newModel
+                // Fetch + publish the folder list, then notify the parent so
+                // it can seed Inbox selection immediately. The unread-count
+                // walk runs afterwards in the background, so badges fill in
+                // without blocking the message list from loading.
+                await newModel.loadFolderList()
+                if !didNotifyLoad, !newModel.folders.isEmpty {
                     didNotifyLoad = true
-                    onFoldersLoaded(folders)
+                    onFoldersLoaded(newModel.folders)
                 }
+                await newModel.refreshUnreadCounts()
             }
         }
     }

@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.13] - Unreleased
+
+### Changed
+- Apple clients (iOS, iPadOS, visionOS, macOS) now apply mailbox
+  affordances optimistically. Swipe-to-mark-read/unread, swipe-to-
+  archive/delete, the message-detail mark-as-read/unread toolbar
+  button, and the message-detail archive/delete toolbar button all
+  flip the in-memory state (and the row's bold styling and unread
+  dot, where applicable) before the IMAP round trip. State reverts
+  if the server rejects the operation; for archive/delete from the
+  detail view a toast surfaces the failure since the row has already
+  been pruned. Mark-read changes from the detail view propagate to
+  the message list so the row updates without waiting for a refresh.
+- Apple clients now select the Inbox immediately on sign-in, as soon
+  as the folder list arrives. The per-folder unread-count walk runs
+  afterwards in the background, so sidebar badges fill in without
+  blocking the message list from loading.
+
 ## [0.9.12] - 2006-05-08
 
 ### Fixed

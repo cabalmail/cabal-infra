@@ -91,6 +91,18 @@ struct MessageListView: View {
             selection = current.flatMap { model?.nextUnreadEnvelope(after: $0) }
             model?.pruneEnvelope(uid: signal.uid)
         }
+        .onChange(of: appState.lastEnvelopeFlagChange) { _, signal in
+            // Detail view toggled \Seen (or another flag in the future).
+            // Apply it directly to the matching row so the bold styling +
+            // unread dot flip without waiting for the next IDLE refresh.
+            // Other folders ignore the signal.
+            guard let signal, signal.folderPath == folder.path else { return }
+            model?.applyFlagChange(
+                uid: signal.uid,
+                flag: signal.flag,
+                added: signal.added
+            )
+        }
     }
 
     @ViewBuilder

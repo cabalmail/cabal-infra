@@ -24,24 +24,43 @@ final class FolderListViewModel {
     }
 
     func refresh() async {
+        await loadFolderList()
+        await refreshUnreadCounts()
+    }
+
+    /// Fetch + publish the folder list without walking per-folder STATUS.
+    /// Split out so the parent view can seed a default selection (Inbox)
+    /// the moment the sidebar arrives — the unread-count walk fans out
+    /// across every folder and can take a second or two on first load,
+    /// during which there's no reason to leave the user staring at an
+    /// empty pane.
+    func loadFolderList() async {
         isLoading = true
         defer { isLoading = false }
         do {
             try await client.imapClient.connectAndAuthenticate()
             let all = try await client.imapClient.listFolders()
             folders = sortForSidebar(all)
-            unreadCounts = [:]
-            for folder in folders {
-                if let status = try? await client.imapClient.status(path: folder.path) {
-                    unreadCounts[folder.path] = status.unseen ?? 0
-                }
-            }
             errorMessage = nil
         } catch let error as CabalmailError {
             errorMessage = String(describing: error)
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// Walk each folder's `STATUS (UNSEEN)` and publish the counts in one
+    /// shot. Runs after `loadFolderList()` (and after the parent has had a
+    /// chance to seed a default selection), so the sidebar's unread badges
+    /// fill in without blocking initial navigation.
+    func refreshUnreadCounts() async {
+        var counts: [String: Int] = [:]
+        for folder in folders {
+            if let status = try? await client.imapClient.status(path: folder.path) {
+                counts[folder.path] = status.unseen ?? 0
+            }
+        }
+        unreadCounts = counts
     }
 
     /// Inbox first, then user folders alpha, then system folders grouped

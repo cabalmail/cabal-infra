@@ -14,8 +14,10 @@ import CabalmailKit
 @MainActor
 final class MessageListViewModel {
     let folder: Folder
-    private let client: CabalmailClient
-    private let preferences: Preferences
+    // Internal (not `private`) so the view model's same-module extensions
+    // in sibling files (`+Optimistic`, `+NextUnread`) can reach them.
+    let client: CabalmailClient
+    let preferences: Preferences
     private let pageSize: UInt32 = 50
 
     var envelopes: [Envelope] = []
@@ -231,17 +233,19 @@ final class MessageListViewModel {
     /// while the message is still in the current folder; post-move the UID
     /// no longer exists here so `STORE` would reject it.
     ///
-    /// After the server `UID MOVE` succeeds, the UID is pruned from both
-    /// the in-memory envelope list *and* the persistent envelope cache,
-    /// and the message body cache entry is dropped. Without the cache
-    /// prune, relaunching the app re-hydrated the Inbox from a snapshot
-    /// that still contained the archived UIDs — the "archived messages
-    /// reappear after relaunch" bug.
+    /// Optimistic UI: the row is removed from `envelopes` before the
+    /// server round trip so the swipe feels instant. If the move fails the
+    /// envelope is reinserted at its prior index. Cache pruning still waits
+    /// for server confirmation — without that gate, a transient failure
+    /// would leave the persistent snapshot disagreeing with the server.
     func dispose(_ envelope: Envelope) async {
         guard pendingDisposeUIDs.insert(envelope.uid).inserted else { return }
         defer { pendingDisposeUIDs.remove(envelope.uid) }
 
         let destination = preferences.disposeAction.destinationFolder
+        let originalIndex = envelopes.firstIndex { $0.uid == envelope.uid }
+        envelopes.removeAll { $0.uid == envelope.uid }
+
         do {
             if !envelope.flags.contains(.seen) {
                 try await client.imapClient.setFlags(
@@ -256,7 +260,6 @@ final class MessageListViewModel {
                 uids: [envelope.uid],
                 destination: destination
             )
-            envelopes.removeAll { $0.uid == envelope.uid }
             if let uidValidity {
                 try? await client.envelopeCache.remove(
                     uids: [envelope.uid],
@@ -269,6 +272,7 @@ final class MessageListViewModel {
                 )
             }
         } catch {
+            restoreEnvelope(envelope, at: originalIndex)
             errorMessage = "\(error)"
         }
     }
@@ -286,6 +290,14 @@ final class MessageListViewModel {
     func pruneEnvelope(uid: UInt32) {
         envelopes.removeAll { $0.uid == uid }
     }
+
+    /// Apply a flag toggle that originated outside the list (currently: the
+    /// detail view's Mark-as-read toggle). Updates the in-memory envelope so
+    /// the row's bold styling and unread dot match the new state without
+    /// waiting for IDLE. No-op when the UID isn't currently in the window.
+    func applyFlagChange(uid: UInt32, flag: Flag, added: Bool) {
+        applyOptimisticFlag(uid: uid, flag: flag, add: added)
+    }
 }
 
 // MARK: - Internals
@@ -294,42 +306,6 @@ final class MessageListViewModel {
 // 250-line cap. Same-file extension — all helpers remain file-private to
 // the view model.
 extension MessageListViewModel {
-    func setFlag(_ flag: Flag, add: Bool, envelope: Envelope) async {
-        do {
-            try await client.imapClient.setFlags(
-                folder: folder.path,
-                uids: [envelope.uid],
-                flags: [flag],
-                operation: add ? .add : .remove
-            )
-            if let index = envelopes.firstIndex(where: { $0.uid == envelope.uid }) {
-                var updated = envelopes[index]
-                var flags = updated.flags
-                if add { flags.insert(flag) } else { flags.remove(flag) }
-                updated = Envelope(
-                    uid: updated.uid,
-                    messageId: updated.messageId,
-                    date: updated.date,
-                    subject: updated.subject,
-                    from: updated.from,
-                    sender: updated.sender,
-                    replyTo: updated.replyTo,
-                    to: updated.to,
-                    cc: updated.cc,
-                    bcc: updated.bcc,
-                    inReplyTo: updated.inReplyTo,
-                    flags: flags,
-                    internalDate: updated.internalDate,
-                    size: updated.size,
-                    hasAttachments: updated.hasAttachments
-                )
-                envelopes[index] = updated
-            }
-        } catch {
-            errorMessage = "\(error)"
-        }
-    }
-
     private func hydrateFromCache() async {
         if let snapshot = await client.envelopeCache.snapshot(for: folder.path) {
             uidValidity = snapshot.uidValidity

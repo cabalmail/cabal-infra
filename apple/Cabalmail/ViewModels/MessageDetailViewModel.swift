@@ -45,6 +45,12 @@ final class MessageDetailViewModel {
     /// message read manually in the meantime.
     private var pendingMarkAsReadTask: Task<Void, Never>?
 
+    /// Hook for the view to relay flag changes to the list view model so the
+    /// list row's unread dot / bold styling flips immediately. Set by
+    /// `MessageDetailView` after construction so the model itself stays
+    /// decoupled from `AppState`.
+    var onFlagChanged: ((Flag, Bool) -> Void)?
+
     /// Delay for the `.afterDelay` mark-as-read mode. Matches the plan's
     /// "After delay (2s)" label and is low enough that a quick glance
     /// doesn't bleed over into "read."
@@ -102,6 +108,17 @@ final class MessageDetailViewModel {
     }
 
     private func setSeen(_ shouldBeSeen: Bool) async {
+        // Optimistic flip: update the toolbar icon and signal the list
+        // before the server round trip so the user sees the change land
+        // instantly. The pending delayed-mark-as-read task is cancelled
+        // because either path supersedes it. On STORE failure we revert
+        // the flag and the cross-view signal so the row goes back to its
+        // truthful state.
+        let previous = isSeen
+        isSeen = shouldBeSeen
+        pendingMarkAsReadTask?.cancel()
+        pendingMarkAsReadTask = nil
+        onFlagChanged?(.seen, shouldBeSeen)
         do {
             try await client.imapClient.setFlags(
                 folder: folder.path,
@@ -109,10 +126,9 @@ final class MessageDetailViewModel {
                 flags: [.seen],
                 operation: shouldBeSeen ? .add : .remove
             )
-            isSeen = shouldBeSeen
-            pendingMarkAsReadTask?.cancel()
-            pendingMarkAsReadTask = nil
         } catch {
+            isSeen = previous
+            onFlagChanged?(.seen, previous)
             errorMessage = "\(error)"
         }
     }
@@ -147,23 +163,36 @@ final class MessageDetailViewModel {
     /// `Preferences.disposeAction` at call time (Archive or Trash), mark
     /// `\Seen` before the move (archived == read, matching the React app),
     /// then run `UID MOVE` and prune both caches so a relaunch can't re-
-    /// hydrate the message into the list. `onSuccess` fires on the main
-    /// actor after all state writes settle; `MessageDetailView` uses it to
-    /// clear the split-view selection and signal the list to drop the UID
-    /// without waiting for the next IDLE refresh.
-    func dispose(onSuccess: (() -> Void)? = nil) async {
+    /// hydrate the message into the list.
+    ///
+    /// Optimistic UI: `onSuccess` fires before the server round trip so the
+    /// list selection advances to the next unread message instantly. The
+    /// list view also prunes the row in response. If the server work fails,
+    /// `onFailure` lets the view revert: the list re-inserts the row and
+    /// the user gets a toast. Cache pruning still waits for confirmation —
+    /// pruning before that would leave the persistent snapshot disagreeing
+    /// with the server on a transient failure.
+    func dispose(
+        onSuccess: (() -> Void)? = nil,
+        onFailure: ((Error) -> Void)? = nil
+    ) async {
         let destination = preferences.disposeAction.destinationFolder
+        let wasSeen = isSeen
+        if !isSeen {
+            isSeen = true
+            pendingMarkAsReadTask?.cancel()
+            pendingMarkAsReadTask = nil
+            onFlagChanged?(.seen, true)
+        }
+        onSuccess?()
         do {
-            if !isSeen {
+            if !wasSeen {
                 try await client.imapClient.setFlags(
                     folder: folder.path,
                     uids: [envelope.uid],
                     flags: [.seen],
                     operation: .add
                 )
-                isSeen = true
-                pendingMarkAsReadTask?.cancel()
-                pendingMarkAsReadTask = nil
             }
             try await client.imapClient.move(
                 folder: folder.path,
@@ -182,9 +211,9 @@ final class MessageDetailViewModel {
                     uid: envelope.uid
                 )
             }
-            onSuccess?()
         } catch {
             errorMessage = "\(error)"
+            onFailure?(error)
         }
     }
 
