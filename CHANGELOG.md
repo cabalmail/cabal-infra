@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.14] - 2026-05-10
+
+### Added
+- Apple clients: message detail view now has a flag toggle button alongside
+  the existing read/unread, archive/delete, remote-content, and reader-mode
+  buttons, bringing it to parity with the row context menu in the message
+  list.
+
+### Changed
+- Apple clients: message detail action buttons moved to a bottom toolbar on
+  iOS and visionOS so they no longer obscure the subject in the navigation
+  bar. The Mail/Addresses/Folders/Settings tab bar hides while a message is
+  open so it doesn't sit on top of the action toolbar, and reappears when
+  the user navigates back. macOS keeps the top toolbar.
+
 ## [0.9.13] - 2026-05-10
 
 ### Added

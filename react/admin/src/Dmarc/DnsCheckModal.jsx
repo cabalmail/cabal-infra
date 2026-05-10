@@ -34,7 +34,9 @@ function DnsCheckModal({ open, recordType, domain, onClose }) {
         setLoading(false);
       },
       (err) => {
-        setMessage('Failed to check DNS: ' + (err.message || err), true);
+        const body = err?.response?.data;
+        const detail = (body && (body.Error || body.message)) || err.message || String(err);
+        setMessage('Failed to check DNS: ' + detail, true);
         setLoading(false);
       }
     );

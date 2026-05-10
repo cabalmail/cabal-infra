@@ -115,6 +115,11 @@ Deploy workflows select environment based on branch: `main`=prod, `stage`=stage,
 
 ## Architecture Details
 
+### Domain Model
+
+- **Users, mailboxes, addresses.** 1 Cognito user <-> 1 mailbox, provisioned automatically by the post-confirmation Lambda (`lambda/counter`) when the user is confirmed. 1 mailbox <-> n addresses, managed by the user via the admin app's `new`/`revoke` API endpoints (rows in the `cabal-addresses` DynamoDB table). Addresses are a *user feature* — spinning them up per-vendor or per-purpose and revoking them when burned — not infrastructure.
+- **No apex addressing.** Mail domains in `TF_VAR_MAIL_DOMAINS` (e.g. `cabalmail.com`) host email *only* on subdomains. The apex itself has no MX, no A, no addressing — it's deliberate, not a missing feature. The IMAP tier's sendmail `check_mail` rule does an MX-then-A DNS lookup on the envelope sender and 553-rejects FROM addresses on the apex. Don't compose system-level FROM, NOTIFICATIONS_EMAIL, or service-account addresses on the apex; use **`mail-admin.<first-mail-domain>`** (provisioned by `terraform/infra/modules/app/dmarc_user.tf` with full MX/SPF/DKIM/DMARC) for system-originated mail. The local part is free to vary (`noreply@`, `healthchecks@`, etc.).
+
 ### Terraform Modules (`terraform/infra/modules/`)
 
 | Module | Purpose |
