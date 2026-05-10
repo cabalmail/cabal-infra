@@ -27,6 +27,10 @@ final class MessageDetailViewModel {
     /// so the UI stays coherent without a full refresh.
     var isSeen: Bool
 
+    /// Mirrors the server's `\Flagged` state. Same role as `isSeen`: lets the
+    /// toolbar render the right icon and updates optimistically on toggle.
+    var isFlagged: Bool
+
     /// Gate for remote-content loading in the `WKWebView`. Seeded from the
     /// `Preferences.loadRemoteContent` preference — Off leaves the user in
     /// control per-message, Always drops the block entirely. "Ask" starts
@@ -70,6 +74,7 @@ final class MessageDetailViewModel {
         self.client = client
         self.preferences = preferences
         self.isSeen = envelope.flags.contains(.seen)
+        self.isFlagged = envelope.flags.contains(.flagged)
         self.remoteContentAllowed = preferences.loadRemoteContent == .always
         self.readerMode = preferences.defaultBodyRenderMode == .reader
     }
@@ -148,6 +153,28 @@ final class MessageDetailViewModel {
                 guard !Task.isCancelled else { return }
                 await self?.setSeen(true)
             }
+        }
+    }
+
+    /// Flip the server's `\Flagged` bit. Optimistic update with revert-on-
+    /// failure mirrors `setSeen(_:)`; the cross-view signal lets the list
+    /// row's flag indicator appear or disappear without a refresh.
+    func toggleFlagged() async {
+        let previous = isFlagged
+        let shouldBeFlagged = !previous
+        isFlagged = shouldBeFlagged
+        onFlagChanged?(.flagged, shouldBeFlagged)
+        do {
+            try await client.imapClient.setFlags(
+                folder: folder.path,
+                uids: [envelope.uid],
+                flags: [.flagged],
+                operation: shouldBeFlagged ? .add : .remove
+            )
+        } catch {
+            isFlagged = previous
+            onFlagChanged?(.flagged, previous)
+            errorMessage = "\(error)"
         }
     }
 
