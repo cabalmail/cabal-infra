@@ -577,6 +577,17 @@
   color: var(--ink);
 }
 
+.compose-attachment-warning {
+  margin: 4px 12px 8px 12px;
+  padding: 6px 10px;
+  border: 1px solid var(--accent-soft, #f0c674);
+  background: var(--accent-softer, #fff8e1);
+  color: var(--ink);
+  border-radius: 4px;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
 /* Phase 8 — Sheet mode (phone). Compose fills the viewport with a top
    chrome row of [Cancel / title / Send] instead of the window buttons. */
 

@@ -216,6 +216,47 @@ export default class ApiClient {
     return response;
   }
 
+  // Attachment uploads
+  //
+  // API Gateway caps a Lambda-proxy request at 10 MB, so outbound
+  // attachments are uploaded directly to the cache bucket via presigned
+  // PUT URLs and then referenced by key in /send. Keys are minted by
+  // the /upload_url Lambda under `outbound/<user>/<uuid>/<filename>` and
+  // cleaned up by the bucket's lifecycle rule.
+
+  getAttachmentUploadUrls(files) {
+    return axios.put('/upload_url',
+      JSON.stringify({
+        host: this.host,
+        files: files.map(f => ({
+          filename: f.filename,
+          mime_type: f.mimeType,
+        })),
+      }),
+      {
+        baseURL: this.baseURL,
+        headers: {
+          'Authorization': this.token
+        },
+        timeout: TIMEOUT
+      }
+    );
+  }
+
+  uploadAttachmentToS3(url, blob, onProgress) {
+    return axios.put(url, blob, {
+      // Bypass the axios default of JSON-stringifying request bodies;
+      // the blob must hit S3 byte-for-byte. Likewise, no Authorization
+      // header — the presigned URL already carries its own signature.
+      transformRequest: [(d) => d],
+      headers: {
+        'Content-Type': blob.type || 'application/octet-stream',
+      },
+      timeout: ONE_SECOND * 120,
+      onUploadProgress: onProgress,
+    });
+  }
+
   // IMAP Messages
 
   moveMessages(source, destination, ids, order, field) {

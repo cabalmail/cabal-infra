@@ -8,10 +8,14 @@ const mockGetAddresses = vi.fn().mockResolvedValue({
   data: { Items: [{ address: 'user@test.com' }, { address: 'other@test.com' }] }
 });
 const mockSendMessage = vi.fn().mockResolvedValue({});
+const mockGetAttachmentUploadUrls = vi.fn();
+const mockUploadAttachmentToS3 = vi.fn().mockResolvedValue({});
 
 const mockApi = {
   getAddresses: mockGetAddresses,
   sendMessage: mockSendMessage,
+  getAttachmentUploadUrls: mockGetAttachmentUploadUrls,
+  uploadAttachmentToS3: mockUploadAttachmentToS3,
   newAddress: vi.fn().mockResolvedValue({ data: { address: 'new@test.com' } }),
 };
 
@@ -224,7 +228,10 @@ describe('ComposeOverlay', () => {
     }
   });
 
-  it('attaches a selected file and forwards it base64-encoded to /send', async () => {
+  it('uploads an attached file to S3 and forwards its key to /send', async () => {
+    mockGetAttachmentUploadUrls.mockResolvedValueOnce({
+      data: { uploads: [{ key: 'outbound/cog-user/uuid/note.txt', url: 'https://s3/put' }] }
+    });
     const { container, unmount } = renderCompose();
     try {
       await waitFor(() => {
@@ -247,12 +254,23 @@ describe('ComposeOverlay', () => {
       const file = new File(['hello'], 'note.txt', { type: 'text/plain' });
       fireEvent.change(fileInput, { target: { files: [file] } });
 
-      // Chip should appear once the FileReader finishes.
       await waitFor(() => {
         expect(screen.getByText('note.txt')).toBeInTheDocument();
       });
 
       fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+      await waitFor(() => {
+        expect(mockGetAttachmentUploadUrls).toHaveBeenCalled();
+      });
+      const urlArgs = mockGetAttachmentUploadUrls.mock.calls[0][0];
+      expect(urlArgs).toHaveLength(1);
+      expect(urlArgs[0].filename).toBe('note.txt');
+      expect(urlArgs[0].mimeType).toBe('text/plain');
+
+      await waitFor(() => {
+        expect(mockUploadAttachmentToS3).toHaveBeenCalledWith('https://s3/put', file);
+      });
 
       await waitFor(() => {
         expect(mockSendMessage).toHaveBeenCalled();
@@ -261,10 +279,11 @@ describe('ComposeOverlay', () => {
       // signature: smtp_host, sender, to, cc, bcc, subject, headers, html, text, draft, attachments
       const wireAttachments = args[10];
       expect(wireAttachments).toHaveLength(1);
-      expect(wireAttachments[0].filename).toBe('note.txt');
-      expect(wireAttachments[0].mime_type).toBe('text/plain');
-      // "hello" base64 = "aGVsbG8="
-      expect(wireAttachments[0].data).toBe('aGVsbG8=');
+      expect(wireAttachments[0]).toEqual({
+        filename: 'note.txt',
+        mime_type: 'text/plain',
+        s3_key: 'outbound/cog-user/uuid/note.txt',
+      });
     } finally {
       unmount();
     }
@@ -284,6 +303,27 @@ describe('ComposeOverlay', () => {
       });
       fireEvent.click(screen.getByRole('button', { name: 'Remove attachment note.txt' }));
       expect(screen.queryByText('note.txt')).not.toBeInTheDocument();
+    } finally {
+      unmount();
+    }
+  });
+
+  it('shows a warning when total attachment size exceeds 20 MB', async () => {
+    const { container, unmount } = renderCompose();
+    try {
+      await waitFor(() => {
+        expect(mockGetAddresses).toHaveBeenCalled();
+      });
+      const fileInput = container.querySelector('.compose-attachment-input');
+      // A 21 MB blob — Blob isn't memory-backed for File constructor in
+      // jsdom unless we feed bytes, so use a sparse buffer.
+      const bigBytes = new Uint8Array(21 * 1024 * 1024);
+      const big = new File([bigBytes], 'big.bin', { type: 'application/octet-stream' });
+      fireEvent.change(fileInput, { target: { files: [big] } });
+      await waitFor(() => {
+        expect(screen.getByText('big.bin')).toBeInTheDocument();
+      });
+      expect(screen.getByRole('status').textContent).toMatch(/delivery may fail/i);
     } finally {
       unmount();
     }

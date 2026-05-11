@@ -8,17 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Outgoing messages can now carry attachments end-to-end. The `/send` Lambda
-  accepts an optional `attachments` list (each entry: `filename`, `mime_type`,
-  base64 `data`), enforces an 8 MB total decoded-payload cap to stay under
-  API Gateway's request ceiling, and uses `EmailMessage.add_attachment` so
-  the wire message becomes a proper `multipart/mixed`. The React composer
-  grows a paperclip button that opens the file picker and renders chips for
-  each attached file (with size and a remove button). The Apple clients
-  thread `OutgoingMessage.attachments` (already populated by the existing
-  attachment picker UI) through `SendMessageRequest`, base64-encoding the
-  bytes on the wire so the Lambda receives the same shape from both
-  clients. Closes #377.
+- Outgoing messages can now carry attachments end-to-end. A new
+  `/upload_url` Lambda hands the client one presigned S3 PUT URL per
+  attachment so bodies are uploaded directly to the existing
+  `cache.<control_domain>` staging bucket (under
+  `outbound/<user>/<uuid>/<filename>`), bypassing API Gateway's 10 MB
+  request ceiling; the bucket's 2-day lifecycle rule cleans up unused
+  uploads. The `/send` Lambda then accepts attachment entries shaped
+  `{filename, mime_type, s3_key}`, validates each key's user segment
+  against the authenticated caller, fetches the bytes from S3, caps the
+  total payload at 25 MB on the server, and assembles a proper
+  `multipart/mixed` via `EmailMessage.add_attachment`. The React
+  composer grows a paperclip button, a chip strip with size and remove,
+  and a soft-warn banner when attachments total over 20 MB. The Apple
+  clients route `OutgoingMessage.attachments` through the same
+  upload-then-send flow and surface the same 20 MB warning in the
+  compose sheet. Closes #377.
 
 ## [0.9.15] - 2026-05-10
 

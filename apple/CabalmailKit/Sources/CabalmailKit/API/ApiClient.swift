@@ -91,12 +91,50 @@ public protocol ApiClient: Sendable {
     /// sendMessage` byte-for-byte.
     func sendMessage(_ request: SendMessageRequest) async throws
 
+    /// Requests one presigned S3 PUT URL per outbound attachment. Used to
+    /// bypass API Gateway's 10 MB request ceiling on /send — clients PUT
+    /// each body to the returned URL and then pass the `key` back via
+    /// `SendMessageRequest.attachments`.
+    func requestAttachmentUploads(
+        host: String,
+        files: [AttachmentUploadSlot]
+    ) async throws -> [AttachmentUpload]
+
+    /// Uploads raw bytes to a presigned PUT URL returned by
+    /// `/upload_url`. The presigned URL carries its own signature, so
+    /// no Authorization header is sent.
+    func uploadAttachment(url: URL, mimeType: String, data: Data) async throws
+
     /// Downloads raw bytes from a presigned URL returned by `/fetch_message`
     /// or `/fetch_attachment`. Bypasses the Cognito Authorization header —
     /// presigned URLs already carry their own credentials in the query
     /// string, and S3 rejects requests with both a Bearer header and a
     /// signed URL.
     func fetchPresignedData(url: URL) async throws -> Data
+}
+
+/// One entry in the `/upload_url` request. Carries only the metadata the
+/// Lambda needs to mint a key — bodies do not flow through API Gateway.
+public struct AttachmentUploadSlot: Sendable, Hashable {
+    public let filename: String
+    public let mimeType: String
+
+    public init(filename: String, mimeType: String) {
+        self.filename = filename
+        self.mimeType = mimeType
+    }
+}
+
+/// One entry in the `/upload_url` response. The caller PUTs the file body
+/// to `url` and then references the file by `key` in `SendMessageRequest`.
+public struct AttachmentUpload: Sendable, Hashable {
+    public let key: String
+    public let url: URL
+
+    public init(key: String, url: URL) {
+        self.key = key
+        self.url = url
+    }
 }
 
 // MARK: - Request types
@@ -205,18 +243,19 @@ public struct SendMessageRequest: Sendable {
     }
 }
 
-/// Wire-shape for a single outbound attachment. `data` is the raw file bytes
-/// — `URLSessionApiClient.sendMessage` base64-encodes them on the way out so
-/// the Lambda receives the JSON shape it expects.
+/// Wire-shape for a single outbound attachment. The body has already been
+/// uploaded to S3 via `/upload_url`; `s3Key` is the staging key the /send
+/// Lambda fetches from. `URLSessionApiClient.sendMessage` forwards this
+/// shape to the Lambda verbatim.
 public struct ApiSendAttachment: Sendable, Hashable {
     public let filename: String
     public let mimeType: String
-    public let data: Data
+    public let s3Key: String
 
-    public init(filename: String, mimeType: String, data: Data) {
+    public init(filename: String, mimeType: String, s3Key: String) {
         self.filename = filename
         self.mimeType = mimeType
-        self.data = data
+        self.s3Key = s3Key
     }
 }
 

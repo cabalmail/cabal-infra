@@ -272,14 +272,13 @@ final class ApiBackedImapClientTests: XCTestCase {
         XCTAssertEqual((payload?["attachments"] as? [[String: Any]])?.count, 0)
     }
 
-    func testSendMessageBase64EncodesAttachments() async throws {
+    func testSendMessageForwardsAttachmentS3Keys() async throws {
         let http = RecordingHTTPTransport(responses: [(Data(#"{"status":"submitted"}"#.utf8), 200)])
         let api = URLSessionApiClient(
             configuration: makeConfiguration(),
             authService: StubAuthService(),
             transport: http
         )
-        let payload = Data("hello".utf8)
         try await api.sendMessage(SendMessageRequest(
             host: "imap.example.com",
             smtpHost: "smtp-out.example.com",
@@ -296,7 +295,7 @@ final class ApiBackedImapClientTests: XCTestCase {
                 ApiSendAttachment(
                     filename: "note.txt",
                     mimeType: "text/plain",
-                    data: payload
+                    s3Key: "outbound/alice/uuid/note.txt"
                 ),
             ]
         ))
@@ -307,6 +306,69 @@ final class ApiBackedImapClientTests: XCTestCase {
         XCTAssertEqual(attachments?.count, 1)
         XCTAssertEqual(attachments?[0]["filename"] as? String, "note.txt")
         XCTAssertEqual(attachments?[0]["mime_type"] as? String, "text/plain")
-        XCTAssertEqual(attachments?[0]["data"] as? String, payload.base64EncodedString())
+        XCTAssertEqual(attachments?[0]["s3_key"] as? String, "outbound/alice/uuid/note.txt")
+        XCTAssertNil(attachments?[0]["data"])
+    }
+
+    func testRequestAttachmentUploadsRoundTripsLambdaPayload() async throws {
+        let body = #"""
+            {"uploads":[
+                {"key":"outbound/alice/uuid-a/a.txt","url":"https://s3.example.com/put-a"},
+                {"key":"outbound/alice/uuid-b/b.bin","url":"https://s3.example.com/put-b"}
+            ]}
+        """#
+        let http = RecordingHTTPTransport(responses: [(Data(body.utf8), 200)])
+        let api = URLSessionApiClient(
+            configuration: makeConfiguration(),
+            authService: StubAuthService(),
+            transport: http
+        )
+        let uploads = try await api.requestAttachmentUploads(
+            host: "imap.example.com",
+            files: [
+                AttachmentUploadSlot(filename: "a.txt", mimeType: "text/plain"),
+                AttachmentUploadSlot(filename: "b.bin", mimeType: "application/octet-stream"),
+            ]
+        )
+        XCTAssertEqual(uploads.count, 2)
+        XCTAssertEqual(uploads[0].key, "outbound/alice/uuid-a/a.txt")
+        XCTAssertEqual(uploads[0].url.absoluteString, "https://s3.example.com/put-a")
+        XCTAssertEqual(uploads[1].key, "outbound/alice/uuid-b/b.bin")
+
+        let requests = await http.requests
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertEqual(requests[0].httpMethod, "PUT")
+        XCTAssertTrue(requests[0].url!.absoluteString.contains("/upload_url"))
+        let payload = try JSONSerialization.jsonObject(with: requests[0].httpBody ?? Data()) as? [String: Any]
+        XCTAssertEqual(payload?["host"] as? String, "imap.example.com")
+        let files = payload?["files"] as? [[String: Any]]
+        XCTAssertEqual(files?.count, 2)
+        XCTAssertEqual(files?[0]["filename"] as? String, "a.txt")
+        XCTAssertEqual(files?[0]["mime_type"] as? String, "text/plain")
+    }
+
+    func testUploadAttachmentPUTsRawBytesToPresignedURL() async throws {
+        let http = RecordingHTTPTransport(responses: [(Data(), 200)])
+        let api = URLSessionApiClient(
+            configuration: makeConfiguration(),
+            authService: StubAuthService(),
+            transport: http
+        )
+        let bytes = Data("hello".utf8)
+        try await api.uploadAttachment(
+            url: URL(string: "https://s3.example.com/put-here")!,
+            mimeType: "text/plain",
+            data: bytes
+        )
+        let requests = await http.requests
+        XCTAssertEqual(requests.count, 1)
+        let request = requests[0]
+        XCTAssertEqual(request.httpMethod, "PUT")
+        XCTAssertEqual(request.url?.absoluteString, "https://s3.example.com/put-here")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "text/plain")
+        XCTAssertEqual(request.httpBody, bytes)
+        // Presigned URLs already carry credentials; ensure we did not add a
+        // Bearer token (which S3 rejects alongside a signed URL).
+        XCTAssertNil(request.value(forHTTPHeaderField: "Authorization"))
     }
 }

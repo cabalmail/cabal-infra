@@ -1,19 +1,25 @@
 '''Sends an email message'''
-import base64
-import binascii
 import json
+import re
 import smtplib
 from email.message import EmailMessage
 from email.utils import formatdate
 from helper import get_imap_client # pylint: disable=import-error
 from helper import get_mpw # pylint: disable=import-error
+from helper import get_object # pylint: disable=import-error
 from helper import user_authorized_for_sender # pylint: disable=import-error
 
-# API Gateway caps a Lambda-proxy request at 10 MB; the JSON envelope, the
-# headers, the bodies, and base64 overhead (~33 percent) all eat into that.
-# 8 MB of decoded attachment payload leaves enough headroom in the worst case
-# to still stay under the gateway limit.
-MAX_TOTAL_ATTACHMENT_BYTES = 8 * 1024 * 1024
+# Attachments are uploaded to S3 via the /upload_url Lambda's presigned
+# PUT URLs (the cache bucket's 2-day lifecycle handles cleanup). Total
+# decoded payload is hard-capped well above the React/Apple soft warning
+# at 20 MB so clients can present a friendly warning while a malformed
+# or hostile request still hits a server-side ceiling.
+MAX_TOTAL_ATTACHMENT_BYTES = 25 * 1024 * 1024
+ALLOWED_KEY_PREFIX = 'outbound'
+# Matches `outbound/<user>/<uuid>/<filename>` keys minted by upload_url.
+# The user segment must equal the authenticated caller; we still pin the
+# overall shape here so a malformed key is rejected before any S3 call.
+_KEY_SHAPE = re.compile(r'^outbound/([^/]+)/[^/]+/[^/]+$')
 
 def handler(event, _context):
     '''Sends an email message'''
@@ -28,8 +34,9 @@ def handler(event, _context):
             })
         }
 
+    bucket = body['host'].replace('imap', 'cache')
     try:
-        attachments = decode_attachments(body.get('attachments', []))
+        attachments = load_attachments(body.get('attachments', []), bucket, user)
     except ValueError as err:
         return {
             "statusCode": 400,
@@ -71,12 +78,14 @@ def handler(event, _context):
         })
     }
 
-def decode_attachments(raw):
-    """Validate and decode the optional attachment list from the request.
+def load_attachments(raw, bucket, user):
+    """Resolve attachment references against S3 and validate the bundle.
 
-    Each entry must carry `filename`, `mime_type`, and base64-encoded `data`.
-    The total decoded size is capped to keep the API Gateway request within
-    its 10 MB ceiling.
+    Each entry must carry `filename`, `mime_type`, and an `s3_key` minted
+    by /upload_url. The key's user segment is checked against the
+    authenticated caller so a request can't pull from another user's
+    upload prefix. Total fetched size is capped above the client-side
+    warning threshold as a defensive ceiling.
     """
     if not raw:
         return []
@@ -89,16 +98,21 @@ def decode_attachments(raw):
             raise ValueError(f"attachment {index} is not an object")
         filename = entry.get('filename')
         mime_type = entry.get('mime_type') or 'application/octet-stream'
-        data_b64 = entry.get('data')
+        s3_key = entry.get('s3_key')
         if not filename or not isinstance(filename, str):
             raise ValueError(f"attachment {index} is missing a filename")
-        if not data_b64 or not isinstance(data_b64, str):
-            raise ValueError(f"attachment {index} is missing data")
-        try:
-            data = base64.b64decode(data_b64, validate=True)
-        except (binascii.Error, ValueError) as err:
+        if not s3_key or not isinstance(s3_key, str):
+            raise ValueError(f"attachment {index} is missing s3_key")
+        match = _KEY_SHAPE.match(s3_key)
+        if not match or match.group(1) != user:
             raise ValueError(
-                f"attachment {index} ({filename}) is not valid base64"
+                f"attachment {index} ({filename}) has an invalid s3_key"
+            )
+        try:
+            data = get_object(bucket, s3_key)
+        except Exception as err: # pylint: disable=broad-except
+            raise ValueError(
+                f"attachment {index} ({filename}) could not be fetched from staging"
             ) from err
         total += len(data)
         if total > MAX_TOTAL_ATTACHMENT_BYTES:

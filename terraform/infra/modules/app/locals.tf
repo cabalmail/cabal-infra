@@ -131,9 +131,20 @@ locals {
     send = {
       runtime = "python3.13"
 
+      method = "PUT"
+      # Bumped from 128 MB so the function can stage and MIME-encode
+      # attachments fetched from S3 (the /upload_url path) without
+      # tripping out-of-memory at the server-side cap of 25 MB.
+      memory    = 512
+      cache     = true
+      cache_ttl = 0
+    },
+    upload_url = {
+      runtime = "python3.13"
+
       method    = "PUT"
       memory    = 128
-      cache     = true
+      cache     = false
       cache_ttl = 0
     },
     list = {
