@@ -57,6 +57,11 @@ targets:
         # App uses only standard HTTPS/TLS; exempt from export compliance
         # questions on every TestFlight upload.
         ITSAppUsesNonExemptEncryption: false
+        # iPadOS opens compose as a real scene rather than a sheet; that
+        # only works when the app advertises multi-scene support. iPhone
+        # ignores the flag (it can't multitask scenes anyway) and the
+        # compose-launch helper falls back to the sheet path there.
+        UIApplicationSupportsMultipleScenes: true
         # Route the plist's version fields through build settings so CI's
         # `CURRENT_PROJECT_VERSION=<timestamp>` actually reaches the shipped
         # Info.plist. Without this, XcodeGen hardcodes "1" / "1.0" and

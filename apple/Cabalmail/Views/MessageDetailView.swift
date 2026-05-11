@@ -19,6 +19,7 @@ struct MessageDetailView: View {
 
     @Environment(AppState.self) private var appState
     @Environment(Preferences.self) private var preferences
+    @Environment(\.openWindow) private var openWindow
     @State private var model: MessageDetailViewModel?
     @State private var composeSeed: Draft?
 
@@ -120,12 +121,23 @@ struct MessageDetailView: View {
         guard let client = appState.client else { return }
         Task { @MainActor in
             let addresses = (try? await client.addresses()) ?? []
-            composeSeed = ReplyBuilder.build(
+            let seed = ReplyBuilder.build(
                 from: envelope,
                 body: model?.plainText,
                 mode: mode,
                 userAddresses: addresses
             )
+            presentCompose(seed: seed)
+        }
+    }
+
+    /// macOS / iPadOS / visionOS open compose in its own scene; iPhone
+    /// keeps the sheet so the message stays on-screen behind it.
+    private func presentCompose(seed: Draft) {
+        if composeOpensInWindow {
+            openWindow(id: composeWindowID, value: seed)
+        } else {
+            composeSeed = seed
         }
     }
 
