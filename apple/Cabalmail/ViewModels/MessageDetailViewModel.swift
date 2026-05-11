@@ -80,18 +80,45 @@ final class MessageDetailViewModel {
     }
 
     func load() async {
+        // Clear any stale error from a prior attempt so a retry doesn't keep
+        // the red banner visible while the new fetch is in flight.
+        errorMessage = nil
         isLoading = true
         defer { isLoading = false }
-        do {
-            let bytes = try await fetchBodyBytes()
-            let tree = MimeParser.parse(bytes)
-            try await hydrate(from: tree)
-            errorMessage = nil
-            scheduleMarkAsReadIfNeeded()
-        } catch let error as CabalmailError {
-            errorMessage = String(describing: error)
-        } catch {
-            errorMessage = error.localizedDescription
+        // One automatic retry on transient cancellation. The body fetch
+        // chains two `URLSession.data(for:)` calls (Lambda + presigned S3);
+        // if either's underlying data task is cancelled while our own Swift
+        // Task is still alive, we see `URLError.cancelled` with no way to
+        // tell *why* the data task died. Tapping a message right as the
+        // list's load finishes is the easiest way to reproduce it. A second
+        // attempt typically succeeds. If our own Task is the one being
+        // cancelled (view going away), `Task.isCancelled` is already true
+        // and we leave the error suppressed — the view is on its way out
+        // and shouldn't flash a red banner on disappear.
+        var attemptsRemaining = 2
+        while attemptsRemaining > 0 {
+            attemptsRemaining -= 1
+            do {
+                let bytes = try await fetchBodyBytes()
+                let tree = MimeParser.parse(bytes)
+                try await hydrate(from: tree)
+                errorMessage = nil
+                scheduleMarkAsReadIfNeeded()
+                return
+            } catch is CancellationError {
+                return
+            } catch let urlError as URLError where urlError.code == .cancelled {
+                if Task.isCancelled { return }
+                if attemptsRemaining > 0 { continue }
+                errorMessage = urlError.localizedDescription
+                return
+            } catch let error as CabalmailError {
+                errorMessage = String(describing: error)
+                return
+            } catch {
+                errorMessage = error.localizedDescription
+                return
+            }
         }
     }
 

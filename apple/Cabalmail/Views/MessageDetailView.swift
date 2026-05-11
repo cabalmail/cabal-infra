@@ -143,9 +143,19 @@ struct MessageDetailView: View {
     @ViewBuilder
     private func body(for model: MessageDetailViewModel) -> some View {
         if let errorMessage = model.errorMessage {
-            Label(errorMessage, systemImage: "exclamationmark.triangle")
-                .foregroundStyle(.red)
-                .padding()
+            VStack(spacing: 12) {
+                Label(errorMessage, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.red)
+                Button {
+                    Task { await model.load() }
+                } label: {
+                    Label("Retry", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.bordered)
+                .disabled(model.isLoading)
+            }
+            .padding()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let html = model.htmlBody {
             // WKWebView manages its own scrolling; fill the available space
             // and let it page through tall messages internally.
