@@ -91,12 +91,50 @@ public protocol ApiClient: Sendable {
     /// sendMessage` byte-for-byte.
     func sendMessage(_ request: SendMessageRequest) async throws
 
+    /// Requests one presigned S3 PUT URL per outbound attachment. Used to
+    /// bypass API Gateway's 10 MB request ceiling on /send — clients PUT
+    /// each body to the returned URL and then pass the `key` back via
+    /// `SendMessageRequest.attachments`.
+    func requestAttachmentUploads(
+        host: String,
+        files: [AttachmentUploadSlot]
+    ) async throws -> [AttachmentUpload]
+
+    /// Uploads raw bytes to a presigned PUT URL returned by
+    /// `/upload_url`. The presigned URL carries its own signature, so
+    /// no Authorization header is sent.
+    func uploadAttachment(url: URL, mimeType: String, data: Data) async throws
+
     /// Downloads raw bytes from a presigned URL returned by `/fetch_message`
     /// or `/fetch_attachment`. Bypasses the Cognito Authorization header —
     /// presigned URLs already carry their own credentials in the query
     /// string, and S3 rejects requests with both a Bearer header and a
     /// signed URL.
     func fetchPresignedData(url: URL) async throws -> Data
+}
+
+/// One entry in the `/upload_url` request. Carries only the metadata the
+/// Lambda needs to mint a key — bodies do not flow through API Gateway.
+public struct AttachmentUploadSlot: Sendable, Hashable {
+    public let filename: String
+    public let mimeType: String
+
+    public init(filename: String, mimeType: String) {
+        self.filename = filename
+        self.mimeType = mimeType
+    }
+}
+
+/// One entry in the `/upload_url` response. The caller PUTs the file body
+/// to `url` and then references the file by `key` in `SendMessageRequest`.
+public struct AttachmentUpload: Sendable, Hashable {
+    public let key: String
+    public let url: URL
+
+    public init(key: String, url: URL) {
+        self.key = key
+        self.url = url
+    }
 }
 
 // MARK: - Request types
@@ -160,8 +198,8 @@ public struct MoveMessagesRequest: Sendable {
 }
 
 /// Parameters for `/send`. The Lambda accepts every recipient list, the
-/// HTML and text body parts, the threading headers, and a `draft` flag in
-/// a single request.
+/// HTML and text body parts, the threading headers, a `draft` flag, and an
+/// optional attachment list in a single request.
 public struct SendMessageRequest: Sendable {
     public let host: String
     public let smtpHost: String
@@ -174,6 +212,7 @@ public struct SendMessageRequest: Sendable {
     public let htmlBody: String
     public let textBody: String
     public let draft: Bool
+    public let attachments: [ApiSendAttachment]
 
     public init(
         host: String,
@@ -186,7 +225,8 @@ public struct SendMessageRequest: Sendable {
         otherHeaders: ApiSendOtherHeaders,
         htmlBody: String,
         textBody: String,
-        draft: Bool
+        draft: Bool,
+        attachments: [ApiSendAttachment] = []
     ) {
         self.host = host
         self.smtpHost = smtpHost
@@ -199,6 +239,23 @@ public struct SendMessageRequest: Sendable {
         self.htmlBody = htmlBody
         self.textBody = textBody
         self.draft = draft
+        self.attachments = attachments
+    }
+}
+
+/// Wire-shape for a single outbound attachment. The body has already been
+/// uploaded to S3 via `/upload_url`; `s3Key` is the staging key the /send
+/// Lambda fetches from. `URLSessionApiClient.sendMessage` forwards this
+/// shape to the Lambda verbatim.
+public struct ApiSendAttachment: Sendable, Hashable {
+    public let filename: String
+    public let mimeType: String
+    public let s3Key: String
+
+    public init(filename: String, mimeType: String, s3Key: String) {
+        self.filename = filename
+        self.mimeType = mimeType
+        self.s3Key = s3Key
     }
 }
 

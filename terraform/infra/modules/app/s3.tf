@@ -99,15 +99,13 @@ resource "aws_s3_bucket_public_access_block" "this" {
 }
 
 # Allow the admin web client to XHR-fetch cached .eml bodies for the reader's
-# View-source modal. Attachments and inline images don't need this (they are
-# loaded via top-level navigation or <img>, neither of which is CORS-gated),
-# but axios.get(signedUrl) in ViewSourceModal is an XHR that the browser
-# blocks without an Access-Control-Allow-Origin response header.
+# View-source modal (GET) and to PUT outbound-attachment bodies directly to
+# the staging prefix (issue #377). Apple clients bypass CORS entirely.
 resource "aws_s3_bucket_cors_configuration" "cache" {
   bucket = aws_s3_bucket.cache.bucket
 
   cors_rule {
-    allowed_methods = ["GET"]
+    allowed_methods = ["GET", "PUT"]
     allowed_origins = ["https://admin.${var.control_domain}"]
     allowed_headers = ["*"]
     expose_headers  = ["ETag"]

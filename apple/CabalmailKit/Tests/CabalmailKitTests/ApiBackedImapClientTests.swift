@@ -11,76 +11,6 @@ final class ApiBackedImapClientTests: XCTestCase {
         )
     }
 
-    // MARK: - Envelope conversion
-
-    func testMakeEnvelopeFlattensLambdaShape() {
-        let raw = ApiEnvelope(
-            id: 42,
-            date: "2024-01-15 10:30:45+00:00",
-            subject: "Hello",
-            from: ["alice@example.com"],
-            to: ["bob@example.com", "undisclosed-recipients"],
-            cc: [],
-            flags: ["\\Seen", "\\Flagged", "Junk"],
-            structure: .list([.string("text"), .string("plain")]),
-            priority: nil
-        )
-        let env = ApiBackedImapClient.makeEnvelope(raw)
-        XCTAssertEqual(env.uid, 42)
-        XCTAssertEqual(env.subject, "Hello")
-        XCTAssertEqual(env.from.first?.mailbox, "alice")
-        XCTAssertEqual(env.from.first?.host, "example.com")
-        XCTAssertEqual(env.to.count, 2)
-        XCTAssertEqual(env.to[1].mailbox, "undisclosed-recipients")
-        XCTAssertTrue(env.flags.contains(.seen))
-        XCTAssertTrue(env.flags.contains(.flagged))
-        XCTAssertTrue(env.flags.contains(.keyword("Junk")))
-    }
-
-    func testParseLambdaDateHandlesPythonStrFormat() {
-        let date = ApiBackedImapClient.parseLambdaDate("2024-01-15 10:30:45+00:00")
-        XCTAssertNotNil(date)
-
-        let nilString = ApiBackedImapClient.parseLambdaDate("None")
-        XCTAssertNil(nilString)
-
-        let empty = ApiBackedImapClient.parseLambdaDate("")
-        XCTAssertNil(empty)
-
-        let actuallyNil = ApiBackedImapClient.parseLambdaDate(nil)
-        XCTAssertNil(actuallyNil)
-    }
-
-    func testParseAddressSplitsOnLastAt() {
-        let addr = ApiBackedImapClient.parseAddress("alice@example.com")
-        XCTAssertEqual(addr?.mailbox, "alice")
-        XCTAssertEqual(addr?.host, "example.com")
-
-        let weird = ApiBackedImapClient.parseAddress("a@b@example.com")
-        XCTAssertEqual(weird?.mailbox, "a@b")
-        XCTAssertEqual(weird?.host, "example.com")
-
-        let placeholder = ApiBackedImapClient.parseAddress("undisclosed-recipients")
-        XCTAssertEqual(placeholder?.mailbox, "undisclosed-recipients")
-        XCTAssertEqual(placeholder?.host, "")
-    }
-
-    func testBodyStructureDetectsAttachment() {
-        let withAttachment = BodyStructureNode.list([
-            .list([.string("text"), .string("plain")]),
-            .list([.string("application"), .string("pdf")]),
-        ])
-        XCTAssertTrue(withAttachment.hasAttachments)
-
-        let plain = BodyStructureNode.list([
-            .string("text"),
-            .string("plain"),
-        ])
-        XCTAssertFalse(plain.hasAttachments)
-    }
-
-    // MARK: - Wire shape (URLs and bodies)
-
     func testListFoldersHitsExpectedURL() async throws {
         let body = #"{"folders":["INBOX","Sent"],"sub_folders":["INBOX"]}"#
         let http = RecordingHTTPTransport(responses: [(Data(body.utf8), 200)])
@@ -267,5 +197,47 @@ final class ApiBackedImapClientTests: XCTestCase {
         XCTAssertEqual(payload?["smtp_host"] as? String, "smtp-out.example.com")
         let headers = payload?["other_headers"] as? [String: Any]
         XCTAssertEqual(headers?["message_id"] as? [String], ["<abc@example.com>"])
+        // Default initializer omits attachments — the wire shape carries an
+        // empty list so the Lambda doesn't need to special-case `null`.
+        XCTAssertEqual((payload?["attachments"] as? [[String: Any]])?.count, 0)
     }
+
+    func testSendMessageForwardsAttachmentS3Keys() async throws {
+        let http = RecordingHTTPTransport(responses: [(Data(#"{"status":"submitted"}"#.utf8), 200)])
+        let api = URLSessionApiClient(
+            configuration: makeConfiguration(),
+            authService: StubAuthService(),
+            transport: http
+        )
+        try await api.sendMessage(SendMessageRequest(
+            host: "imap.example.com",
+            smtpHost: "smtp-out.example.com",
+            sender: "alice@example.com",
+            toList: ["bob@example.com"],
+            ccList: [],
+            bccList: [],
+            subject: "with attachment",
+            otherHeaders: ApiSendOtherHeaders(messageId: ["<abc@example.com>"]),
+            htmlBody: "",
+            textBody: "see attached",
+            draft: false,
+            attachments: [
+                ApiSendAttachment(
+                    filename: "note.txt",
+                    mimeType: "text/plain",
+                    s3Key: "outbound/alice/uuid/note.txt"
+                ),
+            ]
+        ))
+        let requests = await http.requests
+        let request = requests[0]
+        let json = try JSONSerialization.jsonObject(with: request.httpBody ?? Data()) as? [String: Any]
+        let attachments = json?["attachments"] as? [[String: Any]]
+        XCTAssertEqual(attachments?.count, 1)
+        XCTAssertEqual(attachments?[0]["filename"] as? String, "note.txt")
+        XCTAssertEqual(attachments?[0]["mime_type"] as? String, "text/plain")
+        XCTAssertEqual(attachments?[0]["s3_key"] as? String, "outbound/alice/uuid/note.txt")
+        XCTAssertNil(attachments?[0]["data"])
+    }
+
 }

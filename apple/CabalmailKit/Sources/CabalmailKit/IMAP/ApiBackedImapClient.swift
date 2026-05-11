@@ -24,10 +24,10 @@ import Foundation
 ///     server-side, so `CabalmailClient.send(_:)` no longer needs a
 ///     client-side APPEND. `append(_:_:_:)` here throws `protocolError`
 ///     to make accidental callers obvious.
-///   * Envelope display names are unavailable — the Lambda flattens RFC
-///     3501 ENVELOPE addresses to `"mailbox@host"`. Messages routed
-///     through the API show the bare address until/unless the Lambda
-///     surfaces the personal name.
+///   * Envelope addresses arrive in RFC 5322 mailbox form — the Lambda
+///     emits `"Display Name" <mailbox@host>` when an addr-name is set
+///     and bare `mailbox@host` otherwise. `parseAddress` splits the two
+///     shapes apart so `EmailAddress.name` is populated when available.
 public actor ApiBackedImapClient: ImapClient {
     private let api: ApiClient
     private let host: String
@@ -261,11 +261,10 @@ public actor ApiBackedImapClient: ImapClient {
 
     /// Builds an `Envelope` from the simplified Lambda payload.
     ///
-    /// Display names are not on the wire, so `EmailAddress.name` is always
-    /// nil. `messageId` is similarly unavailable — the Lambda doesn't
-    /// surface it from the ENVELOPE struct. `internalDate` and `size`
-    /// likewise omitted; the cache uses UID + UIDVALIDITY as keys, so no
-    /// behavior depends on these.
+    /// `messageId` is unavailable — the Lambda doesn't surface it from the
+    /// ENVELOPE struct. `internalDate` and `size` are likewise omitted;
+    /// the cache uses UID + UIDVALIDITY as keys, so no behavior depends on
+    /// these.
     static func makeEnvelope(_ raw: ApiEnvelope) -> Envelope {
         let date = parseLambdaDate(raw.date)
         let flags = Set(raw.flags.map { Flag(wireValue: $0) })
@@ -288,20 +287,41 @@ public actor ApiBackedImapClient: ImapClient {
         )
     }
 
-    /// Parses `"mailbox@host"` (the Lambda's flattened address shape).
-    /// Falls back to a placeholder `EmailAddress` when the input is the
-    /// literal sentinel `"undisclosed-recipients"` the Lambda emits for
-    /// addresses it couldn't decode.
+    /// Parses an address from the Lambda's wire format.
+    ///
+    /// `/list_envelopes` emits each address in RFC 5322 mailbox form:
+    /// `"Display Name" <mailbox@host>` when an addr-name is set, or bare
+    /// `mailbox@host` when it isn't. Display-name quotes are stripped so
+    /// the parsed `name` matches the React client's `extractName`
+    /// presentation. The sentinel `undisclosed-recipients` (which the
+    /// Lambda emits when an address fails to decode) becomes a placeholder
+    /// `EmailAddress`.
     static func parseAddress(_ raw: String) -> EmailAddress? {
         if raw == "undisclosed-recipients" {
             return EmailAddress(name: nil, mailbox: "undisclosed-recipients", host: "")
         }
-        guard let atIndex = raw.lastIndex(of: "@") else {
-            return EmailAddress(name: nil, mailbox: raw, host: "")
+        let trimmed = raw.trimmingCharacters(in: .whitespaces)
+        if let open = trimmed.lastIndex(of: "<"),
+           let close = trimmed.lastIndex(of: ">"),
+           open < close {
+            let inside = String(trimmed[trimmed.index(after: open)..<close])
+            let namePart = trimmed[..<open].trimmingCharacters(in: .whitespaces)
+            let name = stripWrappingQuotes(namePart)
+            let (mailbox, host) = splitMailboxHost(inside)
+            return EmailAddress(name: name.isEmpty ? nil : name, mailbox: mailbox, host: host)
         }
-        let mailbox = String(raw[..<atIndex])
-        let host = String(raw[raw.index(after: atIndex)...])
+        let (mailbox, host) = splitMailboxHost(trimmed)
         return EmailAddress(name: nil, mailbox: mailbox, host: host)
+    }
+
+    private static func splitMailboxHost(_ value: String) -> (String, String) {
+        guard let atIndex = value.lastIndex(of: "@") else { return (value, "") }
+        return (String(value[..<atIndex]), String(value[value.index(after: atIndex)...]))
+    }
+
+    private static func stripWrappingQuotes(_ value: String) -> String {
+        guard value.count >= 2, value.first == "\"", value.last == "\"" else { return value }
+        return String(value.dropFirst().dropLast())
     }
 
     /// Parses the Lambda's stringified date format. `imapclient` returns a

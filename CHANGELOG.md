@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Outgoing messages can now carry attachments end-to-end. A new
+  `/upload_url` Lambda hands the client one presigned S3 PUT URL per
+  attachment so bodies are uploaded directly to the existing
+  `cache.<control_domain>` staging bucket (under
+  `outbound/<user>/<uuid>/<filename>`), bypassing API Gateway's 10 MB
+  request ceiling; the bucket's 2-day lifecycle rule cleans up unused
+  uploads. The `/send` Lambda then accepts attachment entries shaped
+  `{filename, mime_type, s3_key}`, validates each key's user segment
+  against the authenticated caller, fetches the bytes from S3, caps the
+  total payload at 25 MB on the server, and assembles a proper
+  `multipart/mixed` via `EmailMessage.add_attachment`. The React
+  composer grows a paperclip button, a chip strip with size and remove,
+  and a soft-warn banner when attachments total over 20 MB. The Apple
+  clients route `OutgoingMessage.attachments` through the same
+  upload-then-send flow and surface the same 20 MB warning in the
+  compose sheet. Closes #377.
+
+### Changed
+- Apple clients on macOS, iPadOS, and visionOS now open compose as a
+  real window scene rather than a modal sheet. New Message, Reply,
+  Reply All, and Forward all hand the seed draft to
+  `openWindow(id: "compose", value: …)`, so the user can keep the
+  mailbox they were reading visible behind the draft and run several
+  compose windows side-by-side (different replies, a forward and a
+  new message, etc.). The iPhone path still uses the sheet because a
+  single-scene device would otherwise be torn away from the mailbox.
+  iPadOS multi-scene support is opted into via
+  `UIApplicationSupportsMultipleScenes` in the Cabalmail Info.plist
+  (#391).
+
 ## [0.9.15] - 2026-05-10
 
 ### Fixed

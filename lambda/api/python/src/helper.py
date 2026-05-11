@@ -154,6 +154,30 @@ def sign_url(bucket, key, expiration=86400):
         return "Error"
     return url
 
+def sign_put_url(bucket, key, expiration=600):
+    '''Signs a PUT URL for direct browser/native uploads to s3.
+
+    The caller PUTs the file body straight to the returned URL, bypassing
+    API Gateway's 10 MB request ceiling. The presigned URL only authorizes
+    a single key, so the Lambda that issues it is responsible for scoping
+    keys to the authenticated user. Content-Type is intentionally not
+    bound here so clients can PUT without negotiating header values; the
+    consumer of the uploaded object (currently `/send`) is the source of
+    truth for the file's MIME type.
+    '''
+    params = {
+        'Bucket': bucket,
+        'Key': key
+    }
+    try:
+        url = s3c.generate_presigned_url('put_object',
+                                        Params=params,
+                                        ExpiresIn=expiration)
+    except Exception as e:
+        logging.error(e)
+        return "Error"
+    return url
+
 def key_exists(bucket, key):
     '''checks wither a key exists in a given bucket'''
     try:

@@ -189,6 +189,13 @@ extension URLSessionApiClient {
             "in_reply_to": request.otherHeaders.inReplyTo,
             "references": request.otherHeaders.references,
         ]
+        let attachmentsJson: [[String: Any]] = request.attachments.map { attachment in
+            [
+                "filename": attachment.filename,
+                "mime_type": attachment.mimeType,
+                "s3_key": attachment.s3Key,
+            ]
+        }
         let httpRequest = try await put("/send", json: [
             "host": request.host,
             "smtp_host": request.smtpHost,
@@ -201,8 +208,56 @@ extension URLSessionApiClient {
             "html": request.htmlBody,
             "text": request.textBody,
             "draft": request.draft,
+            "attachments": attachmentsJson,
         ])
         _ = try await send(httpRequest, expectedStatuses: 200..<300)
+    }
+
+    public func requestAttachmentUploads(
+        host: String,
+        files: [AttachmentUploadSlot]
+    ) async throws -> [AttachmentUpload] {
+        guard !files.isEmpty else { return [] }
+        let filesJson: [[String: Any]] = files.map { slot in
+            [
+                "filename": slot.filename,
+                "mime_type": slot.mimeType,
+            ]
+        }
+        let httpRequest = try await put("/upload_url", json: [
+            "host": host,
+            "files": filesJson,
+        ])
+        let data = try await send(httpRequest, expectedStatuses: 200..<300)
+        struct Entry: Decodable { let key: String; let url: String }
+        struct Payload: Decodable { let uploads: [Entry] }
+        let decoded = try JSONDecoder().decode(Payload.self, from: data)
+        guard decoded.uploads.count == files.count else {
+            throw CabalmailError.decoding(
+                "upload_url returned \(decoded.uploads.count) entries for \(files.count) files"
+            )
+        }
+        return try decoded.uploads.map { entry in
+            guard let url = URL(string: entry.url) else {
+                throw CabalmailError.decoding("upload_url returned an invalid URL")
+            }
+            return AttachmentUpload(key: entry.key, url: url)
+        }
+    }
+
+    public func uploadAttachment(url: URL, mimeType: String, data: Data) async throws {
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue(mimeType.isEmpty ? "application/octet-stream" : mimeType,
+                         forHTTPHeaderField: "Content-Type")
+        request.httpBody = data
+        let (respData, response) = try await transport.perform(request)
+        guard (200..<300).contains(response.statusCode) else {
+            throw CabalmailError.server(
+                code: String(response.statusCode),
+                message: String(data: respData, encoding: .utf8) ?? ""
+            )
+        }
     }
 
     public func fetchPresignedData(url: URL) async throws -> Data {

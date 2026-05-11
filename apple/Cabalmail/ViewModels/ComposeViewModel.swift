@@ -18,6 +18,12 @@ final class ComposeViewModel {
     /// Interval between autosave flushes. Matches the plan.
     static let autosaveInterval: TimeInterval = 5
 
+    /// Soft-warn the user when total attachment payload exceeds this size.
+    /// Many mail servers reject messages over ~25 MB, so anything above 20
+    /// MB is worth flagging without hard-blocking the send. Mirrors the
+    /// React composer's threshold.
+    static let attachmentWarnBytes = 20 * 1024 * 1024
+
     let client: CabalmailClient
     private(set) var draftId: UUID
     private let draftStore: DraftStore
@@ -139,6 +145,16 @@ final class ComposeViewModel {
         return !parseRecipients(toText).isEmpty
             || !parseRecipients(ccText).isEmpty
             || !parseRecipients(bccText).isEmpty
+    }
+
+    /// Sum of the attached file sizes in bytes. Drives the soft-warn banner.
+    var attachmentTotalBytes: Int {
+        attachments.reduce(0) { $0 + $1.data.count }
+    }
+
+    /// True when the total attachment payload is over the soft-warn threshold.
+    var attachmentTotalExceedsWarning: Bool {
+        attachmentTotalBytes > Self.attachmentWarnBytes
     }
 
     func send() async -> Bool {

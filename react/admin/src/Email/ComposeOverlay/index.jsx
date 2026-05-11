@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
-  Minus, Maximize2, Minimize2, X,
+  Minus, Maximize2, Minimize2, X, Paperclip,
 } from 'lucide-react';
 import './ComposeOverlay.css';
 import { ADDRESS_LIST } from '../../constants';
@@ -179,9 +179,11 @@ function ComposeOverlay({
   const [savedAt, setSavedAt] = useState(null);
   const [, setSavedTick] = useState(0); // forces re-render for "Saved just now" label
   const [pendingImport, setPendingImport] = useState(null); // 'fromRich' | 'fromMarkdown' | null
+  const [attachments, setAttachments] = useState([]); // [{ id, filename, mimeType, file (Blob), size }]
   const markdownRef = useRef(null);
   const rootRef = useRef(null);
   const autosaveRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   const addresses = useMemo(
     () => addressItems.map((a) => a.address),
@@ -509,10 +511,32 @@ function ComposeOverlay({
       textBody = markdownContent;
     }
 
-    api.sendMessage(
-      effectiveSmtpHost, address, To, CC, BCC, Subject, headers,
-      htmlBody, textBody, false
-    ).then(() => {
+    // Upload any attachments directly to S3 first, then send the message
+    // referencing them by key. Bypasses API Gateway's 10 MB request ceiling.
+    const uploadAndSend = async () => {
+      let wireAttachments = [];
+      if (attachments.length > 0) {
+        const resp = await api.getAttachmentUploadUrls(attachments);
+        const uploads = resp?.data?.uploads || [];
+        if (uploads.length !== attachments.length) {
+          throw new Error('upload_url returned the wrong number of slots');
+        }
+        await Promise.all(attachments.map((a, i) =>
+          api.uploadAttachmentToS3(uploads[i].url, a.file)
+        ));
+        wireAttachments = attachments.map((a, i) => ({
+          filename: a.filename,
+          mime_type: a.mimeType,
+          s3_key: uploads[i].key,
+        }));
+      }
+      await api.sendMessage(
+        effectiveSmtpHost, address, To, CC, BCC, Subject, headers,
+        htmlBody, textBody, false, wireAttachments
+      );
+    };
+
+    uploadAndSend().then(() => {
       setMessage("Email sent", false);
       setSending(false);
       hide();
@@ -522,12 +546,53 @@ function ComposeOverlay({
       console.log(err);
     });
   }, [other_headers, effectiveSmtpHost, recipient, To, CC, BCC, Subject, address, addresses,
-      editor, markdownContent, api, hide, setMessage, addRecipient, randomString]);
+      editor, markdownContent, attachments, api, hide, setMessage, addRecipient, randomString]);
 
   const handleDiscard = useCallback((e) => {
     e.preventDefault();
     hide();
   }, [hide]);
+
+  // Attachments are uploaded directly to S3 via presigned PUT URLs, so
+  // the only real ceiling is whatever the receiver SMTP server accepts.
+  // Show a soft warning past 20 MB total (Gmail's typical inbound cap is
+  // ~25 MB), but don't block the user — they may know the recipient's
+  // mail server permits more, or they may be sending to themselves.
+  const ATTACHMENT_WARN_BYTES = 20 * 1024 * 1024;
+
+  const onAttachClick = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const onFilesSelected = useCallback((e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = ''; // allow re-picking the same file later
+    if (files.length === 0) return;
+    const additions = files.map((file) => ({
+      id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      filename: file.name,
+      mimeType: file.type || 'application/octet-stream',
+      file,
+      size: file.size,
+    }));
+    setAttachments(prev => [...prev, ...additions]);
+  }, []);
+
+  const attachmentTotalBytes = useMemo(
+    () => attachments.reduce((s, a) => s + a.size, 0),
+    [attachments]
+  );
+  const showAttachmentWarning = attachmentTotalBytes > ATTACHMENT_WARN_BYTES;
+
+  const removeAttachment = useCallback((id) => {
+    setAttachments(prev => prev.filter(a => a.id !== id));
+  }, []);
+
+  const formatBytes = useCallback((n) => {
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+    return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  }, []);
 
   const onRecipientChange = (e) => {
     setRecipient(e.target.value);
@@ -764,6 +829,34 @@ function ComposeOverlay({
           />
         </div>
 
+        {attachments.length > 0 && (
+          <>
+            <ul className="compose-attachments" aria-label="Attachments">
+              {attachments.map((a) => (
+                <li key={a.id} className="compose-attachment-chip">
+                  <Paperclip size={12} aria-hidden="true" />
+                  <span className="compose-attachment-name" title={a.filename}>{a.filename}</span>
+                  <span className="compose-attachment-size">{formatBytes(a.size)}</span>
+                  <button
+                    type="button"
+                    className="compose-attachment-remove"
+                    onClick={() => removeAttachment(a.id)}
+                    aria-label={`Remove attachment ${a.filename}`}
+                  >
+                    <X size={12} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {showAttachmentWarning && (
+              <div className="compose-attachment-warning" role="status">
+                Attachments total {formatBytes(attachmentTotalBytes)}. Many mail servers
+                reject messages over 25 MB; delivery may fail.
+              </div>
+            )}
+          </>
+        )}
+
         <div className="compose-editor">
           <div className="editor-mode-tabs">
             <button type="button"
@@ -793,6 +886,15 @@ function ComposeOverlay({
         </div>
       </div>
 
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        className="compose-attachment-input"
+        onChange={onFilesSelected}
+        aria-hidden="true"
+      />
+
       <div className="compose-bottom">
         <div className="compose-bottom__left">
           <button
@@ -801,6 +903,15 @@ function ComposeOverlay({
             onClick={handleSend}
             disabled={sending}
           >{sending ? 'Sending…' : 'Send'}</button>
+          <button
+            type="button"
+            className="compose-attach-btn"
+            onClick={onAttachClick}
+            aria-label="Attach files"
+            title="Attach files"
+          >
+            <Paperclip size={16} />
+          </button>
         </div>
         <div className="compose-bottom__right">
           <span className="compose-saved" aria-live="polite">{savedLabel}</span>
