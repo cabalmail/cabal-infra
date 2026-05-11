@@ -55,7 +55,16 @@ struct MessageDetailView: View {
             composeSheet(for: seed)
         }
         .task {
-            if model == nil, let client = appState.client {
+            // Construct the model on first appear, then either load (initial
+            // entry) or re-load if a prior `.task` cycle was cancelled before
+            // the body landed. Without the second branch a cancelled-and-
+            // re-fired `.task` would short-circuit on the existing model and
+            // strand the user in the no-body state forever.
+            let activeModel: MessageDetailViewModel
+            if let existing = model {
+                activeModel = existing
+            } else {
+                guard let client = appState.client else { return }
                 let newModel = MessageDetailViewModel(
                     folder: folder,
                     envelope: envelope,
@@ -77,7 +86,12 @@ struct MessageDetailView: View {
                     )
                 }
                 model = newModel
-                await newModel.load()
+                activeModel = newModel
+            }
+            if activeModel.htmlBody == nil,
+               activeModel.plainText == nil,
+               !activeModel.isLoading {
+                await activeModel.load()
             }
         }
         .onDisappear { model?.onDisappear() }

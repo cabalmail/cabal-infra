@@ -105,12 +105,19 @@ final class MessageDetailViewModel {
                 errorMessage = nil
                 scheduleMarkAsReadIfNeeded()
                 return
-            } catch is CancellationError {
-                return
             } catch let urlError as URLError where urlError.code == .cancelled {
-                if Task.isCancelled { return }
-                if attemptsRemaining > 0 { continue }
-                errorMessage = urlError.localizedDescription
+                // URLSession cancellations sometimes fire mid-fetch while
+                // our own Swift Task is still alive (we see it on quick
+                // taps right as the list finishes its initial load) — one
+                // retry inside the same Task usually clears it. If our
+                // Task is itself cancelled, retrying inside it would just
+                // throw the same cancellation, so surface an error and
+                // let the Retry button give the user a fresh Task.
+                if !Task.isCancelled, attemptsRemaining > 0 { continue }
+                errorMessage = "Couldn't load message body."
+                return
+            } catch is CancellationError {
+                errorMessage = "Couldn't load message body."
                 return
             } catch let error as CabalmailError {
                 errorMessage = String(describing: error)
