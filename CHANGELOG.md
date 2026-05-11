@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.17] - 2026-05-11
+
+### Fixed
+- Compose window on iPadOS native client.
+  `UIApplicationSupportsMultipleScenes: true` was being emitted at the
+  top level of `Cabalmail/Info.plist`, but per Apple's docs that key has
+  to be nested inside `UIApplicationSceneManifest`. Nested the key in
+  `apple/project.yml` so XcodeGen emits the correct plist structure.
+
 ## [0.9.16] - 2026-05-11
 
 ### Added
