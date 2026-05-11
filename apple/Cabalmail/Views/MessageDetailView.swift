@@ -55,7 +55,16 @@ struct MessageDetailView: View {
             composeSheet(for: seed)
         }
         .task {
-            if model == nil, let client = appState.client {
+            // Construct the model on first appear, then either load (initial
+            // entry) or re-load if a prior `.task` cycle was cancelled before
+            // the body landed. Without the second branch a cancelled-and-
+            // re-fired `.task` would short-circuit on the existing model and
+            // strand the user in the no-body state forever.
+            let activeModel: MessageDetailViewModel
+            if let existing = model {
+                activeModel = existing
+            } else {
+                guard let client = appState.client else { return }
                 let newModel = MessageDetailViewModel(
                     folder: folder,
                     envelope: envelope,
@@ -77,7 +86,12 @@ struct MessageDetailView: View {
                     )
                 }
                 model = newModel
-                await newModel.load()
+                activeModel = newModel
+            }
+            if activeModel.htmlBody == nil,
+               activeModel.plainText == nil,
+               !activeModel.isLoading {
+                await activeModel.load()
             }
         }
         .onDisappear { model?.onDisappear() }
@@ -143,9 +157,19 @@ struct MessageDetailView: View {
     @ViewBuilder
     private func body(for model: MessageDetailViewModel) -> some View {
         if let errorMessage = model.errorMessage {
-            Label(errorMessage, systemImage: "exclamationmark.triangle")
-                .foregroundStyle(.red)
-                .padding()
+            VStack(spacing: 12) {
+                Label(errorMessage, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.red)
+                Button {
+                    Task { await model.load() }
+                } label: {
+                    Label("Retry", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.bordered)
+                .disabled(model.isLoading)
+            }
+            .padding()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let html = model.htmlBody {
             // WKWebView manages its own scrolling; fill the available space
             // and let it page through tall messages internally.

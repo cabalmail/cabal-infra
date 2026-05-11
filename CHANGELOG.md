@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.15] - 2026-05-10
+
+### Fixed
+- Apple clients: tapping a message while the list was still loading could
+  leave the detail view stuck on a red "cancelled" error (a stray
+  `URLError.cancelled` surfacing from the body fetch's URLSession data
+  tasks) with no way out. The detail view now retries the body fetch
+  once when the cancellation didn't come from our own Task, surfaces a
+  Retry button on any remaining error, and re-runs the fetch if the
+  `.task` modifier itself gets cancelled and re-fired before the body
+  has landed so the user is never stranded.
+
 ## [0.9.14] - 2026-05-10
 
 ### Added
