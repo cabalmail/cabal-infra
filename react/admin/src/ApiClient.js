@@ -189,9 +189,7 @@ export default class ApiClient {
 
   // Send
 
-  sendMessage(smtp_host, sender, to_list, cc_list, bcc_list, subject, other_headers, html_body, text_body, draft) {
-    // TODO:
-    // - attachments
+  sendMessage(smtp_host, sender, to_list, cc_list, bcc_list, subject, other_headers, html_body, text_body, draft, attachments) {
     const response = axios.put('/send',
       JSON.stringify({
         smtp_host: smtp_host,
@@ -204,7 +202,8 @@ export default class ApiClient {
         other_headers: other_headers,
         html: html_body,
         text: text_body,
-        draft: draft // false == outbox, true == drafts
+        draft: draft, // false == outbox, true == drafts
+        attachments: attachments || []
       }),
       {
         baseURL: this.baseURL,

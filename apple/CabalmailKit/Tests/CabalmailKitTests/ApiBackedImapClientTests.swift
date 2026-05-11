@@ -267,5 +267,46 @@ final class ApiBackedImapClientTests: XCTestCase {
         XCTAssertEqual(payload?["smtp_host"] as? String, "smtp-out.example.com")
         let headers = payload?["other_headers"] as? [String: Any]
         XCTAssertEqual(headers?["message_id"] as? [String], ["<abc@example.com>"])
+        // Default initializer omits attachments — the wire shape carries an
+        // empty list so the Lambda doesn't need to special-case `null`.
+        XCTAssertEqual((payload?["attachments"] as? [[String: Any]])?.count, 0)
+    }
+
+    func testSendMessageBase64EncodesAttachments() async throws {
+        let http = RecordingHTTPTransport(responses: [(Data(#"{"status":"submitted"}"#.utf8), 200)])
+        let api = URLSessionApiClient(
+            configuration: makeConfiguration(),
+            authService: StubAuthService(),
+            transport: http
+        )
+        let payload = Data("hello".utf8)
+        try await api.sendMessage(SendMessageRequest(
+            host: "imap.example.com",
+            smtpHost: "smtp-out.example.com",
+            sender: "alice@example.com",
+            toList: ["bob@example.com"],
+            ccList: [],
+            bccList: [],
+            subject: "with attachment",
+            otherHeaders: ApiSendOtherHeaders(messageId: ["<abc@example.com>"]),
+            htmlBody: "",
+            textBody: "see attached",
+            draft: false,
+            attachments: [
+                ApiSendAttachment(
+                    filename: "note.txt",
+                    mimeType: "text/plain",
+                    data: payload
+                ),
+            ]
+        ))
+        let requests = await http.requests
+        let request = requests[0]
+        let json = try JSONSerialization.jsonObject(with: request.httpBody ?? Data()) as? [String: Any]
+        let attachments = json?["attachments"] as? [[String: Any]]
+        XCTAssertEqual(attachments?.count, 1)
+        XCTAssertEqual(attachments?[0]["filename"] as? String, "note.txt")
+        XCTAssertEqual(attachments?[0]["mime_type"] as? String, "text/plain")
+        XCTAssertEqual(attachments?[0]["data"] as? String, payload.base64EncodedString())
     }
 }

@@ -223,4 +223,69 @@ describe('ComposeOverlay', () => {
       unmount();
     }
   });
+
+  it('attaches a selected file and forwards it base64-encoded to /send', async () => {
+    const { container, unmount } = renderCompose();
+    try {
+      await waitFor(() => {
+        expect(mockGetAddresses).toHaveBeenCalled();
+      });
+
+      // Pick a From address.
+      fireEvent.click(screen.getByLabelText('From'));
+      fireEvent.click(await screen.findByRole('option', { name: /user@test\.com/ }));
+
+      // Add a recipient and a subject so canSend is satisfied.
+      const toInput = screen.getByLabelText('Recipients');
+      fireEvent.change(toInput, { target: { value: 'dest@test.com' } });
+      fireEvent.keyDown(toInput, { key: 'Enter' });
+      fireEvent.change(screen.getByLabelText('Subject'), { target: { value: 'hi' } });
+
+      // Drop a tiny file onto the hidden file input.
+      const fileInput = container.querySelector('.compose-attachment-input');
+      expect(fileInput).not.toBeNull();
+      const file = new File(['hello'], 'note.txt', { type: 'text/plain' });
+      fireEvent.change(fileInput, { target: { files: [file] } });
+
+      // Chip should appear once the FileReader finishes.
+      await waitFor(() => {
+        expect(screen.getByText('note.txt')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+      await waitFor(() => {
+        expect(mockSendMessage).toHaveBeenCalled();
+      });
+      const args = mockSendMessage.mock.calls[0];
+      // signature: smtp_host, sender, to, cc, bcc, subject, headers, html, text, draft, attachments
+      const wireAttachments = args[10];
+      expect(wireAttachments).toHaveLength(1);
+      expect(wireAttachments[0].filename).toBe('note.txt');
+      expect(wireAttachments[0].mime_type).toBe('text/plain');
+      // "hello" base64 = "aGVsbG8="
+      expect(wireAttachments[0].data).toBe('aGVsbG8=');
+    } finally {
+      unmount();
+    }
+  });
+
+  it('removes an attached file when the chip remove button is clicked', async () => {
+    const { container, unmount } = renderCompose();
+    try {
+      await waitFor(() => {
+        expect(mockGetAddresses).toHaveBeenCalled();
+      });
+      const fileInput = container.querySelector('.compose-attachment-input');
+      const file = new File(['hello'], 'note.txt', { type: 'text/plain' });
+      fireEvent.change(fileInput, { target: { files: [file] } });
+      await waitFor(() => {
+        expect(screen.getByText('note.txt')).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Remove attachment note.txt' }));
+      expect(screen.queryByText('note.txt')).not.toBeInTheDocument();
+    } finally {
+      unmount();
+    }
+  });
 });

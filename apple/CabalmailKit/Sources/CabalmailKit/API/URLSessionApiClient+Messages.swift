@@ -189,6 +189,13 @@ extension URLSessionApiClient {
             "in_reply_to": request.otherHeaders.inReplyTo,
             "references": request.otherHeaders.references,
         ]
+        let attachmentsJson: [[String: Any]] = request.attachments.map { attachment in
+            [
+                "filename": attachment.filename,
+                "mime_type": attachment.mimeType,
+                "data": attachment.data.base64EncodedString(),
+            ]
+        }
         let httpRequest = try await put("/send", json: [
             "host": request.host,
             "smtp_host": request.smtpHost,
@@ -201,6 +208,7 @@ extension URLSessionApiClient {
             "html": request.htmlBody,
             "text": request.textBody,
             "draft": request.draft,
+            "attachments": attachmentsJson,
         ])
         _ = try await send(httpRequest, expectedStatuses: 200..<300)
     }

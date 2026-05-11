@@ -301,6 +301,9 @@ public actor CabalmailClient {
             inReplyTo: message.inReplyTo.map { [$0] } ?? [],
             references: message.references
         )
+        let wireAttachments = message.attachments.map {
+            ApiSendAttachment(filename: $0.filename, mimeType: $0.mimeType, data: $0.data)
+        }
         try await api.sendMessage(SendMessageRequest(
             host: imapHost,
             smtpHost: smtpHost,
@@ -312,7 +315,8 @@ public actor CabalmailClient {
             otherHeaders: headers,
             htmlBody: message.htmlBody ?? "",
             textBody: message.textBody ?? "",
-            draft: false
+            draft: false,
+            attachments: wireAttachments
         ))
     }
 

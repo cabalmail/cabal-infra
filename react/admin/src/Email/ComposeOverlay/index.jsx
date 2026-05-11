@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
-  Minus, Maximize2, Minimize2, X,
+  Minus, Maximize2, Minimize2, X, Paperclip,
 } from 'lucide-react';
 import './ComposeOverlay.css';
 import { ADDRESS_LIST } from '../../constants';
@@ -179,9 +179,11 @@ function ComposeOverlay({
   const [savedAt, setSavedAt] = useState(null);
   const [, setSavedTick] = useState(0); // forces re-render for "Saved just now" label
   const [pendingImport, setPendingImport] = useState(null); // 'fromRich' | 'fromMarkdown' | null
+  const [attachments, setAttachments] = useState([]); // [{ id, filename, mimeType, data (base64), size }]
   const markdownRef = useRef(null);
   const rootRef = useRef(null);
   const autosaveRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   const addresses = useMemo(
     () => addressItems.map((a) => a.address),
@@ -509,9 +511,15 @@ function ComposeOverlay({
       textBody = markdownContent;
     }
 
+    const wireAttachments = attachments.map(a => ({
+      filename: a.filename,
+      mime_type: a.mimeType,
+      data: a.data,
+    }));
+
     api.sendMessage(
       effectiveSmtpHost, address, To, CC, BCC, Subject, headers,
-      htmlBody, textBody, false
+      htmlBody, textBody, false, wireAttachments
     ).then(() => {
       setMessage("Email sent", false);
       setSending(false);
@@ -522,12 +530,76 @@ function ComposeOverlay({
       console.log(err);
     });
   }, [other_headers, effectiveSmtpHost, recipient, To, CC, BCC, Subject, address, addresses,
-      editor, markdownContent, api, hide, setMessage, addRecipient, randomString]);
+      editor, markdownContent, attachments, api, hide, setMessage, addRecipient, randomString]);
 
   const handleDiscard = useCallback((e) => {
     e.preventDefault();
     hide();
   }, [hide]);
+
+  // Lambda /send caps total decoded attachment payload at 8 MB to keep
+  // the JSON-encoded request under API Gateway's 10 MB ceiling. Pre-flight
+  // here so the user gets immediate feedback instead of a server-side 400.
+  const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
+
+  const readFileAsBase64 = useCallback((file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result || '';
+      // FileReader.readAsDataURL returns "data:<mime>;base64,<payload>";
+      // strip the prefix so we send only the payload.
+      const comma = result.indexOf(',');
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.onerror = () => reject(reader.error || new Error('read failed'));
+    reader.readAsDataURL(file);
+  }), []);
+
+  const onAttachClick = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const onFilesSelected = useCallback(async (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = ''; // allow re-picking the same file later
+    if (files.length === 0) return;
+    const currentTotal = attachments.reduce((s, a) => s + a.size, 0);
+    let runningTotal = currentTotal;
+    const additions = [];
+    for (const file of files) {
+      if (runningTotal + file.size > MAX_ATTACHMENT_BYTES) {
+        setMessage(`Attachments exceed the ${Math.floor(MAX_ATTACHMENT_BYTES / (1024 * 1024))} MB total limit.`, true);
+        break;
+      }
+      try {
+        const b64 = await readFileAsBase64(file);
+        additions.push({
+          id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          filename: file.name,
+          mimeType: file.type || 'application/octet-stream',
+          data: b64,
+          size: file.size,
+        });
+        runningTotal += file.size;
+      } catch (err) {
+        console.log(err);
+        setMessage(`Couldn't read ${file.name}.`, true);
+      }
+    }
+    if (additions.length > 0) {
+      setAttachments(prev => [...prev, ...additions]);
+    }
+  }, [attachments, readFileAsBase64, setMessage]);
+
+  const removeAttachment = useCallback((id) => {
+    setAttachments(prev => prev.filter(a => a.id !== id));
+  }, []);
+
+  const formatBytes = useCallback((n) => {
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+    return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  }, []);
 
   const onRecipientChange = (e) => {
     setRecipient(e.target.value);
@@ -764,6 +836,26 @@ function ComposeOverlay({
           />
         </div>
 
+        {attachments.length > 0 && (
+          <ul className="compose-attachments" aria-label="Attachments">
+            {attachments.map((a) => (
+              <li key={a.id} className="compose-attachment-chip">
+                <Paperclip size={12} aria-hidden="true" />
+                <span className="compose-attachment-name" title={a.filename}>{a.filename}</span>
+                <span className="compose-attachment-size">{formatBytes(a.size)}</span>
+                <button
+                  type="button"
+                  className="compose-attachment-remove"
+                  onClick={() => removeAttachment(a.id)}
+                  aria-label={`Remove attachment ${a.filename}`}
+                >
+                  <X size={12} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
         <div className="compose-editor">
           <div className="editor-mode-tabs">
             <button type="button"
@@ -793,6 +885,15 @@ function ComposeOverlay({
         </div>
       </div>
 
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        className="compose-attachment-input"
+        onChange={onFilesSelected}
+        aria-hidden="true"
+      />
+
       <div className="compose-bottom">
         <div className="compose-bottom__left">
           <button
@@ -801,6 +902,15 @@ function ComposeOverlay({
             onClick={handleSend}
             disabled={sending}
           >{sending ? 'Sending…' : 'Send'}</button>
+          <button
+            type="button"
+            className="compose-attach-btn"
+            onClick={onAttachClick}
+            aria-label="Attach files"
+            title="Attach files"
+          >
+            <Paperclip size={16} />
+          </button>
         </div>
         <div className="compose-bottom__right">
           <span className="compose-saved" aria-live="polite">{savedLabel}</span>

@@ -160,8 +160,8 @@ public struct MoveMessagesRequest: Sendable {
 }
 
 /// Parameters for `/send`. The Lambda accepts every recipient list, the
-/// HTML and text body parts, the threading headers, and a `draft` flag in
-/// a single request.
+/// HTML and text body parts, the threading headers, a `draft` flag, and an
+/// optional attachment list in a single request.
 public struct SendMessageRequest: Sendable {
     public let host: String
     public let smtpHost: String
@@ -174,6 +174,7 @@ public struct SendMessageRequest: Sendable {
     public let htmlBody: String
     public let textBody: String
     public let draft: Bool
+    public let attachments: [ApiSendAttachment]
 
     public init(
         host: String,
@@ -186,7 +187,8 @@ public struct SendMessageRequest: Sendable {
         otherHeaders: ApiSendOtherHeaders,
         htmlBody: String,
         textBody: String,
-        draft: Bool
+        draft: Bool,
+        attachments: [ApiSendAttachment] = []
     ) {
         self.host = host
         self.smtpHost = smtpHost
@@ -199,6 +201,22 @@ public struct SendMessageRequest: Sendable {
         self.htmlBody = htmlBody
         self.textBody = textBody
         self.draft = draft
+        self.attachments = attachments
+    }
+}
+
+/// Wire-shape for a single outbound attachment. `data` is the raw file bytes
+/// — `URLSessionApiClient.sendMessage` base64-encodes them on the way out so
+/// the Lambda receives the JSON shape it expects.
+public struct ApiSendAttachment: Sendable, Hashable {
+    public let filename: String
+    public let mimeType: String
+    public let data: Data
+
+    public init(filename: String, mimeType: String, data: Data) {
+        self.filename = filename
+        self.mimeType = mimeType
+        self.data = data
     }
 }
 

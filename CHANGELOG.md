@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Outgoing messages can now carry attachments end-to-end. The `/send` Lambda
+  accepts an optional `attachments` list (each entry: `filename`, `mime_type`,
+  base64 `data`), enforces an 8 MB total decoded-payload cap to stay under
+  API Gateway's request ceiling, and uses `EmailMessage.add_attachment` so
+  the wire message becomes a proper `multipart/mixed`. The React composer
+  grows a paperclip button that opens the file picker and renders chips for
+  each attached file (with size and a remove button). The Apple clients
+  thread `OutgoingMessage.attachments` (already populated by the existing
+  attachment picker UI) through `SendMessageRequest`, base64-encoding the
+  bytes on the wire so the Lambda receives the same shape from both
+  clients. Closes #377.
+
 ## [0.9.15] - 2026-05-10
 
 ### Fixed
