@@ -632,7 +632,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (the shared layer) and `healthchecks_iac` (kept on the legacy
   in-Terraform invocation flow per phase 2's note).
 
-## 0.9.2 - 2026-04-29
+## [0.9.2] - 2026-04-29
 
 ### Changed
 - Phase 2 of the build/deploy simplification plan
@@ -886,11 +886,11 @@ The full design rationale lives in [`docs/0.7.0/monitoring-plan.md`](docs/0.7.0/
 
 - Three CloudWatch metric filters per mail-tier log group, defined in [`terraform/infra/modules/monitoring/log_metrics.tf`](terraform/infra/modules/monitoring/log_metrics.tf), emitting to a new `Cabalmail/Logs` namespace. cloudwatch_exporter scrapes them; Prometheus rules in the `log-derived` group alert on the rates.
 
-  | Filter | Pattern | Metric | Alert |
-  | --- | --- | --- | --- |
-  | `cabal-sendmail-deferred-{tier}` | `"stat=Deferred"` | `SendmailDeferred` | `SendmailDeferredSpike` (warning) |
-  | `cabal-sendmail-bounced-{tier}` | `"dsn=5"` | `SendmailBounced` | `SendmailBouncedSpike` (critical) |
-  | `cabal-imap-auth-failures` (imap tier only) | `"imap-login" "auth failed"` | `IMAPAuthFailures` | `IMAPAuthFailureSpike` (warning) |
+  | Filter                                      | Pattern                       | Metric             | Alert                             |
+  | ------------------------------------------- | ----------------------------- | ------------------ | --------------------------------- |
+  | `cabal-sendmail-deferred-{tier}`            | `"stat=Deferred"`             | `SendmailDeferred` | `SendmailDeferredSpike` (warning) |
+  | `cabal-sendmail-bounced-{tier}`             | `"dsn=5"`                     | `SendmailBounced`  | `SendmailBouncedSpike` (critical) |
+  | `cabal-imap-auth-failures` (imap tier only) | `"imap-login" "auth failed"`  | `IMAPAuthFailures` | `IMAPAuthFailureSpike` (warning)  |
 
   All filters emit value=1 per matching log line, default 0; CloudWatch aggregates per-minute. The `LambdaErrors` rule's `function_name` regex was extended to `cabal-.+|assign_osid` so the Cognito post-confirmation Lambda is covered without a separate log filter (avoids adopting the Lambda-auto-created `/aws/lambda/assign_osid` log group, which would force a `terraform import` on existing stacks). fail2ban metrics are intentionally not in this set -- `[program:fail2ban]` is currently commented out in every mail-tier `supervisord.conf`; add the filter when fail2ban is re-enabled.
 - New `tier_log_group_names` output on the ecs module + variable on the monitoring module so the metric filters reference real log-group resources rather than hardcoded names.
