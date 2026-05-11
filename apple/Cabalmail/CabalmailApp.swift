@@ -40,6 +40,12 @@ struct CabalmailApp: App {
                     }
                 }
         }
+        // iPadOS and visionOS open compose as a real scene; iPhone
+        // ignores the group because `composeOpensInWindow` keeps it on
+        // the sheet path. Installing the WindowGroup on every iOS
+        // build keeps the scene available the moment a user moves to a
+        // multi-scene device (Stage Manager, iPad).
+        ComposeWindowScene(appState: appState, preferences: preferences)
     }
 
     /// Maps the theme preference onto SwiftUI's optional `ColorScheme`.

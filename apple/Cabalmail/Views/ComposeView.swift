@@ -5,9 +5,10 @@ import PhotosUI
 #endif
 import UniformTypeIdentifiers
 
-/// Compose scene — presented as a sheet on iPhone and as a full-height
-/// modal on iPad / macOS / visionOS. Phase 5 keeps this unified; Phase 7
-/// polish moves macOS and iPad to their own windows via `openWindow`.
+/// Compose scene. macOS, iPadOS, and visionOS host this in a standalone
+/// `WindowGroup` opened via `openWindow` (see `ComposeWindowScene`); iPhone
+/// keeps it as a modal sheet so the user doesn't get torn away from the
+/// mailbox they were just reading on a single-scene device.
 ///
 /// The form is four labeled fields (From picker, To/Cc/Bcc tokens, subject,
 /// plain-text body) plus an attachment strip and a Send button. The primary

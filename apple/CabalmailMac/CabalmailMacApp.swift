@@ -37,6 +37,10 @@ struct CabalmailMacApp: App {
         .commands {
             CabalmailCommands(appState: appState)
         }
+        // Standalone compose window scene — matches every other Mac
+        // mail client. The Cabalmail iOS target installs the same
+        // scene so the iPad path lights up automatically.
+        ComposeWindowScene(appState: appState, preferences: preferences)
         Settings {
             SettingsTabsView()
                 .environment(appState)

@@ -9,6 +9,7 @@ struct MessageListView: View {
 
     @Environment(AppState.self) private var appState
     @Environment(Preferences.self) private var preferences
+    @Environment(\.openWindow) private var openWindow
     @State private var model: MessageListViewModel?
     @State private var composeSeed: Draft?
 
@@ -24,7 +25,7 @@ struct MessageListView: View {
         .toolbar {
             ToolbarItem {
                 Button {
-                    composeSeed = ReplyBuilder.newDraft()
+                    presentCompose(seed: ReplyBuilder.newDraft())
                 } label: {
                     Image(systemName: "square.and.pencil")
                         .accessibilityLabel("New Message")
@@ -75,7 +76,7 @@ struct MessageListView: View {
         // refresh. Using the currently-displayed list as the refresh target
         // matches every desktop mail client's convention.
         .onChange(of: appState.composeRequestTick) { _, _ in
-            composeSeed = ReplyBuilder.newDraft()
+            presentCompose(seed: ReplyBuilder.newDraft())
         }
         .onChange(of: appState.refreshRequestTick) { _, _ in
             Task { await model?.refresh() }
@@ -117,6 +118,18 @@ struct MessageListView: View {
             ))
             .environment(appState)
             .environment(preferences)
+        }
+    }
+
+    /// Hands off to the standalone compose window where the platform
+    /// supports it (macOS, iPadOS, visionOS); the iPhone path keeps
+    /// the existing sheet so the user doesn't lose the mailbox they
+    /// were just reading.
+    private func presentCompose(seed: Draft) {
+        if composeOpensInWindow {
+            openWindow(id: composeWindowID, value: seed)
+        } else {
+            composeSeed = seed
         }
     }
 

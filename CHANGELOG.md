@@ -25,6 +25,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   upload-then-send flow and surface the same 20 MB warning in the
   compose sheet. Closes #377.
 
+### Changed
+- Apple clients on macOS, iPadOS, and visionOS now open compose as a
+  real window scene rather than a modal sheet. New Message, Reply,
+  Reply All, and Forward all hand the seed draft to
+  `openWindow(id: "compose", value: …)`, so the user can keep the
+  mailbox they were reading visible behind the draft and run several
+  compose windows side-by-side (different replies, a forward and a
+  new message, etc.). The iPhone path still uses the sheet because a
+  single-scene device would otherwise be torn away from the mailbox.
+  iPadOS multi-scene support is opted into via
+  `UIApplicationSupportsMultipleScenes` in the Cabalmail Info.plist
+  (#391).
+
 ## [0.9.15] - 2026-05-10
 
 ### Fixed
