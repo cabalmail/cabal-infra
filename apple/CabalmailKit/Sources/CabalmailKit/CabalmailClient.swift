@@ -287,6 +287,21 @@ public actor CabalmailClient {
         return .sent
     }
 
+    /// Activate or deactivate MetricKit diagnostic collection. The Settings
+    /// toggle bridges its `Preferences.crashReportingEnabled` value into
+    /// this method so a user opt-in immediately starts receiving crash and
+    /// hang payloads (the next reports arrive at *the following* launch,
+    /// per MetricKit's delivery semantics).
+    public nonisolated func setCrashReportingEnabled(_ enabled: Bool) {
+        if enabled {
+            metricKitCollector.start()
+        } else {
+            metricKitCollector.stop()
+        }
+    }
+}
+
+extension CabalmailClient {
     /// Shared `/send` invocation used by both the foreground send path
     /// and `SendQueue`'s retry closure. Lives on the type so the queue
     /// closure doesn't capture `self`.
@@ -340,26 +355,13 @@ public actor CabalmailClient {
         ))
     }
 
-    /// Activate or deactivate MetricKit diagnostic collection. The Settings
-    /// toggle bridges its `Preferences.crashReportingEnabled` value into
-    /// this method so a user opt-in immediately starts receiving crash and
-    /// hang payloads (the next reports arrive at *the following* launch,
-    /// per MetricKit's delivery semantics).
-    public nonisolated func setCrashReportingEnabled(_ enabled: Bool) {
-        if enabled {
-            metricKitCollector.start()
-        } else {
-            metricKitCollector.stop()
-        }
-    }
-
     /// Classifies which SMTP failures should fall through to the outbox.
     ///
     /// `network` / `transport` / `timeout` / `cancelled` are transient —
     /// retrying when the connection returns has a real chance of
     /// succeeding. `invalidCredentials`, `smtpCommandFailed`, and the rest
     /// are application-level and surface to the user immediately.
-    private static func shouldQueue(_ error: CabalmailError) -> Bool {
+    fileprivate static func shouldQueue(_ error: CabalmailError) -> Bool {
         switch error {
         case .network, .transport, .timeout, .cancelled:
             return true

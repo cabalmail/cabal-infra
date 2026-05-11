@@ -58,12 +58,15 @@ struct ComposeView: View {
                             attachmentRow(attachment)
                         }
                         if model.attachmentTotalExceedsWarning {
-                            Label(
-                                "Attachments total \(ByteCountFormatter.string(fromByteCount: Int64(model.attachmentTotalBytes), countStyle: .file)). Many mail servers reject messages over 25 MB; delivery may fail.",
-                                systemImage: "exclamationmark.triangle"
+                            let total = ByteCountFormatter.string(
+                                fromByteCount: Int64(model.attachmentTotalBytes),
+                                countStyle: .file
                             )
-                            .font(.caption)
-                            .foregroundStyle(.orange)
+                            let warning = "Attachments total \(total). Many mail servers reject "
+                                + "messages over 25 MB; delivery may fail."
+                            Label(warning, systemImage: "exclamationmark.triangle")
+                                .font(.caption)
+                                .foregroundStyle(.orange)
                         }
                     }
                 }

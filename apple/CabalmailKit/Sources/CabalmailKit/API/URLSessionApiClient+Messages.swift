@@ -233,7 +233,9 @@ extension URLSessionApiClient {
         struct Payload: Decodable { let uploads: [Entry] }
         let decoded = try JSONDecoder().decode(Payload.self, from: data)
         guard decoded.uploads.count == files.count else {
-            throw CabalmailError.decoding("upload_url returned \(decoded.uploads.count) entries for \(files.count) files")
+            throw CabalmailError.decoding(
+                "upload_url returned \(decoded.uploads.count) entries for \(files.count) files"
+            )
         }
         return try decoded.uploads.map { entry in
             guard let url = URL(string: entry.url) else {
