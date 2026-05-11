@@ -494,6 +494,100 @@
   font-size: 12px;
 }
 
+.compose-attach-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  width: 32px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.compose-attach-btn:hover {
+  background: var(--surface-hover);
+}
+
+.compose-attachment-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  border: 0;
+}
+
+.compose-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 8px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.compose-attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--ink);
+  max-width: 240px;
+}
+
+.compose-attachment-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compose-attachment-size {
+  color: var(--ink-quiet);
+  font-variant-numeric: tabular-nums;
+}
+
+.compose-attachment-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-quiet);
+  border-radius: 50%;
+  cursor: pointer;
+  padding: 0;
+}
+
+.compose-attachment-remove:hover {
+  background: var(--border);
+  color: var(--ink);
+}
+
+.compose-attachment-warning {
+  margin: 4px 12px 8px 12px;
+  padding: 6px 10px;
+  border: 1px solid var(--accent-soft, #f0c674);
+  background: var(--accent-softer, #fff8e1);
+  color: var(--ink);
+  border-radius: 4px;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
 /* Phase 8 — Sheet mode (phone). Compose fills the viewport with a top
    chrome row of [Cancel / title / Send] instead of the window buttons. */
 

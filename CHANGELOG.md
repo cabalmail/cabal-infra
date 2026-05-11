@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Outgoing messages can now carry attachments end-to-end. A new
+  `/upload_url` Lambda hands the client one presigned S3 PUT URL per
+  attachment so bodies are uploaded directly to the existing
+  `cache.<control_domain>` staging bucket (under
+  `outbound/<user>/<uuid>/<filename>`), bypassing API Gateway's 10 MB
+  request ceiling; the bucket's 2-day lifecycle rule cleans up unused
+  uploads. The `/send` Lambda then accepts attachment entries shaped
+  `{filename, mime_type, s3_key}`, validates each key's user segment
+  against the authenticated caller, fetches the bytes from S3, caps the
+  total payload at 25 MB on the server, and assembles a proper
+  `multipart/mixed` via `EmailMessage.add_attachment`. The React
+  composer grows a paperclip button, a chip strip with size and remove,
+  and a soft-warn banner when attachments total over 20 MB. The Apple
+  clients route `OutgoingMessage.attachments` through the same
+  upload-then-send flow and surface the same 20 MB warning in the
+  compose sheet. Closes #377.
+
 ### Changed
 - Apple clients on macOS, iPadOS, and visionOS now open compose as a
   real window scene rather than a modal sheet. New Message, Reply,
