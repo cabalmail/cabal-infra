@@ -3,21 +3,38 @@ import base64
 import os
 import boto3
 from twilio.rest import Client  # pylint: disable=import-error
+from aws_encryption_sdk import (  # pylint: disable=import-error
+    EncryptionSDKClient,
+    StrictAwsKmsMasterKeyProvider,
+    CommitmentPolicy,
+)
 
 region = os.environ['AWS_REGION']
 twilio_account_sid_param = os.environ['TWILIO_ACCOUNT_SID_PARAM']
 twilio_api_key_param = os.environ['TWILIO_API_KEY_PARAM']
 twilio_api_secret_param = os.environ['TWILIO_API_SECRET_PARAM']
 twilio_from_number_param = os.environ['TWILIO_FROM_NUMBER_PARAM']
-# Optional. KMS can recover the key id from the ciphertext metadata
-# for symmetric keys, so a missing KMS_KEY_ID is recoverable. The
-# .get() also avoids crashing at module import if app.yml has shipped
-# new code before infra.yml has had a chance to apply a matching env
-# var change - the assign_osid Lambda uses the same pattern.
+# Optional at import so a code/topology deploy race doesn't crash
+# the cold start. _get_key_provider() raises a useful error at
+# invocation time if it's actually missing.
 kms_key_id = os.environ.get('KMS_KEY_ID')
 
-kms = boto3.client('kms', region_name=region)
 ssm = boto3.client('ssm', region_name=region)
+
+# Cognito encrypts the custom SMS sender OTP via the AWS Encryption
+# SDK, not raw KMS - the ciphertext carries the SDK's envelope and
+# raw kms.decrypt() rejects it with InvalidCiphertextException. The
+# SDK does its own kms:Decrypt under the hood through the key
+# provider, so existing IAM (kms:Decrypt on the key) is sufficient.
+#
+# FORBID_ENCRYPT_ALLOW_DECRYPT lets us decrypt ciphertexts produced
+# with or without key commitment. We never encrypt, so the
+# forbid-encrypt half doesn't constrain us and we don't have to
+# guess which mode Cognito is using.
+_ENCRYPTION_CLIENT = EncryptionSDKClient(
+    commitment_policy=CommitmentPolicy.FORBID_ENCRYPT_ALLOW_DECRYPT,
+)
+_KEY_PROVIDER = None
 
 _TWILIO_CLIENT = None
 _TWILIO_FROM_NUMBER = None
@@ -44,27 +61,27 @@ def _get_twilio_client():
     return _TWILIO_CLIENT
 
 
-def _decrypt_code(event):
-    """Decrypt the OTP Cognito handed us in event['request']['code'].
+def _get_key_provider():
+    """Build (and cache) the AWS Encryption SDK key provider."""
+    global _KEY_PROVIDER  # pylint: disable=global-statement
+    if _KEY_PROVIDER is None:
+        if not kms_key_id:
+            raise RuntimeError(
+                'KMS_KEY_ID env var not set; cannot construct '
+                'AWS Encryption SDK key provider for decryption'
+            )
+        _KEY_PROVIDER = StrictAwsKmsMasterKeyProvider(key_ids=[kms_key_id])
+    return _KEY_PROVIDER
 
-    The ciphertext is base64-encoded and encrypted under the user
-    pool's configured KMS key (var.sms_kms_key_arn) with
-    EncryptionContext = {'username': <user>, 'userpoolId': <pool>}.
-    KMS Decrypt fails with InvalidCiphertextException if the context
-    doesn't match, so we have to mirror it exactly.
-    """
+
+def _decrypt_code(event):
+    """Decrypt the OTP Cognito handed us in event['request']['code']."""
     ciphertext = base64.b64decode(event['request']['code'])
-    decrypt_args = {
-        'CiphertextBlob': ciphertext,
-        'EncryptionContext': {
-            'username': event['userName'],
-            'userpoolId': event['userPoolId'],
-        },
-    }
-    if kms_key_id:
-        decrypt_args['KeyId'] = kms_key_id
-    response = kms.decrypt(**decrypt_args)
-    return response['Plaintext'].decode('utf-8')
+    plaintext, _header = _ENCRYPTION_CLIENT.decrypt(
+        source=ciphertext,
+        key_provider=_get_key_provider(),
+    )
+    return plaintext.decode('utf-8')
 
 
 def _message_body(trigger_source, code):

@@ -31,7 +31,20 @@ STAGING="$(mktemp -d)"
 trap 'rm -rf "${STAGING}"' EXIT
 
 cp "${SRC_DIR}/function.py" "${STAGING}/"
-pip install --no-compile -r "${SRC_DIR}/requirements.txt" -t "${STAGING}" 2>/dev/null || true
+# aws-encryption-sdk pulls cryptography, which has native code. The
+# GHA build host is x86_64 but the Lambda runs on arm64, so we have
+# to ask pip for arm64 manylinux wheels explicitly - otherwise pip
+# either grabs the x86_64 wheel (won't run on the Lambda) or tries
+# to build from sdist (fails without dev headers). --only-binary
+# refuses sdist fallback so a missing wheel surfaces loudly rather
+# than as a runtime ImportError.
+pip install --no-compile \
+  --platform manylinux2014_aarch64 \
+  --only-binary=:all: \
+  --python-version 3.13 \
+  --implementation cp \
+  -r "${SRC_DIR}/requirements.txt" \
+  -t "${STAGING}"
 
 pushd "${STAGING}" >/dev/null
 find . -depth -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
