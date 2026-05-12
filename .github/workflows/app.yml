@@ -18,7 +18,7 @@ on:
         description: >-
           Comma-separated areas to build and deploy. Allowed values:
           all, docker, lambda_api, lambda_counter, lambda_certbot,
-          react. Defaults to "all".
+          lambda_sms_sender, react. Defaults to "all".
         required: false
         default: all
         type: string
@@ -38,6 +38,7 @@ on:
       - '.github/scripts/build-api.sh'
       - '.github/scripts/build-api-one.sh'
       - '.github/scripts/build-counter.sh'
+      - '.github/scripts/build-sms-sender.sh'
       - '.github/scripts/deploy-ecs-service.sh'
       - '.github/scripts/deploy-lambda-image.sh'
       - '.github/scripts/deploy-lambda-zip.sh'
@@ -69,6 +70,7 @@ jobs:
       lambda_api: ${{ steps.areas.outputs.lambda_api }}
       lambda_counter: ${{ steps.areas.outputs.lambda_counter }}
       lambda_certbot: ${{ steps.areas.outputs.lambda_certbot }}
+      lambda_sms_sender: ${{ steps.areas.outputs.lambda_sms_sender }}
       react: ${{ steps.areas.outputs.react }}
     steps:
     - name: checkout
@@ -126,6 +128,11 @@ jobs:
             - 'lambda/certbot-renewal/**'
             - '.github/workflows/app.yml'
             - '.github/scripts/deploy-lambda-image.sh'
+          lambda_sms_sender:
+            - 'lambda/sms-sender/**'
+            - '.github/workflows/app.yml'
+            - '.github/scripts/build-sms-sender.sh'
+            - '.github/scripts/deploy-lambda-zip.sh'
           react:
             - 'react/admin/**'
             - '.github/workflows/app.yml'
@@ -139,12 +146,13 @@ jobs:
         LAMBDA_API: ${{ steps.filter.outputs.lambda_api }}
         LAMBDA_COUNTER: ${{ steps.filter.outputs.lambda_counter }}
         LAMBDA_CERTBOT: ${{ steps.filter.outputs.lambda_certbot }}
+        LAMBDA_SMS_SENDER: ${{ steps.filter.outputs.lambda_sms_sender }}
         REACT: ${{ steps.filter.outputs.react }}
       run: |
         set -euo pipefail
         if [ "${EVENT_NAME}" = "push" ]; then
           # Push: trust dorny/paths-filter results.
-          for pair in "docker:${DOCKER}" "lambda_api:${LAMBDA_API}" "lambda_counter:${LAMBDA_COUNTER}" "lambda_certbot:${LAMBDA_CERTBOT}" "react:${REACT}"; do
+          for pair in "docker:${DOCKER}" "lambda_api:${LAMBDA_API}" "lambda_counter:${LAMBDA_COUNTER}" "lambda_certbot:${LAMBDA_CERTBOT}" "lambda_sms_sender:${LAMBDA_SMS_SENDER}" "react:${REACT}"; do
             name="${pair%%:*}"
             val="${pair#*:}"
             if [ "${val}" = "true" ]; then
@@ -161,7 +169,7 @@ jobs:
             [ "${normalised}" = "all" ] && return 0
             case "${wanted}" in *",$1,"*) return 0 ;; *) return 1 ;; esac
           }
-          for a in docker lambda_api lambda_counter lambda_certbot react; do
+          for a in docker lambda_api lambda_counter lambda_certbot lambda_sms_sender react; do
             if is_on "${a}"; then
               echo "${a}=true" >> "$GITHUB_OUTPUT"
             else
@@ -404,6 +412,44 @@ jobs:
       run: |
         BUCKET="admin.${TF_VAR_CONTROL_DOMAIN}"
         ./.github/scripts/deploy-lambda-zip.sh assign_osid "${BUCKET}"
+
+  lambda-sms-sender:
+    needs: setup
+    if: needs.setup.outputs.lambda_sms_sender == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+    steps:
+    - name: checkout
+      uses: actions/checkout@v5
+
+    - name: pylint
+      run: pip install pylint && pylint --rcfile ./lambda/api/.pylintrc ./lambda/sms-sender/function.py
+
+    - name: configure-aws
+      run: |
+        aws configure --profile deploy_lambda <<-EOF > /dev/null 2>&1
+        ${{ secrets.AWS_ACCESS_KEY_ID }}
+        ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        ${{ secrets.AWS_REGION }}
+        json
+        EOF
+
+    - name: build
+      env:
+        TF_VAR_CONTROL_DOMAIN: ${{ vars.TF_VAR_CONTROL_DOMAIN }}
+      run: ./.github/scripts/build-sms-sender.sh
+
+    - name: deploy
+      env:
+        TF_VAR_CONTROL_DOMAIN: ${{ vars.TF_VAR_CONTROL_DOMAIN }}
+      run: |
+        BUCKET="admin.${TF_VAR_CONTROL_DOMAIN}"
+        ./.github/scripts/deploy-lambda-zip.sh sms_sender "${BUCKET}"
 
   react:
     needs: setup

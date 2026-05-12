@@ -116,3 +116,30 @@ variable "lambda_pinned_hashes" {
   description = "Map of Lambda function name to currently-deployed CodeSha256, recorded from AWS at CI time so a topology-only Terraform apply can plan against running code identities once phase 3 introduces out-of-band Lambda deploys."
   default     = {}
 }
+
+variable "twilio_account_sid" {
+  type        = string
+  description = "Twilio Account SID for SMS sending"
+  sensitive   = true
+  default     = ""
+}
+
+variable "twilio_api_key" {
+  type        = string
+  description = "Twilio API key for SMS sending"
+  sensitive   = true
+  default     = ""
+}
+
+variable "twilio_api_secret" {
+  type        = string
+  description = "Twilio API secret for SMS sending"
+  sensitive   = true
+  default     = ""
+}
+
+variable "twilio_from_number" {
+  type        = string
+  description = "Twilio phone number to send SMS from"
+  default     = ""
+}
