@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- "Resend code" control on the signup verification and password-reset
+  screens. The button stays clickable until Cognito itself refuses
+  with `LimitExceededException` (which it does after ~5 resends per
+  user per hour); at that point the UI swaps to "Too many resend
+  attempts. Try again in about an hour." and disables the control
+  until the window passes. The lockout signal is persisted to
+  localStorage, keyed by `(flow, username)`, so a page refresh
+  doesn't make the message disappear, and a different account or
+  flow gets its own state. Implementation is a reusable
+  `useResendThrottle` hook plus an in-flight guard in `App.jsx` that
+  disables the button while a request is on the wire.
+
 ## [0.9.17] - 2026-05-11
 
 ### Fixed

@@ -1,9 +1,49 @@
 import AuthShell from '../Login/AuthShell';
 
-function Verify({ onSubmit, onCodeChange, code, onBackToSignIn }) {
+function formatLockout(seconds) {
+  if (seconds >= 60) {
+    const mins = Math.ceil(seconds / 60);
+    return `${mins} minute${mins === 1 ? '' : 's'}`;
+  }
+  return `${seconds} second${seconds === 1 ? '' : 's'}`;
+}
+
+function Verify({
+  onSubmit,
+  onCodeChange,
+  code,
+  onBackToSignIn,
+  onResend,
+  resendInFlight = false,
+  resendLocked = false,
+  resendLockoutRemaining = 0,
+}) {
   const headerRight = onBackToSignIn ? (
     <span><a href="#" onClick={onBackToSignIn}>Back to sign in</a></span>
   ) : null;
+  let resendBody;
+  if (resendLocked) {
+    resendBody = (
+      <span className="auth__resend-locked">
+        Too many resend attempts. Try again in about {formatLockout(resendLockoutRemaining)}.
+      </span>
+    );
+  } else if (resendInFlight) {
+    resendBody = (
+      <button type="button" disabled>
+        Sending...
+      </button>
+    );
+  } else {
+    resendBody = (
+      <>
+        Didn&rsquo;t get it?{' '}
+        <button type="button" onClick={onResend} disabled={!onResend}>
+          Resend code
+        </button>
+      </>
+    );
+  }
   return (
     <AuthShell headerRight={headerRight} cardSize="narrow">
       <p className="auth__eyebrow">Verify</p>
@@ -32,6 +72,11 @@ function Verify({ onSubmit, onCodeChange, code, onBackToSignIn }) {
         </div>
         <button type="submit" className="auth__btn-primary">Verify</button>
       </form>
+      {onResend ? (
+        <p className="auth__alt auth__resend" aria-live="polite">
+          {resendBody}
+        </p>
+      ) : null}
     </AuthShell>
   );
 }
