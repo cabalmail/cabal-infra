@@ -444,11 +444,21 @@ jobs:
         TF_VAR_CONTROL_DOMAIN: ${{ vars.TF_VAR_CONTROL_DOMAIN }}
       run: ./.github/scripts/build-sms-sender.sh
 
+    # Mirrors the lambda-api skip-with-warning pre-check so the first
+    # push that introduces this function does not fail CI: the zip
+    # lands in S3 here, then infra.yml creates the function from S3
+    # on the next apply, and subsequent pushes find the function and
+    # update it normally.
     - name: deploy
       env:
         TF_VAR_CONTROL_DOMAIN: ${{ vars.TF_VAR_CONTROL_DOMAIN }}
       run: |
+        set -euo pipefail
         BUCKET="admin.${TF_VAR_CONTROL_DOMAIN}"
+        if ! aws lambda get-function --function-name sms_sender >/dev/null 2>&1; then
+          echo "::warning::function sms_sender not deployed in this environment; skipping (zip is in S3 for infra.yml to pick up)"
+          exit 0
+        fi
         ./.github/scripts/deploy-lambda-zip.sh sms_sender "${BUCKET}"
 
   react:

@@ -65,7 +65,7 @@ resource "aws_kms_key" "sms_sender" {
 }
 
 resource "aws_kms_alias" "sms_sender" {
-  name          = "alias/sms-sender"
+  name          = "alias/sms_sender"
   target_key_id = aws_kms_key.sms_sender.key_id
 }
 
@@ -119,7 +119,7 @@ resource "aws_ssm_parameter" "twilio_from_number" {
 
 # IAM role and policy for the Lambda function
 resource "aws_iam_role" "lambda" {
-  name = "sms-sender"
+  name = "sms_sender"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -135,7 +135,7 @@ resource "aws_iam_role" "lambda" {
 }
 
 resource "aws_iam_role_policy" "lambda" {
-  name = "sms-sender-policy"
+  name = "sms_sender_policy"
   role = aws_iam_role.lambda.id
   policy = jsonencode({
     Version = "2012-10-17"
@@ -147,7 +147,7 @@ resource "aws_iam_role_policy" "lambda" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-        Resource = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/sms-sender:${local.wildcard}"
+        Resource = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/sms_sender:${local.wildcard}"
       },
       {
         Effect = "Allow"
@@ -182,7 +182,7 @@ resource "aws_lambda_function" "sms_sender" {
   s3_bucket        = var.bucket
   s3_key           = "lambda/sms_sender.zip"
   source_code_hash = data.aws_s3_object.lambda_function_hash.body
-  function_name    = "sms-sender"
+  function_name    = "sms_sender"
   role             = aws_iam_role.lambda.arn
   handler          = "function.handler"
   runtime          = "python3.13"
