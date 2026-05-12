@@ -30,9 +30,9 @@
   min-width: 0;
 }
 
-/* Hamburger (phone + tablet) ------------------------------------------ */
+/* Sidebar toggle (phone + tablet, email view only) ----------------------- */
 
-.nav__hamburger {
+.nav__sidebar-toggle {
   display: none;
   align-items: center;
   justify-content: center;
@@ -47,17 +47,21 @@
   cursor: pointer;
 }
 
-.nav__hamburger:hover {
+.nav__sidebar-toggle:hover {
   background: var(--surface-hover);
   color: var(--ink);
 }
 
+.nav__sidebar-toggle--hidden {
+  visibility: hidden;
+}
+
 @media (max-width: 1199px) {
-  .nav.logged-in .nav__hamburger { display: inline-flex; }
+  .nav.logged-in .nav__sidebar-toggle { display: inline-flex; }
 }
 
 @media (min-width: 1200px) {
-  .nav__hamburger { display: none; }
+  .nav__sidebar-toggle { display: none; }
 }
 
 /* Brand ---------------------------------------------------------------- */

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Search, Check, Menu } from 'lucide-react';
+import { Search, Check, PanelLeft } from 'lucide-react';
 import logoMarkup from '../assets/logo.svg?raw';
 import './Nav.css';
 
@@ -74,16 +74,6 @@ function Nav({
       className={`nav logged-${loggedIn ? 'in' : 'out'}${isAdmin ? ' is-admin' : ''}`}
     >
       <div className="nav__left">
-        {loggedIn && (
-          <button
-            type="button"
-            className="nav__hamburger"
-            aria-label="Open navigation"
-            onClick={openDrawer}
-          >
-            <Menu size={18} aria-hidden="true" />
-          </button>
-        )}
         <div className="nav__brand">
           <span
             className="nav__brand-tile"
@@ -92,6 +82,16 @@ function Nav({
           />
           <span className="nav__brand-word">Cabalmail</span>
         </div>
+        {loggedIn && (
+          <button
+            type="button"
+            className={`nav__sidebar-toggle${view === 'Email' ? '' : ' nav__sidebar-toggle--hidden'}`}
+            aria-label="Open sidebar"
+            onClick={openDrawer}
+          >
+            <PanelLeft size={18} aria-hidden="true" />
+          </button>
+        )}
       </div>
 
       {loggedIn && (
