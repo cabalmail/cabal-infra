@@ -57,7 +57,13 @@ def _get_twilio_client():
         resp_number = ssm.get_parameter(Name=twilio_from_number_param, WithDecryption=False)
         _TWILIO_FROM_NUMBER = resp_number['Parameter']['Value']
 
-        _TWILIO_CLIENT = Client(account_sid, api_key, api_secret)
+        # twilio.rest.Client signature is (username, password,
+        # account_sid). For API-key auth - which is what we're doing -
+        # the API Key SID (SK...) is the username and the secret is
+        # the password; the Account SID moves to the third arg. (Auth
+        # Token auth is Client(account_sid, auth_token) instead, which
+        # is what everyone remembers and is easy to mis-port.)
+        _TWILIO_CLIENT = Client(api_key, api_secret, account_sid)
     return _TWILIO_CLIENT
 
 
