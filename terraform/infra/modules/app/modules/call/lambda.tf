@@ -106,6 +106,7 @@ resource "aws_iam_role_policy" "lambda" {
                 "dynamodb:Query",
                 "dynamodb:Scan",
                 "dynamodb:PutItem",
+                "dynamodb:UpdateItem",
                 "dynamodb:ListTagsOfResource",
                 "dynamodb:ListGlobalTables",
                 "dynamodb:DescribeGlobalTable"

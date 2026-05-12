@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Server-side support for marking an email address as a favorite. A new
+  `/set_favorite` Lambda toggles the caller's membership in the address
+  row's `favorites` string set on the `cabal-addresses` DynamoDB table;
+  the existing `/list` response now carries a per-caller `favorite`
+  boolean derived from that set. Favorites are per-user, so multi-user
+  addresses can be favorited independently by each assigned user. This
+  is the backend foundation for sectioned (Favorites / All) address
+  lists in the web and native clients.
+
 ### Changed
 - Replaced the responsive nav's hamburger icon with a sidebar-panel icon
   (lucide-react `PanelLeft`), matching the idiom used by Claude Desktop

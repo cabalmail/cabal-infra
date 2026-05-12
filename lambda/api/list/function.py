@@ -24,13 +24,14 @@ def handler(event, _context):
             'ExpressionAttributeValues': {
                 ':user': user
             },
-            'ProjectionExpression': 'subdomain, #c, tld, address, username, #user'
+            'ProjectionExpression': 'subdomain, #c, tld, address, username, #user, favorites'
         }
         while True:
             response = table.scan(**scan_kwargs)
             for item in response.get('Items', []):
                 assigned = item.get('user', '').split('/')
                 if user in assigned:
+                    item['favorite'] = user in (item.pop('favorites', None) or set())
                     items.append(item)
             if 'LastEvaluatedKey' not in response:
                 break
