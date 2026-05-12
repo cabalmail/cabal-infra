@@ -1,11 +1,58 @@
 import { useState } from 'react';
 import AuthShell from '../Login/AuthShell';
 
-function ResetPassword({ onSubmit, onCodeChange, onPasswordChange, code, password, onBackToSignIn }) {
+function formatLockout(seconds) {
+  if (seconds >= 60) {
+    const mins = Math.ceil(seconds / 60);
+    return `${mins} minute${mins === 1 ? '' : 's'}`;
+  }
+  return `${seconds} second${seconds === 1 ? '' : 's'}`;
+}
+
+function ResetPassword({
+  onSubmit,
+  onCodeChange,
+  onPasswordChange,
+  code,
+  password,
+  onBackToSignIn,
+  onResend,
+  resendCooldown = 0,
+  resendLocked = false,
+  resendLockoutRemaining = 0,
+}) {
   const [showPassword, setShowPassword] = useState(false);
   const headerRight = onBackToSignIn ? (
     <span><a href="#" onClick={onBackToSignIn}>Back to sign in</a></span>
   ) : null;
+  const resendDisabled = resendLocked || resendCooldown > 0;
+  let resendBody;
+  if (resendLocked) {
+    resendBody = (
+      <span className="auth__resend-locked">
+        Too many resend attempts. Try again in {formatLockout(resendLockoutRemaining)}.
+      </span>
+    );
+  } else if (resendCooldown > 0) {
+    resendBody = (
+      <span className="auth__resend-cooldown">
+        Resend available in {resendCooldown}s
+      </span>
+    );
+  } else {
+    resendBody = (
+      <>
+        Didn&rsquo;t get it?{' '}
+        <button
+          type="button"
+          onClick={onResend}
+          disabled={resendDisabled || !onResend}
+        >
+          Resend code
+        </button>
+      </>
+    );
+  }
   return (
     <AuthShell headerRight={headerRight} cardSize="narrow">
       <p className="auth__eyebrow">Reset</p>
@@ -58,6 +105,11 @@ function ResetPassword({ onSubmit, onCodeChange, onPasswordChange, code, passwor
         </div>
         <button type="submit" className="auth__btn-primary">Reset password</button>
       </form>
+      {onResend ? (
+        <p className="auth__alt auth__resend" aria-live="polite">
+          {resendBody}
+        </p>
+      ) : null}
     </AuthShell>
   );
 }

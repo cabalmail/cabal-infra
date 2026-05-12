@@ -39,6 +39,7 @@ import AppMessageContext from './contexts/AppMessageContext';
 // Hooks
 import useTheme from './hooks/useTheme';
 import useKeyboardShortcuts from './hooks/useKeyboardShortcuts';
+import useResendThrottle from './hooks/useResendThrottle';
 
 // Site-wide and Theme-specific style.
 // AppLight.css defines unconditional default tokens; AppDark.css overrides
@@ -128,6 +129,12 @@ function App() {
   // Phase 7 §3: controls the ForgotPassword success state. Set on Cognito
   // `forgotPassword` success; cleared when the user leaves the screen.
   const [forgotPasswordSent, setForgotPasswordSent] = useState(false);
+
+  // Throttle "Resend code" clicks on Verify (signup) and ResetPassword.
+  // Counter + cooldown + eventual lockout, persisted to localStorage so
+  // a refresh doesn't reset the budget. See hooks/useResendThrottle.js.
+  const signupResend = useResendThrottle('signup', state.userName);
+  const resetResend = useResendThrottle('reset', state.userName);
 
   // Phase 7 §Interactions: `?` toggles the keyboard-shortcut overlay.
   const [helpOpen, setHelpOpen] = useState(false);
@@ -282,13 +289,34 @@ function App() {
     });
     cognitoUser.confirmRegistration(state.verificationCode, true, (err, _result) => {
       if (!err) {
+        signupResend.reset();
         setState({ view: "Login", verificationCode: null });
         setMessage("Phone verified. Your account is pending admin approval.", false);
       } else {
         setMessage("Verification failed. Please check your code and try again.", true);
       }
     });
-  }, [state.userName, state.verificationCode, setState, setMessage]);
+  }, [state.userName, state.verificationCode, setState, setMessage, signupResend]);
+
+  const doResendVerification = useCallback(() => {
+    if (!signupResend.canResend) return;
+    // Advance the throttle immediately so back-to-back clicks can't bypass
+    // the cooldown while Cognito is in flight. The send itself runs async;
+    // a Cognito failure still costs a slot, which matches the "don't let
+    // the user spam the button" intent.
+    signupResend.recordResend();
+    const cognitoUser = new CognitoUser({
+      Username: state.userName,
+      Pool: UserPool
+    });
+    cognitoUser.resendConfirmationCode((err) => {
+      if (err) {
+        setMessage("Could not resend code. Please try again later.", true);
+      } else {
+        setMessage("A new verification code has been sent to your phone.", false);
+      }
+    });
+  }, [state.userName, signupResend, setMessage]);
 
   const doForgotPassword = useCallback((e) => {
     e.preventDefault();
@@ -311,6 +339,26 @@ function App() {
     });
   }, [state.userName, setMessage]);
 
+  const doResendResetCode = useCallback(() => {
+    if (!resetResend.canResend) return;
+    resetResend.recordResend();
+    const cognitoUser = new CognitoUser({
+      Username: state.userName,
+      Pool: UserPool
+    });
+    cognitoUser.forgotPassword({
+      onSuccess: () => {
+        setMessage("A new reset code has been sent to your phone.", false);
+      },
+      onFailure: () => {
+        setMessage("Could not resend code. Please try again later.", true);
+      },
+      inputVerificationCode: () => {
+        setMessage("A new reset code has been sent to your phone.", false);
+      }
+    });
+  }, [state.userName, resetResend, setMessage]);
+
   const doResetPassword = useCallback((e) => {
     e.preventDefault();
     const cognitoUser = new CognitoUser({
@@ -319,6 +367,7 @@ function App() {
     });
     cognitoUser.confirmPassword(state.verificationCode, state.password, {
       onSuccess: () => {
+        resetResend.reset();
         setState({ view: "Login", verificationCode: null, password: null });
         setMessage("Password reset successful. You can now log in.", false);
       },
@@ -326,7 +375,7 @@ function App() {
         setMessage("Password reset failed. Please check your code and try again.", true);
       }
     });
-  }, [state.userName, state.verificationCode, state.password, setState, setMessage]);
+  }, [state.userName, state.verificationCode, state.password, setState, setMessage, resetResend]);
 
   const doLogin = useCallback((e) => {
     e.preventDefault();
@@ -421,6 +470,10 @@ function App() {
             onCodeChange={doInputChange}
             code={state.verificationCode}
             onBackToSignIn={(e) => { e.preventDefault(); setState({ view: "Login" }); }}
+            onResend={doResendVerification}
+            resendCooldown={signupResend.cooldownSeconds}
+            resendLocked={signupResend.locked}
+            resendLockoutRemaining={signupResend.lockoutRemaining}
           />
         );
       case "ForgotPassword":
@@ -451,6 +504,10 @@ function App() {
             code={state.verificationCode}
             password={state.password}
             onBackToSignIn={(e) => { e.preventDefault(); setState({ view: "Login" }); }}
+            onResend={doResendResetCode}
+            resendCooldown={resetResend.cooldownSeconds}
+            resendLocked={resetResend.locked}
+            resendLockoutRemaining={resetResend.lockoutRemaining}
           />
         );
       case "SignUp":

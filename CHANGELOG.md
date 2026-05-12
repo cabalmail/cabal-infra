@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- "Resend code" control on the signup verification and password-reset
+  screens, with an escalating cooldown (30s -> 60s -> 120s -> 300s
+  between resends) and a one-hour lockout after the schedule is
+  exhausted. State is keyed by `(flow, username)` and persisted to
+  localStorage so a page refresh doesn't hand the user a fresh budget;
+  the lockout self-clears once its window expires. Implemented as a
+  reusable `useResendThrottle` hook so both flows share one budget per
+  account.
+
 ## [0.9.17] - 2026-05-11
 
 ### Fixed
