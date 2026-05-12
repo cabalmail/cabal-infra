@@ -10,7 +10,7 @@ terraform {
     }
     twilio = {
       source  = "twilio/twilio"
-      version = "~> 0.19"
+      version = "~> 0.18.46"
     }
   }
   required_version = ">= 1.9.0"
