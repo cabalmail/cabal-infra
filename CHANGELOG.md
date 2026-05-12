@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Replaced the responsive nav's hamburger icon with a sidebar-panel icon
+  (lucide-react `PanelLeft`), matching the idiom used by Claude Desktop
+  and similar apps. The control now sits to the right of the brand and
+  is hidden via `visibility: hidden` outside the Email view so the logo
+  no longer shifts horizontally when navigating between Email, Users,
+  Addresses, and DMARC.
+
 ### Added
 - "Resend code" control on the signup verification and password-reset
   screens. The button stays clickable until Cognito itself refuses
