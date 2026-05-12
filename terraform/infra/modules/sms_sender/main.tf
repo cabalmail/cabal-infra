@@ -195,6 +195,7 @@ resource "aws_lambda_function" "sms_sender" {
       TWILIO_API_KEY_PARAM     = aws_ssm_parameter.twilio_api_key.name
       TWILIO_API_SECRET_PARAM  = aws_ssm_parameter.twilio_api_secret.name
       TWILIO_FROM_NUMBER_PARAM = aws_ssm_parameter.twilio_from_number.name
+      KMS_KEY_ID               = aws_kms_key.sms_sender.arn
     }
   }
 
