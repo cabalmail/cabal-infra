@@ -9,7 +9,12 @@ twilio_account_sid_param = os.environ['TWILIO_ACCOUNT_SID_PARAM']
 twilio_api_key_param = os.environ['TWILIO_API_KEY_PARAM']
 twilio_api_secret_param = os.environ['TWILIO_API_SECRET_PARAM']
 twilio_from_number_param = os.environ['TWILIO_FROM_NUMBER_PARAM']
-kms_key_id = os.environ['KMS_KEY_ID']
+# Optional. KMS can recover the key id from the ciphertext metadata
+# for symmetric keys, so a missing KMS_KEY_ID is recoverable. The
+# .get() also avoids crashing at module import if app.yml has shipped
+# new code before infra.yml has had a chance to apply a matching env
+# var change - the assign_osid Lambda uses the same pattern.
+kms_key_id = os.environ.get('KMS_KEY_ID')
 
 kms = boto3.client('kms', region_name=region)
 ssm = boto3.client('ssm', region_name=region)
@@ -49,14 +54,16 @@ def _decrypt_code(event):
     doesn't match, so we have to mirror it exactly.
     """
     ciphertext = base64.b64decode(event['request']['code'])
-    response = kms.decrypt(
-        CiphertextBlob=ciphertext,
-        KeyId=kms_key_id,
-        EncryptionContext={
+    decrypt_args = {
+        'CiphertextBlob': ciphertext,
+        'EncryptionContext': {
             'username': event['userName'],
             'userpoolId': event['userPoolId'],
         },
-    )
+    }
+    if kms_key_id:
+        decrypt_args['KeyId'] = kms_key_id
+    response = kms.decrypt(**decrypt_args)
     return response['Plaintext'].decode('utf-8')
 
 
