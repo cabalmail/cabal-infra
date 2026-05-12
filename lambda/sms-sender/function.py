@@ -1,7 +1,5 @@
 """Sends Cognito SMS verification codes via Twilio"""
 import os
-import json
-import base64
 import boto3
 from twilio.rest import Client  # pylint: disable=import-error
 
