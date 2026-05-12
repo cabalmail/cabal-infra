@@ -130,11 +130,15 @@ function App() {
   // `forgotPassword` success; cleared when the user leaves the screen.
   const [forgotPasswordSent, setForgotPasswordSent] = useState(false);
 
-  // Throttle "Resend code" clicks on Verify (signup) and ResetPassword.
-  // Counter + cooldown + eventual lockout, persisted to localStorage so
-  // a refresh doesn't reset the budget. See hooks/useResendThrottle.js.
+  // "Resend code" state for Verify (signup) and ResetPassword. The
+  // hook only holds the lockout signalled by Cognito's
+  // LimitExceededException; the in-flight booleans here disable the
+  // button while a request is on the wire so users don't double-fire.
+  // See hooks/useResendThrottle.js.
   const signupResend = useResendThrottle('signup', state.userName);
   const resetResend = useResendThrottle('reset', state.userName);
+  const [signupResendInFlight, setSignupResendInFlight] = useState(false);
+  const [resetResendInFlight, setResetResendInFlight] = useState(false);
 
   // Phase 7 §Interactions: `?` toggles the keyboard-shortcut overlay.
   const [helpOpen, setHelpOpen] = useState(false);
@@ -299,24 +303,30 @@ function App() {
   }, [state.userName, state.verificationCode, setState, setMessage, signupResend]);
 
   const doResendVerification = useCallback(() => {
-    if (!signupResend.canResend) return;
-    // Advance the throttle immediately so back-to-back clicks can't bypass
-    // the cooldown while Cognito is in flight. The send itself runs async;
-    // a Cognito failure still costs a slot, which matches the "don't let
-    // the user spam the button" intent.
-    signupResend.recordResend();
+    if (signupResend.locked || signupResendInFlight || !state.userName) return;
+    setSignupResendInFlight(true);
     const cognitoUser = new CognitoUser({
       Username: state.userName,
       Pool: UserPool
     });
     cognitoUser.resendConfirmationCode((err) => {
-      if (err) {
-        setMessage("Could not resend code. Please try again later.", true);
-      } else {
+      setSignupResendInFlight(false);
+      if (!err) {
         setMessage("A new verification code has been sent to your phone.", false);
+        return;
+      }
+      // Cognito hit its per-user resend limit. Mirror the lockout in
+      // local state so the UI stops offering Resend until the window
+      // passes; the message echoes Cognito rather than inventing a
+      // schedule.
+      if (err.code === 'LimitExceededException' || err.name === 'LimitExceededException') {
+        signupResend.recordLimitHit();
+        setMessage("Too many resend attempts. Please try again later.", true);
+      } else {
+        setMessage("Could not resend code. Please try again later.", true);
       }
     });
-  }, [state.userName, signupResend, setMessage]);
+  }, [state.userName, signupResend, signupResendInFlight, setMessage]);
 
   const doForgotPassword = useCallback((e) => {
     e.preventDefault();
@@ -340,24 +350,32 @@ function App() {
   }, [state.userName, setMessage]);
 
   const doResendResetCode = useCallback(() => {
-    if (!resetResend.canResend) return;
-    resetResend.recordResend();
+    if (resetResend.locked || resetResendInFlight || !state.userName) return;
+    setResetResendInFlight(true);
     const cognitoUser = new CognitoUser({
       Username: state.userName,
       Pool: UserPool
     });
     cognitoUser.forgotPassword({
       onSuccess: () => {
+        setResetResendInFlight(false);
         setMessage("A new reset code has been sent to your phone.", false);
       },
-      onFailure: () => {
-        setMessage("Could not resend code. Please try again later.", true);
+      onFailure: (err) => {
+        setResetResendInFlight(false);
+        if (err && (err.code === 'LimitExceededException' || err.name === 'LimitExceededException')) {
+          resetResend.recordLimitHit();
+          setMessage("Too many resend attempts. Please try again later.", true);
+        } else {
+          setMessage("Could not resend code. Please try again later.", true);
+        }
       },
       inputVerificationCode: () => {
+        setResetResendInFlight(false);
         setMessage("A new reset code has been sent to your phone.", false);
       }
     });
-  }, [state.userName, resetResend, setMessage]);
+  }, [state.userName, resetResend, resetResendInFlight, setMessage]);
 
   const doResetPassword = useCallback((e) => {
     e.preventDefault();
@@ -471,7 +489,7 @@ function App() {
             code={state.verificationCode}
             onBackToSignIn={(e) => { e.preventDefault(); setState({ view: "Login" }); }}
             onResend={doResendVerification}
-            resendCooldown={signupResend.cooldownSeconds}
+            resendInFlight={signupResendInFlight}
             resendLocked={signupResend.locked}
             resendLockoutRemaining={signupResend.lockoutRemaining}
           />
@@ -505,7 +523,7 @@ function App() {
             password={state.password}
             onBackToSignIn={(e) => { e.preventDefault(); setState({ view: "Login" }); }}
             onResend={doResendResetCode}
-            resendCooldown={resetResend.cooldownSeconds}
+            resendInFlight={resetResendInFlight}
             resendLocked={resetResend.locked}
             resendLockoutRemaining={resetResend.lockoutRemaining}
           />

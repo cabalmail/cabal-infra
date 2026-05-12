@@ -14,36 +14,31 @@ function Verify({
   code,
   onBackToSignIn,
   onResend,
-  resendCooldown = 0,
+  resendInFlight = false,
   resendLocked = false,
   resendLockoutRemaining = 0,
 }) {
   const headerRight = onBackToSignIn ? (
     <span><a href="#" onClick={onBackToSignIn}>Back to sign in</a></span>
   ) : null;
-  const resendDisabled = resendLocked || resendCooldown > 0;
   let resendBody;
   if (resendLocked) {
     resendBody = (
       <span className="auth__resend-locked">
-        Too many resend attempts. Try again in {formatLockout(resendLockoutRemaining)}.
+        Too many resend attempts. Try again in about {formatLockout(resendLockoutRemaining)}.
       </span>
     );
-  } else if (resendCooldown > 0) {
+  } else if (resendInFlight) {
     resendBody = (
-      <span className="auth__resend-cooldown">
-        Resend available in {resendCooldown}s
-      </span>
+      <button type="button" disabled>
+        Sending...
+      </button>
     );
   } else {
     resendBody = (
       <>
         Didn&rsquo;t get it?{' '}
-        <button
-          type="button"
-          onClick={onResend}
-          disabled={resendDisabled || !onResend}
-        >
+        <button type="button" onClick={onResend} disabled={!onResend}>
           Resend code
         </button>
       </>

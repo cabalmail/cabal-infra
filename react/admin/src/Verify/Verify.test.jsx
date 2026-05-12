@@ -20,25 +20,19 @@ describe('Verify', () => {
     expect(screen.queryByRole('button', { name: /resend/i })).not.toBeInTheDocument();
   });
 
-  it('renders a clickable resend button when cooldown is 0 and not locked', () => {
+  it('renders a clickable resend button at rest', () => {
     const onResend = vi.fn();
-    render(<Verify {...baseProps} onResend={onResend} resendCooldown={0} resendLocked={false} />);
+    render(<Verify {...baseProps} onResend={onResend} />);
     const btn = screen.getByRole('button', { name: 'Resend code' });
     expect(btn).toBeEnabled();
     fireEvent.click(btn);
     expect(onResend).toHaveBeenCalledTimes(1);
   });
 
-  it('shows the countdown when cooldown > 0', () => {
-    render(
-      <Verify
-        {...baseProps}
-        onResend={vi.fn()}
-        resendCooldown={42}
-        resendLocked={false}
-      />,
-    );
-    expect(screen.getByText(/Resend available in 42s/i)).toBeInTheDocument();
+  it('shows a disabled "Sending..." button while a request is in flight', () => {
+    render(<Verify {...baseProps} onResend={vi.fn()} resendInFlight={true} />);
+    const btn = screen.getByRole('button', { name: /sending/i });
+    expect(btn).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Resend code' })).not.toBeInTheDocument();
   });
 
@@ -47,12 +41,12 @@ describe('Verify', () => {
       <Verify
         {...baseProps}
         onResend={vi.fn()}
-        resendCooldown={0}
         resendLocked={true}
         resendLockoutRemaining={45}
       />,
     );
-    expect(screen.getByText(/Too many resend attempts.*45 seconds/i)).toBeInTheDocument();
+    expect(screen.getByText(/Too many resend attempts.*about 45 seconds/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /resend|sending/i })).not.toBeInTheDocument();
   });
 
   it('formats lockout remaining in minutes when over 60 seconds', () => {
@@ -60,11 +54,10 @@ describe('Verify', () => {
       <Verify
         {...baseProps}
         onResend={vi.fn()}
-        resendCooldown={0}
         resendLocked={true}
         resendLockoutRemaining={59 * 60}
       />,
     );
-    expect(screen.getByText(/Too many resend attempts.*59 minutes/i)).toBeInTheDocument();
+    expect(screen.getByText(/Too many resend attempts.*about 59 minutes/i)).toBeInTheDocument();
   });
 });

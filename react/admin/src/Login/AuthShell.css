@@ -325,7 +325,6 @@
 
 /* ---- resend code link (Verify, ResetPassword) ---------------------- */
 
-.auth__resend-cooldown,
 .auth__resend-locked {
   color: var(--ink-quiet);
   font-style: italic;

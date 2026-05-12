@@ -2,10 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 
 const STORAGE_KEY = 'cabalmail.resend.v1';
 
-// Cooldown schedule (seconds) keyed by resend count. The Nth click
-// applies COOLDOWNS[N-1] before another resend is allowed. After the
-// last entry is exhausted, the next attempt trips LOCKOUT_SECONDS.
-const COOLDOWNS = [30, 60, 120, 300];
+// Cognito enforces ~5 resends per user per hour and returns
+// LimitExceededException once that window is exceeded. We don't know
+// the precise rolling-window semantics on Cognito's side, so we just
+// hold the lockout for an hour from the moment we saw the error and
+// then let the user try again. If Cognito still says no, we'll get
+// LimitExceededException again and the state refreshes.
 const LOCKOUT_SECONDS = 60 * 60;
 
 function now() {
@@ -41,7 +43,7 @@ function clearStored() {
 }
 
 function emptyState(key) {
-  return { key, count: 0, nextAt: 0, lockedUntil: 0 };
+  return { key, lockedUntil: 0 };
 }
 
 function loadFor(key) {
@@ -49,106 +51,71 @@ function loadFor(key) {
   if (!stored || stored.key !== key) {
     return emptyState(key);
   }
-  // Lockout expired since last visit? Reset so the user gets a fresh
-  // window rather than being told they're still locked out.
   if (stored.lockedUntil && stored.lockedUntil <= now()) {
     return emptyState(key);
   }
-  return {
-    key,
-    count: Number(stored.count) || 0,
-    nextAt: Number(stored.nextAt) || 0,
-    lockedUntil: Number(stored.lockedUntil) || 0,
-  };
+  return { key, lockedUntil: Number(stored.lockedUntil) || 0 };
 }
 
 /**
- * Throttles "resend verification code" clicks on signup / forgot-password.
+ * Tracks the "Cognito told us we hit the resend rate limit" state
+ * across page refreshes. Cognito enforces the actual policy (~5
+ * resends per user per hour) and returns LimitExceededException
+ * once it's exceeded; this hook persists that signal so the UI keeps
+ * showing the lockout message even after a refresh, until an hour
+ * has passed.
  *
- * After each resend the user must wait COOLDOWNS[count-1] seconds before
- * clicking again; the schedule escalates 30s -> 60s -> 120s -> 300s.
- * Past the last entry the next attempt trips a one-hour lockout. State
- * is persisted to localStorage so a page refresh doesn't hand the user
- * a fresh budget. The `key` (flow + username) scopes the throttle so
- * starting a different account doesn't inherit a stranger's counter.
+ * The hook deliberately does not impose its own pre-emptive cooldown.
+ * Cognito decides what's allowed; we just reflect what it tells us
+ * so the user gets an accurate picture of what's happening.
  *
- * `flow`     - one of 'signup' | 'reset', so signup and forgot-password
- *              don't share a counter.
- * `username` - included in the storage key. Falsy username yields a
- *              permanently-locked-out result; the caller should mount
- *              the hook only once a username is known.
+ * `flow`     - 'signup' | 'reset', so signup and forgot-password
+ *              don't share a lockout.
+ * `username` - included in the storage key so starting a different
+ *              account doesn't inherit a stranger's lockout. Falsy
+ *              usernames are accepted but the resulting state is
+ *              effectively scratch.
  */
 export default function useResendThrottle(flow, username) {
   const key = `${flow}:${username || ''}`;
   const [state, setState] = useState(() => loadFor(key));
   const [tick, setTick] = useState(0);
 
-  // Re-initialise when the (flow, username) pair changes - e.g. user
-  // backs out, switches account, and starts a fresh signup.
   useEffect(() => {
     setState(loadFor(key));
   }, [key]);
 
-  // Tick once a second while there is something to count down. When
-  // nothing's pending we leave the interval off so we don't churn the
-  // event loop on the Login screen.
+  // Tick once a second while the lockout is counting down so
+  // lockoutRemaining stays current. No interval when nothing is
+  // pending - the Login screen shouldn't churn.
   useEffect(() => {
-    const pending = state.nextAt > now() || state.lockedUntil > now();
-    if (!pending) return undefined;
+    if (state.lockedUntil <= now()) return undefined;
     const id = setInterval(() => setTick(t => t + 1), 1000);
     return () => clearInterval(id);
-  }, [state.nextAt, state.lockedUntil, tick]);
+  }, [state.lockedUntil, tick]);
 
-  // Persist whenever state changes (except when it's been reset to a
-  // pristine empty state for a known key, in which case drop the
-  // storage entry so unrelated flows start clean).
   useEffect(() => {
-    if (state.count === 0 && state.lockedUntil === 0 && state.nextAt === 0) {
+    if (state.lockedUntil === 0) {
       clearStored();
       return;
     }
     writeStored(state);
   }, [state]);
 
-  // Lockout window expired in the background? Promote to a fresh state.
+  // Lockout expired in the background? Promote to a fresh state.
   useEffect(() => {
     if (state.lockedUntil && state.lockedUntil <= now()) {
       setState(emptyState(key));
     }
   }, [tick, state.lockedUntil, key]);
 
-  const cooldownSeconds = state.nextAt > now()
-    ? Math.ceil((state.nextAt - now()) / 1000)
-    : 0;
   const lockoutRemaining = state.lockedUntil > now()
     ? Math.ceil((state.lockedUntil - now()) / 1000)
     : 0;
   const locked = lockoutRemaining > 0;
-  const canResend = !locked && cooldownSeconds === 0 && Boolean(username);
 
-  const recordResend = useCallback(() => {
-    setState(prev => {
-      // Already locked out: clicking again shouldn't extend the lockout
-      // - just no-op. The UI shouldn't have called us in that state but
-      // belt-and-braces.
-      if (prev.lockedUntil > now()) return prev;
-      const nextCount = prev.count + 1;
-      // Past the cooldown schedule = lockout.
-      if (nextCount > COOLDOWNS.length) {
-        return {
-          ...prev,
-          count: nextCount,
-          nextAt: 0,
-          lockedUntil: now() + LOCKOUT_SECONDS * 1000,
-        };
-      }
-      return {
-        ...prev,
-        count: nextCount,
-        nextAt: now() + COOLDOWNS[nextCount - 1] * 1000,
-        lockedUntil: 0,
-      };
-    });
+  const recordLimitHit = useCallback(() => {
+    setState(prev => ({ ...prev, lockedUntil: now() + LOCKOUT_SECONDS * 1000 }));
   }, []);
 
   const reset = useCallback(() => {
@@ -156,11 +123,9 @@ export default function useResendThrottle(flow, username) {
   }, [key]);
 
   return {
-    cooldownSeconds,
     locked,
     lockoutRemaining,
-    canResend,
-    recordResend,
+    recordLimitHit,
     reset,
   };
 }

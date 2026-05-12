@@ -9,13 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - "Resend code" control on the signup verification and password-reset
-  screens, with an escalating cooldown (30s -> 60s -> 120s -> 300s
-  between resends) and a one-hour lockout after the schedule is
-  exhausted. State is keyed by `(flow, username)` and persisted to
-  localStorage so a page refresh doesn't hand the user a fresh budget;
-  the lockout self-clears once its window expires. Implemented as a
-  reusable `useResendThrottle` hook so both flows share one budget per
-  account.
+  screens. The button stays clickable until Cognito itself refuses
+  with `LimitExceededException` (which it does after ~5 resends per
+  user per hour); at that point the UI swaps to "Too many resend
+  attempts. Try again in about an hour." and disables the control
+  until the window passes. The lockout signal is persisted to
+  localStorage, keyed by `(flow, username)`, so a page refresh
+  doesn't make the message disappear, and a different account or
+  flow gets its own state. Implementation is a reusable
+  `useResendThrottle` hook plus an in-flight guard in `App.jsx` that
+  disables the button while a request is on the wire.
 
 ## [0.9.17] - 2026-05-11
 
