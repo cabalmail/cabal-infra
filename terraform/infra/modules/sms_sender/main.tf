@@ -10,11 +10,19 @@ locals {
   wildcard = "*"
 }
 
-# KMS key for Cognito to encrypt verification codes
+# KMS key for Cognito to encrypt verification codes.
+#
+# bypass_policy_lockout_safety_check is set because the safety check
+# refuses to create the key when it can't prove the calling principal
+# (the GHA deploy IAM user) has kms:PutKeyPolicy through the root
+# delegation, even though the policy below grants kms:* to account
+# root. The policy stays manageable via the root principal, so
+# bypassing the check is safe.
 resource "aws_kms_key" "sms_sender" {
-  description             = "KMS key for Cognito SMS sender"
-  deletion_window_in_days = 7
-  enable_key_rotation     = true
+  description                        = "KMS key for Cognito SMS sender"
+  deletion_window_in_days            = 7
+  enable_key_rotation                = true
+  bypass_policy_lockout_safety_check = true
 
   policy = jsonencode({
     Version = "2012-10-17"
