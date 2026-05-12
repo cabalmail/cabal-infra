@@ -51,11 +51,11 @@ module "lambda_layers" {
 module "sms_sender" {
   source = "./modules/sms_sender"
 
-  bucket                 = module.bucket.bucket
-  twilio_account_sid     = var.twilio_account_sid
-  twilio_api_key         = var.twilio_api_key
-  twilio_api_secret      = var.twilio_api_secret
-  twilio_from_number     = var.twilio_from_number
+  bucket             = module.bucket.bucket
+  twilio_account_sid = var.twilio_account_sid
+  twilio_api_key     = var.twilio_api_key
+  twilio_api_secret  = var.twilio_api_secret
+  twilio_from_number = var.twilio_from_number
 }
 
 # Creates a Cognito User Pool
@@ -68,6 +68,7 @@ module "pool" {
   healthcheck_ping_param = local.hc_ping_assign_osid
   sms_sender_arn         = module.sms_sender.lambda_arn
   sms_kms_key_arn        = module.sms_sender.kms_key_arn
+  use_twilio_sms         = var.use_twilio_sms
 }
 
 # Creates an AWS Certificate Manager certificate for use on load balancers and CloudFront

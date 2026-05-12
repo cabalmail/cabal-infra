@@ -143,3 +143,9 @@ variable "twilio_from_number" {
   description = "Twilio phone number to send SMS from"
   default     = ""
 }
+
+variable "use_twilio_sms" {
+  type        = bool
+  description = "Feature flag: when true, wire the custom_sms_sender (Twilio) Lambda + KMS key into the Cognito user pool. When false, Cognito stays on the legacy SNS/EUM SMS path. See docs/0.9.0/twilio-sms-migration-plan.md."
+  default     = false
+}

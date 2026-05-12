@@ -29,8 +29,25 @@ resource "aws_cognito_user_pool" "users" {
       min_value = 2000
     }
   }
+  # custom_sms_sender (Twilio) is feature-flagged per env via
+  # var.use_twilio_sms. When the flag is true Cognito hands SMS
+  # delivery to the sms-sender Lambda, encrypts OTPs with the
+  # provided KMS key, and bypasses the SNS hot path. The
+  # sms_configuration block above stays in place because Cognito
+  # still validates it whenever a phone attribute is auto-verified.
+  # See docs/0.9.0/twilio-sms-migration-plan.md.
   lambda_config {
     post_confirmation = aws_lambda_function.assign_osid.arn
+
+    dynamic "custom_sms_sender" {
+      for_each = var.use_twilio_sms ? [1] : []
+      content {
+        lambda_arn     = var.sms_sender_arn
+        lambda_version = "V1_0"
+      }
+    }
+
+    kms_key_id = var.use_twilio_sms ? var.sms_kms_key_arn : null
   }
 }
 

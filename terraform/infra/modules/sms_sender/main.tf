@@ -63,47 +63,47 @@ resource "aws_kms_alias" "sms_sender" {
 
 # SSM SecureString parameters for Twilio credentials
 resource "aws_ssm_parameter" "twilio_account_sid" {
-  name            = "/cabal/twilio/account_sid"
-  description     = "Twilio Account SID for SMS sending"
-  type            = "SecureString"
-  value           = var.twilio_account_sid
-  key_id          = aws_kms_key.sms_sender.id
-  overwrite       = true
+  name        = "/cabal/twilio/account_sid"
+  description = "Twilio Account SID for SMS sending"
+  type        = "SecureString"
+  value       = var.twilio_account_sid
+  key_id      = aws_kms_key.sms_sender.id
+  overwrite   = true
   tags = {
     Name = "twilio-account-sid"
   }
 }
 
 resource "aws_ssm_parameter" "twilio_api_key" {
-  name            = "/cabal/twilio/api_key"
-  description     = "Twilio API key for SMS sending"
-  type            = "SecureString"
-  value           = var.twilio_api_key
-  key_id          = aws_kms_key.sms_sender.id
-  overwrite       = true
+  name        = "/cabal/twilio/api_key"
+  description = "Twilio API key for SMS sending"
+  type        = "SecureString"
+  value       = var.twilio_api_key
+  key_id      = aws_kms_key.sms_sender.id
+  overwrite   = true
   tags = {
     Name = "twilio-api-key"
   }
 }
 
 resource "aws_ssm_parameter" "twilio_api_secret" {
-  name            = "/cabal/twilio/api_secret"
-  description     = "Twilio API secret for SMS sending"
-  type            = "SecureString"
-  value           = var.twilio_api_secret
-  key_id          = aws_kms_key.sms_sender.id
-  overwrite       = true
+  name        = "/cabal/twilio/api_secret"
+  description = "Twilio API secret for SMS sending"
+  type        = "SecureString"
+  value       = var.twilio_api_secret
+  key_id      = aws_kms_key.sms_sender.id
+  overwrite   = true
   tags = {
     Name = "twilio-api-secret"
   }
 }
 
 resource "aws_ssm_parameter" "twilio_from_number" {
-  name            = "/cabal/twilio/from_number"
-  description     = "Twilio phone number for SMS sending"
-  type            = "String"
-  value           = var.twilio_from_number
-  overwrite       = true
+  name        = "/cabal/twilio/from_number"
+  description = "Twilio phone number for SMS sending"
+  type        = "String"
+  value       = var.twilio_from_number
+  overwrite   = true
   tags = {
     Name = "twilio-from-number"
   }
@@ -111,7 +111,7 @@ resource "aws_ssm_parameter" "twilio_from_number" {
 
 # IAM role and policy for the Lambda function
 resource "aws_iam_role" "lambda" {
-  name               = "sms-sender"
+  name = "sms-sender"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [

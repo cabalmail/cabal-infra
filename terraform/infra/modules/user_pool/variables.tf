@@ -78,3 +78,9 @@ variable "sms_kms_key_arn" {
   description = "ARN of the KMS key for SMS sender. Required when custom_sms_sender is configured."
   default     = ""
 }
+
+variable "use_twilio_sms" {
+  type        = bool
+  description = "Feature flag: when true, wire the custom_sms_sender (Twilio) Lambda + KMS key into the user pool. When false, Cognito stays on the legacy SNS/EUM path."
+  default     = false
+}
