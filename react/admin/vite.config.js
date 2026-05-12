@@ -51,6 +51,13 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: './src/test/setup.js',
+    // Run test files serially in a single forked process. jsdom is heavy
+    // and the default parallel worker pool was driving RSS into multi-GB
+    // territory on this suite. Trades wall-clock for memory ceiling.
+    pool: 'forks',
+    poolOptions: {
+      forks: { singleFork: true }
+    },
     server: {
       deps: {
         inline: [/@tiptap\/.*/]
