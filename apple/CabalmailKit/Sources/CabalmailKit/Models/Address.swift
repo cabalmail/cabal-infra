@@ -45,12 +45,12 @@ public struct Address: Sendable, Codable, Hashable, Identifiable {
     }
 
     public init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        self.address = try c.decode(String.self, forKey: .address)
-        self.subdomain = try c.decode(String.self, forKey: .subdomain)
-        self.tld = try c.decode(String.self, forKey: .tld)
-        self.comment = try c.decodeIfPresent(String.self, forKey: .comment)
-        self.publicKey = try c.decodeIfPresent(String.self, forKey: .publicKey)
-        self.favorite = try c.decodeIfPresent(Bool.self, forKey: .favorite) ?? false
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.address = try container.decode(String.self, forKey: .address)
+        self.subdomain = try container.decode(String.self, forKey: .subdomain)
+        self.tld = try container.decode(String.self, forKey: .tld)
+        self.comment = try container.decodeIfPresent(String.self, forKey: .comment)
+        self.publicKey = try container.decodeIfPresent(String.self, forKey: .publicKey)
+        self.favorite = try container.decodeIfPresent(Bool.self, forKey: .favorite) ?? false
     }
 }
