@@ -225,6 +225,13 @@ public actor CabalmailClient {
         await addressCache.invalidate()
     }
 
+    /// Toggles the caller's favorite flag on an address. Invalidates the
+    /// address cache so the next `addresses(...)` call sees the new state.
+    public func setFavorite(address: String, favorite: Bool) async throws {
+        try await apiClient.setFavorite(address: address, favorite: favorite)
+        await addressCache.invalidate()
+    }
+
     /// Submits an outgoing message via the Cabalmail `/send` Lambda.
     ///
     /// Issue #371 — the same Lambda the React app uses now handles the

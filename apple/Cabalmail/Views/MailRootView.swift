@@ -12,30 +12,37 @@ import CabalmailKit
 /// changes. Without it, the same view instance is reused with a new folder
 /// or envelope prop and its one-shot `.task` never re-fires — which is the
 /// bug that made "select a second folder" do nothing on the split layout.
+/// Which list the sidebar is showing — toggled by a segmented control
+/// pinned above the list itself. Persisted across launches via
+/// `@AppStorage` so the user lands on the tab they last used.
+enum SidebarTab: String, CaseIterable, Identifiable {
+    case folders
+    case addresses
+    var id: String { rawValue }
+}
+
 struct MailRootView: View {
     @State private var selectedFolder: Folder?
     @State private var selectedEnvelope: Envelope?
+    @State private var selectedAddress: Address?
+    @AppStorage("cabalmail.sidebar.tab") private var sidebarTabRaw: String = SidebarTab.folders.rawValue
+
+    private var sidebarTab: SidebarTab {
+        SidebarTab(rawValue: sidebarTabRaw) ?? .folders
+    }
 
     var body: some View {
         NavigationSplitView {
-            FolderListView(
-                selection: $selectedFolder,
-                onFoldersLoaded: { folders in
-                    // Default-select INBOX the first time the list arrives.
-                    // The Compose button lives on the message-list toolbar,
-                    // so a nil-selection state would leave the user no way
-                    // to start a new message. INBOX is always present
-                    // (`FolderListViewModel.sortForSidebar` pins it first).
-                    guard selectedFolder == nil else { return }
-                    selectedFolder = folders.first { inbox in
-                        inbox.path.caseInsensitiveCompare("INBOX") == .orderedSame
-                    } ?? folders.first
-                }
-            )
+            sidebar
         } content: {
             if let selectedFolder {
-                MessageListView(folder: selectedFolder, selection: $selectedEnvelope)
-                    .id(selectedFolder.path)
+                MessageListView(
+                    folder: selectedFolder,
+                    selection: $selectedEnvelope,
+                    addressFilter: selectedAddress?.address,
+                    onClearAddressFilter: { selectedAddress = nil }
+                )
+                .id(selectedFolder.path)
             } else {
                 ContentUnavailableView(
                     "Select a folder",
@@ -58,11 +65,54 @@ struct MailRootView: View {
                 )
             }
         }
-        // Clearing the envelope selection when the folder changes keeps the
-        // detail column from briefly rendering an old message against the
-        // new mailbox.
+        // Clearing the envelope selection AND any active address filter when
+        // the folder changes keeps the detail column from briefly rendering
+        // an old message against the new mailbox, and matches the plan's
+        // "switching folders clears the filter" rule.
         .onChange(of: selectedFolder) { _, _ in
             selectedEnvelope = nil
+            selectedAddress = nil
+        }
+    }
+
+    @ViewBuilder
+    private var sidebar: some View {
+        VStack(spacing: 0) {
+            Picker(
+                "Sidebar",
+                selection: Binding(
+                    get: { sidebarTab },
+                    set: { sidebarTabRaw = $0.rawValue }
+                )
+            ) {
+                Text("Folders").tag(SidebarTab.folders)
+                Text("Addresses").tag(SidebarTab.addresses)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(.horizontal)
+            .padding(.top, 8)
+            .padding(.bottom, 4)
+
+            switch sidebarTab {
+            case .folders:
+                FolderListView(
+                    selection: $selectedFolder,
+                    onFoldersLoaded: { folders in
+                        // Default-select INBOX the first time the list arrives.
+                        // The Compose button lives on the message-list toolbar,
+                        // so a nil-selection state would leave the user no way
+                        // to start a new message. INBOX is always present
+                        // (`FolderListViewModel.sortForSidebar` pins it first).
+                        guard selectedFolder == nil else { return }
+                        selectedFolder = folders.first { inbox in
+                            inbox.path.caseInsensitiveCompare("INBOX") == .orderedSame
+                        } ?? folders.first
+                    }
+                )
+            case .addresses:
+                AddressListView(selection: $selectedAddress)
+            }
         }
     }
 }

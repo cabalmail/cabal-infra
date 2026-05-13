@@ -25,6 +25,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   favorites.
 
 ### Added
+- Apple clients' sidebar now carries a segmented control at the top
+  to switch between **Folders** and **Addresses** tabs. The selected
+  tab is persisted across launches via `@AppStorage`. The Addresses
+  tab renders a new `AddressListView` with **Favorites** on top
+  (when present) and **All addresses** below (inclusive); per-row
+  swipe action + context menu toggle the favorite flag via the
+  `setFavorite` plumbing added in Phase 3. Tapping an address sets
+  a filter on the message list — visible envelopes are narrowed to
+  those whose `To` or `Cc` includes that address (case-insensitive
+  substring, matching React's
+  `react/admin/src/Email/Messages/Envelopes.jsx`). The active filter
+  shows as a chip pinned above the message list; switching folders
+  or tapping the chip clears it.
 - Apple clients' sidebar (`FolderListView`) now renders folders as two
   sections: **Subscribed** on top (when at least one folder is
   subscribed) and **All folders** below, inclusive of subscribed. Each

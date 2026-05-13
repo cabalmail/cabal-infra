@@ -6,6 +6,12 @@ import CabalmailKit
 struct MessageListView: View {
     let folder: Folder
     @Binding var selection: Envelope?
+    /// When set, narrows the visible envelopes to those whose `To` or `Cc`
+    /// includes this address (case-insensitive substring match), matching
+    /// `react/admin/src/Email/Messages/Envelopes.jsx` byte-for-byte.
+    var addressFilter: String? = nil
+    /// Tapped on the filter chip to drop the address scope.
+    var onClearAddressFilter: () -> Void = {}
 
     @Environment(AppState.self) private var appState
     @Environment(Preferences.self) private var preferences
@@ -136,6 +142,7 @@ struct MessageListView: View {
     @ViewBuilder
     private func content(for model: MessageListViewModel) -> some View {
         @Bindable var model = model
+        let visible = filteredEnvelopes(model.envelopes)
         List(selection: $selection) {
             if let errorMessage = model.errorMessage {
                 Label(errorMessage, systemImage: "exclamationmark.triangle")
@@ -144,7 +151,7 @@ struct MessageListView: View {
             if model.isLoading && model.envelopes.isEmpty {
                 ProgressView("Fetching messages…")
             }
-            ForEach(model.envelopes) { envelope in
+            ForEach(visible) { envelope in
                 row(for: envelope, model: model, isSelected: envelope == selection)
             }
             if model.isLoadingMore {
@@ -158,6 +165,48 @@ struct MessageListView: View {
         }
         .refreshable {
             await model.refresh()
+        }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if let addressFilter, !addressFilter.isEmpty {
+                addressFilterChip(addressFilter)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func addressFilterChip(_ address: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "line.3.horizontal.decrease.circle")
+                .foregroundStyle(.tint)
+            Text("Filtered to ")
+                .foregroundStyle(.secondary)
+            + Text(address)
+                .fontWeight(.medium)
+            Spacer()
+            Button {
+                onClearAddressFilter()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("Clear address filter")
+            }
+            .buttonStyle(.plain)
+        }
+        .font(.subheadline)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(.thinMaterial)
+    }
+
+    private func filteredEnvelopes(_ envelopes: [Envelope]) -> [Envelope] {
+        guard let needle = addressFilter?.lowercased(), !needle.isEmpty else {
+            return envelopes
+        }
+        return envelopes.filter { envelope in
+            let recipients = envelope.to + envelope.cc
+            return recipients.contains { recipient in
+                "\(recipient.mailbox)@\(recipient.host)".lowercased().contains(needle)
+            }
         }
     }
 
