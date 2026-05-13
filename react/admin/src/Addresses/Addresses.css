@@ -133,6 +133,22 @@
 
 /* Rows ---------------------------------------------------------------- */
 
+.addresses-rail__section-label {
+  list-style: none;
+  padding: 8px 14px 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-quiet);
+  user-select: none;
+}
+
+.addresses-rail__row-action.is-on {
+  color: var(--accent);
+  opacity: 1;
+}
+
 .addresses-rail__list {
   list-style: none;
   margin: 0;

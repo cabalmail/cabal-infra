@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Web client sidebar address rail and the compose-window From picker now
+  render addresses as two sections: **Favorites** on top, then **All
+  addresses** (inclusive of favorites) below. Each address row carries a
+  star toggle that calls `/set_favorite`; favorites sync across
+  browsers/devices because the source of truth is the server-side
+  attribute introduced in Phase 1. The From picker's previous
+  localStorage-only favorites (`cabalmail.compose.favorites.v1`) are
+  replaced by the server-side state; orphaned localStorage entries are
+  harmless and can be ignored.
+- Web client folder rail now renders folders as two sections:
+  **Subscribed** on top (only when at least one folder is subscribed)
+  and **All folders** below (inclusive of subscribed). The per-row
+  toggle aria-label changed from "Favorite/Unfavorite" to
+  "Subscribe to/Unsubscribe from" to disambiguate from address
+  favorites.
+
 ### Added
 - Server-side support for marking an email address as a favorite. A new
   `/set_favorite` Lambda toggles the caller's membership in the address

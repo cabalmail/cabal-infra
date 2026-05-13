@@ -33,11 +33,52 @@ function FolderIcon({ kind }) {
   return <Icon className={styles.folderIcon} size={16} aria-hidden="true" />;
 }
 
+function FolderRow({
+  f, isActive, isSubscribed, canDelete, onSelect, onToggleSubscribe, onRemove,
+}) {
+  return (
+    <li
+      className={`${styles.folderItem} ${isActive ? styles.active : ''}`}
+      onClick={() => onSelect(f.id)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter') onSelect(f.id); }}
+      aria-current={isActive ? 'true' : undefined}
+    >
+      <FolderIcon kind={f.kind} />
+      <span className={styles.folderName}>{f.label}</span>
+      <span className={styles.rowActions} onClick={(e) => e.stopPropagation()}>
+        <button
+          type="button"
+          className={`${styles.rowAction} ${isSubscribed ? styles.favActive : ''}`}
+          title={isSubscribed ? 'Unsubscribe' : 'Subscribe'}
+          aria-label={isSubscribed ? `Unsubscribe from ${f.label}` : `Subscribe to ${f.label}`}
+          onClick={(e) => onToggleSubscribe(e, f.id)}
+        >
+          <Star size={12} aria-hidden="true" />
+        </button>
+        {canDelete && (
+          <button
+            type="button"
+            className={styles.rowAction}
+            title={`Remove ${f.label}`}
+            aria-label={`Remove ${f.label}`}
+            onClick={(e) => onRemove(e, f.id)}
+          >
+            <X size={12} aria-hidden="true" />
+          </button>
+        )}
+      </span>
+    </li>
+  );
+}
+
 function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false, onClose }) {
   const api = useApi();
   const [folders, setFolders] = useState([]);
   const [subscribed, setSubscribed] = useState([]);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsedSub, setCollapsedSub] = useState(false);
+  const [collapsedAll, setCollapsedAll] = useState(false);
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
 
@@ -62,6 +103,10 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
   useEffect(() => { refresh(); }, [refresh]);
 
   const items = useMemo(() => orderFolders(folders), [folders]);
+  const subscribedItems = useMemo(
+    () => items.filter((f) => subscribed.includes(f.id)),
+    [items, subscribed]
+  );
 
   const handleSelect = useCallback((name) => {
     if (typeof setFolder === 'function') setFolder(name);
@@ -137,19 +182,54 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
         <span>New message</span>
       </button>
 
-      <div className={`${styles.section} ${collapsed ? styles.collapsed : ''}`}>
+      {subscribedItems.length > 0 && (
+        <div className={`${styles.section} ${collapsedSub ? styles.collapsed : ''}`}>
+          <div
+            className={styles.sectionHeader}
+            role="button"
+            tabIndex={0}
+            onClick={() => setCollapsedSub(c => !c)}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setCollapsedSub(c => !c); }}
+            aria-expanded={!collapsedSub}
+          >
+            <span className={styles.chev}>
+              <ChevronDown size={12} aria-hidden="true" />
+            </span>
+            <span className={styles.sectionLabel}>Subscribed</span>
+          </div>
+
+          <div className={styles.sectionBody}>
+            <ul className={styles.folderList}>
+              {subscribedItems.map((f) => (
+                <FolderRow
+                  key={f.id}
+                  f={f}
+                  isActive={folder === f.id}
+                  isSubscribed
+                  canDelete={!PERMANENT_FOLDERS.includes(f.id)}
+                  onSelect={handleSelect}
+                  onToggleSubscribe={toggleSubscribe}
+                  onRemove={removeFolder}
+                />
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+
+      <div className={`${styles.section} ${collapsedAll ? styles.collapsed : ''}`}>
         <div
           className={styles.sectionHeader}
           role="button"
           tabIndex={0}
-          onClick={() => setCollapsed(c => !c)}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setCollapsed(c => !c); }}
-          aria-expanded={!collapsed}
+          onClick={() => setCollapsedAll(c => !c)}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setCollapsedAll(c => !c); }}
+          aria-expanded={!collapsedAll}
         >
           <span className={styles.chev}>
             <ChevronDown size={12} aria-hidden="true" />
           </span>
-          <span className={styles.sectionLabel}>Folders</span>
+          <span className={styles.sectionLabel}>All folders</span>
           <span className={styles.sectionActions}>
             <button
               type="button"
@@ -158,7 +238,7 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
               aria-label="New folder"
               onClick={(e) => {
                 e.stopPropagation();
-                if (collapsed) setCollapsed(false);
+                if (collapsedAll) setCollapsedAll(false);
                 setAdding(true);
               }}
             >
@@ -169,48 +249,18 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
 
         <div className={styles.sectionBody}>
           <ul className={styles.folderList}>
-            {items.map((f) => {
-              const isActive = folder === f.id;
-              const isFav = subscribed.includes(f.id);
-              const canDelete = !PERMANENT_FOLDERS.includes(f.id);
-              return (
-                <li
-                  key={f.id}
-                  id={f.id}
-                  className={`${styles.folderItem} ${isActive ? styles.active : ''}`}
-                  onClick={() => handleSelect(f.id)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleSelect(f.id); }}
-                  aria-current={isActive ? 'true' : undefined}
-                >
-                  <FolderIcon kind={f.kind} />
-                  <span className={styles.folderName}>{f.label}</span>
-                  <span className={styles.rowActions} onClick={(e) => e.stopPropagation()}>
-                    <button
-                      type="button"
-                      className={`${styles.rowAction} ${isFav ? styles.favActive : ''}`}
-                      title={isFav ? 'Unfavorite' : 'Favorite'}
-                      aria-label={isFav ? `Unfavorite ${f.label}` : `Favorite ${f.label}`}
-                      onClick={(e) => toggleSubscribe(e, f.id)}
-                    >
-                      <Star size={12} aria-hidden="true" />
-                    </button>
-                    {canDelete && (
-                      <button
-                        type="button"
-                        className={styles.rowAction}
-                        title={`Remove ${f.label}`}
-                        aria-label={`Remove ${f.label}`}
-                        onClick={(e) => removeFolder(e, f.id)}
-                      >
-                        <X size={12} aria-hidden="true" />
-                      </button>
-                    )}
-                  </span>
-                </li>
-              );
-            })}
+            {items.map((f) => (
+              <FolderRow
+                key={f.id}
+                f={f}
+                isActive={folder === f.id}
+                isSubscribed={subscribed.includes(f.id)}
+                canDelete={!PERMANENT_FOLDERS.includes(f.id)}
+                onSelect={handleSelect}
+                onToggleSubscribe={toggleSubscribe}
+                onRemove={removeFolder}
+              />
+            ))}
           </ul>
 
           {adding ? (

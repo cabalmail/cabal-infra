@@ -2,12 +2,11 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import FromPicker from './index';
 
-const FAVORITES_KEY = 'cabalmail.compose.favorites.v1';
-
 const mockNewAddress = vi.fn();
+const mockSetFavorite = vi.fn();
 
 vi.mock('../../../hooks/useApi', () => ({
-  default: () => ({ newAddress: mockNewAddress }),
+  default: () => ({ newAddress: mockNewAddress, setFavorite: mockSetFavorite }),
 }));
 
 const items = [
@@ -42,6 +41,8 @@ describe('FromPicker', () => {
     window.localStorage.clear();
     mockNewAddress.mockReset();
     mockNewAddress.mockResolvedValue({ data: { address: 'new@sub.test.com' } });
+    mockSetFavorite.mockReset();
+    mockSetFavorite.mockResolvedValue({});
   });
 
   afterEach(() => {
@@ -114,14 +115,13 @@ describe('FromPicker', () => {
     }
   });
 
-  it('toggles favorites and persists them to localStorage', async () => {
+  it('toggles favorites via the server API and reflects the result locally', async () => {
     const { unmount } = renderPicker();
     try {
       fireEvent.click(document.getElementById('from-picker-trigger-0'));
       const star = await screen.findByLabelText('Favorite bb@test.com');
-      fireEvent.click(star);
-      const stored = JSON.parse(window.localStorage.getItem(FAVORITES_KEY));
-      expect(stored).toContain('bb@test.com');
+      await act(async () => { fireEvent.click(star); });
+      expect(mockSetFavorite).toHaveBeenCalledWith('bb@test.com', true);
       // After favoriting, a Favorites section should appear.
       expect(screen.getByText('Favorites')).toBeInTheDocument();
     } finally {
@@ -129,13 +129,17 @@ describe('FromPicker', () => {
     }
   });
 
-  it('loads existing favorites from localStorage on mount', async () => {
-    window.localStorage.setItem(FAVORITES_KEY, JSON.stringify(['cc@test.com']));
-    const { unmount } = renderPicker();
+  it('seeds favorites from the items prop favorite field', async () => {
+    const seeded = [
+      { address: 'aa@test.com', comment: 'personal' },
+      { address: 'bb@test.com', comment: 'work' },
+      { address: 'cc@test.com', favorite: true },
+    ];
+    const { unmount } = renderPicker({ items: seeded });
     try {
       fireEvent.click(document.getElementById('from-picker-trigger-0'));
       expect(await screen.findByText('Favorites')).toBeInTheDocument();
-      expect(screen.getByText('More addresses')).toBeInTheDocument();
+      expect(screen.getByText('All addresses')).toBeInTheDocument();
     } finally {
       unmount();
     }

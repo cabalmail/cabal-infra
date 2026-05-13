@@ -70,7 +70,9 @@ describe('Folders rail', () => {
     expect(screen.getByText('Archive')).toBeInTheDocument();
     expect(screen.getByText('Trash')).toBeInTheDocument();
     expect(screen.getByText('Junk')).toBeInTheDocument();
-    expect(screen.getByText('Receipts')).toBeInTheDocument();
+    // Receipts is subscribed in the fixture, so it appears in both the
+    // Subscribed and All folders sections.
+    expect(screen.getAllByText('Receipts').length).toBeGreaterThan(0);
   });
 
   it('marks the active folder with aria-current', async () => {
@@ -100,9 +102,11 @@ describe('Folders rail', () => {
   it('can delete a custom folder via the row remove action', async () => {
     mockDeleteFolder.mockResolvedValue({ data: { folders: [], sub_folders: [] } });
     renderFolders();
-    await waitFor(() => expect(screen.getByText('Receipts')).toBeInTheDocument());
-    const btn = screen.getByRole('button', { name: /remove receipts/i });
-    await act(async () => { fireEvent.click(btn); });
+    await waitFor(() => expect(screen.getAllByText('Receipts').length).toBeGreaterThan(0));
+    // Receipts is subscribed so it renders in both sections; either remove
+    // button targets the same folder.
+    const btns = screen.getAllByRole('button', { name: /remove receipts/i });
+    await act(async () => { fireEvent.click(btns[0]); });
     expect(mockDeleteFolder).toHaveBeenCalledWith('Receipts');
   });
 
@@ -116,9 +120,12 @@ describe('Folders rail', () => {
   it('toggles subscription from a folder row', async () => {
     mockUnsubscribe.mockResolvedValue({});
     renderFolders();
-    await waitFor(() => expect(screen.getByText('Receipts')).toBeInTheDocument());
-    const btn = screen.getByRole('button', { name: /unfavorite receipts/i });
-    await act(async () => { fireEvent.click(btn); });
+    await waitFor(() => expect(screen.getAllByText('Receipts').length).toBeGreaterThan(0));
+    // Receipts is subscribed in the fixture, so it appears in both the
+    // Subscribed and All folders sections. Either row's toggle is fine.
+    const btns = screen.getAllByRole('button', { name: /unsubscribe from receipts/i });
+    expect(btns.length).toBeGreaterThan(0);
+    await act(async () => { fireEvent.click(btns[0]); });
     expect(mockUnsubscribe).toHaveBeenCalledWith('Receipts');
   });
 });
