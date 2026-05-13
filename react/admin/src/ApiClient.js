@@ -62,6 +62,24 @@ export default class ApiClient {
     return response;
   }
 
+  setFavorite(address, favorite) {
+    localStorage.removeItem(ADDRESS_LIST);
+    const response = axios.put('/set_favorite',
+      JSON.stringify({
+        address: address,
+        favorite: !!favorite
+      }),
+      {
+        baseURL: this.baseURL,
+        headers: {
+          'Authorization': this.token
+        },
+        timeout: TIMEOUT
+      }
+    );
+    return response;
+  }
+
   deleteAddress(address, subdomain, tld, public_key) {
     localStorage.removeItem(ADDRESS_LIST);
     const response = axios.delete('/revoke', {

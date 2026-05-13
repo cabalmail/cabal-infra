@@ -61,4 +61,39 @@ final class AddressesViewModel {
     func onAddressCreated() async {
         await refresh(force: true)
     }
+
+    /// Addresses the caller has favorited. Same ordering as `addresses`.
+    var favorites: [Address] {
+        addresses.filter { $0.favorite }
+    }
+
+    /// Optimistically flip the favorite flag on `address`, fire the API call,
+    /// and revert on failure. Mirrors the React rail's behavior.
+    func toggleFavorite(_ address: Address) async {
+        let target = !address.favorite
+        applyFavorite(addressId: address.id, to: target)
+        do {
+            try await client.setFavorite(address: address.address, favorite: target)
+            errorMessage = nil
+        } catch let error as CabalmailError {
+            applyFavorite(addressId: address.id, to: !target)
+            errorMessage = String(describing: error)
+        } catch {
+            applyFavorite(addressId: address.id, to: !target)
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func applyFavorite(addressId: String, to favorite: Bool) {
+        guard let index = addresses.firstIndex(where: { $0.id == addressId }) else { return }
+        let previous = addresses[index]
+        addresses[index] = Address(
+            address: previous.address,
+            subdomain: previous.subdomain,
+            tld: previous.tld,
+            comment: previous.comment,
+            publicKey: previous.publicKey,
+            favorite: favorite
+        )
+    }
 }

@@ -8,28 +8,17 @@ import { swatchFor } from '../../../utils/addressSwatch';
 import useApi from '../../../hooks/useApi';
 import './FromPicker.css';
 
-const FAVORITES_KEY = 'cabalmail.compose.favorites.v1';
 const USERNAME_RE = /^[a-z0-9][a-z0-9._-]*$/i;
 const SUBDOMAIN_RE = /^[a-z0-9][a-z0-9-]*$/i;
 const UNFILTERED_MORE_CAP = 12;
 const FILTERED_SEARCH_CAP = 40;
 
-function loadFavorites() {
-  try {
-    const raw = window.localStorage.getItem(FAVORITES_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return new Set(Array.isArray(parsed) ? parsed : []);
-  } catch {
-    return new Set();
+function seedFavorites(items) {
+  const set = new Set();
+  for (const a of items || []) {
+    if (a && a.favorite) set.add(a.address);
   }
-}
-
-function saveFavorites(set) {
-  try {
-    window.localStorage.setItem(FAVORITES_KEY, JSON.stringify([...set]));
-  } catch {
-    /* quota / disabled storage — favorites are non-critical */
-  }
+  return set;
 }
 
 function randomString(length, first, middle, last) {
@@ -316,7 +305,12 @@ function FromPicker({
   const [mode, setMode] = useState('pick'); // 'pick' | 'create'
   const [query, setQuery] = useState('');
   const [activeIdx, setActiveIdx] = useState(-1);
-  const [favorites, setFavorites] = useState(loadFavorites);
+  // Local overlay of server-side favorites. Initialized from the items prop's
+  // `favorite` field; toggles call /set_favorite and revert on failure.
+  // Re-seeded when the items prop changes so cross-component updates (e.g.
+  // toggling from the sidebar rail) eventually propagate.
+  const [favorites, setFavorites] = useState(() => seedFavorites(items));
+  useEffect(() => { setFavorites(seedFavorites(items)); }, [items]);
   const rootRef = useRef(null);
   const inputRef = useRef(null);
   const rowsRef = useRef([]);
@@ -336,7 +330,8 @@ function FromPicker({
     const rest = [];
     for (const a of addresses) {
       if (!matches(a)) continue;
-      if (favorites.has(a.address)) fav.push(a); else rest.push(a);
+      if (favorites.has(a.address)) fav.push(a);
+      rest.push(a);
     }
     const restCap = q ? FILTERED_SEARCH_CAP : UNFILTERED_MORE_CAP;
     const shownRest = rest.slice(0, restCap);
@@ -384,13 +379,22 @@ function FromPicker({
   }, [activeIdx]);
 
   const toggleFav = useCallback((address) => {
+    const wasOn = favorites.has(address);
+    const target = !wasOn;
     setFavorites((prev) => {
       const next = new Set(prev);
-      if (next.has(address)) next.delete(address); else next.add(address);
-      saveFavorites(next);
+      if (target) next.add(address); else next.delete(address);
       return next;
     });
-  }, []);
+    api.setFavorite(address, target).catch(() => {
+      setFavorites((prev) => {
+        const next = new Set(prev);
+        if (wasOn) next.add(address); else next.delete(address);
+        return next;
+      });
+      if (setMessage) setMessage('Could not update favorite.', true);
+    });
+  }, [api, favorites, setMessage]);
 
   const closeMenu = useCallback(() => {
     setOpen(false);
@@ -454,7 +458,7 @@ function FromPicker({
   const menuId = `from-picker-menu-${stackIndex}`;
 
   const favLabel = grouped.fav.length > 0 ? 'Favorites' : null;
-  const restLabel = grouped.fav.length > 0 ? 'More addresses' : 'Your addresses';
+  const restLabel = grouped.fav.length > 0 ? 'All addresses' : 'Your addresses';
 
   return (
     <div className="from-picker" ref={rootRef}>
@@ -533,7 +537,7 @@ function FromPicker({
                     </div>
                     {grouped.fav.map((a, i) => (
                       <FromRow
-                        key={a.address}
+                        key={`fav-${a.address}`}
                         item={a}
                         q={q}
                         starred

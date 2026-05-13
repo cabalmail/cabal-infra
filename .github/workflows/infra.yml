@@ -295,6 +295,17 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
+      # Twilio: the first three are picked up by the twilio Terraform
+      # provider; the TF_VAR_* values feed the sms_sender module's SSM
+      # SecureString params. Empty defaults in variables.tf keep envs
+      # without Twilio secrets working.
+      TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+      TWILIO_API_KEY: ${{ secrets.TWILIO_API_KEY }}
+      TWILIO_API_SECRET: ${{ secrets.TWILIO_API_SECRET }}
+      TF_VAR_twilio_account_sid: ${{ secrets.TWILIO_ACCOUNT_SID }}
+      TF_VAR_twilio_api_key: ${{ secrets.TWILIO_API_KEY }}
+      TF_VAR_twilio_api_secret: ${{ secrets.TWILIO_API_SECRET }}
+      TF_VAR_twilio_from_number: ${{ secrets.TWILIO_FROM_NUMBER }}
     steps:
     - name: checkout
       uses: actions/checkout@v5
@@ -338,6 +349,7 @@ jobs:
         echo "healthchecks_registration_open = ${{ vars.TF_VAR_HEALTHCHECKS_REGISTRATION_OPEN || 'false' }}" >> terraform.tfvars
         echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
         echo "quiesced = ${{ vars.TF_VAR_QUIESCED || 'false' }}" >> terraform.tfvars
+        echo "use_twilio_sms = ${{ vars.TF_VAR_USE_TWILIO_SMS || 'false' }}" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
     - name: record-lambda-hashes
@@ -368,6 +380,13 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
+      TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+      TWILIO_API_KEY: ${{ secrets.TWILIO_API_KEY }}
+      TWILIO_API_SECRET: ${{ secrets.TWILIO_API_SECRET }}
+      TF_VAR_twilio_account_sid: ${{ secrets.TWILIO_ACCOUNT_SID }}
+      TF_VAR_twilio_api_key: ${{ secrets.TWILIO_API_KEY }}
+      TF_VAR_twilio_api_secret: ${{ secrets.TWILIO_API_SECRET }}
+      TF_VAR_twilio_from_number: ${{ secrets.TWILIO_FROM_NUMBER }}
     steps:
     - name: checkout
       uses: actions/checkout@v5
@@ -396,6 +415,7 @@ jobs:
         echo "healthchecks_registration_open = ${{ vars.TF_VAR_HEALTHCHECKS_REGISTRATION_OPEN || 'false' }}" >> terraform.tfvars
         echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
         echo "quiesced = ${{ vars.TF_VAR_QUIESCED || 'false' }}" >> terraform.tfvars
+        echo "use_twilio_sms = ${{ vars.TF_VAR_USE_TWILIO_SMS || 'false' }}" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
     - name: record-lambda-hashes

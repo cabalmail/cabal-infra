@@ -39,6 +39,7 @@ import AppMessageContext from './contexts/AppMessageContext';
 // Hooks
 import useTheme from './hooks/useTheme';
 import useKeyboardShortcuts from './hooks/useKeyboardShortcuts';
+import useResendThrottle from './hooks/useResendThrottle';
 
 // Site-wide and Theme-specific style.
 // AppLight.css defines unconditional default tokens; AppDark.css overrides
@@ -128,6 +129,16 @@ function App() {
   // Phase 7 §3: controls the ForgotPassword success state. Set on Cognito
   // `forgotPassword` success; cleared when the user leaves the screen.
   const [forgotPasswordSent, setForgotPasswordSent] = useState(false);
+
+  // "Resend code" state for Verify (signup) and ResetPassword. The
+  // hook only holds the lockout signalled by Cognito's
+  // LimitExceededException; the in-flight booleans here disable the
+  // button while a request is on the wire so users don't double-fire.
+  // See hooks/useResendThrottle.js.
+  const signupResend = useResendThrottle('signup', state.userName);
+  const resetResend = useResendThrottle('reset', state.userName);
+  const [signupResendInFlight, setSignupResendInFlight] = useState(false);
+  const [resetResendInFlight, setResetResendInFlight] = useState(false);
 
   // Phase 7 §Interactions: `?` toggles the keyboard-shortcut overlay.
   const [helpOpen, setHelpOpen] = useState(false);
@@ -282,13 +293,40 @@ function App() {
     });
     cognitoUser.confirmRegistration(state.verificationCode, true, (err, _result) => {
       if (!err) {
+        signupResend.reset();
         setState({ view: "Login", verificationCode: null });
         setMessage("Phone verified. Your account is pending admin approval.", false);
       } else {
         setMessage("Verification failed. Please check your code and try again.", true);
       }
     });
-  }, [state.userName, state.verificationCode, setState, setMessage]);
+  }, [state.userName, state.verificationCode, setState, setMessage, signupResend]);
+
+  const doResendVerification = useCallback(() => {
+    if (signupResend.locked || signupResendInFlight || !state.userName) return;
+    setSignupResendInFlight(true);
+    const cognitoUser = new CognitoUser({
+      Username: state.userName,
+      Pool: UserPool
+    });
+    cognitoUser.resendConfirmationCode((err) => {
+      setSignupResendInFlight(false);
+      if (!err) {
+        setMessage("A new verification code has been sent to your phone.", false);
+        return;
+      }
+      // Cognito hit its per-user resend limit. Mirror the lockout in
+      // local state so the UI stops offering Resend until the window
+      // passes; the message echoes Cognito rather than inventing a
+      // schedule.
+      if (err.code === 'LimitExceededException' || err.name === 'LimitExceededException') {
+        signupResend.recordLimitHit();
+        setMessage("Too many resend attempts. Please try again later.", true);
+      } else {
+        setMessage("Could not resend code. Please try again later.", true);
+      }
+    });
+  }, [state.userName, signupResend, signupResendInFlight, setMessage]);
 
   const doForgotPassword = useCallback((e) => {
     e.preventDefault();
@@ -311,6 +349,34 @@ function App() {
     });
   }, [state.userName, setMessage]);
 
+  const doResendResetCode = useCallback(() => {
+    if (resetResend.locked || resetResendInFlight || !state.userName) return;
+    setResetResendInFlight(true);
+    const cognitoUser = new CognitoUser({
+      Username: state.userName,
+      Pool: UserPool
+    });
+    cognitoUser.forgotPassword({
+      onSuccess: () => {
+        setResetResendInFlight(false);
+        setMessage("A new reset code has been sent to your phone.", false);
+      },
+      onFailure: (err) => {
+        setResetResendInFlight(false);
+        if (err && (err.code === 'LimitExceededException' || err.name === 'LimitExceededException')) {
+          resetResend.recordLimitHit();
+          setMessage("Too many resend attempts. Please try again later.", true);
+        } else {
+          setMessage("Could not resend code. Please try again later.", true);
+        }
+      },
+      inputVerificationCode: () => {
+        setResetResendInFlight(false);
+        setMessage("A new reset code has been sent to your phone.", false);
+      }
+    });
+  }, [state.userName, resetResend, resetResendInFlight, setMessage]);
+
   const doResetPassword = useCallback((e) => {
     e.preventDefault();
     const cognitoUser = new CognitoUser({
@@ -319,6 +385,7 @@ function App() {
     });
     cognitoUser.confirmPassword(state.verificationCode, state.password, {
       onSuccess: () => {
+        resetResend.reset();
         setState({ view: "Login", verificationCode: null, password: null });
         setMessage("Password reset successful. You can now log in.", false);
       },
@@ -326,7 +393,7 @@ function App() {
         setMessage("Password reset failed. Please check your code and try again.", true);
       }
     });
-  }, [state.userName, state.verificationCode, state.password, setState, setMessage]);
+  }, [state.userName, state.verificationCode, state.password, setState, setMessage, resetResend]);
 
   const doLogin = useCallback((e) => {
     e.preventDefault();
@@ -421,6 +488,10 @@ function App() {
             onCodeChange={doInputChange}
             code={state.verificationCode}
             onBackToSignIn={(e) => { e.preventDefault(); setState({ view: "Login" }); }}
+            onResend={doResendVerification}
+            resendInFlight={signupResendInFlight}
+            resendLocked={signupResend.locked}
+            resendLockoutRemaining={signupResend.lockoutRemaining}
           />
         );
       case "ForgotPassword":
@@ -451,6 +522,10 @@ function App() {
             code={state.verificationCode}
             password={state.password}
             onBackToSignIn={(e) => { e.preventDefault(); setState({ view: "Login" }); }}
+            onResend={doResendResetCode}
+            resendInFlight={resetResendInFlight}
+            resendLocked={resetResend.locked}
+            resendLockoutRemaining={resetResend.lockoutRemaining}
           />
         );
       case "SignUp":

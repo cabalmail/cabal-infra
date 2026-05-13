@@ -6,11 +6,13 @@ import AuthContext from '../contexts/AuthContext';
 const mockGetAddresses = vi.fn();
 const mockDeleteAddress = vi.fn();
 const mockNewAddress = vi.fn();
+const mockSetFavorite = vi.fn();
 
 const mockApi = {
   getAddresses: mockGetAddresses,
   deleteAddress: mockDeleteAddress,
   newAddress: mockNewAddress,
+  setFavorite: mockSetFavorite,
 };
 
 vi.mock('../hooks/useApi', () => ({
@@ -43,6 +45,7 @@ function renderAddresses(props = {}) {
 describe('Addresses rail', () => {
   beforeEach(() => {
     mockGetAddresses.mockResolvedValue({ data: { Items: SAMPLE_ADDRESSES } });
+    mockSetFavorite.mockResolvedValue({});
     localStorage.clear();
   });
 
@@ -144,6 +147,30 @@ describe('Addresses rail', () => {
       'cabalmail.com',
       'pk2'
     );
+  });
+
+  it('toggles favorite via api.setFavorite and shows a Favorites section', async () => {
+    renderAddresses();
+    await waitFor(() => expect(screen.getByText('chris@main.cabalmail.com')).toBeInTheDocument());
+    const btn = screen.getByRole('button', { name: /favorite chris@main\.cabalmail\.com/i });
+    await act(async () => { fireEvent.click(btn); });
+    expect(mockSetFavorite).toHaveBeenCalledWith('chris@main.cabalmail.com', true);
+    // After favoriting, both sections are shown (Favorites + All addresses).
+    expect(screen.getByText('Favorites')).toBeInTheDocument();
+    expect(screen.getByText('All addresses')).toBeInTheDocument();
+  });
+
+  it('seeds favorites from the API response favorite field', async () => {
+    mockGetAddresses.mockResolvedValue({
+      data: {
+        Items: SAMPLE_ADDRESSES.map((a, i) => (
+          i === 0 ? { ...a, favorite: true } : a
+        )),
+      },
+    });
+    renderAddresses();
+    await waitFor(() => expect(screen.getByText('Favorites')).toBeInTheDocument());
+    expect(screen.getByText('All addresses')).toBeInTheDocument();
   });
 
   it('does not revoke when the confirmation dialog is cancelled', async () => {

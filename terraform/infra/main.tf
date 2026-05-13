@@ -47,6 +47,17 @@ module "lambda_layers" {
   bucket = module.bucket.bucket
 }
 
+# SMS sender for Cognito via Twilio. See docs/0.9.0/twilio-sms-migration-plan.md.
+module "sms_sender" {
+  source = "./modules/sms_sender"
+
+  bucket             = module.bucket.bucket
+  twilio_account_sid = var.twilio_account_sid
+  twilio_api_key     = var.twilio_api_key
+  twilio_api_secret  = var.twilio_api_secret
+  twilio_from_number = var.twilio_from_number
+}
+
 # Creates a Cognito User Pool
 module "pool" {
   source                 = "./modules/user_pool"
@@ -55,6 +66,9 @@ module "pool" {
   bucket_arn             = module.bucket.bucket_arn
   ecs_cluster_name       = module.ecs.cluster_name
   healthcheck_ping_param = local.hc_ping_assign_osid
+  sms_sender_arn         = module.sms_sender.lambda_arn
+  sms_kms_key_arn        = module.sms_sender.kms_key_arn
+  use_twilio_sms         = var.use_twilio_sms
 }
 
 # Creates an AWS Certificate Manager certificate for use on load balancers and CloudFront

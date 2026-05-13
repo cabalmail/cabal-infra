@@ -93,6 +93,14 @@ extension URLSessionApiClient {
         _ = try await send(request, expectedStatuses: 200..<300)
     }
 
+    public func setFavorite(address: String, favorite: Bool) async throws {
+        let request = try await put("/set_favorite", json: [
+            "address": address,
+            "favorite": favorite,
+        ])
+        _ = try await send(request, expectedStatuses: 200..<300)
+    }
+
     public func fetchBimiURL(senderDomain: String) async throws -> URL? {
         let request = try await get(
             "/fetch_bimi",

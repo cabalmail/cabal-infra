@@ -49,6 +49,46 @@ final class FolderListViewModel {
         }
     }
 
+    /// Folders the user has subscribed to. Mirrors the sort of `folders`
+    /// (which already pins Inbox first, then user folders, then system
+    /// folders), filtered to the subscribed subset.
+    var subscribedFolders: [Folder] {
+        folders.filter { $0.isSubscribed }
+    }
+
+    /// Optimistically flip the subscription state, fire the IMAP/API call,
+    /// and revert on failure. Mirrors the React rail's behavior so toggling
+    /// from the Apple sidebar feels as responsive as the web client.
+    func toggleSubscription(_ folder: Folder) async {
+        let target = !folder.isSubscribed
+        applySubscription(path: folder.path, to: target)
+        do {
+            try await client.imapClient.connectAndAuthenticate()
+            if target {
+                try await client.imapClient.subscribe(path: folder.path)
+            } else {
+                try await client.imapClient.unsubscribe(path: folder.path)
+            }
+            errorMessage = nil
+        } catch let error as CabalmailError {
+            applySubscription(path: folder.path, to: !target)
+            errorMessage = String(describing: error)
+        } catch {
+            applySubscription(path: folder.path, to: !target)
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func applySubscription(path: String, to subscribed: Bool) {
+        guard let index = folders.firstIndex(where: { $0.path == path }) else { return }
+        let previous = folders[index]
+        folders[index] = Folder(
+            path: previous.path,
+            attributes: previous.attributes,
+            isSubscribed: subscribed
+        )
+    }
+
     /// Walk each folder's `STATUS (UNSEEN)` and publish the counts in one
     /// shot. Runs after `loadFolderList()` (and after the parent has had a
     /// chance to seed a default selection), so the sidebar's unread badges

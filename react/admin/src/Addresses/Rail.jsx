@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Copy, Plus, Search, X } from 'lucide-react';
+import { Copy, Plus, Search, Star, X } from 'lucide-react';
 import useApi from '../hooks/useApi';
 import { ADDRESS_LIST } from '../constants';
 import ConfirmDialog from '../ConfirmDialog';
@@ -12,6 +12,55 @@ function sortAddresses(items) {
     if (a.address < b.address) return -1;
     return 0;
   });
+}
+
+function AddressRow({
+  a, isActive, isFavorite, onSelect, onToggleFavorite, onCopy, onRevoke,
+}) {
+  return (
+    <li
+      className={`addresses-rail__row${isActive ? ' is-active' : ''}`}
+      title={a.comment ? undefined : a.address}
+      data-address={a.address}
+      data-comment={a.comment || undefined}
+      onClick={() => onSelect(a.address)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter') onSelect(a.address); }}
+      aria-current={isActive ? 'true' : undefined}
+    >
+      <span className="addresses-rail__address">{a.address}</span>
+      <span className="addresses-rail__row-actions" onClick={(e) => e.stopPropagation()}>
+        <button
+          type="button"
+          className={`addresses-rail__row-action${isFavorite ? ' is-on' : ''}`}
+          title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+          aria-label={isFavorite ? `Unfavorite ${a.address}` : `Favorite ${a.address}`}
+          onClick={(e) => onToggleFavorite(e, a)}
+        >
+          <Star size={12} fill={isFavorite ? 'currentColor' : 'none'} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="addresses-rail__row-action"
+          title="Copy address"
+          aria-label={`Copy ${a.address}`}
+          onClick={(e) => onCopy(e, a)}
+        >
+          <Copy size={12} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="addresses-rail__row-action"
+          title="Revoke address"
+          aria-label={`Revoke ${a.address}`}
+          onClick={(e) => onRevoke(e, a)}
+        >
+          <X size={12} aria-hidden="true" />
+        </button>
+      </span>
+    </li>
+  );
 }
 
 function Addresses({ domains, setMessage, selectedAddress, onSelectAddress }) {
@@ -47,6 +96,8 @@ function Addresses({ domains, setMessage, selectedAddress, onSelectAddress }) {
   }, [addresses, query]);
 
   const hiddenCount = addresses.length - filtered.length;
+  const favoriteItems = useMemo(() => filtered.filter((a) => a.favorite), [filtered]);
+  const showSections = favoriteItems.length > 0;
 
   const handleSelect = useCallback((address) => {
     if (typeof onSelectAddress !== 'function') return;
@@ -108,6 +159,21 @@ function Addresses({ domains, setMessage, selectedAddress, onSelectAddress }) {
     setPendingRevoke(null);
   }, []);
 
+  const toggleFavorite = useCallback((e, a) => {
+    e.stopPropagation();
+    const next = !a.favorite;
+    // Optimistic update; revert and notify on failure.
+    setAddresses((prev) => prev.map((x) => (
+      x.address === a.address ? { ...x, favorite: next } : x
+    )));
+    api.setFavorite(a.address, next).catch(() => {
+      setAddresses((prev) => prev.map((x) => (
+        x.address === a.address ? { ...x, favorite: a.favorite } : x
+      )));
+      setMessage && setMessage('Could not update favorite.', true);
+    });
+  }, [api, setMessage]);
+
   const confirmRevoke = useCallback(() => {
     const a = pendingRevoke;
     if (!a) return;
@@ -168,46 +234,38 @@ function Addresses({ domains, setMessage, selectedAddress, onSelectAddress }) {
         {filtered.length === 0 && query && (
           <li className="addresses-rail__empty">No matches</li>
         )}
-        {filtered.map((a) => {
-          const isActive = selectedAddress === a.address;
-          return (
-            <li
-              key={a.address}
-              id={a.address}
-              className={`addresses-rail__row${isActive ? ' is-active' : ''}`}
-              title={a.comment ? undefined : a.address}
-              data-address={a.address}
-              data-comment={a.comment || undefined}
-              onClick={() => handleSelect(a.address)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleSelect(a.address); }}
-              aria-current={isActive ? 'true' : undefined}
-            >
-              <span className="addresses-rail__address">{a.address}</span>
-              <span className="addresses-rail__row-actions" onClick={(e) => e.stopPropagation()}>
-                <button
-                  type="button"
-                  className="addresses-rail__row-action"
-                  title="Copy address"
-                  aria-label={`Copy ${a.address}`}
-                  onClick={(e) => copyAddress(e, a)}
-                >
-                  <Copy size={12} aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  className="addresses-rail__row-action"
-                  title="Revoke address"
-                  aria-label={`Revoke ${a.address}`}
-                  onClick={(e) => requestRevoke(e, a)}
-                >
-                  <X size={12} aria-hidden="true" />
-                </button>
-              </span>
-            </li>
-          );
-        })}
+
+        {showSections && (
+          <li className="addresses-rail__section-label" aria-hidden="true">Favorites</li>
+        )}
+        {showSections && favoriteItems.map((a) => (
+          <AddressRow
+            key={`fav-${a.address}`}
+            a={a}
+            isActive={selectedAddress === a.address}
+            isFavorite
+            onSelect={handleSelect}
+            onToggleFavorite={toggleFavorite}
+            onCopy={copyAddress}
+            onRevoke={requestRevoke}
+          />
+        ))}
+
+        {showSections && filtered.length > 0 && (
+          <li className="addresses-rail__section-label" aria-hidden="true">All addresses</li>
+        )}
+        {filtered.map((a) => (
+          <AddressRow
+            key={a.address}
+            a={a}
+            isActive={selectedAddress === a.address}
+            isFavorite={!!a.favorite}
+            onSelect={handleSelect}
+            onToggleFavorite={toggleFavorite}
+            onCopy={copyAddress}
+            onRevoke={requestRevoke}
+          />
+        ))}
 
         {!query && (
           <li

@@ -117,6 +117,49 @@ final class ApiClientTests: XCTestCase {
         }
     }
 
+    func testListAddressesDecodesFavoriteFlag() async throws {
+        // The `/list` Lambda flattens a per-caller `favorite` boolean onto
+        // each row (derived from the `favorites` string set). Older rows and
+        // older deployments omit the field; decoding must default it to
+        // false rather than throw.
+        let body = """
+        {
+          "Items": [
+            {"address":"alice@mail.example.com","subdomain":"mail","tld":"example.com","favorite":true},
+            {"address":"bob@x.example.com","subdomain":"x","tld":"example.com","favorite":false},
+            {"address":"carol@y.example.com","subdomain":"y","tld":"example.com"}
+          ]
+        }
+        """
+        let http = RecordingHTTPTransport(responses: [(Data(body.utf8), 200)])
+        let client = URLSessionApiClient(
+            configuration: makeConfiguration(),
+            authService: StubAuthService(),
+            transport: http
+        )
+        let addresses = try await client.listAddresses()
+        XCTAssertEqual(addresses.map(\.favorite), [true, false, false])
+    }
+
+    func testSetFavoritePutsExpectedBody() async throws {
+        let http = RecordingHTTPTransport(responses: [(Data(#"{"address":"a","favorite":true}"#.utf8), 200)])
+        let client = URLSessionApiClient(
+            configuration: makeConfiguration(),
+            authService: StubAuthService(),
+            transport: http
+        )
+        try await client.setFavorite(address: "alice@mail.example.com", favorite: true)
+        let requests = await http.requests
+        XCTAssertEqual(requests.count, 1)
+        let request = requests[0]
+        XCTAssertEqual(request.httpMethod, "PUT")
+        XCTAssertTrue(request.url!.absoluteString.contains("/set_favorite"))
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "idtoken")
+        let payload = try JSONSerialization.jsonObject(with: request.httpBody ?? Data()) as? [String: Any]
+        XCTAssertEqual(payload?["address"] as? String, "alice@mail.example.com")
+        XCTAssertEqual(payload?["favorite"] as? Bool, true)
+    }
+
     func testFetchBimiReturnsNilWhenEmpty() async throws {
         let http = RecordingHTTPTransport(responses: [(Data("{}".utf8), 200)])
         let client = URLSessionApiClient(

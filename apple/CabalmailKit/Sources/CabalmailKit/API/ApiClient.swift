@@ -24,6 +24,11 @@ public protocol ApiClient: Sendable {
         publicKey: String?
     ) async throws
 
+    /// Toggles the caller's favorite flag on an address. Backed by the
+    /// `/set_favorite` Lambda, which ADDs/DELETEs the caller's username
+    /// from the row's `favorites` string set.
+    func setFavorite(address: String, favorite: Bool) async throws
+
     /// Returns the BIMI logo URL for the sender domain, or nil if the domain
     /// has no BIMI record. The Lambda returns a JSON object shaped
     /// `{"url": "..."}`; a 404 / missing key maps to nil.

@@ -5,6 +5,78 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.18] - 2026-05-13
+
+### Changed
+- Web client sidebar address rail and the compose-window From picker now
+  render addresses as two sections: **Favorites** on top, then **All
+  addresses** (inclusive of favorites) below. Each address row carries a
+  star toggle that calls `/set_favorite`; favorites sync across
+  browsers/devices because the source of truth is the server-side
+  attribute introduced in Phase 1. The From picker's previous
+  localStorage-only favorites (`cabalmail.compose.favorites.v1`) are
+  replaced by the server-side state; orphaned localStorage entries are
+  harmless and can be ignored.
+- Web client folder rail now renders folders as two sections:
+  **Subscribed** on top (only when at least one folder is subscribed)
+  and **All folders** below (inclusive of subscribed). The per-row
+  toggle aria-label changed from "Favorite/Unfavorite" to
+  "Subscribe to/Unsubscribe from" to disambiguate from address
+  favorites.
+- Replaced the responsive nav's hamburger icon with a sidebar-panel icon
+  (lucide-react `PanelLeft`), matching the idiom used by Claude Desktop
+  and similar apps. The control now sits to the right of the brand and
+  is hidden via `visibility: hidden` outside the Email view so the logo
+  no longer shifts horizontally when navigating between Email, Users,
+  Addresses, and DMARC.
+
+### Added
+- Apple clients' sidebar now carries a segmented control at the top
+  to switch between **Folders** and **Addresses** tabs. The selected
+  tab is persisted across launches via `@AppStorage`. The Addresses
+  tab renders a new `AddressListView` with **Favorites** on top
+  (when present) and **All addresses** below (inclusive); per-row
+  swipe action + context menu toggle the favorite flag via the
+  `setFavorite` plumbing added in Phase 3. Tapping an address sets
+  a filter on the message list — visible envelopes are narrowed to
+  those whose `To` or `Cc` includes that address (case-insensitive
+  substring, matching React's
+  `react/admin/src/Email/Messages/Envelopes.jsx`). The active filter
+  shows as a chip pinned above the message list; switching folders
+  or tapping the chip clears it.
+- Apple clients' sidebar (`FolderListView`) now renders folders as two
+  sections: **Subscribed** on top (when at least one folder is
+  subscribed) and **All folders** below, inclusive of subscribed. Each
+  row gets a trailing-edge swipe action and a context-menu entry to
+  subscribe or unsubscribe. The toggle is optimistic and reverts on
+  failure, mirroring the React rail's behavior. Subscribed folders
+  appear in both sections; tapping either selects the same folder.
+- `CabalmailKit` data-layer support for address favorites: the
+  `Address` model carries a `favorite` boolean (defaults to false when
+  the `/list` response omits the field), and `ApiClient.setFavorite`
+  hits the new `/set_favorite` Lambda. Folder subscribe/unsubscribe
+  was already wired through `ImapClient` end-to-end, so no protocol
+  changes were needed for that side of the work. No native UI yet.
+- Server-side support for marking an email address as a favorite. A new
+  `/set_favorite` Lambda toggles the caller's membership in the address
+  row's `favorites` string set on the `cabal-addresses` DynamoDB table;
+  the existing `/list` response now carries a per-caller `favorite`
+  boolean derived from that set. Favorites are per-user, so multi-user
+  addresses can be favorited independently by each assigned user. This
+  is the backend foundation for sectioned (Favorites / All) address
+  lists in the web and native clients.
+- "Resend code" control on the signup verification and password-reset
+  screens. The button stays clickable until Cognito itself refuses
+  with `LimitExceededException` (which it does after ~5 resends per
+  user per hour); at that point the UI swaps to "Too many resend
+  attempts. Try again in about an hour." and disables the control
+  until the window passes. The lockout signal is persisted to
+  localStorage, keyed by `(flow, username)`, so a page refresh
+  doesn't make the message disappear, and a different account or
+  flow gets its own state. Implementation is a reusable
+  `useResendThrottle` hook plus an in-flight guard in `App.jsx` that
+  disables the button while a request is on the wire.
+
 ## [0.9.17] - 2026-05-11
 
 ### Fixed

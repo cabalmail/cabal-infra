@@ -1,4 +1,14 @@
 import '@testing-library/jest-dom';
+import { cleanup } from '@testing-library/react';
+import { afterEach } from 'vitest';
+
+// React Testing Library's auto-cleanup does not fire reliably under
+// `pool: 'forks'` with `singleFork: true` (the jsdom document is shared
+// across test files in the same fork, and RTL's per-file afterEach hook
+// can miss mounts from the previous file). Register cleanup explicitly.
+afterEach(() => {
+  cleanup();
+});
 
 // Mock IntersectionObserver for jsdom (used by react-intersection-observer)
 class IntersectionObserver {
