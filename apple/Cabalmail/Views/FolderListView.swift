@@ -27,9 +27,21 @@ struct FolderListView: View {
                     Label(errorMessage, systemImage: "exclamationmark.triangle")
                         .foregroundStyle(.red)
                 }
-                ForEach(model.folders) { folder in
-                    row(for: folder, unread: model.unreadCounts[folder.path] ?? 0)
-                        .tag(folder)
+                if !model.subscribedFolders.isEmpty {
+                    Section("Subscribed") {
+                        ForEach(model.subscribedFolders, id: \.path) { folder in
+                            folderRow(folder, model: model)
+                        }
+                    }
+                    Section("All folders") {
+                        ForEach(model.folders, id: \.path) { folder in
+                            folderRow(folder, model: model)
+                        }
+                    }
+                } else {
+                    ForEach(model.folders, id: \.path) { folder in
+                        folderRow(folder, model: model)
+                    }
                 }
             }
         }
@@ -57,6 +69,33 @@ struct FolderListView: View {
                 await newModel.refreshUnreadCounts()
             }
         }
+    }
+
+    @ViewBuilder
+    private func folderRow(_ folder: Folder, model: FolderListViewModel) -> some View {
+        row(for: folder, unread: model.unreadCounts[folder.path] ?? 0)
+            .tag(folder)
+            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                Button {
+                    Task { await model.toggleSubscription(folder) }
+                } label: {
+                    Label(
+                        folder.isSubscribed ? "Unsubscribe" : "Subscribe",
+                        systemImage: folder.isSubscribed ? "bell.slash" : "bell"
+                    )
+                }
+                .tint(folder.isSubscribed ? .orange : .accentColor)
+            }
+            .contextMenu {
+                Button {
+                    Task { await model.toggleSubscription(folder) }
+                } label: {
+                    Label(
+                        folder.isSubscribed ? "Unsubscribe" : "Subscribe",
+                        systemImage: folder.isSubscribed ? "bell.slash" : "bell"
+                    )
+                }
+            }
     }
 
     @ViewBuilder

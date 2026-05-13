@@ -25,6 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   favorites.
 
 ### Added
+- Apple clients' sidebar (`FolderListView`) now renders folders as two
+  sections: **Subscribed** on top (when at least one folder is
+  subscribed) and **All folders** below, inclusive of subscribed. Each
+  row gets a trailing-edge swipe action and a context-menu entry to
+  subscribe or unsubscribe. The toggle is optimistic and reverts on
+  failure, mirroring the React rail's behavior. Subscribed folders
+  appear in both sections; tapping either selects the same folder.
 - `CabalmailKit` data-layer support for address favorites: the
   `Address` model carries a `favorite` boolean (defaults to false when
   the `/list` response omits the field), and `ApiClient.setFavorite`
