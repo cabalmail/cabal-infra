@@ -20,6 +20,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `useResendThrottle` hook plus an in-flight guard in `App.jsx` that
   disables the button while a request is on the wire.
 
+### Fixed
+- macOS Settings window: the General / Addresses / Folders tab
+  buttons no longer shift sideways when switching between General
+  and the other two. The 0.9.17 pass moved the "+" action onto a
+  `safeAreaInset` strip below the tab row, but the underlying
+  `NavigationStack` was still contributing to the window's toolbar
+  region (where the tab buttons live), so toggling to Addresses or
+  Folders re-centered the row. Both views now drop the
+  `NavigationStack` on macOS to match `SettingsView`, and the
+  "Request New Address" / "New Folder" actions render as their own
+  section inside the scrollable List instead.
+
 ## [0.9.17] - 2026-05-11
 
 ### Fixed
