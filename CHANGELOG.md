@@ -25,6 +25,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   favorites.
 
 ### Added
+- `CabalmailKit` data-layer support for address favorites: the
+  `Address` model carries a `favorite` boolean (defaults to false when
+  the `/list` response omits the field), and `ApiClient.setFavorite`
+  hits the new `/set_favorite` Lambda. Folder subscribe/unsubscribe
+  was already wired through `ImapClient` end-to-end, so no protocol
+  changes were needed for that side of the work. No native UI yet.
 - Server-side support for marking an email address as a favorite. A new
   `/set_favorite` Lambda toggles the caller's membership in the address
   row's `favorites` string set on the `cabal-addresses` DynamoDB table;
