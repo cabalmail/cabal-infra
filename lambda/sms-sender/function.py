@@ -101,15 +101,23 @@ def _message_body(trigger_source, code):
     return f'Your Cabalmail verification code is {code}'
 
 
+def _mask_phone_number(phone_number):
+    """Return a redacted phone number safe for logs."""
+    if not phone_number:
+        return '[redacted]'
+    return f'***{str(phone_number)[-2:]}'
+
+
 def handler(event, _context):
     """Sends the Cognito-generated SMS code via Twilio. Returns event unchanged."""
     try:
         trigger = event.get('triggerSource')
         phone_number = event['request']['userAttributes']['phone_number']
+        masked_phone_number = _mask_phone_number(phone_number)
         code = _decrypt_code(event)
-        print(f'[SMS] Sending {trigger} code to {phone_number}')
+        print(f'[SMS] Sending {trigger} code to {masked_phone_number}')
         send_sms(phone_number, _message_body(trigger, code))
-        print(f'[SMS] Sent to {phone_number}')
+        print(f'[SMS] Sent to {masked_phone_number}')
     except Exception as err:  # pylint: disable=broad-exception-caught
         print(f'[SMS] Error: {type(err).__name__}: {err}')
     return event
