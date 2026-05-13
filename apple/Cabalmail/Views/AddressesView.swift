@@ -21,20 +21,35 @@ struct AddressesView: View {
     @State private var isRefreshing = false
 
     var body: some View {
+        #if os(macOS)
+        // Inside the Settings window's TabView the General tab is a bare
+        // Form (see SettingsView) but Addresses and Folders had been
+        // wrapped in NavigationStack + a `.toolbar` / `.safeAreaInset`
+        // action strip. Both of those contribute to the window's
+        // toolbar region, which is the same horizontal band the
+        // General/Addresses/Folders tab buttons live in, so the tab
+        // buttons re-centered whenever the active tab differed from
+        // General. Match the SettingsView shape - bare content, no
+        // NavigationStack - and move the "Request new address" action
+        // into the List as its own section so the action has its own
+        // space inside the scrollable content rather than crowding
+        // the tab toolbar.
+        content
+            .refreshable { await model?.refresh(force: true) }
+            .task { await ensureModel() }
+            .sheet(isPresented: $showNewAddressSheet) { newAddressSheet }
+            .confirmationDialog(
+                revokeDialogTitle,
+                isPresented: revokeDialogBinding,
+                presenting: pendingRevoke,
+                actions: revokeDialogActions,
+                message: revokeDialogMessage
+            )
+        #else
         NavigationStack {
             content
                 .navigationTitle("Addresses")
-                #if os(macOS)
-                // On macOS this view sits inside the Settings window's
-                // TabView. Using `.toolbar` here would hoist the "+" button
-                // up next to the General/Addresses/Folders tab buttons,
-                // shifting their centering. Render it as a `safeAreaInset`
-                // strip below the tab row instead.
-                .safeAreaInset(edge: .top, spacing: 0) { actionBar }
-                #else
                 .toolbar { toolbarContent }
-                #endif
-                .searchable(text: $filterQuery, prompt: "Filter addresses")
                 .refreshable { await model?.refresh(force: true) }
                 .task { await ensureModel() }
                 .sheet(isPresented: $showNewAddressSheet) { newAddressSheet }
@@ -46,6 +61,7 @@ struct AddressesView: View {
                     message: revokeDialogMessage
                 )
         }
+        #endif
     }
 
     #if os(macOS)
@@ -90,6 +106,8 @@ struct AddressesView: View {
         }
     }
 
+=======
+>>>>>>> claude/dazzling-albattani-bd56db
     // MARK: - Subviews
 
     @ViewBuilder
@@ -102,12 +120,28 @@ struct AddressesView: View {
                             .foregroundStyle(.red)
                     }
                 }
+                #if os(macOS)
+                requestNewSection
+                #endif
                 mainSection(for: model)
             }
         } else {
             ProgressView()
         }
     }
+
+    #if os(macOS)
+    @ViewBuilder
+    private var requestNewSection: some View {
+        Section {
+            Button {
+                showNewAddressSheet = true
+            } label: {
+                Label("Request New Address", systemImage: "plus")
+            }
+        }
+    }
+    #endif
 
     @ViewBuilder
     private func mainSection(for model: AddressesViewModel) -> some View {
@@ -118,11 +152,16 @@ struct AddressesView: View {
             } else if model.addresses.isEmpty {
                 // iPhone clips ContentUnavailableView inside a Section — use
                 // a plain label so the "no addresses" hint still reads cleanly.
+                #if os(macOS)
+                Label("No addresses yet.", systemImage: "at")
+                    .foregroundStyle(.secondary)
+                #else
                 Label(
                     "Tap + to request your first address.",
                     systemImage: "at"
                 )
                 .foregroundStyle(.secondary)
+                #endif
             } else {
                 ForEach(filteredAddresses(model.addresses)) { address in
                     addressRow(address)

@@ -17,16 +17,30 @@ struct FoldersAdminView: View {
     @State private var isRefreshing = false
 
     var body: some View {
+        #if os(macOS)
+        // See `AddressesView` for the rationale. The Settings TabView
+        // already supplies window chrome, and any NavigationStack /
+        // toolbar / safeAreaInset content here lands in the same
+        // horizontal band as the General/Addresses/Folders tab
+        // buttons - which made them re-center every time the active
+        // tab changed. Render content bare and put "New Folder"
+        // inside the List so the action has its own space in the
+        // scrollable content.
+        content
+            .refreshable { await model?.refresh() }
+            .task { await ensureModel() }
+            .sheet(isPresented: $showNewFolderSheet) { newFolderSheet }
+            .confirmationDialog(
+                deleteDialogTitle,
+                isPresented: deleteDialogBinding,
+                presenting: pendingDelete,
+                actions: deleteDialogActions,
+                message: deleteDialogMessage
+            )
+        #else
         NavigationStack {
             content
                 .navigationTitle("Folders")
-                #if os(macOS)
-                // See `AddressesView` — the macOS Settings TabView would
-                // hoist a `.toolbar` "+" button up next to the tab buttons,
-                // shifting their centering. Render the action below the tab
-                // row instead.
-                .safeAreaInset(edge: .top, spacing: 0) { actionBar }
-                #else
                 .toolbar { toolbarContent }
                 #endif
                 .searchable(text: $filterQuery, prompt: "Filter folders")
@@ -41,6 +55,7 @@ struct FoldersAdminView: View {
                     message: deleteDialogMessage
                 )
         }
+        #endif
     }
 
     #if os(macOS)
@@ -83,6 +98,8 @@ struct FoldersAdminView: View {
         return folders.filter { $0.path.lowercased().contains(needle) }
     }
 
+=======
+>>>>>>> claude/dazzling-albattani-bd56db
     // MARK: - Subviews
 
     @ViewBuilder
@@ -95,6 +112,9 @@ struct FoldersAdminView: View {
                             .foregroundStyle(.red)
                     }
                 }
+                #if os(macOS)
+                newFolderSection
+                #endif
                 if model.isLoading && model.folders.isEmpty {
                     Section {
                         ProgressView()
@@ -108,6 +128,20 @@ struct FoldersAdminView: View {
             ProgressView()
         }
     }
+
+    #if os(macOS)
+    @ViewBuilder
+    private var newFolderSection: some View {
+        Section {
+            Button {
+                showNewFolderSheet = true
+            } label: {
+                Label("New Folder", systemImage: "plus")
+            }
+            .disabled(model == nil)
+        }
+    }
+    #endif
 
     @ViewBuilder
     private func folderSections(for model: FoldersAdminViewModel) -> some View {
