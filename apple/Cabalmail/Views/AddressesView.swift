@@ -106,8 +106,6 @@ struct AddressesView: View {
         }
     }
 
-=======
->>>>>>> claude/dazzling-albattani-bd56db
     // MARK: - Subviews
 
     @ViewBuilder

@@ -98,8 +98,6 @@ struct FoldersAdminView: View {
         return folders.filter { $0.path.lowercased().contains(needle) }
     }
 
-=======
->>>>>>> claude/dazzling-albattani-bd56db
     // MARK: - Subviews
 
     @ViewBuilder
