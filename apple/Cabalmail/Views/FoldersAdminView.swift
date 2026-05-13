@@ -13,6 +13,8 @@ struct FoldersAdminView: View {
     @State private var model: FoldersAdminViewModel?
     @State private var showNewFolderSheet = false
     @State private var pendingDelete: Folder?
+    @State private var filterQuery: String = ""
+    @State private var isRefreshing = false
 
     var body: some View {
         NavigationStack {
@@ -27,6 +29,7 @@ struct FoldersAdminView: View {
                 #else
                 .toolbar { toolbarContent }
                 #endif
+                .searchable(text: $filterQuery, prompt: "Filter folders")
                 .refreshable { await model?.refresh() }
                 .task { await ensureModel() }
                 .sheet(isPresented: $showNewFolderSheet) { newFolderSheet }
@@ -46,6 +49,16 @@ struct FoldersAdminView: View {
         HStack {
             Spacer()
             Button {
+                Task { await manualRefresh() }
+            } label: {
+                if isRefreshing {
+                    ProgressView()
+                } else {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+            }
+            .disabled(isRefreshing || model == nil)
+            Button {
                 showNewFolderSheet = true
             } label: {
                 Label("New Folder", systemImage: "plus")
@@ -56,6 +69,19 @@ struct FoldersAdminView: View {
         .padding(.vertical, 6)
     }
     #endif
+
+    private func manualRefresh() async {
+        guard let model, !isRefreshing else { return }
+        isRefreshing = true
+        defer { isRefreshing = false }
+        await model.refresh()
+    }
+
+    private func filteredFolders(_ folders: [Folder]) -> [Folder] {
+        let needle = filterQuery.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !needle.isEmpty else { return folders }
+        return folders.filter { $0.path.lowercased().contains(needle) }
+    }
 
     // MARK: - Subviews
 
@@ -85,7 +111,7 @@ struct FoldersAdminView: View {
 
     @ViewBuilder
     private func folderSections(for model: FoldersAdminViewModel) -> some View {
-        let sorted = model.sortedForDisplay
+        let sorted = filteredFolders(model.sortedForDisplay)
         let subscribed = sorted.filter(\.isSubscribed)
         let unsubscribed = sorted.filter { !$0.isSubscribed }
 
@@ -171,6 +197,19 @@ struct FoldersAdminView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
+        ToolbarItem {
+            Button {
+                Task { await manualRefresh() }
+            } label: {
+                if isRefreshing {
+                    ProgressView()
+                } else {
+                    Image(systemName: "arrow.clockwise")
+                        .accessibilityLabel("Refresh folders")
+                }
+            }
+            .disabled(isRefreshing || model == nil)
+        }
         ToolbarItem {
             Button {
                 showNewFolderSheet = true

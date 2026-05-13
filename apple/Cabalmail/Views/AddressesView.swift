@@ -17,6 +17,8 @@ struct AddressesView: View {
     @State private var model: AddressesViewModel?
     @State private var showNewAddressSheet = false
     @State private var pendingRevoke: Address?
+    @State private var filterQuery: String = ""
+    @State private var isRefreshing = false
 
     var body: some View {
         NavigationStack {
@@ -32,6 +34,7 @@ struct AddressesView: View {
                 #else
                 .toolbar { toolbarContent }
                 #endif
+                .searchable(text: $filterQuery, prompt: "Filter addresses")
                 .refreshable { await model?.refresh(force: true) }
                 .task { await ensureModel() }
                 .sheet(isPresented: $showNewAddressSheet) { newAddressSheet }
@@ -51,6 +54,16 @@ struct AddressesView: View {
         HStack {
             Spacer()
             Button {
+                Task { await manualRefresh() }
+            } label: {
+                if isRefreshing {
+                    ProgressView()
+                } else {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+            }
+            .disabled(isRefreshing || model == nil)
+            Button {
                 showNewAddressSheet = true
             } label: {
                 Label("Request New Address", systemImage: "plus")
@@ -60,6 +73,22 @@ struct AddressesView: View {
         .padding(.vertical, 6)
     }
     #endif
+
+    private func manualRefresh() async {
+        guard let model, !isRefreshing else { return }
+        isRefreshing = true
+        defer { isRefreshing = false }
+        await model.refresh(force: true)
+    }
+
+    private func filteredAddresses(_ addresses: [Address]) -> [Address] {
+        let needle = filterQuery.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !needle.isEmpty else { return addresses }
+        return addresses.filter { address in
+            address.address.lowercased().contains(needle)
+                || (address.comment?.lowercased().contains(needle) ?? false)
+        }
+    }
 
     // MARK: - Subviews
 
@@ -95,7 +124,7 @@ struct AddressesView: View {
                 )
                 .foregroundStyle(.secondary)
             } else {
-                ForEach(model.addresses) { address in
+                ForEach(filteredAddresses(model.addresses)) { address in
                     addressRow(address)
                 }
             }
@@ -132,6 +161,19 @@ struct AddressesView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
+        ToolbarItem {
+            Button {
+                Task { await manualRefresh() }
+            } label: {
+                if isRefreshing {
+                    ProgressView()
+                } else {
+                    Image(systemName: "arrow.clockwise")
+                        .accessibilityLabel("Refresh addresses")
+                }
+            }
+            .disabled(isRefreshing || model == nil)
+        }
         ToolbarItem {
             Button {
                 showNewAddressSheet = true

@@ -68,19 +68,54 @@ final class AppState {
     /// Exposed as an observable so future views (e.g. a sidebar indicator)
     /// can mirror what shows on the dock/home-screen badge.
     private(set) var inboxUnreadCount: Int = 0
+
+    /// Per-folder unread counts. Authoritative writes land from
+    /// `FolderListViewModel.refreshUnreadCounts` (via STATUS walk);
+    /// optimistic deltas come from flag-change and dispose paths so the
+    /// sidebar badges shift the moment the user acts, without waiting for
+    /// the next STATUS round trip.
+    private(set) var folderUnreadCounts: [String: Int] = [:]
+
+    /// Replace the count for one folder. Called after an authoritative
+    /// `STATUS (UNSEEN)`.
+    func setUnreadCount(folderPath: String, count: Int) {
+        folderUnreadCounts[folderPath] = max(0, count)
+    }
+
+    /// Replace the whole map. Used by the folder list view model after a
+    /// full STATUS walk so any folders that have disappeared drop out.
+    func setUnreadCounts(_ counts: [String: Int]) {
+        folderUnreadCounts = counts.mapValues { max(0, $0) }
+    }
+
+    /// Bump (or reduce) the count for one folder. Clamped at zero so a
+    /// stale +1 from a doubled signal can't make the badge negative.
+    func applyUnreadDelta(folderPath: String, delta: Int) {
+        let current = folderUnreadCounts[folderPath] ?? 0
+        folderUnreadCounts[folderPath] = max(0, current + delta)
+    }
     private var inboxBadgeTask: Task<Void, Never>?
     private let inboxBadgePollInterval: UInt64 = 60 * 1_000_000_000
 
     func requestCompose() { composeRequestTick += 1 }
     func requestRefresh() { refreshRequestTick += 1 }
 
-    func signalDisposed(folderPath: String, uid: UInt32) {
+    func signalDisposed(folderPath: String, uid: UInt32, wasUnread: Bool = false) {
         disposedTick += 1
         lastDisposedEnvelope = DisposedEnvelope(
             folderPath: folderPath,
             uid: uid,
             tick: disposedTick
         )
+        // Dispose marks the message `\Seen` before the move, so the source
+        // folder loses one unread message iff the row was unread to begin
+        // with. The `setSeen(true)` path that ran moments earlier already
+        // applied a -1 via `signalFlagChange`; passing `wasUnread` lets the
+        // list-swipe path (which doesn't go through `setSeen`) report the
+        // same delta exactly once.
+        if wasUnread {
+            applyUnreadDelta(folderPath: folderPath, delta: -1)
+        }
     }
 
     func signalFlagChange(folderPath: String, uid: UInt32, flag: Flag, added: Bool) {
@@ -92,6 +127,9 @@ final class AppState {
             added: added,
             tick: flagChangeTick
         )
+        if flag == .seen {
+            applyUnreadDelta(folderPath: folderPath, delta: added ? -1 : 1)
+        }
     }
 
     /// Publishes a toast and auto-clears it after `duration`. The task lives

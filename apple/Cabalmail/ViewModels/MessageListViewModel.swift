@@ -18,6 +18,7 @@ final class MessageListViewModel {
     // in sibling files (`+Optimistic`, `+NextUnread`) can reach them.
     let client: CabalmailClient
     let preferences: Preferences
+    let appState: AppState
     private let pageSize: UInt32 = 50
 
     var envelopes: [Envelope] = []
@@ -50,10 +51,11 @@ final class MessageListViewModel {
     /// the in-flight moves were still returning.
     private var pendingDisposeUIDs: Set<UInt32> = []
 
-    init(folder: Folder, client: CabalmailClient, preferences: Preferences) {
+    init(folder: Folder, client: CabalmailClient, preferences: Preferences, appState: AppState) {
         self.folder = folder
         self.client = client
         self.preferences = preferences
+        self.appState = appState
     }
 
     func loadInitial() async {
@@ -244,7 +246,16 @@ final class MessageListViewModel {
 
         let destination = preferences.disposeAction.destinationFolder
         let originalIndex = envelopes.firstIndex { $0.uid == envelope.uid }
+        let wasUnread = !envelope.flags.contains(.seen)
         envelopes.removeAll { $0.uid == envelope.uid }
+        // Optimistic count drop for the source folder: the dispose path
+        // marks the message `\Seen` before moving, so an unread message
+        // both loses its unread state AND leaves the folder. One -1 covers
+        // both — the post-move STATUS walk will fix it if the server
+        // disagrees.
+        if wasUnread {
+            appState.applyUnreadDelta(folderPath: folder.path, delta: -1)
+        }
 
         do {
             if !envelope.flags.contains(.seen) {
@@ -273,6 +284,9 @@ final class MessageListViewModel {
             }
         } catch {
             restoreEnvelope(envelope, at: originalIndex)
+            if wasUnread {
+                appState.applyUnreadDelta(folderPath: folder.path, delta: 1)
+            }
             errorMessage = "\(error)"
         }
     }

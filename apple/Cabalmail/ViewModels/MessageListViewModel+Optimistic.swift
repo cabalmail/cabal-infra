@@ -14,6 +14,18 @@ extension MessageListViewModel {
     /// the same primitive.
     func setFlag(_ flag: Flag, add: Bool, envelope: Envelope) async {
         applyOptimisticFlag(uid: envelope.uid, flag: flag, add: add)
+        // Mirror the optimistic flag flip onto the folder's unread count
+        // when `.seen` changes — adding `.seen` to an unread message drops
+        // one from the badge, removing it adds one back. Only fires when
+        // the message wasn't already in the target state to avoid double-
+        // counting a no-op toggle.
+        let unreadDelta: Int
+        if flag == .seen, envelope.flags.contains(.seen) != add {
+            unreadDelta = add ? -1 : 1
+            appState.applyUnreadDelta(folderPath: folder.path, delta: unreadDelta)
+        } else {
+            unreadDelta = 0
+        }
         do {
             try await client.imapClient.setFlags(
                 folder: folder.path,
@@ -23,6 +35,9 @@ extension MessageListViewModel {
             )
         } catch {
             applyOptimisticFlag(uid: envelope.uid, flag: flag, add: !add)
+            if unreadDelta != 0 {
+                appState.applyUnreadDelta(folderPath: folder.path, delta: -unreadDelta)
+            }
             errorMessage = "\(error)"
         }
     }

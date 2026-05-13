@@ -47,7 +47,8 @@ struct MessageListView: View {
                 model = MessageListViewModel(
                     folder: folder,
                     client: client,
-                    preferences: preferences
+                    preferences: preferences,
+                    appState: appState
                 )
                 await model?.loadInitial()
                 await model?.startWatching()
