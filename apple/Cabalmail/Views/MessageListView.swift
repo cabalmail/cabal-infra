@@ -9,9 +9,9 @@ struct MessageListView: View {
     /// When set, narrows the visible envelopes to those whose `To` or `Cc`
     /// includes this address (case-insensitive substring match), matching
     /// `react/admin/src/Email/Messages/Envelopes.jsx` byte-for-byte.
-    var addressFilter: String? = nil
+    let addressFilter: String?
     /// Tapped on the filter chip to drop the address scope.
-    var onClearAddressFilter: () -> Void = {}
+    let onClearAddressFilter: () -> Void
 
     @Environment(AppState.self) private var appState
     @Environment(Preferences.self) private var preferences
