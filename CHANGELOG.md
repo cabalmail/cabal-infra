@@ -16,16 +16,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   addresses can be favorited independently by each assigned user. This
   is the backend foundation for sectioned (Favorites / All) address
   lists in the web and native clients.
-
-### Changed
-- Replaced the responsive nav's hamburger icon with a sidebar-panel icon
-  (lucide-react `PanelLeft`), matching the idiom used by Claude Desktop
-  and similar apps. The control now sits to the right of the brand and
-  is hidden via `visibility: hidden` outside the Email view so the logo
-  no longer shifts horizontally when navigating between Email, Users,
-  Addresses, and DMARC.
-
-### Added
 - "Resend code" control on the signup verification and password-reset
   screens. The button stays clickable until Cognito itself refuses
   with `LimitExceededException` (which it does after ~5 resends per
@@ -37,6 +27,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   flow gets its own state. Implementation is a reusable
   `useResendThrottle` hook plus an in-flight guard in `App.jsx` that
   disables the button while a request is on the wire.
+
+### Changed
+- Replaced the responsive nav's hamburger icon with a sidebar-panel icon
+  (lucide-react `PanelLeft`), matching the idiom used by Claude Desktop
+  and similar apps. The control now sits to the right of the brand and
+  is hidden via `visibility: hidden` outside the Email view so the logo
+  no longer shifts horizontally when navigating between Email, Users,
+  Addresses, and DMARC.
 
 ## [0.9.17] - 2026-05-11
 
