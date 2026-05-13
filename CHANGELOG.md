@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.9.18] - 2026-05-13
 
 ### Changed
 - Web client sidebar address rail and the compose-window From picker now
@@ -23,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   toggle aria-label changed from "Favorite/Unfavorite" to
   "Subscribe to/Unsubscribe from" to disambiguate from address
   favorites.
+- Replaced the responsive nav's hamburger icon with a sidebar-panel icon
+  (lucide-react `PanelLeft`), matching the idiom used by Claude Desktop
+  and similar apps. The control now sits to the right of the brand and
+  is hidden via `visibility: hidden` outside the Email view so the logo
+  no longer shifts horizontally when navigating between Email, Users,
+  Addresses, and DMARC.
 
 ### Added
 - Apple clients' sidebar now carries a segmented control at the top
@@ -70,14 +76,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   flow gets its own state. Implementation is a reusable
   `useResendThrottle` hook plus an in-flight guard in `App.jsx` that
   disables the button while a request is on the wire.
-
-### Changed
-- Replaced the responsive nav's hamburger icon with a sidebar-panel icon
-  (lucide-react `PanelLeft`), matching the idiom used by Claude Desktop
-  and similar apps. The control now sits to the right of the brand and
-  is hidden via `visibility: hidden` outside the Email view so the logo
-  no longer shifts horizontally when navigating between Email, Users,
-  Addresses, and DMARC.
 
 ## [0.9.17] - 2026-05-11
 
