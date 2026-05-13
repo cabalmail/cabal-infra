@@ -13,14 +13,15 @@ import CabalmailKit
 @MainActor
 final class FolderListViewModel {
     var folders: [Folder] = []
-    var unreadCounts: [String: Int] = [:]
     var isLoading = false
     var errorMessage: String?
 
     private let client: CabalmailClient
+    private let appState: AppState
 
-    init(client: CabalmailClient) {
+    init(client: CabalmailClient, appState: AppState) {
         self.client = client
+        self.appState = appState
     }
 
     func refresh() async {
@@ -97,10 +98,15 @@ final class FolderListViewModel {
         var counts: [String: Int] = [:]
         for folder in folders {
             if let status = try? await client.imapClient.status(path: folder.path) {
-                counts[folder.path] = status.unseen ?? 0
+                let count = status.unseen ?? 0
+                counts[folder.path] = count
+                // Publish each count as it arrives so badges fill in
+                // progressively rather than appearing in one shot at the
+                // end of the walk.
+                appState.setUnreadCount(folderPath: folder.path, count: count)
             }
         }
-        unreadCounts = counts
+        appState.setUnreadCounts(counts)
     }
 
     /// Inbox first, then user folders alpha, then system folders grouped
