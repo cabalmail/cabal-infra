@@ -103,6 +103,14 @@ jobs:
     # Phase 6: per-area path filter for push events. workflow_dispatch
     # keeps the manual `areas` input as an override so an operator can
     # force a partial or full re-deploy without a fresh push.
+    #
+    # Note .github/workflows/app.yml is deliberately NOT in any filter:
+    # a workflow-only change still triggers this run (via on.push.paths)
+    # and setup will execute as a parse-check smoke test, but no area
+    # job fires. If a workflow change needs to be tested against a real
+    # area, use workflow_dispatch with the right `areas` input - cheaper
+    # than auto-rebuilding all six areas on every push that happens to
+    # touch the workflow file.
     - name: changed-paths
       id: filter
       if: github.event_name == 'push'
@@ -111,31 +119,25 @@ jobs:
         filters: |
           docker:
             - 'docker/**'
-            - '.github/workflows/app.yml'
             - '.github/scripts/deploy-ecs-service.sh'
           lambda_api:
             - 'lambda/api/**'
-            - '.github/workflows/app.yml'
             - '.github/scripts/build-api.sh'
             - '.github/scripts/build-api-one.sh'
             - '.github/scripts/deploy-lambda-zip.sh'
           lambda_counter:
             - 'lambda/counter/**'
-            - '.github/workflows/app.yml'
             - '.github/scripts/build-counter.sh'
             - '.github/scripts/deploy-lambda-zip.sh'
           lambda_certbot:
             - 'lambda/certbot-renewal/**'
-            - '.github/workflows/app.yml'
             - '.github/scripts/deploy-lambda-image.sh'
           lambda_sms_sender:
             - 'lambda/sms-sender/**'
-            - '.github/workflows/app.yml'
             - '.github/scripts/build-sms-sender.sh'
             - '.github/scripts/deploy-lambda-zip.sh'
           react:
             - 'react/admin/**'
-            - '.github/workflows/app.yml'
 
     - name: resolve-areas
       id: areas

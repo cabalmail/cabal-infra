@@ -10,6 +10,8 @@ struct FolderListView: View {
     @Environment(AppState.self) private var appState
     @State private var model: FolderListViewModel?
     @State private var didNotifyLoad = false
+    @State private var filterQuery: String = ""
+    @State private var isRefreshing = false
     @Binding var selection: Folder?
     /// Called exactly once, the first time the folder list successfully
     /// loads. `MailRootView` uses it to seed a default `selection` so the
@@ -27,25 +29,43 @@ struct FolderListView: View {
                     Label(errorMessage, systemImage: "exclamationmark.triangle")
                         .foregroundStyle(.red)
                 }
+                let subscribed = filteredFolders(model.subscribedFolders)
+                let all = filteredFolders(model.folders)
                 if !model.subscribedFolders.isEmpty {
                     Section("Subscribed") {
-                        ForEach(model.subscribedFolders, id: \.path) { folder in
-                            folderRow(folder, model: model)
+                        ForEach(subscribed, id: \.path) { folder in
+                            folderRow(folder, model: model, depth: 0)
                         }
                     }
                     Section("All folders") {
-                        ForEach(model.folders, id: \.path) { folder in
-                            folderRow(folder, model: model)
+                        ForEach(all, id: \.path) { folder in
+                            folderRow(folder, model: model, depth: model.depth(for: folder))
                         }
                     }
                 } else {
-                    ForEach(model.folders, id: \.path) { folder in
-                        folderRow(folder, model: model)
+                    ForEach(all, id: \.path) { folder in
+                        folderRow(folder, model: model, depth: model.depth(for: folder))
                     }
                 }
             }
         }
         .navigationTitle("Mailboxes")
+        .searchable(text: $filterQuery, placement: .sidebar, prompt: "Filter folders")
+        .toolbar {
+            ToolbarItem {
+                Button {
+                    Task { await manualRefresh() }
+                } label: {
+                    if isRefreshing {
+                        ProgressView()
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .accessibilityLabel("Refresh folders")
+                    }
+                }
+                .disabled(isRefreshing || model == nil)
+            }
+        }
         .refreshable {
             await model?.refresh()
         }
@@ -55,7 +75,7 @@ struct FolderListView: View {
         // state.
         .task {
             if model == nil, let client = appState.client {
-                let newModel = FolderListViewModel(client: client)
+                let newModel = FolderListViewModel(client: client, appState: appState)
                 model = newModel
                 // Fetch + publish the folder list, then notify the parent so
                 // it can seed Inbox selection immediately. The unread-count
@@ -71,9 +91,25 @@ struct FolderListView: View {
         }
     }
 
+    private func manualRefresh() async {
+        guard let model, !isRefreshing else { return }
+        isRefreshing = true
+        defer { isRefreshing = false }
+        await model.refresh()
+    }
+
+    private func filteredFolders(_ folders: [Folder]) -> [Folder] {
+        let needle = filterQuery.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !needle.isEmpty else { return folders }
+        return folders.filter { folder in
+            folder.path.lowercased().contains(needle)
+                || folder.name.lowercased().contains(needle)
+        }
+    }
+
     @ViewBuilder
-    private func folderRow(_ folder: Folder, model: FolderListViewModel) -> some View {
-        row(for: folder, unread: model.unreadCounts[folder.path] ?? 0)
+    private func folderRow(_ folder: Folder, model: FolderListViewModel, depth: Int) -> some View {
+        row(for: folder, unread: appState.folderUnreadCounts[folder.path] ?? 0, depth: depth)
             .tag(folder)
             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                 Button {
@@ -99,8 +135,11 @@ struct FolderListView: View {
     }
 
     @ViewBuilder
-    private func row(for folder: Folder, unread: Int) -> some View {
+    private func row(for folder: Folder, unread: Int, depth: Int) -> some View {
         HStack {
+            if depth > 0 {
+                Spacer().frame(width: CGFloat(depth) * 14)
+            }
             Image(systemName: iconName(for: folder))
                 .foregroundStyle(.tint)
             Text(folder.name)

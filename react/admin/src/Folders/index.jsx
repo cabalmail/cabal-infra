@@ -35,10 +35,13 @@ function FolderIcon({ kind }) {
 
 function FolderRow({
   f, isActive, isSubscribed, canDelete, onSelect, onToggleSubscribe, onRemove,
+  depth = 0, showFullPath = false,
 }) {
+  const display = showFullPath && !f.system ? f.id : f.label;
   return (
     <li
       className={`${styles.folderItem} ${isActive ? styles.active : ''}`}
+      style={depth > 0 ? { paddingLeft: `${12 + depth * 14}px` } : undefined}
       onClick={() => onSelect(f.id)}
       role="button"
       tabIndex={0}
@@ -46,7 +49,7 @@ function FolderRow({
       aria-current={isActive ? 'true' : undefined}
     >
       <FolderIcon kind={f.kind} />
-      <span className={styles.folderName}>{f.label}</span>
+      <span className={styles.folderName}>{display}</span>
       <span className={styles.rowActions} onClick={(e) => e.stopPropagation()}>
         <button
           type="button"
@@ -210,6 +213,7 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
                   onSelect={handleSelect}
                   onToggleSubscribe={toggleSubscribe}
                   onRemove={removeFolder}
+                  showFullPath
                 />
               ))}
             </ul>
@@ -259,6 +263,7 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
                 onSelect={handleSelect}
                 onToggleSubscribe={toggleSubscribe}
                 onRemove={removeFolder}
+                depth={f.depth}
               />
             ))}
           </ul>

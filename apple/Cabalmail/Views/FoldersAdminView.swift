@@ -13,20 +13,36 @@ struct FoldersAdminView: View {
     @State private var model: FoldersAdminViewModel?
     @State private var showNewFolderSheet = false
     @State private var pendingDelete: Folder?
+    @State private var filterQuery: String = ""
+    @State private var isRefreshing = false
 
     var body: some View {
+        #if os(macOS)
+        // See `AddressesView` for the rationale. The Settings TabView
+        // already supplies window chrome, and any NavigationStack /
+        // toolbar / safeAreaInset content here lands in the same
+        // horizontal band as the General/Addresses/Folders tab
+        // buttons - which made them re-center every time the active
+        // tab changed. Render content bare and put "New Folder"
+        // inside the List so the action has its own space in the
+        // scrollable content.
+        content
+            .refreshable { await model?.refresh() }
+            .task { await ensureModel() }
+            .sheet(isPresented: $showNewFolderSheet) { newFolderSheet }
+            .confirmationDialog(
+                deleteDialogTitle,
+                isPresented: deleteDialogBinding,
+                presenting: pendingDelete,
+                actions: deleteDialogActions,
+                message: deleteDialogMessage
+            )
+        #else
         NavigationStack {
             content
                 .navigationTitle("Folders")
-                #if os(macOS)
-                // See `AddressesView` — the macOS Settings TabView would
-                // hoist a `.toolbar` "+" button up next to the tab buttons,
-                // shifting their centering. Render the action below the tab
-                // row instead.
-                .safeAreaInset(edge: .top, spacing: 0) { actionBar }
-                #else
                 .toolbar { toolbarContent }
-                #endif
+                .searchable(text: $filterQuery, prompt: "Filter folders")
                 .refreshable { await model?.refresh() }
                 .task { await ensureModel() }
                 .sheet(isPresented: $showNewFolderSheet) { newFolderSheet }
@@ -38,24 +54,15 @@ struct FoldersAdminView: View {
                     message: deleteDialogMessage
                 )
         }
+        #endif
     }
 
-    #if os(macOS)
-    @ViewBuilder
-    private var actionBar: some View {
-        HStack {
-            Spacer()
-            Button {
-                showNewFolderSheet = true
-            } label: {
-                Label("New Folder", systemImage: "plus")
-            }
-            .disabled(model == nil)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+    private func manualRefresh() async {
+        guard let model, !isRefreshing else { return }
+        isRefreshing = true
+        defer { isRefreshing = false }
+        await model.refresh()
     }
-    #endif
 
     // MARK: - Subviews
 
@@ -69,6 +76,9 @@ struct FoldersAdminView: View {
                             .foregroundStyle(.red)
                     }
                 }
+                #if os(macOS)
+                actionsSection
+                #endif
                 if model.isLoading && model.folders.isEmpty {
                     Section {
                         ProgressView()
@@ -83,9 +93,39 @@ struct FoldersAdminView: View {
         }
     }
 
+    #if os(macOS)
+    // Filter + actions live in the List rather than the window's
+    // toolbar/sidebar so they don't compete for space with the
+    // General/Addresses/Folders tab buttons. `.searchable` would
+    // default to toolbar placement on macOS, which re-introduces the
+    // displacement bug.
+    @ViewBuilder
+    private var actionsSection: some View {
+        Section {
+            TextField("Filter folders", text: $filterQuery)
+            Button {
+                Task { await manualRefresh() }
+            } label: {
+                if isRefreshing {
+                    ProgressView()
+                } else {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+            }
+            .disabled(isRefreshing || model == nil)
+            Button {
+                showNewFolderSheet = true
+            } label: {
+                Label("New Folder", systemImage: "plus")
+            }
+            .disabled(model == nil)
+        }
+    }
+    #endif
+
     @ViewBuilder
     private func folderSections(for model: FoldersAdminViewModel) -> some View {
-        let sorted = model.sortedForDisplay
+        let sorted = filteredFolders(model.sortedForDisplay)
         let subscribed = sorted.filter(\.isSubscribed)
         let unsubscribed = sorted.filter { !$0.isSubscribed }
 
@@ -173,6 +213,19 @@ struct FoldersAdminView: View {
     private var toolbarContent: some ToolbarContent {
         ToolbarItem {
             Button {
+                Task { await manualRefresh() }
+            } label: {
+                if isRefreshing {
+                    ProgressView()
+                } else {
+                    Image(systemName: "arrow.clockwise")
+                        .accessibilityLabel("Refresh folders")
+                }
+            }
+            .disabled(isRefreshing || model == nil)
+        }
+        ToolbarItem {
+            Button {
                 showNewFolderSheet = true
             } label: {
                 Image(systemName: "plus")
@@ -231,7 +284,18 @@ struct FoldersAdminView: View {
 
     // MARK: - Helpers
 
-    private func iconName(for folder: Folder) -> String {
+    private func ensureModel() async {
+        if model == nil, let client = appState.client {
+            model = FoldersAdminViewModel(client: client)
+            await model?.refresh()
+        }
+    }
+}
+
+// Pure helpers split into an extension so the main struct body stays
+// under SwiftLint's type_body_length budget.
+extension FoldersAdminView {
+    fileprivate func iconName(for folder: Folder) -> String {
         switch folder.path {
         case "INBOX":   return "tray"
         case "Sent":    return "paperplane"
@@ -244,11 +308,10 @@ struct FoldersAdminView: View {
         }
     }
 
-    private func ensureModel() async {
-        if model == nil, let client = appState.client {
-            model = FoldersAdminViewModel(client: client)
-            await model?.refresh()
-        }
+    fileprivate func filteredFolders(_ folders: [Folder]) -> [Folder] {
+        let needle = filterQuery.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !needle.isEmpty else { return folders }
+        return folders.filter { $0.path.lowercased().contains(needle) }
     }
 }
 

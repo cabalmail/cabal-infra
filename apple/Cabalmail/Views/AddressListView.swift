@@ -12,6 +12,8 @@ import CabalmailKit
 struct AddressListView: View {
     @Environment(AppState.self) private var appState
     @State private var model: AddressesViewModel?
+    @State private var filterQuery: String = ""
+    @State private var isRefreshing = false
     @Binding var selection: Address?
 
     var body: some View {
@@ -24,25 +26,43 @@ struct AddressListView: View {
                     Label(errorMessage, systemImage: "exclamationmark.triangle")
                         .foregroundStyle(.red)
                 }
+                let favorites = filteredAddresses(model.favorites)
+                let all = filteredAddresses(model.addresses)
                 if !model.favorites.isEmpty {
                     Section("Favorites") {
-                        ForEach(model.favorites, id: \.address) { address in
+                        ForEach(favorites, id: \.address) { address in
                             addressRow(address, model: model)
                         }
                     }
                     Section("All addresses") {
-                        ForEach(model.addresses, id: \.address) { address in
+                        ForEach(all, id: \.address) { address in
                             addressRow(address, model: model)
                         }
                     }
                 } else {
-                    ForEach(model.addresses, id: \.address) { address in
+                    ForEach(all, id: \.address) { address in
                         addressRow(address, model: model)
                     }
                 }
             }
         }
         .navigationTitle("Addresses")
+        .searchable(text: $filterQuery, placement: .sidebar, prompt: "Filter addresses")
+        .toolbar {
+            ToolbarItem {
+                Button {
+                    Task { await manualRefresh() }
+                } label: {
+                    if isRefreshing {
+                        ProgressView()
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .accessibilityLabel("Refresh addresses")
+                    }
+                }
+                .disabled(isRefreshing || model == nil)
+            }
+        }
         .refreshable {
             await model?.refresh(force: true)
         }
@@ -52,6 +72,22 @@ struct AddressListView: View {
                 model = newModel
                 await newModel.refresh()
             }
+        }
+    }
+
+    private func manualRefresh() async {
+        guard let model, !isRefreshing else { return }
+        isRefreshing = true
+        defer { isRefreshing = false }
+        await model.refresh(force: true)
+    }
+
+    private func filteredAddresses(_ addresses: [Address]) -> [Address] {
+        let needle = filterQuery.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !needle.isEmpty else { return addresses }
+        return addresses.filter { address in
+            address.address.lowercased().contains(needle)
+                || (address.comment?.lowercased().contains(needle) ?? false)
         }
     }
 

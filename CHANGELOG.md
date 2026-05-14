@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.19] - 2026-05-14
+
+### Added
+- Apple clients' sidebar folder and address lists, and the macOS Settings
+  Folders / Addresses tabs, gained inline search fields for filtering the
+  rows by name / address (substring match). Each list also exposes a
+  manual refresh button in its toolbar (or top action bar on the macOS
+  Settings tabs) alongside the existing pull-to-refresh.
+
+### Changed
+- Web and Apple clients' sidebar "All folders" list now arranges folders
+  as a `/`-delimited tree: peers sort alphabetically (case-insensitive)
+  and children are indented directly under their parent. The Subscribed
+  list stays flat (web client shows full path there so context isn't
+  lost when a child is subscribed without its parent).
+- Apple clients' sidebar folder unread badges now update optimistically.
+  Marking a message read or unread (from the swipe action, context menu,
+  or the detail-view toolbar) and archiving / trashing an unread message
+  shift the source folder's badge before the server round trip; the
+  authoritative count from `STATUS (UNSEEN)` lands asynchronously and
+  reconciles any drift. Per-folder counts moved into `AppState`
+  (`folderUnreadCounts`) so flag-change and dispose paths in both the
+  list and detail view models drive the badge from a single point.
+
 ## [0.9.18] - 2026-05-13
 
 ### Changed

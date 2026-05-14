@@ -17,21 +17,39 @@ struct AddressesView: View {
     @State private var model: AddressesViewModel?
     @State private var showNewAddressSheet = false
     @State private var pendingRevoke: Address?
+    @State private var filterQuery: String = ""
+    @State private var isRefreshing = false
 
     var body: some View {
+        #if os(macOS)
+        // Inside the Settings window's TabView the General tab is a bare
+        // Form (see SettingsView) but Addresses and Folders had been
+        // wrapped in NavigationStack + a `.toolbar` / `.safeAreaInset`
+        // action strip. Both of those contribute to the window's
+        // toolbar region, which is the same horizontal band the
+        // General/Addresses/Folders tab buttons live in, so the tab
+        // buttons re-centered whenever the active tab differed from
+        // General. Match the SettingsView shape - bare content, no
+        // NavigationStack - and move the "Request new address" action
+        // into the List as its own section so the action has its own
+        // space inside the scrollable content rather than crowding
+        // the tab toolbar.
+        content
+            .refreshable { await model?.refresh(force: true) }
+            .task { await ensureModel() }
+            .sheet(isPresented: $showNewAddressSheet) { newAddressSheet }
+            .confirmationDialog(
+                revokeDialogTitle,
+                isPresented: revokeDialogBinding,
+                presenting: pendingRevoke,
+                actions: revokeDialogActions,
+                message: revokeDialogMessage
+            )
+        #else
         NavigationStack {
             content
                 .navigationTitle("Addresses")
-                #if os(macOS)
-                // On macOS this view sits inside the Settings window's
-                // TabView. Using `.toolbar` here would hoist the "+" button
-                // up next to the General/Addresses/Folders tab buttons,
-                // shifting their centering. Render it as a `safeAreaInset`
-                // strip below the tab row instead.
-                .safeAreaInset(edge: .top, spacing: 0) { actionBar }
-                #else
                 .toolbar { toolbarContent }
-                #endif
                 .refreshable { await model?.refresh(force: true) }
                 .task { await ensureModel() }
                 .sheet(isPresented: $showNewAddressSheet) { newAddressSheet }
@@ -43,23 +61,24 @@ struct AddressesView: View {
                     message: revokeDialogMessage
                 )
         }
+        #endif
     }
 
-    #if os(macOS)
-    @ViewBuilder
-    private var actionBar: some View {
-        HStack {
-            Spacer()
-            Button {
-                showNewAddressSheet = true
-            } label: {
-                Label("Request New Address", systemImage: "plus")
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+    private func manualRefresh() async {
+        guard let model, !isRefreshing else { return }
+        isRefreshing = true
+        defer { isRefreshing = false }
+        await model.refresh(force: true)
     }
-    #endif
+
+    private func filteredAddresses(_ addresses: [Address]) -> [Address] {
+        let needle = filterQuery.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !needle.isEmpty else { return addresses }
+        return addresses.filter { address in
+            address.address.lowercased().contains(needle)
+                || (address.comment?.lowercased().contains(needle) ?? false)
+        }
+    }
 
     // MARK: - Subviews
 
@@ -73,12 +92,44 @@ struct AddressesView: View {
                             .foregroundStyle(.red)
                     }
                 }
+                #if os(macOS)
+                actionsSection
+                #endif
                 mainSection(for: model)
             }
         } else {
             ProgressView()
         }
     }
+
+    #if os(macOS)
+    // Filter + actions live in the List rather than the window's
+    // toolbar/sidebar so they don't compete for space with the
+    // General/Addresses/Folders tab buttons. `.searchable` would
+    // default to toolbar placement on macOS, which re-introduces the
+    // displacement bug.
+    @ViewBuilder
+    private var actionsSection: some View {
+        Section {
+            TextField("Filter addresses", text: $filterQuery)
+            Button {
+                Task { await manualRefresh() }
+            } label: {
+                if isRefreshing {
+                    ProgressView()
+                } else {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+            }
+            .disabled(isRefreshing || model == nil)
+            Button {
+                showNewAddressSheet = true
+            } label: {
+                Label("Request New Address", systemImage: "plus")
+            }
+        }
+    }
+    #endif
 
     @ViewBuilder
     private func mainSection(for model: AddressesViewModel) -> some View {
@@ -89,13 +140,18 @@ struct AddressesView: View {
             } else if model.addresses.isEmpty {
                 // iPhone clips ContentUnavailableView inside a Section — use
                 // a plain label so the "no addresses" hint still reads cleanly.
+                #if os(macOS)
+                Label("No addresses yet.", systemImage: "at")
+                    .foregroundStyle(.secondary)
+                #else
                 Label(
                     "Tap + to request your first address.",
                     systemImage: "at"
                 )
                 .foregroundStyle(.secondary)
+                #endif
             } else {
-                ForEach(model.addresses) { address in
+                ForEach(filteredAddresses(model.addresses)) { address in
                     addressRow(address)
                 }
             }
@@ -132,6 +188,19 @@ struct AddressesView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
+        ToolbarItem {
+            Button {
+                Task { await manualRefresh() }
+            } label: {
+                if isRefreshing {
+                    ProgressView()
+                } else {
+                    Image(systemName: "arrow.clockwise")
+                        .accessibilityLabel("Refresh addresses")
+                }
+            }
+            .disabled(isRefreshing || model == nil)
+        }
         ToolbarItem {
             Button {
                 showNewAddressSheet = true

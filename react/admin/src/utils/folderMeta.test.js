@@ -47,4 +47,26 @@ describe('orderFolders', () => {
     const ordered = orderFolders(['INBOX', 'INBOX', 'Receipts']);
     expect(ordered.map((f) => f.id)).toEqual(['INBOX', 'Receipts']);
   });
+
+  it('arranges user folders into a /-delimited tree with peers alphabetical', () => {
+    const ordered = orderFolders([
+      'Projects/Zeta',
+      'Projects',
+      'Projects/Alpha/Sub',
+      'Projects/Alpha',
+      'Newsletters',
+    ]);
+    expect(ordered.map((f) => ({ id: f.id, label: f.label, depth: f.depth }))).toEqual([
+      { id: 'Newsletters',          label: 'Newsletters', depth: 0 },
+      { id: 'Projects',             label: 'Projects',    depth: 0 },
+      { id: 'Projects/Alpha',       label: 'Alpha',       depth: 1 },
+      { id: 'Projects/Alpha/Sub',   label: 'Sub',         depth: 2 },
+      { id: 'Projects/Zeta',        label: 'Zeta',        depth: 1 },
+    ]);
+  });
+
+  it('skips intermediate path segments that are not themselves folders', () => {
+    const ordered = orderFolders(['Projects/Alpha', 'Other']);
+    expect(ordered.map((f) => f.id)).toEqual(['Other', 'Projects/Alpha']);
+  });
 });
