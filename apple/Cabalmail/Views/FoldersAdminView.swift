@@ -57,44 +57,11 @@ struct FoldersAdminView: View {
         #endif
     }
 
-    #if os(macOS)
-    @ViewBuilder
-    private var actionBar: some View {
-        HStack {
-            Spacer()
-            Button {
-                Task { await manualRefresh() }
-            } label: {
-                if isRefreshing {
-                    ProgressView()
-                } else {
-                    Label("Refresh", systemImage: "arrow.clockwise")
-                }
-            }
-            .disabled(isRefreshing || model == nil)
-            Button {
-                showNewFolderSheet = true
-            } label: {
-                Label("New Folder", systemImage: "plus")
-            }
-            .disabled(model == nil)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-    }
-    #endif
-
     private func manualRefresh() async {
         guard let model, !isRefreshing else { return }
         isRefreshing = true
         defer { isRefreshing = false }
         await model.refresh()
-    }
-
-    private func filteredFolders(_ folders: [Folder]) -> [Folder] {
-        let needle = filterQuery.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !needle.isEmpty else { return folders }
-        return folders.filter { $0.path.lowercased().contains(needle) }
     }
 
     // MARK: - Subviews
@@ -110,7 +77,7 @@ struct FoldersAdminView: View {
                     }
                 }
                 #if os(macOS)
-                newFolderSection
+                actionsSection
                 #endif
                 if model.isLoading && model.folders.isEmpty {
                     Section {
@@ -128,8 +95,18 @@ struct FoldersAdminView: View {
 
     #if os(macOS)
     @ViewBuilder
-    private var newFolderSection: some View {
+    private var actionsSection: some View {
         Section {
+            Button {
+                Task { await manualRefresh() }
+            } label: {
+                if isRefreshing {
+                    ProgressView()
+                } else {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+            }
+            .disabled(isRefreshing || model == nil)
             Button {
                 showNewFolderSheet = true
             } label: {
@@ -301,7 +278,18 @@ struct FoldersAdminView: View {
 
     // MARK: - Helpers
 
-    private func iconName(for folder: Folder) -> String {
+    private func ensureModel() async {
+        if model == nil, let client = appState.client {
+            model = FoldersAdminViewModel(client: client)
+            await model?.refresh()
+        }
+    }
+}
+
+// Pure helpers split into an extension so the main struct body stays
+// under SwiftLint's type_body_length budget.
+extension FoldersAdminView {
+    fileprivate func iconName(for folder: Folder) -> String {
         switch folder.path {
         case "INBOX":   return "tray"
         case "Sent":    return "paperplane"
@@ -314,11 +302,10 @@ struct FoldersAdminView: View {
         }
     }
 
-    private func ensureModel() async {
-        if model == nil, let client = appState.client {
-            model = FoldersAdminViewModel(client: client)
-            await model?.refresh()
-        }
+    fileprivate func filteredFolders(_ folders: [Folder]) -> [Folder] {
+        let needle = filterQuery.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !needle.isEmpty else { return folders }
+        return folders.filter { $0.path.lowercased().contains(needle) }
     }
 }
 

@@ -64,32 +64,6 @@ struct AddressesView: View {
         #endif
     }
 
-    #if os(macOS)
-    @ViewBuilder
-    private var actionBar: some View {
-        HStack {
-            Spacer()
-            Button {
-                Task { await manualRefresh() }
-            } label: {
-                if isRefreshing {
-                    ProgressView()
-                } else {
-                    Label("Refresh", systemImage: "arrow.clockwise")
-                }
-            }
-            .disabled(isRefreshing || model == nil)
-            Button {
-                showNewAddressSheet = true
-            } label: {
-                Label("Request New Address", systemImage: "plus")
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-    }
-    #endif
-
     private func manualRefresh() async {
         guard let model, !isRefreshing else { return }
         isRefreshing = true
@@ -119,7 +93,7 @@ struct AddressesView: View {
                     }
                 }
                 #if os(macOS)
-                requestNewSection
+                actionsSection
                 #endif
                 mainSection(for: model)
             }
@@ -130,8 +104,18 @@ struct AddressesView: View {
 
     #if os(macOS)
     @ViewBuilder
-    private var requestNewSection: some View {
+    private var actionsSection: some View {
         Section {
+            Button {
+                Task { await manualRefresh() }
+            } label: {
+                if isRefreshing {
+                    ProgressView()
+                } else {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+            }
+            .disabled(isRefreshing || model == nil)
             Button {
                 showNewAddressSheet = true
             } label: {
