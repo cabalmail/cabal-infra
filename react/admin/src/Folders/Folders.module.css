@@ -10,6 +10,7 @@
   min-height: 0;
   height: 100%;
   padding-top: 8px;
+  padding-bottom: 12px;
   color: var(--ink-soft);
   font-family: var(--font-ui);
 }
