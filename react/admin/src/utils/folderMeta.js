@@ -16,11 +16,22 @@ const SYSTEM_BY_NAME = {
   'Junk':             { kind: 'junk',    label: 'Junk' },
 };
 
+function isSystem(name) {
+  return Object.prototype.hasOwnProperty.call(SYSTEM_BY_NAME, name);
+}
+
 export function folderMeta(name) {
-  if (Object.prototype.hasOwnProperty.call(SYSTEM_BY_NAME, name)) {
-    return { id: name, ...SYSTEM_BY_NAME[name], system: true };
+  if (isSystem(name)) {
+    return { id: name, ...SYSTEM_BY_NAME[name], system: true, depth: 0 };
   }
-  return { id: name, kind: 'folder', label: name, system: false };
+  const segs = name.split('/');
+  return {
+    id: name,
+    kind: 'folder',
+    label: segs[segs.length - 1],
+    system: false,
+    depth: segs.length - 1,
+  };
 }
 
 function systemRank(kind) {
@@ -28,19 +39,50 @@ function systemRank(kind) {
   return idx === -1 ? SYSTEM_KINDS.length : idx;
 }
 
+// DFS through the implicit `/`-delimited tree formed by the names so peers
+// sort alphabetically and children appear directly under their parent.
+// Intermediate segments that aren't themselves in `names` are not emitted —
+// we don't fabricate rows for folders that don't exist on the server.
+function sortUserTree(names) {
+  const present = new Set(names);
+  const root = new Map();
+  for (const name of names) {
+    const segs = name.split('/');
+    let node = root;
+    let acc = '';
+    for (const seg of segs) {
+      acc = acc ? `${acc}/${seg}` : seg;
+      if (!node.has(seg)) {
+        node.set(seg, { path: acc, children: new Map() });
+      }
+      node = node.get(seg).children;
+    }
+  }
+  const out = [];
+  const walk = (map) => {
+    const entries = Array.from(map.entries())
+      .sort(([a], [b]) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+    for (const [, { path, children }] of entries) {
+      if (present.has(path)) out.push(path);
+      walk(children);
+    }
+  };
+  walk(root);
+  return out;
+}
+
 export function orderFolders(folders) {
   const seen = new Set();
-  const metas = [];
+  const uniq = [];
   for (const name of folders) {
     if (seen.has(name)) continue;
     seen.add(name);
-    metas.push(folderMeta(name));
+    uniq.push(name);
   }
-  metas.sort((a, b) => {
-    if (a.system && b.system) return systemRank(a.kind) - systemRank(b.kind);
-    if (a.system) return -1;
-    if (b.system) return 1;
-    return a.label.localeCompare(b.label);
-  });
-  return metas;
+  const systemSorted = uniq
+    .filter(isSystem)
+    .map(folderMeta)
+    .sort((a, b) => systemRank(a.kind) - systemRank(b.kind));
+  const userSorted = sortUserTree(uniq.filter((n) => !isSystem(n))).map(folderMeta);
+  return [...systemSorted, ...userSorted];
 }

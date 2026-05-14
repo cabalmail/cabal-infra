@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Settings tabs) alongside the existing pull-to-refresh.
 
 ### Changed
+- Web and Apple clients' sidebar "All folders" list now arranges folders
+  as a `/`-delimited tree: peers sort alphabetically (case-insensitive)
+  and children are indented directly under their parent. The Subscribed
+  list stays flat (web client shows full path there so context isn't
+  lost when a child is subscribed without its parent).
 - Apple clients' sidebar folder unread badges now update optimistically.
   Marking a message read or unread (from the swipe action, context menu,
   or the detail-view toolbar) and archiving / trashing an unread message

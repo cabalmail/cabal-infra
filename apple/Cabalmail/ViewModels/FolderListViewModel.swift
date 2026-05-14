@@ -109,21 +109,66 @@ final class FolderListViewModel {
         appState.setUnreadCounts(counts)
     }
 
-    /// Inbox first, then user folders alpha, then system folders grouped
-    /// at the bottom. Mirrors the plan's Phase-4 sidebar spec.
+    /// Inbox first, then user folders arranged as a `/`-delimited tree
+    /// (peers alphabetical, children directly under their parent), then
+    /// system folders grouped at the bottom.
     private func sortForSidebar(_ input: [Folder]) -> [Folder] {
         let systemNames: Set<String> = ["Sent", "Drafts", "Trash", "Junk", "Archive"]
         let inbox = input.filter { $0.path.caseInsensitiveCompare("INBOX") == .orderedSame }
         let system = input
             .filter { systemNames.contains($0.path) }
-            .sorted { $0.path < $1.path }
-        let userFolders = input
-            .filter { folder in
-                !inbox.contains(folder)
-                    && !system.contains(folder)
-                    && !folder.attributes.contains("\\Noselect")
+            .sorted { $0.path.localizedCaseInsensitiveCompare($1.path) == .orderedAscending }
+        let userFolders = input.filter { folder in
+            !inbox.contains(folder)
+                && !system.contains(folder)
+                && !folder.attributes.contains("\\Noselect")
+        }
+        return inbox + sortUserTree(userFolders) + system
+    }
+
+    /// DFS through the `/`-delimited tree formed by `path`s, emitting peers
+    /// alphabetically and children directly under their parent. Intermediate
+    /// path segments that aren't themselves in `input` are skipped — we
+    /// don't fabricate rows for folders that aren't on the server.
+    private func sortUserTree(_ input: [Folder]) -> [Folder] {
+        let byPath = Dictionary(uniqueKeysWithValues: input.map { ($0.path, $0) })
+        // children["parent/path"] = sorted child segment names; "" = roots.
+        var children: [String: [String]] = [:]
+        var seen: [String: Set<String>] = [:]
+        for folder in input {
+            let segs = folder.path.split(separator: "/").map(String.init)
+            var parent = ""
+            for seg in segs {
+                if seen[parent, default: []].insert(seg).inserted {
+                    children[parent, default: []].append(seg)
+                }
+                parent = parent.isEmpty ? seg : "\(parent)/\(seg)"
             }
-            .sorted { $0.path < $1.path }
-        return inbox + userFolders + system
+        }
+        for key in children.keys {
+            children[key]?.sort { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+        }
+        var out: [Folder] = []
+        func walk(_ parent: String) {
+            for seg in children[parent] ?? [] {
+                let path = parent.isEmpty ? seg : "\(parent)/\(seg)"
+                if let folder = byPath[path] {
+                    out.append(folder)
+                }
+                walk(path)
+            }
+        }
+        walk("")
+        return out
+    }
+
+    /// Indentation depth for the "All folders" section — system folders
+    /// (Inbox + Sent/Drafts/etc.) sit at depth 0 regardless of any `/` in
+    /// the name; user folders indent one step per path segment past the
+    /// root.
+    func depth(for folder: Folder) -> Int {
+        let systemNames: Set<String> = ["INBOX", "Sent", "Drafts", "Trash", "Junk", "Archive"]
+        if systemNames.contains(folder.path) { return 0 }
+        return max(0, folder.path.split(separator: "/").count - 1)
     }
 }

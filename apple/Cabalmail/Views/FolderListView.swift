@@ -34,17 +34,17 @@ struct FolderListView: View {
                 if !model.subscribedFolders.isEmpty {
                     Section("Subscribed") {
                         ForEach(subscribed, id: \.path) { folder in
-                            folderRow(folder, model: model)
+                            folderRow(folder, model: model, depth: 0)
                         }
                     }
                     Section("All folders") {
                         ForEach(all, id: \.path) { folder in
-                            folderRow(folder, model: model)
+                            folderRow(folder, model: model, depth: model.depth(for: folder))
                         }
                     }
                 } else {
                     ForEach(all, id: \.path) { folder in
-                        folderRow(folder, model: model)
+                        folderRow(folder, model: model, depth: model.depth(for: folder))
                     }
                 }
             }
@@ -108,8 +108,8 @@ struct FolderListView: View {
     }
 
     @ViewBuilder
-    private func folderRow(_ folder: Folder, model: FolderListViewModel) -> some View {
-        row(for: folder, unread: appState.folderUnreadCounts[folder.path] ?? 0)
+    private func folderRow(_ folder: Folder, model: FolderListViewModel, depth: Int) -> some View {
+        row(for: folder, unread: appState.folderUnreadCounts[folder.path] ?? 0, depth: depth)
             .tag(folder)
             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                 Button {
@@ -135,8 +135,11 @@ struct FolderListView: View {
     }
 
     @ViewBuilder
-    private func row(for folder: Folder, unread: Int) -> some View {
+    private func row(for folder: Folder, unread: Int, depth: Int) -> some View {
         HStack {
+            if depth > 0 {
+                Spacer().frame(width: CGFloat(depth) * 14)
+            }
             Image(systemName: iconName(for: folder))
                 .foregroundStyle(.tint)
             Text(folder.name)
