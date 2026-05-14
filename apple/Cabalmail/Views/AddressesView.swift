@@ -103,9 +103,15 @@ struct AddressesView: View {
     }
 
     #if os(macOS)
+    // Filter + actions live in the List rather than the window's
+    // toolbar/sidebar so they don't compete for space with the
+    // General/Addresses/Folders tab buttons. `.searchable` would
+    // default to toolbar placement on macOS, which re-introduces the
+    // displacement bug.
     @ViewBuilder
     private var actionsSection: some View {
         Section {
+            TextField("Filter addresses", text: $filterQuery)
             Button {
                 Task { await manualRefresh() }
             } label: {
