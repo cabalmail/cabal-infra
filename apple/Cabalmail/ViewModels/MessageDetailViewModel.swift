@@ -87,6 +87,16 @@ final class MessageDetailViewModel {
     }
 
     func load() async {
+        // SwiftUI fires `.task` twice for the same view identity during the
+        // iPhone-compact NavigationStack push (issue #403): a first instance
+        // is born already-cancelled, and a second, live instance fires ~1 ms
+        // later. Without this guard, the first instance would flip
+        // `isLoading = true` and start the fetch, the second would see the
+        // gate `!isLoading` fail and skip `load()`, and the doomed first
+        // fetch would eventually throw `URLError.cancelled` and paint the
+        // error/retry screen. Bailing without mutating state lets the second
+        // instance's gate pass and its `load()` run cleanly.
+        if Task.isCancelled { return }
         // Clear any stale error from a prior attempt so a retry doesn't keep
         // the red banner visible while the new fetch is in flight.
         errorMessage = nil

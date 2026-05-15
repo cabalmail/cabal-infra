@@ -136,12 +136,7 @@ describe('MessageOverlay (viewport)', () => {
 
   it('renders the retry card when message fetch fails, and retry re-fetches', async () => {
     setViewport(...PHONE);
-    /* The reader auto-retries the body fetch once before surfacing the
-       retry card, so both initial attempts must fail to reach the error
-       state. The manual Retry click then triggers a fresh batch that
-       resolves. */
-    mockGetMessage.mockRejectedValueOnce(new Error('boom-1'));
-    mockGetMessage.mockRejectedValueOnce(new Error('boom-2'));
+    mockGetMessage.mockRejectedValueOnce(new Error('boom'));
     mockGetMessage.mockResolvedValueOnce({
       data: {
         message_body_plain: 'ok', message_body_html: '<p>ok</p>',
@@ -151,13 +146,10 @@ describe('MessageOverlay (viewport)', () => {
     });
     const { unmount } = renderReader('phone');
     try {
-      await waitFor(
-        () => expect(screen.getByText(/Couldn.t load this message/i)).toBeInTheDocument(),
-        { timeout: 3000 },
-      );
+      await waitFor(() => expect(screen.getByText(/Couldn.t load this message/i)).toBeInTheDocument());
       const retryBtn = screen.getByRole('button', { name: 'Retry' });
       fireEvent.click(retryBtn);
-      await waitFor(() => expect(mockGetMessage).toHaveBeenCalledTimes(3));
+      await waitFor(() => expect(mockGetMessage).toHaveBeenCalledTimes(2));
       await waitFor(() => expect(screen.getByText('Hello')).toBeInTheDocument());
     } finally {
       unmount();
