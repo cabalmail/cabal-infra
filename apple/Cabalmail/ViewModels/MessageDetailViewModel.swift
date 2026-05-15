@@ -87,6 +87,9 @@ final class MessageDetailViewModel {
     }
 
     func load() async {
+        let uid = envelope.uid
+        let startedAt = Date()
+        BodyFetchLog.loadEnter(uid: uid, hadError: errorMessage != nil, hasAttemptedLoad: hasAttemptedLoad)
         // Clear any stale error from a prior attempt so a retry doesn't keep
         // the red banner visible while the new fetch is in flight.
         errorMessage = nil
@@ -94,6 +97,7 @@ final class MessageDetailViewModel {
         defer {
             isLoading = false
             hasAttemptedLoad = true
+            BodyFetchLog.loadExit(uid: uid, startedAt: startedAt, errorSet: errorMessage != nil)
         }
         // One automatic retry on transient cancellation. The body fetch
         // chains two `URLSession.data(for:)` calls (Lambda + presigned S3);
@@ -108,32 +112,39 @@ final class MessageDetailViewModel {
         var attemptsRemaining = 2
         while attemptsRemaining > 0 {
             attemptsRemaining -= 1
+            let attemptNumber = 2 - attemptsRemaining; BodyFetchLog.loadAttempt(uid: uid, attempt: attemptNumber)
             do {
                 let bytes = try await fetchBodyBytes()
                 let tree = MimeParser.parse(bytes)
                 try await hydrate(from: tree)
                 errorMessage = nil
+                BodyFetchLog.debug("load success", uid: uid, BodyFetchLog.int("attempt", attemptNumber))
                 scheduleMarkAsReadIfNeeded()
                 return
             } catch let urlError as URLError where urlError.code == .cancelled {
-                // URLSession cancellations sometimes fire mid-fetch while
-                // our own Swift Task is still alive (we see it on quick
-                // taps right as the list finishes its initial load) — one
-                // retry inside the same Task usually clears it. If our
-                // Task is itself cancelled, retrying inside it would just
-                // throw the same cancellation, so surface an error and
-                // let the Retry button give the user a fresh Task.
-                if !Task.isCancelled, attemptsRemaining > 0 { continue }
-                errorMessage = "Couldn't load message body."
+                // URLSession cancellations sometimes fire mid-fetch while our
+                // own Swift Task is still alive (quick taps right as the list
+                // finishes) — one retry inside the same Task usually clears
+                // it. If our Task is itself cancelled, retrying would just
+                // throw the same cancellation, so surface an error and let
+                // the Retry button give the user a fresh Task.
+                if !Task.isCancelled, attemptsRemaining > 0 {
+                    BodyFetchLog.debug("load URLError.cancelled retry", uid: uid,
+                                       BodyFetchLog.int("attempt", attemptNumber))
+                    continue
+                }
+                errorMessage = BodyFetchLog.cancelledMessage(uid: uid, attempt: attemptNumber, source: "URLError")
                 return
             } catch is CancellationError {
-                errorMessage = "Couldn't load message body."
+                errorMessage = BodyFetchLog.cancelledMessage(
+                    uid: uid, attempt: attemptNumber, source: "CancellationError"
+                )
                 return
             } catch let error as CabalmailError {
-                errorMessage = String(describing: error)
+                errorMessage = BodyFetchLog.cabalmailMessage(uid: uid, attempt: attemptNumber, error: error)
                 return
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = BodyFetchLog.otherMessage(uid: uid, attempt: attemptNumber, error: error)
                 return
             }
         }
@@ -304,16 +315,21 @@ final class MessageDetailViewModel {
 
 private extension MessageDetailViewModel {
     func fetchBodyBytes() async throws -> Data {
+        let uid = envelope.uid
+        BodyFetchLog.debug("fetchBodyBytes start", uid: uid, BodyFetchLog.flag("cancelled", Task.isCancelled))
         let uidValidity = try await currentUIDValidity()
         if let cached = await client.bodyCache.fetch(
             folder: folder.path,
             uidValidity: uidValidity,
             uid: envelope.uid
         ) {
+            BodyFetchLog.debug("fetchBodyBytes cache_hit", uid: uid)
             return cached
         }
+        BodyFetchLog.debug("fetchBodyBytes cache_miss", uid: uid, BodyFetchLog.flag("cancelled", Task.isCancelled))
         try await client.imapClient.connectAndAuthenticate()
         let raw = try await client.imapClient.fetchBody(folder: folder.path, uid: envelope.uid)
+        BodyFetchLog.debug("fetchBodyBytes network_done", uid: uid, BodyFetchLog.int("bytes", raw.bytes.count))
         try await client.bodyCache.store(
             folder: folder.path,
             uidValidity: uidValidity,
