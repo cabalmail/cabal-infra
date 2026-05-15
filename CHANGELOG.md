@@ -8,20 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
-- Apple clients' message detail view no longer flashes the "Couldn't load
-  message body." retry screen when a body fetch fails quickly. The view
-  now shows the loading spinner from the moment the detail pane appears
-  until the first fetch attempt finishes, falling back to the
-  error/retry screen only after a completed-but-failed attempt.
+- Apple clients on iPhone no longer show the "Couldn't load message body."
+  retry screen immediately when tapping a message whose body is not yet
+  cached. The iPhone-compact `NavigationSplitView` collapse fires
+  SwiftUI's `.task` modifier twice for the same pushed detail view: a
+  first instance born already-cancelled, and a second, live instance
+  ~1 ms later. The first instance was flipping `isLoading = true` and
+  starting a fetch that would inevitably throw `URLError.cancelled`,
+  while the second instance's `!isLoading` gate then skipped its own
+  fetch entirely. `MessageDetailViewModel.load()` now returns early
+  without mutating state when its enclosing Task is already cancelled,
+  so the live second instance does the work cleanly. Also keeps the
+  spinner up across the load attempt rather than flashing the
+  error/retry screen on a quickly-failed fetch.
 
 ### Changed
-- Web client reader auto-retries the message-body fetch once before
-  showing the "Couldn't load this message" / Retry card. The skeleton
-  spinner stays up across both attempts, so a single transient failure
-  (cold IMAP, brief network blip, request timeout) no longer flashes the
-  error screen on message select. The manual Retry button is unchanged
-  and still kicks off a fresh attempt (which itself auto-retries) when
-  both initial tries fail.
 - Provided guidance as to issue labels in `claude.yml`.
 
 ## [0.9.19] - 2026-05-14
