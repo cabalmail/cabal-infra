@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   error screen on message select. The manual Retry button is unchanged
   and still kicks off a fresh attempt (which itself auto-retries) when
   both initial tries fail.
+- Provided guidance as to issue labels in `claude.yml`.
 
 ## [0.9.19] - 2026-05-14
 

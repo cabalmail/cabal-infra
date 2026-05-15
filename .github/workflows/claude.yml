@@ -174,11 +174,16 @@ jobs:
 
             Your job:
               1. Read the issue and explore the repo enough to understand the problem.
-              2. If the issue is not actionable as a code change (e.g. it's a
+              2. Note the labels on the issue for hints as to scope and context.
+                   - `apple` means the issue relates to the Apple clients.
+                   - `webui` means the issue relates to the React app.
+                   - `terraform` means the issue relates to infrastructure.
+                   - Other labels will provide important clues.
+              3. If the issue is not actionable as a code change (e.g. it's a
                  design discussion, a question, or too vague), comment on the
                  issue explaining what additional information you'd need, and
                  stop. Do NOT open a speculative PR.
-              3. Otherwise, create a new branch named `claude/issue-${{ github.event.issue.number }}`,
+              4. Otherwise, create a new branch named `claude/issue-${{ github.event.issue.number }}`,
                  implement the change, run any relevant tests or linters, and
                  open a pull request that:
                    - Targets the `stage` branch (never `main` directly; promotion to prod is a deliberate second step performed by the human).
@@ -188,7 +193,7 @@ jobs:
                      knows where to focus.
                    - Requests a review from the human "darth-sipid".
                  Don't forget to add an appropriate entry to the CHANGELOG.
-              4. Treat this PR as a draft proposal, not a final answer. Be honest
+              5. Treat this PR as a draft proposal, not a final answer. Be honest
                  about limitations.
 
   # ---------------------------------------------------------------------------
