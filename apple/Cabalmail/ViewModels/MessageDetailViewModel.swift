@@ -87,6 +87,7 @@ final class MessageDetailViewModel {
     }
 
     func load() async {
+        let uid = envelope.uid
         // SwiftUI fires `.task` twice for the same view identity during the
         // iPhone-compact NavigationStack push (issue #403): a first instance
         // is born already-cancelled, and a second, live instance fires ~1 ms
