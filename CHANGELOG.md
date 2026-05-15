@@ -14,6 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   until the first fetch attempt finishes, falling back to the
   error/retry screen only after a completed-but-failed attempt.
 
+### Changed
+- Web client reader auto-retries the message-body fetch once before
+  showing the "Couldn't load this message" / Retry card. The skeleton
+  spinner stays up across both attempts, so a single transient failure
+  (cold IMAP, brief network blip, request timeout) no longer flashes the
+  error screen on message select. The manual Retry button is unchanged
+  and still kicks off a fresh attempt (which itself auto-retries) when
+  both initial tries fail.
+
 ## [0.9.19] - 2026-05-14
 
 ### Added
