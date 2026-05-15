@@ -292,10 +292,18 @@ final class MessageDetailViewModel {
     /// render the right icon and label without reaching into the preferences
     /// environment itself.
     var disposeAction: DisposeAction { preferences.disposeAction }
+}
 
-    // MARK: - Internals
+// MARK: - Internals
+//
+// Body-fetch, MIME parsing, and attachment-extraction helpers live in a
+// same-file extension so the primary class body stays under SwiftLint's
+// type_body_length cap. They remain `private` (file-scoped) and reach
+// stored properties (`client`, `folder`, `envelope`) through the type's
+// `@MainActor` isolation, inherited by the extension.
 
-    private func fetchBodyBytes() async throws -> Data {
+private extension MessageDetailViewModel {
+    func fetchBodyBytes() async throws -> Data {
         let uidValidity = try await currentUIDValidity()
         if let cached = await client.bodyCache.fetch(
             folder: folder.path,
@@ -315,7 +323,7 @@ final class MessageDetailViewModel {
         return raw.bytes
     }
 
-    private func currentUIDValidity() async throws -> UInt32 {
+    func currentUIDValidity() async throws -> UInt32 {
         if let snapshot = await client.envelopeCache.snapshot(for: folder.path) {
             return snapshot.uidValidity
         }
@@ -323,7 +331,7 @@ final class MessageDetailViewModel {
         return status.uidValidity ?? 0
     }
 
-    private func hydrate(from root: MimePart) async throws {
+    func hydrate(from root: MimePart) async throws {
         if let plain = root.firstPart(where: { $0.contentType.mimeType == "text/plain" }) {
             plainText = plain.textContent()
         }
@@ -354,7 +362,7 @@ final class MessageDetailViewModel {
         inlineImages = inlineMap
     }
 
-    private func isAttachmentLike(_ part: MimePart) -> Bool {
+    func isAttachmentLike(_ part: MimePart) -> Bool {
         if part.contentDisposition?.isAttachment == true { return true }
         if part.contentType.isText, part.contentType.subtype == "plain" { return false }
         if part.contentType.isText, part.contentType.subtype == "html" { return false }
@@ -364,7 +372,7 @@ final class MessageDetailViewModel {
     /// Writes a decoded part to the app's temp directory. Phase-7 polish can
     /// replace this with a size-bounded managed directory; for Phase 4 we
     /// rely on the OS sweeping `/tmp` between launches.
-    private func writeToTmp(data: Data, filename: String) throws -> URL {
+    func writeToTmp(data: Data, filename: String) throws -> URL {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("cabalmail-attachments-\(envelope.uid)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
