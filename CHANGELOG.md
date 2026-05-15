@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Apple clients' message detail view no longer flashes the "Couldn't load
+  message body." retry screen when a body fetch fails quickly. The view
+  now shows the loading spinner from the moment the detail pane appears
+  until the first fetch attempt finishes, falling back to the
+  error/retry screen only after a completed-but-failed attempt.
+
 ### Changed
 - Web client reader auto-retries the message-body fetch once before
   showing the "Couldn't load this message" / Retry card. The skeleton
