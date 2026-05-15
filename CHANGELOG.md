@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- Web client reader auto-retries the message-body fetch once before
+  showing the "Couldn't load this message" / Retry card. The skeleton
+  spinner stays up across both attempts, so a single transient failure
+  (cold IMAP, brief network blip, request timeout) no longer flashes the
+  error screen on message select. The manual Retry button is unchanged
+  and still kicks off a fresh attempt (which itself auto-retries) when
+  both initial tries fail.
+
 ## [0.9.19] - 2026-05-14
 
 ### Added

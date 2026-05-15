@@ -27,6 +27,13 @@ import {
 import { folderMeta } from '../../utils/folderMeta';
 import './MessageOverlay.css';
 
+/* Auto-retry the body fetch once before surfacing the error/retry screen.
+   The fetch tends to fail on transient hiccups (cold IMAP, brief network
+   blip, request timeout) that a quick second attempt clears. The spinner
+   stays up across attempts so the retry is invisible on the happy path. */
+const BODY_FETCH_ATTEMPTS = 2;
+const BODY_FETCH_RETRY_DELAY_MS = 500;
+
 function MessageOverlay({
   envelope, folder, visible, flags,
   hide: hideProp, updateOverlay,
@@ -66,7 +73,9 @@ function MessageOverlay({
   const isSeen = (flags || []).includes('\\Seen');
 
   useEffect(() => {
-    if (!envelopeId) return;
+    if (!envelopeId) return undefined;
+    let cancelled = false;
+    let retryTimer = null;
     setLoading(true);
     setLoadError(false);
     setMessageBodyHtml('');
@@ -77,26 +86,45 @@ function MessageOverlay({
     setRawError(false);
     setSourceOpen(false);
 
-    api.getMessage(folder, envelopeId, seen).then((data) => {
-      setMessageBodyPlain(data.data.message_body_plain || '');
-      setMessageBodyHtml(data.data.message_body_html || '');
-      setRecipient(data.data.recipient || '');
-      setMessageId(data.data.message_id || []);
-      setInReplyTo(data.data.in_reply_to || []);
-      setReferences(data.data.references || []);
-      setMessageRawUrl(data.data.message_raw || null);
-      setLoading(false);
-    }).catch((e) => {
-      setLoading(false);
-      setLoadError(true);
-      console.log(e);
-    });
+    const attemptFetch = (attemptsLeft) => {
+      api.getMessage(folder, envelopeId, seen).then((data) => {
+        if (cancelled) return;
+        setMessageBodyPlain(data.data.message_body_plain || '');
+        setMessageBodyHtml(data.data.message_body_html || '');
+        setRecipient(data.data.recipient || '');
+        setMessageId(data.data.message_id || []);
+        setInReplyTo(data.data.in_reply_to || []);
+        setReferences(data.data.references || []);
+        setMessageRawUrl(data.data.message_raw || null);
+        setLoading(false);
+      }).catch((e) => {
+        if (cancelled) return;
+        if (attemptsLeft > 1) {
+          retryTimer = setTimeout(() => {
+            retryTimer = null;
+            if (!cancelled) attemptFetch(attemptsLeft - 1);
+          }, BODY_FETCH_RETRY_DELAY_MS);
+          return;
+        }
+        setLoading(false);
+        setLoadError(true);
+        console.log(e);
+      });
+    };
+
+    attemptFetch(BODY_FETCH_ATTEMPTS);
 
     api.getAttachments(folder, envelopeId, seen).then((data) => {
+      if (cancelled) return;
       setAttachments(data.data.attachments || []);
     }).catch((e) => {
       console.log(e);
     });
+
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [envelopeId, loadNonce]);
 
