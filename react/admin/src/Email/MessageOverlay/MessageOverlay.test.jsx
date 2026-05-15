@@ -188,14 +188,55 @@ describe('MessageOverlay (Reader)', () => {
     }
   });
 
-  it('shows inline retry card when message fetch fails', async () => {
-    mockGetMessage.mockRejectedValueOnce(new Error('fail'));
+  it('shows inline retry card when message fetch fails on every attempt', async () => {
+    /* Reject persistently so the built-in auto-retry exhausts. */
+    mockGetMessage.mockRejectedValue(new Error('fail'));
     const { unmount } = renderOverlay();
     try {
       await waitFor(() => {
         expect(screen.getByText(/Couldn.t load this message/i)).toBeInTheDocument();
-      });
+      }, { timeout: 3000 });
       expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+      expect(mockGetMessage.mock.calls.length).toBeGreaterThanOrEqual(2);
+    } finally {
+      unmount();
+      mockGetMessage.mockResolvedValue({
+        data: {
+          message_body_plain: 'plain text body',
+          message_body_html: '<p>html body</p>',
+          message_raw: 'https://cache.example/signed',
+          recipient: 'me@test.com',
+          message_id: ['<msg1@test>'],
+          in_reply_to: [],
+          references: [],
+        },
+      });
+    }
+  });
+
+  it('auto-retries a transient body-fetch failure without surfacing the error screen', async () => {
+    /* First attempt fails, second succeeds. The error screen must not
+       flash; the body must render once the retry resolves. */
+    mockGetMessage
+      .mockRejectedValueOnce(new Error('transient'))
+      .mockResolvedValueOnce({
+        data: {
+          message_body_plain: 'recovered body',
+          message_body_html: '<p>recovered body</p>',
+          message_raw: 'https://cache.example/signed',
+          recipient: 'me@test.com',
+          message_id: ['<msg1@test>'],
+          in_reply_to: [],
+          references: [],
+        },
+      });
+    const { unmount } = renderOverlay();
+    try {
+      await waitFor(() => {
+        expect(screen.getByText('Test Subject')).toBeInTheDocument();
+      }, { timeout: 3000 });
+      expect(mockGetMessage).toHaveBeenCalledTimes(2);
+      expect(screen.queryByText(/Couldn.t load this message/i)).not.toBeInTheDocument();
     } finally {
       unmount();
     }

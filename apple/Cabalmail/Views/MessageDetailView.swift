@@ -168,20 +168,13 @@ struct MessageDetailView: View {
 
     @ViewBuilder
     private func body(for model: MessageDetailViewModel) -> some View {
-        if let errorMessage = model.errorMessage {
-            VStack(spacing: 12) {
-                Label(errorMessage, systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.red)
-                Button {
-                    Task { await model.load() }
-                } label: {
-                    Label("Retry", systemImage: "arrow.clockwise")
-                }
-                .buttonStyle(.bordered)
-                .disabled(model.isLoading)
-            }
-            .padding()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Spinner wins over the error/retry screen whenever a load is in
+        // flight, and whenever the view hasn't completed an attempt yet. A
+        // fast-failing fetch used to paint the red banner before the user
+        // saw any indication of work — issue #403.
+        if model.isLoading || !model.hasAttemptedLoad {
+            ProgressView("Fetching message…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let html = model.htmlBody {
             // WKWebView manages its own scrolling; fill the available space
             // and let it page through tall messages internally.
@@ -202,8 +195,20 @@ struct MessageDetailView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding()
             }
-        } else if model.isLoading {
-            ProgressView("Fetching message…")
+        } else if let errorMessage = model.errorMessage {
+            VStack(spacing: 12) {
+                Label(errorMessage, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.red)
+                Button {
+                    Task { await model.load() }
+                } label: {
+                    Label("Retry", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.bordered)
+                .disabled(model.isLoading)
+            }
+            .padding()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             Text("No renderable body.")
                 .foregroundStyle(.secondary)

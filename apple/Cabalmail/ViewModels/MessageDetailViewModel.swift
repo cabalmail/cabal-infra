@@ -21,6 +21,13 @@ final class MessageDetailViewModel {
     var attachments: [Attachment] = []
     var inlineImages: [String: URL] = [:]
 
+    /// Flips to `true` after the first `load()` call finishes — successfully
+    /// or otherwise. The view treats the pre-attempt state as "loading" so a
+    /// fast-failing fetch can never paint the error/retry screen before the
+    /// user has seen a spinner. The Retry button still works on its own
+    /// because `load()` also drives `isLoading` while it's in flight.
+    var hasAttemptedLoad = false
+
     /// Mirrors the server's `\Seen` state so the toolbar button can flip its
     /// icon and label between "Mark as read" and "Mark as unread". Initial
     /// value comes from the envelope; updated in place after every toggle
@@ -84,7 +91,10 @@ final class MessageDetailViewModel {
         // the red banner visible while the new fetch is in flight.
         errorMessage = nil
         isLoading = true
-        defer { isLoading = false }
+        defer {
+            isLoading = false
+            hasAttemptedLoad = true
+        }
         // One automatic retry on transient cancellation. The body fetch
         // chains two `URLSession.data(for:)` calls (Lambda + presigned S3);
         // if either's underlying data task is cancelled while our own Swift
