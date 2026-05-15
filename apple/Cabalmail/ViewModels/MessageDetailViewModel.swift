@@ -89,18 +89,7 @@ final class MessageDetailViewModel {
     func load() async {
         let uid = envelope.uid
         let startedAt = Date()
-        // SwiftUI fires `.task` twice for the same view identity during the
-        // iPhone-compact NavigationStack push (issue #403): a first instance
-        // is born already-cancelled, and a second, live instance fires ~1 ms
-        // later. Without this guard, the first instance would flip
-        // `isLoading = true` and start the fetch, the second would see the
-        // gate `!isLoading` fail and skip `load()`, and the doomed first
-        // fetch would eventually throw `URLError.cancelled` and paint the
-        // error/retry screen. Bailing without mutating state lets the second
-        // instance's gate pass and its `load()` run cleanly.
         if Task.isCancelled { return }
-        // Clear any stale error from a prior attempt so a retry doesn't keep
-        // the red banner visible while the new fetch is in flight.
         errorMessage = nil
         isLoading = true
         defer {
@@ -108,16 +97,6 @@ final class MessageDetailViewModel {
             hasAttemptedLoad = true
             BodyFetchLog.loadExit(uid: uid, startedAt: startedAt, errorSet: errorMessage != nil)
         }
-        // One automatic retry on transient cancellation. The body fetch
-        // chains two `URLSession.data(for:)` calls (Lambda + presigned S3);
-        // if either's underlying data task is cancelled while our own Swift
-        // Task is still alive, we see `URLError.cancelled` with no way to
-        // tell *why* the data task died. Tapping a message right as the
-        // list's load finishes is the easiest way to reproduce it. A second
-        // attempt typically succeeds. If our own Task is the one being
-        // cancelled (view going away), `Task.isCancelled` is already true
-        // and we leave the error suppressed — the view is on its way out
-        // and shouldn't flash a red banner on disappear.
         var attemptsRemaining = 2
         while attemptsRemaining > 0 {
             attemptsRemaining -= 1
@@ -132,11 +111,7 @@ final class MessageDetailViewModel {
                 return
             } catch let urlError as URLError where urlError.code == .cancelled {
                 // URLSession cancellations sometimes fire mid-fetch while our
-                // own Swift Task is still alive (quick taps right as the list
-                // finishes) — one retry inside the same Task usually clears
-                // it. If our Task is itself cancelled, retrying would just
-                // throw the same cancellation, so surface an error and let
-                // the Retry button give the user a fresh Task.
+                // own Swift Task is still alive
                 if !Task.isCancelled, attemptsRemaining > 0 {
                     BodyFetchLog.debug("load URLError.cancelled retry", uid: uid,
                                        BodyFetchLog.int("attempt", attemptNumber))
