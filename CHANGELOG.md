@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- Apple clients' message detail view no longer flashes the "Couldn't load
+  message body." retry screen when a body fetch fails quickly. The view
+  now shows the loading spinner from the moment the detail pane appears
+  until the first fetch attempt finishes, falling back to the
+  error/retry screen only after a completed-but-failed attempt.
+
 ## [0.9.19] - 2026-05-14
 
 ### Added
