@@ -54,22 +54,6 @@ resource "aws_service_discovery_service" "monitoring" {
       type = "A"
     }
   }
-
-  # AWS deprecated `failure_threshold` and pins it at 1 server-side, so
-  # the value below is documentation more than control. We set it
-  # explicitly because omitting the field causes Terraform to read drift
-  # on every plan (server returns 1, code says nothing -> diff ->
-  # forced-replace) and the replace fails because the ECS service has
-  # live instances registered. ignore_changes is the belt-and-braces:
-  # if a future provider version changes how it represents this block,
-  # we still won't churn.
-  health_check_custom_config {
-    failure_threshold = 1
-  }
-
-  lifecycle {
-    ignore_changes = [health_check_custom_config]
-  }
 }
 
 # node_exporter daemon - SRV record because ECS won't accept A-record
@@ -89,15 +73,5 @@ resource "aws_service_discovery_service" "node_exporter" {
       ttl  = 10
       type = "SRV"
     }
-  }
-
-  # See note on the for_each resource above re: failure_threshold +
-  # ignore_changes - same drift trap, same defensive fix.
-  health_check_custom_config {
-    failure_threshold = 1
-  }
-
-  lifecycle {
-    ignore_changes = [health_check_custom_config]
   }
 }

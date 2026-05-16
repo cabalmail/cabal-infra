@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.21] - Unreleased
+
+### Changed
+- Cleared Terraform deprecation warnings against AWS provider v6:
+  switched `data.aws_region.current.name` to `.region` in the `app`,
+  `user_pool`, and `sms_sender` modules; dropped the deprecated
+  `health_check_custom_config { failure_threshold = 1 }` block (AWS
+  pins the value to 1 server-side and the argument will be removed)
+  from the mail-tier and monitoring `aws_service_discovery_service`
+  resources, along with the now-unnecessary `ignore_changes` lifecycle
+  that guarded it; and removed `public_ip` / `public_dns` from the NAT
+  instance's `ignore_changes` since computed-only attributes can't
+  drift against configured values.
+
 ## [0.9.20] - 2026-05-16
 
 ### Fixed
