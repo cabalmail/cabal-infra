@@ -56,6 +56,11 @@ final class MessageDetailViewModel {
     /// message read manually in the meantime.
     private var pendingMarkAsReadTask: Task<Void, Never>?
 
+    /// In-flight body fetch (issue #403). Owned by the model so SwiftUI's
+    /// `.task` double-fire on iPhone push can't cancel it. Torn down by
+    /// `onDisappear()`.
+    private var loadTask: Task<Void, Never>?
+
     /// Hook for the view to relay flag changes to the list view model so the
     /// list row's unread dot / bold styling flips immediately. Set by
     /// `MessageDetailView` after construction so the model itself stays
@@ -87,48 +92,53 @@ final class MessageDetailViewModel {
     }
 
     func load() async {
-        let uid = envelope.uid
-        let startedAt = Date()
-        if Task.isCancelled { return }
+        // Clear any stale error from a prior attempt so a retry doesn't keep
+        // the red banner visible while the new fetch is in flight.
         errorMessage = nil
         isLoading = true
         defer {
             isLoading = false
             hasAttemptedLoad = true
-            BodyFetchLog.loadExit(uid: uid, startedAt: startedAt, errorSet: errorMessage != nil)
         }
+        // One automatic retry on transient cancellation. The body fetch
+        // chains two `URLSession.data(for:)` calls (Lambda + presigned S3);
+        // if either's underlying data task is cancelled while our own Swift
+        // Task is still alive, we see `URLError.cancelled` with no way to
+        // tell *why* the data task died. Tapping a message right as the
+        // list's load finishes is the easiest way to reproduce it. A second
+        // attempt typically succeeds. If our own Task is the one being
+        // cancelled (view going away), `Task.isCancelled` is already true
+        // and we leave the error suppressed — the view is on its way out
+        // and shouldn't flash a red banner on disappear.
         var attemptsRemaining = 2
         while attemptsRemaining > 0 {
             attemptsRemaining -= 1
-            let attemptNumber = 2 - attemptsRemaining; BodyFetchLog.loadAttempt(uid: uid, attempt: attemptNumber)
             do {
                 let bytes = try await fetchBodyBytes()
                 let tree = MimeParser.parse(bytes)
                 try await hydrate(from: tree)
                 errorMessage = nil
-                BodyFetchLog.debug("load success", uid: uid, BodyFetchLog.int("attempt", attemptNumber))
                 scheduleMarkAsReadIfNeeded()
                 return
             } catch let urlError as URLError where urlError.code == .cancelled {
-                // URLSession cancellations sometimes fire mid-fetch while our
-                // own Swift Task is still alive
-                if !Task.isCancelled, attemptsRemaining > 0 {
-                    BodyFetchLog.debug("load URLError.cancelled retry", uid: uid,
-                                       BodyFetchLog.int("attempt", attemptNumber))
-                    continue
-                }
-                errorMessage = BodyFetchLog.cancelledMessage(uid: uid, attempt: attemptNumber, source: "URLError")
+                // URLSession cancellations sometimes fire mid-fetch while
+                // our own Swift Task is still alive (we see it on quick
+                // taps right as the list finishes its initial load) — one
+                // retry inside the same Task usually clears it. If our
+                // Task is itself cancelled, retrying inside it would just
+                // throw the same cancellation, so surface an error and
+                // let the Retry button give the user a fresh Task.
+                if !Task.isCancelled, attemptsRemaining > 0 { continue }
+                errorMessage = "Couldn't load message body."
                 return
             } catch is CancellationError {
-                errorMessage = BodyFetchLog.cancelledMessage(
-                    uid: uid, attempt: attemptNumber, source: "CancellationError"
-                )
+                errorMessage = "Couldn't load message body."
                 return
             } catch let error as CabalmailError {
-                errorMessage = BodyFetchLog.cabalmailMessage(uid: uid, attempt: attemptNumber, error: error)
+                errorMessage = String(describing: error)
                 return
             } catch {
-                errorMessage = BodyFetchLog.otherMessage(uid: uid, attempt: attemptNumber, error: error)
+                errorMessage = error.localizedDescription
                 return
             }
         }
@@ -137,10 +147,20 @@ final class MessageDetailViewModel {
     /// Cancels any pending delayed mark-as-read task. Called when the detail
     /// view goes away — either the user navigated to another message or
     /// backed out entirely — so we don't mark a message read the user
-    /// barely previewed.
+    /// barely previewed. Also tears down any in-flight body fetch so we
+    /// don't hold the network call open after the user moves on.
     func onDisappear() {
         pendingMarkAsReadTask?.cancel()
         pendingMarkAsReadTask = nil
+        loadTask?.cancel()
+        loadTask = nil
+    }
+
+    /// Spawns the body fetch on `loadTask`. No-op if loaded or in flight.
+    func startLoadIfNeeded() {
+        guard htmlBody == nil, plainText == nil, !isLoading else { return }
+        if let existing = loadTask, !existing.isCancelled { return }
+        loadTask = Task { @MainActor [weak self] in await self?.load() }
     }
 
     /// Toggles the server's `\Seen` flag. Drives both the toolbar button's
@@ -299,21 +319,16 @@ final class MessageDetailViewModel {
 
 private extension MessageDetailViewModel {
     func fetchBodyBytes() async throws -> Data {
-        let uid = envelope.uid
-        BodyFetchLog.debug("fetchBodyBytes start", uid: uid, BodyFetchLog.flag("cancelled", Task.isCancelled))
         let uidValidity = try await currentUIDValidity()
         if let cached = await client.bodyCache.fetch(
             folder: folder.path,
             uidValidity: uidValidity,
             uid: envelope.uid
         ) {
-            BodyFetchLog.debug("fetchBodyBytes cache_hit", uid: uid)
             return cached
         }
-        BodyFetchLog.debug("fetchBodyBytes cache_miss", uid: uid, BodyFetchLog.flag("cancelled", Task.isCancelled))
         try await client.imapClient.connectAndAuthenticate()
         let raw = try await client.imapClient.fetchBody(folder: folder.path, uid: envelope.uid)
-        BodyFetchLog.debug("fetchBodyBytes network_done", uid: uid, BodyFetchLog.int("bytes", raw.bytes.count))
         try await client.bodyCache.store(
             folder: folder.path,
             uidValidity: uidValidity,

@@ -11,16 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Apple clients on iPhone no longer show the "Couldn't load message body."
   retry screen immediately when tapping a message whose body is not yet
   cached. The iPhone-compact `NavigationSplitView` collapse fires
-  SwiftUI's `.task` modifier twice for the same pushed detail view: a
-  first instance born already-cancelled, and a second, live instance
-  ~1 ms later. The first instance was flipping `isLoading = true` and
-  starting a fetch that would inevitably throw `URLError.cancelled`,
-  while the second instance's `!isLoading` gate then skipped its own
-  fetch entirely. `MessageDetailViewModel.load()` now returns early
-  without mutating state when its enclosing Task is already cancelled,
-  so the live second instance does the work cleanly. Also keeps the
-  spinner up across the load attempt rather than flashing the
-  error/retry screen on a quickly-failed fetch.
+  SwiftUI's `.task` modifier twice for the same pushed detail view —
+  often with one instance born already-cancelled — which caused the
+  doomed instance to run a fetch that surfaced as `URLError.cancelled`
+  while the live instance skipped its own fetch on a dirty `isLoading`
+  flag. The body fetch now runs on an unstructured Task owned by
+  `MessageDetailViewModel` and is kicked off from `.onAppear` rather
+  than `.task`, decoupling it from SwiftUI's view-lifetime cancellation;
+  the model cancels the in-flight Task in `onDisappear` when the user
+  genuinely navigates away. Also keeps the spinner up across the load
+  attempt rather than flashing the error/retry screen on a quickly-
+  failed fetch.
 
 ### Changed
 - Provided guidance as to issue labels in `claude.yml`.
