@@ -14,8 +14,11 @@ import OSLog
 enum BodyFetchLog {
     static let logger = Logger(subsystem: "com.cabalmail.Cabalmail", category: "body-fetch")
 
+    // `.notice` instead of `.info` so the messages aren't dropped on
+    // optimized / TestFlight builds. Switch back to `.info` (or strip the
+    // helper entirely) once #403 is closed.
     private static func info(_ message: String) {
-        logger.info("\(message, privacy: .public)")
+        logger.notice("\(message, privacy: .public)")
     }
 
     private static func error(_ message: String) {
