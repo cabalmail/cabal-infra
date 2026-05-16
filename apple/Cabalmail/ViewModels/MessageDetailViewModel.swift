@@ -1,3 +1,7 @@
+// swiftlint:disable file_length
+// `file_length` is suppressed while issue #403 diagnostic logging lives
+// here. Re-enable (remove this line) when `BodyFetchLog` calls are
+// stripped and the file falls back under the 400-line cap.
 import Foundation
 import Observation
 import CabalmailKit
@@ -90,7 +94,11 @@ final class MessageDetailViewModel {
         self.readerMode = preferences.defaultBodyRenderMode == .reader
     }
 
+    // swiftlint:disable:next function_body_length
     func load() async {
+        let uid = envelope.uid
+        let startedAt = Date()
+        BodyFetchLog.loadEnter(uid: uid)
         // #403: SwiftUI fires `.onDisappear` mid-push transition, cancelling
         // this Task before `.onAppear` re-fires and spawns the live one.
         // Short-circuit so the cancelled Task doesn't paint an error screen.
@@ -103,35 +111,44 @@ final class MessageDetailViewModel {
         defer {
             isLoading = false
             if completed { hasAttemptedLoad = true }
+            let hasBody = htmlBody != nil || plainText != nil
+            BodyFetchLog.loadExit(uid: uid, startedAt: startedAt, errorSet: errorMessage != nil, hasBody: hasBody)
         }
         // One automatic retry on transient `URLError.cancelled`.
         var attemptsRemaining = 2
         while attemptsRemaining > 0 {
             attemptsRemaining -= 1
+            let attemptNumber = 2 - attemptsRemaining
+            BodyFetchLog.loadAttempt(uid: uid, attempt: attemptNumber)
             do {
                 let bytes = try await fetchBodyBytes()
                 let tree = MimeParser.parse(bytes)
                 try await hydrate(from: tree)
                 errorMessage = nil
+                BodyFetchLog.loadSuccess(uid: uid, attempt: attemptNumber, bytes: bytes.count)
                 scheduleMarkAsReadIfNeeded()
                 completed = true
                 return
             } catch let urlError as URLError where urlError.code == .cancelled {
+                BodyFetchLog.loadURLError(uid: uid, attempt: attemptNumber, error: urlError)
                 if Task.isCancelled { return }
                 if attemptsRemaining > 0 { continue }
                 errorMessage = "Couldn't load message body."
                 completed = true
                 return
             } catch let urlError as URLError {
+                BodyFetchLog.loadURLError(uid: uid, attempt: attemptNumber, error: urlError)
                 errorMessage = urlError.localizedDescription
                 completed = true
                 return
             } catch is CancellationError {
+                BodyFetchLog.loadCancellation(uid: uid, attempt: attemptNumber)
                 if Task.isCancelled { return }
                 errorMessage = "Couldn't load message body."
                 completed = true
                 return
             } catch {
+                BodyFetchLog.loadOther(uid: uid, attempt: attemptNumber, error: error)
                 errorMessage = (error as? CabalmailError).map { String(describing: $0) }
                     ?? error.localizedDescription
                 completed = true
@@ -149,12 +166,18 @@ final class MessageDetailViewModel {
     func onDisappear() {
         pendingMarkAsReadTask?.cancel()
         pendingMarkAsReadTask = nil
+        BodyFetchLog.disappear(uid: envelope.uid, hadTask: loadTask != nil)
     }
 
     /// Spawns the body fetch on `loadTask`. No-op if loaded or in flight.
     func startLoadIfNeeded() {
+        let uid = envelope.uid
+        BodyFetchLog.startGate(uid: uid, hasHTML: htmlBody != nil,
+                               hasPlain: plainText != nil,
+                               isLoading: isLoading, hasTask: loadTask != nil)
         guard htmlBody == nil, plainText == nil, !isLoading else { return }
         if let existing = loadTask, !existing.isCancelled { return }
+        BodyFetchLog.startSpawn(uid: uid)
         loadTask = Task { @MainActor [weak self] in await self?.load() }
     }
 

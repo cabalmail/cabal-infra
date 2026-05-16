@@ -59,7 +59,10 @@ struct MessageDetailView: View {
         .sheet(item: $composeSeed) { seed in
             composeSheet(for: seed)
         }
-        .onAppear { syncModelForCurrentEnvelope() }
+        .onAppear {
+            BodyFetchLog.appear(uid: envelope.uid, modelExists: model != nil)
+            syncModelForCurrentEnvelope()
+        }
         .onChange(of: envelope.uid) { _, _ in syncModelForCurrentEnvelope() }
         .onDisappear { model?.onDisappear() }
     }
