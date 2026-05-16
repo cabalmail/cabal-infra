@@ -25,8 +25,8 @@ enum BodyFetchLog {
         logger.error("\(message, privacy: .public)")
     }
 
-    static func appear(uid: UInt32, modelExists: Bool) {
-        info("onAppear uid=\(uid) modelExists=\(modelExists)")
+    static func appear(uid: UInt32, modelExists: Bool, viewID: String, callID: String) {
+        info("onAppear uid=\(uid) modelExists=\(modelExists) viewID=\(viewID) callID=\(callID)")
     }
 
     static func disappear(uid: UInt32, hadTask: Bool) {
@@ -84,8 +84,8 @@ enum BodyFetchLog {
     // differs between the two phantoms, the `.environment(...)` injection
     // isn't reaching one of them; if `storeID` matches but `modelID`
     // differs, the store's cache check is failing.
-    static func envCheck(uid: UInt32, storeID: String) {
-        info("envCheck uid=\(uid) storeID=\(storeID)")
+    static func envCheck(uid: UInt32, storeID: String, viewID: String, callID: String) {
+        info("envCheck uid=\(uid) storeID=\(storeID) viewID=\(viewID) callID=\(callID)")
     }
 
     static func storeLookup(uid: UInt32, storeID: String, hit: Bool, modelID: String, currentKey: String) {

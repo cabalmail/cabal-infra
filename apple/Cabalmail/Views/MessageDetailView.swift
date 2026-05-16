@@ -27,6 +27,11 @@ struct MessageDetailView: View {
     @Environment(\.openWindow) private var openWindow
     @State var model: MessageDetailViewModel?
     @State private var composeSeed: Draft?
+    // #403 diagnostic: stable per-view-identity UUID. Two phantom view
+    // instances with separate @State buckets produce two distinct UUIDs;
+    // one instance whose .onAppear gets logged twice produces one UUID
+    // appearing in two log lines.
+    @State private var viewID: String = String(UUID().uuidString.prefix(8))
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -61,10 +66,16 @@ struct MessageDetailView: View {
             composeSheet(for: seed)
         }
         .onAppear {
-            BodyFetchLog.appear(uid: envelope.uid, modelExists: model != nil)
-            syncModelForCurrentEnvelope()
+            let callID = String(UUID().uuidString.prefix(8))
+            BodyFetchLog.appear(
+                uid: envelope.uid, modelExists: model != nil,
+                viewID: viewID, callID: callID
+            )
+            syncModelForCurrentEnvelope(callID: callID)
         }
-        .onChange(of: envelope.uid) { _, _ in syncModelForCurrentEnvelope() }
+        .onChange(of: envelope.uid) { _, _ in
+            syncModelForCurrentEnvelope(callID: String(UUID().uuidString.prefix(8)))
+        }
         .onDisappear { model?.onDisappear() }
     }
 
@@ -80,12 +91,12 @@ struct MessageDetailView: View {
     /// `.onAppear` and so end up referencing the same `MessageDetailView
     /// Model`. The second `startLoadIfNeeded()` is gated by the model's
     /// `loadTask`, so the body fetch runs once. See #403.
-    private func syncModelForCurrentEnvelope() {
+    private func syncModelForCurrentEnvelope(callID: String) {
         guard let client = appState.client else { return }
         let folderPath = folder.path
         let uid = envelope.uid
         let storeID = String(UInt(bitPattern: ObjectIdentifier(modelStore)), radix: 16)
-        BodyFetchLog.envCheck(uid: uid, storeID: storeID)
+        BodyFetchLog.envCheck(uid: uid, storeID: storeID, viewID: viewID, callID: callID)
         let activeModel = modelStore.model(
             for: folder,
             envelope: envelope,
