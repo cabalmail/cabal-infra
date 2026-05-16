@@ -34,6 +34,10 @@ struct MailRootView: View {
     @State private var selectedFolder: Folder?
     @State private var selectedEnvelope: Envelope?
     @State private var selectedAddress: Address?
+    // Owned here so the two phantom `MessageDetailView` instances that
+    // iPhone's `NavigationSplitView` compact-collapse adapter creates
+    // both reach the same model. See `MessageDetailModelStore` and #403.
+    @State private var detailModelStore = MessageDetailModelStore()
     @AppStorage("cabalmail.sidebar.tab") private var sidebarTabRaw: String = SidebarTab.folders.rawValue
 
     private var sidebarTab: SidebarTab {
@@ -73,6 +77,7 @@ struct MailRootView: View {
                 )
             }
         }
+        .environment(detailModelStore)
         // Clearing the envelope selection AND any active address filter when
         // the folder changes keeps the detail column from briefly rendering
         // an old message against the new mailbox, and matches the plan's
@@ -80,6 +85,10 @@ struct MailRootView: View {
         .onChange(of: selectedFolder) { _, _ in
             selectedEnvelope = nil
             selectedAddress = nil
+            detailModelStore.clear()
+        }
+        .onChange(of: selectedEnvelope) { _, newValue in
+            if newValue == nil { detailModelStore.clear() }
         }
     }
 

@@ -23,6 +23,7 @@ struct MessageDetailView: View {
     // exposed beyond the module.
     @Environment(AppState.self) var appState
     @Environment(Preferences.self) private var preferences
+    @Environment(MessageDetailModelStore.self) private var modelStore
     @Environment(\.openWindow) private var openWindow
     @State var model: MessageDetailViewModel?
     @State private var composeSeed: Draft?
@@ -71,35 +72,24 @@ struct MessageDetailView: View {
     /// `.onAppear` (first appearance) and `.onChange(of: envelope.uid)`
     /// (subsequent selection changes while the view stays on screen).
     ///
-    /// Dropping `.id(...)` on the detail branch in `MailRootView` makes the
-    /// view's identity stable across taps, which keeps iPhone's compact-
-    /// collapse `NavigationSplitView` from materialising the subtree in two
-    /// structural slots at once. The cost is that envelope changes no
-    /// longer rebuild the view automatically — this helper does it
-    /// explicitly. Body-fetch runs on an unstructured Task owned by the
-    /// view model, gated by `startLoadIfNeeded()` so a stale call is a
-    /// no-op.
+    /// The actual model is owned by `MessageDetailModelStore` (a single
+    /// shared `@Observable` in `MailRootView`'s environment). iPhone's
+    /// `NavigationSplitView` compact-collapse adapter materialises this
+    /// view in two structural slots per tap — each phantom has its own
+    /// `@State var model`, but both route through the store from
+    /// `.onAppear` and so end up referencing the same `MessageDetailView
+    /// Model`. The second `startLoadIfNeeded()` is gated by the model's
+    /// `loadTask`, so the body fetch runs once. See #403.
     private func syncModelForCurrentEnvelope() {
-        if let existing = model,
-           existing.folder.path == folder.path,
-           existing.envelope.uid == envelope.uid {
-            existing.startLoadIfNeeded()
-            return
-        }
         guard let client = appState.client else { return }
-        let newModel = MessageDetailViewModel(
-            folder: folder,
+        let folderPath = folder.path
+        let uid = envelope.uid
+        let activeModel = modelStore.model(
+            for: folder,
             envelope: envelope,
             client: client,
             preferences: preferences
-        )
-        // Relay flag changes (\Seen toggles) up to AppState so the
-        // list view's `.onChange` handler can flip the row's bold
-        // styling and unread dot without waiting for the next
-        // IDLE / pull-to-refresh.
-        let folderPath = folder.path
-        let uid = envelope.uid
-        newModel.onFlagChanged = { [weak appState] flag, added in
+        ) { [weak appState] flag, added in
             appState?.signalFlagChange(
                 folderPath: folderPath,
                 uid: uid,
@@ -107,8 +97,8 @@ struct MessageDetailView: View {
                 added: added
             )
         }
-        model = newModel
-        newModel.startLoadIfNeeded()
+        model = activeModel
+        activeModel.startLoadIfNeeded()
     }
 
     @ViewBuilder
