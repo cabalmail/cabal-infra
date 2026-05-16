@@ -22,22 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   time it runs, so a doomed instance is a no-op rather than painting
   the error/retry screen. Also keeps the spinner up across the load
   attempt rather than flashing the error/retry screen on a quickly-
-  failed fetch. As a follow-up, the iPhone-compact navigation now uses
-  an explicit `NavigationStack` with `.navigationDestination(item:)`
-  pushes for the folder list and message detail, instead of letting
-  `NavigationSplitView`'s compact-collapse adapter auto-collapse the
-  three columns. The auto-collapse path materialised the detail
-  subtree in two structural slots when an envelope was selected,
-  giving `MessageDetailView` two `@State` buckets and two body-fetch
-  Tasks per tap; an explicit stack pushes a single destination. macOS,
-  iPad in regular width, and visionOS continue to use the
-  `NavigationSplitView` layout. Also dropped the `.id("path#uid")`
-  modifier on `MessageDetailView` (the view now has stable identity
-  across selection changes and refreshes its model in response to
-  `envelope.uid` via `.onChange`) and added `MessageDetailModelStore`,
-  a `MailRootView`-scoped `@Observable` cache that hands out the same
-  `MessageDetailViewModel` for a given `(folder, uid)` — belt and
-  suspenders if anything ever re-introduces duplicate evaluation.
+  failed fetch.
 
 ### Changed
 - Provided guidance as to issue labels in `claude.yml`.

@@ -23,15 +23,9 @@ struct MessageDetailView: View {
     // exposed beyond the module.
     @Environment(AppState.self) var appState
     @Environment(Preferences.self) private var preferences
-    @Environment(MessageDetailModelStore.self) private var modelStore
     @Environment(\.openWindow) private var openWindow
     @State var model: MessageDetailViewModel?
     @State private var composeSeed: Draft?
-    // #403 diagnostic: stable per-view-identity UUID. Two phantom view
-    // instances with separate @State buckets produce two distinct UUIDs;
-    // one instance whose .onAppear gets logged twice produces one UUID
-    // appearing in two log lines.
-    @State private var viewID: String = String(UUID().uuidString.prefix(8))
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -66,52 +60,48 @@ struct MessageDetailView: View {
             composeSheet(for: seed)
         }
         .onAppear {
-            let callID = String(UUID().uuidString.prefix(8))
-            BodyFetchLog.appear(
-                uid: envelope.uid, modelExists: model != nil,
-                viewID: viewID, callID: callID
-            )
-            syncModelForCurrentEnvelope(callID: callID)
-        }
-        .onChange(of: envelope.uid) { _, _ in
-            syncModelForCurrentEnvelope(callID: String(UUID().uuidString.prefix(8)))
+            BodyFetchLog.appear(uid: envelope.uid, modelExists: model != nil)
+            // Drive the body fetch from `.onAppear` rather than SwiftUI's
+            // `.task` modifier. On iPhone-compact NavigationStack push,
+            // `.task` fires twice for the same view identity with
+            // unpredictable cancellation timing — the live instance can
+            // race the doomed one, or both can be cancelled at entry,
+            // leaving the view stuck on a spinner. `.onAppear` only fires
+            // when the view actually appears, and the load itself runs on
+            // an unstructured Task owned by the view model, immune to
+            // SwiftUI's `.task` cancellation. The model cancels that Task
+            // in `onDisappear()` when the view is genuinely going away.
+            let activeModel: MessageDetailViewModel
+            if let existing = model {
+                activeModel = existing
+            } else {
+                guard let client = appState.client else { return }
+                let newModel = MessageDetailViewModel(
+                    folder: folder,
+                    envelope: envelope,
+                    client: client,
+                    preferences: preferences
+                )
+                // Relay flag changes (\Seen toggles) up to AppState so the
+                // list view's `.onChange` handler can flip the row's bold
+                // styling and unread dot without waiting for the next
+                // IDLE / pull-to-refresh.
+                let folderPath = folder.path
+                let uid = envelope.uid
+                newModel.onFlagChanged = { [weak appState] flag, added in
+                    appState?.signalFlagChange(
+                        folderPath: folderPath,
+                        uid: uid,
+                        flag: flag,
+                        added: added
+                    )
+                }
+                model = newModel
+                activeModel = newModel
+            }
+            activeModel.startLoadIfNeeded()
         }
         .onDisappear { model?.onDisappear() }
-    }
-
-    /// Brings `model` in line with the current `envelope`. Called both from
-    /// `.onAppear` (first appearance) and `.onChange(of: envelope.uid)`
-    /// (subsequent selection changes while the view stays on screen).
-    ///
-    /// The actual model is owned by `MessageDetailModelStore` (a single
-    /// shared `@Observable` in `MailRootView`'s environment). iPhone's
-    /// `NavigationSplitView` compact-collapse adapter materialises this
-    /// view in two structural slots per tap — each phantom has its own
-    /// `@State var model`, but both route through the store from
-    /// `.onAppear` and so end up referencing the same `MessageDetailView
-    /// Model`. The second `startLoadIfNeeded()` is gated by the model's
-    /// `loadTask`, so the body fetch runs once. See #403.
-    private func syncModelForCurrentEnvelope(callID: String) {
-        guard let client = appState.client else { return }
-        let folderPath = folder.path
-        let uid = envelope.uid
-        let storeID = String(UInt(bitPattern: ObjectIdentifier(modelStore)), radix: 16)
-        BodyFetchLog.envCheck(uid: uid, storeID: storeID, viewID: viewID, callID: callID)
-        let activeModel = modelStore.model(
-            for: folder,
-            envelope: envelope,
-            client: client,
-            preferences: preferences
-        ) { [weak appState] flag, added in
-            appState?.signalFlagChange(
-                folderPath: folderPath,
-                uid: uid,
-                flag: flag,
-                added: added
-            )
-        }
-        model = activeModel
-        activeModel.startLoadIfNeeded()
     }
 
     @ViewBuilder
