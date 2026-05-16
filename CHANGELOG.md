@@ -9,20 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Apple clients on iPhone no longer flash the "Couldn't load message
-  body." retry screen on tap, and no longer hang on the loading spinner
-  forever, when the body is not yet cached. SwiftUI's
-  `NavigationSplitView` compact-collapse on iPhone fires `.onAppear`
-  multiple times per pushed detail view and fires `.onDisappear`
-  mid-push for instances that aren't actually going away. The body
-  fetch now runs on an unstructured Task owned by
-  `MessageDetailViewModel` and kicked off from `.onAppear` via
-  `startLoadIfNeeded()`; `onDisappear` no longer cancels the in-flight
-  fetch (that signal proved too unreliable to act on), and `load()`
-  short-circuits silently if its Task was already cancelled by the
-  time it runs, so a doomed instance is a no-op rather than painting
-  the error/retry screen. Also keeps the spinner up across the load
-  attempt rather than flashing the error/retry screen on a quickly-
-  failed fetch.
+  body." retry screen on tap, and no longer hang on the loading
+  spinner forever, when the body is not yet cached. The body fetch
+  now runs on an unstructured `Task` owned by
+  `MessageDetailViewModel` and is kicked off from `.onAppear` via
+  `startLoadIfNeeded()`, rather than from SwiftUI's `.task` modifier
+  whose view-tied cancellation proved unreliable during the
+  iPhone-compact `NavigationSplitView` push transition into the
+  detail pane. The model's `onDisappear()` no longer cancels the
+  in-flight fetch; the spinner stays up across the first load
+  attempt rather than flashing the error screen on a quickly-failed
+  fetch; and `load()` short-circuits silently if its Task was
+  cancelled before it ran.
 
 ### Changed
 - Provided guidance as to issue labels in `claude.yml`.
