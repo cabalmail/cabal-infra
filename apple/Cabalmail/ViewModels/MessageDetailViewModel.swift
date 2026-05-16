@@ -56,6 +56,11 @@ final class MessageDetailViewModel {
     /// message read manually in the meantime.
     private var pendingMarkAsReadTask: Task<Void, Never>?
 
+    /// In-flight body fetch (issue #403). Owned by the model so SwiftUI's
+    /// `.task` double-fire on iPhone push can't cancel it. Torn down by
+    /// `onDisappear()`.
+    private var loadTask: Task<Void, Never>?
+
     /// Hook for the view to relay flag changes to the list view model so the
     /// list row's unread dot / bold styling flips immediately. Set by
     /// `MessageDetailView` after construction so the model itself stays
@@ -87,16 +92,6 @@ final class MessageDetailViewModel {
     }
 
     func load() async {
-        // SwiftUI fires `.task` twice for the same view identity during the
-        // iPhone-compact NavigationStack push (issue #403): a first instance
-        // is born already-cancelled, and a second, live instance fires ~1 ms
-        // later. Without this guard, the first instance would flip
-        // `isLoading = true` and start the fetch, the second would see the
-        // gate `!isLoading` fail and skip `load()`, and the doomed first
-        // fetch would eventually throw `URLError.cancelled` and paint the
-        // error/retry screen. Bailing without mutating state lets the second
-        // instance's gate pass and its `load()` run cleanly.
-        if Task.isCancelled { return }
         // Clear any stale error from a prior attempt so a retry doesn't keep
         // the red banner visible while the new fetch is in flight.
         errorMessage = nil
@@ -152,10 +147,20 @@ final class MessageDetailViewModel {
     /// Cancels any pending delayed mark-as-read task. Called when the detail
     /// view goes away — either the user navigated to another message or
     /// backed out entirely — so we don't mark a message read the user
-    /// barely previewed.
+    /// barely previewed. Also tears down any in-flight body fetch so we
+    /// don't hold the network call open after the user moves on.
     func onDisappear() {
         pendingMarkAsReadTask?.cancel()
         pendingMarkAsReadTask = nil
+        loadTask?.cancel()
+        loadTask = nil
+    }
+
+    /// Spawns the body fetch on `loadTask`. No-op if loaded or in flight.
+    func startLoadIfNeeded() {
+        guard htmlBody == nil, plainText == nil, !isLoading else { return }
+        if let existing = loadTask, !existing.isCancelled { return }
+        loadTask = Task { @MainActor [weak self] in await self?.load() }
     }
 
     /// Toggles the server's `\Seen` flag. Drives both the toolbar button's

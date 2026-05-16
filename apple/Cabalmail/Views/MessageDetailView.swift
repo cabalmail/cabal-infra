@@ -59,12 +59,17 @@ struct MessageDetailView: View {
         .sheet(item: $composeSeed) { seed in
             composeSheet(for: seed)
         }
-        .task {
-            // Construct the model on first appear, then either load (initial
-            // entry) or re-load if a prior `.task` cycle was cancelled before
-            // the body landed. Without the second branch a cancelled-and-
-            // re-fired `.task` would short-circuit on the existing model and
-            // strand the user in the no-body state forever.
+        .onAppear {
+            // Drive the body fetch from `.onAppear` rather than SwiftUI's
+            // `.task` modifier. On iPhone-compact NavigationStack push,
+            // `.task` fires twice for the same view identity with
+            // unpredictable cancellation timing — the live instance can
+            // race the doomed one, or both can be cancelled at entry,
+            // leaving the view stuck on a spinner. `.onAppear` only fires
+            // when the view actually appears, and the load itself runs on
+            // an unstructured Task owned by the view model, immune to
+            // SwiftUI's `.task` cancellation. The model cancels that Task
+            // in `onDisappear()` when the view is genuinely going away.
             let activeModel: MessageDetailViewModel
             if let existing = model {
                 activeModel = existing
@@ -93,11 +98,7 @@ struct MessageDetailView: View {
                 model = newModel
                 activeModel = newModel
             }
-            if activeModel.htmlBody == nil,
-               activeModel.plainText == nil,
-               !activeModel.isLoading {
-                await activeModel.load()
-            }
+            activeModel.startLoadIfNeeded()
         }
         .onDisappear { model?.onDisappear() }
     }
