@@ -60,6 +60,7 @@ struct MessageDetailView: View {
             composeSheet(for: seed)
         }
         .onAppear {
+            BodyFetchLog.appear(uid: envelope.uid, modelExists: model != nil)
             // Drive the body fetch from `.onAppear` rather than SwiftUI's
             // `.task` modifier. On iPhone-compact NavigationStack push,
             // `.task` fires twice for the same view identity with
