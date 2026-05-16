@@ -56,9 +56,8 @@ final class MessageDetailViewModel {
     /// message read manually in the meantime.
     private var pendingMarkAsReadTask: Task<Void, Never>?
 
-    /// In-flight body fetch (issue #403). Owned by the model so SwiftUI's
-    /// `.task` double-fire on iPhone push can't cancel it. Torn down by
-    /// `onDisappear()`.
+    /// In-flight body fetch (#403). Owned by the model so SwiftUI's `.task`
+    /// double-fire can't cancel it. Torn down by `onDisappear()`.
     private var loadTask: Task<Void, Never>?
 
     /// Hook for the view to relay flag changes to the list view model so the
@@ -92,74 +91,76 @@ final class MessageDetailViewModel {
     }
 
     func load() async {
-        // Clear any stale error from a prior attempt so a retry doesn't keep
-        // the red banner visible while the new fetch is in flight.
+        let uid = envelope.uid
+        let startedAt = Date()
+        BodyFetchLog.loadEnter(uid: uid)
+        // Clear any stale error so a retry doesn't keep the red banner up
+        // while the new fetch is in flight.
         errorMessage = nil
         isLoading = true
         defer {
             isLoading = false
             hasAttemptedLoad = true
+            let hasBody = htmlBody != nil || plainText != nil
+            BodyFetchLog.loadExit(uid: uid, startedAt: startedAt, errorSet: errorMessage != nil, hasBody: hasBody)
         }
-        // One automatic retry on transient cancellation. The body fetch
-        // chains two `URLSession.data(for:)` calls (Lambda + presigned S3);
-        // if either's underlying data task is cancelled while our own Swift
-        // Task is still alive, we see `URLError.cancelled` with no way to
-        // tell *why* the data task died. Tapping a message right as the
-        // list's load finishes is the easiest way to reproduce it. A second
-        // attempt typically succeeds. If our own Task is the one being
-        // cancelled (view going away), `Task.isCancelled` is already true
-        // and we leave the error suppressed — the view is on its way out
-        // and shouldn't flash a red banner on disappear.
+        // One automatic retry on transient `URLError.cancelled`; a fresh
+        // Task is the user's path after that. See #403 history.
         var attemptsRemaining = 2
         while attemptsRemaining > 0 {
             attemptsRemaining -= 1
+            let attemptNumber = 2 - attemptsRemaining
+            BodyFetchLog.loadAttempt(uid: uid, attempt: attemptNumber)
             do {
                 let bytes = try await fetchBodyBytes()
                 let tree = MimeParser.parse(bytes)
                 try await hydrate(from: tree)
                 errorMessage = nil
+                BodyFetchLog.loadSuccess(uid: uid, attempt: attemptNumber, bytes: bytes.count)
                 scheduleMarkAsReadIfNeeded()
                 return
             } catch let urlError as URLError where urlError.code == .cancelled {
-                // URLSession cancellations sometimes fire mid-fetch while
-                // our own Swift Task is still alive (we see it on quick
-                // taps right as the list finishes its initial load) — one
-                // retry inside the same Task usually clears it. If our
-                // Task is itself cancelled, retrying inside it would just
-                // throw the same cancellation, so surface an error and
-                // let the Retry button give the user a fresh Task.
+                BodyFetchLog.loadURLError(uid: uid, attempt: attemptNumber, error: urlError)
                 if !Task.isCancelled, attemptsRemaining > 0 { continue }
                 errorMessage = "Couldn't load message body."
                 return
+            } catch let urlError as URLError {
+                BodyFetchLog.loadURLError(uid: uid, attempt: attemptNumber, error: urlError)
+                errorMessage = urlError.localizedDescription
+                return
             } catch is CancellationError {
+                BodyFetchLog.loadCancellation(uid: uid, attempt: attemptNumber)
                 errorMessage = "Couldn't load message body."
                 return
-            } catch let error as CabalmailError {
-                errorMessage = String(describing: error)
-                return
             } catch {
-                errorMessage = error.localizedDescription
+                BodyFetchLog.loadOther(uid: uid, attempt: attemptNumber, error: error)
+                errorMessage = (error as? CabalmailError).map { String(describing: $0) }
+                    ?? error.localizedDescription
                 return
             }
         }
     }
 
-    /// Cancels any pending delayed mark-as-read task. Called when the detail
-    /// view goes away — either the user navigated to another message or
-    /// backed out entirely — so we don't mark a message read the user
-    /// barely previewed. Also tears down any in-flight body fetch so we
-    /// don't hold the network call open after the user moves on.
+    /// Cancels the pending mark-as-read task and any in-flight body fetch
+    /// so we don't mark a barely-previewed message read or hold a network
+    /// call open after the user navigates away.
     func onDisappear() {
         pendingMarkAsReadTask?.cancel()
         pendingMarkAsReadTask = nil
+        BodyFetchLog.disappear(uid: envelope.uid, hadTask: loadTask != nil)
         loadTask?.cancel()
         loadTask = nil
     }
 
     /// Spawns the body fetch on `loadTask`. No-op if loaded or in flight.
     func startLoadIfNeeded() {
+        let uid = envelope.uid
+        BodyFetchLog.startGate(uid: uid, hasHTML: htmlBody != nil,
+                               hasPlain: plainText != nil,
+                               isLoading: isLoading, hasTask: loadTask != nil)
         guard htmlBody == nil, plainText == nil, !isLoading else { return }
         if let existing = loadTask, !existing.isCancelled { return }
+        BodyFetchLog.startSpawn(uid: uid)
         loadTask = Task { @MainActor [weak self] in await self?.load() }
     }
 
