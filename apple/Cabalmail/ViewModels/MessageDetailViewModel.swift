@@ -90,22 +90,27 @@ final class MessageDetailViewModel {
         self.readerMode = preferences.defaultBodyRenderMode == .reader
     }
 
+    // swiftlint:disable:next function_body_length
     func load() async {
         let uid = envelope.uid
         let startedAt = Date()
         BodyFetchLog.loadEnter(uid: uid)
-        // Clear any stale error so a retry doesn't keep the red banner up
-        // while the new fetch is in flight.
+        // #403: SwiftUI fires `.onDisappear` mid-push transition, cancelling
+        // this Task before `.onAppear` re-fires and spawns the live one.
+        // Short-circuit so the cancelled Task doesn't paint an error screen.
+        if Task.isCancelled { return }
         errorMessage = nil
         isLoading = true
+        // Only mark attempted on a definitive outcome — a mid-flight cancel
+        // leaves the load un-attempted so the next live Task can take over.
+        var completed = false
         defer {
             isLoading = false
-            hasAttemptedLoad = true
+            if completed { hasAttemptedLoad = true }
             let hasBody = htmlBody != nil || plainText != nil
             BodyFetchLog.loadExit(uid: uid, startedAt: startedAt, errorSet: errorMessage != nil, hasBody: hasBody)
         }
-        // One automatic retry on transient `URLError.cancelled`; a fresh
-        // Task is the user's path after that. See #403 history.
+        // One automatic retry on transient `URLError.cancelled`.
         var attemptsRemaining = 2
         while attemptsRemaining > 0 {
             attemptsRemaining -= 1
@@ -118,24 +123,31 @@ final class MessageDetailViewModel {
                 errorMessage = nil
                 BodyFetchLog.loadSuccess(uid: uid, attempt: attemptNumber, bytes: bytes.count)
                 scheduleMarkAsReadIfNeeded()
+                completed = true
                 return
             } catch let urlError as URLError where urlError.code == .cancelled {
                 BodyFetchLog.loadURLError(uid: uid, attempt: attemptNumber, error: urlError)
-                if !Task.isCancelled, attemptsRemaining > 0 { continue }
+                if Task.isCancelled { return }
+                if attemptsRemaining > 0 { continue }
                 errorMessage = "Couldn't load message body."
+                completed = true
                 return
             } catch let urlError as URLError {
                 BodyFetchLog.loadURLError(uid: uid, attempt: attemptNumber, error: urlError)
                 errorMessage = urlError.localizedDescription
+                completed = true
                 return
             } catch is CancellationError {
                 BodyFetchLog.loadCancellation(uid: uid, attempt: attemptNumber)
+                if Task.isCancelled { return }
                 errorMessage = "Couldn't load message body."
+                completed = true
                 return
             } catch {
                 BodyFetchLog.loadOther(uid: uid, attempt: attemptNumber, error: error)
                 errorMessage = (error as? CabalmailError).map { String(describing: $0) }
                     ?? error.localizedDescription
+                completed = true
                 return
             }
         }
