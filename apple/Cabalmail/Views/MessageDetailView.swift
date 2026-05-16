@@ -84,6 +84,8 @@ struct MessageDetailView: View {
         guard let client = appState.client else { return }
         let folderPath = folder.path
         let uid = envelope.uid
+        let storeID = String(UInt(bitPattern: ObjectIdentifier(modelStore)), radix: 16)
+        BodyFetchLog.envCheck(uid: uid, storeID: storeID)
         let activeModel = modelStore.model(
             for: folder,
             envelope: envelope,

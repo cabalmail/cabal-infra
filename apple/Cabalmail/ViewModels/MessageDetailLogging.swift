@@ -77,4 +77,19 @@ enum BodyFetchLog {
         error("load other uid=\(uid) attempt=\(attempt) type=\(type) "
               + "error=\(err.localizedDescription)")
     }
+
+    // Diagnostic: pin down whether the two phantom `MessageDetailView`
+    // instances on iPhone are looking up the *same* `MessageDetailModelStore`
+    // and getting the *same* `MessageDetailViewModel` back. If `storeID`
+    // differs between the two phantoms, the `.environment(...)` injection
+    // isn't reaching one of them; if `storeID` matches but `modelID`
+    // differs, the store's cache check is failing.
+    static func envCheck(uid: UInt32, storeID: String) {
+        info("envCheck uid=\(uid) storeID=\(storeID)")
+    }
+
+    static func storeLookup(uid: UInt32, storeID: String, hit: Bool, modelID: String, currentKey: String) {
+        info("storeLookup uid=\(uid) storeID=\(storeID) hit=\(hit) "
+             + "modelID=\(modelID) currentKey=\(currentKey)")
+    }
 }

@@ -37,7 +37,15 @@ final class MessageDetailModelStore {
         onFlagChanged: @escaping @MainActor (Flag, Bool) -> Void
     ) -> MessageDetailViewModel {
         let key = Key(folderPath: folder.path, uid: envelope.uid)
-        if let current, current.key == key { return current.model }
+        let storeID = String(UInt(bitPattern: ObjectIdentifier(self)), radix: 16)
+        if let current, current.key == key {
+            let modelID = String(UInt(bitPattern: ObjectIdentifier(current.model)), radix: 16)
+            BodyFetchLog.storeLookup(
+                uid: envelope.uid, storeID: storeID, hit: true,
+                modelID: modelID, currentKey: "\(current.key.folderPath)#\(current.key.uid)"
+            )
+            return current.model
+        }
         let model = MessageDetailViewModel(
             folder: folder,
             envelope: envelope,
@@ -46,6 +54,12 @@ final class MessageDetailModelStore {
         )
         model.onFlagChanged = onFlagChanged
         current = (key, model)
+        let modelID = String(UInt(bitPattern: ObjectIdentifier(model)), radix: 16)
+        let currentKey = "\(key.folderPath)#\(key.uid)"
+        BodyFetchLog.storeLookup(
+            uid: envelope.uid, storeID: storeID, hit: false,
+            modelID: modelID, currentKey: currentKey
+        )
         return model
     }
 
