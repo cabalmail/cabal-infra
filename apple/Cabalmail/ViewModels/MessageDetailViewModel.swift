@@ -157,15 +157,16 @@ final class MessageDetailViewModel {
         }
     }
 
-    /// Cancels the pending mark-as-read task and any in-flight body fetch
-    /// so we don't mark a barely-previewed message read or hold a network
-    /// call open after the user navigates away.
+    /// Cancels the pending mark-as-read task so a barely-previewed message
+    /// doesn't get marked read. Deliberately does NOT cancel the body-fetch
+    /// `loadTask`: on iPhone, SwiftUI fires `.onDisappear` mid-push for
+    /// phantom view instances that aren't actually going away (#403). The
+    /// load Task holds the model alive for the duration of `load()`, then
+    /// everything deallocates naturally if the view is truly gone.
     func onDisappear() {
         pendingMarkAsReadTask?.cancel()
         pendingMarkAsReadTask = nil
         BodyFetchLog.disappear(uid: envelope.uid, hadTask: loadTask != nil)
-        loadTask?.cancel()
-        loadTask = nil
     }
 
     /// Spawns the body fetch on `loadTask`. No-op if loaded or in flight.
