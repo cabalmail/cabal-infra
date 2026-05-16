@@ -38,6 +38,14 @@ final class MessageDetailModelStore {
     ) -> MessageDetailViewModel {
         let key = Key(folderPath: folder.path, uid: envelope.uid)
         let storeID = String(UInt(bitPattern: ObjectIdentifier(self)), radix: 16)
+        // Log entry state so we can distinguish "current was nil at entry"
+        // from "current.key != lookup key". The previous diagnostic only
+        // logged the *post-write* key, which couldn't tell those apart.
+        let entryKey = current.map { "\($0.key.folderPath)#\($0.key.uid)" } ?? "nil"
+        let entryModelID = current.map { String(UInt(bitPattern: ObjectIdentifier($0.model)), radix: 16) } ?? "nil"
+        BodyFetchLog.storeEntry(uid: envelope.uid, storeID: storeID,
+                                lookupKey: "\(key.folderPath)#\(key.uid)",
+                                entryKey: entryKey, entryModelID: entryModelID)
         if let current, current.key == key {
             let modelID = String(UInt(bitPattern: ObjectIdentifier(current.model)), radix: 16)
             BodyFetchLog.storeLookup(

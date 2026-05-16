@@ -92,4 +92,15 @@ enum BodyFetchLog {
         info("storeLookup uid=\(uid) storeID=\(storeID) hit=\(hit) "
              + "modelID=\(modelID) currentKey=\(currentKey)")
     }
+
+    static func storeEntry(
+        uid: UInt32,
+        storeID: String,
+        lookupKey: String,
+        entryKey: String,
+        entryModelID: String
+    ) {
+        info("storeEntry uid=\(uid) storeID=\(storeID) lookupKey=\(lookupKey) "
+             + "entryKey=\(entryKey) entryModelID=\(entryModelID)")
+    }
 }
