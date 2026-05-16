@@ -25,6 +25,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Provided guidance as to issue labels in `claude.yml`.
+- `HTMLBodyCoordinator` now implements the async variant of
+  `WKNavigationDelegate.webView(_:decidePolicyFor:)`, which matches the
+  iOS 18 SDK's actor-isolated optional requirement exactly and clears
+  the "nearly matches optional requirement" warning under Swift 5.10
+  strict concurrency.
+- `apple.yml` skips `brew install` for packages already present on the
+  macos-15 runner image, suppressing the "Warning: foo is already
+  installed..." annotations that GitHub was surfacing on every run.
 
 ## [0.9.19] - 2026-05-14
 

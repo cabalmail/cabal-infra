@@ -149,23 +149,26 @@ final class HTMLBodyCoordinator: NSObject, WKNavigationDelegate {
         self.allowRemote = allowRemote
     }
 
+    // Async variant of the protocol requirement. The completion-handler
+    // form ("nearly matches optional requirement") collides with strict
+    // concurrency: the iOS 18 SDK marks `decisionHandler` with isolation
+    // attributes that our @MainActor class can't restate in a way the
+    // compiler considers an exact match. Returning the policy directly
+    // sidesteps the closure entirely.
     func webView(
         _ webView: WKWebView,
-        decidePolicyFor navigationAction: WKNavigationAction,
-        decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
-    ) {
+        decidePolicyFor navigationAction: WKNavigationAction
+    ) async -> WKNavigationActionPolicy {
         guard let url = navigationAction.request.url else {
-            decisionHandler(.cancel)
-            return
+            return .cancel
         }
         // Always allow the very first `about:blank` that `loadHTMLString`
         // uses as its base, plus any local file URL we injected.
         let allowedSchemes: Set<String> = ["about", "file", "data"]
         if allowedSchemes.contains(url.scheme?.lowercased() ?? "") {
-            decisionHandler(.allow)
-            return
+            return .allow
         }
-        decisionHandler(allowRemote ? .allow : .cancel)
+        return allowRemote ? .allow : .cancel
     }
 
     /// Installs or removes the remote-blocker content rule list on the web
