@@ -1,8 +1,9 @@
 # Cabalmail Apple Client
 
-Native iOS / iPadOS / visionOS / macOS client for Cabalmail. See
-[`docs/0.6.0/ios-client-plan.md`](../docs/0.6.0/ios-client-plan.md) for the full
-plan. This directory is the Phase 1 scaffold.
+Native iOS / iPadOS / visionOS / macOS client for Cabalmail. The original
+implementation plan is preserved at
+[`docs/0.6.0/ios-client-plan.md`](../docs/0.6.0/ios-client-plan.md) for
+historical context; this README describes the as-implemented state.
 
 ## Layout
 
@@ -50,7 +51,7 @@ project files.
   the repo tree (for the same xattr reason). Omit the flag to use
   `~/Library/Developer/Xcode/DerivedData` instead.
 
-## Verification (Phase 1)
+## Verification
 
 From `apple/` after `xcodegen generate`:
 
@@ -187,8 +188,7 @@ are expanded in the sections further down.
 
    Internal groups hold up to 100 team members and do not require Apple
    Beta Review. External groups (invite-by-email, up to 10,000 testers)
-   are out of scope for 0.6.0 but would be the next step before an App
-   Store launch.
+   would be the next step before an App Store launch.
 
 ## GitHub secrets for CI
 
@@ -369,10 +369,9 @@ distribution cert you just exported. Recreate them whenever the cert rolls
 1. App Store Connect → **Users and Access** → **Integrations** tab → **Keys**.
 2. Click the **+** to generate a new key.
 3. Name it something descriptive (e.g. `Cabalmail CI`). Role: **App Manager**.
-   App Manager covers everything CI still needs — TestFlight upload,
-   notarization — now that archives sign manually and don't call the
-   profile-creation API. (Earlier revisions of this setup required
-   Admin.)
+   App Manager covers everything CI needs — TestFlight upload and
+   notarization — because archives sign manually and don't call the
+   profile-creation API.
 4. Copy the **Issuer ID** (top of the page) → `APP_STORE_CONNECT_API_ISSUER_ID`.
 5. Copy the **Key ID** (shown in the row for the new key) →
    `APP_STORE_CONNECT_API_KEY_ID`.
@@ -408,31 +407,9 @@ TestFlight upload and skips the notarization steps.
    pbcopy`.
 3. Set `DEVELOPER_ID_CERT_P12` and `DEVELOPER_ID_CERT_PASSWORD`.
 
-## Phase 1 Decisions
-
-### 1. macOS: native target (not Mac Catalyst)
-
-The plan defaults to a native macOS target because the roadmap treats macOS as
-a first-class platform. Phase 1 follows that default. The macOS target
-(`CabalmailMac/`) is a separate app that shares `CabalmailKit` only; views are
-not reused from the iOS target. Revisit after Phase 7 polish if the duplication
-becomes unacceptable.
-
-### 2. Runtime configuration: published `config.json` (Option A)
-
-The React app loads runtime configuration from `/config.js` on CloudFront.
-`config.js`'s body happens to be valid JSON, so Terraform now writes a sibling
-`config.json` object from the same template variables (see
-[`terraform/infra/modules/app/s3.tf`](../terraform/infra/modules/app/s3.tf)).
-
-The Apple client fetches `https://{control_domain}/config.json` on first launch
-and caches it in `UserDefaults`. Same IPA works against dev/stage/prod by
-pointing at a different control domain — only the bootstrap URL differs. The
-schema is modelled by `CabalmailKit.Configuration`.
-
 ## CI workflow
 
-`.github/workflows/apple.yml` lands with Phase 2. It has four jobs:
+`.github/workflows/apple.yml` has four jobs:
 
 | Job | Runs when | What it does |
 |---|---|---|
@@ -533,135 +510,124 @@ those at runtime. The handoff README spells this out.
 visionOS apps can ship a layered `AppIcon.solidimagestack` (back / middle
 / front layers, composited with parallax on gaze focus). The three
 visionOS source layers already exist in `apple/handoff/`
-(`AppIcon-visionos-{back,middle,front}.svg`), but this scaffold does
+(`AppIcon-visionos-{back,middle,front}.svg`), but the current build does
 **not** install them. The `Cabalmail` target's visionOS destination is
 served by the same `AppIcon.appiconset` as iOS/iPadOS, which is a valid
 visionOS icon configuration — just not the layered one.
 
-Adding the solidimagestack is left as a Phase 7 platform-polish task: it
-requires a new `AppIcon.solidimagestack` asset, per-layer
-`Content.imageset/Contents.json` files, and a per-platform icon name
-wired through `project.yml` (e.g. `ASSETCATALOG_COMPILER_APPICON_NAME`
-overridden for xros). Non-trivial, and easy to get wrong without a
-visionOS device in the loop — so we decided to ship the shared
-appiconset now and revisit once the visionOS build is receiving
-first-class attention.
+Adding the solidimagestack requires a new `AppIcon.solidimagestack`
+asset, per-layer `Content.imageset/Contents.json` files, and a
+per-platform icon name wired through `project.yml` (e.g.
+`ASSETCATALOG_COMPILER_APPICON_NAME` overridden for xros). Validating
+the parallax result requires a visionOS device in the loop.
 
-### Obsolete placeholder generator
+## Architecture
 
-[`scripts/generate-placeholder-icons.sh`](scripts/generate-placeholder-icons.sh)
-and its Swift sibling `generate-placeholder-icon.swift` produced the
-bootstrap placeholder that shipped before real artwork existed. They are
-no longer part of the icon pipeline — the commands in this section are
-the authoritative regen path. Keep the scripts around if they're useful
-as a standalone demo; otherwise safe to delete.
+### macOS: native target (not Mac Catalyst)
 
-## Phase 3 decisions
+The roadmap treats macOS as a first-class platform, so the macOS target
+is native rather than Mac Catalyst. `CabalmailMac/` is a separate app
+that shares `CabalmailKit` only; views are not reused from the iOS
+target.
 
-Phase 3 lands the `CabalmailKit` networking and auth layer on top of the
-Phase 1 scaffold. Every service is protocol-based so app-side code depends
-on the interface, not the concrete implementation — tests inject fakes
-(`ScriptedByteStream`, `RecordingHTTPTransport`, `InMemorySecureStore`).
+### Runtime configuration: published `config.json`
 
-### 1. Cognito: hand-rolled `USER_PASSWORD_AUTH`
+The React app loads runtime configuration from `/config.js` on CloudFront.
+`config.js`'s body happens to be valid JSON, so Terraform also writes a
+sibling `config.json` object from the same template variables (see
+[`terraform/infra/modules/app/s3.tf`](../terraform/infra/modules/app/s3.tf)).
 
-The plan defaulted to AWS Amplify Swift for velocity. The scaffold takes
-the other branch: since the Cognito pool is provisioned with
-`explicit_auth_flows = ["USER_PASSWORD_AUTH"]` (see
+The Apple client fetches `https://{control_domain}/config.json` on first
+launch and caches it in `UserDefaults`. The same IPA works against
+dev/stage/prod by pointing at a different control domain — only the
+bootstrap URL differs. The schema is modelled by
+`CabalmailKit.Configuration`.
+
+### Cognito: hand-rolled `USER_PASSWORD_AUTH`
+
+The Cognito pool is provisioned with `explicit_auth_flows =
+["USER_PASSWORD_AUTH"]` (see
 [`terraform/infra/modules/user_pool/main.tf`](../terraform/infra/modules/user_pool/main.tf)),
-the wire surface reduces to JSON POSTs against
+so the wire surface reduces to JSON POSTs against
 `https://cognito-idp.<region>.amazonaws.com/`. `CognitoAuthService` drives
 that directly — no AWS SDK dependency, no ~2 MB extra binary. The
 `AuthService` protocol leaves room to swap in Amplify later.
 
-### 2. IMAP: `swift-nio-imap`/`MailCore2` — neither
+### IMAP: hand-rolled on `NWConnection`
 
-Rather than adopt either of the two candidates in the plan, Phase 3 lands
-a small hand-rolled client on `NWConnection` + a byte-accurate response
-parser. Trade-offs:
+`CabalmailKit` ships a small hand-rolled IMAP client (`LiveImapClient`)
+built on `NWConnection` + a byte-accurate response parser, rather than
+`swift-nio-imap` or `MailCore2`. Trade-offs:
 
 - **For us:** zero external SwiftPM packages (simpler CI, no network
   resolution, no visionOS build surprises); the parser handles the exact
   subset of RFC 3501 we need (envelopes, flags, body literals,
   bodystructure-as-attachment-heuristic, status, search, list/lsub).
 - **Against:** we own the IMAP parser. Real servers emit corner cases we
-  haven't seen yet; expect follow-ups.
+  haven't seen yet.
 
-The plan leaves this choice open for Phase 3 after a spike — this is the
-spike, committed.
+See the top-level [`CLAUDE.md`](../CLAUDE.md) for the production wiring:
+the live mail traffic goes through `ApiBackedImapClient` against the
+Lambda API surface, not `LiveImapClient` direct-to-IMAP.
 
-### 3. SMTP submission: implicit TLS on 465 instead of STARTTLS on 587
+### SMTP submission: implicit TLS on 465 instead of STARTTLS on 587
 
-The plan specified port 587 with STARTTLS. `NWConnection`'s TLS stack
-attaches at connect time, so a clean STARTTLS upgrade requires a custom
-framer — meaningfully more code with no operational upside. The submission
-listener already binds 465 as well as 587 (see
+`NWConnection`'s TLS stack attaches at connect time, so a clean STARTTLS
+upgrade requires a custom framer — meaningfully more code with no
+operational upside. The submission listener already binds 465 as well as
+587 (see
 [`terraform/infra/modules/elb/main.tf`](../terraform/infra/modules/elb/main.tf)),
 and implicit-TLS on 465 is operationally equivalent to STARTTLS on 587,
 so `LiveSmtpClient` defaults to 465. `NetworkByteStream.startTLS(host:)`
 throws deliberately so future contributors see exactly why the upgrade
 path isn't available.
 
-### 4. Storage: Keychain for secrets, on-disk Codable for mirrors
+### Storage: Keychain for secrets, on-disk Codable for mirrors
 
 - Cognito tokens: one JSON blob in the data-protection keychain
   (`KeychainSecureStore`, `kSecUseDataProtectionKeychain = true`).
 - IMAP username + password: separate keychain items keyed to the tokens
   so sign-out cleans them up together.
 - Envelopes: per-folder JSON files under the app support directory,
-  keyed by UIDVALIDITY — the Phase 3 reconnect flow (`STATUS` + UID
-  FETCH since UIDNEXT) drops straight onto this.
-- Bodies: per-folder directory of raw `.eml` files, LRU-evicted by
-  mtime when the total exceeds a configurable cap (default 200 MB).
+  keyed by UIDVALIDITY — the reconnect flow (`STATUS` + UID FETCH since
+  UIDNEXT) drops straight onto this.
+- Bodies: per-folder directory of raw `.eml` files, LRU-evicted by mtime
+  when the total exceeds a configurable cap (default 200 MB).
 
-### 5. IDLE: separate connection, `AsyncThrowingStream`
+### IDLE: separate connection, `AsyncThrowingStream`
 
 `LiveImapClient.idle(folder:)` opens a second authenticated connection
 dedicated to IDLE so foreground mailbox operations aren't blocked by the
 open IDLE socket. Untagged `EXISTS` / `EXPUNGE` / `FETCH` events stream
 via `AsyncThrowingStream<IdleEvent, Error>`; terminating the stream
 cancels the reader task, issues `DONE\r\n`, and closes the connection.
-Phase 7 wires this into the message list / unread badge refresh.
 
-## Phase 5 decisions
+### Rich-text editor: plain text only
 
-Phase 5 lands mail composition, reply/reply-all/forward, and the on-the-fly
-`From` flow — the product differentiator described in [`docs/README.md`](../docs/README.md).
-Three decisions that narrow the plan's open choices:
+iOS 18's selection APIs for `TextEditor<AttributedString>` aren't yet
+rich enough to drive a custom toolbar cleanly, and a
+`UITextViewRepresentable`/`NSTextViewRepresentable` wrapper is
+substantially more code than the compose-send-deliver path needs.
+`ComposeView` ships with `TextEditor(text: $body)` plain text and emits
+a `text/plain` body only.
 
-### 1. Rich-text editor: plain text only (Phase 5.1 will add formatting)
-
-The plan defaults to SwiftUI `TextEditor` bound to `AttributedString` with a
-formatting toolbar. iOS 18's selection APIs for `TextEditor<AttributedString>`
-aren't yet rich enough to drive a custom toolbar cleanly, and a
-`UITextViewRepresentable`/`NSTextViewRepresentable` wrapper is substantially
-more code than Phase 5's primary goal (compose → send → delivered) needs.
-`ComposeView` ships with `TextEditor(text: $body)` plain text and emits a
-`text/plain` body only. Toolbar formatting + `text/html` emission is
-tracked as Phase 5.1.
-
-### 2. Drafts: local only (Phase 5.1 will add IMAP Drafts sync)
+### Drafts: local only
 
 `CabalmailKit.DraftStore` persists drafts as Codable JSON under the app
 support directory, keyed by UUID. `ComposeViewModel` autosaves every 5 s
-while the sheet is open, so a mid-compose app kill is recoverable (plan
-verification #4). Cross-device draft sync via IMAP `APPEND` to the `Drafts`
-folder (the plan's stretch goal) is Phase 5.1 — the `append` primitive is
-already in `LiveImapClient`, but the fetch-edit-re-APPEND-expunge round-trip
-is enough extra state to belong in its own PR.
+while the sheet is open, so a mid-compose app kill is recoverable.
 
-### 3. Sent-folder APPEND: client-side after successful submission
+### Sent-folder APPEND: client-side after successful submission
 
-The plan flags this as an open question pending Sendmail + Dovecot
-behavior. In the Cabalmail stack, neither tier auto-APPENDs to `Sent`; the
-React app's backend replicates the message into `Sent` from the `send`
-Lambda (see `lambda/api/send/function.py`). `CabalmailClient.send(_:)`
-mirrors that behavior: it stamps a shared `Message-ID`, submits via SMTP,
-and best-effort-APPENDs the same payload to `Sent` with `\Seen` set. The
+Neither mail tier auto-APPENDs to `Sent`; the React app's backend
+replicates the message into `Sent` from the `send` Lambda (see
+`lambda/api/send/function.py`). `CabalmailClient.send(_:)` mirrors that
+behavior: it stamps a shared `Message-ID`, submits via SMTP, and
+best-effort-APPENDs the same payload to `Sent` with `\Seen` set. The
 APPEND is best-effort because a failed Sent-folder write on an
 already-delivered message shouldn't surface as a send failure.
 
-### Compose-scene architecture
+### Compose scene
 
 - `CabalmailKit.ReplyBuilder` (pure value-type helper) turns an incoming
   `Envelope` + its decoded plain-text body + the user's owned addresses
@@ -679,102 +645,88 @@ already-delivered message shouldn't surface as a send failure.
   comment, with a **Random** button that seeds alphanumerics so the
   mint-an-address flow stays a one-tap affordance.
 
-## Phase 6 decisions
-
-Phase 6 lands address and folder management (non-mail features from the
-React app) plus the Settings surface the plan calls for. Three decisions
-that narrow the plan's open choices:
-
-### 1. Preferences storage: `UserDefaults` + `NSUbiquitousKeyValueStore`
+### Preferences storage: `UserDefaults` + `NSUbiquitousKeyValueStore`
 
 `CabalmailKit.Preferences` persists through a pluggable `PreferenceStore`
-protocol. Production uses `UbiquitousPreferenceStore`, which writes to both
-`UserDefaults` (fast local reads) and `NSUbiquitousKeyValueStore` (cross-
-device sync via iCloud). An `NSUbiquitousKeyValueStoreDidChangeExternallyNotification`
-observer mirrors every pushed key back into `UserDefaults` so subsequent
+protocol. Production uses `UbiquitousPreferenceStore`, which writes to
+both `UserDefaults` (fast local reads) and `NSUbiquitousKeyValueStore`
+(cross-device sync via iCloud). An
+`NSUbiquitousKeyValueStoreDidChangeExternallyNotification` observer
+mirrors every pushed key back into `UserDefaults` so subsequent
 synchronous reads stay fast. The store degrades gracefully on an
 iCloud-disabled install — the ubiquitous half becomes a no-op and
 `UserDefaults` carries the whole load.
 
-The plan suggests `@AppStorage` property wrappers; we picked a single
-`@Observable` class instead because multiple views (compose, message
-detail, message list) need to read the same preference on the same code
-path, and the SwiftUI 18 `@Observable` macro makes sharing a
-`Preferences` instance across the environment cheaper than keeping a
-property wrapper in each view.
+A single `@Observable` class is used in preference to `@AppStorage`
+property wrappers because multiple views (compose, message detail,
+message list) need to read the same preference on the same code path,
+and the SwiftUI 18 `@Observable` macro makes sharing a `Preferences`
+instance across the environment cheaper than keeping a property wrapper
+in each view.
 
-### 2. Signed-in navigation: `TabView(.sidebarAdaptable)`
+### Signed-in navigation: `TabView(.sidebarAdaptable)`
 
 `SignedInRootView` uses SwiftUI 18's `TabView(selection:)` + the
 `.sidebarAdaptable` style so the same screen renders as a bottom tab bar
-on iPhone and as a collapsible sidebar on iPad / visionOS / macOS. The
-plan flagged "tabs on iPhone / sidebar sections on iPad/macOS/visionOS"
-as the target split; `.sidebarAdaptable` covers both from one definition.
-macOS hides the Settings tab via a `#if !os(macOS)` guard because the
+on iPhone and as a collapsible sidebar on iPad / visionOS / macOS. macOS
+hides the Settings tab via a `#if !os(macOS)` guard because the
 `Settings` scene wired to ⌘, in `CabalmailMacApp` already covers that
 ground.
 
-### 3. Signature insertion: RFC 3676 delimiter, static helper
+### Signature insertion: RFC 3676 delimiter, static helper
 
 Signatures are inserted via `CabalmailKit.SignatureFormatter.seedBody`, a
 pure value-type helper that prepends `"\n-- \n<signature>"` to the seed
 body. The RFC 3676 `"-- "` (dash-dash-space) on its own line is the
 canonical signature marker every UNIX mail client since Pine recognises,
 so downstream clients can collapse / strip the block when threading a
-long reply chain. Keeping the helper pure (and outside `ComposeViewModel`)
-lets `SignatureFormatterTests` pin the three entry-point layouts —
-empty-new-message, reply/forward-with-quoted-original, and arbitrary base
-— without spinning up the full view model.
+long reply chain. Keeping the helper pure (and outside
+`ComposeViewModel`) lets `SignatureFormatterTests` pin the three
+entry-point layouts — empty-new-message,
+reply/forward-with-quoted-original, and arbitrary base — without
+spinning up the full view model.
 
-### Settings surface layout
+### Settings surface
 
 - **Account.** Signed-in username + control domain (both read-only), plus
-  the single sign-out button. The prior Phase-4 "sign-out on the
-  Mailboxes toolbar" button is removed; Account is the canonical place
-  now.
+  the single sign-out button. Account is the canonical place for
+  sign-out.
 - **Reading.** `Mark as read` (manual / on open / after delay) and
-  `Load remote content` (off / ask / always). Defaults match the plan.
-  `MessageDetailViewModel` schedules a cancellable 2-second task for
-  `.afterDelay` that the view cancels on disappear so we don't mark read
-  a message the user only previewed.
+  `Load remote content` (off / ask / always). `MessageDetailViewModel`
+  schedules a cancellable 2-second task for `.afterDelay` that the view
+  cancels on disappear so we don't mark read a message the user only
+  previewed.
 - **Composing.** `Default From address` (None / one of the user's
   addresses — revoked addresses fall back to None so a stale preference
   can't persist an address that doesn't exist any more) and a plain-text
-  `Signature`. Reply / forward flows still default From to the original's
-  addressee (Phase 5 on-the-fly-From idiom) so the default From
-  preference only applies to new messages.
+  `Signature`. Reply / forward flows default From to the original's
+  addressee, so the default-From preference only applies to new
+  messages.
 - **Actions.** `Dispose action` (Archive / Trash). `MessageListViewModel`
   reads this on every swipe so a change mid-session takes effect
   immediately; the swipe label + icon follow the preference too.
 - **Appearance.** `Theme` (System / Light / Dark) applied via
   `.preferredColorScheme` at the App level so the whole app flips
-  instantly. `CabalmailApp` and `CabalmailMacApp` now own the `AppState`
-  and `Preferences` instances; the iOS `ContentView` reads them from
-  `@Environment` rather than owning an inline `@State AppState`.
+  instantly. `CabalmailApp` and `CabalmailMacApp` own the `AppState` and
+  `Preferences` instances; the iOS `ContentView` reads them from
+  `@Environment`.
 - **About.** Version + build (read from `Bundle.main.infoDictionary`) and
   a link to the GitHub issues.
 
-## Phase 7 decisions
+### IDLE is tied to the message list lifetime
 
-Phase 7 is the "platform polish" pass: push-style freshness, offline
-reading + send queue, structured errors + MetricKit, a debug log surface,
-and keyboard / menu wiring. Five decisions that narrow the plan's open
-choices:
+`MailboxWatcher` opens a dedicated IDLE connection and emits `.changed` /
+`.reconnecting` / `.active` ticks on an `AsyncStream`.
+`MessageListViewModel.startWatching()` drives it from the message list's
+`.task { }` and stops it on `.onDisappear`. The watcher stays off while
+the user is elsewhere — mailbox management, compose sheet, settings — so
+the server only holds one open IDLE socket per active mailbox.
+Reconnects use bounded exponential backoff (2s → 60s) per RFC 2177's
+29-minute disconnect cadence; consecutive `EXISTS` bursts are coalesced
+on the view-model side with a 1-second refresh floor so a message sweep
+doesn't trigger N envelope fetches.
 
-### 1. IDLE is tied to the message list lifetime, not the app lifetime
-
-`MailboxWatcher` opens a dedicated IDLE connection (see Phase 3 decision
-#5) and emits `.changed` / `.reconnecting` / `.active` ticks on an
-`AsyncStream`. `MessageListViewModel.startWatching()` drives it from the
-message list's `.task { }` and stops it on `.onDisappear`. The watcher
-stays off while the user is elsewhere — mailbox management, compose
-sheet, settings — so the server only holds one open IDLE socket per
-active mailbox. Reconnects use bounded exponential backoff (2s → 60s)
-per RFC 2177's 29-minute disconnect cadence; consecutive `EXISTS` bursts
-are coalesced on the view-model side with a 1-second refresh floor so a
-message sweep doesn't trigger N envelope fetches.
-
-### 2. Send failures classify transient vs permanent before queueing
+### Send failures classify transient vs permanent before queueing
 
 `CabalmailClient.send(_:)` returns `SendOutcome.sent` or `.queued`.
 Transport / network errors (`CabalmailError.network`, connection
@@ -787,19 +739,20 @@ compose sheet can correct them. `SendQueue` drains the outbox when
 recipient can't spin forever. One JSON file per entry under app support,
 same layout as `DraftStore`.
 
-### 3. MetricKit is opt-in, not always-on
+### MetricKit is opt-in
 
 `Preferences.crashReportingEnabled` defaults to `false`. When the user
-toggles it on in Settings → Diagnostics, `CabalmailClient.setCrashReportingEnabled(true)`
-subscribes the `MetricKitCollector` to `MXMetricManager.shared` and
-payloads land in `DebugLogStore` at the `.info` level. Off by default
-respects the "self-hosted email, minimum phoning-home" stance the
-project leans on; the toggle is explicit and the surface for viewing
-what's captured is right there (Settings → Debug Log → ShareLink).
-visionOS doesn't vend MetricKit at all, so the collector is a no-op on
-that platform behind `#if canImport(MetricKit) && !os(visionOS)`.
+toggles it on in Settings → Diagnostics,
+`CabalmailClient.setCrashReportingEnabled(true)` subscribes the
+`MetricKitCollector` to `MXMetricManager.shared` and payloads land in
+`DebugLogStore` at the `.info` level. Off by default respects the
+"self-hosted email, minimum phoning-home" stance the project leans on;
+the toggle is explicit and the surface for viewing what's captured is
+right there (Settings → Debug Log → ShareLink). visionOS doesn't vend
+MetricKit at all, so the collector is a no-op on that platform behind
+`#if canImport(MetricKit) && !os(visionOS)`.
 
-### 4. Commands dispatch through `AppState` tick counters
+### Commands dispatch through `AppState` tick counters
 
 macOS menu commands (File → New Message ⌘N, Mailbox → Refresh ⌘R) and
 iOS keyboard shortcuts need to reach whichever view currently owns the
@@ -807,23 +760,13 @@ action — but `.commands { }` is defined at the scene level, so there's
 no direct reference to the focused view. `AppState` exposes two
 monotonic counters (`composeRequestTick`, `refreshRequestTick`);
 `MessageListView` / `SignedInRootView` watch them with `.onChange` and
-act on each bump. Avoids the @FocusedValue / responder-chain dance, and
-the same tick flow works on iOS (shortcuts) and macOS (menu bar). Reply
-(⌘R), Reply-All (⌘⇧D), Forward (⌘⇧J) are local to `MessageDetailView`
-and use plain `.keyboardShortcut` on the toolbar buttons.
+act on each bump. Avoids the `@FocusedValue` / responder-chain dance,
+and the same tick flow works on iOS (shortcuts) and macOS (menu bar).
+Reply (⌘R), Reply-All (⌘⇧D), Forward (⌘⇧J) are local to
+`MessageDetailView` and use plain `.keyboardShortcut` on the toolbar
+buttons.
 
-### 5. visionOS `AppIcon.solidimagestack` deferred
-
-The layered-icon source SVGs are installed in `apple/handoff/` but the
-asset catalog wiring isn't. Reason: a correct solidimagestack needs
-per-layer `Content.imageset/Contents.json` and a per-platform icon-name
-override in `project.yml`, and validating the parallax result without a
-visionOS device in the loop is error-prone. Shipping the shared
-`.appiconset` (which visionOS already accepts) keeps the icon correct
-now; the layered variant lands when visionOS becomes a first-class
-deployment target rather than a "build passes" one.
-
-### Platform polish inventory
+### Platform polish
 
 - **Reachability banner.** `SignedInRootView` overlays a capsule banner
   sourced from `CabalmailClient.reachability.changes()` when the network
@@ -839,32 +782,3 @@ deployment target rather than a "build passes" one.
   `DebugLogStore` tail with level chips, a Clear button, and a ShareLink
   that exports the current filtered buffer. Capped at 1000 visible
   entries to keep SwiftUI happy.
-
-## What's deliberately not here yet
-
-- Real views (Phase 4) — `ContentView.swift` is still the Phase 1 "Hello,
-  Cabalmail" placeholder; Phase 4 replaces it with the folder/message
-  list UI that consumes `LiveImapClient` + `URLSessionApiClient`.
-- Full MIME parsing — `RawMessage.bytes` is handed to the UI layer verbatim;
-  Phase 4 plugs in a renderer (`WKWebView` for HTML, `Text` for plain).
-- True STARTTLS on `NetworkByteStream` — see Phase 3 decision #3 above.
-- BODYSTRUCTURE structural parsing — the current parser returns a single
-  "has attachments" boolean derived from scanning for `attachment` tokens;
-  Phase 4's attachment chip UI will want the proper tree.
-- visionOS `AppIcon.solidimagestack` — deferred in Phase 7 (decision #5
-  above). Source SVGs live in `apple/handoff/`; iOS/iPadOS/visionOS
-  currently share the same `.appiconset`. See [App icons](#app-icons).
-- Adoption of `Color.cmForest` / `cmCream` / etc. in view code —
-  `CabalmailKit/Sources/CabalmailKit/CabalmailTokens.swift` exposes the
-  brand palette as a `SwiftUI.Color` extension, but no existing view
-  consumes them yet.
-- Rich-text compose toolbar + HTML body emission (Phase 5.1)
-- IMAP `Drafts` folder round-trip for cross-device draft sync (Phase 5.1)
-- Contact autocomplete in To / Cc / Bcc fields (Phase 5.1)
-
-## Open questions tracked for later phases
-
-- **Amplify Swift vs hand-rolled Cognito SRP** — decide in Phase 3 after
-  measuring Amplify's binary size impact on an otherwise-empty project.
-- **Unread-count endpoint shape** — decide in Phase 7 (new endpoint vs.
-  extending `list_folders`).

@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.20] - 2026-05-16
+
+### Fixed
+- Apple clients on iPhone no longer flash the "Couldn't load message
+  body." retry screen on tap, and no longer hang on the loading
+  spinner forever, when the body is not yet cached. The body fetch
+  now runs on an unstructured `Task` owned by
+  `MessageDetailViewModel` and is kicked off from `.onAppear` via
+  `startLoadIfNeeded()`, rather than from SwiftUI's `.task` modifier
+  whose view-tied cancellation proved unreliable during the
+  iPhone-compact `NavigationSplitView` push transition into the
+  detail pane. The model's `onDisappear()` no longer cancels the
+  in-flight fetch; the spinner stays up across the first load
+  attempt rather than flashing the error screen on a quickly-failed
+  fetch; and `load()` short-circuits silently if its Task was
+  cancelled before it ran.
+
+### Changed
+- Provided guidance as to issue labels in `claude.yml`.
+- `HTMLBodyCoordinator` now implements the async variant of
+  `WKNavigationDelegate.webView(_:decidePolicyFor:)`, which matches the
+  iOS 18 SDK's actor-isolated optional requirement exactly and clears
+  the "nearly matches optional requirement" warning under Swift 5.10
+  strict concurrency.
+- `apple.yml` skips `brew install` for packages already present on the
+  macos-15 runner image, suppressing the "Warning: foo is already
+  installed..." annotations that GitHub was surfacing on every run.
+- Bumped GitHub Actions to Node 24 runtimes ahead of the June 2026
+  cutoff: `dorny/paths-filter` v3 -> v4, `docker/setup-buildx-action`
+  v3 -> v4, `hashicorp/setup-terraform` v2 -> v4, and the two
+  remaining `actions/checkout@v4` pins in `claude.yml` -> v5.
+
 ## [0.9.19] - 2026-05-14
 
 ### Added

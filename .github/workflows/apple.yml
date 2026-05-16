@@ -53,7 +53,15 @@ jobs:
           xcode-version: ${{ env.XCODE_VERSION }}
 
       - name: Install XcodeGen + SwiftLint + xcbeautify
-        run: brew install xcodegen swiftlint xcbeautify
+        # The macos-15 runner image preinstalls some of these (xcbeautify in
+        # particular), and `brew install` then emits a `Warning: foo is
+        # already installed...` line that GitHub surfaces as a workflow
+        # annotation. Filter to packages that aren't installed yet so the
+        # step stays silent when there's nothing to do.
+        run: |
+          for pkg in xcodegen swiftlint xcbeautify; do
+            brew list "$pkg" >/dev/null 2>&1 || brew install "$pkg"
+          done
 
       - name: Generate Xcode project
         working-directory: apple
@@ -161,7 +169,11 @@ jobs:
           xcode-version: ${{ env.XCODE_VERSION }}
 
       - name: Install XcodeGen + xcbeautify
-        run: brew install xcodegen xcbeautify
+        # See the kit-test job for the rationale on the per-package check.
+        run: |
+          for pkg in xcodegen xcbeautify; do
+            brew list "$pkg" >/dev/null 2>&1 || brew install "$pkg"
+          done
 
       - name: Generate Xcode project
         working-directory: apple
@@ -237,7 +249,11 @@ jobs:
 
       - name: Install XcodeGen + xcbeautify
         if: steps.check.outputs.enabled == 'true'
-        run: brew install xcodegen xcbeautify
+        # See the kit-test job for the rationale on the per-package check.
+        run: |
+          for pkg in xcodegen xcbeautify; do
+            brew list "$pkg" >/dev/null 2>&1 || brew install "$pkg"
+          done
 
       - name: Generate Xcode project
         if: steps.check.outputs.enabled == 'true'
@@ -481,7 +497,11 @@ jobs:
           xcode-version: ${{ env.XCODE_VERSION }}
 
       - name: Install XcodeGen + xcbeautify
-        run: brew install xcodegen xcbeautify
+        # See the kit-test job for the rationale on the per-package check.
+        run: |
+          for pkg in xcodegen xcbeautify; do
+            brew list "$pkg" >/dev/null 2>&1 || brew install "$pkg"
+          done
 
       - name: Generate Xcode project
         working-directory: apple

@@ -17,7 +17,7 @@ These rules are evolving — they reflect the current solo-developer workflow an
 The asymmetry below is deliberate — commits and pushes are treated differently.
 
 - **Local commits: do them proactively, without asking.** Once a change is reasonably shippable, commit it. Don't wait for confirmation. Local commits are cheap and the human reviews them at merge time.
-- **Pushes to origin: do not do them.** The human merges from the worktree, studies the change locally, and pushes their own branch. This applies even after a commit you were asked to make.
+- **Pushes to origin: do not do them.** The human merges from the worktree, studies the change locally, and pushes their own branch. This applies even after a commit you were asked to make. **Exception:** If you were invoked via GitHub Actions, commit, push, and create a PR to `stage`.
 
 ### Branches and environments
 

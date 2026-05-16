@@ -58,7 +58,7 @@ jobs:
     - name: move
       run: mv ../../backend.tf backend.tf
     - name: install-terraform
-      uses: hashicorp/setup-terraform@v2
+      uses: hashicorp/setup-terraform@v4
       with:
         cli_config_credentials_token: ${{ secrets.TF_TOKEN }}
     - name: tfvars-terraform

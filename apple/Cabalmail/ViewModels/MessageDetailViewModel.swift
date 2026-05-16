@@ -1,3 +1,7 @@
+// swiftlint:disable file_length
+// `file_length` is suppressed while issue #403 diagnostic logging lives
+// here. Re-enable (remove this line) when `BodyFetchLog` calls are
+// stripped and the file falls back under the 400-line cap.
 import Foundation
 import Observation
 import CabalmailKit
@@ -20,6 +24,13 @@ final class MessageDetailViewModel {
     var htmlBody: String?
     var attachments: [Attachment] = []
     var inlineImages: [String: URL] = [:]
+
+    /// Flips to `true` after the first `load()` call finishes — successfully
+    /// or otherwise. The view treats the pre-attempt state as "loading" so a
+    /// fast-failing fetch can never paint the error/retry screen before the
+    /// user has seen a spinner. The Retry button still works on its own
+    /// because `load()` also drives `isLoading` while it's in flight.
+    var hasAttemptedLoad = false
 
     /// Mirrors the server's `\Seen` state so the toolbar button can flip its
     /// icon and label between "Mark as read" and "Mark as unread". Initial
@@ -48,6 +59,10 @@ final class MessageDetailViewModel {
     /// if the user navigates away before the 2-second threshold or marks the
     /// message read manually in the meantime.
     private var pendingMarkAsReadTask: Task<Void, Never>?
+
+    /// In-flight body fetch (#403). Owned by the model so SwiftUI's `.task`
+    /// double-fire can't cancel it. Torn down by `onDisappear()`.
+    private var loadTask: Task<Void, Never>?
 
     /// Hook for the view to relay flag changes to the list view model so the
     /// list row's unread dot / bold styling flips immediately. Set by
@@ -79,63 +94,91 @@ final class MessageDetailViewModel {
         self.readerMode = preferences.defaultBodyRenderMode == .reader
     }
 
+    // swiftlint:disable:next function_body_length
     func load() async {
-        // Clear any stale error from a prior attempt so a retry doesn't keep
-        // the red banner visible while the new fetch is in flight.
+        let uid = envelope.uid
+        let startedAt = Date()
+        BodyFetchLog.loadEnter(uid: uid)
+        // #403: SwiftUI fires `.onDisappear` mid-push transition, cancelling
+        // this Task before `.onAppear` re-fires and spawns the live one.
+        // Short-circuit so the cancelled Task doesn't paint an error screen.
+        if Task.isCancelled { return }
         errorMessage = nil
         isLoading = true
-        defer { isLoading = false }
-        // One automatic retry on transient cancellation. The body fetch
-        // chains two `URLSession.data(for:)` calls (Lambda + presigned S3);
-        // if either's underlying data task is cancelled while our own Swift
-        // Task is still alive, we see `URLError.cancelled` with no way to
-        // tell *why* the data task died. Tapping a message right as the
-        // list's load finishes is the easiest way to reproduce it. A second
-        // attempt typically succeeds. If our own Task is the one being
-        // cancelled (view going away), `Task.isCancelled` is already true
-        // and we leave the error suppressed — the view is on its way out
-        // and shouldn't flash a red banner on disappear.
+        // Only mark attempted on a definitive outcome — a mid-flight cancel
+        // leaves the load un-attempted so the next live Task can take over.
+        var completed = false
+        defer {
+            isLoading = false
+            if completed { hasAttemptedLoad = true }
+            let hasBody = htmlBody != nil || plainText != nil
+            BodyFetchLog.loadExit(uid: uid, startedAt: startedAt, errorSet: errorMessage != nil, hasBody: hasBody)
+        }
+        // One automatic retry on transient `URLError.cancelled`.
         var attemptsRemaining = 2
         while attemptsRemaining > 0 {
             attemptsRemaining -= 1
+            let attemptNumber = 2 - attemptsRemaining
+            BodyFetchLog.loadAttempt(uid: uid, attempt: attemptNumber)
             do {
                 let bytes = try await fetchBodyBytes()
                 let tree = MimeParser.parse(bytes)
                 try await hydrate(from: tree)
                 errorMessage = nil
+                BodyFetchLog.loadSuccess(uid: uid, attempt: attemptNumber, bytes: bytes.count)
                 scheduleMarkAsReadIfNeeded()
+                completed = true
                 return
             } catch let urlError as URLError where urlError.code == .cancelled {
-                // URLSession cancellations sometimes fire mid-fetch while
-                // our own Swift Task is still alive (we see it on quick
-                // taps right as the list finishes its initial load) — one
-                // retry inside the same Task usually clears it. If our
-                // Task is itself cancelled, retrying inside it would just
-                // throw the same cancellation, so surface an error and
-                // let the Retry button give the user a fresh Task.
-                if !Task.isCancelled, attemptsRemaining > 0 { continue }
+                BodyFetchLog.loadURLError(uid: uid, attempt: attemptNumber, error: urlError)
+                if Task.isCancelled { return }
+                if attemptsRemaining > 0 { continue }
                 errorMessage = "Couldn't load message body."
+                completed = true
+                return
+            } catch let urlError as URLError {
+                BodyFetchLog.loadURLError(uid: uid, attempt: attemptNumber, error: urlError)
+                errorMessage = urlError.localizedDescription
+                completed = true
                 return
             } catch is CancellationError {
+                BodyFetchLog.loadCancellation(uid: uid, attempt: attemptNumber)
+                if Task.isCancelled { return }
                 errorMessage = "Couldn't load message body."
-                return
-            } catch let error as CabalmailError {
-                errorMessage = String(describing: error)
+                completed = true
                 return
             } catch {
-                errorMessage = error.localizedDescription
+                BodyFetchLog.loadOther(uid: uid, attempt: attemptNumber, error: error)
+                errorMessage = (error as? CabalmailError).map { String(describing: $0) }
+                    ?? error.localizedDescription
+                completed = true
                 return
             }
         }
     }
 
-    /// Cancels any pending delayed mark-as-read task. Called when the detail
-    /// view goes away — either the user navigated to another message or
-    /// backed out entirely — so we don't mark a message read the user
-    /// barely previewed.
+    /// Cancels the pending mark-as-read task so a barely-previewed message
+    /// doesn't get marked read. Deliberately does NOT cancel the body-fetch
+    /// `loadTask`: on iPhone, SwiftUI fires `.onDisappear` mid-push for
+    /// phantom view instances that aren't actually going away (#403). The
+    /// load Task holds the model alive for the duration of `load()`, then
+    /// everything deallocates naturally if the view is truly gone.
     func onDisappear() {
         pendingMarkAsReadTask?.cancel()
         pendingMarkAsReadTask = nil
+        BodyFetchLog.disappear(uid: envelope.uid, hadTask: loadTask != nil)
+    }
+
+    /// Spawns the body fetch on `loadTask`. No-op if loaded or in flight.
+    func startLoadIfNeeded() {
+        let uid = envelope.uid
+        BodyFetchLog.startGate(uid: uid, hasHTML: htmlBody != nil,
+                               hasPlain: plainText != nil,
+                               isLoading: isLoading, hasTask: loadTask != nil)
+        guard htmlBody == nil, plainText == nil, !isLoading else { return }
+        if let existing = loadTask, !existing.isCancelled { return }
+        BodyFetchLog.startSpawn(uid: uid)
+        loadTask = Task { @MainActor [weak self] in await self?.load() }
     }
 
     /// Toggles the server's `\Seen` flag. Drives both the toolbar button's
@@ -282,10 +325,18 @@ final class MessageDetailViewModel {
     /// render the right icon and label without reaching into the preferences
     /// environment itself.
     var disposeAction: DisposeAction { preferences.disposeAction }
+}
 
-    // MARK: - Internals
+// MARK: - Internals
+//
+// Body-fetch, MIME parsing, and attachment-extraction helpers live in a
+// same-file extension so the primary class body stays under SwiftLint's
+// type_body_length cap. They remain `private` (file-scoped) and reach
+// stored properties (`client`, `folder`, `envelope`) through the type's
+// `@MainActor` isolation, inherited by the extension.
 
-    private func fetchBodyBytes() async throws -> Data {
+private extension MessageDetailViewModel {
+    func fetchBodyBytes() async throws -> Data {
         let uidValidity = try await currentUIDValidity()
         if let cached = await client.bodyCache.fetch(
             folder: folder.path,
@@ -305,7 +356,7 @@ final class MessageDetailViewModel {
         return raw.bytes
     }
 
-    private func currentUIDValidity() async throws -> UInt32 {
+    func currentUIDValidity() async throws -> UInt32 {
         if let snapshot = await client.envelopeCache.snapshot(for: folder.path) {
             return snapshot.uidValidity
         }
@@ -313,7 +364,7 @@ final class MessageDetailViewModel {
         return status.uidValidity ?? 0
     }
 
-    private func hydrate(from root: MimePart) async throws {
+    func hydrate(from root: MimePart) async throws {
         if let plain = root.firstPart(where: { $0.contentType.mimeType == "text/plain" }) {
             plainText = plain.textContent()
         }
@@ -344,7 +395,7 @@ final class MessageDetailViewModel {
         inlineImages = inlineMap
     }
 
-    private func isAttachmentLike(_ part: MimePart) -> Bool {
+    func isAttachmentLike(_ part: MimePart) -> Bool {
         if part.contentDisposition?.isAttachment == true { return true }
         if part.contentType.isText, part.contentType.subtype == "plain" { return false }
         if part.contentType.isText, part.contentType.subtype == "html" { return false }
@@ -354,7 +405,7 @@ final class MessageDetailViewModel {
     /// Writes a decoded part to the app's temp directory. Phase-7 polish can
     /// replace this with a size-bounded managed directory; for Phase 4 we
     /// rely on the OS sweeping `/tmp` between launches.
-    private func writeToTmp(data: Data, filename: String) throws -> URL {
+    func writeToTmp(data: Data, filename: String) throws -> URL {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("cabalmail-attachments-\(envelope.uid)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

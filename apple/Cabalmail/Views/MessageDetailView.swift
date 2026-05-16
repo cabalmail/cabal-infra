@@ -17,10 +17,14 @@ struct MessageDetailView: View {
     let folder: Folder
     let envelope: Envelope
 
-    @Environment(AppState.self) private var appState
+    // `appState` and `model` are reached by the toolbar extension in
+    // `MessageDetailView+Toolbar.swift`; SwiftUI's `private` in this struct
+    // would block access from that file. Kept `internal` (default) and not
+    // exposed beyond the module.
+    @Environment(AppState.self) var appState
     @Environment(Preferences.self) private var preferences
     @Environment(\.openWindow) private var openWindow
-    @State private var model: MessageDetailViewModel?
+    @State var model: MessageDetailViewModel?
     @State private var composeSeed: Draft?
 
     var body: some View {
@@ -55,12 +59,18 @@ struct MessageDetailView: View {
         .sheet(item: $composeSeed) { seed in
             composeSheet(for: seed)
         }
-        .task {
-            // Construct the model on first appear, then either load (initial
-            // entry) or re-load if a prior `.task` cycle was cancelled before
-            // the body landed. Without the second branch a cancelled-and-
-            // re-fired `.task` would short-circuit on the existing model and
-            // strand the user in the no-body state forever.
+        .onAppear {
+            BodyFetchLog.appear(uid: envelope.uid, modelExists: model != nil)
+            // Drive the body fetch from `.onAppear` rather than SwiftUI's
+            // `.task` modifier. On iPhone-compact NavigationStack push,
+            // `.task` fires twice for the same view identity with
+            // unpredictable cancellation timing — the live instance can
+            // race the doomed one, or both can be cancelled at entry,
+            // leaving the view stuck on a spinner. `.onAppear` only fires
+            // when the view actually appears, and the load itself runs on
+            // an unstructured Task owned by the view model, immune to
+            // SwiftUI's `.task` cancellation. The model cancels that Task
+            // in `onDisappear()` when the view is genuinely going away.
             let activeModel: MessageDetailViewModel
             if let existing = model {
                 activeModel = existing
@@ -89,11 +99,7 @@ struct MessageDetailView: View {
                 model = newModel
                 activeModel = newModel
             }
-            if activeModel.htmlBody == nil,
-               activeModel.plainText == nil,
-               !activeModel.isLoading {
-                await activeModel.load()
-            }
+            activeModel.startLoadIfNeeded()
         }
         .onDisappear { model?.onDisappear() }
     }
@@ -117,7 +123,7 @@ struct MessageDetailView: View {
     /// Pulls the user's address list so `ReplyBuilder` can pick a default
     /// From by matching the original message's recipients against owned
     /// addresses (per the React app's 0.3.0 behavior).
-    private func beginCompose(_ mode: ReplyBuilder.ReplyMode) {
+    func beginCompose(_ mode: ReplyBuilder.ReplyMode) {
         guard let client = appState.client else { return }
         Task { @MainActor in
             let addresses = (try? await client.addresses()) ?? []
@@ -168,20 +174,13 @@ struct MessageDetailView: View {
 
     @ViewBuilder
     private func body(for model: MessageDetailViewModel) -> some View {
-        if let errorMessage = model.errorMessage {
-            VStack(spacing: 12) {
-                Label(errorMessage, systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.red)
-                Button {
-                    Task { await model.load() }
-                } label: {
-                    Label("Retry", systemImage: "arrow.clockwise")
-                }
-                .buttonStyle(.bordered)
-                .disabled(model.isLoading)
-            }
-            .padding()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Spinner wins over the error/retry screen whenever a load is in
+        // flight, and whenever the view hasn't completed an attempt yet. A
+        // fast-failing fetch used to paint the red banner before the user
+        // saw any indication of work — issue #403.
+        if model.isLoading || !model.hasAttemptedLoad {
+            ProgressView("Fetching message…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let html = model.htmlBody {
             // WKWebView manages its own scrolling; fill the available space
             // and let it page through tall messages internally.
@@ -202,8 +201,20 @@ struct MessageDetailView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding()
             }
-        } else if model.isLoading {
-            ProgressView("Fetching message…")
+        } else if let errorMessage = model.errorMessage {
+            VStack(spacing: 12) {
+                Label(errorMessage, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.red)
+                Button {
+                    Task { await model.load() }
+                } label: {
+                    Label("Retry", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.bordered)
+                .disabled(model.isLoading)
+            }
+            .padding()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             Text("No renderable body.")
                 .foregroundStyle(.secondary)
@@ -243,157 +254,6 @@ struct MessageDetailView: View {
 
 }
 
-// Toolbar-button builders and dispose helpers split into an extension so the
-// primary view body stays under SwiftLint's 250-line cap.
-extension MessageDetailView {
-    @ViewBuilder
-    var replyButton: some View {
-        Menu {
-            Button {
-                beginCompose(.reply)
-            } label: {
-                Label("Reply", systemImage: "arrowshape.turn.up.left")
-            }
-            .keyboardShortcut("r", modifiers: .command)
-            Button {
-                beginCompose(.replyAll)
-            } label: {
-                Label("Reply All", systemImage: "arrowshape.turn.up.left.2")
-            }
-            .keyboardShortcut("d", modifiers: [.command, .shift])
-            Button {
-                beginCompose(.forward)
-            } label: {
-                Label("Forward", systemImage: "arrowshape.turn.up.forward")
-            }
-            .keyboardShortcut("j", modifiers: [.command, .shift])
-        } label: {
-            Image(systemName: "arrowshape.turn.up.left")
-                .accessibilityLabel("Reply")
-        }
-    }
-
-    @ViewBuilder
-    var seenButton: some View {
-        if let model {
-            Button {
-                Task { await model.toggleSeen() }
-            } label: {
-                // Icon reflects the current state; tap-action is the
-                // inverse. Matches Mail.app: an already-read message
-                // shows "envelope.open" and tapping marks it unread.
-                Image(systemName: model.isSeen ? "envelope.open" : "envelope.badge")
-                    .accessibilityLabel(model.isSeen ? "Mark as unread" : "Mark as read")
-            }
-        }
-    }
-
-    @ViewBuilder
-    var flagButton: some View {
-        if let model {
-            Button {
-                Task { await model.toggleFlagged() }
-            } label: {
-                Image(systemName: model.isFlagged ? "flag.slash" : "flag")
-                    .accessibilityLabel(model.isFlagged ? "Unflag" : "Flag")
-            }
-        }
-    }
-
-    @ViewBuilder
-    var remoteContentButton: some View {
-        if let model, model.htmlBody != nil {
-            Button {
-                model.toggleRemoteContent()
-            } label: {
-                Image(systemName: model.remoteContentAllowed
-                      ? "eye.fill"
-                      : "eye.slash")
-                    .accessibilityLabel(
-                        model.remoteContentAllowed
-                        ? "Hide remote content"
-                        : "Show remote content"
-                    )
-            }
-        }
-    }
-
-    @ViewBuilder
-    var readerModeButton: some View {
-        if let model, model.htmlBody != nil {
-            Button {
-                model.toggleReaderMode()
-            } label: {
-                Image(systemName: model.readerMode
-                      ? "text.alignleft"
-                      : "doc.richtext")
-                    .accessibilityLabel(
-                        model.readerMode
-                        ? "Show original formatting"
-                        : "Show reader view"
-                    )
-            }
-        }
-    }
-
-    @ViewBuilder
-    var disposeButton: some View {
-        if let model {
-            Button(role: disposeRole(for: model.disposeAction)) {
-                Task {
-                    await model.dispose(
-                        onSuccess: {
-                            // Fires before the server round trip so the
-                            // list selection advances and the row vanishes
-                            // instantly.
-                            appState.signalDisposed(
-                                folderPath: folder.path,
-                                uid: envelope.uid
-                            )
-                        },
-                        onFailure: { error in
-                            // The optimistic prune has already happened
-                            // upstream; surface a toast so the user knows
-                            // the move didn't take and can retry on the
-                            // next refresh.
-                            appState.showToast(Toast(
-                                kind: .error,
-                                message: failureMessage(for: model.disposeAction, error: error)
-                            ))
-                        }
-                    )
-                }
-            } label: {
-                disposeToolbarLabel(for: model.disposeAction)
-            }
-        }
-    }
-
-    @ViewBuilder
-    func disposeToolbarLabel(for action: DisposeAction) -> some View {
-        switch action {
-        case .archive:
-            Image(systemName: "archivebox")
-                .accessibilityLabel("Archive")
-        case .trash:
-            Image(systemName: "trash")
-                .accessibilityLabel("Delete")
-        }
-    }
-
-    func disposeRole(for action: DisposeAction) -> ButtonRole? {
-        switch action {
-        case .archive: return nil
-        case .trash:   return .destructive
-        }
-    }
-
-    func failureMessage(for action: DisposeAction, error: Error) -> String {
-        let verb: String
-        switch action {
-        case .archive: verb = "archive"
-        case .trash:   verb = "delete"
-        }
-        return "Couldn't \(verb) message: \(error.localizedDescription)"
-    }
-}
+// Toolbar-button builders and dispose helpers live in
+// `MessageDetailView+Toolbar.swift` so this file stays under SwiftLint's
+// 400-line file_length cap.
