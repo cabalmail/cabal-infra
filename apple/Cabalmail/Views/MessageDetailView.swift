@@ -59,49 +59,53 @@ struct MessageDetailView: View {
         .sheet(item: $composeSeed) { seed in
             composeSheet(for: seed)
         }
-        .onAppear {
-            BodyFetchLog.appear(uid: envelope.uid, modelExists: model != nil)
-            // Drive the body fetch from `.onAppear` rather than SwiftUI's
-            // `.task` modifier. On iPhone-compact NavigationStack push,
-            // `.task` fires twice for the same view identity with
-            // unpredictable cancellation timing — the live instance can
-            // race the doomed one, or both can be cancelled at entry,
-            // leaving the view stuck on a spinner. `.onAppear` only fires
-            // when the view actually appears, and the load itself runs on
-            // an unstructured Task owned by the view model, immune to
-            // SwiftUI's `.task` cancellation. The model cancels that Task
-            // in `onDisappear()` when the view is genuinely going away.
-            let activeModel: MessageDetailViewModel
-            if let existing = model {
-                activeModel = existing
-            } else {
-                guard let client = appState.client else { return }
-                let newModel = MessageDetailViewModel(
-                    folder: folder,
-                    envelope: envelope,
-                    client: client,
-                    preferences: preferences
-                )
-                // Relay flag changes (\Seen toggles) up to AppState so the
-                // list view's `.onChange` handler can flip the row's bold
-                // styling and unread dot without waiting for the next
-                // IDLE / pull-to-refresh.
-                let folderPath = folder.path
-                let uid = envelope.uid
-                newModel.onFlagChanged = { [weak appState] flag, added in
-                    appState?.signalFlagChange(
-                        folderPath: folderPath,
-                        uid: uid,
-                        flag: flag,
-                        added: added
-                    )
-                }
-                model = newModel
-                activeModel = newModel
-            }
-            activeModel.startLoadIfNeeded()
-        }
+        .onAppear { syncModelForCurrentEnvelope() }
+        .onChange(of: envelope.uid) { _, _ in syncModelForCurrentEnvelope() }
         .onDisappear { model?.onDisappear() }
+    }
+
+    /// Brings `model` in line with the current `envelope`. Called both from
+    /// `.onAppear` (first appearance) and `.onChange(of: envelope.uid)`
+    /// (subsequent selection changes while the view stays on screen).
+    ///
+    /// Dropping `.id(...)` on the detail branch in `MailRootView` makes the
+    /// view's identity stable across taps, which keeps iPhone's compact-
+    /// collapse `NavigationSplitView` from materialising the subtree in two
+    /// structural slots at once. The cost is that envelope changes no
+    /// longer rebuild the view automatically — this helper does it
+    /// explicitly. Body-fetch runs on an unstructured Task owned by the
+    /// view model, gated by `startLoadIfNeeded()` so a stale call is a
+    /// no-op.
+    private func syncModelForCurrentEnvelope() {
+        if let existing = model,
+           existing.folder.path == folder.path,
+           existing.envelope.uid == envelope.uid {
+            existing.startLoadIfNeeded()
+            return
+        }
+        guard let client = appState.client else { return }
+        let newModel = MessageDetailViewModel(
+            folder: folder,
+            envelope: envelope,
+            client: client,
+            preferences: preferences
+        )
+        // Relay flag changes (\Seen toggles) up to AppState so the
+        // list view's `.onChange` handler can flip the row's bold
+        // styling and unread dot without waiting for the next
+        // IDLE / pull-to-refresh.
+        let folderPath = folder.path
+        let uid = envelope.uid
+        newModel.onFlagChanged = { [weak appState] flag, added in
+            appState?.signalFlagChange(
+                folderPath: folderPath,
+                uid: uid,
+                flag: flag,
+                added: added
+            )
+        }
+        model = newModel
+        newModel.startLoadIfNeeded()
     }
 
     @ViewBuilder

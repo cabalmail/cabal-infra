@@ -7,11 +7,20 @@ import CabalmailKit
 /// collapses it to a stack push sequence automatically. Selection is lifted
 /// to this view so the three columns stay in sync.
 ///
-/// `.id(...)` on the content and detail columns forces SwiftUI to rebuild
-/// the view (and its `@State` / `@Observable` view models) when selection
-/// changes. Without it, the same view instance is reused with a new folder
-/// or envelope prop and its one-shot `.task` never re-fires — which is the
+/// `.id(...)` on the content column forces SwiftUI to rebuild the message
+/// list (and its `@State` / `@Observable` view model) when the folder
+/// selection changes. Without it, the same view instance is reused with a
+/// new folder prop and its one-shot `.task` never re-fires — which is the
 /// bug that made "select a second folder" do nothing on the split layout.
+///
+/// The detail column intentionally does NOT carry an `.id(...)` keyed on
+/// the envelope UID. On iPhone, `NavigationSplitView`'s compact-collapse
+/// adapter materialises the detail subtree in two structural slots when
+/// the .id changes (once as the pushed stack destination, once as the in-
+/// place detail branch), giving `MessageDetailView` two `@State` buckets
+/// and two body-fetch Tasks per tap. Keeping a stable identity and
+/// reacting to envelope changes via `.onChange(of: envelope.uid)` inside
+/// `MessageDetailView` produces a single instance per tap.
 /// Which list the sidebar is showing — toggled by a segmented control
 /// pinned above the list itself. Persisted across launches via
 /// `@AppStorage` so the user lands on the tab they last used.
@@ -56,7 +65,6 @@ struct MailRootView: View {
                     folder: selectedFolder,
                     envelope: selectedEnvelope
                 )
-                .id("\(selectedFolder.path)#\(selectedEnvelope.uid)")
             } else {
                 ContentUnavailableView(
                     "No message selected",

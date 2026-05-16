@@ -22,7 +22,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   time it runs, so a doomed instance is a no-op rather than painting
   the error/retry screen. Also keeps the spinner up across the load
   attempt rather than flashing the error/retry screen on a quickly-
-  failed fetch.
+  failed fetch. As a follow-up, dropped the `.id("path#uid")` modifier
+  from `MessageDetailView` in `MailRootView`: the compact-collapse
+  adapter materialised the detail subtree in two structural slots when
+  that identity changed, giving each tap two `@State` buckets and two
+  body-fetch Tasks. The view now has stable identity across selection
+  changes and refreshes its model in response to `envelope.uid` via
+  `.onChange`, so only one `MessageDetailView` instance exists per
+  tap.
 
 ### Changed
 - Provided guidance as to issue labels in `claude.yml`.
