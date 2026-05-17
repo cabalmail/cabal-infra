@@ -290,6 +290,30 @@ locals {
       memory    = 128
       cache     = false
       cache_ttl = 0
+    },
+    list_user_domain_access = {
+      runtime = "python3.13"
+
+      method    = "GET"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    set_user_domain_access = {
+      runtime = "python3.13"
+
+      method    = "PUT"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    list_my_domains = {
+      runtime = "python3.13"
+
+      method    = "GET"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
     }
   }
 }

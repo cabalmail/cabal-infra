@@ -4,6 +4,7 @@ import json
 import os
 from datetime import datetime, timezone
 import boto3  # pylint: disable=import-error
+from helper import user_authorized_for_domain  # pylint: disable=import-error
 
 domains = json.loads(os.environ['DOMAINS'])
 control_domain = os.environ['CONTROL_DOMAIN']
@@ -19,6 +20,18 @@ def handler(event, _context):
     '''Creates a new email address'''
     body = json.loads(event['body'])
     user = event['requestContext']['authorizer']['claims']['cognito:username']
+    if body['tld'] not in domains:
+        return {
+            'statusCode': 400,
+            'body': json.dumps({'Error': f"Unknown domain \"{body['tld']}\""})
+        }
+    if not user_authorized_for_domain(user, body['tld']):
+        return {
+            'statusCode': 403,
+            'body': json.dumps({
+                'Error': f"Not permitted to create addresses on \"{body['tld']}\""
+            })
+        }
     try:
         create_dns_records(domains[body['tld']], body['subdomain'], body['tld'])
         record_address(user, body)
