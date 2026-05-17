@@ -80,7 +80,7 @@ If you also want the EUM toll-free path provisioned - either as a fallback targe
 
 Two things to know:
 
-1. **The Terraform AWS provider has no `aws_pinpointsmsvoicev2_registration` resource.** The TFV submission (use-case description, privacy policy, sample messages, opt-in flow) has to be filed in the [AWS End User Messaging console](https://console.aws.amazon.com/sms-voice/home) under **Registrations -> Create registration -> Toll-free verification**. Until that registration is approved by the carriers, the number sits in `pending` and the SNS SMS path delivers nothing.
+1. **The Terraform AWS provider has no `aws_pinpointsmsvoicev2_registration` resource.** The TFV submission (use-case description, privacy policy, sample messages, opt-in flow) is handled by the `register-tfv` GitHub Actions workflow, which drives the API end-to-end. See [docs/sms-tfv-setup.md](sms-tfv-setup.md) for the operator runbook including required GitHub Environment variables and secrets. Until the submitted registration is approved by the carriers (typically 5-15 business days), the number sits in `pending` and the SNS SMS path delivers nothing.
 2. **Deletion protection means you cannot disable EUM in one step.** Flipping `TF_VAR_USE_EUM_SMS` from `true` back to `false` will fail apply because the resource is still in state and deletion-protected. To actually destroy the number, first do an apply that sets `deletion_protection_enabled = false` (currently requires editing `terraform/infra/modules/user_pool/main.tf`), then a second apply that flips the flag.
 
 ## Rollback

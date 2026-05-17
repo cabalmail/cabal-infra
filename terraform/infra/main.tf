@@ -95,6 +95,17 @@ module "cert" {
   zone_id        = data.terraform_remote_state.zone.outputs.control_domain_zone_id
 }
 
+# Public marketing surface at www.<control_domain>. Hosts the placeholder
+# home page and the privacy/terms pages referenced by carrier registrations.
+# See docs/marketing-site.md.
+module "marketing_site" {
+  source          = "./modules/marketing_site"
+  control_domain  = var.control_domain
+  zone_id         = data.terraform_remote_state.zone.outputs.control_domain_zone_id
+  private_zone_id = module.vpc.private_zone.zone_id
+  cert_arn        = module.cert.cert_arn
+}
+
 # Sets up Route 53 hosted zones for mail domains
 module "domains" {
   source       = "./modules/domains"

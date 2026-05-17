@@ -28,8 +28,16 @@ function SignUp({
   username,
   phone,
   password,
+  controlDomain,
   onSignIn,
 }) {
+  // Legal pages live on the marketing site at www.<control_domain>.
+  // controlDomain is loaded asynchronously from /config.js by App.jsx;
+  // if the signup screen renders before it resolves (rare in practice),
+  // fall back to "#" so we don't navigate to https://www.null/...
+  const marketingOrigin = controlDomain ? `https://www.${controlDomain}` : null;
+  const termsHref = marketingOrigin ? `${marketingOrigin}/terms.html` : '#';
+  const privacyHref = marketingOrigin ? `${marketingOrigin}/privacy.html` : '#';
   const [showPassword, setShowPassword] = useState(false);
   const [confirm, setConfirm] = useState('');
   const score = useMemo(() => strengthScore(password), [password]);
@@ -156,7 +164,12 @@ function SignUp({
         </div>
         <p className="auth__terms">
           By creating an account you agree to the{' '}
-          <a href="#">Terms</a> and <a href="#">Privacy Policy</a>.
+          <a href={termsHref} target="_blank" rel="noopener noreferrer">Terms</a>
+          {' '}and{' '}
+          <a href={privacyHref} target="_blank" rel="noopener noreferrer">Privacy Policy</a>,
+          and to receive transactional SMS (signup verification, password reset,
+          sign-in codes) at the phone number you provide. Reply{' '}
+          <code>STOP</code> to opt out at any time; message and data rates may apply.
         </p>
         <button
           type="submit"
