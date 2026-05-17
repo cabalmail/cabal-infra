@@ -77,8 +77,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   installed..." annotations that GitHub was surfacing on every run.
 - Bumped GitHub Actions to Node 24 runtimes ahead of the June 2026
   cutoff: `dorny/paths-filter` v3 -> v4, `docker/setup-buildx-action`
-  v3 -> v4, `hashicorp/setup-terraform` v2 -> v4, and the two
-  remaining `actions/checkout@v4` pins in `claude.yml` -> v5.
+  v3 -> v4, `hashicorp/setup-terraform` v2 -> v4,
+  `actions/upload-artifact` v5 -> v6, `actions/download-artifact`
+  v5 -> v7, and the two remaining `actions/checkout@v4` pins in
+  `claude.yml` -> v5.
 
 ## [0.9.19] - 2026-05-14
 

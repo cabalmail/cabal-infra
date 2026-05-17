@@ -65,7 +65,7 @@ jobs:
       - name: generate-versions
         run: env TF_MODULE=infra TF_ENVIRONMENT="${{ vars.TF_VAR_ENVIRONMENT }}" ./.github/scripts/make-terraform.sh
       - name: store-artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: backend.tf
           path: ./terraform/infra/backend.tf
@@ -87,7 +87,7 @@ jobs:
       - name: checkout
         uses: actions/checkout@v5
       - name: retrieve-artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v7
         with:
           name: backend.tf
       - name: move

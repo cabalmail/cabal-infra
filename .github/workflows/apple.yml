@@ -783,7 +783,7 @@ jobs:
 
       - name: Upload notarized .app as workflow artifact
         if: steps.devid.outputs.enabled == 'true'
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: CabalmailMac-notarized-${{ github.run_number }}
           path: ${{ env.NOTARIZED_ZIP }}
