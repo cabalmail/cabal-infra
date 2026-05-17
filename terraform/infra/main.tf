@@ -74,6 +74,22 @@ moved {
   to   = module.sms_sender[0]
 }
 
+# Adopt the auto-created CloudWatch log group for the sms_sender
+# Lambda. AWS creates /aws/lambda/sms_sender automatically on first
+# invocation with "Never Expire" retention; the module declares it as
+# a Terraform resource (with retention_in_days = 30) so the auto-
+# created group has to be imported on first apply, otherwise Terraform
+# fails with ResourceAlreadyExistsException. import blocks have to
+# live in the root module per Terraform's rules.
+#
+# Fresh environments (no prior Lambda invocation) will fail this
+# import. Remove the import block for those envs - the resource will
+# create from scratch.
+import {
+  to = module.sms_sender[0].aws_cloudwatch_log_group.sms_sender
+  id = "/aws/lambda/sms_sender"
+}
+
 # Creates a Cognito User Pool
 module "pool" {
   source                 = "./modules/user_pool"
