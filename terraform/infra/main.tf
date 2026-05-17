@@ -106,18 +106,6 @@ module "front_door" {
   cert_arn        = module.cert.cert_arn
 }
 
-# Migrate state from the previous module name. Without this, every
-# resource under module.marketing_site would be destroyed and a fresh
-# copy created under module.front_door, which would orphan the live
-# CloudFront distribution and the wired-up DNS. Harmless on
-# environments where module.marketing_site was never applied (Terraform
-# skips moved blocks whose source address doesn't exist in state).
-# Safe to delete once every environment has applied past this change.
-moved {
-  from = module.marketing_site
-  to   = module.front_door
-}
-
 # Sets up Route 53 hosted zones for mail domains
 module "domains" {
   source       = "./modules/domains"
