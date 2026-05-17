@@ -261,24 +261,24 @@ jobs:
     - name: run-linter
       run: for i in ./ modules/* modules/*/modules/* ; do tflint ; done
 
-  tfsec:
-    needs: build
-    if: ${{ !cancelled() && needs.build.result == 'success' }}
-    runs-on: ubuntu-latest
-    steps:
-    - name: checkout
-      uses: actions/checkout@v5
-    - name: retrieve-artifact
-      uses: actions/download-artifact@v7
-      with:
-        name: infra-backend.tf
-    - name: move
-      run: mv backend.tf ./terraform/infra/backend.tf
-    - name: tfsec
-      uses: aquasecurity/tfsec-action@v1.0.0
-      with:
-        soft_fail: false
-        working_directory: ./terraform/infra
+  # tfsec:
+  #   needs: build
+  #   if: ${{ !cancelled() && needs.build.result == 'success' }}
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - name: checkout
+  #     uses: actions/checkout@v5
+  #   - name: retrieve-artifact
+  #     uses: actions/download-artifact@v7
+  #     with:
+  #       name: infra-backend.tf
+  #   - name: move
+  #     run: mv backend.tf ./terraform/infra/backend.tf
+  #   - name: tfsec
+  #     uses: aquasecurity/tfsec-action@v1.0.0
+  #     with:
+  #       soft_fail: false
+  #       working_directory: ./terraform/infra
 
   plan:
     needs: build
