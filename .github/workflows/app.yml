@@ -18,7 +18,7 @@ on:
         description: >-
           Comma-separated areas to build and deploy. Allowed values:
           all, docker, lambda_api, lambda_counter, lambda_certbot,
-          lambda_sms_sender, react. Defaults to "all".
+          lambda_sms_sender, react, front_door. Defaults to "all".
         required: false
         default: all
         type: string
@@ -34,6 +34,7 @@ on:
       - 'docker/**'
       - 'lambda/**'
       - 'react/admin/**'
+      - 'front-door/**'
       - '.github/workflows/app.yml'
       - '.github/scripts/build-api.sh'
       - '.github/scripts/build-api-one.sh'
@@ -42,6 +43,7 @@ on:
       - '.github/scripts/deploy-ecs-service.sh'
       - '.github/scripts/deploy-lambda-image.sh'
       - '.github/scripts/deploy-lambda-zip.sh'
+      - '.github/scripts/render-front-door.py'
 
 permissions:
   contents: read
@@ -72,6 +74,7 @@ jobs:
       lambda_certbot: ${{ steps.areas.outputs.lambda_certbot }}
       lambda_sms_sender: ${{ steps.areas.outputs.lambda_sms_sender }}
       react: ${{ steps.areas.outputs.react }}
+      front_door: ${{ steps.areas.outputs.front_door }}
     steps:
     - name: checkout
       uses: actions/checkout@v5
@@ -138,6 +141,9 @@ jobs:
             - '.github/scripts/deploy-lambda-zip.sh'
           react:
             - 'react/admin/**'
+          front_door:
+            - 'front-door/**'
+            - '.github/scripts/render-front-door.py'
 
     - name: resolve-areas
       id: areas
@@ -150,11 +156,12 @@ jobs:
         LAMBDA_CERTBOT: ${{ steps.filter.outputs.lambda_certbot }}
         LAMBDA_SMS_SENDER: ${{ steps.filter.outputs.lambda_sms_sender }}
         REACT: ${{ steps.filter.outputs.react }}
+        FRONT_DOOR: ${{ steps.filter.outputs.front_door }}
       run: |
         set -euo pipefail
         if [ "${EVENT_NAME}" = "push" ]; then
           # Push: trust dorny/paths-filter results.
-          for pair in "docker:${DOCKER}" "lambda_api:${LAMBDA_API}" "lambda_counter:${LAMBDA_COUNTER}" "lambda_certbot:${LAMBDA_CERTBOT}" "lambda_sms_sender:${LAMBDA_SMS_SENDER}" "react:${REACT}"; do
+          for pair in "docker:${DOCKER}" "lambda_api:${LAMBDA_API}" "lambda_counter:${LAMBDA_COUNTER}" "lambda_certbot:${LAMBDA_CERTBOT}" "lambda_sms_sender:${LAMBDA_SMS_SENDER}" "react:${REACT}" "front_door:${FRONT_DOOR}"; do
             name="${pair%%:*}"
             val="${pair#*:}"
             if [ "${val}" = "true" ]; then
@@ -171,7 +178,7 @@ jobs:
             [ "${normalised}" = "all" ] && return 0
             case "${wanted}" in *",$1,"*) return 0 ;; *) return 1 ;; esac
           }
-          for a in docker lambda_api lambda_counter lambda_certbot lambda_sms_sender react; do
+          for a in docker lambda_api lambda_counter lambda_certbot lambda_sms_sender react front_door; do
             if is_on "${a}"; then
               echo "${a}=true" >> "$GITHUB_OUTPUT"
             else
@@ -491,6 +498,50 @@ jobs:
       run: |
         DIST_ID=$(aws ssm get-parameter \
           --name "/cabal/react-config/cf-distribution" \
+          --query 'Parameter.Value' --output text)
+        aws cloudfront create-invalidation \
+          --distribution-id "${DIST_ID}" \
+          --paths '/*' >/dev/null
+
+  front-door:
+    needs: setup
+    if: needs.setup.outputs.front_door == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+    steps:
+    - name: checkout
+      uses: actions/checkout@v5
+
+    # Substitute {{VAR}} placeholders in front-door/* with values from
+    # environment variables of the same name. Anything left as a
+    # literal {{...}} after this step is reported as a ::warning:: by
+    # the render script (see .github/scripts/render-front-door.py).
+    # Add new placeholders here as the front door copy grows; they
+    # can come from `vars`, `secrets`, or computed values (like
+    # BUILD_SHA).
+    - name: render
+      env:
+        SITE_VERSION: ${{ github.ref_name }}
+        BUILD_SHA: ${{ github.sha }}
+      run: ./.github/scripts/render-front-door.py
+
+    - name: upload
+      env:
+        TF_VAR_CONTROL_DOMAIN: ${{ vars.TF_VAR_CONTROL_DOMAIN }}
+      run: |
+        aws s3 sync front-door-rendered "s3://www.${TF_VAR_CONTROL_DOMAIN}" \
+          --delete \
+          --no-progress
+
+    - name: invalidate-cache
+      run: |
+        DIST_ID=$(aws ssm get-parameter \
+          --name "/cabal/front-door/cf-distribution" \
           --query 'Parameter.Value' --output text)
         aws cloudfront create-invalidation \
           --distribution-id "${DIST_ID}" \

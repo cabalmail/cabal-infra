@@ -24,7 +24,7 @@ Required env vars (mirrors GitHub Environment variables added by docs/sms-tfv-se
 
   AWS_REGION                       e.g. us-east-1
   TFV_COMPANY_NAME                 Legal entity name on file
-  TFV_COMPANY_WEBSITE              https://www.<control_domain> (the marketing site)
+  TFV_COMPANY_WEBSITE              https://www.<control_domain> (the front door site)
   TFV_COMPANY_ADDRESS1             Street address line 1
   TFV_COMPANY_CITY
   TFV_COMPANY_STATE                Two-letter state code (US) or province

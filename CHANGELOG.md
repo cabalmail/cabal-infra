@@ -8,15 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.21] - Unreleased
 
 ### Added
-- Marketing site at `www.<control_domain>`. New `marketing_site`
+- Front door site at `www.<control_domain>`. New `front_door`
   Terraform module provisions an S3 bucket, CloudFront distribution,
-  Route 53 record (public + private zone), and uploads static content
-  from the top-level `marketing-site/` directory via `aws_s3_object`.
-  Initial content is a placeholder home page plus the privacy policy
-  and terms of service. Three operator-replace markers in
-  `marketing-site/terms.html` (legal entity name, contact email,
+  and Route 53 record (public + private zone). Content under the
+  top-level `front-door/` directory ships through a new `front_door`
+  area in `.github/workflows/app.yml`: a path-filtered job renders
+  `{{VAR}}` placeholders in text files from matching environment
+  variables (`SITE_VERSION` and `BUILD_SHA` wired by default),
+  `aws s3 sync`s the result into the bucket, and invalidates the
+  CloudFront distribution. The distribution ID is published to SSM
+  at `/cabal/front-door/cf-distribution` for the workflow to read.
+  Initial content is a home page plus the privacy policy and terms
+  of service. Three operator-replace markers in
+  `front-door/terms.html` (legal entity name, contact email,
   jurisdiction) must be edited before going live. See
-  `docs/marketing-site.md`.
+  `docs/front-door.md`.
 - AWS End User Messaging toll-free verification (TFV) submission
   automation. New `scripts/submit-tfv-registration.py` drives the
   `pinpoint-sms-voice-v2` API end-to-end: discovers the toll-free
@@ -30,7 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Environment variables/secrets. See `docs/sms-tfv-setup.md` for the
   operator runbook.
 - React signup screen now links to the canonical privacy policy and
-  terms of service on the marketing site (`https://www.<control_domain>/privacy.html`,
+  terms of service on the front door site (`https://www.<control_domain>/privacy.html`,
   `/terms.html`), and the consent paragraph spells out the SMS opt-in
   scope (signup verification, password reset, sign-in codes) with
   STOP/HELP and message-and-data-rates language required by carriers.

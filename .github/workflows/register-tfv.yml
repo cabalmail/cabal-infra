@@ -25,7 +25,7 @@ on:
           - stage
           - prod
       opt_in_image_url:
-        description: 'Optional public HTTPS URL to fetch the opt-in screenshot from. If empty, the script falls back to a PNG checked into the repo at marketing-site/opt-in-screenshot.png.'
+        description: 'Optional public HTTPS URL to fetch the opt-in screenshot from. If empty, the script falls back to a PNG checked into the repo at front-door/opt-in-screenshot.png.'
         required: false
         type: string
 
@@ -79,11 +79,11 @@ jobs:
           if [ -n "${{ inputs.opt_in_image_url }}" ]; then
             echo "Fetching opt-in image from URL"
             curl -fsSL --max-time 30 -o /tmp/opt-in.png "${{ inputs.opt_in_image_url }}"
-          elif [ -f marketing-site/opt-in-screenshot.png ]; then
-            echo "Using checked-in marketing-site/opt-in-screenshot.png"
-            cp marketing-site/opt-in-screenshot.png /tmp/opt-in.png
+          elif [ -f front-door/opt-in-screenshot.png ]; then
+            echo "Using checked-in front-door/opt-in-screenshot.png"
+            cp front-door/opt-in-screenshot.png /tmp/opt-in.png
           else
-            echo "::error::No opt-in image available. Pass opt_in_image_url as workflow input, or commit one at marketing-site/opt-in-screenshot.png."
+            echo "::error::No opt-in image available. Pass opt_in_image_url as workflow input, or commit one at front-door/opt-in-screenshot.png."
             exit 1
           fi
           file /tmp/opt-in.png

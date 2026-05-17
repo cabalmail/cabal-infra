@@ -95,15 +95,27 @@ module "cert" {
   zone_id        = data.terraform_remote_state.zone.outputs.control_domain_zone_id
 }
 
-# Public marketing surface at www.<control_domain>. Hosts the placeholder
-# home page and the privacy/terms pages referenced by carrier registrations.
-# See docs/marketing-site.md.
-module "marketing_site" {
-  source          = "./modules/marketing_site"
+# Public front door site at www.<control_domain>. Hosts the home page
+# and the privacy/terms pages referenced by carrier registrations.
+# See docs/front-door.md.
+module "front_door" {
+  source          = "./modules/front_door"
   control_domain  = var.control_domain
   zone_id         = data.terraform_remote_state.zone.outputs.control_domain_zone_id
   private_zone_id = module.vpc.private_zone.zone_id
   cert_arn        = module.cert.cert_arn
+}
+
+# Migrate state from the previous module name. Without this, every
+# resource under module.marketing_site would be destroyed and a fresh
+# copy created under module.front_door, which would orphan the live
+# CloudFront distribution and the wired-up DNS. Harmless on
+# environments where module.marketing_site was never applied (Terraform
+# skips moved blocks whose source address doesn't exist in state).
+# Safe to delete once every environment has applied past this change.
+moved {
+  from = module.marketing_site
+  to   = module.front_door
 }
 
 # Sets up Route 53 hosted zones for mail domains

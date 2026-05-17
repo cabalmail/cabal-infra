@@ -31,14 +31,14 @@ function SignUp({
   password,
   onSignIn,
 }) {
-  // Legal pages live on the marketing site at www.<control_domain>.
+  // Legal pages live on the front door site at www.<control_domain>.
   // control_domain is loaded asynchronously from /config.js by App.jsx;
   // if the signup screen renders before it resolves (rare in practice),
   // fall back to "#" so we don't navigate to https://www.null/...
   const { control_domain } = useAuth();
-  const marketingOrigin = control_domain ? `https://www.${control_domain}` : null;
-  const termsHref = marketingOrigin ? `${marketingOrigin}/terms.html` : '#';
-  const privacyHref = marketingOrigin ? `${marketingOrigin}/privacy.html` : '#';
+  const frontDoorOrigin = control_domain ? `https://www.${control_domain}` : null;
+  const termsHref = frontDoorOrigin ? `${frontDoorOrigin}/terms.html` : '#';
+  const privacyHref = frontDoorOrigin ? `${frontDoorOrigin}/privacy.html` : '#';
   const [showPassword, setShowPassword] = useState(false);
   const [confirm, setConfirm] = useState('');
   const score = useMemo(() => strengthScore(password), [password]);

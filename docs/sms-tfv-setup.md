@@ -9,11 +9,11 @@ This guide walks you through the one-time operator steps to submit the TFV regis
 Before you trigger the workflow:
 
 1. **EUM toll-free number provisioned.** Confirm `TF_VAR_USE_EUM_SMS=true` is set as a GitHub Environment variable on the target environment (`stage` and/or `prod`) and that `infra.yml` has applied successfully. The number should appear in the [AWS End User Messaging console](https://console.aws.amazon.com/sms-voice/home) under **Configurations -> Phone numbers** with status `Pending`.
-2. **Marketing site deployed.** The privacy policy and terms of service must be reachable at `https://www.<control_domain>/privacy.html` and `https://www.<control_domain>/terms.html` respectively. These are provisioned by the `marketing_site` Terraform module (see [marketing-site.md](marketing-site.md)) and are uploaded automatically when `infra.yml` runs.
+2. **Front door site deployed.** The privacy policy and terms of service must be reachable at `https://www.<control_domain>/privacy.html` and `https://www.<control_domain>/terms.html` respectively. The bucket and CloudFront distribution are provisioned by the `front_door` Terraform module and the content ships via the `front_door` area of `.github/workflows/app.yml` (see [front-door.md](front-door.md)).
 3. **Opt-in screenshot.** AWS requires a screenshot of the signup screen showing the SMS consent language. Capture a screenshot of the Cabalmail admin signup form (the panel with the username + phone number fields and the paragraph reading "By creating an account you agree to the Terms and Privacy Policy, and to receive transactional SMS..."). Save as a PNG, ideally under 1 MB.
 
    You have two delivery options:
-   - **Commit it to the repo.** Save the file as `marketing-site/opt-in-screenshot.png`. The workflow picks it up automatically.
+   - **Commit it to the repo.** Save the file as `front-door/opt-in-screenshot.png`. The workflow picks it up automatically.
    - **Host it elsewhere.** Pass an HTTPS URL via the `opt_in_image_url` workflow input. The workflow fetches it at run time. This avoids committing a binary that may need to be regenerated whenever the signup screen changes.
 
 ## GitHub Environment configuration
@@ -25,7 +25,7 @@ For each environment you want to enable TFV in (typically `stage` first, then `p
 | Variable | Example | Notes |
 | --- | --- | --- |
 | `TFV_COMPANY_NAME`        | `Example Holdings LLC`              | Legal entity name exactly as registered. Must match your EIN documentation. |
-| `TFV_COMPANY_WEBSITE`     | `https://www.cabal-mail.net`        | The marketing site URL. Must be a live HTTPS URL that resolves to a page describing the service. |
+| `TFV_COMPANY_WEBSITE`     | `https://www.cabal-mail.net`        | The front door site URL. Must be a live HTTPS URL that resolves to a page describing the service. |
 | `TFV_COMPANY_ADDRESS1`    | `1234 Example Street`               | Street address line 1. |
 | `TFV_COMPANY_ADDRESS2`    | `Suite 200`                         | Optional; omit the variable if not applicable. |
 | `TFV_COMPANY_CITY`        | `Wilmington`                        |  |
@@ -53,7 +53,7 @@ For each environment you want to enable TFV in (typically `stage` first, then `p
 
 1. GitHub -> Actions -> "Submit AWS End User Messaging TFV" -> **Run workflow**.
 2. Pick the target environment (`stage` or `prod`).
-3. Either leave `opt_in_image_url` empty (uses the file at `marketing-site/opt-in-screenshot.png` if committed) or paste a public HTTPS URL to the screenshot.
+3. Either leave `opt_in_image_url` empty (uses the file at `front-door/opt-in-screenshot.png` if committed) or paste a public HTTPS URL to the screenshot.
 4. Click **Run workflow**.
 
 The job will:
@@ -95,7 +95,7 @@ Once status is `COMPLETE`:
 
 ## Common rejection reasons
 
-- **Privacy policy URL inaccessible or missing required language.** The page at `TFV_COMPANY_WEBSITE/privacy.html` must explicitly cover SMS use, message frequency, STOP/HELP keywords, and data retention. The default `marketing-site/privacy.html` includes all of these.
+- **Privacy policy URL inaccessible or missing required language.** The page at `TFV_COMPANY_WEBSITE/privacy.html` must explicitly cover SMS use, message frequency, STOP/HELP keywords, and data retention. The default `front-door/privacy.html` includes all of these.
 - **Opt-in screenshot does not show consent language.** The screenshot must show the SMS consent paragraph on the same screen where the user enters their phone number. The default signup screen since this PR landed satisfies this.
 - **Use case category mismatch with sample message.** If the sample message reads "verification code," `Two-factor authentication` or `One-time passcodes` are accepted; `Notifications` may be flagged.
 - **Volume estimate too high for sole proprietor.** Cabalmail's deployment is low-volume; keep `TFV_MONTHLY_VOLUME=10` unless you actually expect more.

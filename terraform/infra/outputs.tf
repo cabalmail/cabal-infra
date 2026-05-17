@@ -29,12 +29,12 @@ output "alert_sink_function_url" {
   description = "Webhook URL for monitoring. Add to Kuma."
 }
 
-output "marketing_site_url" {
-  value       = module.marketing_site.site_url
-  description = "Public URL of the marketing site at www.<control_domain>."
+output "front_door_url" {
+  value       = module.front_door.site_url
+  description = "Public URL of the front door site at www.<control_domain>."
 }
 
-output "marketing_site_cf_id" {
-  value       = module.marketing_site.cloudfront_distribution_id
-  description = "CloudFront distribution ID for the marketing site. Use with aws cloudfront create-invalidation when content is updated."
+output "front_door_cf_id" {
+  value       = module.front_door.cloudfront_distribution_id
+  description = "CloudFront distribution ID for the front door site. Use with aws cloudfront create-invalidation when content is updated."
 }
