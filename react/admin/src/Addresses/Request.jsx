@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import useApi from '../hooks/useApi';
 import './Request.css';
 
@@ -8,6 +8,32 @@ function Request({ domains, callback, setMessage }) {
   const [subdomain, setSubdomain] = useState('');
   const [domain, setDomain] = useState('');
   const [comment, setComment] = useState('');
+  // null = still loading; an array (possibly empty) once /list_my_domains has
+  // returned. On lookup failure we fall back to the unfiltered list so a
+  // transient error doesn't make the picker disappear; the backend will still
+  // reject any request to a denied domain.
+  const [allowedDomainNames, setAllowedDomainNames] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.listMyDomains().then(
+      ({ data }) => {
+        if (cancelled) return;
+        setAllowedDomainNames(Array.isArray(data?.Domains) ? data.Domains : []);
+      },
+      () => {
+        if (cancelled) return;
+        setAllowedDomainNames(domains.map((d) => d.domain));
+      }
+    );
+    return () => { cancelled = true; };
+  }, [api, domains]);
+
+  const visibleDomains = useMemo(() => {
+    if (allowedDomainNames === null) return [];
+    const allowed = new Set(allowedDomainNames);
+    return domains.filter((d) => allowed.has(d.domain));
+  }, [domains, allowedDomainNames]);
 
   // Derive address from parts instead of storing in state
   const address = useMemo(() => {
@@ -39,11 +65,11 @@ function Request({ domains, callback, setMessage }) {
 
   const generateRandom = (e) => {
     e.preventDefault();
-    const domainLength = domains.length;
+    if (visibleDomains.length === 0) return;
     const alphanum = 'abcdefghijklmnopqrstuvwxyz1234567890';
     setUsername(randomString(8, alphanum, alphanum + '._-', alphanum));
     setSubdomain(randomString(8, alphanum, alphanum + '-', alphanum));
-    setDomain(domains[Math.floor(Math.random() * domainLength)].domain);
+    setDomain(visibleDomains[Math.floor(Math.random() * visibleDomains.length)].domain);
   };
 
   const doInputChange = (e) => {
@@ -89,10 +115,13 @@ function Request({ domains, callback, setMessage }) {
   };
 
   const getOptions = () => {
-    return domains.map(d => (
+    return visibleDomains.map(d => (
       <option value={d.domain} key={d.domain}>{d.domain}</option>
     ));
   };
+
+  const loadingDomains = allowedDomainNames === null;
+  const noDomainsAvailable = !loadingDomains && visibleDomains.length === 0;
 
   return (
     <div className="request">
@@ -129,8 +158,15 @@ function Request({ domains, callback, setMessage }) {
           value={domain}
           onChange={doInputChange}
           className="request__select"
+          disabled={loadingDomains || noDomainsAvailable}
         >
-          <option value="">Select a domain</option>
+          <option value="">
+            {loadingDomains
+              ? 'Loading domains...'
+              : noDomainsAvailable
+                ? 'No domains available'
+                : 'Select a domain'}
+          </option>
           {getOptions()}
         </select>
       </fieldset>

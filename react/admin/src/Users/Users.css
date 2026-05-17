@@ -165,3 +165,45 @@ span.user-picker-inline button {
   padding: 0.25em 0.6em;
   line-height: 1;
 }
+
+div.user-domains {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3em;
+  align-items: center;
+  padding: 0.2em 0 0.4em 0;
+  font-size: 90%;
+}
+
+span.domains-label {
+  color: #888;
+  margin-right: 0.3em;
+}
+
+label.domain-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  height: 1.8em;
+  padding: 0 0.6em;
+  border: 1px solid #888;
+  border-radius: 0.9em;
+  font: inherit;
+  font-size: 90%;
+  line-height: 1;
+  box-sizing: border-box;
+  cursor: pointer;
+  user-select: none;
+}
+
+label.domain-chip input {
+  margin: 0;
+  width: auto;
+  cursor: pointer;
+}
+
+label.domain-chip.denied {
+  border-style: dashed;
+  color: #888;
+}
+

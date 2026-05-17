@@ -7,6 +7,8 @@ const mockListUsers = vi.fn();
 const mockListAllAddresses = vi.fn();
 const mockDeleteUser = vi.fn();
 const mockUnassignAddress = vi.fn();
+const mockListUserDomainAccess = vi.fn();
+const mockSetUserDomainAccess = vi.fn();
 
 const mockApi = {
   listUsers: mockListUsers,
@@ -17,6 +19,8 @@ const mockApi = {
   disableUser: vi.fn().mockResolvedValue({}),
   enableUser: vi.fn().mockResolvedValue({}),
   assignAddress: vi.fn().mockResolvedValue({}),
+  listUserDomainAccess: mockListUserDomainAccess,
+  setUserDomainAccess: mockSetUserDomainAccess,
 };
 
 vi.mock('../hooks/useApi', () => ({
@@ -33,10 +37,10 @@ const SAMPLE_ADDRESSES = [
   { address: 'bob@cabalmail.com',   user: 'bob' },
 ];
 
-function renderUsers() {
+function renderUsers(props = {}) {
   return render(
     <AppMessageContext.Provider value={{ setMessage: vi.fn() }}>
-      <Users />
+      <Users domains={[{ domain: 'cabalmail.com' }]} {...props} />
     </AppMessageContext.Provider>
   );
 }
@@ -55,6 +59,8 @@ describe('Users admin', () => {
     mockListAllAddresses.mockResolvedValue({ data: { Items: SAMPLE_ADDRESSES } });
     mockDeleteUser.mockResolvedValue({});
     mockUnassignAddress.mockResolvedValue({});
+    mockListUserDomainAccess.mockResolvedValue({ data: { Denials: [] } });
+    mockSetUserDomainAccess.mockResolvedValue({});
   });
 
   afterEach(() => {
@@ -98,6 +104,49 @@ describe('Users admin', () => {
     const confirmBtn = within(getDialog()).getByRole('button', { name: /^remove$/i });
     await act(async () => { fireEvent.click(confirmBtn); });
     expect(mockUnassignAddress).toHaveBeenCalledWith('alice@cabalmail.com', 'alice');
+  });
+
+  it('renders a checked domain chip per available apex domain', async () => {
+    renderUsers({ domains: [{ domain: 'cabalmail.com' }, { domain: 'example.com' }] });
+    await waitFor(() => expect(screen.getByText('alice')).toBeInTheDocument());
+    const aliceRow = screen.getByText('alice').closest('.user-row-extended');
+    const cabal = within(aliceRow).getByLabelText('cabalmail.com');
+    const example = within(aliceRow).getByLabelText('example.com');
+    expect(cabal).toBeChecked();
+    expect(example).toBeChecked();
+  });
+
+  it('renders an unchecked chip for a denied (user, domain) pair', async () => {
+    mockListUserDomainAccess.mockResolvedValue({
+      data: { Denials: [{ user: 'alice', domain: 'example.com' }] }
+    });
+    renderUsers({ domains: [{ domain: 'cabalmail.com' }, { domain: 'example.com' }] });
+    await waitFor(() => expect(screen.getByText('alice')).toBeInTheDocument());
+    const aliceRow = screen.getByText('alice').closest('.user-row-extended');
+    expect(within(aliceRow).getByLabelText('cabalmail.com')).toBeChecked();
+    expect(within(aliceRow).getByLabelText('example.com')).not.toBeChecked();
+  });
+
+  it('calls setUserDomainAccess(false) when an allowed chip is unchecked', async () => {
+    renderUsers({ domains: [{ domain: 'cabalmail.com' }] });
+    await waitFor(() => expect(screen.getByText('alice')).toBeInTheDocument());
+    const aliceRow = screen.getByText('alice').closest('.user-row-extended');
+    const checkbox = within(aliceRow).getByLabelText('cabalmail.com');
+    await act(async () => { fireEvent.click(checkbox); });
+    expect(mockSetUserDomainAccess).toHaveBeenCalledWith('alice', 'cabalmail.com', false);
+  });
+
+  it('calls setUserDomainAccess(true) when a denied chip is re-checked', async () => {
+    mockListUserDomainAccess.mockResolvedValue({
+      data: { Denials: [{ user: 'alice', domain: 'cabalmail.com' }] }
+    });
+    renderUsers({ domains: [{ domain: 'cabalmail.com' }] });
+    await waitFor(() => expect(screen.getByText('alice')).toBeInTheDocument());
+    const aliceRow = screen.getByText('alice').closest('.user-row-extended');
+    const checkbox = within(aliceRow).getByLabelText('cabalmail.com');
+    expect(checkbox).not.toBeChecked();
+    await act(async () => { fireEvent.click(checkbox); });
+    expect(mockSetUserDomainAccess).toHaveBeenCalledWith('alice', 'cabalmail.com', true);
   });
 
   it('does not unassign when the confirmation dialog is cancelled', async () => {
