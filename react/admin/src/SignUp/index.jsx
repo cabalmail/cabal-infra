@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import AuthShell from '../Login/AuthShell';
+import { useAuth } from '../contexts/AuthContext';
 
 /**
  * Strength meter per §2: four segments, each lights as a zxcvbn-style
@@ -28,14 +29,14 @@ function SignUp({
   username,
   phone,
   password,
-  controlDomain,
   onSignIn,
 }) {
   // Legal pages live on the marketing site at www.<control_domain>.
-  // controlDomain is loaded asynchronously from /config.js by App.jsx;
+  // control_domain is loaded asynchronously from /config.js by App.jsx;
   // if the signup screen renders before it resolves (rare in practice),
   // fall back to "#" so we don't navigate to https://www.null/...
-  const marketingOrigin = controlDomain ? `https://www.${controlDomain}` : null;
+  const { control_domain } = useAuth();
+  const marketingOrigin = control_domain ? `https://www.${control_domain}` : null;
   const termsHref = marketingOrigin ? `${marketingOrigin}/terms.html` : '#';
   const privacyHref = marketingOrigin ? `${marketingOrigin}/privacy.html` : '#';
   const [showPassword, setShowPassword] = useState(false);
