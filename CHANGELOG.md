@@ -7,7 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.9.21] - Unreleased
 
+### Added
+- `TF_VAR_USE_EUM_SMS` feature flag gates provisioning of the AWS End
+  User Messaging toll-free phone number (`aws_pinpointsmsvoicev2_phone_number.sms`).
+  Defaults to `false`. Mirrors `TF_VAR_USE_TWILIO_SMS` so the two SMS
+  delivery paths can be toggled independently per environment. See
+  `docs/twilio.md` for the four-state matrix and rollback semantics.
+  Existing EUM phone numbers are migrated to the indexed state
+  address via a `moved {}` block; `deletion_protection_enabled = true`
+  is preserved.
+
 ### Changed
+- The `sms_sender` module (KMS key, SSM SecureString parameters for
+  Twilio credentials, Lambda, IAM role) is now gated on
+  `TF_VAR_USE_TWILIO_SMS`. Previously the module was always
+  provisioned regardless of the flag, which forced every environment
+  to set non-empty `TWILIO_*` secrets even when the Twilio path
+  wasn't being used. Existing state is migrated via a `moved {}`
+  block so envs already running with `USE_TWILIO_SMS=true` are
+  unaffected.
 - Cleared Terraform deprecation warnings against AWS provider v6:
   switched `data.aws_region.current.name` to `.region` in the `app`,
   `user_pool`, and `sms_sender` modules; dropped the deprecated
@@ -18,6 +36,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that guarded it; and removed `public_ip` / `public_dns` from the NAT
   instance's `ignore_changes` since computed-only attributes can't
   drift against configured values.
+
+### Fixed
+- `terraform apply` no longer hangs waiting for stdin when
+  `TF_VAR_USE_TWILIO_SMS=false` and the `TWILIO_*` GitHub Environment
+  secrets are unset. The `twilio` Terraform provider was declared in
+  `terraform/infra/providers.tf` (and `required_providers` in
+  `terraform.tf`) but never consumed by any resource; with
+  credentials absent the provider blocked on interactive prompts.
+  The provider declaration is removed - the `sms_sender` Lambda
+  talks to the Twilio API directly via the Python SDK, not through
+  Terraform.
 
 ## [0.9.20] - 2026-05-16
 

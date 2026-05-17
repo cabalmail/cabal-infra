@@ -146,6 +146,12 @@ variable "twilio_from_number" {
 
 variable "use_twilio_sms" {
   type        = bool
-  description = "Feature flag: when true, wire the custom_sms_sender (Twilio) Lambda + KMS key into the Cognito user pool. When false, Cognito stays on the legacy SNS/EUM SMS path. See docs/0.9.0/twilio-sms-migration-plan.md."
+  description = "Feature flag: when true, provision the Twilio sms_sender module (KMS key, SSM parameters, Lambda) and wire the custom_sms_sender into the Cognito user pool. When false, the sms_sender module is not created and Cognito does not call out to Twilio. The TWILIO_* variables only need to be set when this is true. See docs/twilio.md."
+  default     = false
+}
+
+variable "use_eum_sms" {
+  type        = bool
+  description = "Feature flag: when true, provision the AWS End User Messaging toll-free phone number for Cognito SMS via SNS. When false, the EUM phone number is not created and Cognito's sms_configuration block falls through to the shared AWS SMS pool (which is sandboxed without registration). Independent of var.use_twilio_sms; setting both true is supported but only one delivery path is on the user pool's hot path at a time (custom_sms_sender wins). See docs/twilio.md."
   default     = false
 }
