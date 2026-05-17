@@ -45,12 +45,13 @@ resource "aws_dynamodb_table" "user_preferences" {
 }
 
 /**
-* Per-user, per-domain deny list for address creation. The presence of a
-* (user, domain) row means the user is NOT permitted to create addresses on
-* that apex domain. The absence of a row is the default and permits creation,
-* preserving legacy behavior. Written by the admin set_user_domain_access
-* Lambda; read by the new and new_address_admin Lambdas to gate creation, and
-* by list_my_domains so the React client can filter its domain picker.
+* Per-user, per-domain allow list for address creation. The presence of a
+* (user, domain) row means the user IS permitted to create addresses on that
+* apex domain; the absence of a row defaults to deny. This matches the
+* expected scaling pattern (many users, many vanity apexes, each user using a
+* small subset). Written by the admin set_user_domain_access Lambda; read by
+* the new and new_address_admin Lambdas to gate creation, and by
+* list_my_domains so the React client can filter its domain picker.
 */
 
 #tfsec:ignore:aws-dynamodb-table-customer-key

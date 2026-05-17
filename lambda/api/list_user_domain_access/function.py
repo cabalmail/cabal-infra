@@ -1,8 +1,8 @@
-'''Lists all per-user, per-domain deny entries (admin only).
+'''Lists all per-user, per-domain allow entries (admin only).
 
-The cabal-user-domain-access table is a deny list: each row represents a
-(user, domain) pair where the user is NOT allowed to create addresses on
-that apex domain. Absence of a row is the default-allow state.
+The cabal-user-domain-access table is an allow list: each row represents a
+(user, domain) pair where the user IS permitted to create addresses on
+that apex domain. Absence of a row is the default-deny state.
 '''
 import json
 import boto3  # pylint: disable=import-error
@@ -12,7 +12,7 @@ table = ddb.Table('cabal-user-domain-access')
 
 
 def handler(event, _context):
-    '''Returns the full deny list as a flat array of {user, domain} items.'''
+    '''Returns the full allow list as a flat array of {user, domain} items.'''
     groups = event['requestContext']['authorizer']['claims'].get('cognito:groups', '')
     if 'admin' not in groups:
         return {
@@ -41,5 +41,5 @@ def handler(event, _context):
         }
     return {
         'statusCode': 200,
-        'body': json.dumps({'Denials': items})
+        'body': json.dumps({'Allowances': items})
     }

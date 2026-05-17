@@ -59,7 +59,7 @@ describe('Users admin', () => {
     mockListAllAddresses.mockResolvedValue({ data: { Items: SAMPLE_ADDRESSES } });
     mockDeleteUser.mockResolvedValue({});
     mockUnassignAddress.mockResolvedValue({});
-    mockListUserDomainAccess.mockResolvedValue({ data: { Denials: [] } });
+    mockListUserDomainAccess.mockResolvedValue({ data: { Allowances: [] } });
     mockSetUserDomainAccess.mockResolvedValue({});
   });
 
@@ -106,47 +106,72 @@ describe('Users admin', () => {
     expect(mockUnassignAddress).toHaveBeenCalledWith('alice@cabalmail.com', 'alice');
   });
 
-  it('renders a checked domain chip per available apex domain', async () => {
+  it('renders an unchecked domain chip per available apex domain by default', async () => {
     renderUsers({ domains: [{ domain: 'cabalmail.com' }, { domain: 'example.com' }] });
     await waitFor(() => expect(screen.getByText('alice')).toBeInTheDocument());
     const aliceRow = screen.getByText('alice').closest('.user-row-extended');
-    const cabal = within(aliceRow).getByLabelText('cabalmail.com');
-    const example = within(aliceRow).getByLabelText('example.com');
-    expect(cabal).toBeChecked();
-    expect(example).toBeChecked();
-  });
-
-  it('renders an unchecked chip for a denied (user, domain) pair', async () => {
-    mockListUserDomainAccess.mockResolvedValue({
-      data: { Denials: [{ user: 'alice', domain: 'example.com' }] }
-    });
-    renderUsers({ domains: [{ domain: 'cabalmail.com' }, { domain: 'example.com' }] });
-    await waitFor(() => expect(screen.getByText('alice')).toBeInTheDocument());
-    const aliceRow = screen.getByText('alice').closest('.user-row-extended');
-    expect(within(aliceRow).getByLabelText('cabalmail.com')).toBeChecked();
+    expect(within(aliceRow).getByLabelText('cabalmail.com')).not.toBeChecked();
     expect(within(aliceRow).getByLabelText('example.com')).not.toBeChecked();
   });
 
-  it('calls setUserDomainAccess(false) when an allowed chip is unchecked', async () => {
+  it('renders a checked chip for a granted (user, domain) pair', async () => {
+    mockListUserDomainAccess.mockResolvedValue({
+      data: { Allowances: [{ user: 'alice', domain: 'example.com' }] }
+    });
+    renderUsers({ domains: [{ domain: 'cabalmail.com' }, { domain: 'example.com' }] });
+    await waitFor(() => expect(screen.getByText('alice')).toBeInTheDocument());
+    const aliceRow = screen.getByText('alice').closest('.user-row-extended');
+    expect(within(aliceRow).getByLabelText('cabalmail.com')).not.toBeChecked();
+    expect(within(aliceRow).getByLabelText('example.com')).toBeChecked();
+  });
+
+  it('calls setUserDomainAccess(true) when an unchecked chip is checked', async () => {
     renderUsers({ domains: [{ domain: 'cabalmail.com' }] });
     await waitFor(() => expect(screen.getByText('alice')).toBeInTheDocument());
     const aliceRow = screen.getByText('alice').closest('.user-row-extended');
     const checkbox = within(aliceRow).getByLabelText('cabalmail.com');
     await act(async () => { fireEvent.click(checkbox); });
-    expect(mockSetUserDomainAccess).toHaveBeenCalledWith('alice', 'cabalmail.com', false);
+    expect(mockSetUserDomainAccess).toHaveBeenCalledWith('alice', 'cabalmail.com', true);
   });
 
-  it('calls setUserDomainAccess(true) when a denied chip is re-checked', async () => {
+  it('also renders domain chips for pending (unconfirmed) users', async () => {
+    mockListUsers.mockResolvedValue({
+      data: { Users: [
+        { username: 'carol', status: 'UNCONFIRMED', enabled: true, created: '2026-01-03T00:00:00Z' },
+      ] }
+    });
+    renderUsers({ domains: [{ domain: 'cabalmail.com' }] });
+    await waitFor(() => expect(screen.getByText('carol')).toBeInTheDocument());
+    const carolRow = screen.getByText('carol').closest('.user-row-extended');
+    expect(within(carolRow).getByLabelText('cabalmail.com')).toBeInTheDocument();
+  });
+
+  it('grants a pending user access via setUserDomainAccess(true)', async () => {
+    mockListUsers.mockResolvedValue({
+      data: { Users: [
+        { username: 'carol', status: 'UNCONFIRMED', enabled: true, created: '2026-01-03T00:00:00Z' },
+      ] }
+    });
+    renderUsers({ domains: [{ domain: 'cabalmail.com' }] });
+    await waitFor(() => expect(screen.getByText('carol')).toBeInTheDocument());
+    const carolRow = screen.getByText('carol').closest('.user-row-extended');
+    const checkbox = within(carolRow).getByLabelText('cabalmail.com');
+    expect(checkbox).not.toBeChecked();
+    await act(async () => { fireEvent.click(checkbox); });
+    expect(mockSetUserDomainAccess).toHaveBeenCalledWith('carol', 'cabalmail.com', true);
+  });
+
+  it('calls setUserDomainAccess(false) when a granted chip is unchecked', async () => {
     mockListUserDomainAccess.mockResolvedValue({
-      data: { Denials: [{ user: 'alice', domain: 'cabalmail.com' }] }
+      data: { Allowances: [{ user: 'alice', domain: 'cabalmail.com' }] }
     });
     renderUsers({ domains: [{ domain: 'cabalmail.com' }] });
     await waitFor(() => expect(screen.getByText('alice')).toBeInTheDocument());
     const aliceRow = screen.getByText('alice').closest('.user-row-extended');
     const checkbox = within(aliceRow).getByLabelText('cabalmail.com');
-    expect(checkbox).not.toBeChecked();
+    expect(checkbox).toBeChecked();
     await act(async () => { fireEvent.click(checkbox); });
-    expect(mockSetUserDomainAccess).toHaveBeenCalledWith('alice', 'cabalmail.com', true);
+    expect(mockSetUserDomainAccess).toHaveBeenCalledWith('alice', 'cabalmail.com', false);
   });
 
   it('does not unassign when the confirmation dialog is cancelled', async () => {

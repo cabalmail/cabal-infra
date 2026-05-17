@@ -1,11 +1,11 @@
 '''Sets per-user, per-domain create-address permission (admin only).
 
-Writes or removes a deny row in cabal-user-domain-access. Body shape:
+Writes or removes an allow row in cabal-user-domain-access. Body shape:
 
     {"user": "<cognito-username>", "domain": "<apex>", "allowed": <bool>}
 
-allowed=False writes a deny row; allowed=True deletes any existing row,
-restoring the default-allow state. The domain must be a known mail apex
+allowed=True writes an allow row; allowed=False deletes any existing row,
+restoring the default-deny state. The domain must be a known mail apex
 domain (as declared via the DOMAINS env var).
 '''
 # pylint: disable=too-many-return-statements
@@ -58,9 +58,9 @@ def handler(event, _context):
         }
     try:
         if allowed:
-            table.delete_item(Key={'user': username, 'domain': domain})
-        else:
             table.put_item(Item={'user': username, 'domain': domain})
+        else:
+            table.delete_item(Key={'user': username, 'domain': domain})
     except Exception as err:  # pylint: disable=broad-exception-caught
         return {
             'statusCode': 500,

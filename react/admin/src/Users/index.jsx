@@ -9,10 +9,11 @@ function Users({ domains = [] }) {
   const { setMessage } = useAppMessage();
   const [users, setUsers] = useState([]);
   const [addresses, setAddresses] = useState([]);
-  // Set of "user||domain" strings denoting a deny row. Toggling a checkbox
-  // optimistically mutates this set and fires set_user_domain_access; on
-  // failure we revert and surface the error.
-  const [denials, setDenials] = useState(() => new Set());
+  // Set of "user||domain" strings denoting an allow row (default-deny: a
+  // missing entry means the user cannot create addresses on that apex).
+  // Toggling a checkbox optimistically mutates this set and fires
+  // set_user_domain_access; on failure we revert and surface the error.
+  const [allowances, setAllowances] = useState(() => new Set());
   const [loading, setLoading] = useState(true);
   const [pickerFor, setPickerFor] = useState(null);
   const [pickerAddress, setPickerAddress] = useState('');
@@ -27,19 +28,19 @@ function Users({ domains = [] }) {
     Promise.all([
       api.listUsers(),
       api.listAllAddresses().catch(() => ({ data: { Items: [] } })),
-      api.listUserDomainAccess().catch(() => ({ data: { Denials: [] } })),
+      api.listUserDomainAccess().catch(() => ({ data: { Allowances: [] } })),
     ]).then(
-      ([userResp, addrResp, denialResp]) => {
+      ([userResp, addrResp, allowResp]) => {
         const userData = userResp.data || userResp;
         const addrData = addrResp.data || addrResp;
-        const denialData = denialResp.data || denialResp;
+        const allowData = allowResp.data || allowResp;
         setUsers(userData.Users || []);
         setAddresses(addrData.Items || []);
         const next = new Set();
-        (denialData.Denials || []).forEach((d) => {
-          if (d && d.user && d.domain) next.add(`${d.user}||${d.domain}`);
+        (allowData.Allowances || []).forEach((a) => {
+          if (a && a.user && a.domain) next.add(`${a.user}||${a.domain}`);
         });
-        setDenials(next);
+        setAllowances(next);
         setLoading(false);
       },
       (err) => {
@@ -168,26 +169,56 @@ function Users({ domains = [] }) {
     );
   }, [api, pendingUnassign, setMessage, loadUsers]);
 
+  const renderDomainChips = (username) => {
+    if (domains.length === 0) return null;
+    return (
+      <div className="user-domains">
+        <span className="domains-label">Domains:</span>
+        {domains.map((d) => {
+          const allowed = allowances.has(`${username}||${d.domain}`);
+          const inputId = `domain-access-${username}-${d.domain}`;
+          return (
+            <label
+              key={d.domain}
+              className={`domain-chip${allowed ? ' granted' : ''}`}
+              htmlFor={inputId}
+            >
+              <input
+                id={inputId}
+                type="checkbox"
+                checked={allowed}
+                onChange={(e) => handleDomainToggle(
+                  username, d.domain, e.target.checked
+                )}
+              />
+              <span>{d.domain}</span>
+            </label>
+          );
+        })}
+      </div>
+    );
+  };
+
   const handleDomainToggle = useCallback((username, domainName, nextAllowed) => {
     const key = `${username}||${domainName}`;
-    setDenials((prev) => {
+    setAllowances((prev) => {
       const next = new Set(prev);
-      if (nextAllowed) next.delete(key); else next.add(key);
+      if (nextAllowed) next.add(key); else next.delete(key);
       return next;
     });
     api.setUserDomainAccess(username, domainName, nextAllowed).then(
       () => {
         setMessage(
           nextAllowed
-            ? `Allowed "${username}" on "${domainName}".`
-            : `Denied "${username}" on "${domainName}".`,
+            ? `Granted "${username}" access to "${domainName}".`
+            : `Revoked "${username}" access to "${domainName}".`,
           false
         );
       },
       (err) => {
-        setDenials((prev) => {
+        setAllowances((prev) => {
           const next = new Set(prev);
-          if (nextAllowed) next.add(key); else next.delete(key);
+          if (nextAllowed) next.delete(key); else next.add(key);
           return next;
         });
         const msg = err.response?.data?.Error || err.message || err;
@@ -246,12 +277,15 @@ function Users({ domains = [] }) {
       ) : (
         <ul className="user-list">
           {pendingUsers.map(user => (
-            <li key={user.username} className="user-row">
-              <span className="username">{user.username}</span>
-              <span className="status">{user.status}</span>
-              <span className="created">{new Date(user.created).toLocaleDateString()}</span>
-              <button className="action confirm" onClick={() => handleConfirm(user.username)}>Confirm</button>
-              <button className="action delete" onClick={() => handleDelete(user.username)}>Delete</button>
+            <li key={user.username} className="user-row-extended">
+              <div className="user-row">
+                <span className="username">{user.username}</span>
+                <span className="status">{user.status}</span>
+                <span className="created">{new Date(user.created).toLocaleDateString()}</span>
+                <button className="action confirm" onClick={() => handleConfirm(user.username)}>Confirm</button>
+                <button className="action delete" onClick={() => handleDelete(user.username)}>Delete</button>
+              </div>
+              {renderDomainChips(user.username)}
             </li>
           ))}
         </ul>
@@ -334,33 +368,7 @@ function Users({ domains = [] }) {
                     )
                   )}
                 </div>
-                {domains.length > 0 && (
-                  <div className="user-domains">
-                    <span className="domains-label">Domains:</span>
-                    {domains.map((d) => {
-                      const denied = denials.has(`${user.username}||${d.domain}`);
-                      const allowed = !denied;
-                      const inputId = `domain-access-${user.username}-${d.domain}`;
-                      return (
-                        <label
-                          key={d.domain}
-                          className={`domain-chip${allowed ? '' : ' denied'}`}
-                          htmlFor={inputId}
-                        >
-                          <input
-                            id={inputId}
-                            type="checkbox"
-                            checked={allowed}
-                            onChange={(e) => handleDomainToggle(
-                              user.username, d.domain, e.target.checked
-                            )}
-                          />
-                          <span>{d.domain}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                )}
+                {renderDomainChips(user.username)}
               </li>
             );
           })}

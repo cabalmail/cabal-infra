@@ -186,7 +186,7 @@ label.domain-chip {
   gap: 0.3em;
   height: 1.8em;
   padding: 0 0.6em;
-  border: 1px solid #888;
+  border: 1px dashed #888;
   border-radius: 0.9em;
   font: inherit;
   font-size: 90%;
@@ -194,6 +194,7 @@ label.domain-chip {
   box-sizing: border-box;
   cursor: pointer;
   user-select: none;
+  color: #888;
 }
 
 label.domain-chip input {
@@ -202,8 +203,8 @@ label.domain-chip input {
   cursor: pointer;
 }
 
-label.domain-chip.denied {
-  border-style: dashed;
-  color: #888;
+label.domain-chip.granted {
+  border-style: solid;
+  color: inherit;
 }
 

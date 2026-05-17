@@ -8,21 +8,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.21] - Unreleased
 
 ### Added
-- Per-user, per-apex-domain access control for address creation.
-  Administrators can now deny specific users the ability to create
-  addresses on individual mail domains. The `Users` admin view shows
-  a checkbox per mail apex on each confirmed user's row; unchecking
-  writes a deny row to a new `cabal-user-domain-access` DynamoDB
-  table (composite key `user` + `domain`). The `new` and
+- Per-user, per-apex-domain access control for address creation,
+  default-deny. Administrators grant specific users access to
+  individual mail apexes from the `Users` admin view, which shows a
+  checkbox chip per configured mail apex on each user's row.
+  Checking a chip writes an allow row to a new
+  `cabal-user-domain-access` DynamoDB table (composite key `user` +
+  `domain`); unchecking deletes it. The `new` and
   `new_address_admin` Lambdas consult that table before provisioning
-  DNS, returning 403 when the calling (or assigned) user is denied.
-  The React new-address picker filters its domain dropdown to only
-  the apexes the current user is permitted to use. Absence of a row
-  preserves the previous default-allow behavior, so existing users
-  are unaffected until an admin sets a restriction. Three new
+  DNS, returning 403 when the calling (or assigned) user does not
+  hold an allow row for the requested apex; existing addresses keep
+  flowing regardless. The React new-address picker filters its
+  domain dropdown to the apexes the current user holds. Three new
   endpoints back the feature: `list_user_domain_access` (admin GET),
   `set_user_domain_access` (admin PUT), and `list_my_domains` (any
-  caller GET, returns the allowed-apex list for the current user).
+  caller GET, returns the granted-apex list for the current user).
+  Because the model is default-deny, the table must be seeded after
+  the first `terraform apply` to grant existing users access to the
+  apexes they were previously using; until then, address creation
+  returns 403 for everyone.
 
 ### Changed
 - Cleared Terraform deprecation warnings against AWS provider v6:

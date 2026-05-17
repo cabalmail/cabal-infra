@@ -73,10 +73,10 @@ def user_authorized_for_sender(user, sender):
 
 def user_authorized_for_domain(user, domain):
     """Checks whether the user is permitted to create addresses on the given
-    apex domain. The cabal-user-domain-access table is a deny list: a row
-    keyed on (user, domain) means the user is NOT allowed. Missing row = allow.
+    apex domain. The cabal-user-domain-access table is an allow list: a row
+    keyed on (user, domain) means the user IS permitted. Missing row = deny.
     On lookup failure, default to deny so a transient DynamoDB error cannot
-    silently grant access."""
+    silently grant access (and matches the default-deny policy of the table)."""
     try:
         response = user_domain_access_table.get_item(
             Key={'user': user, 'domain': domain}
@@ -84,7 +84,7 @@ def user_authorized_for_domain(user, domain):
     except ClientError as err:
         print(err.response['Error']['Message'])
         return False
-    return 'Item' not in response
+    return 'Item' in response
 
 def get_folder_list(client):
     '''
