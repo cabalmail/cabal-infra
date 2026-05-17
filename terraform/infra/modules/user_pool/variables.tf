@@ -81,6 +81,12 @@ variable "sms_kms_key_arn" {
 
 variable "use_twilio_sms" {
   type        = bool
-  description = "Feature flag: when true, wire the custom_sms_sender (Twilio) Lambda + KMS key into the user pool. When false, Cognito stays on the legacy SNS/EUM path."
+  description = "Feature flag: when true, wire the custom_sms_sender (Twilio) Lambda + KMS key into the user pool. When false, Cognito stays on the SNS/EUM path."
+  default     = false
+}
+
+variable "use_eum_sms" {
+  type        = bool
+  description = "Feature flag: when true, provision the AWS End User Messaging toll-free phone number that backs SNS-based SMS delivery. When false, no EUM phone number is created."
   default     = false
 }

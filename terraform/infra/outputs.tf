@@ -21,7 +21,7 @@ output "domains" {
 
 output "sms_phone_number" {
   value       = module.pool.sms_phone_number
-  description = "Toll-free phone number used for SMS verification."
+  description = "AWS End User Messaging toll-free phone number for SMS verification. Empty when var.use_eum_sms is false."
 }
 
 output "alert_sink_function_url" {

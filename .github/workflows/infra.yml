@@ -295,13 +295,9 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      # Twilio: the first three are picked up by the twilio Terraform
-      # provider; the TF_VAR_* values feed the sms_sender module's SSM
-      # SecureString params. Empty defaults in variables.tf keep envs
-      # without Twilio secrets working.
-      TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
-      TWILIO_API_KEY: ${{ secrets.TWILIO_API_KEY }}
-      TWILIO_API_SECRET: ${{ secrets.TWILIO_API_SECRET }}
+      # Twilio: TF_VAR_* values feed the sms_sender module's SSM
+      # SecureString params. Only consumed when var.use_twilio_sms
+      # is true; harmless empty strings otherwise.
       TF_VAR_twilio_account_sid: ${{ secrets.TWILIO_ACCOUNT_SID }}
       TF_VAR_twilio_api_key: ${{ secrets.TWILIO_API_KEY }}
       TF_VAR_twilio_api_secret: ${{ secrets.TWILIO_API_SECRET }}
@@ -350,6 +346,7 @@ jobs:
         echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
         echo "quiesced = ${{ vars.TF_VAR_QUIESCED || 'false' }}" >> terraform.tfvars
         echo "use_twilio_sms = ${{ vars.TF_VAR_USE_TWILIO_SMS || 'false' }}" >> terraform.tfvars
+        echo "use_eum_sms = ${{ vars.TF_VAR_USE_EUM_SMS || 'false' }}" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
     - name: record-lambda-hashes
@@ -416,6 +413,7 @@ jobs:
         echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
         echo "quiesced = ${{ vars.TF_VAR_QUIESCED || 'false' }}" >> terraform.tfvars
         echo "use_twilio_sms = ${{ vars.TF_VAR_USE_TWILIO_SMS || 'false' }}" >> terraform.tfvars
+        echo "use_eum_sms = ${{ vars.TF_VAR_USE_EUM_SMS || 'false' }}" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
     - name: record-lambda-hashes
@@ -432,7 +430,7 @@ jobs:
         if [ $TF_EXIT -ne 0 ]; then
           if grep -q 'aws_pinpointsmsvoicev2_phone_number.sms' /tmp/tf-apply.log && grep -q "timeout while waiting for state to become 'ACTIVE'" /tmp/tf-apply.log; then
             echo "::warning::Toll-free number provisioning timed out. Untainting resource for next run."
-            terraform untaint 'module.pool.aws_pinpointsmsvoicev2_phone_number.sms'
+            terraform untaint 'module.pool.aws_pinpointsmsvoicev2_phone_number.sms[0]'
             exit 0
           fi
           exit $TF_EXIT
