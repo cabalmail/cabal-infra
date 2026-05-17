@@ -172,6 +172,25 @@ resource "aws_iam_role_policy" "lambda" {
   })
 }
 
+# CloudWatch log group for the Lambda. Declared explicitly so the
+# retention can be set to 30 days, matching the front-door/privacy.html
+# claim that SMS delivery metadata is purged on a bounded schedule.
+# Without this resource AWS auto-creates the log group on first
+# invocation with "Never Expire" retention, which would make that
+# privacy claim false.
+#
+# 30 days matches the retention used elsewhere in the stack (ECS tier
+# logs, certbot logs).
+#
+# Existing environments (stage, prod) already have an auto-created
+# log group; an `import` block at the root (terraform/infra/main.tf)
+# adopts it on first apply. Terraform requires `import` blocks to
+# live in the root module, hence the split.
+resource "aws_cloudwatch_log_group" "sms_sender" {
+  name              = "/aws/lambda/sms_sender"
+  retention_in_days = 30
+}
+
 # Lambda function for sending SMS via Twilio
 data "aws_s3_object" "lambda_function_hash" {
   bucket = var.bucket
@@ -188,6 +207,11 @@ resource "aws_lambda_function" "sms_sender" {
   runtime          = "python3.13"
   architectures    = ["arm64"]
   timeout          = 30
+
+  # Ensure the log group exists (with our retention setting) before
+  # the Lambda is created, so AWS does not auto-create one with the
+  # default "Never Expire" retention on first invocation.
+  depends_on = [aws_cloudwatch_log_group.sms_sender]
 
   environment {
     variables = {
