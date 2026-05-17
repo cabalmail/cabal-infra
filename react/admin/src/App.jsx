@@ -538,6 +538,7 @@ function App() {
             username={state.userName}
             password={state.password}
             phone={state.phone}
+            controlDomain={state.control_domain}
             onSignIn={(e) => { e.preventDefault(); setState({ view: "Login" }); }}
           />
         );
