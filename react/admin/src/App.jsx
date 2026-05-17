@@ -538,7 +538,6 @@ function App() {
             username={state.userName}
             password={state.password}
             phone={state.phone}
-            controlDomain={state.control_domain}
             onSignIn={(e) => { e.preventDefault(); setState({ view: "Login" }); }}
           />
         );
@@ -592,6 +591,7 @@ function App() {
     api_url: state.api_url,
     host: state.imap_host,
     smtp_host: `smtp-out.${state.control_domain}`,
+    control_domain: state.control_domain,
     domains: state.domains
   };
 
