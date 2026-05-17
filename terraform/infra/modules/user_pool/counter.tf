@@ -78,6 +78,21 @@ resource "aws_iam_role_policy" "lambda" {
   })
 }
 
+# CloudWatch log group for the Lambda. Declared explicitly so the
+# retention is bounded (14 days is plenty - the function fires only at
+# Cognito signup confirmation). Without this resource AWS auto-creates
+# the log group on first invocation with "Never Expire" retention,
+# leaving the last "Never Expire" log-group gap in the repo.
+#
+# Existing environments (stage, prod) already have an auto-created log
+# group; an `import` block at the root (terraform/infra/main.tf) adopts
+# it on first apply. Terraform requires `import` blocks to live in the
+# root module, hence the split.
+resource "aws_cloudwatch_log_group" "assign_osid" {
+  name              = "/aws/lambda/assign_osid"
+  retention_in_days = 14
+}
+
 resource "aws_lambda_function" "assign_osid" {
   s3_bucket        = var.bucket
   s3_key           = "lambda/assign_osid.zip"
@@ -88,6 +103,11 @@ resource "aws_lambda_function" "assign_osid" {
   runtime          = "python3.13"
   architectures    = ["arm64"]
   timeout          = 30
+
+  # Ensure the log group exists (with our retention setting) before
+  # the Lambda is created, so AWS does not auto-create one with the
+  # default "Never Expire" retention on first invocation.
+  depends_on = [aws_cloudwatch_log_group.assign_osid]
 
   environment {
     variables = {
