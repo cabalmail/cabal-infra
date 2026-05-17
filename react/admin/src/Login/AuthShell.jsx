@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import './AuthShell.css';
 
 // Hardcoded. The project's status / changelog / runbook surface lives
-// on the GitHub wiki, not on the marketing site, so it doesn't follow
+// on the GitHub wiki, not on the front door site, so it doesn't follow
 // the www.<control_domain> pattern of Terms / Privacy.
 const STATUS_URL = 'https://github.com/cabalmail/cabal-infra/wiki';
 
@@ -17,9 +17,9 @@ export default function AuthShell({ headerRight, children, cardSize = 'default' 
   // resolves, but for the brief window before it does, the legal links
   // fall back to "#" so we don't navigate to https://www.null/...
   const { control_domain } = useAuth();
-  const marketingOrigin = control_domain ? `https://www.${control_domain}` : null;
-  const termsHref = marketingOrigin ? `${marketingOrigin}/terms.html` : '#';
-  const privacyHref = marketingOrigin ? `${marketingOrigin}/privacy.html` : '#';
+  const frontDoorOrigin = control_domain ? `https://www.${control_domain}` : null;
+  const termsHref = frontDoorOrigin ? `${frontDoorOrigin}/terms.html` : '#';
+  const privacyHref = frontDoorOrigin ? `${frontDoorOrigin}/privacy.html` : '#';
 
   const cardClass = cardSize === 'narrow'
     ? 'auth__card auth__card--narrow'

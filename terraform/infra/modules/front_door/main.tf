@@ -1,43 +1,25 @@
 /**
 * Creates an S3-backed CloudFront site published at www.<control_domain>.
 *
-* Purpose: a public-facing marketing surface separate from the React
+* Purpose: a public-facing front door surface separate from the React
 * admin app at admin.<control_domain>. The privacy policy and terms of
 * service live here so they can be referenced as public URLs by carrier
 * registrations (AWS End User Messaging toll-free verification, Twilio
 * A2P 10DLC) without auth-gating the admin app.
 *
-* Content is uploaded from the marketing-site/ directory at the repo
-* root via aws_s3_object. Placeholder content is committed alongside
-* this module; real marketing copy and design land in a later
-* milestone. When that lands, the simplest migration is to swap the
-* aws_s3_object resources for an `aws s3 sync` step in app.yml driven
-* by a path filter on marketing-site/**.
+* This module owns the S3 bucket, the CloudFront distribution, the
+* Route 53 records, and the SSM parameter that publishes the
+* distribution ID. It does NOT upload site content - that ships out of
+* band via .github/workflows/app.yml (front_door area), which renders
+* {{VAR}} placeholders in front-door/ from env vars and `aws s3 sync`s
+* the result into the bucket, then invalidates the distribution. The
+* workflow looks up the distribution ID by reading the SSM parameter
+* created here.
 */
 
 locals {
   bucket_name = "www.${var.control_domain}"
   site_host   = "www.${var.control_domain}"
-
-  # Files to upload, with their content-type. fileset() is recursive,
-  # so subdirectories under marketing-site/ are picked up automatically
-  # when added later. The map keeps content-type assignment explicit
-  # rather than guessing from the extension.
-  content_types = {
-    "html" = "text/html; charset=utf-8"
-    "css"  = "text/css; charset=utf-8"
-    "js"   = "application/javascript; charset=utf-8"
-    "json" = "application/json; charset=utf-8"
-    "svg"  = "image/svg+xml"
-    "png"  = "image/png"
-    "jpg"  = "image/jpeg"
-    "jpeg" = "image/jpeg"
-    "ico"  = "image/x-icon"
-    "txt"  = "text/plain; charset=utf-8"
-    "xml"  = "application/xml; charset=utf-8"
-  }
-
-  site_files = fileset(var.site_root, "**/*")
 }
 
 resource "aws_s3_bucket" "this" {
@@ -63,7 +45,7 @@ resource "aws_s3_bucket_public_access_block" "this" {
 }
 
 resource "aws_cloudfront_origin_access_identity" "this" {
-  comment = "Cabalmail marketing site (${local.site_host})"
+  comment = "Cabalmail front door site (${local.site_host})"
 }
 
 data "aws_iam_policy_document" "bucket" {
@@ -83,30 +65,12 @@ resource "aws_s3_bucket_policy" "this" {
   policy = data.aws_iam_policy_document.bucket.json
 }
 
-# Upload every file under marketing-site/ as an object in the bucket.
-# content_type is resolved from the file extension; unknown extensions
-# fall back to application/octet-stream which is safe but unhelpful in
-# a browser - keep the content_types map above current as the site
-# grows. etag = filemd5() forces Terraform to upload a new object
-# whenever the file content changes locally.
-#
-# tfsec:ignore:aws-s3-encryption-customer-key:default S3 SSE-S3
-# applies; no need for a customer-managed KMS key for a public site.
-resource "aws_s3_object" "site" {
-  for_each     = local.site_files
-  bucket       = aws_s3_bucket.this.id
-  key          = each.value
-  source       = "${var.site_root}/${each.value}"
-  etag         = filemd5("${var.site_root}/${each.value}")
-  content_type = lookup(local.content_types, lower(reverse(split(".", each.value))[0]), "application/octet-stream")
-}
-
 #tfsec:ignore:aws-cloudfront-enable-logging
 #tfsec:ignore:aws-cloudfront-enable-waf
 resource "aws_cloudfront_distribution" "this" {
   origin {
     domain_name = aws_s3_bucket.this.bucket_regional_domain_name
-    origin_id   = "marketing_site_s3"
+    origin_id   = "front_door_s3"
 
     s3_origin_config {
       origin_access_identity = aws_cloudfront_origin_access_identity.this.cloudfront_access_identity_path
@@ -115,14 +79,14 @@ resource "aws_cloudfront_distribution" "this" {
 
   enabled             = true
   is_ipv6_enabled     = true
-  comment             = "Cabalmail marketing site"
+  comment             = "Cabalmail front door site"
   default_root_object = "index.html"
   aliases             = [local.site_host]
 
   default_cache_behavior {
     allowed_methods  = ["GET", "HEAD"]
     cached_methods   = ["GET", "HEAD"]
-    target_origin_id = "marketing_site_s3"
+    target_origin_id = "front_door_s3"
 
     forwarded_values {
       query_string = false
@@ -170,4 +134,30 @@ resource "aws_route53_record" "this_private" {
   type    = "CNAME"
   ttl     = "300"
   records = [aws_cloudfront_distribution.this.domain_name]
+}
+
+# Release the previously-managed front door content from Terraform
+# state without deleting the live objects out of the bucket. The
+# initial drop of this module (under its earlier name, marketing_site)
+# managed every file under marketing-site/ as
+# aws_s3_object.site["..."]. Ownership has moved to
+# .github/workflows/app.yml (front_door area); this block lets the
+# next terraform apply drop those state entries cleanly. Safe to
+# delete once every environment has applied past this change.
+removed {
+  from = aws_s3_object.site
+  lifecycle {
+    destroy = false
+  }
+}
+
+# Published so .github/workflows/app.yml can invalidate the distribution
+# after `aws s3 sync` without taking a Terraform dependency. Mirrors
+# the /cabal/react-config/cf-distribution parameter the React deploy
+# job reads.
+resource "aws_ssm_parameter" "cf_distribution" {
+  name        = "/cabal/front-door/cf-distribution"
+  description = "CloudFront Distribution ID for front door site deploy invalidation"
+  type        = "String"
+  value       = aws_cloudfront_distribution.this.id
 }
