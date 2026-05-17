@@ -8,6 +8,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.21] - Unreleased
 
 ### Added
+- Marketing site at `www.<control_domain>`. New `marketing_site`
+  Terraform module provisions an S3 bucket, CloudFront distribution,
+  Route 53 record (public + private zone), and uploads static content
+  from the top-level `marketing-site/` directory via `aws_s3_object`.
+  Initial content is a placeholder home page plus the privacy policy
+  and terms of service. Three operator-replace markers in
+  `marketing-site/terms.html` (legal entity name, contact email,
+  jurisdiction) must be edited before going live. See
+  `docs/marketing-site.md`.
+- AWS End User Messaging toll-free verification (TFV) submission
+  automation. New `scripts/submit-tfv-registration.py` drives the
+  `pinpoint-sms-voice-v2` API end-to-end: discovers the toll-free
+  phone number, finds or creates a `US_TOLL_FREE_REGISTRATION`,
+  uploads the opt-in screenshot, sets every required field from env
+  vars, associates the phone number, and submits for carrier review.
+  Idempotent: safe to re-run after a `REQUIRES_UPDATES` rejection.
+  Wrapped by new `.github/workflows/register-tfv.yml` workflow
+  (workflow_dispatch, per-environment) so operators trigger it from
+  the Actions tab with all identity inputs supplied via GitHub
+  Environment variables/secrets. See `docs/sms-tfv-setup.md` for the
+  operator runbook.
+- React signup screen now links to the canonical privacy policy and
+  terms of service on the marketing site (`https://www.<control_domain>/privacy.html`,
+  `/terms.html`), and the consent paragraph spells out the SMS opt-in
+  scope (signup verification, password reset, sign-in codes) with
+  STOP/HELP and message-and-data-rates language required by carriers.
 - `TF_VAR_USE_EUM_SMS` feature flag gates provisioning of the AWS End
   User Messaging toll-free phone number (`aws_pinpointsmsvoicev2_phone_number.sms`).
   Defaults to `false`. Mirrors `TF_VAR_USE_TWILIO_SMS` so the two SMS

@@ -591,6 +591,7 @@ function App() {
     api_url: state.api_url,
     host: state.imap_host,
     smtp_host: `smtp-out.${state.control_domain}`,
+    control_domain: state.control_domain,
     domains: state.domains
   };
 

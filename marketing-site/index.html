@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cabalmail</title>
+<meta name="description" content="Self-hosted email on your own AWS account.">
+<meta name="robots" content="index,follow">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<style>
+  :root { color-scheme: light dark; }
+  html { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif; }
+  body { max-width: 44rem; margin: 0 auto; padding: 4rem 1.25rem; line-height: 1.55; }
+  h1 { font-size: 2.25rem; margin-bottom: 0.25rem; }
+  .tag { color: #6b7280; font-size: 1rem; margin-top: 0.25rem; }
+  p { margin: 1rem 0; }
+  ul { padding-left: 1.5rem; }
+  li { margin: 0.4rem 0; }
+  a.btn {
+    display: inline-block;
+    padding: 0.6rem 1.1rem;
+    border-radius: 0.4rem;
+    background: #2E5235;
+    color: white;
+    text-decoration: none;
+    font-weight: 600;
+    margin-top: 1rem;
+  }
+  a.btn:hover { background: #25422a; }
+  .footer {
+    margin-top: 4rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid rgba(127,127,127,0.25);
+    font-size: 0.9rem;
+    color: #6b7280;
+  }
+  .footer a { color: inherit; margin-right: 1rem; }
+  .placeholder {
+    background: rgba(255, 220, 100, 0.18);
+    border-left: 3px solid #d4a017;
+    padding: 0.6rem 0.9rem;
+    border-radius: 0.25rem;
+    font-size: 0.9rem;
+    margin: 1.5rem 0;
+  }
+</style>
+</head>
+<body>
+<h1>Cabalmail</h1>
+<p class="tag">Self-hosted email on your own AWS account.</p>
+
+<div class="placeholder">
+  <strong>Placeholder home page.</strong> Design and copy for this site are
+  scheduled for a later milestone. For now this page exists so the project
+  has a public marketing surface that hosts the legal pages required for
+  SMS verification.
+</div>
+
+<p>Cabalmail provides three mail tiers (IMAP, inbound SMTP, outbound SMTP with DKIM signing) backed by Cognito authentication, EFS mailstores, and a self-hosted React admin UI. Per-address provisioning lets you spin up disposable addresses per vendor or per use, and revoke them when they get burned.</p>
+
+<p>The full source code is open source under AGPLv3.</p>
+
+<p>
+  <a class="btn" href="https://github.com/cabalmail/cabal-infra" target="_blank" rel="noopener noreferrer">View on GitHub</a>
+</p>
+
+<h2>Already have an account?</h2>
+<p>Sign in or sign up at the admin app:</p>
+<p>
+  <a class="btn" id="admin-link" href="https://admin.example.com/">Open Cabalmail admin</a>
+</p>
+
+<div class="footer">
+  <a href="/privacy.html">Privacy Policy</a>
+  <a href="/terms.html">Terms of Service</a>
+  <a href="https://github.com/cabalmail/cabal-infra" target="_blank" rel="noopener noreferrer">Source code</a>
+</div>
+
+<script>
+  // Rewrite the admin link to match the host we were served from
+  // (e.g. www.cabal-mail.net -> admin.cabal-mail.net). Keeps the
+  // placeholder honest across stage/prod without templating.
+  (function () {
+    var host = window.location.hostname;
+    if (host.indexOf('www.') === 0) {
+      var domain = host.substring(4);
+      var el = document.getElementById('admin-link');
+      if (el) el.href = 'https://admin.' + domain + '/';
+    }
+  })();
+</script>
+
+</body>
+</html>
