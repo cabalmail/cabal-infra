@@ -166,13 +166,6 @@ resource "aws_instance" "nat" {
   tags = {
     Name = "cabal-nat-${count.index}"
   }
-
-  # The EIP association overwrites the instance's public_ip/public_dns
-  # out-of-band, which the AWS provider re-reports as drift on every
-  # plan. Ignore those computed attributes so plans are idempotent.
-  lifecycle {
-    ignore_changes = [public_ip, public_dns]
-  }
 }
 
 resource "aws_eip_association" "nat" {

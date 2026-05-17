@@ -1,0 +1,92 @@
+---
+name: Submit AWS End User Messaging TFV
+
+# Triggers an operator-driven submission of a US toll-free verification
+# (TFV) registration against the AWS End User Messaging phone number
+# already provisioned by Terraform. See docs/sms-tfv-setup.md for the
+# full operator runbook including the required GitHub Environment
+# variables and secrets.
+#
+# The script (scripts/submit-tfv-registration.py) is idempotent: it
+# picks up an existing draft, re-applies all field values from env vars,
+# re-uploads the opt-in screenshot, and re-submits. Safe to re-run after
+# a REQUIRES_UPDATES rejection.
+#
+# Carrier review typically takes 5-15 business days after submission.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target AWS environment (stage or prod). development is excluded because EUM does not run there.'
+        required: true
+        type: choice
+        options:
+          - stage
+          - prod
+      opt_in_image_url:
+        description: 'Optional public HTTPS URL to fetch the opt-in screenshot from. If empty, the script falls back to a PNG checked into the repo at front-door/opt-in-screenshot.png.'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    env:
+      AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION:            ${{ secrets.AWS_REGION }}
+      # Identity (GitHub Environment variables - not secret)
+      TFV_COMPANY_NAME:        ${{ vars.TFV_COMPANY_NAME }}
+      TFV_COMPANY_WEBSITE:     ${{ vars.TFV_COMPANY_WEBSITE }}
+      TFV_COMPANY_ADDRESS1:    ${{ vars.TFV_COMPANY_ADDRESS1 }}
+      TFV_COMPANY_ADDRESS2:    ${{ vars.TFV_COMPANY_ADDRESS2 }}
+      TFV_COMPANY_CITY:        ${{ vars.TFV_COMPANY_CITY }}
+      TFV_COMPANY_STATE:       ${{ vars.TFV_COMPANY_STATE }}
+      TFV_COMPANY_ZIP:         ${{ vars.TFV_COMPANY_ZIP }}
+      TFV_COMPANY_COUNTRY:     ${{ vars.TFV_COMPANY_COUNTRY }}
+      TFV_CONTACT_FIRST_NAME:  ${{ vars.TFV_CONTACT_FIRST_NAME }}
+      TFV_CONTACT_LAST_NAME:   ${{ vars.TFV_CONTACT_LAST_NAME }}
+      # Contact email + phone are sensitive (personal info on a public
+      # registration form, often the same as on-call contact); kept in
+      # secrets so they don't appear in workflow logs.
+      TFV_CONTACT_EMAIL:       ${{ secrets.TFV_CONTACT_EMAIL }}
+      TFV_CONTACT_PHONE:       ${{ secrets.TFV_CONTACT_PHONE }}
+      # Optional overrides; if any of these are unset, the script uses
+      # sensible defaults baked in to scripts/submit-tfv-registration.py.
+      TFV_MONTHLY_VOLUME:      ${{ vars.TFV_MONTHLY_VOLUME }}
+      TFV_USE_CASE_CATEGORY:   ${{ vars.TFV_USE_CASE_CATEGORY }}
+      TFV_USE_CASE_DETAILS:    ${{ vars.TFV_USE_CASE_DETAILS }}
+      TFV_OPT_IN_DESCRIPTION:  ${{ vars.TFV_OPT_IN_DESCRIPTION }}
+      TFV_SAMPLE_MESSAGE:      ${{ vars.TFV_SAMPLE_MESSAGE }}
+      TFV_PHONE_NUMBER_ID:     ${{ vars.TFV_PHONE_NUMBER_ID }}
+    steps:
+      - name: checkout
+        uses: actions/checkout@v5
+      - name: setup-python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: install-boto3
+        run: pip install boto3
+      - name: fetch-opt-in-image
+        run: |
+          set -euo pipefail
+          if [ -n "${{ inputs.opt_in_image_url }}" ]; then
+            echo "Fetching opt-in image from URL"
+            curl -fsSL --max-time 30 -o /tmp/opt-in.png "${{ inputs.opt_in_image_url }}"
+          elif [ -f front-door/opt-in-screenshot.png ]; then
+            echo "Using checked-in front-door/opt-in-screenshot.png"
+            cp front-door/opt-in-screenshot.png /tmp/opt-in.png
+          else
+            echo "::error::No opt-in image available. Pass opt_in_image_url as workflow input, or commit one at front-door/opt-in-screenshot.png."
+            exit 1
+          fi
+          file /tmp/opt-in.png
+          echo "TFV_OPT_IN_IMAGE=/tmp/opt-in.png" >> "$GITHUB_ENV"
+      - name: submit-tfv-registration
+        run: python3 scripts/submit-tfv-registration.py

@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Cabalmail — an address for every door</title>
+<meta name="description" content="Cabalmail turns the domain you already own into a wall of disposable subdomains. One per correspondent, each independently revocable at the DNS level. Invitation only." />
+
+<link rel="icon" type="image/svg+xml" href="/assets/cabalmail-mark.svg" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=IBM+Plex+Mono:wght@400;500&display=swap" />
+
+<link rel="stylesheet" href="/css/home.css" />
+<script src="/js/home.js" defer></script>
+</head>
+<body>
+
+<!-- Cabalmail mark — defined once, referenced by <use> in header + footer -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="cabal-mark" viewBox="0 0 1024 1024">
+      <g fill="currentColor" transform="translate(122 147) scale(2.036)">
+        <path fill-rule="evenodd" d="M 0 180 a 96 96 0 1 0 192 0 a 96 96 0 1 0 -192 0 Z M 38 180 L 108 110 L 108 146 L 154 146 L 154 214 L 108 214 L 108 250 Z"/>
+        <path d="M 154 84 L 268 176 L 400 84 L 400 275 L 154 275 Z"/>
+      </g>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="page">
+  <header class="site-header">
+    <a href="/" class="brand" aria-label="Cabalmail home">
+      <svg class="brand-mark" aria-hidden="true"><use href="#cabal-mark"/></svg>
+      <span class="brand-word">Cabalmail</span>
+    </a>
+
+    <nav class="site-nav" aria-label="Primary">
+      <a class="nav-link nav-link--privacy" href="/privacy">Privacy</a>
+      <a class="nav-link nav-link--terms" href="/terms">Terms</a>
+      <a class="nav-link" href="/sign-in">Sign in</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="hero-text">
+        <p class="hero-eyebrow"><span class="hero-eyebrow-dot"></span>Cabalmail · a disposable subdomain for every door</p>
+        <h1 class="hero-headline">An address for <em>every</em> door.</h1>
+        <p class="hero-lede">
+          Cabalmail turns the domain you already own into a wall of disposable subdomains. Hand your bank <span class="inline-domain">chase.yourname.com</span>, your friends <span class="inline-domain">friends.yourname.com</span>, every newsletter sign-up its own. When one starts leaking spam, you yank the subdomain from DNS — and the channel is shut for good.
+        </p>
+
+        <div class="hero-cta">
+          <a class="btn btn-primary" href="/sign-up">
+            Create your account
+            <svg class="btn-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M5 12h14M13 5l7 7-7 7"/>
+            </svg>
+          </a>
+          <a class="btn btn-ghost" href="/sign-in">Sign in</a>
+        </div>
+
+        <div class="invite-note" role="note">
+          <span class="invite-badge">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="4" y="6" width="16" height="12" rx="1.5"/>
+              <path d="M4 7l8 6 8-6"/>
+            </svg>
+            By invitation only
+          </span>
+          <span class="invite-text">Cabalmail is invitation only. You’ll need a code from an existing member to sign up. <a href="/request-access">Request access&nbsp;→</a></span>
+        </div>
+      </div>
+
+      <aside class="hero-visual" aria-hidden="true">
+        <figure class="compose-card">
+          <figcaption class="compose-chrome">
+            <span class="compose-title">New message</span>
+            <span class="compose-controls" aria-hidden="true">
+              <span></span><span></span><span></span>
+            </span>
+          </figcaption>
+
+          <div class="compose-body">
+            <div class="compose-row">
+              <span class="compose-label">From</span>
+              <span class="from-chip">
+                <span class="from-swatch"></span>
+                <span class="from-stack">
+                  <span class="from-text from-text-a">me@friends.franklin.science</span>
+                  <span class="from-text from-text-b">me@common.franklin.science</span>
+                </span>
+                <svg class="from-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M6 9l6 6 6-6"/>
+                </svg>
+              </span>
+            </div>
+            <div class="compose-row">
+              <span class="compose-label">To</span>
+              <span class="compose-value">editor@thecommon.org</span>
+            </div>
+            <div class="compose-row">
+              <span class="compose-label">Subject</span>
+              <span class="compose-value">A draft, for your consideration</span>
+            </div>
+          </div>
+
+          <div class="picker" aria-hidden="true">
+            <div class="picker-list">
+              <div class="picker-row picker-row--initial">
+                <span class="picker-swatch picker-swatch--a"></span>
+                <span class="picker-addr">me@friends.franklin.science</span>
+                <span class="picker-check picker-check--a">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-11"/></svg>
+                </span>
+              </div>
+              <div class="picker-row">
+                <span class="picker-swatch picker-swatch--b"></span>
+                <span class="picker-addr">me@chase.franklin.science</span>
+              </div>
+              <div class="picker-row">
+                <span class="picker-swatch picker-swatch--c"></span>
+                <span class="picker-addr">me@signups.franklin.science</span>
+              </div>
+              <div class="picker-row picker-row--new">
+                <span class="picker-swatch picker-swatch--d"></span>
+                <span class="picker-addr">me@common.franklin.science</span>
+                <span class="picker-check picker-check--d">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-11"/></svg>
+                </span>
+              </div>
+            </div>
+            <div class="picker-add">
+              <span class="picker-plus">+</span>
+              <span class="picker-typer">
+                <span class="picker-static">me@</span>
+                <span class="typed-wrap"><span class="typed">common</span></span>
+                <span class="caret"></span>
+                <span class="picker-static">.franklin.science</span>
+              </span>
+            </div>
+          </div>
+        </figure>
+      </aside>
+    </section>
+
+    <section class="pillars" aria-label="What you get">
+      <article class="pillar">
+        <span class="pillar-glyph" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 7h16v12H4z"/><path d="M4 7l8 6 8-6"/>
+          </svg>
+        </span>
+        <h3 class="pillar-title">One subdomain per correspondent.</h3>
+        <p class="pillar-body">Bank, employer, every form you fill out — each gets its own subdomain on <span class="inline-domain">yourname.com</span>. When one goes bad, pull the DNS record and the address vanishes. No unsubscribe theater.</p>
+      </article>
+      <article class="pillar">
+        <span class="pillar-glyph" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10"/>
+          </svg>
+        </span>
+        <h3 class="pillar-title">Built for the keyboard.</h3>
+        <p class="pillar-body">Read, archive, reply without leaving the home row. <span class="kbd">j</span><span class="kbd">k</span> to move, <span class="kbd">e</span> to archive, <span class="kbd">r</span> to reply, <span class="kbd">⌘K</span> to find anything.</p>
+      </article>
+      <article class="pillar">
+        <span class="pillar-glyph" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/>
+          </svg>
+        </span>
+        <h3 class="pillar-title">Quiet by design.</h3>
+        <p class="pillar-body">No trackers, no read receipts, no algorithmic re-ordering. Remote images stay blocked until you say otherwise. The inbox is a place to read, not be measured.</p>
+      </article>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer-brand">
+      <svg class="footer-mark" aria-hidden="true"><use href="#cabal-mark"/></svg>
+      <span>© <span data-year>2026</span> J C Carr, LLC</span>
+    </div>
+    <nav class="footer-links" aria-label="Legal">
+      <a href="/privacy.html">Privacy Policy</a>
+      <a href="/terms.html">Terms &amp; Conditions</a>
+      <a href="https://github.com/cabalmail/cabal-infra/wiki">Status</a>
+      <a href="/contact">Contact</a>
+    </nav>
+    <div class="footer-meta">{{SITE_VERSION}} &middot; {{BUILD_SHA}}</div>
+  </footer>
+</div>
+
+</body>
+</html>

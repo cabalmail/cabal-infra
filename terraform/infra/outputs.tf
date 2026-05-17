@@ -21,10 +21,20 @@ output "domains" {
 
 output "sms_phone_number" {
   value       = module.pool.sms_phone_number
-  description = "Toll-free phone number used for SMS verification."
+  description = "AWS End User Messaging toll-free phone number for SMS verification. Empty when var.use_eum_sms is false."
 }
 
 output "alert_sink_function_url" {
   value       = module.monitoring[*].alert_sink_function_url
   description = "Webhook URL for monitoring. Add to Kuma."
+}
+
+output "front_door_url" {
+  value       = module.front_door.site_url
+  description = "Public URL of the front door site at www.<control_domain>."
+}
+
+output "front_door_cf_id" {
+  value       = module.front_door.cloudfront_distribution_id
+  description = "CloudFront distribution ID for the front door site. Use with aws cloudfront create-invalidation when content is updated."
 }

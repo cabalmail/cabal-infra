@@ -5,6 +5,81 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.21] - 2026-05-17
+
+### Added
+- Front door site at `www.<control_domain>`. New `front_door`
+  Terraform module provisions an S3 bucket, CloudFront distribution,
+  and Route 53 record (public + private zone). Content under the
+  top-level `front-door/` directory ships through a new `front_door`
+  area in `.github/workflows/app.yml`: a path-filtered job renders
+  `{{VAR}}` placeholders in text files from matching environment
+  variables (`SITE_VERSION` and `BUILD_SHA` wired by default),
+  `aws s3 sync`s the result into the bucket, and invalidates the
+  CloudFront distribution. The distribution ID is published to SSM
+  at `/cabal/front-door/cf-distribution` for the workflow to read.
+  Initial content is a home page plus the privacy policy and terms
+  of service. Three operator-replace markers in
+  `front-door/terms.html` (legal entity name, contact email,
+  jurisdiction) must be edited before going live. See
+  `docs/front-door.md`.
+- AWS End User Messaging toll-free verification (TFV) submission
+  automation. New `scripts/submit-tfv-registration.py` drives the
+  `pinpoint-sms-voice-v2` API end-to-end: discovers the toll-free
+  phone number, finds or creates a `US_TOLL_FREE_REGISTRATION`,
+  uploads the opt-in screenshot, sets every required field from env
+  vars, associates the phone number, and submits for carrier review.
+  Idempotent: safe to re-run after a `REQUIRES_UPDATES` rejection.
+  Wrapped by new `.github/workflows/register-tfv.yml` workflow
+  (workflow_dispatch, per-environment) so operators trigger it from
+  the Actions tab with all identity inputs supplied via GitHub
+  Environment variables/secrets. See `docs/sms-tfv-setup.md` for the
+  operator runbook.
+- React signup screen now links to the canonical privacy policy and
+  terms of service on the front door site (`https://www.<control_domain>/privacy.html`,
+  `/terms.html`), and the consent paragraph spells out the SMS opt-in
+  scope (signup verification, password reset, sign-in codes) with
+  STOP/HELP and message-and-data-rates language required by carriers.
+- `TF_VAR_USE_EUM_SMS` feature flag gates provisioning of the AWS End
+  User Messaging toll-free phone number (`aws_pinpointsmsvoicev2_phone_number.sms`).
+  Defaults to `false`. Mirrors `TF_VAR_USE_TWILIO_SMS` so the two SMS
+  delivery paths can be toggled independently per environment. See
+  `docs/twilio.md` for the four-state matrix and rollback semantics.
+  Existing EUM phone numbers are migrated to the indexed state
+  address via a `moved {}` block; `deletion_protection_enabled = true`
+  is preserved.
+
+### Changed
+- The `sms_sender` module (KMS key, SSM SecureString parameters for
+  Twilio credentials, Lambda, IAM role) is now gated on
+  `TF_VAR_USE_TWILIO_SMS`. Previously the module was always
+  provisioned regardless of the flag, which forced every environment
+  to set non-empty `TWILIO_*` secrets even when the Twilio path
+  wasn't being used. Existing state is migrated via a `moved {}`
+  block so envs already running with `USE_TWILIO_SMS=true` are
+  unaffected.
+- Cleared Terraform deprecation warnings against AWS provider v6:
+  switched `data.aws_region.current.name` to `.region` in the `app`,
+  `user_pool`, and `sms_sender` modules; dropped the deprecated
+  `health_check_custom_config { failure_threshold = 1 }` block (AWS
+  pins the value to 1 server-side and the argument will be removed)
+  from the mail-tier and monitoring `aws_service_discovery_service`
+  resources, along with the now-unnecessary `ignore_changes` lifecycle
+  that guarded it; and removed `public_ip` / `public_dns` from the NAT
+  instance's `ignore_changes` since computed-only attributes can't
+  drift against configured values.
+
+### Fixed
+- `terraform apply` no longer hangs waiting for stdin when
+  `TF_VAR_USE_TWILIO_SMS=false` and the `TWILIO_*` GitHub Environment
+  secrets are unset. The `twilio` Terraform provider was declared in
+  `terraform/infra/providers.tf` (and `required_providers` in
+  `terraform.tf`) but never consumed by any resource; with
+  credentials absent the provider blocked on interactive prompts.
+  The provider declaration is removed - the `sms_sender` Lambda
+  talks to the Twilio API directly via the Python SDK, not through
+  Terraform.
+
 ## [0.9.20] - 2026-05-16
 
 ### Fixed
@@ -34,8 +109,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   installed..." annotations that GitHub was surfacing on every run.
 - Bumped GitHub Actions to Node 24 runtimes ahead of the June 2026
   cutoff: `dorny/paths-filter` v3 -> v4, `docker/setup-buildx-action`
-  v3 -> v4, `hashicorp/setup-terraform` v2 -> v4, and the two
-  remaining `actions/checkout@v4` pins in `claude.yml` -> v5.
+  v3 -> v4, `hashicorp/setup-terraform` v2 -> v4,
+  `actions/upload-artifact` v5 -> v6, `actions/download-artifact`
+  v5 -> v7, and the two remaining `actions/checkout@v4` pins in
+  `claude.yml` -> v5.
 
 ## [0.9.19] - 2026-05-14
 

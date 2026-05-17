@@ -8,8 +8,3 @@ provider "aws" {
     }
   }
 }
-
-provider "twilio" {
-  # Credentials come from environment variables:
-  # TWILIO_ACCOUNT_SID, TWILIO_API_KEY, TWILIO_API_SECRET
-}

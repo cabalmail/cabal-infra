@@ -47,15 +47,64 @@ module "lambda_layers" {
   bucket = module.bucket.bucket
 }
 
-# SMS sender for Cognito via Twilio. See docs/0.9.0/twilio-sms-migration-plan.md.
+# SMS sender for Cognito via Twilio. See docs/twilio.md.
+#
+# Gated on var.use_twilio_sms so an environment that doesn't use the
+# Twilio path doesn't have to set TWILIO_* secrets just to satisfy
+# the SecureString SSM parameters this module creates. The module is
+# additive: when count = 0, nothing here exists in AWS.
 module "sms_sender" {
   source = "./modules/sms_sender"
+  count  = var.use_twilio_sms ? 1 : 0
 
   bucket             = module.bucket.bucket
   twilio_account_sid = var.twilio_account_sid
   twilio_api_key     = var.twilio_api_key
   twilio_api_secret  = var.twilio_api_secret
   twilio_from_number = var.twilio_from_number
+}
+
+# Migrate state from the pre-count module address. Without this an
+# env that already had sms_sender provisioned would see a destroy on
+# the un-indexed address and a create on the indexed one (when
+# use_twilio_sms = true), which is needlessly destructive for the
+# KMS key and SSM parameters.
+moved {
+  from = module.sms_sender
+  to   = module.sms_sender[0]
+}
+
+# Adopt the auto-created CloudWatch log group for the sms_sender
+# Lambda. AWS creates /aws/lambda/sms_sender automatically on first
+# invocation with "Never Expire" retention; the module declares it as
+# a Terraform resource (with retention_in_days = 30) so the auto-
+# created group has to be imported on first apply, otherwise Terraform
+# fails with ResourceAlreadyExistsException. import blocks have to
+# live in the root module per Terraform's rules.
+#
+# Fresh environments (no prior Lambda invocation) will fail this
+# import. Remove the import block for those envs - the resource will
+# create from scratch.
+import {
+  to = module.sms_sender[0].aws_cloudwatch_log_group.sms_sender
+  id = "/aws/lambda/sms_sender"
+}
+
+# Adopt the auto-created CloudWatch log group for the assign_osid
+# Lambda (Cognito post-confirmation trigger). AWS creates
+# /aws/lambda/assign_osid automatically on first invocation with
+# "Never Expire" retention; the user_pool module now declares it as a
+# Terraform resource (with retention_in_days = 14) so the auto-created
+# group has to be imported on first apply, otherwise Terraform fails
+# with ResourceAlreadyExistsException. import blocks have to live in
+# the root module per Terraform's rules.
+#
+# Fresh environments (no prior Lambda invocation) will fail this
+# import. Remove the import block for those envs - the resource will
+# create from scratch.
+import {
+  to = module.pool.aws_cloudwatch_log_group.assign_osid
+  id = "/aws/lambda/assign_osid"
 }
 
 # Creates a Cognito User Pool
@@ -66,9 +115,10 @@ module "pool" {
   bucket_arn             = module.bucket.bucket_arn
   ecs_cluster_name       = module.ecs.cluster_name
   healthcheck_ping_param = local.hc_ping_assign_osid
-  sms_sender_arn         = module.sms_sender.lambda_arn
-  sms_kms_key_arn        = module.sms_sender.kms_key_arn
+  sms_sender_arn         = var.use_twilio_sms ? module.sms_sender[0].lambda_arn : ""
+  sms_kms_key_arn        = var.use_twilio_sms ? module.sms_sender[0].kms_key_arn : ""
   use_twilio_sms         = var.use_twilio_sms
+  use_eum_sms            = var.use_eum_sms
 }
 
 # Creates an AWS Certificate Manager certificate for use on load balancers and CloudFront
@@ -76,6 +126,17 @@ module "cert" {
   source         = "./modules/cert"
   control_domain = var.control_domain
   zone_id        = data.terraform_remote_state.zone.outputs.control_domain_zone_id
+}
+
+# Public front door site at www.<control_domain>. Hosts the home page
+# and the privacy/terms pages referenced by carrier registrations.
+# See docs/front-door.md.
+module "front_door" {
+  source          = "./modules/front_door"
+  control_domain  = var.control_domain
+  zone_id         = data.terraform_remote_state.zone.outputs.control_domain_zone_id
+  private_zone_id = module.vpc.private_zone.zone_id
+  cert_arn        = module.cert.cert_arn
 }
 
 # Sets up Route 53 hosted zones for mail domains

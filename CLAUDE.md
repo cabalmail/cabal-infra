@@ -258,6 +258,7 @@ Use semantic versioning. Create a new version when appropriate. When creating a 
 | 0.7.x   | Monitoring and alerting.                                                                            | Done        |
 | 0.8.x   | Overhaul web UX.                                                                                    | Done        |
 | 0.9.x   | Stabilize.                                                                                          | In Progress |
+| 0.10.x  | Harden.                                                                                             | Planning    |
 | 1.0.x   | Production-ready release.                                                                           |             |
 | 1.1.x   | Native app for Android.                                                                             |             |
 | 1.2.x   | Quotas.                                                                                             |             |

@@ -41,7 +41,7 @@ resource "aws_iam_role_policy" "lambda" {
         {
           Effect   = "Allow"
           Action   = "cognito-idp:AdminUpdateUserAttributes"
-          Resource = "arn:aws:cognito-idp:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:userpool/${local.wildcard}"
+          Resource = "arn:aws:cognito-idp:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:userpool/${local.wildcard}"
         },
         {
           Effect   = "Allow"
@@ -51,7 +51,7 @@ resource "aws_iam_role_policy" "lambda" {
         {
           Effect   = "Allow"
           Action   = "logs:CreateLogGroup"
-          Resource = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:${local.wildcard}"
+          Resource = "arn:aws:logs:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:${local.wildcard}"
         },
         {
           Effect = "Allow"
@@ -60,22 +60,37 @@ resource "aws_iam_role_policy" "lambda" {
             "logs:PutLogEvents",
           ]
           Resource = [
-            "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/assign_osid:${local.wildcard}",
+            "arn:aws:logs:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/assign_osid:${local.wildcard}",
           ]
         },
         {
           Effect   = "Allow"
           Action   = "ecs:UpdateService"
-          Resource = "arn:aws:ecs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:service/${var.ecs_cluster_name}/${local.wildcard}"
+          Resource = "arn:aws:ecs:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:service/${var.ecs_cluster_name}/${local.wildcard}"
         },
       ],
       var.healthcheck_ping_param != "" ? [{
         Effect   = "Allow"
         Action   = "ssm:GetParameter"
-        Resource = "arn:aws:ssm:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:parameter${var.healthcheck_ping_param}"
+        Resource = "arn:aws:ssm:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:parameter${var.healthcheck_ping_param}"
       }] : []
     )
   })
+}
+
+# CloudWatch log group for the Lambda. Declared explicitly so the
+# retention is bounded (14 days is plenty - the function fires only at
+# Cognito signup confirmation). Without this resource AWS auto-creates
+# the log group on first invocation with "Never Expire" retention,
+# leaving the last "Never Expire" log-group gap in the repo.
+#
+# Existing environments (stage, prod) already have an auto-created log
+# group; an `import` block at the root (terraform/infra/main.tf) adopts
+# it on first apply. Terraform requires `import` blocks to live in the
+# root module, hence the split.
+resource "aws_cloudwatch_log_group" "assign_osid" {
+  name              = "/aws/lambda/assign_osid"
+  retention_in_days = 14
 }
 
 resource "aws_lambda_function" "assign_osid" {
@@ -88,6 +103,11 @@ resource "aws_lambda_function" "assign_osid" {
   runtime          = "python3.13"
   architectures    = ["arm64"]
   timeout          = 30
+
+  # Ensure the log group exists (with our retention setting) before
+  # the Lambda is created, so AWS does not auto-create one with the
+  # default "Never Expire" retention on first invocation.
+  depends_on = [aws_cloudwatch_log_group.assign_osid]
 
   environment {
     variables = {
