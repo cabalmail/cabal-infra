@@ -22,6 +22,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `validationData` so it never lands on the user record. Existing
   environments stay open by default until the env var is set.
 
+  The `check_invite` Terraform self-seeds a placeholder zip via
+  `archive_file` + `aws_s3_object` on first apply, so the Lambda's
+  initial creation does not chicken-and-egg against `app.yml`. The
+  real code lands on the next `app.yml` run via
+  `aws lambda update-function-code`; `lifecycle.ignore_changes` on
+  the S3 objects keeps Terraform from reverting it.
+
 ## [0.9.23] - 2026-05-17
 
 ### Changed
