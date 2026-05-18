@@ -30,6 +30,7 @@ After signing up and logging in, [fork this repository](https://docs.github.com/
     | TF_VAR_EMAIL              | your_email@example.com                                           |
     | TF_VAR_ENVIRONMENT        | production                                                       |
     | TF_VAR_IMAP_SCALE         | { min = 1, max = 1, des = 1, size = \\"t3.small\\" }             |
+    | TF_VAR_INVITATION_CODE    | shared-signup-secret                                             |
     | TF_VAR_MAIL_DOMAINS       | [\\"example.com\\",\\"example.org\\"]                            |
     | TF_VAR_MONITORING         | false                                                            |
     | TF_VAR_PROD               | true                                                             |
@@ -40,3 +41,8 @@ After signing up and logging in, [fork this repository](https://docs.github.com/
     Note that quotation marks must be escaped with a single back-slash. (If you're reading this document in raw markdown, you'll see double-back-slashes.)
 
     \* Deprecated; will be removed in 0.4.1
+
+    `TF_VAR_INVITATION_CODE` is optional. When set, new signups must
+    supply the matching code in the React signup form's "Invitation
+    code" field; the `check_invite` Cognito pre-signup Lambda compares
+    it server-side. Leave it unset (or empty) to keep signups open.

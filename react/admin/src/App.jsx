@@ -63,6 +63,7 @@ function loadSavedState() {
     userName: null,
     password: null,
     phone: null,
+    inviteCode: null,
     verificationCode: null,
     view: "Login",
     poolData: null,
@@ -70,14 +71,15 @@ function loadSavedState() {
     imap_host: null,
     domains: {},
     api_url: null,
+    invitation_required: false,
   };
   const saved = JSON.parse(window.localStorage.getItem('state'));
-  return saved ? { ...defaults, ...saved, password: null } : defaults;
+  return saved ? { ...defaults, ...saved, password: null, inviteCode: null } : defaults;
 }
 
 function persistState(state) {
   try {
-    const { password, ...safe } = state;
+    const { password, inviteCode, ...safe } = state;
     window.localStorage.setItem('state', JSON.stringify(safe));
   } catch (e) {
     console.log(e);
@@ -196,7 +198,7 @@ function App() {
   // Fetch config and restore session on mount
   useEffect(() => {
     axios.get('/config.js').then(({ data }) => {
-      const { control_domain, domains, cognitoConfig } = data;
+      const { control_domain, domains, cognitoConfig, invitation_required } = data;
       UserPool = new CognitoUserPool(cognitoConfig.poolData);
       setState({
         poolData: cognitoConfig.poolData,
@@ -205,7 +207,8 @@ function App() {
           ? control_domain.replace("dev.", "imap.")
           : "imap." + control_domain,
         domains,
-        api_url: "https://admin." + control_domain + "/prod"
+        api_url: "https://admin." + control_domain + "/prod",
+        invitation_required: invitation_required === true
       });
       const cognitoUser = UserPool.getCurrentUser();
       if (cognitoUser) {
@@ -268,22 +271,32 @@ function App() {
       Name: 'phone_number',
       Value: state.phone
     });
+    // Shared-secret invitation code, validated by the check_invite
+    // Cognito pre-signup Lambda. Passed via validationData so it never
+    // lands on the user record. Key must match the Python handler.
+    const validationData = [new CognitoUserAttribute({
+      Name: 'invitationCode',
+      Value: state.inviteCode || ''
+    })];
     UserPool.signUp(
       state.userName,
       state.password,
       [attributeUsername, attributePhone],
-      null,
+      validationData,
       (err, _result) => {
         if (!err) {
-          setState({ view: "Verify" });
+          setState({ view: "Verify", inviteCode: null });
           setMessage("Check your phone for a verification code.", false);
         } else {
           setState({ view: "SignUp" });
-          setMessage("Registration failed.", true);
+          const msg = /invitation code/i.test(err.message || '')
+            ? "Invalid invitation code."
+            : "Registration failed.";
+          setMessage(msg, true);
         }
       }
     );
-  }, [state.userName, state.password, state.phone, setState, setMessage]);
+  }, [state.userName, state.password, state.phone, state.inviteCode, setState, setMessage]);
 
   const doVerify = useCallback((e) => {
     e.preventDefault();
@@ -535,9 +548,11 @@ function App() {
             onUsernameChange={doInputChange}
             onPhoneChange={doInputChange}
             onPasswordChange={doInputChange}
+            onInviteCodeChange={doInputChange}
             username={state.userName}
             password={state.password}
             phone={state.phone}
+            inviteCode={state.inviteCode}
             onSignIn={(e) => { e.preventDefault(); setState({ view: "Login" }); }}
           />
         );
@@ -592,7 +607,8 @@ function App() {
     host: state.imap_host,
     smtp_host: `smtp-out.${state.control_domain}`,
     control_domain: state.control_domain,
-    domains: state.domains
+    domains: state.domains,
+    invitation_required: state.invitation_required
   };
 
   const isPreLoginView = ["Login", "SignUp", "Verify", "ForgotPassword", "ResetPassword"]
