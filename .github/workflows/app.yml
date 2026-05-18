@@ -531,6 +531,7 @@ jobs:
         BUILD_SHA: ${{ github.sha }}
         OPERATOR_NAME: ${{ vars.OPERATOR_NAME }}
         OPERATOR_EMAIL: ${{ vars.OPERATOR_EMAIL }}
+        CONTROL_DOMAIN: ${{ vars.TF_VAR_CONTROL_DOMAIN }}
       run: ./.github/scripts/render-front-door.py
 
     - name: upload
