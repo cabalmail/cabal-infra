@@ -128,8 +128,8 @@ button { font: inherit; cursor: pointer; border: 0; background: transparent; col
 }
 .brand:hover { text-decoration: none; }
 .brand-mark {
-  width: 90;
-  height: 90;
+  width: 90px;
+  height: 90px;
   color: var(--accent);
   flex-shrink: 0;
 }
