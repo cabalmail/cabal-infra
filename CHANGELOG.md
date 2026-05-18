@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Runtime config objects (`/config.js`, `/config.json`) now carry
+  `Cache-Control: no-cache`, so a Terraform-only change to Cognito
+  IDs or the API Gateway URL reaches clients on next page load
+  without a CloudFront invalidation. Previously the CloudFront
+  `default_ttl = 600` could serve stale config for up to ten minutes
+  after `infra.yml` applied, because that workflow does not
+  invalidate the distribution. The header is set on the S3 objects
+  themselves (`aws_s3_object.website_config` and
+  `website_config_json` in `terraform/infra/modules/app/s3.tf`) and
+  is honored by CloudFront over its default TTL. `no-cache` (not
+  `no-store`) means ETag-matched requests still return 304.
+- React admin app now surfaces a blocking error screen when the
+  `/config.js` fetch fails on a first visit. Previously the Login
+  form rendered with a null Cognito UserPool and silently swallowed
+  submits. Returning visits with cached `poolData` in `localStorage`
+  are unaffected: a transient refresh failure leaves the app usable
+  against the saved snapshot.
+
 ### Added
 - Shared-secret invitation code gating new signups. A new
   `check_invite` Cognito pre-signup Lambda (under `lambda/counter/`)
