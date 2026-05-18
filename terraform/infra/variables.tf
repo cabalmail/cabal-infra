@@ -155,3 +155,10 @@ variable "use_eum_sms" {
   description = "Feature flag: when true, provision the AWS End User Messaging toll-free phone number for Cognito SMS via SNS. When false, the EUM phone number is not created and Cognito's sms_configuration block falls through to the shared AWS SMS pool (which is sandboxed without registration). Independent of var.use_twilio_sms; setting both true is supported but only one delivery path is on the user pool's hot path at a time (custom_sms_sender wins). See docs/twilio.md."
   default     = false
 }
+
+variable "invitation_code" {
+  type        = string
+  description = "Shared secret that new users must supply on the signup form. Surfaced to the check_invite pre-signup Lambda as the INVITATION_CODE env var. Empty string disables the check and allows all signups."
+  sensitive   = true
+  default     = ""
+}

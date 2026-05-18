@@ -347,6 +347,7 @@ jobs:
         echo "quiesced = ${{ vars.TF_VAR_QUIESCED || 'false' }}" >> terraform.tfvars
         echo "use_twilio_sms = ${{ vars.TF_VAR_USE_TWILIO_SMS || 'false' }}" >> terraform.tfvars
         echo "use_eum_sms = ${{ vars.TF_VAR_USE_EUM_SMS || 'false' }}" >> terraform.tfvars
+        echo "invitation_code = \"${{ vars.TF_VAR_INVITATION_CODE }}\"" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
     - name: record-lambda-hashes
@@ -414,6 +415,7 @@ jobs:
         echo "quiesced = ${{ vars.TF_VAR_QUIESCED || 'false' }}" >> terraform.tfvars
         echo "use_twilio_sms = ${{ vars.TF_VAR_USE_TWILIO_SMS || 'false' }}" >> terraform.tfvars
         echo "use_eum_sms = ${{ vars.TF_VAR_USE_EUM_SMS || 'false' }}" >> terraform.tfvars
+        echo "invitation_code = \"${{ vars.TF_VAR_INVITATION_CODE }}\"" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
     - name: record-lambda-hashes

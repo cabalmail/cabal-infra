@@ -422,6 +422,7 @@ jobs:
       run: |
         BUCKET="admin.${TF_VAR_CONTROL_DOMAIN}"
         ./.github/scripts/deploy-lambda-zip.sh assign_osid "${BUCKET}"
+        ./.github/scripts/deploy-lambda-zip.sh check_invite "${BUCKET}"
 
   lambda-sms-sender:
     needs: setup

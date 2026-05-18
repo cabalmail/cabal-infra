@@ -80,6 +80,7 @@ module "pool" {
   sms_kms_key_arn        = var.use_twilio_sms ? module.sms_sender[0].kms_key_arn : ""
   use_twilio_sms         = var.use_twilio_sms
   use_eum_sms            = var.use_eum_sms
+  invitation_code        = var.invitation_code
 }
 
 # Creates an AWS Certificate Manager certificate for use on load balancers and CloudFront

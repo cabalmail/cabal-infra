@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Shared-secret invitation code gating new signups. A new
+  `check_invite` Cognito pre-signup Lambda (under `lambda/counter/`)
+  rejects signups whose `invitationCode` validation-data value does
+  not match the `INVITATION_CODE` env var. The value is configured
+  via the `TF_VAR_INVITATION_CODE` GitHub environment variable, plumbed
+  through `var.invitation_code` at the root and `module.pool`; leaving
+  it unset (the default) disables the check. The React signup form
+  exposes a new "Invitation code" field and passes the value via
+  Cognito `validationData` so it never lands on the user record.
+  Existing environments stay open by default until the env var is set.
+
 ## [0.9.23] - 2026-05-17
 
 ### Changed
