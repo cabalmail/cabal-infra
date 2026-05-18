@@ -23,6 +23,7 @@ import Login from './Login';
 import Verify from './Verify';
 import ForgotPassword from './ForgotPassword';
 import ResetPassword from './ResetPassword';
+import AuthShell from './Login/AuthShell';
 
 // Persistent Components
 import AppMessage from './AppMessage';
@@ -96,6 +97,7 @@ function App() {
   const [message, setMessageText] = useState(null);
   const [error, setError] = useState(false);
   const [hideMessage, setHideMessage] = useState(true);
+  const [configError, setConfigError] = useState(false);
   const hideTimerRef = useRef(null);
 
   // ApiClient for preference hydration. Only usable once login has populated
@@ -195,7 +197,12 @@ function App() {
     }, e ? 15000 : 4000);
   }, [checkSession]);
 
-  // Fetch config and restore session on mount
+  // Fetch config and restore session on mount.
+  //
+  // If the /config.js fetch fails on a first visit (no localStorage),
+  // configError gates a blocking error screen below; without it the Login
+  // form would render with a null UserPool and silently swallow submits.
+  // Returning visits keep working from the loadSavedState snapshot.
   useEffect(() => {
     axios.get('/config.js').then(({ data }) => {
       const { control_domain, domains, cognitoConfig, invitation_required } = data;
@@ -222,6 +229,9 @@ function App() {
           setState({ loggedIn: true, view: "Email" });
         });
       }
+    }).catch((err) => {
+      console.error('Failed to load runtime config from /config.js', err);
+      setConfigError(true);
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -462,7 +472,20 @@ function App() {
     setState({ view: e.target.name });
   }, [setState]);
 
+  const configUnavailable = configError && !state.poolData;
+
   function renderContent() {
+    if (configUnavailable) {
+      return (
+        <AuthShell>
+          <h1>Cabalmail is unavailable</h1>
+          <p>
+            The app couldn&apos;t load its configuration. Please refresh the
+            page or try again in a few minutes.
+          </p>
+        </AuthShell>
+      );
+    }
     switch (state.view) {
       case "About":
         return (
@@ -611,8 +634,8 @@ function App() {
     invitation_required: state.invitation_required
   };
 
-  const isPreLoginView = ["Login", "SignUp", "Verify", "ForgotPassword", "ResetPassword"]
-    .includes(state.view);
+  const isPreLoginView = configUnavailable
+    || ["Login", "SignUp", "Verify", "ForgotPassword", "ResetPassword"].includes(state.view);
 
   const shortcutCallbacks = useMemo(() => ({
     onToggleHelp: () => setHelpOpen(prev => !prev),
