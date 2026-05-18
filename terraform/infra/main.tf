@@ -123,7 +123,6 @@ module "admin" {
   zone_id             = data.terraform_remote_state.zone.outputs.control_domain_zone_id
   private_zone_id     = module.vpc.private_zone.zone_id
   domains             = module.domains.domains
-  layers              = module.lambda_layers.layers
   bucket              = module.bucket.bucket
   bucket_domain_name  = module.bucket.domain_name
   relay_ips           = module.vpc.relay_ips
