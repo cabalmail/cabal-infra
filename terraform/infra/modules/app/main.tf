@@ -36,7 +36,6 @@ module "cabal_method" {
   source                    = "./modules/call"
   name                      = each.key
   runtime                   = each.value.runtime
-  layer_arns                = [var.layers["python"]]
   method                    = each.value.method
   memory                    = each.value.memory
   region                    = var.region

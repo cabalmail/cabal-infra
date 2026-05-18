@@ -4,7 +4,25 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
- 
+
+## [0.9.23] - 2026-05-17
+
+### Changed
+- API Lambda functions no longer share a Python Lambda layer for
+  `imapclient`, `dnspython`, and `helper.py`. Each function zip now
+  bundles only the third-party deps it actually imports (driven by
+  per-function `requirements.txt`) and a build-time copy of
+  `helper.py` from `lambda/api/_shared/`. `build-api-one.sh` stages
+  each function in a `./build/` subdir and installs deps at the zip
+  root, since Lambda only puts `/var/task` on `sys.path`, not
+  `/var/task/python`. The `lambda_layers` Terraform module,
+  `aws_lambda_layer_version.layer["python"]`, the `layers` /
+  `layer_arns` plumbing through `module.app` and `module.call`, and
+  the `lambda/api/python/` source dir are all deleted. Closes the
+  layer-rebinding gap where an `app.yml` run alone was not enough
+  to ship a `helper.py` change end-to-end -
+  [`docs/0.9.0/lambda-layer-removal-plan.md`](docs/0.9.0/lambda-layer-removal-plan.md).
+
 ## [0.9.22] - 2026-05-17
 
 ### Fixed

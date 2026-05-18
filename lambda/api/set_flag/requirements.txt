@@ -1,0 +1,2 @@
+imapclient==2.3.1
+dnspython==2.3.0

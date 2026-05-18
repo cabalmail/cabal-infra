@@ -41,12 +41,6 @@ module "bucket" {
   control_domain = var.control_domain
 }
 
-# Create Lambda layer for API functions
-module "lambda_layers" {
-  source = "./modules/lambda_layers"
-  bucket = module.bucket.bucket
-}
-
 # SMS sender for Cognito via Twilio. See docs/twilio.md.
 #
 # Gated on var.use_twilio_sms so an environment that doesn't use the
@@ -123,7 +117,6 @@ module "admin" {
   zone_id             = data.terraform_remote_state.zone.outputs.control_domain_zone_id
   private_zone_id     = module.vpc.private_zone.zone_id
   domains             = module.domains.domains
-  layers              = module.lambda_layers.layers
   bucket              = module.bucket.bucket
   bucket_domain_name  = module.bucket.domain_name
   relay_ips           = module.vpc.relay_ips

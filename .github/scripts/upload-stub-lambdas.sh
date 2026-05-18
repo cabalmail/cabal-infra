@@ -41,14 +41,19 @@ if [ ! -d lambda/api ] || [ ! -d lambda/counter ]; then
 fi
 
 # Enumerate the function names that need a zip in S3. Each subdir of
-# lambda/api/ corresponds to s3://${BUCKET}/lambda/<dirname>.zip,
-# including the shared "python" layer dir whose zip is consumed by
-# terraform/infra/modules/lambda_layers. lambda/counter/ contributes
-# assign_osid (and any future counter functions).
+# lambda/api/ corresponds to s3://${BUCKET}/lambda/<dirname>.zip.
+# lambda/counter/ contributes assign_osid (and any future counter
+# functions). Directories whose names start with "_" are build-time
+# scaffolding (currently just lambda/api/_shared/), not Lambda
+# functions, so they have no zip in S3.
 names=()
 for d in lambda/api/*/ lambda/counter/*/; do
   [ -d "${d}" ] || continue
-  names+=("$(basename "${d%/}")")
+  name="$(basename "${d%/}")"
+  case "${name}" in
+    _*) continue ;;
+  esac
+  names+=("${name}")
 done
 
 if [ "${#names[@]}" -eq 0 ]; then

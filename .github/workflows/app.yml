@@ -333,27 +333,28 @@ jobs:
 
     # Out-of-band Lambda deploy. The api functions are registered with
     # function_name == directory name (see modules/app/modules/call), so
-    # the dir name doubles as the AWS function name. The 'python' dir
-    # is the shared Lambda layer, not a function. healthchecks_iac is
+    # the dir name doubles as the AWS function name. healthchecks_iac is
     # excluded for now: phase 2 left it on the legacy in-Terraform
     # invocation flow because aws_lambda_invocation triggers on its
     # source_code_hash and freezing that trigger would block config.py
     # changes from propagating. Phase 3 leaves Terraform as the deploy
     # path for healthchecks_iac (build-api.sh still uploads its zip);
     # a follow-on swaps it to an explicit aws lambda invoke after a
-    # code deploy. Functions whose Terraform module is gated off in
-    # this environment (e.g. alert_sink and backup_heartbeat when
-    # vars.TF_VAR_MONITORING != 'true') do not exist in AWS; we skip
-    # them with a warning rather than fail the run, since build-api.sh
-    # uploads a zip for every directory unconditionally.
-    # Eligibility (skip layer/healthchecks_iac, skip functions whose
-    # module is gated off in this environment) is decided serially
-    # against aws lambda get-function. The actual update-function-code
-    # + wait function-updated calls are then dispatched under
-    # xargs -P so the wall time is dominated by the slowest single
-    # function rather than the sum of ~30 sequential waits. AWS does
-    # not rate-limit update-function-code across distinct functions
-    # at any level we'd hit here.
+    # code deploy. Directories starting with "_" (currently _shared/)
+    # are build-time scaffolding, not Lambda functions. Functions
+    # whose Terraform module is gated off in this environment (e.g.
+    # alert_sink and backup_heartbeat when vars.TF_VAR_MONITORING !=
+    # 'true') do not exist in AWS; we skip them with a warning rather
+    # than fail the run, since build-api.sh uploads a zip for every
+    # directory unconditionally.
+    # Eligibility (skip healthchecks_iac and _* scaffolding, skip
+    # functions whose module is gated off in this environment) is
+    # decided serially against aws lambda get-function. The actual
+    # update-function-code + wait function-updated calls are then
+    # dispatched under xargs -P so the wall time is dominated by the
+    # slowest single function rather than the sum of ~30 sequential
+    # waits. AWS does not rate-limit update-function-code across
+    # distinct functions at any level we'd hit here.
     - name: deploy
       env:
         TF_VAR_CONTROL_DOMAIN: ${{ vars.TF_VAR_CONTROL_DOMAIN }}
@@ -366,7 +367,7 @@ jobs:
         for FUNC_DIR in lambda/api/*/ ; do
           FUNC=$(basename "${FUNC_DIR}")
           case "${FUNC}" in
-            python|healthchecks_iac) continue ;;
+            healthchecks_iac|_*) continue ;;
           esac
           if ! aws lambda get-function --function-name "${FUNC}" >/dev/null 2>&1; then
             echo "::warning::function ${FUNC} not deployed in this environment; skipping"

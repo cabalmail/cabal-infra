@@ -108,7 +108,6 @@ resource "aws_lambda_function" "process_dmarc" {
   s3_bucket        = var.bucket
   s3_key           = "lambda/process_dmarc.zip"
   source_code_hash = data.aws_s3_object.process_dmarc_hash.body
-  layers           = [var.layers["python"]]
   function_name    = "process_dmarc"
   role             = aws_iam_role.process_dmarc.arn
   handler          = "function.handler"
