@@ -71,6 +71,7 @@ function loadSavedState() {
     imap_host: null,
     domains: {},
     api_url: null,
+    invitation_required: false,
   };
   const saved = JSON.parse(window.localStorage.getItem('state'));
   return saved ? { ...defaults, ...saved, password: null, inviteCode: null } : defaults;
@@ -197,7 +198,7 @@ function App() {
   // Fetch config and restore session on mount
   useEffect(() => {
     axios.get('/config.js').then(({ data }) => {
-      const { control_domain, domains, cognitoConfig } = data;
+      const { control_domain, domains, cognitoConfig, invitation_required } = data;
       UserPool = new CognitoUserPool(cognitoConfig.poolData);
       setState({
         poolData: cognitoConfig.poolData,
@@ -206,7 +207,8 @@ function App() {
           ? control_domain.replace("dev.", "imap.")
           : "imap." + control_domain,
         domains,
-        api_url: "https://admin." + control_domain + "/prod"
+        api_url: "https://admin." + control_domain + "/prod",
+        invitation_required: invitation_required === true
       });
       const cognitoUser = UserPool.getCurrentUser();
       if (cognitoUser) {
@@ -605,7 +607,8 @@ function App() {
     host: state.imap_host,
     smtp_host: `smtp-out.${state.control_domain}`,
     control_domain: state.control_domain,
-    domains: state.domains
+    domains: state.domains,
+    invitation_required: state.invitation_required
   };
 
   const isPreLoginView = ["Login", "SignUp", "Verify", "ForgotPassword", "ResetPassword"]

@@ -3,8 +3,8 @@ import { describe, it, expect, vi } from 'vitest';
 import SignUp from './index';
 import AuthContext from '../contexts/AuthContext';
 
-const withAuth = (ui) => (
-  <AuthContext.Provider value={{ control_domain: 'example.com' }}>
+const withAuth = (ui, { invitation_required = false } = {}) => (
+  <AuthContext.Provider value={{ control_domain: 'example.com', invitation_required }}>
     {ui}
   </AuthContext.Provider>
 );
@@ -29,13 +29,22 @@ describe('SignUp', () => {
     inviteCode: 'shared-secret',
   };
 
-  it('renders username, phone, invitation code, and password fields', () => {
+  it('renders username, phone, and password fields', () => {
     render(withAuth(<SignUp {...defaultProps} />));
     expect(screen.getByLabelText('Username')).toBeInTheDocument();
     expect(screen.getByLabelText('Phone number')).toBeInTheDocument();
-    expect(screen.getByLabelText('Invitation code')).toBeInTheDocument();
     expect(screen.getByLabelText('Password')).toBeInTheDocument();
     expect(screen.getByLabelText('Confirm password')).toBeInTheDocument();
+  });
+
+  it('hides the invitation code field when not required', () => {
+    render(withAuth(<SignUp {...defaultProps} />));
+    expect(screen.queryByLabelText('Invitation code')).toBeNull();
+  });
+
+  it('shows the invitation code field when required', () => {
+    render(withAuth(<SignUp {...defaultProps} />, { invitation_required: true }));
+    expect(screen.getByLabelText('Invitation code')).toBeInTheDocument();
   });
 
   it('renders a submit button', () => {
@@ -55,9 +64,9 @@ describe('SignUp', () => {
     expect(onPhoneChange).toHaveBeenCalledTimes(1);
   });
 
-  it('calls onSubmit when the fully-valid form is submitted', () => {
+  it('calls onSubmit when the fully-valid form is submitted (gate off)', () => {
     const onSubmit = vi.fn(e => e.preventDefault());
-    render(withAuth(<SignUp {...defaultProps} {...validProps} onSubmit={onSubmit} />));
+    render(withAuth(<SignUp {...defaultProps} {...validProps} inviteCode="" onSubmit={onSubmit} />));
     fireEvent.change(screen.getByLabelText('Confirm password'), {
       target: { value: validProps.password },
     });
@@ -65,13 +74,27 @@ describe('SignUp', () => {
     expect(onSubmit).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps submit disabled when invitation code is empty', () => {
+  it('calls onSubmit when the fully-valid form is submitted (gate on)', () => {
+    const onSubmit = vi.fn(e => e.preventDefault());
+    render(withAuth(
+      <SignUp {...defaultProps} {...validProps} onSubmit={onSubmit} />,
+      { invitation_required: true }
+    ));
+    fireEvent.change(screen.getByLabelText('Confirm password'), {
+      target: { value: validProps.password },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps submit disabled when invitation code is empty and required', () => {
     render(withAuth(
       <SignUp
         {...defaultProps}
         {...validProps}
         inviteCode=""
-      />
+      />,
+      { invitation_required: true }
     ));
     fireEvent.change(screen.getByLabelText('Confirm password'), {
       target: { value: validProps.password },

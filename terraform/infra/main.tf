@@ -129,6 +129,8 @@ module "admin" {
   admin_group_name          = module.pool.admin_group_name
 
   dmarc_healthcheck_ping_param = local.hc_ping_dmarc
+
+  invitation_required = module.pool.invitation_required
 }
 
 # Creates a DynamoDB table for storing address data
