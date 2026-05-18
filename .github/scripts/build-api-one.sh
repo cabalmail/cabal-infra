@@ -35,9 +35,14 @@ pushd "${FUNC}" >/dev/null
 # sys.path; deps and helper.py therefore go at the zip root, not
 # under a python/ subdir. Staged in ./build/ so reruns do not leave
 # cruft in the source tree.
+#
+# Every *.py at the function dir root is shipped (function.py plus
+# any sibling modules like healthchecks_iac/config.py that the
+# handler imports). requirements.txt is intentionally excluded - it
+# is a build input, not runtime code.
 rm -rf ./build
 mkdir -p ./build
-cp function.py ./build/
+find . -maxdepth 1 -type f -name '*.py' -exec cp {} ./build/ \;
 if [ -s requirements.txt ]; then
   pip install --no-compile -r requirements.txt -t ./build 2>/dev/null || true
 fi
