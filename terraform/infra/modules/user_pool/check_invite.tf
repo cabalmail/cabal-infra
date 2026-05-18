@@ -4,11 +4,45 @@
 * var.invitation_code and surfaced to the Lambda as the INVITATION_CODE
 * env var; when empty (the default) the Lambda short-circuits and lets
 * every signup through.
+*
+* Bootstrap: this module self-seeds the Lambda zip on first apply so
+* that Terraform does not chicken-and-egg against app.yml. archive_file
+* packages a placeholder handler locally; two aws_s3_object resources
+* upload the zip and its base64sha256 sidecar to the same keys app.yml
+* writes to. lifecycle.ignore_changes on the S3 objects (and the Lambda's
+* code-identity attributes) lets app.yml's out-of-band updates win once
+* the real code ships, without Terraform reverting them.
 */
 
-data "aws_s3_object" "check_invite_hash" {
+data "archive_file" "check_invite_placeholder" {
+  type        = "zip"
+  output_path = "${path.module}/.terraform/check_invite_placeholder.zip"
+  source {
+    content  = "def handler(event, _context):\n    return event\n"
+    filename = "function.py"
+  }
+}
+
+resource "aws_s3_object" "check_invite_zip" {
   bucket = var.bucket
-  key    = "/lambda/check_invite.zip.base64sha256"
+  key    = "lambda/check_invite.zip"
+  source = data.archive_file.check_invite_placeholder.output_path
+  etag   = data.archive_file.check_invite_placeholder.output_md5
+
+  lifecycle {
+    ignore_changes = [source, etag, content, content_base64, source_hash, version_id, metadata]
+  }
+}
+
+resource "aws_s3_object" "check_invite_hash" {
+  bucket       = var.bucket
+  key          = "/lambda/check_invite.zip.base64sha256"
+  content      = data.archive_file.check_invite_placeholder.output_base64sha256
+  content_type = "text/plain"
+
+  lifecycle {
+    ignore_changes = [content, etag, source, source_hash, version_id]
+  }
 }
 
 resource "aws_iam_role" "check_invite" {
@@ -61,9 +95,9 @@ resource "aws_cloudwatch_log_group" "check_invite" {
 }
 
 resource "aws_lambda_function" "check_invite" {
-  s3_bucket        = var.bucket
-  s3_key           = "lambda/check_invite.zip"
-  source_code_hash = data.aws_s3_object.check_invite_hash.body
+  s3_bucket        = aws_s3_object.check_invite_zip.bucket
+  s3_key           = aws_s3_object.check_invite_zip.key
+  source_code_hash = data.archive_file.check_invite_placeholder.output_base64sha256
   function_name    = "check_invite"
   role             = aws_iam_role.check_invite.arn
   handler          = "function.handler"
@@ -71,7 +105,10 @@ resource "aws_lambda_function" "check_invite" {
   architectures    = ["arm64"]
   timeout          = 5
 
-  depends_on = [aws_cloudwatch_log_group.check_invite]
+  depends_on = [
+    aws_cloudwatch_log_group.check_invite,
+    aws_s3_object.check_invite_zip,
+  ]
 
   environment {
     variables = {

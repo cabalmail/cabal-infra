@@ -10,6 +10,12 @@ import hmac
 expected_code = os.environ.get('INVITATION_CODE', '')
 
 
+class InvalidInvitationCode(Exception):
+    '''Raised when the supplied invitation code does not match the shared
+    secret. Cognito surfaces the message verbatim to the client as a
+    UserLambdaValidationException.'''
+
+
 def handler(event, _context):
     '''Pre-sign-up Cognito trigger: reject signups missing the shared code.'''
     if not expected_code:
@@ -17,5 +23,5 @@ def handler(event, _context):
     validation_data = (event.get('request') or {}).get('validationData') or {}
     supplied = validation_data.get('invitationCode', '')
     if not hmac.compare_digest(supplied, expected_code):
-        raise Exception('Invalid invitation code.')
+        raise InvalidInvitationCode('Invalid invitation code.')
     return event
