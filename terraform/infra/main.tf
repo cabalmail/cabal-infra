@@ -41,12 +41,6 @@ module "bucket" {
   control_domain = var.control_domain
 }
 
-# Create Lambda layer for API functions
-module "lambda_layers" {
-  source = "./modules/lambda_layers"
-  bucket = module.bucket.bucket
-}
-
 # SMS sender for Cognito via Twilio. See docs/twilio.md.
 #
 # Gated on var.use_twilio_sms so an environment that doesn't use the

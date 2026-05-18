@@ -10,11 +10,10 @@
 # and is copied into each consuming function's zip by build-api-one.sh.
 # Directories whose names start with "_" are scaffolding for this
 # bundling (currently just _shared/) and are not built as Lambda
-# functions. The "python" dir is the legacy shared Lambda layer
-# kept through phase 2 of the layer-removal migration; its zip
-# becomes a new aws_lambda_layer_version every time its sha256
-# changes. Determinism therefore still matters there - same source
-# in, same zip out - to avoid spurious layer-version rotations.
+# functions. Determinism still matters because each function zip's
+# sha256 is recorded as source_code_hash on the running Lambda; a
+# spurious hash bump would force every CI run to redeploy code that
+# is byte-equivalent to what is already deployed.
 #
 # Sources of non-determinism we control here:
 #   - SOURCE_DATE_EPOCH: honored by zip, pip wheel builds, and most
