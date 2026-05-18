@@ -25,23 +25,52 @@ export PYTHONDONTWRITEBYTECODE=1
 
 [ -d "${FUNC}" ] || { echo "[build-api-one] missing dir ${FUNC}" >&2; exit 1; }
 
+# Determinism scrubber applied to whichever staging dir we end up
+# zipping from. See build-api.sh header for what each step removes.
+scrub() {
+  find . -depth -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
+  find . -name '*.pyc' -delete 2>/dev/null || true
+  find . -name 'direct_url.json' -delete 2>/dev/null || true
+  find . -type d -exec chmod 0755 {} +
+  find . -type f -exec chmod 0644 {} +
+  find . -exec touch -h -d "@${SOURCE_DATE_EPOCH}" {} +
+}
+
 pushd "${FUNC}" >/dev/null
-rm -rf ./python
-pip install --no-compile -r requirements.txt -t ./python 2>/dev/null || true
-# The shared layer (lambda/api/python) keeps its first-party module sources
-# under ./src/ so they survive the wipe above; copy them into ./python/
-# alongside the pip-installed third-party deps. See build-api.sh header.
-if [ -d ./src ]; then
-  mkdir -p ./python
-  cp -a ./src/. ./python/
+
+if [ "${FUNC}" = "python" ]; then
+  # Shared Lambda layer build. The layer zip is structured as
+  # python/<modules> so that when AWS Lambda extracts it to /opt/,
+  # /opt/python/ lands on sys.path. helper.py is sourced from
+  # ../_shared so the layer's copy stays byte-identical with the
+  # function-bundled copy throughout the layer-removal migration
+  # (docs/0.9.0/lambda-layer-removal-plan.md). Removed entirely in
+  # phase 3.
+  rm -rf ./python
+  pip install --no-compile -r requirements.txt -t ./python 2>/dev/null || true
+  cp ../_shared/helper.py ./python/helper.py
+  scrub
+  find . -type f -print | LC_ALL=C sort | zip -X -D -@ ../"${FUNC}.zip" >/dev/null
+else
+  # API function build. The zip is extracted to /var/task/, which is
+  # on sys.path; deps and helper.py therefore go at the zip root, not
+  # under a python/ subdir. Staged in ./build/ so reruns do not leave
+  # cruft in the source tree.
+  rm -rf ./build
+  mkdir -p ./build
+  cp function.py ./build/
+  if [ -s requirements.txt ]; then
+    pip install --no-compile -r requirements.txt -t ./build 2>/dev/null || true
+  fi
+  if grep -qE '^[[:space:]]*(from|import)[[:space:]]+helper' function.py 2>/dev/null; then
+    cp ../_shared/helper.py ./build/helper.py
+  fi
+  pushd ./build >/dev/null
+  scrub
+  find . -type f -print | LC_ALL=C sort | zip -X -D -@ ../../"${FUNC}.zip" >/dev/null
+  popd >/dev/null
+  rm -rf ./build
 fi
-find . -depth -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
-find . -name '*.pyc' -delete 2>/dev/null || true
-find . -name 'direct_url.json' -delete 2>/dev/null || true
-find . -type d -exec chmod 0755 {} +
-find . -type f -exec chmod 0644 {} +
-find . -exec touch -h -d "@${SOURCE_DATE_EPOCH}" {} +
-find . -type f -print | LC_ALL=C sort | zip -X -D -@ ../"${FUNC}.zip" >/dev/null
 popd >/dev/null
 
 openssl dgst -sha256 -binary "${FUNC}.zip" | openssl enc -base64 | tr -d "\n" > "${FUNC}.zip.base64sha256"

@@ -366,7 +366,7 @@ jobs:
         for FUNC_DIR in lambda/api/*/ ; do
           FUNC=$(basename "${FUNC_DIR}")
           case "${FUNC}" in
-            python|healthchecks_iac) continue ;;
+            python|healthchecks_iac|_*) continue ;;
           esac
           if ! aws lambda get-function --function-name "${FUNC}" >/dev/null 2>&1; then
             echo "::warning::function ${FUNC} not deployed in this environment; skipping"
