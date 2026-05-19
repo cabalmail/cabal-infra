@@ -60,6 +60,8 @@ jobs:
       # sensible defaults baked in to scripts/submit-tfv-registration.py.
       TFV_MONTHLY_VOLUME:      ${{ vars.TFV_MONTHLY_VOLUME }}
       TFV_USE_CASE_CATEGORY:   ${{ vars.TFV_USE_CASE_CATEGORY }}
+      TFV_BUSINESS_TYPE:       ${{ vars.TFV_BUSINESS_TYPE }}
+      TFV_OPT_IN_TYPE:         ${{ vars.TFV_OPT_IN_TYPE }}
       TFV_USE_CASE_DETAILS:    ${{ vars.TFV_USE_CASE_DETAILS }}
       TFV_OPT_IN_DESCRIPTION:  ${{ vars.TFV_OPT_IN_DESCRIPTION }}
       TFV_SAMPLE_MESSAGE:      ${{ vars.TFV_SAMPLE_MESSAGE }}
