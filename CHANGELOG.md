@@ -5,6 +5,54 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.24] - Unreleased
+
+### Fixed
+- Inbound mail no longer 550-bounces with `Host unknown (Name server:
+  [imap.cabal.internal])` after a Terraform apply touches
+  `aws_service_discovery_service.imap`. The 0.9.21 cleanup of the
+  `health_check_custom_config { failure_threshold = 1 }` block also
+  dropped the `lifecycle { ignore_changes = [health_check_custom_config] }`
+  guard that the monitoring module had originally documented as the
+  workaround for AWS reading the server-side default value as drift.
+  Without the guard, the next apply force-replaced the Cloud Map
+  service - and because ECS only registers tasks with Cloud Map at
+  task START, the running IMAP task remained bound to the destroyed
+  predecessor service's ARN. The new service had zero registered
+  instances, `imap.cabal.internal` returned NXDOMAIN, and smtp-in
+  bounced every inbound message with a permanent 5.1.2.
+- `ignore_changes = [health_check_custom_config]` restored on
+  `aws_service_discovery_service.imap` (`modules/ecs/service_discovery.tf`),
+  `aws_service_discovery_service.monitoring` for-each set, and
+  `aws_service_discovery_service.node_exporter`
+  (`modules/monitoring/discovery.tf`). Primary fix for the recurrence.
+
+### Added
+- `terraform_data.imap_cloud_map_lifecycle` in
+  `modules/ecs/service_discovery.tf` brackets the IMAP Cloud Map
+  service so any future ForceNew (different deprecated field, provider
+  behavior change, manual import) cleanly drains and rebinds. Its
+  `triggers_replace` tracks the Cloud Map service id; the destroy
+  provisioner scales `cabal-imap` to zero and waits for
+  `services-stable` so AWS DeleteService succeeds (it otherwise
+  rejects a service that has registered instances); the create
+  provisioner restores `desired_count` and forces a new deployment so
+  a fresh task registers with the new Cloud Map service ARN.
+  `depends_on = [aws_ecs_service.imap]` is what guarantees the
+  create-provisioner runs after the ECS service's
+  `service_registries.registry_arn` has been updated to the new ARN -
+  without it, the force-new-deployment could fire against the stale
+  ARN and the new task would fail to register.
+- Cloud Map orphan reconciliation in
+  `.github/scripts/post-apply-update-services.sh`. Runs after the
+  existing task-def-family roll. For each ECS service whose
+  `serviceRegistries[0].registryArn` points at a Cloud Map service
+  with zero registered instances - despite the ECS service having
+  running tasks - force-new-deployment is invoked. Safety net for
+  manual interventions, partial apply failures, and any
+  Cloud-Map-registered service that does not yet have the
+  `terraform_data` lifecycle helper (monitoring tiers).
+
 ## [0.9.23] - 2026-05-17
 
 ### Changed
