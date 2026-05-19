@@ -44,6 +44,13 @@ Optional env vars:
                                    the SCREAMING_SNAKE_CASE enum values AWS returns
                                    from describe-registration-field-definitions;
                                    the script logs every valid option at startup)
+  TFV_BUSINESS_TYPE                Default "PRIVATE_PROFIT" (right for an LLC or
+                                   private corporation). Allowed values:
+                                   PRIVATE_PROFIT, PUBLIC_PROFIT, NON_PROFIT,
+                                   SOLE_PROPRIETOR, GOVERNMENT
+  TFV_OPT_IN_TYPE                  Default "DIGITAL_FORM" (right for a web signup
+                                   form). Allowed values: VERBAL, DIGITAL_FORM,
+                                   PAPER_FORM, TEXT, QR_CODE
   TFV_USE_CASE_DETAILS             Free text; script supplies a sensible default
   TFV_OPT_IN_DESCRIPTION           Free text; script supplies a sensible default
   TFV_SAMPLE_MESSAGE               Free text; defaults to what the sms_sender Lambda actually sends
@@ -323,6 +330,33 @@ def check_choice(defs, field, value):
     return None
 
 
+def check_required_coverage(defs, fields_we_set):
+    """Verify every field AWS marks as REQUIRED is in fields_we_set.
+
+    check_text and check_choice only validate the values we send.
+    They cannot catch fields we *don't* send but AWS *requires*; those
+    slip past submission and surface later as "missing field" issues
+    on the registration once a carrier reviewer looks at it. This
+    function closes that gap: if AWS adds a required field tomorrow,
+    the next workflow run fails the validation pass with a clear
+    "missing required fields: X, Y" message before any API mutation.
+
+    Returns an error string when fields are missing, None otherwise.
+    """
+    required = {
+        path for path, d in defs.items()
+        if d.get("FieldRequirement") == "REQUIRED"
+    }
+    missing = sorted(required - set(fields_we_set))
+    if not missing:
+        return None
+    return (
+        f"missing required fields: {', '.join(missing)}. "
+        "Add each to fields_text, fields_choice, or as an attachment "
+        "in main() with a sensible default and an env-var override."
+    )
+
+
 def main():
     region = env("AWS_REGION", required=True)
     client = boto3.client("pinpoint-sms-voice-v2", region_name=region)
@@ -354,6 +388,8 @@ def main():
     fields_choice = {
         "messagingUseCase.monthlyMessageVolume": env("TFV_MONTHLY_VOLUME",    default="10"),
         "messagingUseCase.useCaseCategory":      env("TFV_USE_CASE_CATEGORY", default="ONE_TIME_PASSCODES"),
+        "companyInfo.businessType":              env("TFV_BUSINESS_TYPE",     default="PRIVATE_PROFIT"),
+        "messagingUseCase.optInType":            env("TFV_OPT_IN_TYPE",       default="DIGITAL_FORM"),
     }
 
     image_path = env("TFV_OPT_IN_IMAGE", required=True)
@@ -385,10 +421,19 @@ def main():
     # the attached file matches the current signup screen).
     attachment_id = upload_opt_in_image(client, reg_id, image_path)
 
-    # 5. Validate every value against the fetched definitions, then
-    # set each field. Validation runs as a single pass first so the
-    # operator sees every violation in one workflow run rather than
-    # discovering them one network round-trip at a time.
+    # 5. Validate every value against the fetched definitions, plus
+    # check that we're setting every REQUIRED field at all. Validation
+    # runs as a single pass first so the operator sees every violation
+    # in one workflow run rather than discovering them one network
+    # round-trip at a time. messagingUseCase.optInImage is set via
+    # put_attachment() rather than put_text/put_choice; it's included
+    # in the fields_we_set list so the coverage check doesn't false-
+    # positive on it.
+    fields_we_set = (
+        set(fields_text.keys())
+        | set(fields_choice.keys())
+        | {"messagingUseCase.optInImage"}
+    )
     errors = []
     for field, value in fields_text.items():
         err = check_text(defs, field, value)
@@ -398,6 +443,9 @@ def main():
         err = check_choice(defs, field, value)
         if err:
             errors.append(err)
+    coverage_err = check_required_coverage(defs, fields_we_set)
+    if coverage_err:
+        errors.append(coverage_err)
     if errors:
         print()
         print("Validation failed against AWS field definitions:")
