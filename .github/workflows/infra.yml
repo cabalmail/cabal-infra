@@ -302,6 +302,13 @@ jobs:
       TF_VAR_twilio_api_key: ${{ secrets.TWILIO_API_KEY }}
       TF_VAR_twilio_api_secret: ${{ secrets.TWILIO_API_SECRET }}
       TF_VAR_twilio_from_number: ${{ secrets.TWILIO_FROM_NUMBER }}
+      # Passed via env (not echoed into tfvars) because TF_VAR_INVITATION_CODE
+      # may contain shell-special characters - `$` in particular gets
+      # expanded by bash inside double-quoted echo, silently truncating
+      # the value. env-block substitution writes the literal string
+      # into the process environment, and Terraform auto-picks up
+      # TF_VAR_* env vars without any shell re-interpretation.
+      TF_VAR_invitation_code: ${{ vars.TF_VAR_INVITATION_CODE }}
     steps:
     - name: checkout
       uses: actions/checkout@v5
@@ -347,7 +354,9 @@ jobs:
         echo "quiesced = ${{ vars.TF_VAR_QUIESCED || 'false' }}" >> terraform.tfvars
         echo "use_twilio_sms = ${{ vars.TF_VAR_USE_TWILIO_SMS || 'false' }}" >> terraform.tfvars
         echo "use_eum_sms = ${{ vars.TF_VAR_USE_EUM_SMS || 'false' }}" >> terraform.tfvars
-        echo "invitation_code = \"${{ vars.TF_VAR_INVITATION_CODE }}\"" >> terraform.tfvars
+        # invitation_code is supplied via the TF_VAR_invitation_code env
+        # var on this job (see env: block above) rather than echoed into
+        # tfvars, so shell-special characters like `$` survive unmangled.
     - name: init-terraform
       run: terraform init
     - name: record-lambda-hashes
@@ -385,6 +394,13 @@ jobs:
       TF_VAR_twilio_api_key: ${{ secrets.TWILIO_API_KEY }}
       TF_VAR_twilio_api_secret: ${{ secrets.TWILIO_API_SECRET }}
       TF_VAR_twilio_from_number: ${{ secrets.TWILIO_FROM_NUMBER }}
+      # Passed via env (not echoed into tfvars) because TF_VAR_INVITATION_CODE
+      # may contain shell-special characters - `$` in particular gets
+      # expanded by bash inside double-quoted echo, silently truncating
+      # the value. env-block substitution writes the literal string
+      # into the process environment, and Terraform auto-picks up
+      # TF_VAR_* env vars without any shell re-interpretation.
+      TF_VAR_invitation_code: ${{ vars.TF_VAR_INVITATION_CODE }}
     steps:
     - name: checkout
       uses: actions/checkout@v5
@@ -415,7 +431,9 @@ jobs:
         echo "quiesced = ${{ vars.TF_VAR_QUIESCED || 'false' }}" >> terraform.tfvars
         echo "use_twilio_sms = ${{ vars.TF_VAR_USE_TWILIO_SMS || 'false' }}" >> terraform.tfvars
         echo "use_eum_sms = ${{ vars.TF_VAR_USE_EUM_SMS || 'false' }}" >> terraform.tfvars
-        echo "invitation_code = \"${{ vars.TF_VAR_INVITATION_CODE }}\"" >> terraform.tfvars
+        # invitation_code is supplied via the TF_VAR_invitation_code env
+        # var on this job (see env: block above) rather than echoed into
+        # tfvars, so shell-special characters like `$` survive unmangled.
     - name: init-terraform
       run: terraform init
     - name: record-lambda-hashes
