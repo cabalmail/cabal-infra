@@ -92,8 +92,18 @@ DEFAULT_OPT_IN_DESCRIPTION = (
 
 
 def env(name, default=None, required=False):
-    """Read an env var, optionally enforcing presence."""
-    value = os.environ.get(name, default)
+    """Read an env var, optionally enforcing presence.
+
+    Empty strings are treated as missing. GitHub Actions substitutes
+    `${{ vars.FOO }}` with an empty string when `vars.FOO` is unset
+    rather than leaving the env var unset, so os.environ.get(name,
+    default) returns "" instead of the default for an unset GHA var.
+    Coercing empty strings to the default fixes that asymmetry and
+    matches what the AWS pinpoint-sms-voice-v2 API actually accepts
+    (it rejects TextValue="" at parameter validation, before the
+    request ever hits the service).
+    """
+    value = os.environ.get(name, "") or default
     if required and not value:
         sys.exit(f"error: required env var {name} is not set")
     return value
