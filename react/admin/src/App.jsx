@@ -289,9 +289,21 @@ function App() {
           setMessage("Check your phone for a verification code.", false);
         } else {
           setState({ view: "SignUp" });
-          const msg = /invitation code/i.test(err.message || '')
-            ? "Invalid invitation code."
-            : "Registration failed.";
+          // Surface Cognito's actual error message so signup failures
+          // (lambda rejections, password policy, SMS quota, etc.) are
+          // diagnosable from the UI instead of all collapsing to a
+          // generic "Registration failed". The invitation-code path
+          // gets its own friendly text because Cognito's
+          // UserLambdaValidationException message is verbose.
+          const errMsg = (err && err.message) || '';
+          let msg;
+          if (/invitation code/i.test(errMsg)) {
+            msg = "Invalid invitation code.";
+          } else if (errMsg) {
+            msg = `Registration failed: ${errMsg}`;
+          } else {
+            msg = "Registration failed.";
+          }
           setMessage(msg, true);
         }
       }
