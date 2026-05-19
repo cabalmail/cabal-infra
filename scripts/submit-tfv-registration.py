@@ -78,16 +78,12 @@ DEFAULT_USE_CASE_DETAILS = (
 )
 
 DEFAULT_OPT_IN_DESCRIPTION = (
-    "End users opt in during account creation. The signup form (shown "
-    "in the attached screenshot) requires the user to enter a mobile "
-    "phone number and click 'Create account', a button that is "
-    "labelled with text stating that creating an account constitutes "
-    "consent to receive transactional SMS for signup verification, "
-    "password reset, and sign-in codes, and that the user can reply "
-    "STOP at any time. The privacy policy linked from the same "
-    "screen describes the same opt-in scope. Users who do not wish "
-    "to receive SMS do not create an account; SMS cannot be sent "
-    "without a verified phone number on file."
+    "End users opt in at signup by entering a mobile phone number on "
+    "the form in the attached screenshot. The Create account button "
+    "label states that account creation constitutes consent to receive "
+    "transactional SMS for signup verification, password reset, and "
+    "sign-in codes, with STOP to opt out. The linked privacy policy "
+    "describes the same scope."
 )
 
 
@@ -249,6 +245,81 @@ def submit(client, reg_id):
     )
 
 
+def fetch_field_definitions(client):
+    """Fetch the registration's field definitions from AWS and log
+    every field's constraints. Returns a dict mapping FieldPath
+    (e.g. "messagingUseCase.optInDescription") to its definition.
+
+    Server-side validation rules (max length, allowed choice values,
+    regex patterns) are not documented anywhere stable; they live in
+    this API. Logging them up-front means any future validation
+    failure is one workflow-log lookup away from a diagnosis instead
+    of an opaque INVALID_PARAMETER error.
+    """
+    defs = {}
+    paginator = client.get_paginator("describe_registration_field_definitions")
+    for page in paginator.paginate(RegistrationType=REGISTRATION_TYPE):
+        for d in page.get("RegistrationFieldDefinitions", []):
+            path = d.get("FieldPath", "")
+            defs[path] = d
+            parts = [d.get("FieldType", "?")]
+            if d.get("FieldRequirement") == "REQUIRED":
+                parts.append("required")
+            tv = d.get("TextValidation") or {}
+            if "MinLength" in tv:
+                parts.append(f"min={tv['MinLength']}")
+            if "MaxLength" in tv:
+                parts.append(f"max={tv['MaxLength']}")
+            sv = d.get("SelectValidation") or {}
+            if sv.get("Options"):
+                parts.append(f"options={sv['Options']}")
+            print(f"[defs] {path}: {' '.join(parts)}")
+    return defs
+
+
+def check_text(defs, field, value):
+    """Validate a text value against the field's constraints. Returns
+    an error string on violation, or None on success. Centralizes
+    the per-field rules so the caller can accumulate errors across
+    all fields and surface them together.
+    """
+    d = defs.get(field)
+    if not d:
+        return None
+    tv = d.get("TextValidation") or {}
+    n = len(value)
+    if "MaxLength" in tv and n > tv["MaxLength"]:
+        return (
+            f"{field}: value is {n} chars, exceeds AWS max of "
+            f"{tv['MaxLength']}. Shorten the env var or the in-script "
+            "default."
+        )
+    if "MinLength" in tv and n < tv["MinLength"]:
+        return (
+            f"{field}: value is {n} chars, below AWS min of "
+            f"{tv['MinLength']}. Lengthen the env var or the in-script "
+            "default."
+        )
+    return None
+
+
+def check_choice(defs, field, value):
+    """Validate a choice value against the field's allowed Options.
+    Returns an error string on violation, or None on success.
+    """
+    d = defs.get(field)
+    if not d:
+        return None
+    sv = d.get("SelectValidation") or {}
+    opts = sv.get("Options") or []
+    if opts and value not in opts:
+        return (
+            f"{field}: value '{value}' is not in AWS options "
+            f"{opts}. Set the corresponding env var to one of those."
+        )
+    return None
+
+
 def main():
     region = env("AWS_REGION", required=True)
     client = boto3.client("pinpoint-sms-voice-v2", region_name=region)
@@ -286,12 +357,17 @@ def main():
     if not os.path.isfile(image_path):
         sys.exit(f"error: TFV_OPT_IN_IMAGE path does not exist: {image_path}")
 
-    # 1. Find the phone number
+    # 1. Fetch field definitions up front so every constraint is in
+    # the workflow log and we can validate values client-side before
+    # the API rejects them with an opaque INVALID_PARAMETER.
+    defs = fetch_field_definitions(client)
+
+    # 2. Find the phone number
     phone_number_id = env("TFV_PHONE_NUMBER_ID")
     if not phone_number_id:
         phone_number_id = discover_phone_number_id(client)
 
-    # 2. Find or create the registration
+    # 3. Find or create the registration
     reg_id, status = find_existing_registration(client, phone_number_id)
     if reg_id is None:
         reg_id = create_registration(client)
@@ -302,11 +378,30 @@ def main():
             "return as REQUIRES_UPDATES) before re-running this script."
         )
 
-    # 3. Upload opt-in image (uploaded fresh each run - cheap, ensures
+    # 4. Upload opt-in image (uploaded fresh each run - cheap, ensures
     # the attached file matches the current signup screen).
     attachment_id = upload_opt_in_image(client, reg_id, image_path)
 
-    # 4. Set every field
+    # 5. Validate every value against the fetched definitions, then
+    # set each field. Validation runs as a single pass first so the
+    # operator sees every violation in one workflow run rather than
+    # discovering them one network round-trip at a time.
+    errors = []
+    for field, value in fields_text.items():
+        err = check_text(defs, field, value)
+        if err:
+            errors.append(err)
+    for field, value in fields_choice.items():
+        err = check_choice(defs, field, value)
+        if err:
+            errors.append(err)
+    if errors:
+        print()
+        print("Validation failed against AWS field definitions:")
+        for e in errors:
+            print(f"  - {e}")
+        sys.exit(1)
+
     for field, value in fields_text.items():
         put_text(client, reg_id, field, value)
     for field, value in fields_choice.items():
