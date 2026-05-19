@@ -52,6 +52,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   manual interventions, partial apply failures, and any
   Cloud-Map-registered service that does not yet have the
   `terraform_data` lifecycle helper (monitoring tiers).
+- `docker/shared/hosts-pin.sh` pins `IMAP_INTERNAL_HOST` into
+  `/etc/hosts` on the **smtp-in** container only. Sendmail's
+  mailertable routes every local domain to `smtp:[imap.cabal.internal]`;
+  with stock DNS, a Cloud Map outage on that hostname yields a
+  permanent 5xx "Host unknown" bounce. With the pin in place, sendmail
+  resolves the hostname from `/etc/hosts` and falls through to TCP
+  connect; if the IMAP task is down or the cached IP is stale, the
+  TCP failure yields a queueable 4xx that sendmail retries for ~4
+  days - long enough to weather any realistic orchestration glitch.
+  `entrypoint.sh` runs the script in `init` mode before supervisord
+  so the very first delivery already sees the pin; supervisord then
+  runs it in `daemon` mode (priority=5, before sendmail at 10) to
+  refresh on IMAP-task IP changes every 30s. The lookup uses `dig`
+  directly against the VPC resolver in `/etc/resolv.conf`, not
+  `getent`, to avoid feedback-looping on the pin itself. smtp-out is
+  intentionally not touched: a user-typo'd external recipient must
+  continue to bounce fast rather than sit in the queue for 4 days.
+  `bind-utils` added to `docker/smtp-in/Dockerfile` for `dig`.
 
 ## [0.9.23] - 2026-05-17
 
