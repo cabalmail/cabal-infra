@@ -35,7 +35,7 @@ For each environment you want to enable TFV in (typically `stage` first, then `p
 | `TFV_CONTACT_FIRST_NAME`  | `Jane`                              | Support contact first name. |
 | `TFV_CONTACT_LAST_NAME`   | `Doe`                               | Support contact last name. |
 | `TFV_MONTHLY_VOLUME`      | `10`                                | Optional. Choices: `10`, `100`, `1,000`, `10,000`, `100,000`, `250,000`, `500,000`, `750,000`, `1,000,000`, `5,000,000`, `10,000,000+`. Default `10` is right for a hobby/small instance. |
-| `TFV_USE_CASE_CATEGORY`   | `Two-factor authentication`         | Optional. Choices: `Two-factor authentication`, `One-time passcodes`, `Notifications`, `Polling and surveys`, `Info on demand`, `Promotions & marketing`, `Other`. Default `Two-factor authentication` is right. |
+| `TFV_USE_CASE_CATEGORY`   | `ONE_TIME_PASSCODES`                | Optional. Must be one of the SCREAMING_SNAKE_CASE enum values AWS accepts: `ONE_TIME_PASSCODES`, `ACCOUNT_NOTIFICATIONS`, `DELIVERY_NOTIFICATIONS`, `EVENT_NOTIFICATIONS`, `APPOINTMENT`, `CUSTOMER_CARE`, `EDUCATION`, `BOOKING`, `FINANCIAL_TRANSACTIONS`, `HEALTH_CARE`, `PUBLIC_ANNOUNCEMENTS`, `NON_PROFIT`, `NON_POLITICAL_POLLING_AND_SURVEY`, `PROMOTIONS_AND_MARKETING`. Default `ONE_TIME_PASSCODES` matches Cabalmail's signup-verification / password-reset / sign-in-code traffic. The script logs the authoritative list as `[defs]` lines at startup. |
 | `TFV_USE_CASE_DETAILS`    | (free text)                         | Optional. Default supplied by the script describing Cabalmail's signup/reset/MFA flows. Override only if you want different wording. |
 | `TFV_OPT_IN_DESCRIPTION`  | (free text)                         | Optional. Default supplied by the script describing the signup-screen opt-in flow. Override only if you want different wording. |
 | `TFV_SAMPLE_MESSAGE`      | `Your Cabalmail verification code is 123456` | Optional. Default matches what the `sms_sender` Lambda actually sends. If you change the Lambda copy, update this. |
@@ -97,5 +97,5 @@ Once status is `COMPLETE`:
 
 - **Privacy policy URL inaccessible or missing required language.** The page at `TFV_COMPANY_WEBSITE/privacy.html` must explicitly cover SMS use, message frequency, STOP/HELP keywords, and data retention. The default `front-door/privacy.html` includes all of these.
 - **Opt-in screenshot does not show consent language.** The screenshot must show the SMS consent paragraph on the same screen where the user enters their phone number. The default signup screen since this PR landed satisfies this.
-- **Use case category mismatch with sample message.** If the sample message reads "verification code," `Two-factor authentication` or `One-time passcodes` are accepted; `Notifications` may be flagged.
+- **Use case category mismatch with sample message.** If the sample message reads "verification code," `ONE_TIME_PASSCODES` or `ACCOUNT_NOTIFICATIONS` are the closest fits; `PROMOTIONS_AND_MARKETING` would be rejected.
 - **Volume estimate too high for sole proprietor.** Cabalmail's deployment is low-volume; keep `TFV_MONTHLY_VOLUME=10` unless you actually expect more.

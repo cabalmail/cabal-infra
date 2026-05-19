@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.25] - 2026-05-19
+
+### Changed
+- The shared auth-screen footer (Terms, Privacy, Status, About) is
+  wired to real URLs across all pre-login screens (Login, SignUp,
+  Verify, ForgotPassword, ResetPassword). Terms and Privacy point at
+  the front-door pages introduced in 0.9.21; Status points at the
+  project's GitHub wiki. The three placeholder `href="#"` links had
+  been shipping since the 0.8.x React rewrite. `control_domain` is
+  added to the existing `AuthContext` so `AuthShell` can build the
+  marketing URLs via `useAuth()` without prop-drilling through six
+  screens; SignUp picks up the same source of truth instead of
+  carrying its own `controlDomain` prop.
+- The `sms_sender` Lambda's CloudWatch log group
+  (`/aws/lambda/sms_sender`) is now Terraform-managed with
+  `retention_in_days = 30`, matching the front-door privacy policy's
+  claim that SMS delivery metadata is purged on a bounded schedule.
+  Previously AWS auto-created the log group on first Lambda
+  invocation with "Never Expire" retention, so the privacy claim was
+  false against the actual log lifetime. 30 days matches the
+  retention used elsewhere in the stack (ECS tier logs, certbot
+  logs). A root-module `import` block adopts the existing log group
+  on first apply for environments where the Lambda has already been
+  invoked; fresh environments without a prior invocation should
+  remove the import block before first apply (the resource then
+  creates from scratch). `front-door/privacy.html` updated to reflect
+  the 30-day window and the actual logged fields ("masked phone
+  number" rather than "originator", matching what
+  `_mask_phone_number()` in `lambda/sms-sender/function.py` writes).
+- `.github/workflows/register-tfv.yml` uses
+  `actions/setup-python@v6` (Node.js 24) instead of `@v5` (Node.js
+  20). Clears the GitHub deprecation warning ahead of the 2 June
+  2026 forced switchover; Node.js 20 is removed from runners on 16
+  September 2026.
+
 ## [0.9.24] - 2026-05-19
 
 ### Fixed
