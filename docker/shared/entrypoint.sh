@@ -174,6 +174,20 @@ fi
 echo "[entrypoint] Preparing rsyslog..."
 mkdir -p /var/lib/rsyslog
 
-# ── Step 12: Start services via supervisord ───────────────────
+# ── Step 12: Pin IMAP_INTERNAL_HOST in /etc/hosts (smtp-in only) ──
+# Converts a transient Cloud Map outage from a permanent 5xx bounce
+# ("Host unknown") into a queueable 4xx (TCP connection refused or
+# timeout), which sendmail retries for ~4 days. The companion
+# `hosts-pin` daemon (started by supervisord) refreshes the entry on
+# IMAP-task IP changes. Init runs before supervisord so the very first
+# delivery attempt already sees the pin. Smtp-in only; smtp-out keeps
+# stock DNS so a user-typo'd external recipient still bounces fast.
+if [ "$TIER" = "smtp-in" ]; then
+  echo "[entrypoint] Pinning ${IMAP_INTERNAL_HOST:-imap.cabal.internal} in /etc/hosts..."
+  /usr/local/bin/hosts-pin.sh init \
+    || echo "[entrypoint] WARN initial hosts-pin failed; deliveries may NXDOMAIN until the daemon refreshes"
+fi
+
+# ── Step 13: Start services via supervisord ───────────────────
 echo "[entrypoint] Starting services via supervisord..."
 exec /usr/local/bin/supervisord -c /etc/supervisord.conf
