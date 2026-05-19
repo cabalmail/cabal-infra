@@ -187,6 +187,23 @@ def create_registration(client):
     return reg_id
 
 
+def create_registration_version(client, reg_id):
+    """Open a new draft version on an existing registration so field
+    values can be edited.
+
+    A registration in REQUIRES_UPDATES status has a rejected (frozen)
+    most-recent version. PutRegistrationFieldValue against the frozen
+    version errors with ConflictException
+    EDIT_REGISTRATION_FIELD_VALUES_NOT_ALLOWED. Calling
+    CreateRegistrationVersion produces a fresh draft that inherits
+    the prior version's field values; subsequent
+    PutRegistrationFieldValue calls land on the new draft.
+    """
+    resp = client.create_registration_version(RegistrationId=reg_id)
+    version = resp.get("VersionNumber", "?")
+    print(f"[version] opened draft version {version} on {reg_id}")
+
+
 def upload_opt_in_image(client, reg_id, image_path):
     """Upload the opt-in screenshot, return RegistrationAttachmentId."""
     with open(image_path, "rb") as fh:
@@ -406,11 +423,24 @@ def main():
     if not phone_number_id:
         phone_number_id = discover_phone_number_id(client)
 
-    # 3. Find or create the registration
+    # 3. Find or create the registration. Status drives the next move:
+    #   - none           -> create from scratch
+    #   - DRAFT          -> edit the existing draft (normal re-run case)
+    #   - REQUIRES_UPDATES -> open a fresh draft version; the rejected
+    #                        version is frozen and PutRegistrationFieldValue
+    #                        on it errors with ConflictException
+    #                        EDIT_REGISTRATION_FIELD_VALUES_NOT_ALLOWED.
+    #   - anything else  -> exit. SUBMITTED / REVIEWING / COMPLETE / CLOSED
+    #                       are non-editable states; the operator should
+    #                       wait for AWS to flip status before re-running.
     reg_id, status = find_existing_registration(client, phone_number_id)
     if reg_id is None:
         reg_id = create_registration(client)
-    elif status in ("REVIEWING", "COMPLETE"):
+    elif status == "DRAFT":
+        pass
+    elif status == "REQUIRES_UPDATES":
+        create_registration_version(client, reg_id)
+    else:
         sys.exit(
             f"error: registration {reg_id} is in status {status}; cannot "
             "modify or resubmit. Wait for the review to complete (or "

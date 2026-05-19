@@ -16,6 +16,37 @@ Before you trigger the workflow:
    - **Commit it to the repo.** Save the file as `front-door/opt-in-screenshot.png`. The workflow picks it up automatically.
    - **Host it elsewhere.** Pass an HTTPS URL via the `opt_in_image_url` workflow input. The workflow fetches it at run time. This avoids committing a binary that may need to be regenerated whenever the signup screen changes.
 
+4. **IAM permissions on the `terraform` user.** The workflow re-uses the existing `terraform` IAM user's credentials (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`) from the `infra.yml` workflow. That user does not have `sms-voice:*` permissions by default; attach the inline policy below before triggering the workflow for the first time on each AWS account. The policy is intentionally action-scoped rather than wildcarded so future API additions are reviewable.
+
+   ```json
+   {
+     "Version": "2012-10-17",
+     "Statement": [
+       {
+         "Sid": "CabalmailTFVSubmission",
+         "Effect": "Allow",
+         "Action": [
+           "sms-voice:DescribePhoneNumbers",
+           "sms-voice:DescribeRegistrations",
+           "sms-voice:DescribeRegistrationFieldDefinitions",
+           "sms-voice:DescribeRegistrationVersions",
+           "sms-voice:DescribeRegistrationFieldValues",
+           "sms-voice:ListRegistrationAssociations",
+           "sms-voice:CreateRegistration",
+           "sms-voice:CreateRegistrationVersion",
+           "sms-voice:CreateRegistrationAttachment",
+           "sms-voice:PutRegistrationFieldValue",
+           "sms-voice:CreateRegistrationAssociation",
+           "sms-voice:SubmitRegistrationVersion"
+         ],
+         "Resource": "*"
+       }
+     ]
+   }
+   ```
+
+   AWS Console -> IAM -> Users -> `terraform` -> **Add permissions -> Create inline policy** -> JSON tab -> paste -> name it `CabalmailTFVSubmission`. Same procedure on each AWS account you intend to submit a TFV registration from (stage, prod).
+
 ## GitHub Environment configuration
 
 For each environment you want to enable TFV in (typically `stage` first, then `prod`), set the following under Settings -> Environments -> [environment name].
