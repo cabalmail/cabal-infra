@@ -40,7 +40,10 @@ Optional env vars:
   TFV_COMPANY_ADDRESS2             Street address line 2 (suite, unit)
   TFV_COMPANY_COUNTRY              ISO country code, default US
   TFV_MONTHLY_VOLUME               Default "10" (low-volume hobby project)
-  TFV_USE_CASE_CATEGORY            Default "Two-factor authentication"
+  TFV_USE_CASE_CATEGORY            Default "ONE_TIME_PASSCODES" (must be one of
+                                   the SCREAMING_SNAKE_CASE enum values AWS returns
+                                   from describe-registration-field-definitions;
+                                   the script logs every valid option at startup)
   TFV_USE_CASE_DETAILS             Free text; script supplies a sensible default
   TFV_OPT_IN_DESCRIPTION           Free text; script supplies a sensible default
   TFV_SAMPLE_MESSAGE               Free text; defaults to what the sms_sender Lambda actually sends
@@ -350,7 +353,7 @@ def main():
 
     fields_choice = {
         "messagingUseCase.monthlyMessageVolume": env("TFV_MONTHLY_VOLUME",    default="10"),
-        "messagingUseCase.useCaseCategory":      env("TFV_USE_CASE_CATEGORY", default="Two-factor authentication"),
+        "messagingUseCase.useCaseCategory":      env("TFV_USE_CASE_CATEGORY", default="ONE_TIME_PASSCODES"),
     }
 
     image_path = env("TFV_OPT_IN_IMAGE", required=True)
