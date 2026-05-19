@@ -1,23 +1,32 @@
-# Runtime configuration for React app
+# Runtime configuration for React app.
+#
+# cache_control = "no-cache" makes browsers and CloudFront revalidate every
+# request against the origin (ETag match returns 304 with no body), so a
+# Terraform-only change to Cognito/API values reaches clients on next page
+# load without a CloudFront invalidation. CloudFront honors the origin's
+# Cache-Control over its default_ttl.
 resource "aws_s3_object" "website_config" {
-  bucket       = var.bucket
-  key          = "/config.js"
-  content_type = "text/javascript"
+  bucket        = var.bucket
+  key           = "/config.js"
+  content_type  = "text/javascript"
+  cache_control = "no-cache"
   content = templatefile("${path.module}/templates/config.js", {
-    pool_id        = var.user_pool_id,
-    pool_client_id = var.user_pool_client_id,
-    region         = var.region,
-    invoke_url     = "https://${aws_api_gateway_rest_api.gateway.id}.execute-api.${var.region}.amazonaws.com/${var.stage_name}",
-    domains        = var.domains,
-    control_domain = var.control_domain
+    pool_id             = var.user_pool_id,
+    pool_client_id      = var.user_pool_client_id,
+    region              = var.region,
+    invoke_url          = "https://${aws_api_gateway_rest_api.gateway.id}.execute-api.${var.region}.amazonaws.com/${var.stage_name}",
+    domains             = var.domains,
+    control_domain      = var.control_domain,
+    invitation_required = var.invitation_required
   })
   etag = md5(templatefile("${path.module}/templates/config.js", {
-    pool_id        = var.user_pool_id,
-    pool_client_id = var.user_pool_client_id,
-    region         = var.region,
-    invoke_url     = "https://${aws_api_gateway_rest_api.gateway.id}.execute-api.${var.region}.amazonaws.com/${var.stage_name}",
-    domains        = var.domains,
-    control_domain = var.control_domain
+    pool_id             = var.user_pool_id,
+    pool_client_id      = var.user_pool_client_id,
+    region              = var.region,
+    invoke_url          = "https://${aws_api_gateway_rest_api.gateway.id}.execute-api.${var.region}.amazonaws.com/${var.stage_name}",
+    domains             = var.domains,
+    control_domain      = var.control_domain,
+    invitation_required = var.invitation_required
     })
   )
 }
@@ -28,24 +37,27 @@ resource "aws_s3_object" "website_config" {
 # object with the same shape. The underlying template already produces
 # valid JSON, so it is reused verbatim. See docs/0.6.0/ios-client-plan.md.
 resource "aws_s3_object" "website_config_json" {
-  bucket       = var.bucket
-  key          = "/config.json"
-  content_type = "application/json"
+  bucket        = var.bucket
+  key           = "/config.json"
+  content_type  = "application/json"
+  cache_control = "no-cache"
   content = templatefile("${path.module}/templates/config.js", {
-    pool_id        = var.user_pool_id,
-    pool_client_id = var.user_pool_client_id,
-    region         = var.region,
-    invoke_url     = "https://${aws_api_gateway_rest_api.gateway.id}.execute-api.${var.region}.amazonaws.com/${var.stage_name}",
-    domains        = var.domains,
-    control_domain = var.control_domain
+    pool_id             = var.user_pool_id,
+    pool_client_id      = var.user_pool_client_id,
+    region              = var.region,
+    invoke_url          = "https://${aws_api_gateway_rest_api.gateway.id}.execute-api.${var.region}.amazonaws.com/${var.stage_name}",
+    domains             = var.domains,
+    control_domain      = var.control_domain,
+    invitation_required = var.invitation_required
   })
   etag = md5(templatefile("${path.module}/templates/config.js", {
-    pool_id        = var.user_pool_id,
-    pool_client_id = var.user_pool_client_id,
-    region         = var.region,
-    invoke_url     = "https://${aws_api_gateway_rest_api.gateway.id}.execute-api.${var.region}.amazonaws.com/${var.stage_name}",
-    domains        = var.domains,
-    control_domain = var.control_domain
+    pool_id             = var.user_pool_id,
+    pool_client_id      = var.user_pool_client_id,
+    region              = var.region,
+    invoke_url          = "https://${aws_api_gateway_rest_api.gateway.id}.execute-api.${var.region}.amazonaws.com/${var.stage_name}",
+    domains             = var.domains,
+    control_domain      = var.control_domain,
+    invitation_required = var.invitation_required
     })
   )
 }

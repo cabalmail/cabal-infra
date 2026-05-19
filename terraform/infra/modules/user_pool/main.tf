@@ -38,6 +38,7 @@ resource "aws_cognito_user_pool" "users" {
   # See docs/twilio.md.
   lambda_config {
     post_confirmation = aws_lambda_function.assign_osid.arn
+    pre_sign_up       = aws_lambda_function.check_invite.arn
 
     dynamic "custom_sms_sender" {
       for_each = var.use_twilio_sms ? [1] : []

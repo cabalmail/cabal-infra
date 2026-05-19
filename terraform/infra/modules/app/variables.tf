@@ -93,3 +93,9 @@ variable "dmarc_healthcheck_ping_param" {
   description = "SSM Parameter Store name holding the Healthchecks ping URL for the process_dmarc Lambda. Empty string disables the heartbeat."
   default     = ""
 }
+
+variable "invitation_required" {
+  type        = bool
+  description = "When true, the React signup form renders the invitation-code field and requires a non-empty value. Plumbed into /config.js so the client can mirror the server-side check_invite gate."
+  default     = false
+}

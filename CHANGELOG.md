@@ -5,6 +5,109 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.24] - 2026-05-19
+
+### Fixed
+- Inbound mail no longer 550-bounces with `Host unknown (Name server:
+  [imap.cabal.internal])` after a Terraform apply touches
+  `aws_service_discovery_service.imap`. The 0.9.21 cleanup of the
+  `health_check_custom_config { failure_threshold = 1 }` block also
+  dropped the `lifecycle { ignore_changes = [health_check_custom_config] }`
+  guard that the monitoring module had originally documented as the
+  workaround for AWS reading the server-side default value as drift.
+  Without the guard, the next apply force-replaced the Cloud Map
+  service - and because ECS only registers tasks with Cloud Map at
+  task START, the running IMAP task remained bound to the destroyed
+  predecessor service's ARN. The new service had zero registered
+  instances, `imap.cabal.internal` returned NXDOMAIN, and smtp-in
+  bounced every inbound message with a permanent 5.1.2.
+- `ignore_changes = [health_check_custom_config]` restored on
+  `aws_service_discovery_service.imap` (`modules/ecs/service_discovery.tf`),
+  `aws_service_discovery_service.monitoring` for-each set, and
+  `aws_service_discovery_service.node_exporter`
+  (`modules/monitoring/discovery.tf`). Primary fix for the recurrence.
+- Runtime config objects (`/config.js`, `/config.json`) now carry
+  `Cache-Control: no-cache`, so a Terraform-only change to Cognito
+  IDs or the API Gateway URL reaches clients on next page load
+  without a CloudFront invalidation. Previously the CloudFront
+  `default_ttl = 600` could serve stale config for up to ten minutes
+  after `infra.yml` applied, because that workflow does not
+  invalidate the distribution. The header is set on the S3 objects
+  themselves (`aws_s3_object.website_config` and
+  `website_config_json` in `terraform/infra/modules/app/s3.tf`) and
+  is honored by CloudFront over its default TTL. `no-cache` (not
+  `no-store`) means ETag-matched requests still return 304.
+- React admin app now surfaces a blocking error screen when the
+  `/config.js` fetch fails on a first visit. Previously the Login
+  form rendered with a null Cognito UserPool and silently swallowed
+  submits. Returning visits with cached `poolData` in `localStorage`
+  are unaffected: a transient refresh failure leaves the app usable
+  against the saved snapshot.
+
+### Added
+- Shared-secret invitation code gating new signups. A new
+  `check_invite` Cognito pre-signup Lambda (under `lambda/counter/`)
+  rejects signups whose `invitationCode` validation-data value does
+  not match the `INVITATION_CODE` env var. The value is configured
+  via the `TF_VAR_INVITATION_CODE` GitHub environment variable, plumbed
+  through `var.invitation_code` at the root and `module.pool`; leaving
+  it unset (the default) disables the check. The user_pool module
+  emits an `invitation_required` boolean output that the app module
+  threads into the runtime `/config.js`, so the React signup form
+  conditionally renders the "Invitation code" field only when the
+  server-side gate is on. The value is passed via Cognito
+  `validationData` so it never lands on the user record. Existing
+  environments stay open by default until the env var is set.
+
+  The `check_invite` Terraform self-seeds a placeholder zip via
+  `archive_file` + `aws_s3_object` on first apply, so the Lambda's
+  initial creation does not chicken-and-egg against `app.yml`. The
+  real code lands on the next `app.yml` run via
+  `aws lambda update-function-code`; `lifecycle.ignore_changes` on
+  the S3 objects keeps Terraform from reverting it.
+- `terraform_data.imap_cloud_map_lifecycle` in
+  `modules/ecs/service_discovery.tf` brackets the IMAP Cloud Map
+  service so any future ForceNew (different deprecated field, provider
+  behavior change, manual import) cleanly drains and rebinds. Its
+  `triggers_replace` tracks the Cloud Map service id; the destroy
+  provisioner scales `cabal-imap` to zero and waits for
+  `services-stable` so AWS DeleteService succeeds (it otherwise
+  rejects a service that has registered instances); the create
+  provisioner restores `desired_count` and forces a new deployment so
+  a fresh task registers with the new Cloud Map service ARN.
+  `depends_on = [aws_ecs_service.imap]` is what guarantees the
+  create-provisioner runs after the ECS service's
+  `service_registries.registry_arn` has been updated to the new ARN -
+  without it, the force-new-deployment could fire against the stale
+  ARN and the new task would fail to register.
+- Cloud Map orphan reconciliation in
+  `.github/scripts/post-apply-update-services.sh`. Runs after the
+  existing task-def-family roll. For each ECS service whose
+  `serviceRegistries[0].registryArn` points at a Cloud Map service
+  with zero registered instances - despite the ECS service having
+  running tasks - force-new-deployment is invoked. Safety net for
+  manual interventions, partial apply failures, and any
+  Cloud-Map-registered service that does not yet have the
+  `terraform_data` lifecycle helper (monitoring tiers).
+- `docker/shared/hosts-pin.sh` pins `IMAP_INTERNAL_HOST` into
+  `/etc/hosts` on the **smtp-in** container only. Sendmail's
+  mailertable routes every local domain to `smtp:[imap.cabal.internal]`;
+  with stock DNS, a Cloud Map outage on that hostname yields a
+  permanent 5xx "Host unknown" bounce. With the pin in place, sendmail
+  resolves the hostname from `/etc/hosts` and falls through to TCP
+  connect; if the IMAP task is down or the cached IP is stale, the
+  TCP failure yields a queueable 4xx that sendmail retries for ~4
+  days - long enough to weather any realistic orchestration glitch.
+  `entrypoint.sh` runs the script in `init` mode before supervisord
+  so the very first delivery already sees the pin; supervisord then
+  runs it in `daemon` mode (priority=5, before sendmail at 10) to
+  refresh on IMAP-task IP changes every 30s. The lookup uses `dig`
+  directly against the VPC resolver in `/etc/resolv.conf`, not
+  `getent`, to avoid feedback-looping on the pin itself. smtp-out is
+  intentionally not touched: a user-typo'd external recipient must
+  continue to bounce fast rather than sit in the queue for 4 days.
+  `bind-utils` added to `docker/smtp-in/Dockerfile` for `dig`.
+
 ## [0.9.23] - 2026-05-17
 
 ### Changed

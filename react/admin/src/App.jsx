@@ -23,6 +23,7 @@ import Login from './Login';
 import Verify from './Verify';
 import ForgotPassword from './ForgotPassword';
 import ResetPassword from './ResetPassword';
+import AuthShell from './Login/AuthShell';
 
 // Persistent Components
 import AppMessage from './AppMessage';
@@ -63,6 +64,7 @@ function loadSavedState() {
     userName: null,
     password: null,
     phone: null,
+    inviteCode: null,
     verificationCode: null,
     view: "Login",
     poolData: null,
@@ -70,14 +72,15 @@ function loadSavedState() {
     imap_host: null,
     domains: {},
     api_url: null,
+    invitation_required: false,
   };
   const saved = JSON.parse(window.localStorage.getItem('state'));
-  return saved ? { ...defaults, ...saved, password: null } : defaults;
+  return saved ? { ...defaults, ...saved, password: null, inviteCode: null } : defaults;
 }
 
 function persistState(state) {
   try {
-    const { password, ...safe } = state;
+    const { password, inviteCode, ...safe } = state;
     window.localStorage.setItem('state', JSON.stringify(safe));
   } catch (e) {
     console.log(e);
@@ -94,6 +97,7 @@ function App() {
   const [message, setMessageText] = useState(null);
   const [error, setError] = useState(false);
   const [hideMessage, setHideMessage] = useState(true);
+  const [configError, setConfigError] = useState(false);
   const hideTimerRef = useRef(null);
 
   // ApiClient for preference hydration. Only usable once login has populated
@@ -193,10 +197,15 @@ function App() {
     }, e ? 15000 : 4000);
   }, [checkSession]);
 
-  // Fetch config and restore session on mount
+  // Fetch config and restore session on mount.
+  //
+  // If the /config.js fetch fails on a first visit (no localStorage),
+  // configError gates a blocking error screen below; without it the Login
+  // form would render with a null UserPool and silently swallow submits.
+  // Returning visits keep working from the loadSavedState snapshot.
   useEffect(() => {
     axios.get('/config.js').then(({ data }) => {
-      const { control_domain, domains, cognitoConfig } = data;
+      const { control_domain, domains, cognitoConfig, invitation_required } = data;
       UserPool = new CognitoUserPool(cognitoConfig.poolData);
       setState({
         poolData: cognitoConfig.poolData,
@@ -205,7 +214,8 @@ function App() {
           ? control_domain.replace("dev.", "imap.")
           : "imap." + control_domain,
         domains,
-        api_url: "https://admin." + control_domain + "/prod"
+        api_url: "https://admin." + control_domain + "/prod",
+        invitation_required: invitation_required === true
       });
       const cognitoUser = UserPool.getCurrentUser();
       if (cognitoUser) {
@@ -219,6 +229,9 @@ function App() {
           setState({ loggedIn: true, view: "Email" });
         });
       }
+    }).catch((err) => {
+      console.error('Failed to load runtime config from /config.js', err);
+      setConfigError(true);
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -268,22 +281,32 @@ function App() {
       Name: 'phone_number',
       Value: state.phone
     });
+    // Shared-secret invitation code, validated by the check_invite
+    // Cognito pre-signup Lambda. Passed via validationData so it never
+    // lands on the user record. Key must match the Python handler.
+    const validationData = [new CognitoUserAttribute({
+      Name: 'invitationCode',
+      Value: state.inviteCode || ''
+    })];
     UserPool.signUp(
       state.userName,
       state.password,
       [attributeUsername, attributePhone],
-      null,
+      validationData,
       (err, _result) => {
         if (!err) {
-          setState({ view: "Verify" });
+          setState({ view: "Verify", inviteCode: null });
           setMessage("Check your phone for a verification code.", false);
         } else {
           setState({ view: "SignUp" });
-          setMessage("Registration failed.", true);
+          const msg = /invitation code/i.test(err.message || '')
+            ? "Invalid invitation code."
+            : "Registration failed.";
+          setMessage(msg, true);
         }
       }
     );
-  }, [state.userName, state.password, state.phone, setState, setMessage]);
+  }, [state.userName, state.password, state.phone, state.inviteCode, setState, setMessage]);
 
   const doVerify = useCallback((e) => {
     e.preventDefault();
@@ -449,7 +472,20 @@ function App() {
     setState({ view: e.target.name });
   }, [setState]);
 
+  const configUnavailable = configError && !state.poolData;
+
   function renderContent() {
+    if (configUnavailable) {
+      return (
+        <AuthShell>
+          <h1>Cabalmail is unavailable</h1>
+          <p>
+            The app couldn&apos;t load its configuration. Please refresh the
+            page or try again in a few minutes.
+          </p>
+        </AuthShell>
+      );
+    }
     switch (state.view) {
       case "About":
         return (
@@ -535,9 +571,11 @@ function App() {
             onUsernameChange={doInputChange}
             onPhoneChange={doInputChange}
             onPasswordChange={doInputChange}
+            onInviteCodeChange={doInputChange}
             username={state.userName}
             password={state.password}
             phone={state.phone}
+            inviteCode={state.inviteCode}
             onSignIn={(e) => { e.preventDefault(); setState({ view: "Login" }); }}
           />
         );
@@ -592,11 +630,12 @@ function App() {
     host: state.imap_host,
     smtp_host: `smtp-out.${state.control_domain}`,
     control_domain: state.control_domain,
-    domains: state.domains
+    domains: state.domains,
+    invitation_required: state.invitation_required
   };
 
-  const isPreLoginView = ["Login", "SignUp", "Verify", "ForgotPassword", "ResetPassword"]
-    .includes(state.view);
+  const isPreLoginView = configUnavailable
+    || ["Login", "SignUp", "Verify", "ForgotPassword", "ResetPassword"].includes(state.view);
 
   const shortcutCallbacks = useMemo(() => ({
     onToggleHelp: () => setHelpOpen(prev => !prev),

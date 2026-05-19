@@ -26,16 +26,18 @@ function SignUp({
   onUsernameChange,
   onPhoneChange,
   onPasswordChange,
+  onInviteCodeChange,
   username,
   phone,
   password,
+  inviteCode,
   onSignIn,
 }) {
   // Legal pages live on the front door site at www.<control_domain>.
   // control_domain is loaded asynchronously from /config.js by App.jsx;
   // if the signup screen renders before it resolves (rare in practice),
   // fall back to "#" so we don't navigate to https://www.null/...
-  const { control_domain } = useAuth();
+  const { control_domain, invitation_required } = useAuth();
   const frontDoorOrigin = control_domain ? `https://www.${control_domain}` : null;
   const termsHref = frontDoorOrigin ? `${frontDoorOrigin}/terms.html` : '#';
   const privacyHref = frontDoorOrigin ? `${frontDoorOrigin}/privacy.html` : '#';
@@ -47,7 +49,8 @@ function SignUp({
   const phoneValid = /^\+?[0-9\s-]{7,}$/.test(phone || '');
   const passwordValid = (password || '').length >= 12;
   const confirmValid = confirm.length > 0 && confirm === password;
-  const valid = usernameValid && phoneValid && passwordValid && confirmValid;
+  const inviteCodeValid = !invitation_required || (inviteCode || '').length > 0;
+  const valid = usernameValid && phoneValid && passwordValid && confirmValid && inviteCodeValid;
 
   const handleSubmit = (e) => {
     if (!valid) { e.preventDefault(); return; }
@@ -105,6 +108,29 @@ function SignUp({
             required
           />
         </div>
+        {invitation_required ? (
+          <div className="auth__field">
+            <div className="auth__field-header">
+              <label className="auth__field-label" htmlFor="inviteCode">Invitation code</label>
+            </div>
+            <input
+              id="inviteCode"
+              name="inviteCode"
+              type="text"
+              autoComplete="off"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck="false"
+              placeholder="Ask the operator"
+              onChange={onInviteCodeChange}
+              value={inviteCode || ''}
+              required
+            />
+            <p className="auth__field-help">
+              Signup is by invitation. Paste the code you were given.
+            </p>
+          </div>
+        ) : null}
         <div className="auth__field">
           <div className="auth__field-header">
             <label className="auth__field-label" htmlFor="password">Password</label>
