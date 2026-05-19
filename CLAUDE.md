@@ -12,13 +12,6 @@ The mail tiers run as Docker containers on ECS (EC2 launch type). See `docs/0.4.
 
 These rules are evolving — they reflect the current solo-developer workflow and will change as patterns settle. Update them rather than working around them.
 
-### Collaboration
-
-The asymmetry below is deliberate — commits and pushes are treated differently.
-
-- **Local commits: do them proactively, without asking.** Once a change is reasonably shippable, commit it. Don't wait for confirmation. Local commits are cheap and the human reviews them at merge time.
-- **Pushes to origin: do not do them.** The human merges from the worktree, studies the change locally, and pushes their own branch. This applies even after a commit you were asked to make. **Exception:** If you were invoked via GitHub Actions, commit, push, and create a PR to `stage`.
-
 ### Branches and environments
 
 Three named branches map 1:1 to GitHub Environments and AWS accounts:
@@ -244,28 +237,4 @@ Use semantic versioning. Create a new version when appropriate. When creating a 
 
 ## Roadmap
 
-| Version | Target Features                                                                                     | Status      |
-| ------- | --------------------------------------------------------------------------------------------------- | ----------- |
-| 0.1.0   | Complete functioning infrastructure; admin app supports creation and revocation of addresses.       | Done        |
-| 0.2.0   | App includes full browser-based IMAP mail client.                                                   | Done        |
-| 0.3.0   | IMAP mail client From: field allows pick or create; for replies, defaults to addressee of original. | Done        |
-| 0.3.1   | Update documentation with new UI features.                                                          | Done        |
-| 0.4.0   | Migrate from EC2 instances to containers.                                                           | Done        |
-| 0.4.1   | Move cert renewal from Terraform to Lambda; Modernize web client.                                   | Done        |
-| 0.5.x   | User management dashboard.                                                                          | Done        |
-| 0.6.x   | Native app for iOS.                                                                                 | Done        |
-| 0.7.x   | Monitoring and alerting.                                                                            | Done        |
-| 0.8.x   | Overhaul web UX.                                                                                    | Done        |
-| 0.9.x   | Stabilize.                                                                                          | In Progress |
-| 0.10.x  | Harden.                                                                                             | Planning    |
-| 1.0.x   | Production-ready release.                                                                           |             |
-| 1.1.x   | Native app for Android.                                                                             |             |
-| 1.2.x   | Quotas.                                                                                             |             |
-| 1.3.x   | Framework for developing procmail-like features (forwarding, marking-read, etc.).                   |             |
-| 1.3.x   | Expose UI for auto-forwarding.                                                                      |             |
-| 1.4.x   | iOS App Store release.                                                                              |             |
-| 1.5.x   | Google Play or other Android store release.                                                         |             |
-| 1.6.x   | Stabilize.                                                                                          |             |
-| 2.0.x   | RSS reader for web client.                                                                          |             |
-| 2.1.x   | RSS reader for iOS app.                                                                             |             |
-| 2.2.x   | RSS reader for Android app.                                                                         |             |
+See the [project wiki](https://github.com/cabalmail/cabal-infra/wiki) for the current roadmap.
