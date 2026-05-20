@@ -220,7 +220,13 @@ def create_registration_version(client, reg_id):
 
 
 def upload_opt_in_image(client, reg_id, image_path):
-    """Upload the opt-in screenshot, return RegistrationAttachmentId."""
+    """Upload the opt-in screenshot, return RegistrationAttachmentId.
+
+    CreateRegistrationAttachment returns immediately; AWS processes
+    the upload asynchronously. The attachment is not usable until its
+    AttachmentStatus reaches UPLOAD_COMPLETE - see
+    wait_for_attachment_active().
+    """
     with open(image_path, "rb") as fh:
         body = fh.read()
     resp = client.create_registration_attachment(
@@ -230,6 +236,40 @@ def upload_opt_in_image(client, reg_id, image_path):
     att_id = resp["RegistrationAttachmentId"]
     print(f"[attach] uploaded opt-in image: {att_id} ({len(body)} bytes)")
     return att_id
+
+
+def wait_for_attachment_active(client, attachment_id, timeout=120, interval=3):
+    """Poll describe-registration-attachments until UPLOAD_COMPLETE.
+
+    PutRegistrationFieldValue binding an attachment to a field fails
+    with ConflictException RESOURCE_NOT_ACTIVE while the attachment
+    is still in UPLOAD_IN_PROGRESS. Empirically the put_text /
+    put_choice round-trips between upload and bind don't always give
+    AWS enough time. Poll until status flips, error on UPLOAD_FAILED,
+    bail after timeout.
+    """
+    print(f"[wait] polling attachment {attachment_id} until UPLOAD_COMPLETE")
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        resp = client.describe_registration_attachments(
+            RegistrationAttachmentIds=[attachment_id],
+        )
+        items = resp.get("RegistrationAttachments", [])
+        if items:
+            status = items[0].get("AttachmentStatus", "")
+            if status == "UPLOAD_COMPLETE":
+                print(f"[wait] attachment {attachment_id} status={status}")
+                return
+            if status == "UPLOAD_FAILED":
+                sys.exit(
+                    f"error: attachment {attachment_id} upload failed; "
+                    "re-run to upload a fresh copy"
+                )
+        time.sleep(interval)
+    sys.exit(
+        f"error: attachment {attachment_id} did not reach UPLOAD_COMPLETE "
+        f"within {timeout}s; check the AWS console or re-run"
+    )
 
 
 def put_text(client, reg_id, field, value):
@@ -531,6 +571,11 @@ def main():
         put_text(client, reg_id, field, value)
     for field, value in fields_choice.items():
         put_choice(client, reg_id, field, value)
+
+    # The text/choice round-trips above don't reliably take long enough
+    # for AWS to finish processing the upload from upload_opt_in_image().
+    # Wait explicitly before binding.
+    wait_for_attachment_active(client, attachment_id)
     put_attachment(client, reg_id, "messagingUseCase.optInImage", attachment_id)
 
     # 5. Associate the phone number (no-op if already linked)

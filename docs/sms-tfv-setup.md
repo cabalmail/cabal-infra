@@ -31,6 +31,7 @@ Before you trigger the workflow:
            "sms-voice:DescribeRegistrationFieldDefinitions",
            "sms-voice:DescribeRegistrationVersions",
            "sms-voice:DescribeRegistrationFieldValues",
+           "sms-voice:DescribeRegistrationAttachments",
            "sms-voice:ListRegistrationAssociations",
            "sms-voice:CreateRegistration",
            "sms-voice:CreateRegistrationVersion",
