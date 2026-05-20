@@ -57,20 +57,9 @@ Cabalmail authenticates to Twilio with an API Key (a scoped credential), not the
 2. Type: **Standard**.
 3. Make a note of the **SID** (starts with `SK...`) and the **Secret**. The secret is shown exactly once and cannot be retrieved later - if you lose it, you have to create a new key.
 
-## GitHub Environment secrets
+## GitHub configuration
 
-Add the following [GitHub Environment](https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-deployments/managing-environments-for-deployment) secrets to each environment where you want Twilio enabled (typically `stage` and `prod`; `development` is optional). Settings > Environments > [environment name] > Add secret.
-
-| Secret | Value |
-| --- | --- |
-| `TWILIO_ACCOUNT_SID` | Twilio Account SID (starts with `AC...`). If you're using a subaccount, use the subaccount's SID, not the parent. |
-| `TWILIO_API_KEY` | API Key SID from above (starts with `SK...`). |
-| `TWILIO_API_SECRET` | API Key Secret from above. |
-| `TWILIO_FROM_NUMBER` | Either the E.164 phone number (e.g., `+15551234567`) or a Messaging Service SID (starts with `MG...`). Once A2P 10DLC is approved, prefer the Messaging Service SID so messages route through the registered campaign. |
-
-## Enable the feature flag
-
-Add a [GitHub Environment variable](https://docs.github.com/en/actions/learn-github-actions/variables#defining-configuration-variables-for-multiple-workflows) (not a secret) named `TF_VAR_USE_TWILIO_SMS` with value `true` to each environment that should route SMS through Twilio. Default is `false`.
+Add the `TWILIO_*` environment secrets and set `TF_VAR_USE_TWILIO_SMS=true` on each environment where you want Twilio enabled (typically `stage` and `prod`; `development` is optional). The full list of variable and secret names, with descriptions, is in [docs/github.md](github.md#sms----twilio).
 
 Then trigger the `infra.yml` workflow (any push to the named branch, or `workflow_dispatch`). Terraform will provision the `sms_sender` module (KMS key + SSM parameters + Lambda) and wire the custom SMS sender Lambda into the Cognito user pool. The next signup verification, password reset, or MFA code will be delivered by Twilio.
 

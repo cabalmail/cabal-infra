@@ -16,38 +16,41 @@ Before you trigger the workflow:
    - **Commit it to the repo.** Save the file as `front-door/opt-in-screenshot.png`. The workflow picks it up automatically.
    - **Host it elsewhere.** Pass an HTTPS URL via the `opt_in_image_url` workflow input. The workflow fetches it at run time. This avoids committing a binary that may need to be regenerated whenever the signup screen changes.
 
+4. **IAM permissions on the `terraform` user.** The workflow re-uses the existing `terraform` IAM user's credentials (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`) from the `infra.yml` workflow. That user does not have `sms-voice:*` permissions by default; attach the inline policy below before triggering the workflow for the first time on each AWS account. The policy is intentionally action-scoped rather than wildcarded so future API additions are reviewable.
+
+   ```json
+   {
+     "Version": "2012-10-17",
+     "Statement": [
+       {
+         "Sid": "CabalmailTFVSubmission",
+         "Effect": "Allow",
+         "Action": [
+           "sms-voice:DescribePhoneNumbers",
+           "sms-voice:DescribeRegistrations",
+           "sms-voice:DescribeRegistrationFieldDefinitions",
+           "sms-voice:DescribeRegistrationVersions",
+           "sms-voice:DescribeRegistrationFieldValues",
+           "sms-voice:DescribeRegistrationAttachments",
+           "sms-voice:ListRegistrationAssociations",
+           "sms-voice:CreateRegistration",
+           "sms-voice:CreateRegistrationVersion",
+           "sms-voice:CreateRegistrationAttachment",
+           "sms-voice:PutRegistrationFieldValue",
+           "sms-voice:CreateRegistrationAssociation",
+           "sms-voice:SubmitRegistrationVersion"
+         ],
+         "Resource": "*"
+       }
+     ]
+   }
+   ```
+
+   AWS Console -> IAM -> Users -> `terraform` -> **Add permissions -> Create inline policy** -> JSON tab -> paste -> name it `CabalmailTFVSubmission`. Same procedure on each AWS account you intend to submit a TFV registration from (stage, prod).
+
 ## GitHub Environment configuration
 
-For each environment you want to enable TFV in (typically `stage` first, then `prod`), set the following under Settings -> Environments -> [environment name].
-
-### Variables (non-sensitive; visible in workflow logs)
-
-| Variable | Example | Notes |
-| --- | --- | --- |
-| `TFV_COMPANY_NAME`        | `Example Holdings LLC`              | Legal entity name exactly as registered. Must match your EIN documentation. |
-| `TFV_COMPANY_WEBSITE`     | `https://www.cabal-mail.net`        | The front door site URL. Must be a live HTTPS URL that resolves to a page describing the service. |
-| `TFV_COMPANY_ADDRESS1`    | `1234 Example Street`               | Street address line 1. |
-| `TFV_COMPANY_ADDRESS2`    | `Suite 200`                         | Optional; omit the variable if not applicable. |
-| `TFV_COMPANY_CITY`        | `Wilmington`                        |  |
-| `TFV_COMPANY_STATE`       | `DE`                                | Two-letter US state code or two/three-letter province code. |
-| `TFV_COMPANY_ZIP`         | `19801`                             |  |
-| `TFV_COMPANY_COUNTRY`     | `US`                                | ISO 3166-1 alpha-2. Defaults to `US` if unset. |
-| `TFV_CONTACT_FIRST_NAME`  | `Jane`                              | Support contact first name. |
-| `TFV_CONTACT_LAST_NAME`   | `Doe`                               | Support contact last name. |
-| `TFV_MONTHLY_VOLUME`      | `10`                                | Optional. Choices: `10`, `100`, `1,000`, `10,000`, `100,000`, `250,000`, `500,000`, `750,000`, `1,000,000`, `5,000,000`, `10,000,000+`. Default `10` is right for a hobby/small instance. |
-| `TFV_USE_CASE_CATEGORY`   | `ONE_TIME_PASSCODES`                | Optional. Must be one of the SCREAMING_SNAKE_CASE enum values AWS accepts: `ONE_TIME_PASSCODES`, `ACCOUNT_NOTIFICATIONS`, `DELIVERY_NOTIFICATIONS`, `EVENT_NOTIFICATIONS`, `APPOINTMENT`, `CUSTOMER_CARE`, `EDUCATION`, `BOOKING`, `FINANCIAL_TRANSACTIONS`, `HEALTH_CARE`, `PUBLIC_ANNOUNCEMENTS`, `NON_PROFIT`, `NON_POLITICAL_POLLING_AND_SURVEY`, `PROMOTIONS_AND_MARKETING`. Default `ONE_TIME_PASSCODES` matches Cabalmail's signup-verification / password-reset / sign-in-code traffic. The script logs the authoritative list as `[defs]` lines at startup. |
-| `TFV_USE_CASE_DETAILS`    | (free text)                         | Optional. Default supplied by the script describing Cabalmail's signup/reset/MFA flows. Override only if you want different wording. |
-| `TFV_OPT_IN_DESCRIPTION`  | (free text)                         | Optional. Default supplied by the script describing the signup-screen opt-in flow. Override only if you want different wording. |
-| `TFV_SAMPLE_MESSAGE`      | `Your Cabalmail verification code is 123456` | Optional. Default matches what the `sms_sender` Lambda actually sends. If you change the Lambda copy, update this. |
-| `TFV_PHONE_NUMBER_ID`     | `phone-abcdef0123456789`            | Optional. The script auto-discovers if there is exactly one US toll-free number on the account; set this only if you have more than one. |
-
-### Secrets (sensitive; redacted in workflow logs)
-
-| Secret | Example | Notes |
-| --- | --- | --- |
-| `TFV_CONTACT_EMAIL`       | `support@example.com`               | Goes on the public TFV submission. Use an alias you don't mind being on a regulatory form. |
-| `TFV_CONTACT_PHONE`       | `+15551234567`                      | E.164 format. Same caveat as email. |
-| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | (existing) | Already configured for `infra.yml`. The TFV workflow reuses them. |
+For each environment you want to enable TFV in (typically `stage` first, then `prod`), set the `TFV_*` variables and secrets under Settings -> Environments -> [environment name]. The full list of names, examples, and descriptions is in [docs/github.md](github.md#tfv-registration). The `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_REGION` repository secrets are reused from `infra.yml` and do not need to be duplicated.
 
 ## Triggering the workflow
 

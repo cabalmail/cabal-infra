@@ -44,10 +44,32 @@ Optional env vars:
                                    the SCREAMING_SNAKE_CASE enum values AWS returns
                                    from describe-registration-field-definitions;
                                    the script logs every valid option at startup)
+  TFV_BUSINESS_TYPE                Default "PRIVATE_PROFIT" (right for an LLC or
+                                   private corporation). Allowed values:
+                                   PRIVATE_PROFIT, PUBLIC_PROFIT, NON_PROFIT,
+                                   SOLE_PROPRIETOR, GOVERNMENT
+  TFV_OPT_IN_TYPE                  Default "DIGITAL_FORM" (right for a web signup
+                                   form). Allowed values: VERBAL, DIGITAL_FORM,
+                                   PAPER_FORM, TEXT, QR_CODE
   TFV_USE_CASE_DETAILS             Free text; script supplies a sensible default
   TFV_OPT_IN_DESCRIPTION           Free text; script supplies a sensible default
   TFV_SAMPLE_MESSAGE               Free text; defaults to what the sms_sender Lambda actually sends
   TFV_PHONE_NUMBER_ID              Explicit phone-number id-XXXX; if unset the script discovers it
+  TFV_TAX_ID                       Business identification number (EIN for a US LLC).
+                                   AWS marks this optional in the field metadata but
+                                   carrier reviewers require it for PRIVATE_PROFIT /
+                                   PUBLIC_PROFIT entities. SOLE_PROPRIETOR entities
+                                   should leave it unset; if set anyway it is
+                                   ignored with a warning, because carriers reject
+                                   sole-proprietor submissions that include tax
+                                   fields.
+  TFV_TAX_ID_AUTHORITY             Default "EIN". Only used when TFV_TAX_ID is set.
+                                   Allowed: EIN, CBN, CRN, PROVINCIAL_NUMBER, VAT,
+                                   ACN, ABN, BRN, SIREN, SIRET, NZBN, USt-IdNr, CIF,
+                                   NIF, CNPJ, UID, NEQ, OTHER
+  TFV_TAX_ID_COUNTRY               Default "US". Only used when TFV_TAX_ID is set.
+                                   Two-letter ISO country code of the issuing
+                                   authority.
 
 The script does NOT touch any other state and will not delete or change
 field values on registrations that are already in REVIEWING or COMPLETE
@@ -180,8 +202,50 @@ def create_registration(client):
     return reg_id
 
 
+def find_open_draft_version(client, reg_id):
+    """Return the VersionNumber of an existing DRAFT version on the
+    registration, or None if no draft is open.
+
+    A REQUIRES_UPDATES registration that has not yet had a new draft
+    opened needs CreateRegistrationVersion before field values can be
+    edited. Once a draft is open, calling CreateRegistrationVersion
+    again errors with ConflictException
+    CREATE_REGISTRATION_VERSION_NOT_ALLOWED. This lets us detect the
+    "previous run opened a draft but failed before submitting" case
+    and skip the create.
+    """
+    resp = client.describe_registration_versions(RegistrationId=reg_id)
+    for v in resp.get("RegistrationVersions", []):
+        if v.get("RegistrationVersionStatus") == "DRAFT":
+            return v.get("VersionNumber")
+    return None
+
+
+def create_registration_version(client, reg_id):
+    """Open a new draft version on an existing registration so field
+    values can be edited.
+
+    A registration in REQUIRES_UPDATES status has a rejected (frozen)
+    most-recent version. PutRegistrationFieldValue against the frozen
+    version errors with ConflictException
+    EDIT_REGISTRATION_FIELD_VALUES_NOT_ALLOWED. Calling
+    CreateRegistrationVersion produces a fresh draft that inherits
+    the prior version's field values; subsequent
+    PutRegistrationFieldValue calls land on the new draft.
+    """
+    resp = client.create_registration_version(RegistrationId=reg_id)
+    version = resp.get("VersionNumber", "?")
+    print(f"[version] opened draft version {version} on {reg_id}")
+
+
 def upload_opt_in_image(client, reg_id, image_path):
-    """Upload the opt-in screenshot, return RegistrationAttachmentId."""
+    """Upload the opt-in screenshot, return RegistrationAttachmentId.
+
+    CreateRegistrationAttachment returns immediately; AWS processes
+    the upload asynchronously. The attachment is not usable until its
+    AttachmentStatus reaches UPLOAD_COMPLETE - see
+    wait_for_attachment_active().
+    """
     with open(image_path, "rb") as fh:
         body = fh.read()
     resp = client.create_registration_attachment(
@@ -191,6 +255,40 @@ def upload_opt_in_image(client, reg_id, image_path):
     att_id = resp["RegistrationAttachmentId"]
     print(f"[attach] uploaded opt-in image: {att_id} ({len(body)} bytes)")
     return att_id
+
+
+def wait_for_attachment_active(client, attachment_id, timeout=120, interval=3):
+    """Poll describe-registration-attachments until UPLOAD_COMPLETE.
+
+    PutRegistrationFieldValue binding an attachment to a field fails
+    with ConflictException RESOURCE_NOT_ACTIVE while the attachment
+    is still in UPLOAD_IN_PROGRESS. Empirically the put_text /
+    put_choice round-trips between upload and bind don't always give
+    AWS enough time. Poll until status flips, error on UPLOAD_FAILED,
+    bail after timeout.
+    """
+    print(f"[wait] polling attachment {attachment_id} until UPLOAD_COMPLETE")
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        resp = client.describe_registration_attachments(
+            RegistrationAttachmentIds=[attachment_id],
+        )
+        items = resp.get("RegistrationAttachments", [])
+        if items:
+            status = items[0].get("AttachmentStatus", "")
+            if status == "UPLOAD_COMPLETE":
+                print(f"[wait] attachment {attachment_id} status={status}")
+                return
+            if status == "UPLOAD_FAILED":
+                sys.exit(
+                    f"error: attachment {attachment_id} upload failed; "
+                    "re-run to upload a fresh copy"
+                )
+        time.sleep(interval)
+    sys.exit(
+        f"error: attachment {attachment_id} did not reach UPLOAD_COMPLETE "
+        f"within {timeout}s; check the AWS console or re-run"
+    )
 
 
 def put_text(client, reg_id, field, value):
@@ -323,6 +421,33 @@ def check_choice(defs, field, value):
     return None
 
 
+def check_required_coverage(defs, fields_we_set):
+    """Verify every field AWS marks as REQUIRED is in fields_we_set.
+
+    check_text and check_choice only validate the values we send.
+    They cannot catch fields we *don't* send but AWS *requires*; those
+    slip past submission and surface later as "missing field" issues
+    on the registration once a carrier reviewer looks at it. This
+    function closes that gap: if AWS adds a required field tomorrow,
+    the next workflow run fails the validation pass with a clear
+    "missing required fields: X, Y" message before any API mutation.
+
+    Returns an error string when fields are missing, None otherwise.
+    """
+    required = {
+        path for path, d in defs.items()
+        if d.get("FieldRequirement") == "REQUIRED"
+    }
+    missing = sorted(required - set(fields_we_set))
+    if not missing:
+        return None
+    return (
+        f"missing required fields: {', '.join(missing)}. "
+        "Add each to fields_text, fields_choice, or as an attachment "
+        "in main() with a sensible default and an env-var override."
+    )
+
+
 def main():
     region = env("AWS_REGION", required=True)
     client = boto3.client("pinpoint-sms-voice-v2", region_name=region)
@@ -351,10 +476,41 @@ def main():
     if address2:
         fields_text["companyInfo.address2"] = address2
 
+    business_type = env("TFV_BUSINESS_TYPE", default="PRIVATE_PROFIT")
     fields_choice = {
         "messagingUseCase.monthlyMessageVolume": env("TFV_MONTHLY_VOLUME",    default="10"),
         "messagingUseCase.useCaseCategory":      env("TFV_USE_CASE_CATEGORY", default="ONE_TIME_PASSCODES"),
+        "companyInfo.businessType":              business_type,
+        "messagingUseCase.optInType":            env("TFV_OPT_IN_TYPE",       default="DIGITAL_FORM"),
     }
+
+    # Tax / business identifier. AWS marks taxId, taxIdAuthority, and
+    # taxIdCountry as OPTIONAL in the field metadata, but in practice
+    # carrier reviewers require them for PRIVATE_PROFIT and
+    # PUBLIC_PROFIT entities and *reject* their presence on
+    # SOLE_PROPRIETOR submissions (a sole proprietor's only
+    # candidate is an SSN, which carriers don't want in this
+    # workflow). The conditionality isn't exposed via
+    # describe-registration-field-definitions, so check_required_coverage
+    # cannot catch either case.
+    #
+    # Treat the three fields as a unit and gate on business type. If
+    # the operator has TFV_TAX_ID set but business type is
+    # SOLE_PROPRIETOR, log a warning and skip - the operator's
+    # leftover env-var value is suppressed rather than producing a
+    # rejection on resubmit.
+    tax_id = env("TFV_TAX_ID")
+    if business_type == "SOLE_PROPRIETOR":
+        if tax_id:
+            print(
+                "[warn] TFV_TAX_ID is set but TFV_BUSINESS_TYPE=SOLE_PROPRIETOR; "
+                "skipping companyInfo.taxId / taxIdAuthority / taxIdCountry "
+                "(carriers reject tax fields on sole-proprietor submissions)"
+            )
+    elif tax_id:
+        fields_text["companyInfo.taxId"]        = tax_id
+        fields_text["companyInfo.taxIdCountry"] = env("TFV_TAX_ID_COUNTRY",   default="US")
+        fields_choice["companyInfo.taxIdAuthority"] = env("TFV_TAX_ID_AUTHORITY", default="EIN")
 
     image_path = env("TFV_OPT_IN_IMAGE", required=True)
     if not os.path.isfile(image_path):
@@ -370,11 +526,38 @@ def main():
     if not phone_number_id:
         phone_number_id = discover_phone_number_id(client)
 
-    # 3. Find or create the registration
+    # 3. Find or create the registration. Status drives the next move:
+    #   - none           -> create from scratch
+    #   - DRAFT          -> edit the existing draft (normal re-run case)
+    #   - REQUIRES_UPDATES -> if there's already an open draft from a
+    #                        previous failed run, edit it; otherwise
+    #                        open a fresh draft via
+    #                        CreateRegistrationVersion. The rejected
+    #                        version is frozen and PutRegistrationFieldValue
+    #                        on it errors with ConflictException
+    #                        EDIT_REGISTRATION_FIELD_VALUES_NOT_ALLOWED,
+    #                        while CreateRegistrationVersion errors with
+    #                        CREATE_REGISTRATION_VERSION_NOT_ALLOWED if
+    #                        a draft is already open. The describe call
+    #                        disambiguates.
+    #   - anything else  -> exit. SUBMITTED / REVIEWING / COMPLETE / CLOSED
+    #                       are non-editable states; the operator should
+    #                       wait for AWS to flip status before re-running.
     reg_id, status = find_existing_registration(client, phone_number_id)
     if reg_id is None:
         reg_id = create_registration(client)
-    elif status in ("REVIEWING", "COMPLETE"):
+    elif status == "DRAFT":
+        pass
+    elif status == "REQUIRES_UPDATES":
+        existing_draft = find_open_draft_version(client, reg_id)
+        if existing_draft is not None:
+            print(
+                f"[version] reusing existing draft version {existing_draft} "
+                f"on {reg_id}"
+            )
+        else:
+            create_registration_version(client, reg_id)
+    else:
         sys.exit(
             f"error: registration {reg_id} is in status {status}; cannot "
             "modify or resubmit. Wait for the review to complete (or "
@@ -385,10 +568,19 @@ def main():
     # the attached file matches the current signup screen).
     attachment_id = upload_opt_in_image(client, reg_id, image_path)
 
-    # 5. Validate every value against the fetched definitions, then
-    # set each field. Validation runs as a single pass first so the
-    # operator sees every violation in one workflow run rather than
-    # discovering them one network round-trip at a time.
+    # 5. Validate every value against the fetched definitions, plus
+    # check that we're setting every REQUIRED field at all. Validation
+    # runs as a single pass first so the operator sees every violation
+    # in one workflow run rather than discovering them one network
+    # round-trip at a time. messagingUseCase.optInImage is set via
+    # put_attachment() rather than put_text/put_choice; it's included
+    # in the fields_we_set list so the coverage check doesn't false-
+    # positive on it.
+    fields_we_set = (
+        set(fields_text.keys())
+        | set(fields_choice.keys())
+        | {"messagingUseCase.optInImage"}
+    )
     errors = []
     for field, value in fields_text.items():
         err = check_text(defs, field, value)
@@ -398,6 +590,9 @@ def main():
         err = check_choice(defs, field, value)
         if err:
             errors.append(err)
+    coverage_err = check_required_coverage(defs, fields_we_set)
+    if coverage_err:
+        errors.append(coverage_err)
     if errors:
         print()
         print("Validation failed against AWS field definitions:")
@@ -409,6 +604,11 @@ def main():
         put_text(client, reg_id, field, value)
     for field, value in fields_choice.items():
         put_choice(client, reg_id, field, value)
+
+    # The text/choice round-trips above don't reliably take long enough
+    # for AWS to finish processing the upload from upload_opt_in_image().
+    # Wait explicitly before binding.
+    wait_for_attachment_active(client, attachment_id)
     put_attachment(client, reg_id, "messagingUseCase.optInImage", attachment_id)
 
     # 5. Associate the phone number (no-op if already linked)

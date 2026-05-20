@@ -10,7 +10,8 @@ import CabalmailKit
 ///    ahead of the existing list also keeps the default-zero-state rule
 ///    ("no preselection") visually coherent: if the user hasn't picked an
 ///    address yet, creating one is the nearest thing to click.
-/// 2. Existing addresses, alphabetized.
+/// 2. Existing addresses: **Favorites** section on top (when non-empty),
+///    then **All addresses** inclusive — mirrors the sidebar address list.
 ///
 /// Send remains disabled (`ComposeViewModel.canSend`) until the user has
 /// either picked an existing address or completed the inline creation flow.
@@ -27,16 +28,15 @@ struct FromPicker: View {
             }
             if !model.availableAddresses.isEmpty {
                 Divider()
-                ForEach(sortedAddresses) { address in
-                    Button {
-                        model.fromAddress = address.address
-                    } label: {
-                        if address.address == model.fromAddress {
-                            Label(address.address, systemImage: "checkmark")
-                        } else {
-                            Text(address.address)
-                        }
+                if !favoriteAddresses.isEmpty {
+                    Section("Favorites") {
+                        ForEach(favoriteAddresses) { addressButton($0) }
                     }
+                    Section("All addresses") {
+                        ForEach(sortedAddresses) { addressButton($0) }
+                    }
+                } else {
+                    ForEach(sortedAddresses) { addressButton($0) }
                 }
             }
         } label: {
@@ -50,6 +50,22 @@ struct FromPicker: View {
             }
             .contentShape(Rectangle())
         }
+    }
+
+    private func addressButton(_ address: Address) -> some View {
+        Button {
+            model.fromAddress = address.address
+        } label: {
+            if address.address == model.fromAddress {
+                Label(address.address, systemImage: "checkmark")
+            } else {
+                Text(address.address)
+            }
+        }
+    }
+
+    private var favoriteAddresses: [Address] {
+        model.availableAddresses.filter { $0.favorite }.sorted { $0.address < $1.address }
     }
 
     private var sortedAddresses: [Address] {
