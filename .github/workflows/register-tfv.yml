@@ -56,6 +56,12 @@ jobs:
       # secrets so they don't appear in workflow logs.
       TFV_CONTACT_EMAIL:       ${{ secrets.TFV_CONTACT_EMAIL }}
       TFV_CONTACT_PHONE:       ${{ secrets.TFV_CONTACT_PHONE }}
+      # Business tax / identification number (EIN for a US LLC). Kept
+      # as a secret to stay out of workflow logs even though the value
+      # is on the public TFV submission once carriers see it.
+      TFV_TAX_ID:              ${{ secrets.TFV_TAX_ID }}
+      TFV_TAX_ID_AUTHORITY:    ${{ vars.TFV_TAX_ID_AUTHORITY }}
+      TFV_TAX_ID_COUNTRY:      ${{ vars.TFV_TAX_ID_COUNTRY }}
       # Optional overrides; if any of these are unset, the script uses
       # sensible defaults baked in to scripts/submit-tfv-registration.py.
       TFV_MONTHLY_VOLUME:      ${{ vars.TFV_MONTHLY_VOLUME }}

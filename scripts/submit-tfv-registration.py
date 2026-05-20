@@ -55,6 +55,18 @@ Optional env vars:
   TFV_OPT_IN_DESCRIPTION           Free text; script supplies a sensible default
   TFV_SAMPLE_MESSAGE               Free text; defaults to what the sms_sender Lambda actually sends
   TFV_PHONE_NUMBER_ID              Explicit phone-number id-XXXX; if unset the script discovers it
+  TFV_TAX_ID                       Business identification number (EIN for a US LLC).
+                                   AWS marks this optional in the field metadata but
+                                   carrier reviewers require it for PRIVATE_PROFIT /
+                                   PUBLIC_PROFIT entities. SOLE_PROPRIETOR /
+                                   GOVERNMENT entities can leave it unset.
+  TFV_TAX_ID_AUTHORITY             Default "EIN". Only used when TFV_TAX_ID is set.
+                                   Allowed: EIN, CBN, CRN, PROVINCIAL_NUMBER, VAT,
+                                   ACN, ABN, BRN, SIREN, SIRET, NZBN, USt-IdNr, CIF,
+                                   NIF, CNPJ, UID, NEQ, OTHER
+  TFV_TAX_ID_COUNTRY               Default "US". Only used when TFV_TAX_ID is set.
+                                   Two-letter ISO country code of the issuing
+                                   authority.
 
 The script does NOT touch any other state and will not delete or change
 field values on registrations that are already in REVIEWING or COMPLETE
@@ -408,6 +420,24 @@ def main():
         "companyInfo.businessType":              env("TFV_BUSINESS_TYPE",     default="PRIVATE_PROFIT"),
         "messagingUseCase.optInType":            env("TFV_OPT_IN_TYPE",       default="DIGITAL_FORM"),
     }
+
+    # Tax / business identifier. AWS marks taxId, taxIdAuthority, and
+    # taxIdCountry as OPTIONAL in the field metadata, but in practice
+    # carrier reviewers require them for PRIVATE_PROFIT and
+    # PUBLIC_PROFIT entities. The conditionality isn't exposed via
+    # describe-registration-field-definitions, so check_required_coverage
+    # cannot catch their absence.
+    #
+    # Treat all three as a unit: if the operator supplies TFV_TAX_ID,
+    # also set authority + country (with sensible US-LLC defaults);
+    # otherwise skip all three. SOLE_PROPRIETOR / GOVERNMENT entities
+    # that legitimately don't have a business identifier just leave
+    # TFV_TAX_ID unset.
+    tax_id = env("TFV_TAX_ID")
+    if tax_id:
+        fields_text["companyInfo.taxId"]        = tax_id
+        fields_text["companyInfo.taxIdCountry"] = env("TFV_TAX_ID_COUNTRY",   default="US")
+        fields_choice["companyInfo.taxIdAuthority"] = env("TFV_TAX_ID_AUTHORITY", default="EIN")
 
     image_path = env("TFV_OPT_IN_IMAGE", required=True)
     if not os.path.isfile(image_path):
