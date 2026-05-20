@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- New EFS access point `cabal-smtp-queue` on the existing `mailstore`
+  filesystem, scoped to `/smtp-queue` and owned `root:mail` (mode 0700)
+  to match the AL2023 sendmail rpm default for `/var/spool/mqueue`.
+  No mount yet - this is the first step of the smtp-out queue persistence
+  work tracked in `docs/0.9.x/smtp-out-queue-persistence-plan.md`. The
+  access point id is exported from the `efs` module as
+  `smtp_queue_access_point_id` for the upcoming task-definition wiring.
+
 ## [0.9.26] - 2026-05-20
 
 ### Added
