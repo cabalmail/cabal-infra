@@ -11,10 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New EFS access point `cabal-smtp-queue` on the existing `mailstore`
   filesystem, scoped to `/smtp-queue` and owned `root:mail` (mode 0700)
   to match the AL2023 sendmail rpm default for `/var/spool/mqueue`.
-  No mount yet - this is the first step of the smtp-out queue persistence
-  work tracked in `docs/0.9.x/smtp-out-queue-persistence-plan.md`. The
-  access point id is exported from the `efs` module as
-  `smtp_queue_access_point_id` for the upcoming task-definition wiring.
+  The access point id is exported from the `efs` module as
+  `smtp_queue_access_point_id`.
+- The smtp-out ECS task definition mounts the shared queue access point
+  at `/var/spool/mqueue`, so a message that lands in sendmail's deferred
+  retry queue (greylisting, transient 4xx, recipient deferral) now
+  survives task replacement, scale-in, and host failure. Concurrent
+  smtp-out tasks coordinate via sendmail's classic shared-NFS pattern
+  (per-`qf` `fcntl` locks). Tracked in
+  `docs/0.9.x/smtp-out-queue-persistence-plan.md`.
+
+### Changed
+- smtp-out task `stopTimeout` raised to 120s (ECS-task-level grace
+  window) and supervisord `stopwaitsecs` raised from 15s to 110s, so
+  sendmail has time to finish an in-flight delivery before SIGKILL.
+  With the persistent queue in place this is the safety net rather than
+  the primary mechanism for surviving deploys.
+- `docker/shared/sendmail-wrapper.sh` re-asserts `root:mail` ownership
+  and mode `0700` on `/var/spool/mqueue` immediately before exec, gated
+  on the smtp-out tier. Redundant on first creation (the EFS access
+  point's `creation_info` sets the same ownership) but covers drift
+  from a prior deploy or manual operator action.
 
 ## [0.9.26] - 2026-05-20
 

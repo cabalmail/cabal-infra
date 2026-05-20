@@ -43,6 +43,11 @@ variable "efs_id" {
   description = "EFS file system ID for the mailstore."
 }
 
+variable "smtp_queue_access_point_id" {
+  type        = string
+  description = "EFS access point id for the shared smtp-out sendmail MTA queue (mounted at /var/spool/mqueue in the smtp-out task)."
+}
+
 # -- Cognito ----------------------------------------------------
 
 variable "user_pool_arn" {

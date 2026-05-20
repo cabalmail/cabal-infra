@@ -155,6 +155,21 @@ resource "aws_ecs_task_definition" "smtp_in" {
 
 # -- SMTP-OUT task definition ----------------------------------
 
+# Marker resource for one-shot replacement of the smtp-out task
+# definition. The lifecycle ignore_changes clause below would otherwise
+# silently swallow any update to fields inside container_definitions
+# (mountPoints, stopTimeout) - it protects out-of-band image-tag
+# rotations from being clobbered, but as a side effect also blocks
+# legitimate topology changes inside the container block. Bumping this
+# input forces a destroy+recreate, which runs a fresh create (not
+# governed by ignore_changes) and so picks up the full container_definitions
+# from config. Subsequent applies revert to the steady-state ignore.
+#
+# See docs/0.9.x/smtp-out-queue-persistence-plan.md.
+resource "terraform_data" "smtp_out_taskdef_revision_marker" {
+  input = "smtp-queue-mount-v1"
+}
+
 resource "aws_ecs_task_definition" "smtp_out" {
   family                   = "cabal-smtp-out"
   requires_compatibilities = ["EC2"]
@@ -169,6 +184,13 @@ resource "aws_ecs_task_definition" "smtp_out" {
 
     memoryReservation = 448
     memory            = 640
+
+    # Give sendmail up to ~110s to finish an in-flight delivery before
+    # SIGKILL. Combined with supervisord stopwaitsecs=110 in the smtp-out
+    # image, this turns the persistent EFS-backed queue into the safety
+    # net rather than the primary mechanism for surviving deploys. ECS
+    # hard-caps stopTimeout at 120 for EC2 launch type.
+    stopTimeout = 120
 
     portMappings = [
       { containerPort = 465, protocol = "tcp" },
@@ -193,6 +215,11 @@ resource "aws_ecs_task_definition" "smtp_out" {
       { name = "DKIM_PRIVATE_KEY", valueFrom = "/cabal/dkim_private_key" },
     ], local.healthcheck_secrets)
 
+    mountPoints = [{
+      sourceVolume  = "smtp-queue"
+      containerPath = "/var/spool/mqueue"
+    }]
+
     linuxParameters = {
       capabilities = {
         add = ["NET_ADMIN"]
@@ -210,7 +237,27 @@ resource "aws_ecs_task_definition" "smtp_out" {
     }
   }])
 
+  # Shared sendmail MTA queue on EFS - lets a replaced smtp-out task
+  # hand off its in-flight retries to whichever sibling task next scans
+  # the queue. Access point pins us to /smtp-queue on the mailstore
+  # filesystem with root:mail (gid=12) mode 0700 (matches AL2023 sendmail
+  # rpm default). IAM auth is left disabled here for parity with the
+  # IMAP mount; tightening to per-tier SG + IAM auth is a separate posture
+  # decision (see plan: Non-goals).
+  volume {
+    name = "smtp-queue"
+    efs_volume_configuration {
+      file_system_id     = var.efs_id
+      transit_encryption = "ENABLED"
+      authorization_config {
+        access_point_id = var.smtp_queue_access_point_id
+        iam             = "DISABLED"
+      }
+    }
+  }
+
   lifecycle {
-    ignore_changes = [container_definitions]
+    ignore_changes       = [container_definitions]
+    replace_triggered_by = [terraform_data.smtp_out_taskdef_revision_marker]
   }
 }

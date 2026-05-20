@@ -102,6 +102,8 @@ resource "aws_ecs_task_definition" "smtp_out" {
 
 The `efs` module exposes the new access point id as an output (`smtp_queue_access_point_id`); the root module wires it through to the `ecs` module.
 
+**One-shot replacement.** The smtp-out task definition already carries `lifecycle { ignore_changes = [container_definitions] }` (added in phase 1 of `docs/0.9.0/build-deploy-simplification-plan.md` to protect out-of-band image-tag updates from topology-only Terraform applies). Adding `mountPoints` and `stopTimeout` *inside* `container_definitions` to a steady-state task def would be silently ignored. Phase 3 of this plan introduces a small marker resource (`terraform_data.smtp_out_taskdef_revision_marker` with `input = "smtp-queue-mount-v1"`) and adds `replace_triggered_by = [terraform_data.smtp_out_taskdef_revision_marker]` to the task-def's lifecycle block. Replacement forces a fresh `create`, which is not governed by `ignore_changes`, so the new revision picks up the full configured `container_definitions` (mountPoints, stopTimeout) plus the new `volume` block. The marker stays in state after the first apply; subsequent applies behave as before. If we ever need to push another topology-only change through the same gate, bump the `input` string (e.g. `smtp-queue-mount-v2`).
+
 ### Container runtime changes
 
 - [`smtp-out/supervisord.conf:26`](../../docker/smtp-out/supervisord.conf:26): raise `stopwaitsecs` from `15` to `110`.
@@ -155,7 +157,7 @@ One PR per phase, in order. Each phase is independently apply-able and each phas
 | --- | --- |
 | Verify gid (1) | None needed — read-only. |
 | Access point (2) | Delete the `aws_efs_access_point` resource. The `/smtp-queue` directory remains on the filesystem; harmless. |
-| Mount + timeouts (3) | Revert the task-definition, supervisord, and wrapper changes. ECS rolls back to ephemeral queue. Any messages in the persistent queue at rollback time are stranded — manually copy them out of the EFS mount on a one-off basis if necessary, or let the new ephemeral queue accept replacements as users retry sending. |
+| Mount + timeouts (3) | Revert the task-definition, supervisord, and wrapper changes, AND bump `terraform_data.smtp_out_taskdef_revision_marker.input` (e.g. `smtp-queue-mount-v1` -> `smtp-queue-rollback-v1`). The bump is required: removing the `volume` block alone would otherwise leave `mountPoints` stranded inside the ignored `container_definitions`, registering a revision that references a non-existent volume. Forcing replacement makes Terraform rebuild the resource from the rolled-back config in full. ECS rolls back to ephemeral queue. Any messages in the persistent queue at rollback time are stranded - manually copy them out of the EFS mount on a one-off basis if necessary, or let the new ephemeral queue accept replacements as users retry sending. |
 | `MIN_QUEUE_AGE` (4) | Single-line revert. No state implication. |
 
 ## Operational considerations
