@@ -165,9 +165,21 @@ resource "aws_ecs_task_definition" "smtp_in" {
 # governed by ignore_changes) and so picks up the full container_definitions
 # from config. Subsequent applies revert to the steady-state ignore.
 #
-# See docs/0.9.x/smtp-out-queue-persistence-plan.md.
+# var.sinkhole is included in the input so that flipping the flag
+# in either direction forces a task-def replacement, which picks up
+# (or drops) the SINKHOLE_ENABLED env var. Without this hook the
+# lifecycle clause would keep the running task on its existing env
+# var list forever; phase 5 of docs/0.9.x/sinkhole-test-harness-plan.md.
+#
+# See also docs/0.9.x/smtp-out-queue-persistence-plan.md for the
+# original use of this marker.
 resource "terraform_data" "smtp_out_taskdef_revision_marker" {
-  input = "smtp-queue-mount-v1"
+  # Default state retains the pre-sinkhole marker so environments
+  # where var.sinkhole stays false (prod, and stage/dev pre-rollout)
+  # do not see a one-time replacement when phase 5 lands. Only the
+  # sinkhole=true state has a distinct marker, so flipping the flag
+  # in either direction forces the smtp-out task-def to replace.
+  input = var.sinkhole ? "smtp-queue-mount-v1+sinkhole" : "smtp-queue-mount-v1"
 }
 
 resource "aws_ecs_task_definition" "smtp_out" {
@@ -197,7 +209,12 @@ resource "aws_ecs_task_definition" "smtp_out" {
       { containerPort = 587, protocol = "tcp" },
     ]
 
-    environment = [
+    # SINKHOLE_ENABLED is appended conditionally so the env-var list
+    # is identical between sinkhole-on and sinkhole-off task defs in
+    # any environment where the flag is permanently false. generate-config.sh
+    # checks the env var at runtime and adds the sinkhole.test mailertable
+    # entry only when true. See docs/0.9.x/sinkhole-test-harness-plan.md.
+    environment = concat([
       { name = "TIER", value = "smtp-out" },
       { name = "CERT_DOMAIN", value = var.control_domain },
       { name = "AWS_REGION", value = var.region },
@@ -206,7 +223,9 @@ resource "aws_ecs_task_definition" "smtp_out" {
       { name = "NETWORK_CIDR", value = var.cidr_block },
       { name = "SQS_QUEUE_URL", value = aws_sqs_queue.tier["smtp-out"].url },
       { name = "IMAP_INTERNAL_HOST", value = "${aws_service_discovery_service.imap.name}.${aws_service_discovery_private_dns_namespace.mail.name}" },
-    ]
+      ], var.sinkhole ? [
+      { name = "SINKHOLE_ENABLED", value = "true" },
+    ] : [])
 
     secrets = concat([
       { name = "TLS_CA_BUNDLE", valueFrom = "/cabal/control_domain_chain_cert" },
