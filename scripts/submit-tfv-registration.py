@@ -202,6 +202,25 @@ def create_registration(client):
     return reg_id
 
 
+def find_open_draft_version(client, reg_id):
+    """Return the VersionNumber of an existing DRAFT version on the
+    registration, or None if no draft is open.
+
+    A REQUIRES_UPDATES registration that has not yet had a new draft
+    opened needs CreateRegistrationVersion before field values can be
+    edited. Once a draft is open, calling CreateRegistrationVersion
+    again errors with ConflictException
+    CREATE_REGISTRATION_VERSION_NOT_ALLOWED. This lets us detect the
+    "previous run opened a draft but failed before submitting" case
+    and skip the create.
+    """
+    resp = client.describe_registration_versions(RegistrationId=reg_id)
+    for v in resp.get("RegistrationVersions", []):
+        if v.get("RegistrationVersionStatus") == "DRAFT":
+            return v.get("VersionNumber")
+    return None
+
+
 def create_registration_version(client, reg_id):
     """Open a new draft version on an existing registration so field
     values can be edited.
@@ -510,10 +529,17 @@ def main():
     # 3. Find or create the registration. Status drives the next move:
     #   - none           -> create from scratch
     #   - DRAFT          -> edit the existing draft (normal re-run case)
-    #   - REQUIRES_UPDATES -> open a fresh draft version; the rejected
+    #   - REQUIRES_UPDATES -> if there's already an open draft from a
+    #                        previous failed run, edit it; otherwise
+    #                        open a fresh draft via
+    #                        CreateRegistrationVersion. The rejected
     #                        version is frozen and PutRegistrationFieldValue
     #                        on it errors with ConflictException
-    #                        EDIT_REGISTRATION_FIELD_VALUES_NOT_ALLOWED.
+    #                        EDIT_REGISTRATION_FIELD_VALUES_NOT_ALLOWED,
+    #                        while CreateRegistrationVersion errors with
+    #                        CREATE_REGISTRATION_VERSION_NOT_ALLOWED if
+    #                        a draft is already open. The describe call
+    #                        disambiguates.
     #   - anything else  -> exit. SUBMITTED / REVIEWING / COMPLETE / CLOSED
     #                       are non-editable states; the operator should
     #                       wait for AWS to flip status before re-running.
@@ -523,7 +549,14 @@ def main():
     elif status == "DRAFT":
         pass
     elif status == "REQUIRES_UPDATES":
-        create_registration_version(client, reg_id)
+        existing_draft = find_open_draft_version(client, reg_id)
+        if existing_draft is not None:
+            print(
+                f"[version] reusing existing draft version {existing_draft} "
+                f"on {reg_id}"
+            )
+        else:
+            create_registration_version(client, reg_id)
     else:
         sys.exit(
             f"error: registration {reg_id} is in status {status}; cannot "
