@@ -82,7 +82,7 @@ For each environment you want to enable TFV in (typically `stage` first, then `p
 | --- | --- | --- |
 | `TFV_CONTACT_EMAIL`       | `support@example.com`               | Goes on the public TFV submission. Use an alias you don't mind being on a regulatory form. |
 | `TFV_CONTACT_PHONE`       | `+15551234567`                      | E.164 format. Same caveat as email. |
-| `TFV_TAX_ID`              | `12-3456789`                        | Business identification number (EIN for a US LLC). AWS marks this optional in the field metadata but carrier reviewers require it for `PRIVATE_PROFIT` and `PUBLIC_PROFIT` entities. Leave unset for `SOLE_PROPRIETOR` or `GOVERNMENT` entities that legitimately don't have one. Stored as a secret rather than a variable so it stays out of workflow logs (the value still appears on the public TFV submission to carriers). |
+| `TFV_TAX_ID`              | `12-3456789`                        | Business identification number (EIN for a US LLC). AWS marks this optional in the field metadata but carrier reviewers require it for `PRIVATE_PROFIT` and `PUBLIC_PROFIT` entities. Leave unset for `SOLE_PROPRIETOR` entities - carriers actively reject sole-proprietor submissions that include tax fields, and the script ignores `TFV_TAX_ID` (with a `[warn]` log line) when `TFV_BUSINESS_TYPE=SOLE_PROPRIETOR`. Stored as a secret rather than a variable so it stays out of workflow logs (the value still appears on the public TFV submission to carriers). |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | (existing) | Already configured for `infra.yml`. The TFV workflow reuses them. |
 
 ## Triggering the workflow
