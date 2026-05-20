@@ -349,6 +349,7 @@ jobs:
         echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
         echo "backup = ${{ vars.TF_VAR_BACKUP }}" >> terraform.tfvars
         echo "monitoring = ${{ vars.TF_VAR_MONITORING }}" >> terraform.tfvars
+        echo "sinkhole = ${{ vars.TF_VAR_SINKHOLE || 'false' }}" >> terraform.tfvars
         echo "healthchecks_registration_open = ${{ vars.TF_VAR_HEALTHCHECKS_REGISTRATION_OPEN || 'false' }}" >> terraform.tfvars
         echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
         echo "quiesced = ${{ vars.TF_VAR_QUIESCED || 'false' }}" >> terraform.tfvars
@@ -426,6 +427,7 @@ jobs:
         echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
         echo "backup = ${{ vars.TF_VAR_BACKUP }}" >> terraform.tfvars
         echo "monitoring = ${{ vars.TF_VAR_MONITORING }}" >> terraform.tfvars
+        echo "sinkhole = ${{ vars.TF_VAR_SINKHOLE || 'false' }}" >> terraform.tfvars
         echo "healthchecks_registration_open = ${{ vars.TF_VAR_HEALTHCHECKS_REGISTRATION_OPEN || 'false' }}" >> terraform.tfvars
         echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
         echo "quiesced = ${{ vars.TF_VAR_QUIESCED || 'false' }}" >> terraform.tfvars

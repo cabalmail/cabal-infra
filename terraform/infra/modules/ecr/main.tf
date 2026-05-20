@@ -81,10 +81,36 @@ moved {
   to   = aws_ecr_repository.monitoring["node-exporter"]
 }
 
+# SMTP sinkhole test fixture (docs/0.9.x/sinkhole-test-harness-plan.md).
+# Same prevent_destroy posture as the monitoring repos: the ECR repo is
+# created unconditionally so images can be pre-built and history is
+# preserved, while the ECS tier consuming it is gated by var.sinkhole.
+# A separate resource (not folded into monitoring_repositories) keeps
+# the semantic distinction clear: sinkhole is a test fixture, not a
+# monitoring service.
+resource "aws_ecr_repository" "sinkhole" {
+  name                 = "cabal-sinkhole"
+  image_tag_mutability = "IMMUTABLE"
+  force_delete         = false
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  encryption_configuration {
+    encryption_type = "AES256"
+  }
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
 locals {
   all_repositories = merge(
     aws_ecr_repository.tier,
     aws_ecr_repository.monitoring,
+    { sinkhole = aws_ecr_repository.sinkhole },
   )
 }
 
