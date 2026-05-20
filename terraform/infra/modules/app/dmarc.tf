@@ -132,7 +132,7 @@ resource "aws_lambda_function" "process_dmarc" {
 
   depends_on = [aws_cloudwatch_log_group.process_dmarc]
 
-  # Phase 2 of docs/0.9.0/build-deploy-simplification-plan.md: out-of-band
+  # Phase 2 of docs/0.9.x/build-deploy-simplification-plan.md: out-of-band
   # Lambda deploys mutate code via aws lambda update-function-code; ignore
   # these attributes so a topology-only Terraform apply does not roll the
   # update back.

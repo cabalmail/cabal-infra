@@ -112,7 +112,7 @@ Bump every `versions.tf`'s `required_version` to `>= 1.10`. Pin `setup-terraform
 
 Per stack (`dns`, then `infra`) per environment (`dev` → `stage` → `prod`):
 
-1. **Bootstrap the KMS key.** A new tiny stack `terraform/state-keys/` (or a one-shot `aws kms create-key` via the console — fine for a one-time bootstrap) creates the three CMKs and aliases. Output the key ARNs to a non-secret file (`docs/0.9.0/key-arns.md`) for reference.
+1. **Bootstrap the KMS key.** A new tiny stack `terraform/state-keys/` (or a one-shot `aws kms create-key` via the console — fine for a one-time bootstrap) creates the three CMKs and aliases. Output the key ARNs to a non-secret file (`docs/0.10.x/key-arns.md`) for reference.
 2. **Bump TF version.** Update `versions.tf` floors and `setup-terraform` versions in CI. Confirm `terraform plan` still no-ops on every environment.
 3. **Add the backend encrypt + kms_key_id.** Update `make-terraform.sh`. The next `terraform init` migrates the state file (S3 PutObject with SSE-KMS). Test on dev first; this is reversible by stripping the lines and re-init'ing with `-migrate-state`.
 4. **Add the `encryption` block with `enforced = false` and a one-shot migration block.**

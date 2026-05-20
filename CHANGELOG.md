@@ -33,6 +33,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   point's `creation_info` sets the same ownership) but covers drift
   from a prior deploy or manual operator action.
 
+### Fixed
+- Cleaned up stale `docs/0.9.0/` references across CHANGELOG, Terraform,
+  CI scripts, workflows, CLAUDE.md, and cross-version planning docs.
+  The build/deploy simplification and lambda-layer-removal plans now
+  live under `docs/0.9.x/`, and the state-encryption plan lives under
+  `docs/0.10.x/`. Docs-only; no behaviour change.
+
 ## [0.9.26] - 2026-05-20
 
 ### Added
@@ -204,7 +211,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the `lambda/api/python/` source dir are all deleted. Closes the
   layer-rebinding gap where an `app.yml` run alone was not enough
   to ship a `helper.py` change end-to-end -
-  [`docs/0.9.0/lambda-layer-removal-plan.md`](docs/0.9.0/lambda-layer-removal-plan.md).
+  [`docs/0.9.x/lambda-layer-removal-plan.md`](docs/0.9.x/lambda-layer-removal-plan.md).
 
 ## [0.9.22] - 2026-05-17
 
@@ -795,7 +802,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Updated CLAUDE.md to reflect 0.9.x as in progress.
 - Phase 7 of the build/deploy simplification plan
-  (`docs/0.9.0/build-deploy-simplification-plan.md`): operator-facing
+  (`docs/0.9.x/build-deploy-simplification-plan.md`): operator-facing
   documentation that referenced the deleted workflows now points at
   the new pipeline. `docs/quiesce.md`, `docs/monitoring.md`, the
   `lambda-errors` and `container-restart-loop` runbooks under
@@ -813,7 +820,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Phase 6 of the build/deploy simplification plan
-  (`docs/0.9.0/build-deploy-simplification-plan.md`): cutover. The
+  (`docs/0.9.x/build-deploy-simplification-plan.md`): cutover. The
   legacy `docker.yml`, `lambda_api_python.yml`, `lambda_counter.yml`,
   `react.yml`, and `bootstrap.yml` workflows are deleted. Pushes to
   `docker/**`, `lambda/**`, and `react/admin/**` now drive `app.yml`
@@ -852,7 +859,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Phase 4 of the build/deploy simplification plan
-  (`docs/0.9.0/build-deploy-simplification-plan.md`): bootstrap
+  (`docs/0.9.x/build-deploy-simplification-plan.md`): bootstrap
   placeholders so a brand-new environment can apply
   `terraform/infra` end-to-end without `app.yml` having ever pushed
   an image or zip. Every `aws_ecs_task_definition` (the three mail
@@ -881,7 +888,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `head-object` is a hit, nothing is uploaded. The script is laid
   down here for phase 5's `infra.yml` to call as a pre-apply step.
 - Phase 5 of the build/deploy simplification plan
-  (`docs/0.9.0/build-deploy-simplification-plan.md`): new
+  (`docs/0.9.x/build-deploy-simplification-plan.md`): new
   `.github/workflows/infra.yml` replaces `terraform.yml` +
   `bootstrap.yml` as the canonical infrastructure pipeline. It owns
   both the bootstrap (`terraform/dns`) stage and the main
@@ -1012,7 +1019,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Phase 3 of the build/deploy simplification plan
-  (`docs/0.9.0/build-deploy-simplification-plan.md`): new
+  (`docs/0.9.x/build-deploy-simplification-plan.md`): new
   `.github/workflows/app.yml` builds every application artifact in
   parallel and deploys directly to running infrastructure via the AWS
   CLI - no Terraform on the deploy path. Triggered on
@@ -1057,7 +1064,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Phase 2 of the build/deploy simplification plan
-  (`docs/0.9.0/build-deploy-simplification-plan.md`): every S3-source
+  (`docs/0.9.x/build-deploy-simplification-plan.md`): every S3-source
   `aws_lambda_function` resource (the api `cabal_method` calls, the
   `process_dmarc` ingester, the `assign_osid` Cognito post-confirmation
   trigger, and the `alert_sink` and `backup_heartbeat` monitoring
@@ -1101,7 +1108,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Phase 1 of the build/deploy simplification plan
-  (`docs/0.9.0/build-deploy-simplification-plan.md`): every
+  (`docs/0.9.x/build-deploy-simplification-plan.md`): every
   `aws_ecs_task_definition` resource in `terraform/infra/modules/ecs`
   and `terraform/infra/modules/monitoring` (12 task defs across the
   three mail tiers and nine monitoring tiers) now has
@@ -1331,7 +1338,7 @@ The full design rationale lives in [`docs/0.7.0/monitoring-plan.md`](docs/0.7.0/
 
 - [`docs/monitoring.md`](docs/monitoring.md) -- single coherent operator runbook for enabling the stack, completing first-boot configuration, and tuning. Covers Pushover signup, SSM seeding, ntfy admin/token bootstrap, Kuma + Healthchecks first-boot, IaC API key bootstrap, Grafana, Prometheus scrape verification, the runbook framework, tabletop exercises, the quarterly monitoring review, secret rotation, disabling the stack or individual heartbeats, and a consolidated troubleshooting block.
 - [`docs/0.7.0/monitoring-plan.md`](docs/0.7.0/monitoring-plan.md) -- design doc with the per-tier "Golden Signals" table, the `var.monitoring` feature-flag pattern, tuning discipline, and Phase-by-phase implementation plan.
-- [`docs/0.9.0/state-encryption-plan.md`](docs/0.9.0/state-encryption-plan.md) -- forward-looking plan to migrate both Terraform stacks to client-side KMS-encrypted state (TF 1.10+ `encryption` block) so secrets like the Pushover/ntfy tokens can be folded into normal Terraform inputs instead of seeded out-of-band.
+- [`docs/0.10.x/state-encryption-plan.md`](docs/0.10.x/state-encryption-plan.md) -- forward-looking plan to migrate both Terraform stacks to client-side KMS-encrypted state (TF 1.10+ `encryption` block) so secrets like the Pushover/ntfy tokens can be folded into normal Terraform inputs instead of seeded out-of-band.
 
 #### CI / build pipeline
 

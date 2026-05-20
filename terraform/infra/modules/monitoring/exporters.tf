@@ -130,7 +130,7 @@ resource "aws_ecs_task_definition" "cloudwatch_exporter" {
     }
   }])
 
-  # See docs/0.9.0/build-deploy-simplification-plan.md. App deploys mutate
+  # See docs/0.9.x/build-deploy-simplification-plan.md. App deploys mutate
   # the image tag out-of-band via aws ecs register-task-definition; Terraform
   # must not roll those forward updates back on a topology-only apply.
   lifecycle {
@@ -345,7 +345,7 @@ resource "aws_ecs_task_definition" "blackbox_exporter" {
     }
   }])
 
-  # See docs/0.9.0/build-deploy-simplification-plan.md. App deploys mutate
+  # See docs/0.9.x/build-deploy-simplification-plan.md. App deploys mutate
   # the image tag out-of-band via aws ecs register-task-definition; Terraform
   # must not roll those forward updates back on a topology-only apply.
   lifecycle {
@@ -487,7 +487,7 @@ resource "aws_ecs_task_definition" "node_exporter" {
     host_path = "/sys"
   }
 
-  # See docs/0.9.0/build-deploy-simplification-plan.md. App deploys mutate
+  # See docs/0.9.x/build-deploy-simplification-plan.md. App deploys mutate
   # the image tag out-of-band via aws ecs register-task-definition; Terraform
   # must not roll those forward updates back on a topology-only apply.
   lifecycle {

@@ -21,7 +21,7 @@ locals {
     }
   }
 
-  # Phase 4 of docs/0.9.0/build-deploy-simplification-plan.md.
+  # Phase 4 of docs/0.9.x/build-deploy-simplification-plan.md.
   # When /cabal/deployed_image_tag is the bootstrap sentinel, the ECR
   # repos are still empty (infra.yml is responsible for the very first
   # apply, before app.yml has ever pushed an image), so the task defs

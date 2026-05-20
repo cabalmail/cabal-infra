@@ -2,7 +2,7 @@
 #
 # Roll every ECS service on cluster cabal-mail to the latest ACTIVE
 # revision in its task-definition family. Phase 1 of
-# docs/0.9.0/build-deploy-simplification-plan.md (shipped in 0.9.3)
+# docs/0.9.x/build-deploy-simplification-plan.md (shipped in 0.9.3)
 # added lifecycle { ignore_changes = [task_definition] } to every
 # aws_ecs_service so out-of-band app deploys are not rolled back by a
 # topology-only Terraform apply. The downside: a Terraform topology

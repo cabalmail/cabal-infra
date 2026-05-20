@@ -2,7 +2,7 @@
 #
 # Reconcile /cabal/deployed_image_tag with the image tag actually running
 # on the canonical mail-tier ECS service (cabal-imap on the cabal-mail
-# cluster). Phase 1 of docs/0.9.0/build-deploy-simplification-plan.md
+# cluster). Phase 1 of docs/0.9.x/build-deploy-simplification-plan.md
 # adds lifecycle { ignore_changes = [container_definitions] } to the ECS
 # task definitions so out-of-band app deploys (which mutate the image
 # tag via aws ecs register-task-definition) are not rolled back by a

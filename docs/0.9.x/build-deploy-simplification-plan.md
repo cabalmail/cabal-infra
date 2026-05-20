@@ -193,7 +193,7 @@ Each phase is independently mergeable and reversible. Phases 1-3 are pure Terraf
 ### Phase 0: Baseline measurement
 
 - Record current per-push CI minutes for a representative changeset that exercises all four app workflows + Terraform. This is the baseline the simplification needs to beat.
-- Document the current first-run procedure (the ugly chicken-and-egg recovery) in `docs/0.9.0/build-deploy-simplification-plan.md` so we have a "before" reference if rollback is ever needed.
+- Document the current first-run procedure (the ugly chicken-and-egg recovery) in `docs/0.9.x/build-deploy-simplification-plan.md` so we have a "before" reference if rollback is ever needed.
 - No code changes.
 
 ### Phase 1: ECS task-definition lifecycle
