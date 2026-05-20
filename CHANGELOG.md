@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- `docs/github.md` is now the single reference for all GitHub
+  Actions variables and secrets. Variables previously scattered across
+  `docs/twilio.md`, `docs/sms-tfv-setup.md`, `docs/monitoring.md`,
+  and `docs/quiesce.md` are consolidated there; those files now
+  cross-reference `docs/github.md` instead of repeating the tables.
+
 ## [0.9.25] - 2026-05-19
 
 ### Changed

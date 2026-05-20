@@ -50,41 +50,7 @@ Before you trigger the workflow:
 
 ## GitHub Environment configuration
 
-For each environment you want to enable TFV in (typically `stage` first, then `prod`), set the following under Settings -> Environments -> [environment name].
-
-### Variables (non-sensitive; visible in workflow logs)
-
-| Variable | Example | Notes |
-| --- | --- | --- |
-| `TFV_COMPANY_NAME`        | `Example Holdings LLC`              | Legal entity name exactly as registered. Must match your EIN documentation. |
-| `TFV_COMPANY_WEBSITE`     | `https://www.cabal-mail.net`        | The front door site URL. Must be a live HTTPS URL that resolves to a page describing the service. |
-| `TFV_COMPANY_ADDRESS1`    | `1234 Example Street`               | Street address line 1. |
-| `TFV_COMPANY_ADDRESS2`    | `Suite 200`                         | Optional; omit the variable if not applicable. |
-| `TFV_COMPANY_CITY`        | `Wilmington`                        |  |
-| `TFV_COMPANY_STATE`       | `DE`                                | Two-letter US state code or two/three-letter province code. |
-| `TFV_COMPANY_ZIP`         | `19801`                             |  |
-| `TFV_COMPANY_COUNTRY`     | `US`                                | ISO 3166-1 alpha-2. Defaults to `US` if unset. |
-| `TFV_CONTACT_FIRST_NAME`  | `Jane`                              | Support contact first name. |
-| `TFV_CONTACT_LAST_NAME`   | `Doe`                               | Support contact last name. |
-| `TFV_MONTHLY_VOLUME`      | `10`                                | Optional. Choices: `10`, `100`, `1,000`, `10,000`, `100,000`, `250,000`, `500,000`, `750,000`, `1,000,000`, `5,000,000`, `10,000,000+`. Default `10` is right for a hobby/small instance. |
-| `TFV_USE_CASE_CATEGORY`   | `ONE_TIME_PASSCODES`                | Optional. Must be one of the SCREAMING_SNAKE_CASE enum values AWS accepts: `ONE_TIME_PASSCODES`, `ACCOUNT_NOTIFICATIONS`, `DELIVERY_NOTIFICATIONS`, `EVENT_NOTIFICATIONS`, `APPOINTMENT`, `CUSTOMER_CARE`, `EDUCATION`, `BOOKING`, `FINANCIAL_TRANSACTIONS`, `HEALTH_CARE`, `PUBLIC_ANNOUNCEMENTS`, `NON_PROFIT`, `NON_POLITICAL_POLLING_AND_SURVEY`, `PROMOTIONS_AND_MARKETING`. Default `ONE_TIME_PASSCODES` matches Cabalmail's signup-verification / password-reset / sign-in-code traffic. The script logs the authoritative list as `[defs]` lines at startup. |
-| `TFV_BUSINESS_TYPE`       | `PRIVATE_PROFIT`                    | Optional. Allowed: `PRIVATE_PROFIT`, `PUBLIC_PROFIT`, `NON_PROFIT`, `SOLE_PROPRIETOR`, `GOVERNMENT`. Default `PRIVATE_PROFIT` is right for an LLC or private corporation; set to `SOLE_PROPRIETOR` if you registered as an individual. |
-| `TFV_OPT_IN_TYPE`         | `DIGITAL_FORM`                      | Optional. Allowed: `VERBAL`, `DIGITAL_FORM`, `PAPER_FORM`, `TEXT`, `QR_CODE`. Default `DIGITAL_FORM` is right for the React signup form; the opt-in screenshot uploaded as an attachment should match this value. |
-| `TFV_TAX_ID_AUTHORITY`    | `EIN`                               | Optional. Only used when `TFV_TAX_ID` (a secret, see below) is set. Allowed: `EIN`, `CBN`, `CRN`, `PROVINCIAL_NUMBER`, `VAT`, `ACN`, `ABN`, `BRN`, `SIREN`, `SIRET`, `NZBN`, `USt-IdNr`, `CIF`, `NIF`, `CNPJ`, `UID`, `NEQ`, `OTHER`. Default `EIN` is right for a US LLC. |
-| `TFV_TAX_ID_COUNTRY`      | `US`                                | Optional. Only used when `TFV_TAX_ID` is set. Two-letter ISO country code of the issuing authority. Default `US`. |
-| `TFV_USE_CASE_DETAILS`    | (free text)                         | Optional. Default supplied by the script describing Cabalmail's signup/reset/MFA flows. Override only if you want different wording. |
-| `TFV_OPT_IN_DESCRIPTION`  | (free text)                         | Optional. Default supplied by the script describing the signup-screen opt-in flow. Override only if you want different wording. |
-| `TFV_SAMPLE_MESSAGE`      | `Your Cabalmail verification code is 123456` | Optional. Default matches what the `sms_sender` Lambda actually sends. If you change the Lambda copy, update this. |
-| `TFV_PHONE_NUMBER_ID`     | `phone-abcdef0123456789`            | Optional. The script auto-discovers if there is exactly one US toll-free number on the account; set this only if you have more than one. |
-
-### Secrets (sensitive; redacted in workflow logs)
-
-| Secret | Example | Notes |
-| --- | --- | --- |
-| `TFV_CONTACT_EMAIL`       | `support@example.com`               | Goes on the public TFV submission. Use an alias you don't mind being on a regulatory form. |
-| `TFV_CONTACT_PHONE`       | `+15551234567`                      | E.164 format. Same caveat as email. |
-| `TFV_TAX_ID`              | `12-3456789`                        | Business identification number (EIN for a US LLC). AWS marks this optional in the field metadata but carrier reviewers require it for `PRIVATE_PROFIT` and `PUBLIC_PROFIT` entities. Leave unset for `SOLE_PROPRIETOR` entities - carriers actively reject sole-proprietor submissions that include tax fields, and the script ignores `TFV_TAX_ID` (with a `[warn]` log line) when `TFV_BUSINESS_TYPE=SOLE_PROPRIETOR`. Stored as a secret rather than a variable so it stays out of workflow logs (the value still appears on the public TFV submission to carriers). |
-| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | (existing) | Already configured for `infra.yml`. The TFV workflow reuses them. |
+For each environment you want to enable TFV in (typically `stage` first, then `prod`), set the `TFV_*` variables and secrets under Settings -> Environments -> [environment name]. The full list of names, examples, and descriptions is in [docs/github.md](github.md#tfv-registration). The `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_REGION` repository secrets are reused from `infra.yml` and do not need to be duplicated.
 
 ## Triggering the workflow
 
