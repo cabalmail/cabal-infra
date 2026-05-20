@@ -232,6 +232,9 @@ module "ecs" {
 
   quiesced = var.quiesced
 
+  sinkhole    = var.sinkhole
+  environment = var.environment
+
   depends_on = [module.cert]
 }
 
