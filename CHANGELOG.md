@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Apple compose From picker now groups favorites above all addresses,
+  matching the sidebar address list and the React From picker.
+- Address management view in Apple clients (Addresses tab in Settings)
+  now groups addresses into Favorites and All sections when favorites
+  exist, and adds swipe/context-menu affordances to toggle the favorite
+  flag — matching the sidebar address list.
+
 ### Changed
 - `docs/github.md` is now the single reference for all GitHub
   Actions variables and secrets. Variables previously scattered across

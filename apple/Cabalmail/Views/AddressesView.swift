@@ -133,11 +133,13 @@ struct AddressesView: View {
 
     @ViewBuilder
     private func mainSection(for model: AddressesViewModel) -> some View {
-        Section("My Addresses") {
-            if model.isLoading && model.addresses.isEmpty {
+        if model.isLoading && model.addresses.isEmpty {
+            Section("My Addresses") {
                 ProgressView()
                     .frame(maxWidth: .infinity, alignment: .center)
-            } else if model.addresses.isEmpty {
+            }
+        } else if model.addresses.isEmpty {
+            Section("My Addresses") {
                 // iPhone clips ContentUnavailableView inside a Section — use
                 // a plain label so the "no addresses" hint still reads cleanly.
                 #if os(macOS)
@@ -150,16 +152,29 @@ struct AddressesView: View {
                 )
                 .foregroundStyle(.secondary)
                 #endif
-            } else {
+            }
+        } else if !model.favorites.isEmpty {
+            Section("Favorites") {
+                ForEach(filteredAddresses(model.favorites)) { address in
+                    addressRow(address, model: model)
+                }
+            }
+            Section("All addresses") {
                 ForEach(filteredAddresses(model.addresses)) { address in
-                    addressRow(address)
+                    addressRow(address, model: model)
+                }
+            }
+        } else {
+            Section("My Addresses") {
+                ForEach(filteredAddresses(model.addresses)) { address in
+                    addressRow(address, model: model)
                 }
             }
         }
     }
 
     @ViewBuilder
-    private func addressRow(_ address: Address) -> some View {
+    private func addressRow(_ address: Address, model: AddressesViewModel) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(address.address)
                 .font(.body)
@@ -176,8 +191,25 @@ struct AddressesView: View {
             } label: {
                 Label("Revoke", systemImage: "xmark.bin")
             }
+            Button {
+                Task { await model.toggleFavorite(address) }
+            } label: {
+                Label(
+                    address.favorite ? "Unfavorite" : "Favorite",
+                    systemImage: address.favorite ? "star.slash" : "star"
+                )
+            }
+            .tint(address.favorite ? .gray : .yellow)
         }
         .contextMenu {
+            Button {
+                Task { await model.toggleFavorite(address) }
+            } label: {
+                Label(
+                    address.favorite ? "Unfavorite" : "Favorite",
+                    systemImage: address.favorite ? "star.slash" : "star.fill"
+                )
+            }
             Button(role: .destructive) {
                 pendingRevoke = address
             } label: {
