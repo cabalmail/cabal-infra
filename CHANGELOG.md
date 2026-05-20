@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Forward-looking plan at `docs/0.9.x/sinkhole-test-harness-plan.md`
+  for a feature-flagged `sinkhole` ECS tier - a tiny configurable SMTP
+  listener registered in Cloud Map and routed to via a `smtp-out`
+  `mailertable` override. Motivating use is queue-persistence test
+  reproducibility (the natural transient-error sources are unreliable);
+  the harness generalises to DSN, large-message, and STARTTLS-fallback
+  scenarios. No code yet; design is independent of the queue-persistence
+  work and can land in parallel.
 - New EFS access point `cabal-smtp-queue` on the existing `mailstore`
   filesystem, scoped to `/smtp-queue` and owned `root:mail` (mode 0700)
   to match the AL2023 sendmail rpm default for `/var/spool/mqueue`.
