@@ -5,7 +5,7 @@
 # tfvars file at terraform/infra/.terraform/lambda-pinned.tfvars,
 # consumed by terraform plan and terraform apply.
 #
-# Phase 2 of docs/0.9.0/build-deploy-simplification-plan.md adds
+# Phase 2 of docs/0.9.x/build-deploy-simplification-plan.md adds
 # lifecycle { ignore_changes = [s3_key, s3_object_version,
 # source_code_hash] } to the Lambda fleet so out-of-band app deploys
 # (which mutate code via aws lambda update-function-code in phase 3+)

@@ -5,7 +5,7 @@
 # enumerates dirs and dispatches them under xargs -P.
 #
 # Per-function deps and helper.py are bundled into each function zip
-# at build time (see docs/0.9.0/lambda-layer-removal-plan.md); the
+# at build time (see docs/0.9.x/lambda-layer-removal-plan.md); the
 # canonical helper.py source lives at lambda/api/_shared/helper.py
 # and is copied into each consuming function's zip by build-api-one.sh.
 # Directories whose names start with "_" are scaffolding for this

@@ -1,7 +1,7 @@
 ---
 name: Build and Deploy Application
 
-# Phase 6 of docs/0.9.0/build-deploy-simplification-plan.md cuts this
+# Phase 6 of docs/0.9.x/build-deploy-simplification-plan.md cuts this
 # workflow over to be the canonical app-deploy pipeline. The legacy
 # docker.yml / lambda_api_python.yml / lambda_counter.yml / react.yml
 # files are deleted in the same change, so a push to any of
@@ -50,7 +50,7 @@ permissions:
 
 # Serialize per-ref so back-to-back app deploys roll services in order
 # rather than racing each other. Phase 3 of
-# docs/0.9.0/build-deploy-simplification-plan.md.
+# docs/0.9.x/build-deploy-simplification-plan.md.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false

@@ -138,7 +138,7 @@ resource "aws_security_group_rule" "healthchecks_from_iac_lambda" {
   description              = "Healthchecks accepts API calls from the healthchecks_iac Lambda."
 }
 
-# Phase 2 of docs/0.9.0/build-deploy-simplification-plan.md adds
+# Phase 2 of docs/0.9.x/build-deploy-simplification-plan.md adds
 # lifecycle { ignore_changes = [s3_key, s3_object_version,
 # source_code_hash] } to the rest of the Lambda fleet. We deliberately
 # do NOT add it here: aws_lambda_invocation.healthchecks_iac below

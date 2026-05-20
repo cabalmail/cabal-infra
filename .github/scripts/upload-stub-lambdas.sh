@@ -2,7 +2,7 @@
 #
 # Upload a placeholder zip + base64sha256 sidecar for every Lambda
 # function in this repo whose pair is missing in S3. Phase 4 of
-# docs/0.9.0/build-deploy-simplification-plan.md uses these stubs to
+# docs/0.9.x/build-deploy-simplification-plan.md uses these stubs to
 # break the bootstrap chicken-and-egg: Terraform reads
 # lambda/<name>.zip.base64sha256 at plan time and refuses to create an
 # aws_lambda_function whose s3_key does not exist. On a brand-new

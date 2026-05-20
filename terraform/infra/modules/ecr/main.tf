@@ -17,7 +17,7 @@ resource "aws_ecr_repository" "tier" {
   }
 }
 
-# Phase 6 of docs/0.9.0/build-deploy-simplification-plan.md: monitoring
+# Phase 6 of docs/0.9.x/build-deploy-simplification-plan.md: monitoring
 # tier ECR repos get prevent_destroy so neither toggling var.monitoring
 # off nor trimming the docker matrix in app.yml can destroy historical
 # images. The repos themselves are still created unconditionally; only

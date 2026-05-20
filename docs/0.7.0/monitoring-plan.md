@@ -316,7 +316,7 @@ Captured in full in [docs/monitoring.md](../monitoring.md). Brief:
 3. Kuma admin user is created on first browser hit (Cognito-authenticated), separate from the Cognito identity.
 4. Kuma webhook notification provider points at the `alert_sink_function_url` with `X-Alert-Secret` header from `/cabal/alert_sink_secret`.
 
-The Pushover/ntfy SSM parameters are TF-managed with placeholder values + `ignore_changes = [value]`. Folding them into "real" Terraform inputs is queued for [docs/0.9.0/state-encryption-plan.md](../0.9.0/state-encryption-plan.md), which gates that on encrypted Terraform state.
+The Pushover/ntfy SSM parameters are TF-managed with placeholder values + `ignore_changes = [value]`. Folding them into "real" Terraform inputs is queued for [docs/0.10.x/state-encryption-plan.md](../0.10.x/state-encryption-plan.md), which gates that on encrypted Terraform state.
 
 ---
 

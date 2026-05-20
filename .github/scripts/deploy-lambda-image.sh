@@ -4,7 +4,7 @@
 # aws lambda update-function-code --image-uri to point the function at
 # the freshly-pushed image, then waits for the update to complete.
 #
-# Phase 3 of docs/0.9.0/build-deploy-simplification-plan.md uses this
+# Phase 3 of docs/0.9.x/build-deploy-simplification-plan.md uses this
 # for cabal-certbot-renewal. The phase 2 lifecycle clause on that
 # function (ignore_changes = [image_uri]) protects the new image from
 # being clobbered by a topology-only Terraform apply.

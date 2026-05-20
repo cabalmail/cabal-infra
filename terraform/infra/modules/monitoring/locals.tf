@@ -8,7 +8,7 @@ locals {
   # string. Everything else (logs, networking, IAM) uses var.region.
   cloudfront_metrics_region = "us-east-1"
 
-  # Phase 4 of docs/0.9.0/build-deploy-simplification-plan.md.
+  # Phase 4 of docs/0.9.x/build-deploy-simplification-plan.md.
   # When /cabal/deployed_image_tag is the bootstrap sentinel, the ECR
   # repos for the monitoring tiers are still empty, so each task def
   # points at a public-ECR placeholder so the cluster comes up cleanly
