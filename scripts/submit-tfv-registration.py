@@ -58,8 +58,11 @@ Optional env vars:
   TFV_TAX_ID                       Business identification number (EIN for a US LLC).
                                    AWS marks this optional in the field metadata but
                                    carrier reviewers require it for PRIVATE_PROFIT /
-                                   PUBLIC_PROFIT entities. SOLE_PROPRIETOR /
-                                   GOVERNMENT entities can leave it unset.
+                                   PUBLIC_PROFIT entities. SOLE_PROPRIETOR entities
+                                   should leave it unset; if set anyway it is
+                                   ignored with a warning, because carriers reject
+                                   sole-proprietor submissions that include tax
+                                   fields.
   TFV_TAX_ID_AUTHORITY             Default "EIN". Only used when TFV_TAX_ID is set.
                                    Allowed: EIN, CBN, CRN, PROVINCIAL_NUMBER, VAT,
                                    ACN, ABN, BRN, SIREN, SIRET, NZBN, USt-IdNr, CIF,
@@ -414,27 +417,38 @@ def main():
     if address2:
         fields_text["companyInfo.address2"] = address2
 
+    business_type = env("TFV_BUSINESS_TYPE", default="PRIVATE_PROFIT")
     fields_choice = {
         "messagingUseCase.monthlyMessageVolume": env("TFV_MONTHLY_VOLUME",    default="10"),
         "messagingUseCase.useCaseCategory":      env("TFV_USE_CASE_CATEGORY", default="ONE_TIME_PASSCODES"),
-        "companyInfo.businessType":              env("TFV_BUSINESS_TYPE",     default="PRIVATE_PROFIT"),
+        "companyInfo.businessType":              business_type,
         "messagingUseCase.optInType":            env("TFV_OPT_IN_TYPE",       default="DIGITAL_FORM"),
     }
 
     # Tax / business identifier. AWS marks taxId, taxIdAuthority, and
     # taxIdCountry as OPTIONAL in the field metadata, but in practice
     # carrier reviewers require them for PRIVATE_PROFIT and
-    # PUBLIC_PROFIT entities. The conditionality isn't exposed via
+    # PUBLIC_PROFIT entities and *reject* their presence on
+    # SOLE_PROPRIETOR submissions (a sole proprietor's only
+    # candidate is an SSN, which carriers don't want in this
+    # workflow). The conditionality isn't exposed via
     # describe-registration-field-definitions, so check_required_coverage
-    # cannot catch their absence.
+    # cannot catch either case.
     #
-    # Treat all three as a unit: if the operator supplies TFV_TAX_ID,
-    # also set authority + country (with sensible US-LLC defaults);
-    # otherwise skip all three. SOLE_PROPRIETOR / GOVERNMENT entities
-    # that legitimately don't have a business identifier just leave
-    # TFV_TAX_ID unset.
+    # Treat the three fields as a unit and gate on business type. If
+    # the operator has TFV_TAX_ID set but business type is
+    # SOLE_PROPRIETOR, log a warning and skip - the operator's
+    # leftover env-var value is suppressed rather than producing a
+    # rejection on resubmit.
     tax_id = env("TFV_TAX_ID")
-    if tax_id:
+    if business_type == "SOLE_PROPRIETOR":
+        if tax_id:
+            print(
+                "[warn] TFV_TAX_ID is set but TFV_BUSINESS_TYPE=SOLE_PROPRIETOR; "
+                "skipping companyInfo.taxId / taxIdAuthority / taxIdCountry "
+                "(carriers reject tax fields on sole-proprietor submissions)"
+            )
+    elif tax_id:
         fields_text["companyInfo.taxId"]        = tax_id
         fields_text["companyInfo.taxIdCountry"] = env("TFV_TAX_ID_COUNTRY",   default="US")
         fields_choice["companyInfo.taxIdAuthority"] = env("TFV_TAX_ID_AUTHORITY", default="EIN")
