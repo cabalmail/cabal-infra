@@ -34,8 +34,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   smtp-out tasks coordinate via sendmail's classic shared-NFS pattern
   (per-`qf` `fcntl` locks). Tracked in
   `docs/0.9.x/smtp-out-queue-persistence-plan.md`.
-
-### Added
 - Per-user, per-apex-domain access control for address creation,
   default-deny. Administrators grant specific users access to
   individual mail apexes from the `Users` admin view, which shows a
