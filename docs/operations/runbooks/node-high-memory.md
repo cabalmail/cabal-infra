@@ -39,6 +39,6 @@ Mail tiers (Dovecot, Sendmail) are I/O- and CPU-bound, not memory-bound, and rar
 ## Escalation
 
 - **Quick mitigation**: bounce the heaviest task. ECS will reschedule it (potentially on a less-loaded host).
-- **Right fix for Prometheus heap growth**: shorter retention or a switch to VictoriaMetrics (mentioned as a fallback in [monitoring-plan.md §3](../../0.7.0/monitoring-plan.md#1-prometheus--alertmanager--grafana)).
+- **Right fix for Prometheus heap growth**: shorter retention or a switch to VictoriaMetrics (mentioned as a fallback in [monitoring-plan.md §3](../../0.7.x/monitoring-plan.md#1-prometheus--alertmanager--grafana)).
 - **Right fix for cluster-wide pressure**: larger instance class. The mail tiers fit comfortably in `t3.small`; the monitoring stack does not at scale.
 - This is `warning` severity. Sustained pressure escalates to a critical via container restart loops once OOM-killing kicks in.

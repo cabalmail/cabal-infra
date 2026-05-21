@@ -4,7 +4,7 @@ Fired by Healthchecks when the `quarterly-review` check has been silent past its
 
 ## What this means
 
-This is **not** an automation heartbeat — it's a manual prompt. The check has no associated job; it expects you, the operator, to ping it once you've completed the quarterly monitoring review described in [docs/0.7.0/monitoring-plan.md §"Tuning discipline"](../../0.7.0/monitoring-plan.md#tuning-discipline).
+This is **not** an automation heartbeat — it's a manual prompt. The check has no associated job; it expects you, the operator, to ping it once you've completed the quarterly monitoring review described in [docs/0.7.x/monitoring-plan.md §"Tuning discipline"](../../0.7.x/monitoring-plan.md#tuning-discipline).
 
 A missed ping means it's been more than ~3.5 months since you last:
 
@@ -12,7 +12,7 @@ A missed ping means it's been more than ~3.5 months since you last:
 2. **Reviewed silences.** Open Alertmanager (via Grafana data-source proxy). Are any silences indefinite that should expire? Drop ones that have outlived the incident they covered.
 3. **Confirmed the on-call number is still correct.** The Pushover and ntfy apps are on a single device today; verify the device still receives test pushes. If you've changed phones, the user key in `/cabal/pushover_user_key` likely needs to be re-seeded.
 4. **Reviewed the noisiest and longest-silent alerts.** Tighten or drop accordingly. Goal: zero false pages in a typical week.
-5. **Walked at least one tabletop scenario** from [docs/0.7.0/monitoring-plan.md §"Phase 4 §5 acceptance"](../../0.7.0/monitoring-plan.md#5-acceptance-for-phase-4) — simulate a failure mode and confirm the alert path delivers.
+5. **Walked at least one tabletop scenario** from [docs/0.7.x/monitoring-plan.md §"Phase 4 §5 acceptance"](../../0.7.x/monitoring-plan.md#5-acceptance-for-phase-4) — simulate a failure mode and confirm the alert path delivers.
 
 ## Ping the check
 

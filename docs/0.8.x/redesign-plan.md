@@ -1,4 +1,4 @@
-# Cabalmail Redesign — Phased Plan (0.8.0)
+# Cabalmail Redesign — Phased Plan (0.8.x)
 
 ## Context
 
@@ -8,14 +8,12 @@ The redesign touches nearly every user-facing surface: the design token system, 
 
 **It cannot be implemented in a single session.** Even under the most aggressive scoping, a single session that attempts all ten steps would end with multiple half-finished surfaces, broken tests, and a diff too large to review. This document breaks the work into eight independently-shippable phases.
 
-All work is performed from the `0.8.0` branch. Each phase results in a PR into `0.8.0`. When the branch is ready, `0.8.0` merges into `stage` and then `main` per the usual deploy flow.
-
 ## Scope notes
 
 - **Stately direction only** for v1. The other two directions (Workbench, Quiet Mono) stay as prototype references; the token plumbing supports them but we do not ship their values.
 - **No new runtime dependencies** without explicit sign-off — no Tailwind, no CSS-in-JS library, no component kit. Fonts are the one exception (Google Fonts for Source Serif 4, Inter Tight, IBM Plex Mono).
 - **Lucide icons are deferred.** Phase 1 assumes we extend `icons.jsx` in-house; if the team later approves `lucide-react`, a small follow-up swaps the imports.
-- Each phase is scoped so that merging it in isolation leaves `0.8.0` in a shippable state. Nothing visible to users breaks mid-way through the rollout; unfinished surfaces either keep their current styling or are gated behind a layout flag on the root.
+- Each phase is scoped so that merging it in isolation leaves `0.8.x` in a shippable state. Nothing visible to users breaks mid-way through the rollout; unfinished surfaces either keep their current styling or are gated behind a layout flag on the root.
 
 ## Preflight — resolve before Phase 1 begins
 

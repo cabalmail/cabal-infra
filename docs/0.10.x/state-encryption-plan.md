@@ -4,7 +4,7 @@
 
 Today, Cabalmail's Terraform state lives in the `cabal-tf-backend` S3 bucket. The bucket has SSE-S3 enabled at the bucket level (AWS default since 2023), so the state file is encrypted at rest — but any IAM principal with `s3:GetObject` on the bucket can read fully-decrypted state. This is the standard backend posture, and it has been adequate while the only secrets in state were resource ARNs and IDs.
 
-The 0.7.0 monitoring work surfaced a concrete case where this posture starts to chafe: the `alert_sink` Lambda needs Pushover credentials and an ntfy publisher token. The Phase 1 implementation works around the issue by writing placeholder values via Terraform and using `ignore_changes = [value]` so the operator can `aws ssm put-parameter` the real values out-of-band. That keeps secrets out of state, but at the cost of:
+The 0.7.x monitoring work surfaced a concrete case where this posture starts to chafe: the `alert_sink` Lambda needs Pushover credentials and an ntfy publisher token. The Phase 1 implementation works around the issue by writing placeholder values via Terraform and using `ignore_changes = [value]` so the operator can `aws ssm put-parameter` the real values out-of-band. That keeps secrets out of state, but at the cost of:
 
 - Manual setup steps that are easy to skip and hard to reproduce across environments.
 - Drift between code and reality — `terraform.tfstate` claims a value the operator immediately overwrote.
@@ -194,11 +194,11 @@ Workflows (`terraform.yml`, `bootstrap.yml`):
 
 ## Open questions
 
-- **Single-region failover.** Today there's one region; if 0.9.0 introduces multi-region, the per-environment CMK becomes a multi-region key with replicas. Out of scope here.
+- **Single-region failover.** Today there's one region; if 0.9.x introduces multi-region, the per-environment CMK becomes a multi-region key with replicas. Out of scope here.
 - **Plan-file artifacts.** `plan-terraform.sh` produces a plan output; with `plan { enforced = true }`, the artifact uploaded between the `plan` and `apply` jobs is encrypted at rest (already true in GitHub Actions) and additionally encrypted client-side. The `apply` job needs `kms:Decrypt` to consume it — confirm the existing apply principal has it.
 - **OpenTofu migration.** If we ever switch, the `encryption` block syntax is identical, but the key provider names differ slightly (`aws_kms` is the same). One-day spike to confirm.
 
-## Out of scope for 0.9.0
+## Out of scope for 0.10.x
 
 - Application-level secrets management (e.g. moving the Cognito client secret out of state — separate posture decision).
 - Hardware-backed key custody (AWS CloudHSM, KMS XKS).

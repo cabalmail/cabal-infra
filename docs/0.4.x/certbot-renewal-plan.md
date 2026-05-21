@@ -6,7 +6,7 @@ The cert module (`terraform/infra/modules/cert/`) currently uses two parallel ce
 1. **ACM certificate** (`main.tf`) — wildcard `*.control_domain`, DNS-validated, used by NLB/CloudFront. This stays.
 2. **ACME/Let's Encrypt certificate** (`acme.tf`) — uses the `vancluever/acme` Terraform provider to issue a cert via DNS-01 challenge and store the key, cert, and chain in SSM Parameter Store. ECS containers (and legacy ASG instances) consume these SSM values.
 
-The ACME approach is problematic: certs expire every 90 days and renewal requires `terraform apply`. With the move to ECS containers (branch `0.4.1`), we'll replace this with a **certbot Lambda** that auto-renews and restarts ECS services.
+The ACME approach is problematic: certs expire every 90 days and renewal requires `terraform apply`. With the move to ECS containers, we'll replace this with a **certbot Lambda** that auto-renews and restarts ECS services.
 
 ## Approach: Container-image Lambda on EventBridge Schedule
 

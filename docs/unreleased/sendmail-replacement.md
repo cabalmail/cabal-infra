@@ -2,7 +2,7 @@
 
 ## Background
 
-With the containerization migration (see `docs/0.4.0/containerization-plan.md`),
+With the containerization migration (see `docs/0.4.x/containerization-plan.md`),
 Dovecot now handles user-facing SMTP submission on the smtp-out tier (ports
 587/465), authenticating users via PAM against Cognito. Dovecot then relays to
 sendmail on localhost:25 for outbound delivery. This architecture reduces

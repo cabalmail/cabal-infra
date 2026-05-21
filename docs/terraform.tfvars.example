@@ -61,13 +61,11 @@ mail_domains = [
   "example.org"
 ]
 
-# DEPRECATED: Let's Encrypt certificates will be removed in 0.4.1.
 # Set this to true to use Lets Encrypt's production API. Defaults
 # to false.
 
 # prod = true
 
-# DEPRECATED: Let's Encrypt certificates will be removed in 0.4.1.
 # Email to use for Lets Encrypt's API.
 
 email = "your_email@example.com"
@@ -121,14 +119,3 @@ smtpout_scale = {
 # https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token
 
 github_token = "ghp_yXfAxxxxxxxxxxxxxxxxxxxxxxxxxxxxGq46"
-
-# DEPRECATED: Chef will be removed in 0.4.1. Mail services are
-# migrating to Docker containers on ECS.
-# This repository installs Chef Infra Client on EC2 instances.
-# For Chef Client to run, you must accept the Chef license.
-# It is available here:
-# https://www.chef.io/end-user-license-agreement
-# NOTE: The Terraform validation still requires this to be set
-# to "accept" even though Chef is deprecated.
-
-chef_license = "accept"

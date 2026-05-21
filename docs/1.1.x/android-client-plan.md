@@ -13,7 +13,7 @@ Scope of "Android client" for 1.1.0:
 
 Wear OS, Android TV, and Android Auto are explicitly out of scope.
 
-Play Store public release is explicitly *not* a 1.1.0 goal -- the roadmap places that at 1.5.0. This phase produces a working client that is continuously built and tested in CI and distributable via Play Console internal testing tracks.
+Play Store public release is explicitly *not* a 1.1.x goal -- the roadmap places that at 1.5.x. This phase produces a working client that is continuously built and tested in CI and distributable via Play Console internal testing tracks.
 
 ## Approach
 
@@ -450,14 +450,14 @@ Fields:
 ### 2. Reply / Reply All / Forward
 
 Triggered from the message detail toolbar. The compose screen opens pre-populated:
-- **From** defaults to the address the original was sent *to* (matching 0.3.0 behavior). If multi-recipient, the first that exists in the user's address list is chosen.
+- **From** defaults to the address the original was sent *to* (matching 0.3.x behavior). If multi-recipient, the first that exists in the user's address list is chosen.
 - **To** / **Cc** populated per reply semantics.
 - **Subject** prefixed with `Re:` or `Fwd:` if not already.
 - **Body** quotes the original with attribution line.
 
 ### 3. Drafts
 
-Drafts persist locally while being edited (Room database, autosaving every 5 seconds). On compose-screen close *without* send, the draft remains in Room for the next session. Cross-device draft sync (via IMAP `Drafts` folder) is deferred -- the API surface doesn't expose `APPEND` directly, and `/send` is the only write path. Local-only drafts are sufficient for 1.1.0.
+Drafts persist locally while being edited (Room database, autosaving every 5 seconds). On compose-screen close *without* send, the draft remains in Room for the next session. Cross-device draft sync (via IMAP `Drafts` folder) is deferred -- the API surface doesn't expose `APPEND` directly, and `/send` is the only write path. Local-only drafts are sufficient for 1.1.x.
 
 ### 4. Share target
 
@@ -595,7 +595,7 @@ Cross-cutting work to make each form factor feel native, plus robustness improve
 
 ## Out of Scope for 1.1.0
 
-- **Public Play Store release.** Tracked as 1.5.0. 1.1.0 ships to Play Console internal testers only.
+- **Public Play Store release.** Tracked as 1.5.x. 1.1.x ships to Play Console internal testers only.
 - **Push notifications (FCM).** Same blocker as iOS/APNs: needs a server-side IDLE watcher to bridge to FCM. Tracked alongside APNs work.
 - **Kotlin Multiplatform code sharing with iOS.** The `CabalmailKit` Swift code stays Swift; `kit/` is a parallel Kotlin implementation. KMP is a future optimization, not a prerequisite.
 - **Admin features** (user management, DMARC, multi-user address assignment). Admins continue to use the web app.
@@ -615,4 +615,4 @@ Cross-cutting work to make each form factor feel native, plus robustness improve
 2. **Amplify Android vs hand-rolled Cognito SRP.** Amplify adds ~3-4 MB after R8 but provides token management, `EncryptedSharedPreferences` integration, and matches the iOS choice. Hand-rolling SRP saves size but costs development time. Default: Amplify.
 3. **`kit/` as `android-library` vs `java-library`.** If `kit/` could avoid Android dependencies it would build faster and be easier to unit test. But Amplify pulls in Android transitively, so `android-library` is likely required. Revisit if Amplify is replaced.
 4. **Rich text compose.** Jetpack Compose's `TextField` with `AnnotatedString` supports basic formatting but lacks a built-in toolbar or HTML export. Options: minimal custom toolbar (bold/italic/link only, export to HTML manually), or a third-party rich-text editor library. Spike in Phase 5.
-5. **Cross-device draft sync.** The API surface doesn't expose IMAP `APPEND`. Drafts are local-only in 1.1.0. If cross-device drafts are important, a `/save_draft` Lambda could be added in a future version.
+5. **Cross-device draft sync.** The API surface doesn't expose IMAP `APPEND`. Drafts are local-only in 1.1.x. If cross-device drafts are important, a `/save_draft` Lambda could be added in a future version.

@@ -11,7 +11,7 @@ Dovecot's IMAP login process logged failed authentication attempts at a sustaine
 Failed auth attempts don't directly affect anyone — Dovecot rejects them and the attacker moves on. The risks are:
 - Real users may experience login latency under heavy attack load (Dovecot's bcrypt verification is intentionally slow).
 - A determined attacker with a valid password gets in once they hit the right user. Cabalmail uses Cognito-issued passwords; check whether any account has a weak password set out-of-band.
-- **fail2ban is currently disabled** in [supervisord.conf](../../../docker/imap/supervisord.conf) on every mail tier (commented out as of 0.7.0). So attempts aren't being banned at the host level. Until fail2ban is re-enabled, this alert is the only signal.
+- **fail2ban is currently disabled** in [supervisord.conf](../../../docker/imap/supervisord.conf) on every mail tier (commented out as of 0.7.x). So attempts aren't being banned at the host level. Until fail2ban is re-enabled, this alert is the only signal.
 
 ## First three things to check
 

@@ -1,8 +1,8 @@
 # Monitoring & Alerting
 
-The 0.7.0 release adds an optional monitoring stack on top of the existing mail infrastructure. Black-box uptime monitoring, heartbeat monitoring for scheduled jobs, a Prometheus / Alertmanager / Grafana metrics stack, log-derived alerts via CloudWatch metric filters, and a runbook for every alert that can fire. All of it routes through a push-notification path (Pushover + self-hosted ntfy) that bypasses Cabalmail's own email tier so the operator stays reachable during a mail outage.
+The 0.7.x release adds an optional monitoring stack on top of the existing mail infrastructure. Black-box uptime monitoring, heartbeat monitoring for scheduled jobs, a Prometheus / Alertmanager / Grafana metrics stack, log-derived alerts via CloudWatch metric filters, and a runbook for every alert that can fire. All of it routes through a push-notification path (Pushover + self-hosted ntfy) that bypasses Cabalmail's own email tier so the operator stays reachable during a mail outage.
 
-See [docs/0.7.0/monitoring-plan.md](./0.7.0/monitoring-plan.md) for the design rationale. This document is the operator's runbook for enabling the stack and completing first-boot configuration. All steps are required unless explicitly marked optional.
+See [docs/0.7.x/monitoring-plan.md](./0.7.x/monitoring-plan.md) for the design rationale. This document is the operator's runbook for enabling the stack and completing first-boot configuration. All steps are required unless explicitly marked optional.
 
 The stack is disabled by default. When enabled it deploys:
 
@@ -469,7 +469,7 @@ All metrics emit value=1 per matching log line, default 0. CloudWatch aggregates
 | `SendmailBouncedSpike` | >15 bounces/30 min, sustained 15 min | critical | [sendmail-bounced-spike.md](./operations/runbooks/sendmail-bounced-spike.md) |
 | `IMAPAuthFailureSpike` | >25 auth-fails/5 min, sustained 5 min | warning | [imap-auth-failure-spike.md](./operations/runbooks/imap-auth-failure-spike.md) |
 
-These thresholds are starting points. Expect them to move once we see what real traffic looks like; record the rationale in the alert's GitHub issue per the [tuning discipline](./0.7.0/monitoring-plan.md#tuning-discipline) in the design doc.
+These thresholds are starting points. Expect them to move once we see what real traffic looks like; record the rationale in the alert's GitHub issue per the [tuning discipline](./0.7.x/monitoring-plan.md#tuning-discipline) in the design doc.
 
 **fail2ban metrics are intentionally not part of this set.** `[program:fail2ban]` is currently commented out in every mail-tier `supervisord.conf`. A metric filter today would publish flat-zero forever and mask the disabled state. Add the filter when fail2ban is re-enabled.
 
