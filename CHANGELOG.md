@@ -252,7 +252,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   jurisdiction) must be edited before going live. See
   `docs/front-door.md`.
 - AWS End User Messaging toll-free verification (TFV) submission
-  automation. New `scripts/submit-tfv-registration.py` drives the
+  automation. New `.github/scripts/submit-tfv-registration.py` drives the
   `pinpoint-sms-voice-v2` API end-to-end: discovers the toll-free
   phone number, finds or creates a `US_TOLL_FREE_REGISTRATION`,
   uploads the opt-in screenshot, sets every required field from env

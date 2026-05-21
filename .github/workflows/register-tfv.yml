@@ -7,7 +7,7 @@ name: Submit AWS End User Messaging TFV
 # full operator runbook including the required GitHub Environment
 # variables and secrets.
 #
-# The script (scripts/submit-tfv-registration.py) is idempotent: it
+# The script (.github/scripts/submit-tfv-registration.py) is idempotent: it
 # picks up an existing draft, re-applies all field values from env vars,
 # re-uploads the opt-in screenshot, and re-submits. Safe to re-run after
 # a REQUIRES_UPDATES rejection.
@@ -63,7 +63,7 @@ jobs:
       TFV_TAX_ID_AUTHORITY:    ${{ vars.TFV_TAX_ID_AUTHORITY }}
       TFV_TAX_ID_COUNTRY:      ${{ vars.TFV_TAX_ID_COUNTRY }}
       # Optional overrides; if any of these are unset, the script uses
-      # sensible defaults baked in to scripts/submit-tfv-registration.py.
+      # sensible defaults baked in to .github/scripts/submit-tfv-registration.py.
       TFV_MONTHLY_VOLUME:      ${{ vars.TFV_MONTHLY_VOLUME }}
       TFV_USE_CASE_CATEGORY:   ${{ vars.TFV_USE_CASE_CATEGORY }}
       TFV_BUSINESS_TYPE:       ${{ vars.TFV_BUSINESS_TYPE }}
@@ -97,4 +97,4 @@ jobs:
           file /tmp/opt-in.png
           echo "TFV_OPT_IN_IMAGE=/tmp/opt-in.png" >> "$GITHUB_ENV"
       - name: submit-tfv-registration
-        run: python3 scripts/submit-tfv-registration.py
+        run: python3 .github/scripts/submit-tfv-registration.py
