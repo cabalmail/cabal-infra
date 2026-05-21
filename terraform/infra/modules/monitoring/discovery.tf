@@ -54,6 +54,16 @@ resource "aws_service_discovery_service" "monitoring" {
       type = "A"
     }
   }
+
+  # See the matching block on aws_service_discovery_service.imap in the
+  # ecs module. AWS sets HealthCheckCustomConfig.FailureThreshold to 1
+  # server-side; absent ignore_changes, Terraform reads that as drift
+  # and schedules a forced replacement that (a) fails because the ECS
+  # task is registered as an instance out-of-band and (b) if it does
+  # land, leaves running tasks bound to the destroyed predecessor ARN.
+  lifecycle {
+    ignore_changes = [health_check_custom_config]
+  }
 }
 
 # node_exporter daemon - SRV record because ECS won't accept A-record
@@ -73,5 +83,10 @@ resource "aws_service_discovery_service" "node_exporter" {
       ttl  = 10
       type = "SRV"
     }
+  }
+
+  # See aws_service_discovery_service.monitoring above.
+  lifecycle {
+    ignore_changes = [health_check_custom_config]
   }
 }

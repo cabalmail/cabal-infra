@@ -43,6 +43,11 @@ variable "efs_id" {
   description = "EFS file system ID for the mailstore."
 }
 
+variable "smtp_queue_access_point_id" {
+  type        = string
+  description = "EFS access point id for the shared smtp-out sendmail MTA queue (mounted at /var/spool/mqueue in the smtp-out task)."
+}
+
 # -- Cognito ----------------------------------------------------
 
 variable "user_pool_arn" {
@@ -122,4 +127,17 @@ variable "quiesced" {
   type        = bool
   description = "When true, set ECS service desired_count and the ECS-instance ASG to zero. Capacity-provider managed termination protection and ASG instance scale-in protection are also disabled so the running instance can be terminated."
   default     = false
+}
+
+# -- Sinkhole test fixture --------------------------------------
+
+variable "sinkhole" {
+  type        = bool
+  description = "When true, provision the SMTP sinkhole test fixture (task definition, service, security group, Cloud Map registration, SSM parameter). See docs/0.9.x/sinkhole-test-harness-plan.md. Must never be true in prod; the parent stack's var.sinkhole validation block and the task definition's precondition both refuse that combination."
+  default     = false
+}
+
+variable "environment" {
+  type        = string
+  description = "Environment name (e.g. prod, stage, development). Surfaced for the sinkhole precondition; not consumed elsewhere in the ECS module today."
 }

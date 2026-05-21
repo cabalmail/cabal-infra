@@ -35,9 +35,10 @@ resource "aws_cognito_user_pool" "users" {
   # provided KMS key, and bypasses the SNS hot path. The
   # sms_configuration block above stays in place because Cognito
   # still validates it whenever a phone attribute is auto-verified.
-  # See docs/0.9.0/twilio-sms-migration-plan.md.
+  # See docs/twilio.md.
   lambda_config {
     post_confirmation = aws_lambda_function.assign_osid.arn
+    pre_sign_up       = aws_lambda_function.check_invite.arn
 
     dynamic "custom_sms_sender" {
       for_each = var.use_twilio_sms ? [1] : []
@@ -51,7 +52,17 @@ resource "aws_cognito_user_pool" "users" {
   }
 }
 
+# AWS End User Messaging toll-free number used by the legacy SNS SMS
+# path. Gated on var.use_eum_sms so environments that have committed
+# to the Twilio path don't carry the EUM number (and its monthly
+# rental + pending TFV registration) as dead weight. See docs/twilio.md.
+#
+# Note: deletion_protection_enabled = true means flipping this flag
+# from true to false will fail apply until protection is disabled in
+# a prior apply. That's intentional - losing a TFV-approved number is
+# expensive.
 resource "aws_pinpointsmsvoicev2_phone_number" "sms" {
+  count                       = var.use_eum_sms ? 1 : 0
   iso_country_code            = "US"
   message_type                = "TRANSACTIONAL"
   number_capabilities         = ["SMS"]
@@ -61,6 +72,16 @@ resource "aws_pinpointsmsvoicev2_phone_number" "sms" {
   timeouts {
     create = "1m"
   }
+}
+
+# Migrate state from the pre-count resource address so an env that
+# already had a (pending or active) EUM phone number does not see a
+# destroy on the un-indexed address. Combined with
+# deletion_protection_enabled = true this means a TFV-approved
+# number cannot be lost by a flag flip alone.
+moved {
+  from = aws_pinpointsmsvoicev2_phone_number.sms
+  to   = aws_pinpointsmsvoicev2_phone_number.sms[0]
 }
 
 resource "aws_cognito_user_group" "admin" {

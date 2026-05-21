@@ -23,7 +23,7 @@ The label `apiname` identifies which API. For Cabalmail there is one API (`cabal
    ```sh
    aws logs tail /aws/lambda/<function-name> --since 15m --filter-pattern '?ERROR ?Exception ?Traceback'
    ```
-3. **Is it environment-wide or one route?** Check the Grafana **API Gateway & Lambda** dashboard — if every route is failing, suspect the API Gateway authorizer, the shared `helper.py` layer, or DynamoDB. If one route, the recent change to that function's code is the prime suspect.
+3. **Is it environment-wide or one route?** Check the Grafana **API Gateway & Lambda** dashboard — if every route is failing, suspect the API Gateway authorizer, the shared `helper.py` module bundled into every function, or DynamoDB. If one route, the recent change to that function's code is the prime suspect.
 
 ## Escalation
 

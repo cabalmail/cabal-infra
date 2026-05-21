@@ -6,10 +6,6 @@ variable "runtime" {
   type = string
 }
 
-variable "layer_arns" {
-  type = list(string)
-}
-
 variable "gateway_id" {
   type = string
 }

@@ -90,7 +90,7 @@ resource "aws_autoscaling_group" "ecs" {
   name_prefix         = "cabal-ecs-"
   vpc_zone_identifier = var.private_subnets[*].id
   desired_capacity    = var.quiesced ? 0 : 1
-  max_size            = var.quiesced ? 0 : 3
+  max_size            = var.quiesced ? 0 : 4
   min_size            = var.quiesced ? 0 : 1
   # Disabled while quiesced so the running instance can actually be
   # terminated. Re-enabled on resume so the capacity provider's

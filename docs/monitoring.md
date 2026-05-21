@@ -37,12 +37,7 @@ Pushover is the "wake someone up" channel -- priority-1 pushes bypass Do Not Dis
 
 The monitoring stack is gated by `var.monitoring`. Set it to `true` only in the environments where you want it on (prod always; stage/dev only while actively testing).
 
-In your GitHub repository settings, go to **Settings -> Environments -> _environment_ -> Variables** and add:
-
-| Variable                                  | Example value | Notes                                                                                                                    |
-| ----------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `TF_VAR_MONITORING`                       | `true`        | Gates the whole stack. Set to `true` in `prod`; leave as `false` (or unset) elsewhere.                                   |
-| `TF_VAR_HEALTHCHECKS_REGISTRATION_OPEN`   | `false`       | Controls whether the Healthchecks signup form accepts new accounts. Defaults to `false` (closed) when unset; flip to `true` for the bootstrap signup in step 11, then back to `false`. Has no effect when `TF_VAR_MONITORING=false`. |
+In your GitHub repository settings, go to **Settings -> Environments -> _environment_ -> Variables** and set `TF_VAR_MONITORING=true` (and later `TF_VAR_HEALTHCHECKS_REGISTRATION_OPEN=true` when you reach step 11). The full variable descriptions are in [docs/github.md](github.md#monitoring).
 
 ## 3. Build container images (first time only)
 

@@ -12,13 +12,6 @@ The mail tiers run as Docker containers on ECS (EC2 launch type). See `docs/0.4.
 
 These rules are evolving — they reflect the current solo-developer workflow and will change as patterns settle. Update them rather than working around them.
 
-### Collaboration
-
-The asymmetry below is deliberate — commits and pushes are treated differently.
-
-- **Local commits: do them proactively, without asking.** Once a change is reasonably shippable, commit it. Don't wait for confirmation. Local commits are cheap and the human reviews them at merge time.
-- **Pushes to origin: do not do them.** The human merges from the worktree, studies the change locally, and pushes their own branch. This applies even after a commit you were asked to make. **Exception:** If you were invoked via GitHub Actions, commit, push, and create a PR to `stage`.
-
 ### Branches and environments
 
 Three named branches map 1:1 to GitHub Environments and AWS accounts:
@@ -71,7 +64,7 @@ docs/               Architecture docs, migration plans, setup guides
 
 ### Docs convention
 
-Versioned subdirectories of `docs/` (e.g. `docs/0.4.0/`, `docs/0.7.0/`, `docs/0.9.0/`) are forward-looking plans for the corresponding roadmap version - design proposals written before or during implementation. Once a feature ships, its as-implemented documentation lives at the top level of `docs/`, not inside the version directory. When you write operator-facing or reference documentation for something that has already shipped, put it in `docs/<topic>.md` and link it from the relevant index (`docs/operations.md`, `docs/setup.md`, etc.). Leave the version directory alone; it is part of the historical planning record.
+Versioned subdirectories of `docs/` (e.g. `docs/0.4.0/`, `docs/0.7.0/`, `docs/0.9.x/`) are forward-looking plans for the corresponding roadmap version - design proposals written before or during implementation. Once a feature ships, its as-implemented documentation lives at the top level of `docs/`, not inside the version directory. When you write operator-facing or reference documentation for something that has already shipped, put it in `docs/<topic>.md` and link it from the relevant index (`docs/operations.md`, `docs/setup.md`, etc.). Leave the version directory alone; it is part of the historical planning record.
 
 ## Build/Lint/Test Commands
 
@@ -142,7 +135,6 @@ Deploy workflows select environment based on branch: `main`=prod, `stage`=stage,
 | `table` | DynamoDB `cabal-addresses` table |
 | `cert` | ACM certificate for control domain |
 | `domains` | Route 53 hosted zones for mail domains |
-| `lambda_layers` | Python Lambda layer (shared deps like `imapclient`) |
 | `certbot_renewal` | Scheduled Lambda for Let's Encrypt cert renewal |
 | `backup` | AWS Backup for DynamoDB + EFS (conditional) |
 
@@ -150,13 +142,13 @@ Image tags are stored in SSM Parameter Store (`/cabal/deployed_image_tag`) and r
 
 ### Lambda Functions (`lambda/api/`)
 
-All Lambda functions are Python, fronted by API Gateway with Cognito authorizer. They share a common helper layer (`lambda/api/python/python/helper.py`) providing:
+All Lambda functions are Python, fronted by API Gateway with Cognito authorizer. They share a first-party helper module at [`lambda/api/_shared/helper.py`](lambda/api/_shared/helper.py), copied into each consuming function's zip at build time (see [`build-api-one.sh`](.github/scripts/build-api-one.sh)), providing:
 - IMAP client management (master-user login via SSM-stored password, username format `{user}*admin`)
 - DynamoDB address lookups (`cabal-addresses` table)
 - S3 message caching (raw email bodies cached at `{user}/{folder}/{id}/raw`)
 - Presigned URL generation for attachments (24hr expiry)
 
-Key dependencies: `imapclient==2.3.1`, `dnspython==2.3.0` (installed as Lambda layer). IMAP folder paths use `.` internally but `/` in API requests — all functions normalize with `.replace("/", ".")`.
+Key dependencies: `imapclient==2.3.1`, `dnspython==2.3.0` (bundled per function via `requirements.txt`; previously shipped as a Lambda layer, removed in 0.9.x). IMAP folder paths use `.` internally but `/` in API requests — all functions normalize with `.replace("/", ".")`.
 
 Response format: `{"statusCode": N, "body": json.dumps({...})}`. User extracted from `event['requestContext']['authorizer']['claims']['cognito:username']`.
 
@@ -245,27 +237,4 @@ Use semantic versioning. Create a new version when appropriate. When creating a 
 
 ## Roadmap
 
-| Version | Target Features                                                                                     | Status      |
-| ------- | --------------------------------------------------------------------------------------------------- | ----------- |
-| 0.1.0   | Complete functioning infrastructure; admin app supports creation and revocation of addresses.       | Done        |
-| 0.2.0   | App includes full browser-based IMAP mail client.                                                   | Done        |
-| 0.3.0   | IMAP mail client From: field allows pick or create; for replies, defaults to addressee of original. | Done        |
-| 0.3.1   | Update documentation with new UI features.                                                          | Done        |
-| 0.4.0   | Migrate from EC2 instances to containers.                                                           | Done        |
-| 0.4.1   | Move cert renewal from Terraform to Lambda; Modernize web client.                                   | Done        |
-| 0.5.x   | User management dashboard.                                                                          | Done        |
-| 0.6.x   | Native app for iOS.                                                                                 | Done        |
-| 0.7.x   | Monitoring and alerting.                                                                            | Done        |
-| 0.8.x   | Overhaul web UX.                                                                                    | Done        |
-| 0.9.x   | Stabilize.                                                                                          | In Progress |
-| 1.0.x   | Production-ready release.                                                                           |             |
-| 1.1.x   | Native app for Android.                                                                             |             |
-| 1.2.x   | Quotas.                                                                                             |             |
-| 1.3.x   | Framework for developing procmail-like features (forwarding, marking-read, etc.).                   |             |
-| 1.3.x   | Expose UI for auto-forwarding.                                                                      |             |
-| 1.4.x   | iOS App Store release.                                                                              |             |
-| 1.5.x   | Google Play or other Android store release.                                                         |             |
-| 1.6.x   | Stabilize.                                                                                          |             |
-| 2.0.x   | RSS reader for web client.                                                                          |             |
-| 2.1.x   | RSS reader for iOS app.                                                                             |             |
-| 2.2.x   | RSS reader for Android app.                                                                         |             |
+See the [project wiki](https://github.com/cabalmail/cabal-infra/wiki) for the current roadmap.

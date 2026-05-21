@@ -2,19 +2,18 @@
 #
 # Build and upload every lambda/api/<func>.zip in parallel. The
 # per-function logic lives in build-api-one.sh; this driver just
-# enumerates dirs and dispatches them under xargs -P. The python dir
-# is the shared Lambda layer source - it gets the same per-function
-# treatment so the layer's source_code_hash stays byte-stable across
-# CI runs (see build-api-one.sh and the 0.9.3 follow-up CHANGELOG
-# entry for why determinism matters there).
+# enumerates dirs and dispatches them under xargs -P.
 #
-# The "python" dir is the shared Lambda layer; its zip becomes a new
-# aws_lambda_layer_version every time its sha256 changes, which then
-# forces every aws_lambda_function that consumes the layer to rotate
-# its `layers` attribute. The build therefore has to be byte-stable
-# - same source in, same zip out - or every CI run produces a layer
-# version bump and Terraform churns through 30+ in-place Lambda
-# updates on the next plan.
+# Per-function deps and helper.py are bundled into each function zip
+# at build time (see docs/0.9.x/lambda-layer-removal-plan.md); the
+# canonical helper.py source lives at lambda/api/_shared/helper.py
+# and is copied into each consuming function's zip by build-api-one.sh.
+# Directories whose names start with "_" are scaffolding for this
+# bundling (currently just _shared/) and are not built as Lambda
+# functions. Determinism still matters because each function zip's
+# sha256 is recorded as source_code_hash on the running Lambda; a
+# spurious hash bump would force every CI run to redeploy code that
+# is byte-equivalent to what is already deployed.
 #
 # Sources of non-determinism we control here:
 #   - SOURCE_DATE_EPOCH: honored by zip, pip wheel builds, and most
@@ -33,13 +32,6 @@
 #   - LC_ALL=C sort: locale-stable filename ordering inside the zip.
 #   - touch -h: sets every entry's mtime to SOURCE_DATE_EPOCH without
 #     following symlinks.
-#
-# `./python` is wiped before every pip install so that stale files from
-# a previous build cannot leak into the layer. The shared layer
-# (lambda/api/python) keeps its own first-party module sources under
-# ./src/ so that the wipe only removes pip-managed artefacts; ./src/.
-# is copied into ./python/ after pip install so the layer ends up with
-# both the third-party deps and helper.py side-by-side.
 
 set -euo pipefail
 
@@ -51,6 +43,9 @@ funcs=()
 for FUNC in */ ; do
   FUNC="${FUNC%/}"
   [ -d "${FUNC}" ] || continue
+  case "${FUNC}" in
+    _*) continue ;;
+  esac
   funcs+=("${FUNC}")
 done
 

@@ -1,7 +1,7 @@
 ---
 name: Build and Deploy Application
 
-# Phase 6 of docs/0.9.0/build-deploy-simplification-plan.md cuts this
+# Phase 6 of docs/0.9.x/build-deploy-simplification-plan.md cuts this
 # workflow over to be the canonical app-deploy pipeline. The legacy
 # docker.yml / lambda_api_python.yml / lambda_counter.yml / react.yml
 # files are deleted in the same change, so a push to any of
@@ -18,7 +18,7 @@ on:
         description: >-
           Comma-separated areas to build and deploy. Allowed values:
           all, docker, lambda_api, lambda_counter, lambda_certbot,
-          lambda_sms_sender, react. Defaults to "all".
+          lambda_sms_sender, react, front_door. Defaults to "all".
         required: false
         default: all
         type: string
@@ -34,6 +34,7 @@ on:
       - 'docker/**'
       - 'lambda/**'
       - 'react/admin/**'
+      - 'front-door/**'
       - '.github/workflows/app.yml'
       - '.github/scripts/build-api.sh'
       - '.github/scripts/build-api-one.sh'
@@ -42,13 +43,14 @@ on:
       - '.github/scripts/deploy-ecs-service.sh'
       - '.github/scripts/deploy-lambda-image.sh'
       - '.github/scripts/deploy-lambda-zip.sh'
+      - '.github/scripts/render-front-door.py'
 
 permissions:
   contents: read
 
 # Serialize per-ref so back-to-back app deploys roll services in order
 # rather than racing each other. Phase 3 of
-# docs/0.9.0/build-deploy-simplification-plan.md.
+# docs/0.9.x/build-deploy-simplification-plan.md.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
@@ -72,6 +74,7 @@ jobs:
       lambda_certbot: ${{ steps.areas.outputs.lambda_certbot }}
       lambda_sms_sender: ${{ steps.areas.outputs.lambda_sms_sender }}
       react: ${{ steps.areas.outputs.react }}
+      front_door: ${{ steps.areas.outputs.front_door }}
     steps:
     - name: checkout
       uses: actions/checkout@v5
@@ -84,18 +87,25 @@ jobs:
     # environment. Per phase 3 of the simplification plan, the
     # monitoring stack (9 tiers) is dropped from the matrix when
     # vars.TF_VAR_MONITORING != 'true' so we stop spending arm64 build
-    # minutes on images nothing deploys.
+    # minutes on images nothing deploys. The sinkhole tier (SMTP test
+    # fixture, see docs/0.9.x/sinkhole-test-harness-plan.md) is gated
+    # the same way on vars.TF_VAR_SINKHOLE; prod's value is hard-coded
+    # false and Terraform's precondition belt-and-suspenders the gate.
     - name: compute-matrix
       id: matrix
       env:
         MONITORING: ${{ vars.TF_VAR_MONITORING }}
+        SINKHOLE: ${{ vars.TF_VAR_SINKHOLE }}
       run: |
         CORE='["imap","smtp-in","smtp-out"]'
         MON='["uptime-kuma","ntfy","healthchecks","prometheus","alertmanager","grafana","cloudwatch-exporter","blackbox-exporter","node-exporter"]'
+        SINK='["sinkhole"]'
+        tiers="$CORE"
         if [ "${MONITORING}" = "true" ]; then
-          tiers="$(jq -cn --argjson c "$CORE" --argjson m "$MON" '$c + $m')"
-        else
-          tiers="$CORE"
+          tiers="$(jq -cn --argjson a "$tiers" --argjson b "$MON" '$a + $b')"
+        fi
+        if [ "${SINKHOLE}" = "true" ]; then
+          tiers="$(jq -cn --argjson a "$tiers" --argjson b "$SINK" '$a + $b')"
         fi
         echo "tiers=${tiers}" >> "$GITHUB_OUTPUT"
         echo "matrix tiers: ${tiers}"
@@ -138,6 +148,9 @@ jobs:
             - '.github/scripts/deploy-lambda-zip.sh'
           react:
             - 'react/admin/**'
+          front_door:
+            - 'front-door/**'
+            - '.github/scripts/render-front-door.py'
 
     - name: resolve-areas
       id: areas
@@ -150,11 +163,12 @@ jobs:
         LAMBDA_CERTBOT: ${{ steps.filter.outputs.lambda_certbot }}
         LAMBDA_SMS_SENDER: ${{ steps.filter.outputs.lambda_sms_sender }}
         REACT: ${{ steps.filter.outputs.react }}
+        FRONT_DOOR: ${{ steps.filter.outputs.front_door }}
       run: |
         set -euo pipefail
         if [ "${EVENT_NAME}" = "push" ]; then
           # Push: trust dorny/paths-filter results.
-          for pair in "docker:${DOCKER}" "lambda_api:${LAMBDA_API}" "lambda_counter:${LAMBDA_COUNTER}" "lambda_certbot:${LAMBDA_CERTBOT}" "lambda_sms_sender:${LAMBDA_SMS_SENDER}" "react:${REACT}"; do
+          for pair in "docker:${DOCKER}" "lambda_api:${LAMBDA_API}" "lambda_counter:${LAMBDA_COUNTER}" "lambda_certbot:${LAMBDA_CERTBOT}" "lambda_sms_sender:${LAMBDA_SMS_SENDER}" "react:${REACT}" "front_door:${FRONT_DOOR}"; do
             name="${pair%%:*}"
             val="${pair#*:}"
             if [ "${val}" = "true" ]; then
@@ -171,7 +185,7 @@ jobs:
             [ "${normalised}" = "all" ] && return 0
             case "${wanted}" in *",$1,"*) return 0 ;; *) return 1 ;; esac
           }
-          for a in docker lambda_api lambda_counter lambda_certbot lambda_sms_sender react; do
+          for a in docker lambda_api lambda_counter lambda_certbot lambda_sms_sender react front_door; do
             if is_on "${a}"; then
               echo "${a}=true" >> "$GITHUB_OUTPUT"
             else
@@ -326,27 +340,28 @@ jobs:
 
     # Out-of-band Lambda deploy. The api functions are registered with
     # function_name == directory name (see modules/app/modules/call), so
-    # the dir name doubles as the AWS function name. The 'python' dir
-    # is the shared Lambda layer, not a function. healthchecks_iac is
+    # the dir name doubles as the AWS function name. healthchecks_iac is
     # excluded for now: phase 2 left it on the legacy in-Terraform
     # invocation flow because aws_lambda_invocation triggers on its
     # source_code_hash and freezing that trigger would block config.py
     # changes from propagating. Phase 3 leaves Terraform as the deploy
     # path for healthchecks_iac (build-api.sh still uploads its zip);
     # a follow-on swaps it to an explicit aws lambda invoke after a
-    # code deploy. Functions whose Terraform module is gated off in
-    # this environment (e.g. alert_sink and backup_heartbeat when
-    # vars.TF_VAR_MONITORING != 'true') do not exist in AWS; we skip
-    # them with a warning rather than fail the run, since build-api.sh
-    # uploads a zip for every directory unconditionally.
-    # Eligibility (skip layer/healthchecks_iac, skip functions whose
-    # module is gated off in this environment) is decided serially
-    # against aws lambda get-function. The actual update-function-code
-    # + wait function-updated calls are then dispatched under
-    # xargs -P so the wall time is dominated by the slowest single
-    # function rather than the sum of ~30 sequential waits. AWS does
-    # not rate-limit update-function-code across distinct functions
-    # at any level we'd hit here.
+    # code deploy. Directories starting with "_" (currently _shared/)
+    # are build-time scaffolding, not Lambda functions. Functions
+    # whose Terraform module is gated off in this environment (e.g.
+    # alert_sink and backup_heartbeat when vars.TF_VAR_MONITORING !=
+    # 'true') do not exist in AWS; we skip them with a warning rather
+    # than fail the run, since build-api.sh uploads a zip for every
+    # directory unconditionally.
+    # Eligibility (skip healthchecks_iac and _* scaffolding, skip
+    # functions whose module is gated off in this environment) is
+    # decided serially against aws lambda get-function. The actual
+    # update-function-code + wait function-updated calls are then
+    # dispatched under xargs -P so the wall time is dominated by the
+    # slowest single function rather than the sum of ~30 sequential
+    # waits. AWS does not rate-limit update-function-code across
+    # distinct functions at any level we'd hit here.
     - name: deploy
       env:
         TF_VAR_CONTROL_DOMAIN: ${{ vars.TF_VAR_CONTROL_DOMAIN }}
@@ -359,7 +374,7 @@ jobs:
         for FUNC_DIR in lambda/api/*/ ; do
           FUNC=$(basename "${FUNC_DIR}")
           case "${FUNC}" in
-            python|healthchecks_iac) continue ;;
+            healthchecks_iac|_*) continue ;;
           esac
           if ! aws lambda get-function --function-name "${FUNC}" >/dev/null 2>&1; then
             echo "::warning::function ${FUNC} not deployed in this environment; skipping"
@@ -414,6 +429,7 @@ jobs:
       run: |
         BUCKET="admin.${TF_VAR_CONTROL_DOMAIN}"
         ./.github/scripts/deploy-lambda-zip.sh assign_osid "${BUCKET}"
+        ./.github/scripts/deploy-lambda-zip.sh check_invite "${BUCKET}"
 
   lambda-sms-sender:
     needs: setup
@@ -491,6 +507,53 @@ jobs:
       run: |
         DIST_ID=$(aws ssm get-parameter \
           --name "/cabal/react-config/cf-distribution" \
+          --query 'Parameter.Value' --output text)
+        aws cloudfront create-invalidation \
+          --distribution-id "${DIST_ID}" \
+          --paths '/*' >/dev/null
+
+  front-door:
+    needs: setup
+    if: needs.setup.outputs.front_door == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+    steps:
+    - name: checkout
+      uses: actions/checkout@v5
+
+    # Substitute {{VAR}} placeholders in front-door/* with values from
+    # environment variables of the same name. Anything left as a
+    # literal {{...}} after this step is reported as a ::warning:: by
+    # the render script (see .github/scripts/render-front-door.py).
+    # Add new placeholders here as the front door copy grows; they
+    # can come from `vars`, `secrets`, or computed values (like
+    # BUILD_SHA).
+    - name: render
+      env:
+        SITE_VERSION: ${{ github.ref_name }}
+        BUILD_SHA: ${{ github.sha }}
+        OPERATOR_NAME: ${{ vars.OPERATOR_NAME }}
+        OPERATOR_EMAIL: ${{ vars.OPERATOR_EMAIL }}
+        CONTROL_DOMAIN: ${{ vars.TF_VAR_CONTROL_DOMAIN }}
+      run: ./.github/scripts/render-front-door.py
+
+    - name: upload
+      env:
+        TF_VAR_CONTROL_DOMAIN: ${{ vars.TF_VAR_CONTROL_DOMAIN }}
+      run: |
+        aws s3 sync front-door-rendered "s3://www.${TF_VAR_CONTROL_DOMAIN}" \
+          --delete \
+          --no-progress
+
+    - name: invalidate-cache
+      run: |
+        DIST_ID=$(aws ssm get-parameter \
+          --name "/cabal/front-door/cf-distribution" \
           --query 'Parameter.Value' --output text)
         aws cloudfront create-invalidation \
           --distribution-id "${DIST_ID}" \

@@ -19,11 +19,16 @@ output "admin_group_name" {
 }
 
 output "sms_phone_number" {
-  value       = aws_pinpointsmsvoicev2_phone_number.sms.phone_number
-  description = "Toll-free phone number used for SMS verification"
+  value       = var.use_eum_sms ? aws_pinpointsmsvoicev2_phone_number.sms[0].phone_number : ""
+  description = "AWS End User Messaging toll-free phone number for SMS verification. Empty string when var.use_eum_sms is false."
 }
 
 output "user_pool_domain" {
   value       = aws_cognito_user_pool_domain.users.domain
   description = "Hosted-UI domain prefix for the Cognito user pool."
+}
+
+output "invitation_required" {
+  value       = var.invitation_code != ""
+  description = "True when the check_invite pre-signup Lambda enforces an invitation code. Consumed by the app module so the React signup form can hide the field when no code is configured."
 }

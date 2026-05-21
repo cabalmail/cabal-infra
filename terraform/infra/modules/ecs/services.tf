@@ -46,7 +46,7 @@ resource "aws_ecs_service" "imap" {
 
   depends_on = [aws_ecs_cluster_capacity_providers.mail]
 
-  # Phase 1 follow-up of docs/0.9.0/build-deploy-simplification-plan.md:
+  # Phase 1 follow-up of docs/0.9.x/build-deploy-simplification-plan.md:
   # app.yml registers a new task-def revision out-of-band and rolls
   # the service to it via aws ecs update-service. Without this clause
   # Terraform sees AWS on revision N+1 and the (state-bound) reference

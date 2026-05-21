@@ -1,6 +1,6 @@
 # About Cabalmail
 
-The Cabalmail developement team is hard at work preparing our first release. Stay tuned.
+The Cabalmail developement team is hard at work preparing our 1.0 release. Stay tuned.
 
 The Cabalmail repository creates AWS infrastructure and machine configuration for a Cabalmail system — a system for hosting and managing your personal email by creating new addresses for each interlocutor.
 

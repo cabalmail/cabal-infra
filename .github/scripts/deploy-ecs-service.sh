@@ -5,7 +5,7 @@
 # whose repo basename is cabal-${TIER} to point at the freshly-pushed
 # tag, registers a new task-def revision, and rolls the service to it.
 #
-# Phase 3 of docs/0.9.0/build-deploy-simplification-plan.md introduces
+# Phase 3 of docs/0.9.x/build-deploy-simplification-plan.md introduces
 # this path: app.yml mutates ECS directly via the AWS CLI instead of
 # routing through Terraform. The phase 1 lifecycle clause
 # (ignore_changes = [container_definitions]) protects the new revision

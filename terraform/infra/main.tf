@@ -41,21 +41,31 @@ module "bucket" {
   control_domain = var.control_domain
 }
 
-# Create Lambda layer for API functions
-module "lambda_layers" {
-  source = "./modules/lambda_layers"
-  bucket = module.bucket.bucket
-}
-
-# SMS sender for Cognito via Twilio. See docs/0.9.0/twilio-sms-migration-plan.md.
+# SMS sender for Cognito via Twilio. See docs/twilio.md.
+#
+# Gated on var.use_twilio_sms so an environment that doesn't use the
+# Twilio path doesn't have to set TWILIO_* secrets just to satisfy
+# the SecureString SSM parameters this module creates. The module is
+# additive: when count = 0, nothing here exists in AWS.
 module "sms_sender" {
   source = "./modules/sms_sender"
+  count  = var.use_twilio_sms ? 1 : 0
 
   bucket             = module.bucket.bucket
   twilio_account_sid = var.twilio_account_sid
   twilio_api_key     = var.twilio_api_key
   twilio_api_secret  = var.twilio_api_secret
   twilio_from_number = var.twilio_from_number
+}
+
+# Migrate state from the pre-count module address. Without this an
+# env that already had sms_sender provisioned would see a destroy on
+# the un-indexed address and a create on the indexed one (when
+# use_twilio_sms = true), which is needlessly destructive for the
+# KMS key and SSM parameters.
+moved {
+  from = module.sms_sender
+  to   = module.sms_sender[0]
 }
 
 # Creates a Cognito User Pool
@@ -66,9 +76,11 @@ module "pool" {
   bucket_arn             = module.bucket.bucket_arn
   ecs_cluster_name       = module.ecs.cluster_name
   healthcheck_ping_param = local.hc_ping_assign_osid
-  sms_sender_arn         = module.sms_sender.lambda_arn
-  sms_kms_key_arn        = module.sms_sender.kms_key_arn
+  sms_sender_arn         = var.use_twilio_sms ? module.sms_sender[0].lambda_arn : ""
+  sms_kms_key_arn        = var.use_twilio_sms ? module.sms_sender[0].kms_key_arn : ""
   use_twilio_sms         = var.use_twilio_sms
+  use_eum_sms            = var.use_eum_sms
+  invitation_code        = var.invitation_code
 }
 
 # Creates an AWS Certificate Manager certificate for use on load balancers and CloudFront
@@ -76,6 +88,17 @@ module "cert" {
   source         = "./modules/cert"
   control_domain = var.control_domain
   zone_id        = data.terraform_remote_state.zone.outputs.control_domain_zone_id
+}
+
+# Public front door site at www.<control_domain>. Hosts the home page
+# and the privacy/terms pages referenced by carrier registrations.
+# See docs/front-door.md.
+module "front_door" {
+  source          = "./modules/front_door"
+  control_domain  = var.control_domain
+  zone_id         = data.terraform_remote_state.zone.outputs.control_domain_zone_id
+  private_zone_id = module.vpc.private_zone.zone_id
+  cert_arn        = module.cert.cert_arn
 }
 
 # Sets up Route 53 hosted zones for mail domains
@@ -95,7 +118,6 @@ module "admin" {
   zone_id             = data.terraform_remote_state.zone.outputs.control_domain_zone_id
   private_zone_id     = module.vpc.private_zone.zone_id
   domains             = module.domains.domains
-  layers              = module.lambda_layers.layers
   bucket              = module.bucket.bucket
   bucket_domain_name  = module.bucket.domain_name
   relay_ips           = module.vpc.relay_ips
@@ -107,6 +129,8 @@ module "admin" {
   admin_group_name          = module.pool.admin_group_name
 
   dmarc_healthcheck_ping_param = local.hc_ping_dmarc
+
+  invitation_required = module.pool.invitation_required
 }
 
 # Creates a DynamoDB table for storing address data
@@ -153,7 +177,7 @@ module "efs" {
 # repos exist regardless of var.monitoring so the docker matrix can
 # push images unconditionally; only the ECS services that consume them
 # are gated by the flag. Phase 6 of the build/deploy simplification
-# plan (docs/0.9.0/build-deploy-simplification-plan.md) routes them
+# plan (docs/0.9.x/build-deploy-simplification-plan.md) routes them
 # through monitoring_repositories so the underlying resource gets
 # lifecycle { prevent_destroy = true } - toggling var.monitoring off
 # (or trimming the docker matrix in app.yml) is now a no-op against
@@ -188,6 +212,8 @@ module "ecs" {
   table_arn = module.table.table_arn
   efs_id    = module.efs.efs_id
 
+  smtp_queue_access_point_id = module.efs.smtp_queue_access_point_id
+
   user_pool_arn = module.pool.user_pool_arn
   user_pool_id  = module.pool.user_pool_id
   client_id     = module.pool.user_pool_client_id
@@ -205,6 +231,9 @@ module "ecs" {
   healthcheck_ping_param = local.hc_ping_ecs_reconfigure
 
   quiesced = var.quiesced
+
+  sinkhole    = var.sinkhole
+  environment = var.environment
 
   depends_on = [module.cert]
 }

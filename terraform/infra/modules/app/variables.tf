@@ -2,10 +2,6 @@ data "aws_caller_identity" "current" {}
 
 data "aws_region" "current" {}
 
-variable "layers" {
-  type        = map(any)
-  description = "List of layer ARNs"
-}
 variable "user_pool_id" {
   type        = string
   description = "ID of the Cognito user pool."
@@ -96,4 +92,10 @@ variable "dmarc_healthcheck_ping_param" {
   type        = string
   description = "SSM Parameter Store name holding the Healthchecks ping URL for the process_dmarc Lambda. Empty string disables the heartbeat."
   default     = ""
+}
+
+variable "invitation_required" {
+  type        = bool
+  description = "When true, the React signup form renders the invitation-code field and requires a non-empty value. Plumbed into /config.js so the client can mirror the server-side check_invite gate."
+  default     = false
 }

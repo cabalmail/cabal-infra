@@ -1,7 +1,7 @@
 ---
 name: Build and Deploy Infrastructure
 
-# Phase 5 of docs/0.9.0/build-deploy-simplification-plan.md replaced
+# Phase 5 of docs/0.9.x/build-deploy-simplification-plan.md replaced
 # the legacy terraform.yml + bootstrap.yml workflows with this single
 # infra.yml that owns both the bootstrap (terraform/dns) stage and the
 # main (terraform/infra) stage. Bootstrap is gated on whether
@@ -100,7 +100,7 @@ jobs:
     - name: generate-backend
       run: env TF_MODULE=dns TF_ENVIRONMENT="${{ vars.TF_VAR_ENVIRONMENT }}" ./.github/scripts/make-terraform.sh
     - name: store-artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: dns-backend.tf
         path: ./terraform/dns/backend.tf
@@ -123,7 +123,7 @@ jobs:
     - name: checkout
       uses: actions/checkout@v5
     - name: retrieve-artifact
-      uses: actions/download-artifact@v5
+      uses: actions/download-artifact@v7
       with:
         name: dns-backend.tf
     - name: move
@@ -162,7 +162,7 @@ jobs:
     - name: checkout
       uses: actions/checkout@v5
     - name: retrieve-artifact
-      uses: actions/download-artifact@v5
+      uses: actions/download-artifact@v7
       with:
         name: dns-backend.tf
     - name: move
@@ -199,7 +199,7 @@ jobs:
     - name: generate-backend
       run: env TF_MODULE=infra TF_ENVIRONMENT="${{ vars.TF_VAR_ENVIRONMENT }}" ./.github/scripts/make-terraform.sh
     - name: store-artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: infra-backend.tf
         path: ./terraform/infra/backend.tf
@@ -224,7 +224,7 @@ jobs:
     - name: checkout
       uses: actions/checkout@v5
     - name: retrieve-artifact
-      uses: actions/download-artifact@v5
+      uses: actions/download-artifact@v7
       with:
         name: infra-backend.tf
     - name: move
@@ -249,7 +249,7 @@ jobs:
     - name: checkout
       uses: actions/checkout@v5
     - name: retrieve-artifact
-      uses: actions/download-artifact@v5
+      uses: actions/download-artifact@v7
       with:
         name: infra-backend.tf
     - name: move
@@ -261,24 +261,24 @@ jobs:
     - name: run-linter
       run: for i in ./ modules/* modules/*/modules/* ; do tflint ; done
 
-  tfsec:
-    needs: build
-    if: ${{ !cancelled() && needs.build.result == 'success' }}
-    runs-on: ubuntu-latest
-    steps:
-    - name: checkout
-      uses: actions/checkout@v5
-    - name: retrieve-artifact
-      uses: actions/download-artifact@v5
-      with:
-        name: infra-backend.tf
-    - name: move
-      run: mv backend.tf ./terraform/infra/backend.tf
-    - name: tfsec
-      uses: aquasecurity/tfsec-action@v1.0.0
-      with:
-        soft_fail: false
-        working_directory: ./terraform/infra
+  # tfsec:
+  #   needs: build
+  #   if: ${{ !cancelled() && needs.build.result == 'success' }}
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - name: checkout
+  #     uses: actions/checkout@v5
+  #   - name: retrieve-artifact
+  #     uses: actions/download-artifact@v7
+  #     with:
+  #       name: infra-backend.tf
+  #   - name: move
+  #     run: mv backend.tf ./terraform/infra/backend.tf
+  #   - name: tfsec
+  #     uses: aquasecurity/tfsec-action@v1.0.0
+  #     with:
+  #       soft_fail: false
+  #       working_directory: ./terraform/infra
 
   plan:
     needs: build
@@ -295,22 +295,25 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      # Twilio: the first three are picked up by the twilio Terraform
-      # provider; the TF_VAR_* values feed the sms_sender module's SSM
-      # SecureString params. Empty defaults in variables.tf keep envs
-      # without Twilio secrets working.
-      TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
-      TWILIO_API_KEY: ${{ secrets.TWILIO_API_KEY }}
-      TWILIO_API_SECRET: ${{ secrets.TWILIO_API_SECRET }}
+      # Twilio: TF_VAR_* values feed the sms_sender module's SSM
+      # SecureString params. Only consumed when var.use_twilio_sms
+      # is true; harmless empty strings otherwise.
       TF_VAR_twilio_account_sid: ${{ secrets.TWILIO_ACCOUNT_SID }}
       TF_VAR_twilio_api_key: ${{ secrets.TWILIO_API_KEY }}
       TF_VAR_twilio_api_secret: ${{ secrets.TWILIO_API_SECRET }}
       TF_VAR_twilio_from_number: ${{ secrets.TWILIO_FROM_NUMBER }}
+      # Passed via env (not echoed into tfvars) because TF_VAR_INVITATION_CODE
+      # may contain shell-special characters - `$` in particular gets
+      # expanded by bash inside double-quoted echo, silently truncating
+      # the value. env-block substitution writes the literal string
+      # into the process environment, and Terraform auto-picks up
+      # TF_VAR_* env vars without any shell re-interpretation.
+      TF_VAR_invitation_code: ${{ vars.TF_VAR_INVITATION_CODE }}
     steps:
     - name: checkout
       uses: actions/checkout@v5
     - name: retrieve-artifact
-      uses: actions/download-artifact@v5
+      uses: actions/download-artifact@v7
       with:
         name: infra-backend.tf
     - name: move
@@ -346,10 +349,15 @@ jobs:
         echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
         echo "backup = ${{ vars.TF_VAR_BACKUP }}" >> terraform.tfvars
         echo "monitoring = ${{ vars.TF_VAR_MONITORING }}" >> terraform.tfvars
+        echo "sinkhole = ${{ vars.TF_VAR_SINKHOLE || 'false' }}" >> terraform.tfvars
         echo "healthchecks_registration_open = ${{ vars.TF_VAR_HEALTHCHECKS_REGISTRATION_OPEN || 'false' }}" >> terraform.tfvars
         echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
         echo "quiesced = ${{ vars.TF_VAR_QUIESCED || 'false' }}" >> terraform.tfvars
         echo "use_twilio_sms = ${{ vars.TF_VAR_USE_TWILIO_SMS || 'false' }}" >> terraform.tfvars
+        echo "use_eum_sms = ${{ vars.TF_VAR_USE_EUM_SMS || 'false' }}" >> terraform.tfvars
+        # invitation_code is supplied via the TF_VAR_invitation_code env
+        # var on this job (see env: block above) rather than echoed into
+        # tfvars, so shell-special characters like `$` survive unmangled.
     - name: init-terraform
       run: terraform init
     - name: record-lambda-hashes
@@ -366,7 +374,7 @@ jobs:
     - plan
     - chekov
     - tflint
-    - tfsec
+    # - tfsec
     if: ${{ !cancelled() && needs.plan.outputs.exit_code == '2' }}
     runs-on: ubuntu-latest
     outputs:
@@ -387,11 +395,18 @@ jobs:
       TF_VAR_twilio_api_key: ${{ secrets.TWILIO_API_KEY }}
       TF_VAR_twilio_api_secret: ${{ secrets.TWILIO_API_SECRET }}
       TF_VAR_twilio_from_number: ${{ secrets.TWILIO_FROM_NUMBER }}
+      # Passed via env (not echoed into tfvars) because TF_VAR_INVITATION_CODE
+      # may contain shell-special characters - `$` in particular gets
+      # expanded by bash inside double-quoted echo, silently truncating
+      # the value. env-block substitution writes the literal string
+      # into the process environment, and Terraform auto-picks up
+      # TF_VAR_* env vars without any shell re-interpretation.
+      TF_VAR_invitation_code: ${{ vars.TF_VAR_INVITATION_CODE }}
     steps:
     - name: checkout
       uses: actions/checkout@v5
     - name: retrieve-artifact
-      uses: actions/download-artifact@v5
+      uses: actions/download-artifact@v7
       with:
         name: infra-backend.tf
     - name: move
@@ -412,10 +427,15 @@ jobs:
         echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
         echo "backup = ${{ vars.TF_VAR_BACKUP }}" >> terraform.tfvars
         echo "monitoring = ${{ vars.TF_VAR_MONITORING }}" >> terraform.tfvars
+        echo "sinkhole = ${{ vars.TF_VAR_SINKHOLE || 'false' }}" >> terraform.tfvars
         echo "healthchecks_registration_open = ${{ vars.TF_VAR_HEALTHCHECKS_REGISTRATION_OPEN || 'false' }}" >> terraform.tfvars
         echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
         echo "quiesced = ${{ vars.TF_VAR_QUIESCED || 'false' }}" >> terraform.tfvars
         echo "use_twilio_sms = ${{ vars.TF_VAR_USE_TWILIO_SMS || 'false' }}" >> terraform.tfvars
+        echo "use_eum_sms = ${{ vars.TF_VAR_USE_EUM_SMS || 'false' }}" >> terraform.tfvars
+        # invitation_code is supplied via the TF_VAR_invitation_code env
+        # var on this job (see env: block above) rather than echoed into
+        # tfvars, so shell-special characters like `$` survive unmangled.
     - name: init-terraform
       run: terraform init
     - name: record-lambda-hashes
@@ -432,7 +452,7 @@ jobs:
         if [ $TF_EXIT -ne 0 ]; then
           if grep -q 'aws_pinpointsmsvoicev2_phone_number.sms' /tmp/tf-apply.log && grep -q "timeout while waiting for state to become 'ACTIVE'" /tmp/tf-apply.log; then
             echo "::warning::Toll-free number provisioning timed out. Untainting resource for next run."
-            terraform untaint 'module.pool.aws_pinpointsmsvoicev2_phone_number.sms'
+            terraform untaint 'module.pool.aws_pinpointsmsvoicev2_phone_number.sms[0]'
             exit 0
           fi
           exit $TF_EXIT

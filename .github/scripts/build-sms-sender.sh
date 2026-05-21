@@ -6,12 +6,13 @@
 # alongside a base64sha256 sidecar. See build-api.sh for the rationale
 # behind each determinism knob.
 #
-# Layout note: unlike the api Lambdas, sms_sender has no shared layer.
-# The twilio SDK ships inside the function zip itself, which means pip
-# has to install into the zip root (next to function.py) rather than
-# into a ./python/ subdir - Lambda's module search path for a plain
-# zip-source function is the zip root, and ./python/ is only on
-# sys.path when delivered as a layer mounted at /opt/python.
+# Layout note: the twilio SDK ships inside the function zip itself.
+# pip therefore installs into the zip root (next to function.py)
+# rather than into a ./python/ subdir - Lambda's module search path
+# for a plain zip-source function is the zip root, and ./python/ is
+# only on sys.path when delivered as a layer mounted at /opt/python.
+# The api Lambdas follow the same root-install pattern after the
+# 0.9.x layer removal (see build-api-one.sh).
 #
 # Builds are staged in a tmp dir so this script is safe to re-run
 # locally without polluting the source tree.

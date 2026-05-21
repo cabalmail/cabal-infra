@@ -114,10 +114,10 @@ Tokens are encrypted at rest with the existing customer-managed KMS key. The tab
 |---|---|---|
 | `push_register` | API Gateway POST `/push/register` | iOS app calls on first launch and on token rotation. Upserts the token row, scoped to the authenticated Cognito user. |
 | `push_deregister` | API Gateway POST `/push/deregister` | iOS app calls on logout or when the user disables notifications. |
-| `push_envelope` | API Gateway POST `/push/envelope` | Called by the NSE. Body: `{folder, uid}`. Returns `{from, subject, snippet}` only. Reuses `get_imap_client` from [helper.py](../../lambda/api/python/src/helper.py). Subject and snippet are truncated to safe display lengths server-side. |
+| `push_envelope` | API Gateway POST `/push/envelope` | Called by the NSE. Body: `{folder, uid}`. Returns `{from, subject, snippet}` only. Reuses `get_imap_client` from [helper.py](../../lambda/api/_shared/helper.py). Subject and snippet are truncated to safe display lengths server-side. |
 | `push_dispatch` | SQS event source | Consumes `cabal-push-queue`. Per message: looks up tokens for the user, filters by `enabled_folders`, sends APNs requests in parallel, updates `last_seen_at` / `last_failure`, and deletes tokens on `Unregistered (410)` or `BadDeviceToken`. |
 
-`push_dispatch` reads the APNs `.p8` key and team/key/bundle IDs from SSM SecureString parameters under `/cabal/apns/`. JWT generation uses the existing python lambda layer; we add `cryptography` (already a transitive dep) for ES256 signing.
+`push_dispatch` reads the APNs `.p8` key and team/key/bundle IDs from SSM SecureString parameters under `/cabal/apns/`. JWT generation will bundle `cryptography` (already a transitive dep) per-function for ES256 signing, the same way other API functions bundle their Python deps.
 
 ### Procmail recipe change
 

@@ -5,7 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.9.21] - Unreleased
+## [Unreleased]
+
+### Added
+- Feature-flagged `sinkhole` ECS tier (`var.sinkhole`, gated off in
+  prod by a Terraform variable validation block and a task-definition
+  precondition): a tiny asyncio Python SMTP listener registered in
+  Cloud Map (`sinkhole.cabal.internal`) whose response shape is
+  controlled by an SSM parameter (`/cabal/sinkhole_mode`, modes:
+  `defer`, `bounce`, `accept`, `accept-log`, `greylist`). When
+  enabled, `smtp-out` is wired with a mailertable entry that routes
+  `sinkhole.test` (RFC 2606 reserved TLD) to the in-VPC listener,
+  giving operators a deterministic 4xx response on demand.
+  Motivating use is queue-persistence test reproducibility (the
+  natural transient-error sources are unreliable); the harness
+  generalises to DSN, large-message, and STARTTLS-fallback scenarios.
+  Design in `docs/0.9.x/sinkhole-test-harness-plan.md`; operator
+  runbook for the first use case in `docs/testing/queue-persistence.md`.
+- New EFS access point `cabal-smtp-queue` on the existing `mailstore`
+  filesystem, scoped to `/smtp-queue` and owned `root:mail` (mode 0700)
+  to match the AL2023 sendmail rpm default for `/var/spool/mqueue`.
+  The access point id is exported from the `efs` module as
+  `smtp_queue_access_point_id`.
+- The smtp-out ECS task definition mounts the shared queue access point
+  at `/var/spool/mqueue`, so a message that lands in sendmail's deferred
+  retry queue (greylisting, transient 4xx, recipient deferral) now
+  survives task replacement, scale-in, and host failure. Concurrent
+  smtp-out tasks coordinate via sendmail's classic shared-NFS pattern
+  (per-`qf` `fcntl` locks). Tracked in
+  `docs/0.9.x/smtp-out-queue-persistence-plan.md`.
 
 ### Added
 - Per-user, per-apex-domain access control for address creation,
@@ -29,6 +57,256 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   returns 403 for everyone.
 
 ### Changed
+- smtp-out task `stopTimeout` raised to 120s (ECS-task-level grace
+  window) and supervisord `stopwaitsecs` raised from 15s to 110s, so
+  sendmail has time to finish an in-flight delivery before SIGKILL.
+  With the persistent queue in place this is the safety net rather than
+  the primary mechanism for surviving deploys.
+- `docker/shared/sendmail-wrapper.sh` re-asserts `root:mail` ownership
+  and mode `0700` on `/var/spool/mqueue` immediately before exec, gated
+  on the smtp-out tier. Redundant on first creation (the EFS access
+  point's `creation_info` sets the same ownership) but covers drift
+  from a prior deploy or manual operator action.
+
+### Fixed
+- Cleaned up stale `docs/0.9.0/` references across CHANGELOG, Terraform,
+  CI scripts, workflows, CLAUDE.md, and cross-version planning docs.
+  The build/deploy simplification and lambda-layer-removal plans now
+  live under `docs/0.9.x/`, and the state-encryption plan lives under
+  `docs/0.10.x/`. Docs-only; no behaviour change.
+
+## [0.9.26] - 2026-05-20
+
+### Added
+- Apple compose From picker now groups favorites above all addresses,
+  matching the sidebar address list and the React From picker.
+- Address management view in Apple clients (Addresses tab in Settings)
+  now groups addresses into Favorites and All sections when favorites
+  exist, and adds swipe/context-menu affordances to toggle the favorite
+  flag — matching the sidebar address list.
+
+### Changed
+- `docs/github.md` is now the single reference for all GitHub
+  Actions variables and secrets. Variables previously scattered across
+  `docs/twilio.md`, `docs/sms-tfv-setup.md`, `docs/monitoring.md`,
+  and `docs/quiesce.md` are consolidated there; those files now
+  cross-reference `docs/github.md` instead of repeating the tables.
+
+## [0.9.25] - 2026-05-19
+
+### Changed
+- The shared auth-screen footer (Terms, Privacy, Status, About) is
+  wired to real URLs across all pre-login screens (Login, SignUp,
+  Verify, ForgotPassword, ResetPassword). Terms and Privacy point at
+  the front-door pages introduced in 0.9.21; Status points at the
+  project's GitHub wiki. The three placeholder `href="#"` links had
+  been shipping since the 0.8.x React rewrite. `control_domain` is
+  added to the existing `AuthContext` so `AuthShell` can build the
+  marketing URLs via `useAuth()` without prop-drilling through six
+  screens; SignUp picks up the same source of truth instead of
+  carrying its own `controlDomain` prop.
+- The `sms_sender` Lambda's CloudWatch log group
+  (`/aws/lambda/sms_sender`) is now Terraform-managed with
+  `retention_in_days = 30`, matching the front-door privacy policy's
+  claim that SMS delivery metadata is purged on a bounded schedule.
+  Previously AWS auto-created the log group on first Lambda
+  invocation with "Never Expire" retention, so the privacy claim was
+  false against the actual log lifetime. 30 days matches the
+  retention used elsewhere in the stack (ECS tier logs, certbot
+  logs). A root-module `import` block adopts the existing log group
+  on first apply for environments where the Lambda has already been
+  invoked; fresh environments without a prior invocation should
+  remove the import block before first apply (the resource then
+  creates from scratch). `front-door/privacy.html` updated to reflect
+  the 30-day window and the actual logged fields ("masked phone
+  number" rather than "originator", matching what
+  `_mask_phone_number()` in `lambda/sms-sender/function.py` writes).
+- `.github/workflows/register-tfv.yml` uses
+  `actions/setup-python@v6` (Node.js 24) instead of `@v5` (Node.js
+  20). Clears the GitHub deprecation warning ahead of the 2 June
+  2026 forced switchover; Node.js 20 is removed from runners on 16
+  September 2026.
+
+## [0.9.24] - 2026-05-19
+
+### Fixed
+- Inbound mail no longer 550-bounces with `Host unknown (Name server:
+  [imap.cabal.internal])` after a Terraform apply touches
+  `aws_service_discovery_service.imap`. The 0.9.21 cleanup of the
+  `health_check_custom_config { failure_threshold = 1 }` block also
+  dropped the `lifecycle { ignore_changes = [health_check_custom_config] }`
+  guard that the monitoring module had originally documented as the
+  workaround for AWS reading the server-side default value as drift.
+  Without the guard, the next apply force-replaced the Cloud Map
+  service - and because ECS only registers tasks with Cloud Map at
+  task START, the running IMAP task remained bound to the destroyed
+  predecessor service's ARN. The new service had zero registered
+  instances, `imap.cabal.internal` returned NXDOMAIN, and smtp-in
+  bounced every inbound message with a permanent 5.1.2.
+- `ignore_changes = [health_check_custom_config]` restored on
+  `aws_service_discovery_service.imap` (`modules/ecs/service_discovery.tf`),
+  `aws_service_discovery_service.monitoring` for-each set, and
+  `aws_service_discovery_service.node_exporter`
+  (`modules/monitoring/discovery.tf`). Primary fix for the recurrence.
+- Runtime config objects (`/config.js`, `/config.json`) now carry
+  `Cache-Control: no-cache`, so a Terraform-only change to Cognito
+  IDs or the API Gateway URL reaches clients on next page load
+  without a CloudFront invalidation. Previously the CloudFront
+  `default_ttl = 600` could serve stale config for up to ten minutes
+  after `infra.yml` applied, because that workflow does not
+  invalidate the distribution. The header is set on the S3 objects
+  themselves (`aws_s3_object.website_config` and
+  `website_config_json` in `terraform/infra/modules/app/s3.tf`) and
+  is honored by CloudFront over its default TTL. `no-cache` (not
+  `no-store`) means ETag-matched requests still return 304.
+- React admin app now surfaces a blocking error screen when the
+  `/config.js` fetch fails on a first visit. Previously the Login
+  form rendered with a null Cognito UserPool and silently swallowed
+  submits. Returning visits with cached `poolData` in `localStorage`
+  are unaffected: a transient refresh failure leaves the app usable
+  against the saved snapshot.
+
+### Added
+- Shared-secret invitation code gating new signups. A new
+  `check_invite` Cognito pre-signup Lambda (under `lambda/counter/`)
+  rejects signups whose `invitationCode` validation-data value does
+  not match the `INVITATION_CODE` env var. The value is configured
+  via the `TF_VAR_INVITATION_CODE` GitHub environment variable, plumbed
+  through `var.invitation_code` at the root and `module.pool`; leaving
+  it unset (the default) disables the check. The user_pool module
+  emits an `invitation_required` boolean output that the app module
+  threads into the runtime `/config.js`, so the React signup form
+  conditionally renders the "Invitation code" field only when the
+  server-side gate is on. The value is passed via Cognito
+  `validationData` so it never lands on the user record. Existing
+  environments stay open by default until the env var is set.
+
+  The `check_invite` Terraform self-seeds a placeholder zip via
+  `archive_file` + `aws_s3_object` on first apply, so the Lambda's
+  initial creation does not chicken-and-egg against `app.yml`. The
+  real code lands on the next `app.yml` run via
+  `aws lambda update-function-code`; `lifecycle.ignore_changes` on
+  the S3 objects keeps Terraform from reverting it.
+- `terraform_data.imap_cloud_map_lifecycle` in
+  `modules/ecs/service_discovery.tf` brackets the IMAP Cloud Map
+  service so any future ForceNew (different deprecated field, provider
+  behavior change, manual import) cleanly drains and rebinds. Its
+  `triggers_replace` tracks the Cloud Map service id; the destroy
+  provisioner scales `cabal-imap` to zero and waits for
+  `services-stable` so AWS DeleteService succeeds (it otherwise
+  rejects a service that has registered instances); the create
+  provisioner restores `desired_count` and forces a new deployment so
+  a fresh task registers with the new Cloud Map service ARN.
+  `depends_on = [aws_ecs_service.imap]` is what guarantees the
+  create-provisioner runs after the ECS service's
+  `service_registries.registry_arn` has been updated to the new ARN -
+  without it, the force-new-deployment could fire against the stale
+  ARN and the new task would fail to register.
+- Cloud Map orphan reconciliation in
+  `.github/scripts/post-apply-update-services.sh`. Runs after the
+  existing task-def-family roll. For each ECS service whose
+  `serviceRegistries[0].registryArn` points at a Cloud Map service
+  with zero registered instances - despite the ECS service having
+  running tasks - force-new-deployment is invoked. Safety net for
+  manual interventions, partial apply failures, and any
+  Cloud-Map-registered service that does not yet have the
+  `terraform_data` lifecycle helper (monitoring tiers).
+- `docker/shared/hosts-pin.sh` pins `IMAP_INTERNAL_HOST` into
+  `/etc/hosts` on the **smtp-in** container only. Sendmail's
+  mailertable routes every local domain to `smtp:[imap.cabal.internal]`;
+  with stock DNS, a Cloud Map outage on that hostname yields a
+  permanent 5xx "Host unknown" bounce. With the pin in place, sendmail
+  resolves the hostname from `/etc/hosts` and falls through to TCP
+  connect; if the IMAP task is down or the cached IP is stale, the
+  TCP failure yields a queueable 4xx that sendmail retries for ~4
+  days - long enough to weather any realistic orchestration glitch.
+  `entrypoint.sh` runs the script in `init` mode before supervisord
+  so the very first delivery already sees the pin; supervisord then
+  runs it in `daemon` mode (priority=5, before sendmail at 10) to
+  refresh on IMAP-task IP changes every 30s. The lookup uses `dig`
+  directly against the VPC resolver in `/etc/resolv.conf`, not
+  `getent`, to avoid feedback-looping on the pin itself. smtp-out is
+  intentionally not touched: a user-typo'd external recipient must
+  continue to bounce fast rather than sit in the queue for 4 days.
+  `bind-utils` added to `docker/smtp-in/Dockerfile` for `dig`.
+
+## [0.9.23] - 2026-05-17
+
+### Changed
+- API Lambda functions no longer share a Python Lambda layer for
+  `imapclient`, `dnspython`, and `helper.py`. Each function zip now
+  bundles only the third-party deps it actually imports (driven by
+  per-function `requirements.txt`) and a build-time copy of
+  `helper.py` from `lambda/api/_shared/`. `build-api-one.sh` stages
+  each function in a `./build/` subdir and installs deps at the zip
+  root, since Lambda only puts `/var/task` on `sys.path`, not
+  `/var/task/python`. The `lambda_layers` Terraform module,
+  `aws_lambda_layer_version.layer["python"]`, the `layers` /
+  `layer_arns` plumbing through `module.app` and `module.call`, and
+  the `lambda/api/python/` source dir are all deleted. Closes the
+  layer-rebinding gap where an `app.yml` run alone was not enough
+  to ship a `helper.py` change end-to-end -
+  [`docs/0.9.x/lambda-layer-removal-plan.md`](docs/0.9.x/lambda-layer-removal-plan.md).
+
+## [0.9.22] - 2026-05-17
+
+### Fixed
+- `tfsec` was failing uselessly. Commenting in out for now. Will
+  replace with Trivy in 0.10.
+
+## [0.9.21] - 2026-05-17
+
+### Added
+- Front door site at `www.<control_domain>`. New `front_door`
+  Terraform module provisions an S3 bucket, CloudFront distribution,
+  and Route 53 record (public + private zone). Content under the
+  top-level `front-door/` directory ships through a new `front_door`
+  area in `.github/workflows/app.yml`: a path-filtered job renders
+  `{{VAR}}` placeholders in text files from matching environment
+  variables (`SITE_VERSION` and `BUILD_SHA` wired by default),
+  `aws s3 sync`s the result into the bucket, and invalidates the
+  CloudFront distribution. The distribution ID is published to SSM
+  at `/cabal/front-door/cf-distribution` for the workflow to read.
+  Initial content is a home page plus the privacy policy and terms
+  of service. Three operator-replace markers in
+  `front-door/terms.html` (legal entity name, contact email,
+  jurisdiction) must be edited before going live. See
+  `docs/front-door.md`.
+- AWS End User Messaging toll-free verification (TFV) submission
+  automation. New `scripts/submit-tfv-registration.py` drives the
+  `pinpoint-sms-voice-v2` API end-to-end: discovers the toll-free
+  phone number, finds or creates a `US_TOLL_FREE_REGISTRATION`,
+  uploads the opt-in screenshot, sets every required field from env
+  vars, associates the phone number, and submits for carrier review.
+  Idempotent: safe to re-run after a `REQUIRES_UPDATES` rejection.
+  Wrapped by new `.github/workflows/register-tfv.yml` workflow
+  (workflow_dispatch, per-environment) so operators trigger it from
+  the Actions tab with all identity inputs supplied via GitHub
+  Environment variables/secrets. See `docs/sms-tfv-setup.md` for the
+  operator runbook.
+- React signup screen now links to the canonical privacy policy and
+  terms of service on the front door site (`https://www.<control_domain>/privacy.html`,
+  `/terms.html`), and the consent paragraph spells out the SMS opt-in
+  scope (signup verification, password reset, sign-in codes) with
+  STOP/HELP and message-and-data-rates language required by carriers.
+- `TF_VAR_USE_EUM_SMS` feature flag gates provisioning of the AWS End
+  User Messaging toll-free phone number (`aws_pinpointsmsvoicev2_phone_number.sms`).
+  Defaults to `false`. Mirrors `TF_VAR_USE_TWILIO_SMS` so the two SMS
+  delivery paths can be toggled independently per environment. See
+  `docs/twilio.md` for the four-state matrix and rollback semantics.
+  Existing EUM phone numbers are migrated to the indexed state
+  address via a `moved {}` block; `deletion_protection_enabled = true`
+  is preserved.
+
+### Changed
+- The `sms_sender` module (KMS key, SSM SecureString parameters for
+  Twilio credentials, Lambda, IAM role) is now gated on
+  `TF_VAR_USE_TWILIO_SMS`. Previously the module was always
+  provisioned regardless of the flag, which forced every environment
+  to set non-empty `TWILIO_*` secrets even when the Twilio path
+  wasn't being used. Existing state is migrated via a `moved {}`
+  block so envs already running with `USE_TWILIO_SMS=true` are
+  unaffected.
 - Cleared Terraform deprecation warnings against AWS provider v6:
   switched `data.aws_region.current.name` to `.region` in the `app`,
   `user_pool`, and `sms_sender` modules; dropped the deprecated
@@ -39,6 +317,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that guarded it; and removed `public_ip` / `public_dns` from the NAT
   instance's `ignore_changes` since computed-only attributes can't
   drift against configured values.
+
+### Fixed
+- `terraform apply` no longer hangs waiting for stdin when
+  `TF_VAR_USE_TWILIO_SMS=false` and the `TWILIO_*` GitHub Environment
+  secrets are unset. The `twilio` Terraform provider was declared in
+  `terraform/infra/providers.tf` (and `required_providers` in
+  `terraform.tf`) but never consumed by any resource; with
+  credentials absent the provider blocked on interactive prompts.
+  The provider declaration is removed - the `sms_sender` Lambda
+  talks to the Twilio API directly via the Python SDK, not through
+  Terraform.
 
 ## [0.9.20] - 2026-05-16
 
@@ -69,8 +358,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   installed..." annotations that GitHub was surfacing on every run.
 - Bumped GitHub Actions to Node 24 runtimes ahead of the June 2026
   cutoff: `dorny/paths-filter` v3 -> v4, `docker/setup-buildx-action`
-  v3 -> v4, `hashicorp/setup-terraform` v2 -> v4, and the two
-  remaining `actions/checkout@v4` pins in `claude.yml` -> v5.
+  v3 -> v4, `hashicorp/setup-terraform` v2 -> v4,
+  `actions/upload-artifact` v5 -> v6, `actions/download-artifact`
+  v5 -> v7, and the two remaining `actions/checkout@v4` pins in
+  `claude.yml` -> v5.
 
 ## [0.9.19] - 2026-05-14
 
@@ -546,7 +837,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Updated CLAUDE.md to reflect 0.9.x as in progress.
 - Phase 7 of the build/deploy simplification plan
-  (`docs/0.9.0/build-deploy-simplification-plan.md`): operator-facing
+  (`docs/0.9.x/build-deploy-simplification-plan.md`): operator-facing
   documentation that referenced the deleted workflows now points at
   the new pipeline. `docs/quiesce.md`, `docs/monitoring.md`, the
   `lambda-errors` and `container-restart-loop` runbooks under
@@ -564,7 +855,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Phase 6 of the build/deploy simplification plan
-  (`docs/0.9.0/build-deploy-simplification-plan.md`): cutover. The
+  (`docs/0.9.x/build-deploy-simplification-plan.md`): cutover. The
   legacy `docker.yml`, `lambda_api_python.yml`, `lambda_counter.yml`,
   `react.yml`, and `bootstrap.yml` workflows are deleted. Pushes to
   `docker/**`, `lambda/**`, and `react/admin/**` now drive `app.yml`
@@ -603,7 +894,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Phase 4 of the build/deploy simplification plan
-  (`docs/0.9.0/build-deploy-simplification-plan.md`): bootstrap
+  (`docs/0.9.x/build-deploy-simplification-plan.md`): bootstrap
   placeholders so a brand-new environment can apply
   `terraform/infra` end-to-end without `app.yml` having ever pushed
   an image or zip. Every `aws_ecs_task_definition` (the three mail
@@ -632,7 +923,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `head-object` is a hit, nothing is uploaded. The script is laid
   down here for phase 5's `infra.yml` to call as a pre-apply step.
 - Phase 5 of the build/deploy simplification plan
-  (`docs/0.9.0/build-deploy-simplification-plan.md`): new
+  (`docs/0.9.x/build-deploy-simplification-plan.md`): new
   `.github/workflows/infra.yml` replaces `terraform.yml` +
   `bootstrap.yml` as the canonical infrastructure pipeline. It owns
   both the bootstrap (`terraform/dns`) stage and the main
@@ -763,7 +1054,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Phase 3 of the build/deploy simplification plan
-  (`docs/0.9.0/build-deploy-simplification-plan.md`): new
+  (`docs/0.9.x/build-deploy-simplification-plan.md`): new
   `.github/workflows/app.yml` builds every application artifact in
   parallel and deploys directly to running infrastructure via the AWS
   CLI - no Terraform on the deploy path. Triggered on
@@ -808,7 +1099,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Phase 2 of the build/deploy simplification plan
-  (`docs/0.9.0/build-deploy-simplification-plan.md`): every S3-source
+  (`docs/0.9.x/build-deploy-simplification-plan.md`): every S3-source
   `aws_lambda_function` resource (the api `cabal_method` calls, the
   `process_dmarc` ingester, the `assign_osid` Cognito post-confirmation
   trigger, and the `alert_sink` and `backup_heartbeat` monitoring
@@ -852,7 +1143,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Phase 1 of the build/deploy simplification plan
-  (`docs/0.9.0/build-deploy-simplification-plan.md`): every
+  (`docs/0.9.x/build-deploy-simplification-plan.md`): every
   `aws_ecs_task_definition` resource in `terraform/infra/modules/ecs`
   and `terraform/infra/modules/monitoring` (12 task defs across the
   three mail tiers and nine monitoring tiers) now has
@@ -1082,7 +1373,7 @@ The full design rationale lives in [`docs/0.7.0/monitoring-plan.md`](docs/0.7.0/
 
 - [`docs/monitoring.md`](docs/monitoring.md) -- single coherent operator runbook for enabling the stack, completing first-boot configuration, and tuning. Covers Pushover signup, SSM seeding, ntfy admin/token bootstrap, Kuma + Healthchecks first-boot, IaC API key bootstrap, Grafana, Prometheus scrape verification, the runbook framework, tabletop exercises, the quarterly monitoring review, secret rotation, disabling the stack or individual heartbeats, and a consolidated troubleshooting block.
 - [`docs/0.7.0/monitoring-plan.md`](docs/0.7.0/monitoring-plan.md) -- design doc with the per-tier "Golden Signals" table, the `var.monitoring` feature-flag pattern, tuning discipline, and Phase-by-phase implementation plan.
-- [`docs/0.9.0/state-encryption-plan.md`](docs/0.9.0/state-encryption-plan.md) -- forward-looking plan to migrate both Terraform stacks to client-side KMS-encrypted state (TF 1.10+ `encryption` block) so secrets like the Pushover/ntfy tokens can be folded into normal Terraform inputs instead of seeded out-of-band.
+- [`docs/0.10.x/state-encryption-plan.md`](docs/0.10.x/state-encryption-plan.md) -- forward-looking plan to migrate both Terraform stacks to client-side KMS-encrypted state (TF 1.10+ `encryption` block) so secrets like the Pushover/ntfy tokens can be folded into normal Terraform inputs instead of seeded out-of-band.
 
 #### CI / build pipeline
 

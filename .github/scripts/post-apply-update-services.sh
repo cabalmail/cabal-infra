@@ -2,7 +2,7 @@
 #
 # Roll every ECS service on cluster cabal-mail to the latest ACTIVE
 # revision in its task-definition family. Phase 1 of
-# docs/0.9.0/build-deploy-simplification-plan.md (shipped in 0.9.3)
+# docs/0.9.x/build-deploy-simplification-plan.md (shipped in 0.9.3)
 # added lifecycle { ignore_changes = [task_definition] } to every
 # aws_ecs_service so out-of-band app deploys are not rolled back by a
 # topology-only Terraform apply. The downside: a Terraform topology
@@ -95,4 +95,57 @@ for service_arn in ${service_arns}; do
   rolled=$((rolled + 1))
 done
 
-log "summary: rolled=${rolled} unchanged=${unchanged}"
+# Cloud Map orphan reconciliation.
+#
+# An ECS service whose serviceRegistries references a Cloud Map service
+# with zero registered instances - despite the ECS service having
+# running tasks - indicates an orphan. The canonical cause is the Cloud
+# Map service having been replaced (e.g. for a ForceNew field change)
+# while the ECS task kept running: ECS only registers tasks with Cloud
+# Map at task START, so it does not reconcile running tasks when the
+# service_registries ARN changes. The terraform_data lifecycle in
+# modules/ecs/service_discovery.tf handles this declaratively for the
+# IMAP service, but it does not cover manual interventions, partial
+# apply failures, or services where the lifecycle helper has not been
+# added yet (monitoring tiers as of 0.9.x). This loop is the safety
+# net.
+
+orphans_redeployed=0
+
+for service_arn in ${service_arns}; do
+  service_name="${service_arn##*/}"
+
+  registry_arn="$(aws ecs describe-services \
+    --cluster "${CLUSTER}" \
+    --services "${service_name}" \
+    --query 'services[0].serviceRegistries[0].registryArn' \
+    --output text 2>/dev/null || echo "None")"
+
+  if [ "${registry_arn}" = "None" ] || [ -z "${registry_arn}" ]; then
+    continue
+  fi
+
+  cm_service_id="${registry_arn##*/}"
+
+  cm_instance_count="$(aws servicediscovery list-instances \
+    --service-id "${cm_service_id}" \
+    --query 'length(Instances)' \
+    --output text 2>/dev/null || echo "0")"
+
+  running_count="$(aws ecs describe-services \
+    --cluster "${CLUSTER}" \
+    --services "${service_name}" \
+    --query 'services[0].runningCount' \
+    --output text 2>/dev/null || echo "0")"
+
+  if [ "${cm_instance_count}" = "0" ] && [ "${running_count}" -gt 0 ]; then
+    log "${service_name}: Cloud Map orphan (running=${running_count}, registered=0); forcing redeploy"
+    aws ecs update-service \
+      --cluster "${CLUSTER}" \
+      --service "${service_name}" \
+      --force-new-deployment >/dev/null
+    orphans_redeployed=$((orphans_redeployed + 1))
+  fi
+done
+
+log "summary: rolled=${rolled} unchanged=${unchanged} orphans_redeployed=${orphans_redeployed}"
