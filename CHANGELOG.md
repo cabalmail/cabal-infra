@@ -34,6 +34,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   smtp-out tasks coordinate via sendmail's classic shared-NFS pattern
   (per-`qf` `fcntl` locks). Tracked in
   `docs/0.9.x/smtp-out-queue-persistence-plan.md`.
+- Per-user, per-apex-domain access control for address creation,
+  default-deny. Administrators grant specific users access to
+  individual mail apexes from the `Users` admin view, which shows a
+  checkbox chip per configured mail apex on each user's row.
+  Checking a chip writes an allow row to a new
+  `cabal-user-domain-access` DynamoDB table (composite key `user` +
+  `domain`); unchecking deletes it. The `new` and
+  `new_address_admin` Lambdas consult that table before provisioning
+  DNS, returning 403 when the calling (or assigned) user does not
+  hold an allow row for the requested apex; existing addresses keep
+  flowing regardless. The React new-address picker filters its
+  domain dropdown to the apexes the current user holds. Three new
+  endpoints back the feature: `list_user_domain_access` (admin GET),
+  `set_user_domain_access` (admin PUT), and `list_my_domains` (any
+  caller GET, returns the granted-apex list for the current user).
+  Because the model is default-deny, the table must be seeded after
+  the first `terraform apply` to grant existing users access to the
+  apexes they were previously using; until then, address creation
+  returns 403 for everyone.
 
 ### Changed
 - smtp-out task `stopTimeout` raised to 120s (ECS-task-level grace

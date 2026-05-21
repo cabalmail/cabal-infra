@@ -7,12 +7,14 @@ const mockGetAddresses = vi.fn();
 const mockDeleteAddress = vi.fn();
 const mockNewAddress = vi.fn();
 const mockSetFavorite = vi.fn();
+const mockListMyDomains = vi.fn();
 
 const mockApi = {
   getAddresses: mockGetAddresses,
   deleteAddress: mockDeleteAddress,
   newAddress: mockNewAddress,
   setFavorite: mockSetFavorite,
+  listMyDomains: mockListMyDomains,
 };
 
 vi.mock('../hooks/useApi', () => ({
@@ -46,6 +48,7 @@ describe('Addresses rail', () => {
   beforeEach(() => {
     mockGetAddresses.mockResolvedValue({ data: { Items: SAMPLE_ADDRESSES } });
     mockSetFavorite.mockResolvedValue({});
+    mockListMyDomains.mockResolvedValue({ data: { Domains: ['cabalmail.com'] } });
     localStorage.clear();
   });
 

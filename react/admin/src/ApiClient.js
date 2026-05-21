@@ -610,6 +610,46 @@ export default class ApiClient {
     return response;
   }
 
+  // Admin — Per-user domain access (deny list)
+
+  listUserDomainAccess() {
+    const response = axios.get('/list_user_domain_access', {
+      baseURL: this.baseURL,
+      headers: {
+        'Authorization': this.token
+      },
+      timeout: TIMEOUT
+    });
+    return response;
+  }
+
+  setUserDomainAccess(username, domain, allowed) {
+    const response = axios.put('/set_user_domain_access',
+      JSON.stringify({ user: username, domain: domain, allowed: !!allowed }),
+      {
+        baseURL: this.baseURL,
+        headers: {
+          'Authorization': this.token
+        },
+        timeout: TIMEOUT
+      }
+    );
+    return response;
+  }
+
+  // Domains the current user is permitted to create addresses on.
+
+  listMyDomains() {
+    const response = axios.get('/list_my_domains', {
+      baseURL: this.baseURL,
+      headers: {
+        'Authorization': this.token
+      },
+      timeout: TIMEOUT
+    });
+    return response;
+  }
+
   // User preferences (theme / accent / density)
 
   getPreferences() {

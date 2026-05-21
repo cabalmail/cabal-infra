@@ -4,11 +4,16 @@ import { useAppMessage } from '../contexts/AppMessageContext';
 import ConfirmDialog from '../ConfirmDialog';
 import './Users.css';
 
-function Users() {
+function Users({ domains = [] }) {
   const api = useApi();
   const { setMessage } = useAppMessage();
   const [users, setUsers] = useState([]);
   const [addresses, setAddresses] = useState([]);
+  // Set of "user||domain" strings denoting an allow row (default-deny: a
+  // missing entry means the user cannot create addresses on that apex).
+  // Toggling a checkbox optimistically mutates this set and fires
+  // set_user_domain_access; on failure we revert and surface the error.
+  const [allowances, setAllowances] = useState(() => new Set());
   const [loading, setLoading] = useState(true);
   const [pickerFor, setPickerFor] = useState(null);
   const [pickerAddress, setPickerAddress] = useState('');
@@ -22,13 +27,20 @@ function Users() {
     setLoading(true);
     Promise.all([
       api.listUsers(),
-      api.listAllAddresses().catch(() => ({ data: { Items: [] } }))
+      api.listAllAddresses().catch(() => ({ data: { Items: [] } })),
+      api.listUserDomainAccess().catch(() => ({ data: { Allowances: [] } })),
     ]).then(
-      ([userResp, addrResp]) => {
+      ([userResp, addrResp, allowResp]) => {
         const userData = userResp.data || userResp;
         const addrData = addrResp.data || addrResp;
+        const allowData = allowResp.data || allowResp;
         setUsers(userData.Users || []);
         setAddresses(addrData.Items || []);
+        const next = new Set();
+        (allowData.Allowances || []).forEach((a) => {
+          if (a && a.user && a.domain) next.add(`${a.user}||${a.domain}`);
+        });
+        setAllowances(next);
         setLoading(false);
       },
       (err) => {
@@ -157,6 +169,64 @@ function Users() {
     );
   }, [api, pendingUnassign, setMessage, loadUsers]);
 
+  const renderDomainChips = (username) => {
+    if (domains.length === 0) return null;
+    return (
+      <div className="user-domains">
+        <span className="domains-label">Domains:</span>
+        {domains.map((d) => {
+          const allowed = allowances.has(`${username}||${d.domain}`);
+          const inputId = `domain-access-${username}-${d.domain}`;
+          return (
+            <label
+              key={d.domain}
+              className={`domain-chip${allowed ? ' granted' : ''}`}
+              htmlFor={inputId}
+            >
+              <input
+                id={inputId}
+                type="checkbox"
+                checked={allowed}
+                onChange={(e) => handleDomainToggle(
+                  username, d.domain, e.target.checked
+                )}
+              />
+              <span>{d.domain}</span>
+            </label>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const handleDomainToggle = useCallback((username, domainName, nextAllowed) => {
+    const key = `${username}||${domainName}`;
+    setAllowances((prev) => {
+      const next = new Set(prev);
+      if (nextAllowed) next.add(key); else next.delete(key);
+      return next;
+    });
+    api.setUserDomainAccess(username, domainName, nextAllowed).then(
+      () => {
+        setMessage(
+          nextAllowed
+            ? `Granted "${username}" access to "${domainName}".`
+            : `Revoked "${username}" access to "${domainName}".`,
+          false
+        );
+      },
+      (err) => {
+        setAllowances((prev) => {
+          const next = new Set(prev);
+          if (nextAllowed) next.delete(key); else next.add(key);
+          return next;
+        });
+        const msg = err.response?.data?.Error || err.message || err;
+        setMessage('Failed to update domain access: ' + msg, true);
+      }
+    );
+  }, [api, setMessage]);
+
   const nonSystemUsers = users.filter(u => !['master', 'dmarc'].includes(u.username));
   const pendingUsers = nonSystemUsers.filter(u => u.status !== 'CONFIRMED');
   const confirmedUsers = nonSystemUsers.filter(u => u.status === 'CONFIRMED');
@@ -207,12 +277,15 @@ function Users() {
       ) : (
         <ul className="user-list">
           {pendingUsers.map(user => (
-            <li key={user.username} className="user-row">
-              <span className="username">{user.username}</span>
-              <span className="status">{user.status}</span>
-              <span className="created">{new Date(user.created).toLocaleDateString()}</span>
-              <button className="action confirm" onClick={() => handleConfirm(user.username)}>Confirm</button>
-              <button className="action delete" onClick={() => handleDelete(user.username)}>Delete</button>
+            <li key={user.username} className="user-row-extended">
+              <div className="user-row">
+                <span className="username">{user.username}</span>
+                <span className="status">{user.status}</span>
+                <span className="created">{new Date(user.created).toLocaleDateString()}</span>
+                <button className="action confirm" onClick={() => handleConfirm(user.username)}>Confirm</button>
+                <button className="action delete" onClick={() => handleDelete(user.username)}>Delete</button>
+              </div>
+              {renderDomainChips(user.username)}
             </li>
           ))}
         </ul>
@@ -295,6 +368,7 @@ function Users() {
                     )
                   )}
                 </div>
+                {renderDomainChips(user.username)}
               </li>
             );
           })}

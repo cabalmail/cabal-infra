@@ -14,6 +14,7 @@ table = 'cabal-addresses'
 region = os.environ['AWS_REGION']
 ddb = boto3.resource('dynamodb')
 ddb_table = ddb.Table(table)
+user_domain_access_table = ddb.Table('cabal-user-domain-access')
 s3r = boto3.resource("s3")
 s3c = boto3.client("s3",
                   region_name=region,
@@ -69,6 +70,21 @@ def user_authorized_for_sender(user, sender):
         return response['Item']['user'] == user
     except KeyError:
         return False
+
+def user_authorized_for_domain(user, domain):
+    """Checks whether the user is permitted to create addresses on the given
+    apex domain. The cabal-user-domain-access table is an allow list: a row
+    keyed on (user, domain) means the user IS permitted. Missing row = deny.
+    On lookup failure, default to deny so a transient DynamoDB error cannot
+    silently grant access (and matches the default-deny policy of the table)."""
+    try:
+        response = user_domain_access_table.get_item(
+            Key={'user': user, 'domain': domain}
+        )
+    except ClientError as err:
+        print(err.response['Error']['Message'])
+        return False
+    return 'Item' in response
 
 def get_folder_list(client):
     '''

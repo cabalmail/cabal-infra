@@ -2,9 +2,12 @@
 import json
 import os
 import boto3  # pylint: disable=import-error
+from boto3.dynamodb.conditions import Key  # pylint: disable=import-error
 
 cognito = boto3.client('cognito-idp')
 user_pool_id = os.environ['USER_POOL_ID']
+ddb = boto3.resource('dynamodb')
+user_domain_access_table = ddb.Table('cabal-user-domain-access')
 
 
 def handler(event, _context):
@@ -28,6 +31,7 @@ def handler(event, _context):
             UserPoolId=user_pool_id,
             Username=username
         )
+        purge_domain_access(username)
     except Exception as err:  # pylint: disable=broad-exception-caught
         return {
             'statusCode': 500,
@@ -37,3 +41,21 @@ def handler(event, _context):
         'statusCode': 200,
         'body': json.dumps({'status': 'deleted', 'username': username})
     }
+
+
+def purge_domain_access(username):
+    '''Removes all (username, *) rows from cabal-user-domain-access so a
+    re-created user with the same name doesn't inherit stale grants.'''
+    query_kwargs = {
+        'KeyConditionExpression': Key('user').eq(username),
+        'ProjectionExpression': '#d',
+        'ExpressionAttributeNames': {'#d': 'domain'}
+    }
+    while True:
+        response = user_domain_access_table.query(**query_kwargs)
+        with user_domain_access_table.batch_writer() as batch:
+            for item in response.get('Items', []):
+                batch.delete_item(Key={'user': username, 'domain': item['domain']})
+        if 'LastEvaluatedKey' not in response:
+            break
+        query_kwargs['ExclusiveStartKey'] = response['LastEvaluatedKey']
