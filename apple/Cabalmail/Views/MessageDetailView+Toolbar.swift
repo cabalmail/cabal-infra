@@ -63,7 +63,10 @@ extension MessageDetailView {
 
     @ViewBuilder
     var remoteContentButton: some View {
-        if let model, model.htmlBody != nil {
+        if let model {
+            // Always render so the dispose button doesn't shift position
+            // when switching between HTML and plain-text messages; dim and
+            // disable the control for messages where it has no effect.
             Button {
                 model.toggleRemoteContent()
             } label: {
@@ -76,12 +79,13 @@ extension MessageDetailView {
                         : "Show remote content"
                     )
             }
+            .disabled(model.htmlBody == nil)
         }
     }
 
     @ViewBuilder
     var readerModeButton: some View {
-        if let model, model.htmlBody != nil {
+        if let model {
             Button {
                 model.toggleReaderMode()
             } label: {
@@ -94,6 +98,7 @@ extension MessageDetailView {
                         : "Show reader view"
                     )
             }
+            .disabled(model.htmlBody == nil)
         }
     }
 

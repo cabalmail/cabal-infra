@@ -67,6 +67,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from a prior deploy or manual operator action.
 
 ### Fixed
+- Apple message-detail toolbar's remote-content and reader-mode buttons
+  stay rendered (disabled and dimmed) for plain-text messages instead of
+  vanishing, so the archive button no longer shifts position when the
+  selection moves between HTML and plain-text mail.
 - Cleaned up stale `docs/0.9.0/` references across CHANGELOG, Terraform,
   CI scripts, workflows, CLAUDE.md, and cross-version planning docs.
   The build/deploy simplification and lambda-layer-removal plans now
