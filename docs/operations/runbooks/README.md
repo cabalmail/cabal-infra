@@ -1,6 +1,6 @@
 # Cabalmail alert runbooks
 
-Short on-call runbooks for every alert in [docs/0.7.0/monitoring-plan.md](../../0.7.0/monitoring-plan.md) Phases 1-3. Each file follows the same shape:
+Short on-call runbooks for every alert in [docs/0.7.x/monitoring-plan.md](../../0.7.x/monitoring-plan.md) Phases 1-3. Each file follows the same shape:
 
 1. **What this means** — what condition fired the alert.
 2. **Who/what is impacted** — user-visible effect.

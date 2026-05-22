@@ -2,7 +2,7 @@
 
 ## Context
 
-Cabalmail has been stable in production, but the pace of AI-assisted development has increased the risk of regressions slipping into production. The 0.5.0 admin dashboard introduces SMS as a first-class delivery channel (phone verification). 0.7.0 ("Stabilize") is the right moment to put a monitoring and alerting framework in place that:
+Cabalmail has been stable in production, but the pace of AI-assisted development has increased the risk of regressions slipping into production. The 0.5.x admin dashboard introduces SMS as a first-class delivery channel (phone verification). 0.7.x ("Stabilize") is the right moment to put a monitoring and alerting framework in place that:
 
 - Detects user-visible failures (IMAP/SMTP/HTTPS down, certificates expiring, API errors) before users do.
 - Surfaces internal-service degradation (queue depth, mail delivery latency, container restarts, disk pressure on EFS/EC2).
@@ -96,13 +96,13 @@ A single bool is coarse but matches how the system is actually used. Alternative
 
 ### Independence from user-facing SMS
 
-The 0.5.0 phone-verification SMS path uses its own AWS Pinpoint/SNS resources and is unrelated to alerting. The alerting stack does not depend on SMS at all (see [Alert transports](#alert-transports)), so disabling `var.monitoring` has no impact on user-visible SMS.
+The 0.5.x phone-verification SMS path uses its own AWS Pinpoint/SNS resources and is unrelated to alerting. The alerting stack does not depend on SMS at all (see [Alert transports](#alert-transports)), so disabling `var.monitoring` has no impact on user-visible SMS.
 
 ### Acceptance
 
 - `terraform plan` with `monitoring = false` shows zero resources from the `monitoring` module and no sidecars attached to mail-tier tasks.
 - Toggling `monitoring` from `false` → `true` in dev produces a clean apply; toggling back to `false` produces a clean destroy with no orphan resources.
-- The phone-verification SMS path in 0.5.0 continues to work in both states.
+- The phone-verification SMS path in 0.5.x continues to work in both states.
 
 ---
 
@@ -217,7 +217,7 @@ Conventions: *p95* unless noted, *over 5 min* unless noted. "—" means the sign
 
 - Every threshold above ships with an issue-tracker label; after each alert fires, the runbook instructs the responder to confirm whether the threshold was correct, too sensitive, or too loose, and record the answer on the issue.
 - Thresholds are code (Prometheus rules, Kuma IaC in Phase 4) — changes go through the normal PR review. No tuning via web UI.
-- Monthly during 0.7.0, review the top three noisiest and the top three longest-silent alerts. Tighten or drop accordingly. The goal for the release is not maximum coverage; it is **zero false pages in a typical week**.
+- Monthly during 0.7.x, review the top three noisiest and the top three longest-silent alerts. Tighten or drop accordingly. The goal for the release is not maximum coverage; it is **zero false pages in a typical week**.
 
 ---
 
@@ -295,7 +295,7 @@ Configured in Kuma at first boot (manually for Phase 1; Phase 4 considers IaC fo
 
 ### 6. Implementation notes (lessons from the prod deploy)
 
-The Phase 1 deploy turned up several non-obvious things worth recording so Phase 2 doesn't re-trip them. Each is reflected in code on `0.7.0`; this list is for future readers.
+The Phase 1 deploy turned up several non-obvious things worth recording so Phase 2 doesn't re-trip them. Each is reflected in code on `0.7.x`; this list is for future readers.
 
 - **Monitoring ALB needs ≥2 AZs.** The mail-tier NLB is happy in a single AZ, but ALBs are not. Prod has two AZs in `TF_VAR_AVAILABILITY_ZONES`; dev and stage have one each. Phase 1 was deployed directly to prod for that reason. Restoring dev/stage parity would require adding a second public subnet to the existing single-AZ VPCs (the per-AZ `cidrsubnet` math means simply adding another AZ to the list rebuilds every subnet — destructive). The monitoring module owning a small extra subnet just for the ALB is the right pattern when we get back to it.
 - **EFS access points reject `chown`.** The upstream `louislam/uptime-kuma` entrypoint runs `chown -R node:node /app/data`, which EFS access points refuse regardless of caller. Fix: override `entryPoint` and `user` in the task definition so Kuma starts directly as 1000:1000 without the shim. ntfy's image doesn't have this problem, but the same workaround applies to any upstream image that chowns at boot.
@@ -316,7 +316,7 @@ Captured in full in [docs/monitoring.md](../monitoring.md). Brief:
 3. Kuma admin user is created on first browser hit (Cognito-authenticated), separate from the Cognito identity.
 4. Kuma webhook notification provider points at the `alert_sink_function_url` with `X-Alert-Secret` header from `/cabal/alert_sink_secret`.
 
-The Pushover/ntfy SSM parameters are TF-managed with placeholder values + `ignore_changes = [value]`. Folding them into "real" Terraform inputs is queued for [docs/0.9.0/state-encryption-plan.md](../0.9.0/state-encryption-plan.md), which gates that on encrypted Terraform state.
+The Pushover/ntfy SSM parameters are TF-managed with placeholder values + `ignore_changes = [value]`. Folding them into "real" Terraform inputs is queued for [docs/0.10.x/state-encryption-plan.md](../0.10.x/state-encryption-plan.md), which gates that on encrypted Terraform state.
 
 ---
 
@@ -464,7 +464,7 @@ Every UI (Kuma, Healthchecks, Grafana) sits behind the existing Cognito authoriz
 
 Monitoring state on EFS is included in the existing AWS Backup plan (extend the `backup` module's selection). Loss of the monitoring stack must not block recovery of mail — verify by running a test where the `monitoring` module is destroyed and re-applied; mail tiers must remain unaffected throughout.
 
-### Out of scope for 0.7.0
+### Out of scope for 0.7.x
 
 - Distributed tracing (Tempo / OpenTelemetry).
 - APM for the React app (Sentry self-hosted is plausible but defers to a later release).

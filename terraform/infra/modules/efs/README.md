@@ -22,6 +22,8 @@ No modules.
 |------|-------------|
 | <a name="output_efs_arn"></a> [efs\_arn](#output\_efs\_arn) | ARN of elastic filesystem. |
 | <a name="output_efs_dns"></a> [efs\_dns](#output\_efs\_dns) | Domain name of elastic filesystem. |
+| <a name="output_efs_id"></a> [efs\_id](#output\_efs\_id) | ID of elastic filesystem. |
+| <a name="output_smtp_queue_access_point_id"></a> [smtp\_queue\_access\_point\_id](#output\_smtp\_queue\_access\_point\_id) | EFS access point id for the shared smtp-out sendmail MTA queue. |
 ## Providers
 
 | Name | Version |
@@ -37,6 +39,7 @@ No modules.
 
 | Name | Type |
 |------|------|
+| [aws_efs_access_point.smtp_queue](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/efs_access_point) | resource |
 | [aws_efs_file_system.mailstore](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/efs_file_system) | resource |
 | [aws_efs_mount_target.mailstore](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/efs_mount_target) | resource |
 | [aws_security_group.mailstore](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/security_group) | resource |

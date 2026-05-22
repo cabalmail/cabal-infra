@@ -5,6 +5,78 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.27] - 2026-05-21
+
+### Added
+- Feature-flagged `sinkhole` ECS tier (`var.sinkhole`, gated off in
+  prod by a Terraform variable validation block and a task-definition
+  precondition): a tiny asyncio Python SMTP listener registered in
+  Cloud Map (`sinkhole.cabal.internal`) whose response shape is
+  controlled by an SSM parameter (`/cabal/sinkhole_mode`, modes:
+  `defer`, `bounce`, `accept`, `accept-log`, `greylist`). When
+  enabled, `smtp-out` is wired with a mailertable entry that routes
+  `sinkhole.test` (RFC 2606 reserved TLD) to the in-VPC listener,
+  giving operators a deterministic 4xx response on demand.
+  Motivating use is queue-persistence test reproducibility (the
+  natural transient-error sources are unreliable); the harness
+  generalises to DSN, large-message, and STARTTLS-fallback scenarios.
+  Design in `docs/0.9.x/sinkhole-test-harness-plan.md`; operator
+  runbook for the first use case in `docs/testing/queue-persistence.md`.
+- New EFS access point `cabal-smtp-queue` on the existing `mailstore`
+  filesystem, scoped to `/smtp-queue` and owned `root:mail` (mode 0700)
+  to match the AL2023 sendmail rpm default for `/var/spool/mqueue`.
+  The access point id is exported from the `efs` module as
+  `smtp_queue_access_point_id`.
+- The smtp-out ECS task definition mounts the shared queue access point
+  at `/var/spool/mqueue`, so a message that lands in sendmail's deferred
+  retry queue (greylisting, transient 4xx, recipient deferral) now
+  survives task replacement, scale-in, and host failure. Concurrent
+  smtp-out tasks coordinate via sendmail's classic shared-NFS pattern
+  (per-`qf` `fcntl` locks). Tracked in
+  `docs/0.9.x/smtp-out-queue-persistence-plan.md`.
+- Per-user, per-apex-domain access control for address creation,
+  default-deny. Administrators grant specific users access to
+  individual mail apexes from the `Users` admin view, which shows a
+  checkbox chip per configured mail apex on each user's row.
+  Checking a chip writes an allow row to a new
+  `cabal-user-domain-access` DynamoDB table (composite key `user` +
+  `domain`); unchecking deletes it. The `new` and
+  `new_address_admin` Lambdas consult that table before provisioning
+  DNS, returning 403 when the calling (or assigned) user does not
+  hold an allow row for the requested apex; existing addresses keep
+  flowing regardless. The React new-address picker filters its
+  domain dropdown to the apexes the current user holds. Three new
+  endpoints back the feature: `list_user_domain_access` (admin GET),
+  `set_user_domain_access` (admin PUT), and `list_my_domains` (any
+  caller GET, returns the granted-apex list for the current user).
+  Because the model is default-deny, the table must be seeded after
+  the first `terraform apply` to grant existing users access to the
+  apexes they were previously using; until then, address creation
+  returns 403 for everyone.
+
+### Changed
+- smtp-out task `stopTimeout` raised to 120s (ECS-task-level grace
+  window) and supervisord `stopwaitsecs` raised from 15s to 110s, so
+  sendmail has time to finish an in-flight delivery before SIGKILL.
+  With the persistent queue in place this is the safety net rather than
+  the primary mechanism for surviving deploys.
+- `docker/shared/sendmail-wrapper.sh` re-asserts `root:mail` ownership
+  and mode `0700` on `/var/spool/mqueue` immediately before exec, gated
+  on the smtp-out tier. Redundant on first creation (the EFS access
+  point's `creation_info` sets the same ownership) but covers drift
+  from a prior deploy or manual operator action.
+
+### Fixed
+- Apple message-detail toolbar's remote-content and reader-mode buttons
+  stay rendered (disabled and dimmed) for plain-text messages instead of
+  vanishing, so the archive button no longer shifts position when the
+  selection moves between HTML and plain-text mail.
+- Cleaned up stale `docs/0.9.0/` references across CHANGELOG, Terraform,
+  CI scripts, workflows, CLAUDE.md, and cross-version planning docs.
+  The build/deploy simplification and lambda-layer-removal plans now
+  live under `docs/0.9.x/`, and the state-encryption plan lives under
+  `docs/0.10.x/`. Docs-only; no behaviour change.
+
 ## [0.9.26] - 2026-05-20
 
 ### Added
@@ -176,7 +248,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the `lambda/api/python/` source dir are all deleted. Closes the
   layer-rebinding gap where an `app.yml` run alone was not enough
   to ship a `helper.py` change end-to-end -
-  [`docs/0.9.0/lambda-layer-removal-plan.md`](docs/0.9.0/lambda-layer-removal-plan.md).
+  [`docs/0.9.x/lambda-layer-removal-plan.md`](docs/0.9.x/lambda-layer-removal-plan.md).
 
 ## [0.9.22] - 2026-05-17
 
@@ -203,7 +275,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   jurisdiction) must be edited before going live. See
   `docs/front-door.md`.
 - AWS End User Messaging toll-free verification (TFV) submission
-  automation. New `scripts/submit-tfv-registration.py` drives the
+  automation. New `.github/scripts/submit-tfv-registration.py` drives the
   `pinpoint-sms-voice-v2` API end-to-end: discovers the toll-free
   phone number, finds or creates a `US_TOLL_FREE_REGISTRATION`,
   uploads the opt-in screenshot, sets every required field from env
@@ -767,7 +839,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Updated CLAUDE.md to reflect 0.9.x as in progress.
 - Phase 7 of the build/deploy simplification plan
-  (`docs/0.9.0/build-deploy-simplification-plan.md`): operator-facing
+  (`docs/0.9.x/build-deploy-simplification-plan.md`): operator-facing
   documentation that referenced the deleted workflows now points at
   the new pipeline. `docs/quiesce.md`, `docs/monitoring.md`, the
   `lambda-errors` and `container-restart-loop` runbooks under
@@ -785,7 +857,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Phase 6 of the build/deploy simplification plan
-  (`docs/0.9.0/build-deploy-simplification-plan.md`): cutover. The
+  (`docs/0.9.x/build-deploy-simplification-plan.md`): cutover. The
   legacy `docker.yml`, `lambda_api_python.yml`, `lambda_counter.yml`,
   `react.yml`, and `bootstrap.yml` workflows are deleted. Pushes to
   `docker/**`, `lambda/**`, and `react/admin/**` now drive `app.yml`
@@ -824,7 +896,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Phase 4 of the build/deploy simplification plan
-  (`docs/0.9.0/build-deploy-simplification-plan.md`): bootstrap
+  (`docs/0.9.x/build-deploy-simplification-plan.md`): bootstrap
   placeholders so a brand-new environment can apply
   `terraform/infra` end-to-end without `app.yml` having ever pushed
   an image or zip. Every `aws_ecs_task_definition` (the three mail
@@ -853,7 +925,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `head-object` is a hit, nothing is uploaded. The script is laid
   down here for phase 5's `infra.yml` to call as a pre-apply step.
 - Phase 5 of the build/deploy simplification plan
-  (`docs/0.9.0/build-deploy-simplification-plan.md`): new
+  (`docs/0.9.x/build-deploy-simplification-plan.md`): new
   `.github/workflows/infra.yml` replaces `terraform.yml` +
   `bootstrap.yml` as the canonical infrastructure pipeline. It owns
   both the bootstrap (`terraform/dns`) stage and the main
@@ -984,7 +1056,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Phase 3 of the build/deploy simplification plan
-  (`docs/0.9.0/build-deploy-simplification-plan.md`): new
+  (`docs/0.9.x/build-deploy-simplification-plan.md`): new
   `.github/workflows/app.yml` builds every application artifact in
   parallel and deploys directly to running infrastructure via the AWS
   CLI - no Terraform on the deploy path. Triggered on
@@ -1029,7 +1101,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Phase 2 of the build/deploy simplification plan
-  (`docs/0.9.0/build-deploy-simplification-plan.md`): every S3-source
+  (`docs/0.9.x/build-deploy-simplification-plan.md`): every S3-source
   `aws_lambda_function` resource (the api `cabal_method` calls, the
   `process_dmarc` ingester, the `assign_osid` Cognito post-confirmation
   trigger, and the `alert_sink` and `backup_heartbeat` monitoring
@@ -1073,7 +1145,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Phase 1 of the build/deploy simplification plan
-  (`docs/0.9.0/build-deploy-simplification-plan.md`): every
+  (`docs/0.9.x/build-deploy-simplification-plan.md`): every
   `aws_ecs_task_definition` resource in `terraform/infra/modules/ecs`
   and `terraform/infra/modules/monitoring` (12 task defs across the
   three mail tiers and nine monitoring tiers) now has
@@ -1303,7 +1375,7 @@ The full design rationale lives in [`docs/0.7.0/monitoring-plan.md`](docs/0.7.0/
 
 - [`docs/monitoring.md`](docs/monitoring.md) -- single coherent operator runbook for enabling the stack, completing first-boot configuration, and tuning. Covers Pushover signup, SSM seeding, ntfy admin/token bootstrap, Kuma + Healthchecks first-boot, IaC API key bootstrap, Grafana, Prometheus scrape verification, the runbook framework, tabletop exercises, the quarterly monitoring review, secret rotation, disabling the stack or individual heartbeats, and a consolidated troubleshooting block.
 - [`docs/0.7.0/monitoring-plan.md`](docs/0.7.0/monitoring-plan.md) -- design doc with the per-tier "Golden Signals" table, the `var.monitoring` feature-flag pattern, tuning discipline, and Phase-by-phase implementation plan.
-- [`docs/0.9.0/state-encryption-plan.md`](docs/0.9.0/state-encryption-plan.md) -- forward-looking plan to migrate both Terraform stacks to client-side KMS-encrypted state (TF 1.10+ `encryption` block) so secrets like the Pushover/ntfy tokens can be folded into normal Terraform inputs instead of seeded out-of-band.
+- [`docs/0.10.x/state-encryption-plan.md`](docs/0.10.x/state-encryption-plan.md) -- forward-looking plan to migrate both Terraform stacks to client-side KMS-encrypted state (TF 1.10+ `encryption` block) so secrets like the Pushover/ntfy tokens can be folded into normal Terraform inputs instead of seeded out-of-band.
 
 #### CI / build pipeline
 

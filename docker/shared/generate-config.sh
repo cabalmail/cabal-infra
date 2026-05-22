@@ -231,4 +231,23 @@ elif tier == "smtp-out":
 
 PYEOF
 
+# Sinkhole test fixture (smtp-out only).
+#
+# When SINKHOLE_ENABLED=true is injected into the smtp-out task by
+# Terraform (var.sinkhole), append a mailertable entry that routes
+# anything addressed to sinkhole.test (RFC 2606 reserved TLD - never
+# resolves on the public internet) to the in-VPC Cloud Map name
+# sinkhole.cabal.internal on port 25. The bracket-and-port syntax
+# skips MX lookup; sendmail connects directly to whatever the private
+# resolver returns.
+#
+# Regenerated on every reconfigure for free, so flipping var.sinkhole
+# does not require a docker rebuild - only a task replacement that
+# picks up the new env var. See
+# docs/0.9.x/sinkhole-test-harness-plan.md.
+if [ "$TIER" = "smtp-out" ] && [ "${SINKHOLE_ENABLED:-false}" = "true" ]; then
+  echo "[generate-config] Appending sinkhole.test mailertable entry"
+  echo "sinkhole.test	smtp:[sinkhole.cabal.internal]:25" >> /etc/mail/mailertable
+fi
+
 echo "[generate-config] Done."

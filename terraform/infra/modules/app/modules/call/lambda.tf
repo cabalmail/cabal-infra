@@ -114,7 +114,8 @@ resource "aws_iam_role_policy" "lambda" {
             "Resource": [
                 "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-addresses",
                 "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-dmarc-reports",
-                "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-user-preferences"
+                "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-user-preferences",
+                "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-user-domain-access"
             ]
         },
         {
@@ -178,7 +179,7 @@ resource "aws_lambda_function" "api_call" {
   depends_on = [
     aws_cloudwatch_log_group.lambda_log,
   ]
-  # Phase 2 of docs/0.9.0/build-deploy-simplification-plan.md.
+  # Phase 2 of docs/0.9.x/build-deploy-simplification-plan.md.
   # Out-of-band Lambda deploys will mutate code via aws lambda
   # update-function-code; ignoring these attributes prevents a
   # topology-only Terraform apply from rolling that update back.

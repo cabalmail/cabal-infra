@@ -21,3 +21,9 @@ Setting `TF_VAR_MONITORING` to `true` in a GitHub environment adds [monitoring](
 # Quiescing a non-prod environment
 
 The `quiesce` GitHub workflow scales a development or stage environment's running compute (ECS services, the ECS-instance ASG, NAT instances) to zero so it stops accruing hourly charges. Data is preserved. The workflow refuses to run against prod. See [Quiesce: scale a non-prod environment to zero](./quiesce.md) for the full list of what gets scaled, what is preserved, and how to make the quiesce durable across other Terraform runs.
+
+# Test fixtures and pre-promotion verification
+
+Setting `TF_VAR_SINKHOLE` to `true` in a non-prod GitHub environment deploys the [SMTP sinkhole test fixture](./0.9.x/sinkhole-test-harness-plan.md), a tiny configurable SMTP listener fronted by Cloud Map. It exists so test sequences that need a deterministic 4xx response on demand (queue persistence, DSN handling, large-message timeouts, STARTTLS fallback) are reproducible. The flag is refused in prod by the Terraform variable's validation block.
+
+The first runbook that uses it is the [queue-persistence test runbook](./testing/queue-persistence.md): verifies that a message deferred by an in-flight retry survives an ECS task replacement.

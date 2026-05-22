@@ -64,7 +64,7 @@ docs/               Architecture docs, migration plans, setup guides
 
 ### Docs convention
 
-Versioned subdirectories of `docs/` (e.g. `docs/0.4.0/`, `docs/0.7.0/`, `docs/0.9.0/`) are forward-looking plans for the corresponding roadmap version - design proposals written before or during implementation. Once a feature ships, its as-implemented documentation lives at the top level of `docs/`, not inside the version directory. When you write operator-facing or reference documentation for something that has already shipped, put it in `docs/<topic>.md` and link it from the relevant index (`docs/operations.md`, `docs/setup.md`, etc.). Leave the version directory alone; it is part of the historical planning record.
+Versioned subdirectories of `docs/` (e.g. `docs/0.4.0/`, `docs/0.7.0/`, `docs/0.9.x/`) are forward-looking plans for the corresponding roadmap version - design proposals written before or during implementation. Once a feature ships, its as-implemented documentation lives at the top level of `docs/`, not inside the version directory. When you write operator-facing or reference documentation for something that has already shipped, put it in `docs/<topic>.md` and link it from the relevant index (`docs/operations.md`, `docs/setup.md`, etc.). Leave the version directory alone; it is part of the historical planning record.
 
 ## Build/Lint/Test Commands
 

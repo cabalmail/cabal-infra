@@ -13,7 +13,7 @@ A specific EC2 instance in the ECS cluster has been near saturation for 15 minut
 Tasks running on that EC2 are getting throttled at the kernel level. For Cabalmail:
 - Mail-tier tasks slow down (longer IMAP responses, longer queue times).
 - Monitoring stack hosts: Prometheus scraping slows, dropping samples; Grafana queries get sluggish.
-- The NAT instance is on a separate ASG, not visible here — see [Platform / NAT](../../0.7.0/monitoring-plan.md#platform-ecs-cluster-nat-vpc) for that signal.
+- The NAT instance is on a separate ASG, not visible here — see [Platform / NAT](../../0.7.x/monitoring-plan.md#platform-ecs-cluster-nat-vpc) for that signal.
 
 ## First three things to check
 

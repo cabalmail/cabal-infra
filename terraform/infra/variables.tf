@@ -93,6 +93,23 @@ variable "monitoring" {
   }
 }
 
+# Feature flag for the SMTP sinkhole test fixture. See
+# docs/0.9.x/sinkhole-test-harness-plan.md. The ECR repo is created
+# regardless so images can be pre-built; only the ECS tier (task def,
+# service, Cloud Map, SSM parameter) and the smtp-out mailertable line
+# are gated on this flag. The sinkhole task definition carries a
+# precondition that refuses to plan when var.environment == "prod",
+# so an accidental TF_VAR_SINKHOLE=true on prod fails at plan time.
+variable "sinkhole" {
+  type        = bool
+  description = "Whether to deploy the SMTP sinkhole test fixture (tiny configurable SMTP listener used to produce on-demand deferred-retry responses for queue-persistence and DSN testing). Permanent in dev and stage; refused in prod by a Terraform precondition. Defaults to false."
+  default     = false
+  validation {
+    condition     = !(var.sinkhole && var.environment == "prod")
+    error_message = "var.sinkhole must never be true in prod. See docs/0.9.x/sinkhole-test-harness-plan.md."
+  }
+}
+
 variable "healthchecks_registration_open" {
   type        = bool
   description = "Whether the Healthchecks signup form is open. Set to true at bootstrap so the operator can sign up the first user via the magic-link flow, then flip back to false. Has no effect when var.monitoring is false (no Healthchecks task is deployed)."
@@ -107,7 +124,7 @@ variable "quiesced" {
 
 # Populated by .github/scripts/record-lambda-hashes.sh at CI time and
 # fed into terraform plan/apply as -var-file=.terraform/lambda-pinned.tfvars.
-# See phase 2 of docs/0.9.0/build-deploy-simplification-plan.md. Reserved
+# See phase 2 of docs/0.9.x/build-deploy-simplification-plan.md. Reserved
 # for phase 3 wiring; not consumed by Lambda resources yet, so the
 # default {} keeps local plans (and the steady-state CI flow) working.
 # tflint-ignore: terraform_unused_declarations

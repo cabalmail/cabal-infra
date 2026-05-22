@@ -119,7 +119,7 @@ resource "aws_lambda_function" "check_invite" {
   # Matches the assign_osid pattern: out-of-band Lambda deploys mutate
   # code via aws lambda update-function-code; ignore those attributes
   # so a topology-only Terraform apply does not roll the update back.
-  # See phase 2 of docs/0.9.0/build-deploy-simplification-plan.md.
+  # See phase 2 of docs/0.9.x/build-deploy-simplification-plan.md.
   lifecycle {
     ignore_changes = [s3_key, s3_object_version, source_code_hash]
   }

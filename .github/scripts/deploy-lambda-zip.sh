@@ -5,7 +5,7 @@
 # then waits for the function update to finish so the caller can roll
 # the next deploy without racing against an in-flight publish.
 #
-# Phase 3 of docs/0.9.0/build-deploy-simplification-plan.md introduces
+# Phase 3 of docs/0.9.x/build-deploy-simplification-plan.md introduces
 # this path: app.yml mutates the running function directly instead of
 # letting Terraform pick up the new code on the next plan. The phase 2
 # lifecycle clause (ignore_changes on s3_key, s3_object_version,

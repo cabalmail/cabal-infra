@@ -49,8 +49,8 @@ resource "aws_efs_access_point" "smtp_queue" {
     path = "/smtp-queue"
     creation_info {
       owner_uid   = 0      # root
-      owner_gid   = 25     # smmsp on AL2023 sendmail packaging — verify in image
-      permissions = "0750"
+      owner_gid   = 12     # mail group on AL2023 sendmail packaging
+      permissions = "0700"
     }
   }
 
@@ -60,9 +60,9 @@ resource "aws_efs_access_point" "smtp_queue" {
 }
 ```
 
-**No POSIX user override.** Sendmail manages ownership across the `qf` (control), `df` (data), `xf` (transcript), and `tf` (temp) files itself; an enforced uid/gid on the access point would break the privilege drops between the listener (root) and queue runner (`smmsp`). The access point only enforces the root-directory boundary and the initial creation owner; sendmail's own perms govern the rest.
+**No POSIX user override.** Sendmail manages ownership across the `qf` (control), `df` (data), `xf` (transcript), and `tf` (temp) files itself; an enforced uid/gid on the access point would break the privilege drops between the listener (root) and queue runner. The access point only enforces the root-directory boundary and the initial creation owner; sendmail's own perms govern the rest.
 
-The 25 in `owner_gid` reflects the historic `smmsp` group id under sendmail's RPM packaging. **The first PR in the migration sequence below verifies the actual gid in the running smtp-out image** (`getent group smmsp`) before the access point is created, and adjusts if AL2023 packaging differs.
+The `owner_gid = 12` matches the AL2023 sendmail rpm default for `/var/spool/mqueue` (`root:mail`, mode `0700`). Verified in image: `getent group mail` yields `mail:x:12:`, `getent group smmsp` yields `smmsp:x:51:`, and `/var/spool/mqueue` ships owned `root:mail` mode `0700`. `smmsp` owns the *client* submission queue (`/var/spool/clientmqueue`), which we do not persist - see Non-goals. An earlier draft of this plan used `25` (smmsp's historic gid under older RPM packaging) and `0750`; both are corrected here.
 
 ### ECS task-definition changes
 
@@ -102,10 +102,12 @@ resource "aws_ecs_task_definition" "smtp_out" {
 
 The `efs` module exposes the new access point id as an output (`smtp_queue_access_point_id`); the root module wires it through to the `ecs` module.
 
+**One-shot replacement.** The smtp-out task definition already carries `lifecycle { ignore_changes = [container_definitions] }` (added in phase 1 of `docs/0.9.x/build-deploy-simplification-plan.md` to protect out-of-band image-tag updates from topology-only Terraform applies). Adding `mountPoints` and `stopTimeout` *inside* `container_definitions` to a steady-state task def would be silently ignored. Phase 3 of this plan introduces a small marker resource (`terraform_data.smtp_out_taskdef_revision_marker` with `input = "smtp-queue-mount-v1"`) and adds `replace_triggered_by = [terraform_data.smtp_out_taskdef_revision_marker]` to the task-def's lifecycle block. Replacement forces a fresh `create`, which is not governed by `ignore_changes`, so the new revision picks up the full configured `container_definitions` (mountPoints, stopTimeout) plus the new `volume` block. The marker stays in state after the first apply; subsequent applies behave as before. If we ever need to push another topology-only change through the same gate, bump the `input` string (e.g. `smtp-queue-mount-v2`).
+
 ### Container runtime changes
 
 - [`smtp-out/supervisord.conf:26`](../../docker/smtp-out/supervisord.conf:26): raise `stopwaitsecs` from `15` to `110`.
-- [`docker/shared/sendmail-wrapper.sh`](../../docker/shared/sendmail-wrapper.sh): defensive `chown root:smmsp /var/spool/mqueue && chmod 0750` immediately before the `exec`. The access point's `creation_info` only fires on first creation; this guard handles edge cases where the directory was created with different perms by a previous deploy or by a manual operator action. No change to the SIGTERM handling — the existing `exec` already lets SIGTERM reach sendmail directly.
+- [`docker/shared/sendmail-wrapper.sh`](../../docker/shared/sendmail-wrapper.sh): defensive `chown root:mail /var/spool/mqueue && chmod 0700` immediately before the `exec`, to match the AL2023 sendmail rpm default. The access point's `creation_info` only fires on first creation; this guard handles edge cases where the directory was created with different perms by a previous deploy or by a manual operator action. No change to the SIGTERM handling - the existing `exec` already lets SIGTERM reach sendmail directly.
 - No change to [`docker/shared/entrypoint.sh`](../../docker/shared/entrypoint.sh) — verified it does not touch the queue.
 
 ### Sendmail `.mc` change
@@ -134,7 +136,7 @@ Three failure modes worth naming explicitly, with how each is handled:
 
 One PR per phase, in order. Each phase is independently apply-able and each phase's rollback is the previous phase.
 
-1. **Verify the smmsp gid.** A throwaway PR (or just a CI run on a docs-only branch) that prints `getent group smmsp` from inside the smtp-out container. Bake the resulting gid into the access-point Terraform in step 2. No infra change.
+1. **Verify the smmsp / mail gid.** Done out-of-band against an `amazonlinux:2023` image with the same `dnf install sendmail` invocation the smtp-out Dockerfile uses. Result: `smmsp` is gid 51, `mail` is gid 12, and the rpm ships `/var/spool/mqueue` as `root:mail` mode `0700`. The MTA queue (the one we persist) belongs to the `mail` group, not `smmsp`; `smmsp` owns the *client* submission queue (`/var/spool/clientmqueue`) which is out of scope here.
 2. **Add the EFS access point.** Terraform-only PR: new `aws_efs_access_point.smtp_queue` resource and module output. No mount yet, no behavioural change. The access point creates `/smtp-queue` on the filesystem with the correct ownership.
 3. **Mount the queue and bump timeouts.** PR with three coordinated changes:
    - `task-definitions.tf` — add the `volume` and `mountPoints` blocks, add `stopTimeout = 120`.
@@ -155,7 +157,7 @@ One PR per phase, in order. Each phase is independently apply-able and each phas
 | --- | --- |
 | Verify gid (1) | None needed — read-only. |
 | Access point (2) | Delete the `aws_efs_access_point` resource. The `/smtp-queue` directory remains on the filesystem; harmless. |
-| Mount + timeouts (3) | Revert the task-definition, supervisord, and wrapper changes. ECS rolls back to ephemeral queue. Any messages in the persistent queue at rollback time are stranded — manually copy them out of the EFS mount on a one-off basis if necessary, or let the new ephemeral queue accept replacements as users retry sending. |
+| Mount + timeouts (3) | Revert the task-definition, supervisord, and wrapper changes, AND bump `terraform_data.smtp_out_taskdef_revision_marker.input` (e.g. `smtp-queue-mount-v1` -> `smtp-queue-rollback-v1`). The bump is required: removing the `volume` block alone would otherwise leave `mountPoints` stranded inside the ignored `container_definitions`, registering a revision that references a non-existent volume. Forcing replacement makes Terraform rebuild the resource from the rolled-back config in full. ECS rolls back to ephemeral queue. Any messages in the persistent queue at rollback time are stranded - manually copy them out of the EFS mount on a one-off basis if necessary, or let the new ephemeral queue accept replacements as users retry sending. |
 | `MIN_QUEUE_AGE` (4) | Single-line revert. No state implication. |
 
 ## Operational considerations
@@ -177,7 +179,7 @@ One PR per phase, in order. Each phase is independently apply-able and each phas
 
 ## Open questions
 
-- **Verified smmsp gid on AL2023.** Step 1 of the migration sequence resolves this; recording here as a reminder that the `25` in this plan is provisional.
+- **Verified smmsp/mail gids on AL2023.** Resolved: smmsp=51, mail=12; the MTA queue is `root:mail` (gid 12) mode `0700`, not `root:smmsp` as an earlier draft assumed. Plan and access-point Terraform have been updated accordingly.
 - **IAM auth on the EFS mount.** Left disabled here for parity with the IMAP mount. Worth a follow-up posture pass to enable it on both mounts in one PR, once the queue work has soaked.
 - **`confMIN_QUEUE_AGE` value.** 5m is a defensible default; if greylist-heavy domains bunch up in the queue, we may want to raise it to 15m to align with the queue-run cadence. Tune during soak.
 - **Queue-runner separation.** Sendmail supports running the listener and the queue runner as separate processes (`-bd` + `-q15m` rather than `-bD -q15m` in one). Splitting them would let us scale queue runners independently of submission capacity, but adds supervisord complexity. Defer until queue depth justifies it.

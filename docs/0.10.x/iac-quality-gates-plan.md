@@ -179,7 +179,7 @@ One PR per phase. Each phase is independently deployable; each phase's rollback 
 
 ### Phase 0 — Baseline measurement (no behavioural change)
 
-Run each tool against current `main` for both stacks; record the finding counts and severity breakdown in [`docs/0.9.0/iac-baseline-snapshot.md`](./iac-baseline-snapshot.md) (created as part of this phase). Output sets the size of the work in Phase 3 and lets us track decay.
+Run each tool against current `main` for both stacks; record the finding counts and severity breakdown in [`docs/0.10.x/iac-baseline-snapshot.md`](./iac-baseline-snapshot.md) (created as part of this phase). Output sets the size of the work in Phase 3 and lets us track decay.
 
 This phase doesn't touch CI. Pure reconnaissance.
 

@@ -499,7 +499,7 @@ function App() {
       case "Users":
         return (
           <ErrorBoundary name="Users">
-            <Users />
+            <Users domains={state.domains} />
           </ErrorBoundary>
         );
       case "DMARC":

@@ -1,9 +1,10 @@
 '''Creates a new email address assigned to one or more users (admin only)'''
-# pylint: disable=duplicate-code
+# pylint: disable=duplicate-code,too-many-return-statements
 import json
 import os
 from datetime import datetime, timezone
 import boto3  # pylint: disable=import-error
+from helper import user_authorized_for_domain  # pylint: disable=import-error
 
 domains = json.loads(os.environ['DOMAINS'])
 control_domain = os.environ['CONTROL_DOMAIN']
@@ -32,12 +33,27 @@ def handler(event, _context):
             'statusCode': 400,
             'body': json.dumps({'Error': 'At least one username is required'})
         }
+    if body['tld'] not in domains:
+        return {
+            'statusCode': 400,
+            'body': json.dumps({'Error': f"Unknown domain \"{body['tld']}\""})
+        }
     try:
         for username in usernames:
             if not cognito_user_exists(username):
                 return {
                     'statusCode': 400,
                     'body': json.dumps({'Error': f'User "{username}" does not exist'})
+                }
+            if not user_authorized_for_domain(username, body['tld']):
+                return {
+                    'statusCode': 403,
+                    'body': json.dumps({
+                        'Error': (
+                            f'User "{username}" is not permitted to create '
+                            f"addresses on \"{body['tld']}\""
+                        )
+                    })
                 }
         create_dns_records(domains[body['tld']], body['subdomain'], body['tld'])
         record_address(usernames, body)

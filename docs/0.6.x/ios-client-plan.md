@@ -2,16 +2,16 @@
 
 ## Context
 
-The React admin app (`react/admin/`) currently serves as the only Cabalmail client. It works well, but it is a browser app with browser idioms — and even wrapped in a WebView it would feel out of place on iOS, iPadOS, visionOS, and macOS. Version 0.6.0 introduces a first-class native client that mirrors the *user-facing* portions of the React app (mail reading/compose/send, folder management, address creation and revocation, on-the-fly `From` addresses) without porting any of its code.
+The React admin app (`react/admin/`) currently serves as the only Cabalmail client. It works well, but it is a browser app with browser idioms — and even wrapped in a WebView it would feel out of place on iOS, iPadOS, visionOS, and macOS. Version 0.6.x introduces a first-class native client that mirrors the *user-facing* portions of the React app (mail reading/compose/send, folder management, address creation and revocation, on-the-fly `From` addresses) without porting any of its code.
 
-Administrative functionality introduced in 0.5.0 (user management, DMARC reports, multi-user address assignment) is out of scope. Admins will continue to use the web app for those workflows.
+Administrative functionality introduced in 0.5.x (user management, DMARC reports, multi-user address assignment) is out of scope. Admins will continue to use the web app for those workflows.
 
-Scope of "Apple client" for 0.6.0:
+Scope of "Apple client" for 0.6.x:
 - **iOS** and **iPadOS** (iPhone + iPad, shared target with adaptive layouts)
 - **macOS** via Mac Catalyst *or* a native AppKit/SwiftUI target — decision in Phase 1
 - **visionOS** as a secondary target sharing the iOS codebase
 
-App Store public release is explicitly *not* a 0.6.0 goal — the roadmap places that at 1.4.0. This phase produces a working client that is continuously built and tested in CI and distributable via TestFlight internal groups.
+App Store public release is explicitly *not* a 0.6.x goal — the roadmap places that at 1.4.x. This phase produces a working client that is continuously built and tested in CI and distributable via TestFlight internal groups.
 
 ## Approach
 
@@ -132,7 +132,7 @@ Environment mapping follows the existing repo convention: `main` → prod, `stag
 - **TestFlight upload**: `xcrun altool --upload-app` with the App Store Connect API key. Build number is `${{ github.run_number }}` for monotonicity; marketing version read from `Info.plist`. A post-upload step posts the TestFlight build URL to the workflow summary.
 - **Notarization (macOS)**: `xcrun notarytool submit --wait` followed by `xcrun stapler staple`.
 
-### 6. Escape hatches (not required for 0.6.0)
+### 6. Escape hatches (not required for 0.6.x)
 
 If hosted-runner wall-clock ever becomes annoying, the workflow is trivial to point at faster infrastructure:
 
@@ -302,7 +302,7 @@ Sending builds an RFC 5322 message client-side (multipart/mixed with multipart/a
 ### 2. Reply / Reply All / Forward
 
 Triggered from the message detail toolbar. The compose scene opens pre-populated:
-- **From** defaults to the address the original was sent *to* (matching the React app's behavior per 0.3.0 roadmap entry). If that address was multi-recipient, the first that exists in the user's address list is chosen.
+- **From** defaults to the address the original was sent *to* (matching the React app's behavior per 0.3.x roadmap entry). If that address was multi-recipient, the first that exists in the user's address list is chosen.
 - **To** / **Cc** populated per reply semantics.
 - **Subject** prefixed with `Re:` or `Fwd:` if not already.
 - **Body** quotes the original with attribution line.
@@ -357,7 +357,7 @@ A new area with no React analog. On iPhone and iPad this is a dedicated Settings
 
 | Preference | Options | Default | Notes |
 |---|---|---|---|
-| Default From address | None / (list of user's addresses) | **None** | None = From picker starts empty; Send is blocked until the user picks or creates an address. When set, that address preselects in new-compose (replies still default to the original's addressee per 0.3.0 semantics). |
+| Default From address | None / (list of user's addresses) | **None** | None = From picker starts empty; Send is blocked until the user picks or creates an address. When set, that address preselects in new-compose (replies still default to the original's addressee per 0.3.x semantics). |
 | Signature | Text field | *(empty)* | Plain text, appended at compose time. Per-address signatures are a future enhancement. |
 
 **Actions:**
@@ -422,7 +422,7 @@ Cross-cutting work to make each platform feel native, plus robustness improvemen
 
 - While the app is foregrounded, `ImapClient.idle(folder: "INBOX")` keeps an IMAP IDLE connection open; `EXISTS` events trigger an immediate envelope fetch and update the message list and unread badge. No server-side infrastructure required.
 - Briefly after backgrounding, iOS keeps the socket alive long enough for IDLE to fire a local notification (via `UNUserNotificationCenter`) for newly arriving mail. Not true push — the connection dies within a minute or two — but it covers the common case of quickly checking another app and returning.
-- True APNs-delivered push (app not running) is still deferred past 0.6.0; it requires a server-side IDLE watcher that translates IMAP events into APNs pokes. The container architecture doesn't run such a process today. Tracked separately.
+- True APNs-delivered push (app not running) is still deferred past 0.6.x; it requires a server-side IDLE watcher that translates IMAP events into APNs pokes. The container architecture doesn't run such a process today. Tracked separately.
 - `BGAppRefreshTask` on iOS / `NSBackgroundActivityScheduler` on macOS periodically opens a short-lived IMAP session and catches up via `STATUS` + `UID FETCH since UIDNEXT`, so unread badges are fresh at launch even when IDLE hasn't been running.
 
 ### 6. Offline reading
@@ -445,13 +445,13 @@ Cross-cutting work to make each platform feel native, plus robustness improvemen
 
 ---
 
-## Out of Scope for 0.6.0
+## Out of Scope for 0.6.x
 
-- **App Store public release.** Tracked as 1.6.0. 0.6.0 produces builds distributable via TestFlight internal groups (automated via CI in Phase 2).
-- **Push notifications.** Requires new server-side infrastructure (IMAP IDLE watcher, APNs bridge) not present in the 0.4.0 container architecture.
-- **Admin features** (user management, DMARC, multi-user address assignment from 0.5.0). Admins continue to use the web app.
+- **App Store public release.** Tracked as 1.6.x. 0.6.x produces builds distributable via TestFlight internal groups (automated via CI in Phase 2).
+- **Push notifications.** Requires new server-side infrastructure (IMAP IDLE watcher, APNs bridge) not present in the 0.4.x container architecture.
+- **Admin features** (user management, DMARC, multi-user address assignment from 0.5.x). Admins continue to use the web app.
 - **RSS reader.** Tracked as 2.x.
-- **Android client.** Tracked separately starting at 1.1.0.
+- **Android client.** Tracked separately starting at 1.1.x.
 
 ## Prerequisites
 

@@ -177,7 +177,7 @@ module "efs" {
 # repos exist regardless of var.monitoring so the docker matrix can
 # push images unconditionally; only the ECS services that consume them
 # are gated by the flag. Phase 6 of the build/deploy simplification
-# plan (docs/0.9.0/build-deploy-simplification-plan.md) routes them
+# plan (docs/0.9.x/build-deploy-simplification-plan.md) routes them
 # through monitoring_repositories so the underlying resource gets
 # lifecycle { prevent_destroy = true } - toggling var.monitoring off
 # (or trimming the docker matrix in app.yml) is now a no-op against
@@ -212,6 +212,8 @@ module "ecs" {
   table_arn = module.table.table_arn
   efs_id    = module.efs.efs_id
 
+  smtp_queue_access_point_id = module.efs.smtp_queue_access_point_id
+
   user_pool_arn = module.pool.user_pool_arn
   user_pool_id  = module.pool.user_pool_id
   client_id     = module.pool.user_pool_client_id
@@ -229,6 +231,9 @@ module "ecs" {
   healthcheck_ping_param = local.hc_ping_ecs_reconfigure
 
   quiesced = var.quiesced
+
+  sinkhole    = var.sinkhole
+  environment = var.environment
 
   depends_on = [module.cert]
 }

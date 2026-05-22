@@ -11,7 +11,7 @@ AWS Backup did not complete a successful `BACKUP_JOB` for the daily plan, so the
 
 ## Who/what is impacted
 
-If `var.backup = true`, the daily backup covers the EFS file system and `cabal-addresses` DynamoDB table. A skipped day means a 24-hour gap in recovery points. Cabalmail's RPO target during 0.7.0 is "best-effort daily" — one missed day is tolerable, three in a row is not.
+If `var.backup = true`, the daily backup covers the EFS file system and `cabal-addresses` DynamoDB table. A skipped day means a 24-hour gap in recovery points. Cabalmail's RPO target during 0.7.x is "best-effort daily" — one missed day is tolerable, three in a row is not.
 
 If `var.backup = false`, this alert is a false positive: there's no plan to ping. Pause the check in Healthchecks and clear the SSM parameter.
 
@@ -36,7 +36,7 @@ If `var.backup = false`, this alert is a false positive: there's no plan to ping
 
 ## Escalation
 
-- **Plan disabled / vault missing**: that's a config drift. Don't manually re-enable in the console — re-apply Terraform from `0.7.0` so state matches.
+- **Plan disabled / vault missing**: that's a config drift. Don't manually re-enable in the console — re-apply Terraform from `0.7.x` so state matches.
 - **Job failure pattern**: AWS Backup occasionally fails with capacity-related errors. Inspect `StatusMessage`; if it's transient, leave it and the next day's run will recover. Trends > 1 in 7 should open an issue.
 - **`backup_heartbeat` itself broken**: see [lambda-errors.md](./lambda-errors.md). The fix is usually re-seeding the SSM ping URL — see [docs/monitoring.md §12](../../monitoring.md#12-create-one-check-per-scheduled-job).
 - This alert is `critical` but the buffer-to-impact is large (you'd need a backup *and* a need-to-restore, both rare). Treat as next-business-day urgency.
