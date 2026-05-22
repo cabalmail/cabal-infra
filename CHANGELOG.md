@@ -55,6 +55,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   returns 403 for everyone.
 
 ### Changed
+- smtp-out's sendmail config now sets `confMIN_QUEUE_AGE=5m`,
+  establishing a five-minute floor before any queue runner re-attempts
+  a freshly-deferred message. With multiple concurrent smtp-out tasks
+  sharing the EFS-backed queue, this avoids thundering-herd retries
+  against a remote MTA that just deferred us (e.g. greylisting). 5m
+  is conservative; the plan flags 15m as the tuning alternative if
+  greylist-heavy domains bunch up. Tracked in
+  `docs/0.9.x/smtp-out-queue-persistence-plan.md`.
 - smtp-out task `stopTimeout` raised to 120s (ECS-task-level grace
   window) and supervisord `stopwaitsecs` raised from 15s to 110s, so
   sendmail has time to finish an in-flight delivery before SIGKILL.

@@ -8,6 +8,15 @@ define(`ALIAS_FILE',`/etc/aliases')dnl
 define(`confPRIVACY_FLAGS', `authwarnings,needmailhelo,noexpn,novrfy')dnl
 define(`confTO_QUEUERETURN', `4d')dnl
 define(`confTO_QUEUEWARN', `4h')dnl
+dnl Minimum age before a queued message is eligible for a fresh delivery
+dnl attempt by any queue runner. With the EFS-backed shared queue and
+dnl multiple smtp-out tasks each running -q15m, a freshly enqueued
+dnl message would otherwise be eligible for a second attempt within
+dnl seconds of the first deferral. 5m avoids thundering-herd retries
+dnl against a remote MTA that just deferred us, while staying short
+dnl enough that a real send after a transient blip still goes out
+dnl promptly. See docs/0.9.x/smtp-out-queue-persistence-plan.md.
+define(`confMIN_QUEUE_AGE', `5m')dnl
 define(`confTO_ICONNECT', `15s')dnl
 define(`confTO_CONNECT', `3m')dnl
 define(`confTO_HELO', `2m')dnl
