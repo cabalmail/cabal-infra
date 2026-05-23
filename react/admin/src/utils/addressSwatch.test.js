@@ -44,7 +44,7 @@ describe('addressSwatch', () => {
   it('distributes a realistic pool of addresses across all four swatches', () => {
     const services = [
       'github', 'linkedin', 'stripe', 'aws', 'figma', 'vercel',
-      'cloudflare', 'netlify', 'notion', 'slack', 'twilio', 'sentry',
+      'cloudflare', 'netlify', 'notion', 'slack', 'plaid', 'sentry',
       'newsletter-hn', 'newsletter-tldr', 'substack-patio11',
       'delta', 'united', 'marriott', 'airbnb', 'uber', 'lyft',
       'costco', 'amazon', 'amex', 'chase', 'vanguard',

@@ -6,13 +6,13 @@ The Cabalmail front door site lives at `www.<control_domain>`. It is a small sta
 
 Two reasons:
 
-1. **A public surface that isn't the admin login.** AWS End User Messaging toll-free verification (TFV), Twilio A2P 10DLC, and similar carrier registrations require a publicly-reachable URL describing the service. The admin app is a login screen; pointing carriers at it produces an awkward user experience and confuses reviewers.
+1. **A public surface that isn't the admin login.** AWS End User Messaging toll-free verification (TFV) and similar carrier registrations require a publicly-reachable URL describing the service. The admin app is a login screen; pointing carriers at it produces an awkward user experience and confuses reviewers.
 2. **A home for the legal pages** (privacy policy, terms of service) that the signup screen and carrier registrations link to.
 
 ## Where the content lives
 
 - `front-door/index.html` - home page.
-- `front-door/privacy.html` - privacy policy. Required text: SMS use, message frequency, STOP/HELP keywords, data retention, third parties. The default copy already satisfies AWS TFV and Twilio A2P requirements.
+- `front-door/privacy.html` - privacy policy. Required text: SMS use, message frequency, STOP/HELP keywords, data retention, third parties. The default copy already satisfies AWS TFV requirements.
 - `front-door/terms.html` - terms of service. Three yellow-highlighted spans (entity name, contact email, jurisdiction) must be replaced by the operator before going live.
 - `front-door/assets/`, `front-door/css/`, `front-door/js/` - static assets.
 

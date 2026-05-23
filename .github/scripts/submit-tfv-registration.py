@@ -53,7 +53,7 @@ Optional env vars:
                                    PAPER_FORM, TEXT, QR_CODE
   TFV_USE_CASE_DETAILS             Free text; script supplies a sensible default
   TFV_OPT_IN_DESCRIPTION           Free text; script supplies a sensible default
-  TFV_SAMPLE_MESSAGE               Free text; defaults to what the sms_sender Lambda actually sends
+  TFV_SAMPLE_MESSAGE               Free text; defaults to what Cognito's SMS verification template sends
   TFV_PHONE_NUMBER_ID              Explicit phone-number id-XXXX; if unset the script discovers it
   TFV_TAX_ID                       Business identification number (EIN for a US LLC).
                                    AWS marks this optional in the field metadata but
@@ -86,9 +86,10 @@ from botocore.exceptions import ClientError
 
 REGISTRATION_TYPE = "US_TOLL_FREE_REGISTRATION"
 
-# These mirror what lambda/sms-sender/function.py composes. If the
-# Lambda copy changes, update this so the registered sample matches
-# what the user actually receives - otherwise carriers reject.
+# Mirrors the Cognito sms_verification_message template in
+# terraform/infra/modules/user_pool/main.tf. If that template changes,
+# update this so the registered sample matches what the user actually
+# receives - otherwise carriers reject.
 DEFAULT_SAMPLE_MESSAGE = "Your Cabalmail verification code is 123456"
 
 DEFAULT_USE_CASE_DETAILS = (

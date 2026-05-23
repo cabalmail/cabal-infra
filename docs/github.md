@@ -63,25 +63,11 @@ These variables gate the optional monitoring stack. See [monitoring.md](./monito
 | `TF_VAR_MONITORING` | `true` | Enables the monitoring stack (Uptime Kuma, ntfy, Healthchecks, Prometheus, Alertmanager, Grafana). Requires at least two AZs in `TF_VAR_AVAILABILITY_ZONES`. Set `true` in `prod`; leave `false` or unset elsewhere unless actively testing. |
 | `TF_VAR_HEALTHCHECKS_REGISTRATION_OPEN` | `false` | Controls whether the Healthchecks signup form accepts new accounts. Default `false`. Flip to `true` for the bootstrap signup in [monitoring.md](./monitoring.md) step 11, then back to `false`. Has no effect when `TF_VAR_MONITORING=false`. |
 
-### SMS -- Twilio
-
-Set these on each environment where you want Twilio to handle Cognito SMS delivery. See [twilio.md](./twilio.md) for the account setup and A2P registration steps.
-
-**Variables:**
+### SMS -- AWS End User Messaging
 
 | Variable | Example | Notes |
 | --- | --- | --- |
-| `TF_VAR_USE_TWILIO_SMS` | `true` | Provisions the Twilio-backed custom SMS sender Lambda. Default `false`. |
-| `TF_VAR_USE_EUM_SMS` | `false` | Provisions an AWS End User Messaging toll-free number alongside Twilio. Default `false`. See [twilio.md](./twilio.md) for the four-combination matrix and cost notes. |
-
-**Secrets:**
-
-| Secret | Value |
-| --- | --- |
-| `TWILIO_ACCOUNT_SID` | Twilio Account SID (starts with `AC...`). Use the subaccount SID if you are using subaccounts. |
-| `TWILIO_API_KEY` | API Key SID (starts with `SK...`). |
-| `TWILIO_API_SECRET` | API Key Secret. |
-| `TWILIO_FROM_NUMBER` | E.164 phone number (e.g., `+15551234567`) or Messaging Service SID (starts with `MG...`). Prefer the Messaging Service SID once A2P registration is approved. |
+| `TF_VAR_USE_EUM_SMS` | `false` | Provisions an AWS End User Messaging toll-free number for Cognito SMS via SNS. Default `false`. |
 
 ### TFV registration
 
@@ -109,7 +95,7 @@ These are used by the `register-tfv` workflow to submit a toll-free verification
 | `TFV_TAX_ID_COUNTRY` | `US` | Optional. Only used when `TFV_TAX_ID` is set. Two-letter ISO country code. Default `US`. |
 | `TFV_USE_CASE_DETAILS` | (free text) | Optional. Default supplied by the workflow. Override only if you need different wording. |
 | `TFV_OPT_IN_DESCRIPTION` | (free text) | Optional. Default supplied by the workflow. Override only if you need different wording. |
-| `TFV_SAMPLE_MESSAGE` | `Your Cabalmail verification code is 123456` | Optional. Default matches what the `sms_sender` Lambda sends. Update if you change the Lambda copy. |
+| `TFV_SAMPLE_MESSAGE` | `Your Cabalmail verification code is 123456` | Optional. Default matches the Cognito `sms_verification_message` template. Update if you change that template. |
 | `TFV_PHONE_NUMBER_ID` | `phone-abcdef0123456789` | Optional. Auto-discovered when there is exactly one US toll-free number on the account. Set explicitly if you have more than one. |
 
 **Secrets** (sensitive; redacted in workflow logs):

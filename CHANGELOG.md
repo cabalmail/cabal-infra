@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.28] - Unreleased
+
+### Removed
+- Twilio SMS integration. The planned migration away from AWS End
+  User Messaging is abandoned; AWS EUM remains the SMS path for
+  Cognito (signup verification, password reset, MFA). Deleted: the
+  `sms_sender` Terraform module (KMS key, SSM SecureString
+  parameters, Lambda, IAM role), the `lambda/sms-sender/` Python
+  function and its dependencies, the `.github/scripts/build-sms-sender.sh`
+  build script, the `lambda-sms-sender` job and area filter in
+  `app.yml`, and the `TF_VAR_twilio_*` / `TWILIO_*` env wiring in
+  `infra.yml`. The `var.use_twilio_sms` flag and the per-env
+  `TF_VAR_USE_TWILIO_SMS` variable are gone; so is the
+  `custom_sms_sender` block on the Cognito user pool. The
+  `var.use_eum_sms` flag and the AWS End User Messaging toll-free
+  number it provisions are unchanged. `docs/twilio.md` and
+  `docs/0.9.x/twilio-sms-migration-plan.md` are deleted; remaining
+  doc references in `docs/setup.md`, `docs/github.md`,
+  `docs/sms-tfv-setup.md`, `docs/front-door.md`, and the front_door
+  Terraform module's privacy-URL description are cleaned up.
+  Environments that had `USE_TWILIO_SMS=true` previously should
+  flip it to `false` (or remove it) before this apply so the
+  custom_sms_sender wiring tears down cleanly on the prior code
+  path; environments that never enabled the flag (the steady state)
+  see a state-only removal of the unindexed `module.sms_sender`
+  address and no AWS resource changes.
+
 ## [0.9.27] - 2026-05-21
 
 ### Added

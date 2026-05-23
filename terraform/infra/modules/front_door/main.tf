@@ -4,8 +4,8 @@
 * Purpose: a public-facing front door surface separate from the React
 * admin app at admin.<control_domain>. The privacy policy and terms of
 * service live here so they can be referenced as public URLs by carrier
-* registrations (AWS End User Messaging toll-free verification, Twilio
-* A2P 10DLC) without auth-gating the admin app.
+* registrations (AWS End User Messaging toll-free verification)
+* without auth-gating the admin app.
 *
 * This module owns the S3 bucket, the CloudFront distribution, the
 * Route 53 records, and the SSM parameter that publishes the
