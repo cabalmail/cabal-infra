@@ -110,14 +110,27 @@ separating "feed" from "subscription" is the same cost you would pay later
 if you started with A and outgrew it. C is appealing for simplicity but the
 cache layer ends up doing most of B's work without B's clarity.
 
+**Decision: B.**
+
 **Sub-decisions if B is chosen.**
 
 - How are feeds that look public but 401 us handled? Quarantine the
   canonical record and convert to per-user, or surface as a credential
   prompt?
+  Decision: surface as a credential prompt.
 - What's the canonical-URL normalizer? (Trailing slashes, scheme, `www.`
   prefix, tracking query params can each produce N copies of "the same"
   feed if not normalized.)
+  Decision: Trailing slashes for URLs provided without paths. Trailing slashes where two users provide an otherwise identical URL and one includes a trailing slash and the other does not. Different query parameters count as different feeds, but order of query params should be normalized. www.<apex_domain> is the same as <apex_domain>. Other subdomains other than "www" are not equivalent to each other nor to the apex. http is **not supported**; only https. Examples:
+	  - https://example.com and https://example.com/ are the same. The latter is canonical.
+	  - https://example.com/ and https://www.example.com/ are the same. The latter is canonical.
+	  - https://web.example.com/ and https://www.example.com/ are different.
+	  - https://example.co.uk/ and https://www.example.co.uk/ are the same (apex domain with two dots is still an apex domain). The former is canonical.
+	  - https://web.example.com/ and https://example.com/ are different.
+	  - https://example.com/dir and https://example.com/dir/ are the same. The latter is canonical.
+	  - https://example.com/?foo=bar and https://example.com/?foo=baz are different.
+	  - https://example.com/?foo=bar&bin=baz and https://example.com/?bin=baz&foo=bar are the same. The latter is canonical (alphabetically normalized).
+	Exception: links used as a `<guid>` should not be normalized.
 
 ### Decision 2: Folder model — Dovecot or native
 
@@ -149,6 +162,8 @@ If a future version wants IMAP access to feeds (the way Gmail exposes labels
 as IMAP folders), expose it as a read-only IMAP *view* layered on the native
 model. Don't put the source of truth there.
 
+**Decision: A.**
+
 ### Decision 3: Third-party API compatibility
 
 **Question.** Should the Cabalmail RSS API be compatible with an existing
@@ -178,6 +193,10 @@ experience (BIMI, in-house Apple apps, etc.). Inviting third-party clients
 dilutes that, but for RSS — where the third-party ecosystem is mature and
 good — interoperability may be a stronger draw than UI consistency.
 
+**Decision: A.** Justification:
+- I'm building the RSS reader that I want to use, and I don't use Fever. Email defaults (e.g. archiving over deleting, manual mark-as-read) reflect my own preferences. I'm fine with making them configurable, but the defaults are what I want in my own email system. I intend to apply the same policy to RSS.
+- I'm building a vertically integrated stack, clients and servers, and don't want to build servers that support arbitrary clients, nor clients that support arbitrary servers. I don't want to be on the hook to change my implementation if a third party client or server changes there. And I don't want the user to blame my product for poor interoperability. I won't object to or seek to prevent a third party implementing my API, but I don't intend to encourage it either. (By the way, I'm not entirely convinced that I should be exposing IMAP externally, but until my mail clients are mature, I don't have a viable alternative.)
+
 ### Decision 4: Retention policy
 
 **Question.** How long do feed items live, and what bounds the storage?
@@ -199,11 +218,15 @@ Without a cap, storage compounds forever and the DB becomes the bottleneck.
 Favorites must be exempt or the favorite feature is a lie. A per-feed user
 override lets power users keep low-volume feeds forever.
 
+**Decision:** In-feed content is kept forever. Linked content is cached for N days where N is an operator-tuned setting.
+
 **Sub-decision.** When an item is dropped, does the per-user "read" state go
 with it (storage win) or persist as a tombstone keyed by item-GUID so a
 re-fetched item does not pop up as unread again (correctness win)?
 Recommend the tombstone — small per-row cost, eliminates a class of
 annoying bugs.
+
+**Decision: tombstone.**
 
 ## Scope cuts (in v1 or defer?)
 
@@ -217,8 +240,12 @@ every prospective user adds feeds one at a time, which kills adoption.
 Export is the corresponding exit story — without it, Cabalmail is a roach
 motel for feed lists. Both are small to implement.
 
+**Decision:** OPML is _in scope_.
+
 **Open sub-decision.** Import behavior on collision — additive with
 duplicate-feed detection by canonical URL, or replace? Recommend additive.
+
+**Decision:** Additive.
 
 ### Decision 6: Full-text article extraction
 
@@ -255,9 +282,13 @@ transform pipeline keyed on feed identity. Shipping the pipeline behind an
 opt-in toggle in v1 means the infrastructure is built; flipping the default
 later is a settings change.
 
+**Decision: C.** Attempting server-side extraction opens up too many potential rendering issues. If possible, I'd like the embedded web view to support reader mode. My current preferred feed client is Reeder, which seems to embed Apple's WebKit and supports Apple's reader view feature.
+
 **Operator clarification needed.** Confirm which interpretation you meant
 for "show article by default" in the original scope, so this decision lands
 on a coherent UX rather than a contradictory mix.
+
+**Clarification:** "show article by default" means, when a user selects a feed item from a channel, the client opens the linked article in an embedded web view. I prefer this approach not only due to the way it sidesteps rendering and fetching issues, but also because it assures that at the moment I open it, I'm getting the latest version with any corrections that might have occurred since initial publication.
 
 **Implementation cost.** Trafilatura, Mercury Parser, or Readability.js
 via Node all work. Lambda-friendly with a modest cold-start budget.
@@ -284,11 +315,15 @@ SMTP-IN, the `cabal-addresses` table, and the per-user mailbox model.
 Cost is mostly UI and the rule that routes mail-to-a-newsletter-address into
 feeds rather than the inbox.
 
+**Decision: B.** The only newsletters I currently subscribe to are from Substack, which also supports feeds (RSS or Atom or both, not sure). I generally ignore the emailed version and rely on the RSS feed. (The concern for corrections is particularly sharp with email because publishers cannot retract messages already in recipients' inboxes.) And As I say, I'm building the feed reader that I want primarily. But I'm fine with keeping it on the roadmap for other users.
+
 **Sub-decision.** One newsletter address per user with sender-based routing
 into feeds, or one address per newsletter-feed? Recommend per-feed
 addresses, generated on demand, revocable like normal Cabalmail addresses.
 Sender-based routing is fragile (newsletter `From:` addresses change without
 notice; same From: can carry multiple newsletter products).
+
+**Decision: deferred.** If we decide to move forward after the initial release, we can revisit this issue. Today, I'm inclined to agree with the on demand approach, but let's not consider that locked in unless/until we decide to move forward with the feature.
 
 ### Decision 8: Feed-to-email digests
 
@@ -299,6 +334,8 @@ deliverable as a daily/weekly email digest into the user's mailbox?
 UI and scheduling surface that v1 doesn't need. Worth noting now so the v1
 storage model doesn't preclude it (it shouldn't — digest generation is a
 pure read from the item store).
+
+**Decision: No.** I don't see this feature adding enough UX value to justify the effort. I've already commented on the rendering challenges. This will be even harder for inbox viewing where Javascript is generally not available.
 
 ## Operational posture
 
@@ -328,6 +365,7 @@ so they don't get lost.
   more than once per N minutes (default 15?). Prevents pathological
   "refresh" loops.
 
+**Decision:** Cabalmail wants to be a good Internet citizen and honor all conventions regarding polite, ethical, and responsible use of others' resources. I think that at least gestures at answers all of these. More specific guidance can be elucidated at implementation time.
 ### Decision 10: Feed health surface
 
 **Question.** When a feed dies (404, malformed XML, certificate expiry,
@@ -345,6 +383,8 @@ redirect loop), how does the user find out?
 **Recommendation: B in v1, C as opt-in in v1.1.** Visibility is table stakes;
 proactive notification needs care not to become noise (a feed flapping
 between 200 and 503 shouldn't notify on every flip).
+
+**Decision: B.** I'm skeptical of even wanting C. I think an in-app message ought to be enough. I might reconsider after using the product for a while.
 
 ## Per-feature design
 
@@ -374,11 +414,17 @@ in v1?
 cover the next-easiest; cookies are a modest extension. OAuth deferred to a
 follow-on with its own design pass.
 
+**Decision: C.** Additional cookie-handling requirements:
+- I'd like cookies to be scoped to each feed. E.g., if I have three Substack feeds, each feed has to set it's own cookies. This allows users to subscribe using distinct email addresses for each feed and prevents tracking across feeds.
+- The local storage objects for the embedded web view should likewise have per-feed scope. E.g. if I drill past the feed summary to a subscriber-only article on the publisher's site, I'd like to be able to authenticate on the site within the web view experience and have any stored tokens perserved across sessions. Scenario: I subscribe to two Substack newsletters with two different email addresses. I want to read subscriber-only article 1 from Substack feed A. I drill past the feed summary to see the article in web view. Because it's subscriber-only, I have to enter my Substack feed A email address and then enter a code sent to my inbox. I later want to read subscriber-only article 2 from Substack feed B. I drill past the feed summary to see the article in web view. Although I have previously authenticated for feed A, feed B has it's own local storage which is not intermingled with feed A's local storage. I therefore have to go through the same email validation using my Substack feed B email address. Thereafter, I can read subscriber-only articles in both feeds as long as each feeds locally stored tokens have not expired. I like having different emails for each feed, and having my feed reader mix up the authentication between them is inconvenient.
+
 **Storage.** Credentials in SSM SecureString, KMS-encrypted, keyed by
 `(user, feed_id)`. Consider whether shared canonical feeds (Decision 1B)
 inherit credentials from the first subscriber or whether each subscriber
 stores their own — recommend the latter (no cross-user credential leakage
 risk) which implies credentialed feeds bypass the shared-fetcher path.
+
+**Decisions:** No shortcuts with user credentials. Only public feeds get shared fetching.
 
 ### Decision 12: Notification defaults and granularity
 
@@ -400,6 +446,8 @@ users naturally think about it ("everything in this folder is important").
 Default off is safer than the alternatives and the push-budget math is
 friendlier. C is clever but surprising — users will be confused why some
 feeds notify and others don't.
+
+**Decision:** A for v1.0, B on the roadmap.
 
 ### Decision 13: Image and asset handling
 
@@ -427,6 +475,8 @@ before committing — if a typical article has 5 images at 200 KB each, a
 user with 50 articles a day at 90-day retention pulls 4.5 GB of image
 cache. Tractable, but not free.
 
+**Decision: C** with 7 day TTL.
+
 ### Decision 14: Filter and search
 
 Confirmed scope includes filter by read/favorite/all. Open questions:
@@ -442,22 +492,28 @@ Confirmed scope includes filter by read/favorite/all. Open questions:
 - **Tagging in addition to folders.** Folders are exclusive, tags are not.
   Useful but adds modeling complexity. **Recommend defer.**
 
+**Decisions:**
+- Can we use Aurora Postgres with tsvector?
+- No per-feed keyword muting.
+- I don't use tags with my feed reader today, and I don't miss them, so keep it on the roadmap for other users' benefit, but not for 1.0.
 ### Decision 15: Read-state and reading-assistance features
 
-| Feature | Description | v1 recommendation |
-|---|---|---|
-| Mark-all-as-read | Per feed, per folder, global | **In** — table stakes |
-| Save-for-later | Reading-intent flag distinct from favorite | Defer |
-| Snooze | Hide article until time T | Defer |
-| Keep-unread pin | Prevent auto-mark-read on a specific item | Defer |
-| Auto-mark-read on scroll | Vs. explicit only | **In**, user-toggle, default off |
-| Cross-feed dedup | Same article syndicated in N feeds appears once | Defer to v1.1 |
-| Reading-time estimate | Per article, from extracted text | **In** — trivial |
+| Feature                  | Description                                     | v1 recommendation                | Decision                                                                                                                 |
+| ------------------------ | ----------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Mark-all-as-read         | Per feed, per folder, global                    | **In** — table stakes            | **In**                                                                                                                   |
+| Save-for-later           | Reading-intent flag distinct from favorite      | Defer                            | **Defer**                                                                                                                |
+| Snooze                   | Hide article until time T                       | Defer                            | **Out**                                                                                                                  |
+| Keep-unread pin          | Prevent auto-mark-read on a specific item       | Defer                            | Marking as read should be **manual** by default. Auto-mark-as-read should be a per-user optional setting (not per-feed). |
+| Auto-mark-read on scroll | Vs. explicit only                               | **In**, user-toggle, default off | **Defer**                                                                                                                |
+| Cross-feed dedup         | Same article syndicated in N feeds appears once | Defer to v1.1                    | **Out**                                                                                                                  |
+| Reading-time estimate    | Per article, from extracted text                | **In** — trivial                 | **In** — make it optional and off unless user opts in (want to avoid distracting UI elements)                            |
 
 ### Decision 16: JSON Feed support
 
 Trivial to add alongside RSS/Atom; the parser library choice usually covers
 all three. **Recommendation: in v1.**
+
+**Decision: In**
 
 ### Decision 17: Cadence
 
@@ -470,6 +526,8 @@ news sources; per-user override bounded to operator-set min/max. Cadence
 is per-feed not per-user (a shared canonical feed under Decision 1B has a
 single fetch cadence — the maximum of any subscriber's requested cadence,
 clamped to the operator's bounds).
+
+**Decision:** I'd like the server to assess feed velocity over time and dynamically adjust cadence within operator-set bounds. I don't want to expose cadence settings to end users.
 
 ---
 
@@ -499,28 +557,34 @@ v1 data model and are cheap if done up front, expensive if retrofitted.
    2.2 once the decisions land? My instinct is that v1-as-described-here
    is 2.0; email-to-feed (Decision 7) plus full-text extraction
    (Decision 6) plus the basic reader UI is plenty for a single release.
+   **Decision**: 2.0.
 2. **Storage engine for feed items.** Extend DynamoDB usage (no joins,
    limited search), introduce Postgres (joins, full-text via tsvector,
    familiar to the operator?), or something else? Largely determined
    by Decision 4 (retention complexity) and Decision 14 (search).
+   **Decision:** Postgres Aurora tsvector.
 3. **Hosting.** Does the fetcher run as its own ECS service (long-running
    pollers, conditional-GET state per feed, per-feed cadence scheduler)
    or as a scheduled Lambda (simpler, but state lives elsewhere and cold
    starts complicate conditional GET)? My lean is a dedicated ECS service
    in the existing cluster.
+   **Decision:** Let's start with scheduled Lambda and see how well it scales.
 4. **Authorization.** Feed subscriptions are per-user Cognito identity,
    like every other Cabalmail per-user concept. Confirm.
+   **Confirmed.**
 5. **Multi-tenancy boundary.** With shared canonical feeds (Decision 1B),
    any per-user customization that touches *content* (e.g. server-side
    transforms with credentials) needs to be careful not to leak between
    subscribers. The recommended pattern — shared feeds are public-only,
    credentialed feeds are per-user — sidesteps this, but it should be
    stated explicitly as an invariant.
+   **Decision:** Any user customizations are **stored** in the cloud but **applied** on the client. This allows public feeds to be shared and also customized.
 6. **Client cut.** v1 ships in which clients — React admin, iOS, macOS,
    Android, all at once, or staged? The Apple clients can't be staged
    independently because they share `CabalmailKit`; the React app is
    independent of both. Android will likely lag (still in 1.1.x
    roadmap).
+   **Decision:** Phased rollout is fine. 2.0.x has plenty of unused values for x.
 
 ## Next step
 
