@@ -11,24 +11,48 @@ consume a Cabalmail-native API and do not need to implement RSS/Atom parsing
 themselves.
 
 This document is the requirements pass. It states goals, non-goals, and
-confirmed scope, then enumerates the decision points whose resolution is a
-precondition to writing an implementation plan. Each decision lists options,
-trade-offs, and a recommended starting position. Once the operator has worked
-through these decisions, this directory will gain a companion
-`rss-implementation-plan.md` modeled on the existing 1.1.x plans
-(see [`bimi.md`](./../1.1.x/bimi.md),
-[`push-notifications.md`](./../1.1.x/push-notifications.md)).
+confirmed scope, then enumerates the decision points the operator
+resolved. Each decision lists the options, trade-offs, and a recommended
+starting position; the operator's inline decisions follow the
+recommendations. The companion
+[`rss-implementation-plan.md`](./rss-implementation-plan.md) (modeled on
+the existing 1.1.x plans — see
+[`bimi.md`](./../1.1.x/bimi.md),
+[`push-notifications.md`](./../1.1.x/push-notifications.md)) sequences
+the work.
 
-This is parked under `2.0.x` for directory convention. The actual scope may
-end up spanning 2.0 / 2.1 / 2.2 once the in-scope cuts below are settled —
-that is itself one of the questions for the operator.
+This directory is `2.0.x` per the operator's answer to Open Q1; the
+release version is 2.0. The plan splits the work across multiple patch
+versions (2.0.0, 2.0.1, ...).
+
+## Revisions after design exploration
+
+After the operator's inline decisions were recorded, a phase-1 design
+pass surfaced cost-shape findings that revised the data-layer choice and
+added one new requirement. The original decisions remain inline as
+historical record; **Revised decision** annotations capture the current
+state. The companion
+[`rss-implementation-plan.md`](./rss-implementation-plan.md) reflects
+the revised state throughout.
+
+- **Decisions 14 + Open Q2 (search + storage engine):** Aurora Postgres
+  has an idle floor of ~$45/env/month that scale-to-zero doesn't help in
+  practice (the fetcher tick would keep the cluster warm). Hard to
+  justify at hobby scale. **DynamoDB is now the sole data store.**
+  Server-side full-text search is deferred indefinitely; **per-feed FTS
+  moves to Apple clients only**, backed by SQLite/FTS5. React has no
+  search; cross-feed search remains out.
+- **New Decision 18 (offline reading on Apple):** the local item cache
+  that backs Apple-side FTS also serves offline reading. Promoted from
+  implicit to a first-class requirement to match the operator's
+  habitual use of offline reading on the current reader.
 
 ## Goals
 
 - Every Cabalmail user can subscribe to RSS/Atom (and JSON Feed) feeds and
   read them across all Cabalmail clients with consistent per-user state.
-- Feeds are fetched server-side on a cadence the operator and (within
-  bounds) the user controls.
+- Feeds are fetched server-side on an adaptive per-feed cadence within
+  operator-set bounds (no user-exposed cadence control, per D17).
 - Per-feed display preferences (order, summary-vs-article default,
   reader-vs-native styling default, notifications) are persisted and synced
   across devices.
@@ -45,9 +69,11 @@ that is itself one of the questions for the operator.
 - Non-text media as a first-class concept. Audio and video play if embedded
   in an article via the web rendering engine; podcasts as a distinct media
   type with playback queue and per-episode progress sync are deferred.
-- Automated per-feed URL or content rewriting beyond simple cases. The
-  "broken-link feed fixer" idea is a follow-on; v1 ships the server-side
-  transform pipeline that makes it possible, not the rule editor.
+- Automated per-feed URL or content rewriting. The "broken-link feed
+  fixer" idea is a follow-on; v1 does not ship the server-side transform
+  infrastructure that would make it possible (per D6 = C, the server
+  does not extract, rewrite, or otherwise transform item content; it
+  fetches, parses, and stores as-delivered).
 - Social-style features (sharing to public profiles, following users,
   recommendations).
 - Native non-RSS sources (Mastodon, ATProto, YouTube as channels, GitHub
@@ -496,6 +522,17 @@ Confirmed scope includes filter by read/favorite/all. Open questions:
 - Can we use Aurora Postgres with tsvector?
 - No per-feed keyword muting.
 - I don't use tags with my feed reader today, and I don't miss them, so keep it on the roadmap for other users' benefit, but not for 1.0.
+
+**Revised decision (after design exploration):** Server-side full-text
+search deferred indefinitely (the Aurora-vs-DynamoDB cost comparison
+under Open Q2 made Postgres tsvector too expensive at hobby scale, and
+OpenSearch is worse). The operator confirmed cross-feed FTS is not a
+real-world need. **Per-feed FTS moves to Apple clients only,** backed
+by a local SQLite/FTS5 item cache that doubles as the offline-reading
+store (see new Decision 18). React has no search in v1; this is a
+documented limitation. Cross-feed search remains out. The "per-feed
+keyword mute" and "tagging" decisions above are unchanged.
+
 ### Decision 15: Read-state and reading-assistance features
 
 | Feature                  | Description                                     | v1 recommendation                | Decision                                                                                                                 |
@@ -529,6 +566,30 @@ clamped to the operator's bounds).
 
 **Decision:** I'd like the server to assess feed velocity over time and dynamically adjust cadence within operator-set bounds. I don't want to expose cadence settings to end users.
 
+### Decision 18: Offline reading on Apple clients
+
+*Added after design exploration; not present in the original decision set.*
+
+**Question.** The local item cache that backs Apple-side per-feed FTS
+(see **Revised decision** under Decision 14) naturally also enables
+offline reading. Should offline reading be a first-class requirement?
+
+**Decision: yes.** The operator uses offline reading regularly on the
+current reader (Reeder) and expects parity. Offline reading covers
+in-feed content (summary plus any `content_html` the feed delivered).
+Articles opened in the embedded web view still require network — per
+Decision 6 we do not extract or cache article bodies server-side, and
+the WKWebView's article rendering is a live publisher fetch. Images
+inside in-feed content rely on whatever the embedded `URLCache` happens
+to have picked up from prior online viewing; explicit aggressive
+pre-cache of image bytes is deferred.
+
+Offline mutations (mark-as-read, favorite/unfavorite) are queued in a
+small local pending-mutations table and dispatched to the server on
+reconnect with last-write-wins semantics. Cache retention defaults and
+the cross-device inconsistency story are implementation details captured
+in the companion plan.
+
 ---
 
 ## Cross-cutting items to design into v1 even if features defer
@@ -536,33 +597,37 @@ clamped to the operator's bounds).
 These exist to keep doors open. They are not optional; they constrain the
 v1 data model and are cheap if done up front, expensive if retrofitted.
 
-- **Tombstone state for dropped items** (Decision 4 sub-decision). The
-  item ID must be canonical-stable so future features (cross-feed dedup,
-  retention changes) can retrofit.
-- **Per-feed transform pipeline** (Decision 6). Even if the URL-fixer
-  defers and full-text extraction is opt-in, the pipeline that runs
-  transforms on fetched-and-parsed items should exist with at least one
-  transform (extraction) implemented. Future transforms (rewrite, mute,
-  tag-on-match) plug in without re-architecting.
 - **Per-user-per-item state separate from item content.** Required by
-  Decision 1 (shared feeds) and Decision 4 (item dropping preserves
-  read state). The `(user, item_guid) -> {read, favorite, ...}` table is
-  the keystone of the storage model.
+  Decision 1 (shared feeds) so per-user mutations don't write into
+  shared item rows. The `(user, item_id) -> {read, favorite, ...}`
+  table is the keystone of the storage model.
 - **Canonical URL normalizer** (Decision 1 sub-decision). Must exist
   before two users subscribe to "the same" feed via different URL forms.
+
+*(Two items previously listed here are moot under the operator's
+decisions: a tombstone table — D4 chose "items kept forever," so items
+are never dropped — and a per-feed server-side transform pipeline — D6
+chose option C, no server-side extraction or rewriting. The
+implementation plan does not include either.)*
 
 ## Open questions for the operator
 
 1. **Roadmap version.** Does this fit at 2.0, or does it span 2.0 / 2.1 /
    2.2 once the decisions land? My instinct is that v1-as-described-here
-   is 2.0; email-to-feed (Decision 7) plus full-text extraction
-   (Decision 6) plus the basic reader UI is plenty for a single release.
+   is 2.0; the basic reader UI plus all of the in-scope items above is
+   plenty for a single release.
    **Decision**: 2.0.
 2. **Storage engine for feed items.** Extend DynamoDB usage (no joins,
    limited search), introduce Postgres (joins, full-text via tsvector,
    familiar to the operator?), or something else? Largely determined
    by Decision 4 (retention complexity) and Decision 14 (search).
    **Decision:** Postgres Aurora tsvector.
+   **Revised decision (after design exploration):** DynamoDB as the sole
+   data store; Aurora Postgres deferred indefinitely. The original choice
+   was undone after Aurora's ~$45/env/month idle floor (scale-to-zero
+   doesn't help in practice because the fetcher tick would keep the
+   cluster warm) proved hard to justify at hobby scale. Search moves to
+   the client per the **Revised decision** under Decision 14.
 3. **Hosting.** Does the fetcher run as its own ECS service (long-running
    pollers, conditional-GET state per feed, per-feed cadence scheduler)
    or as a scheduled Lambda (simpler, but state lives elsewhere and cold
@@ -588,9 +653,10 @@ v1 data model and are cheap if done up front, expensive if retrofitted.
 
 ## Next step
 
-When the decisions above are made (or at least narrowed), this directory
-gains a companion `rss-implementation-plan.md` modeled on the existing
-1.1.x plans. The implementation plan will sequence the changes into
-shippable phases, name the modules and services, identify the storage
-schema and API shape, and lay out the migration path from "no RSS in 1.x"
-to "RSS GA in 2.x".
+The companion [`rss-implementation-plan.md`](./rss-implementation-plan.md)
+sequences the changes into shippable phases, names the modules and
+services, identifies the data model and API shape, and lays out the
+migration path from "no RSS in 1.x" to "RSS GA in 2.x". It reflects the
+**Revised decision** annotations above (DynamoDB primary store; per-feed
+FTS on Apple clients only; offline reading on Apple as a first-class
+requirement).
