@@ -128,4 +128,77 @@ describe('Folders rail', () => {
     await act(async () => { fireEvent.click(btns[0]); });
     expect(mockUnsubscribe).toHaveBeenCalledWith('Receipts');
   });
+
+  describe('collapse persistence', () => {
+    it('persists Subscribed/All section collapse to localStorage', async () => {
+      const { unmount } = renderFolders();
+      await waitFor(() => expect(screen.getByText('Inbox')).toBeInTheDocument());
+      const subHeader = screen.getByText(/^Subscribed$/i).closest('[role="button"]');
+      const allHeader = screen.getByText(/^All folders$/i).closest('[role="button"]');
+      await act(async () => { fireEvent.click(subHeader); });
+      await act(async () => { fireEvent.click(allHeader); });
+      expect(localStorage.getItem('folder_collapsed_sub')).toBe('true');
+      expect(localStorage.getItem('folder_collapsed_all')).toBe('true');
+      unmount();
+      renderFolders();
+      await waitFor(() => {
+        expect(
+          screen.getByText(/^Subscribed$/i).closest('[role="button"]')
+        ).toHaveAttribute('aria-expanded', 'false');
+        expect(
+          screen.getByText(/^All folders$/i).closest('[role="button"]')
+        ).toHaveAttribute('aria-expanded', 'false');
+      });
+    });
+
+    it('per-folder collapse hides descendants and persists', async () => {
+      mockGetFolderList.mockResolvedValue({
+        data: {
+          folders: ['INBOX', 'Work', 'Work/Q1', 'Work/Q2'],
+          sub_folders: [],
+        },
+      });
+      const { unmount } = renderFolders({ folder: 'INBOX' });
+      await waitFor(() => expect(screen.getByText('Work')).toBeInTheDocument());
+      expect(screen.getByText('Q1')).toBeInTheDocument();
+      expect(screen.getByText('Q2')).toBeInTheDocument();
+      const collapseBtn = screen.getByRole('button', { name: /collapse work/i });
+      await act(async () => { fireEvent.click(collapseBtn); });
+      expect(screen.queryByText('Q1')).not.toBeInTheDocument();
+      expect(screen.queryByText('Q2')).not.toBeInTheDocument();
+      expect(JSON.parse(localStorage.getItem('folder_collapsed_paths'))).toEqual(['Work']);
+      unmount();
+      renderFolders({ folder: 'INBOX' });
+      await waitFor(() => expect(screen.getByText('Work')).toBeInTheDocument());
+      expect(screen.queryByText('Q1')).not.toBeInTheDocument();
+    });
+
+    it('auto-expands ancestors of the active selection', async () => {
+      mockGetFolderList.mockResolvedValue({
+        data: {
+          folders: ['INBOX', 'Work', 'Work/Q1', 'Work/Q2'],
+          sub_folders: [],
+        },
+      });
+      localStorage.setItem('folder_collapsed_paths', JSON.stringify(['Work']));
+      renderFolders({ folder: 'Work/Q1' });
+      await waitFor(() => expect(screen.getByText('Q1')).toBeInTheDocument());
+      expect(screen.getByText('Q2')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(JSON.parse(localStorage.getItem('folder_collapsed_paths'))).toEqual([]);
+      });
+    });
+
+    it('does not render a chevron on leaf folders', async () => {
+      mockGetFolderList.mockResolvedValue({
+        data: {
+          folders: ['INBOX', 'Receipts'],
+          sub_folders: [],
+        },
+      });
+      renderFolders({ folder: 'INBOX' });
+      await waitFor(() => expect(screen.getByText('Receipts')).toBeInTheDocument());
+      expect(screen.queryByRole('button', { name: /collapse receipts/i })).not.toBeInTheDocument();
+    });
+  });
 });

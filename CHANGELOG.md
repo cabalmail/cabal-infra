@@ -22,6 +22,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cross-folder is Phase 3. The existing raw-syntax `/search` endpoint
   is unchanged and continues to power the Apple client until Phase 5
   cuts it over.
+- Collapsible folder list on the React admin app and the Apple
+  (iOS/iPadOS/macOS/visionOS) clients. The Subscribed and All
+  folders section headers collapse and expand, and within All
+  folders any parent that has child folders gets a chevron that
+  hides or shows its descendants. All collapse state is persisted
+  (localStorage on React, `@AppStorage` on Apple) so the sidebar
+  comes up the way the user left it. Selecting a folder
+  auto-expands any of its collapsed ancestors so the active
+  selection never disappears behind a stale collapse.
 
 ### Changed
 - The per-envelope JSON-decoder helpers (`decode_subject`,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { folderMeta, orderFolders } from './folderMeta';
+import { ancestorsOf, folderMeta, orderFolders } from './folderMeta';
 
 describe('folderMeta', () => {
   it('classifies system folders with their kind and display label', () => {
@@ -68,5 +68,24 @@ describe('orderFolders', () => {
   it('skips intermediate path segments that are not themselves folders', () => {
     const ordered = orderFolders(['Projects/Alpha', 'Other']);
     expect(ordered.map((f) => f.id)).toEqual(['Other', 'Projects/Alpha']);
+  });
+
+  it('marks user folders with descendants as hasChildren, leaves leaves alone', () => {
+    const ordered = orderFolders(['INBOX', 'Work', 'Work/Q1', 'Receipts']);
+    const byId = Object.fromEntries(ordered.map((f) => [f.id, f.hasChildren]));
+    expect(byId).toEqual({
+      INBOX: false,
+      Work: true,
+      'Work/Q1': false,
+      Receipts: false,
+    });
+  });
+});
+
+describe('ancestorsOf', () => {
+  it('returns each /-delimited parent up to but not including the leaf', () => {
+    expect(ancestorsOf('Work')).toEqual([]);
+    expect(ancestorsOf('Work/Q1')).toEqual(['Work']);
+    expect(ancestorsOf('Work/Q1/Archive')).toEqual(['Work', 'Work/Q1']);
   });
 });
