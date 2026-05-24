@@ -1,0 +1,336 @@
+# Container Runtime Hardening Plan
+
+## Context
+
+The three mail-tier containers (imap, smtp-in, smtp-out) and the optional monitoring tier (prometheus, alertmanager, grafana, exporters, kuma, ntfy, healthchecks) were lifted off the original Chef/EC2 baseline during the 0.4.x containerisation work. The migration faithfully preserved the *behaviour* of the EC2 install — same sendmail `.mc` macros, same Dovecot conf, same supervisord process tree — but did not replace EC2-era assumptions with container-era ones. The result is a stack of `amazonlinux:2023`-based images running as root with full Linux capabilities, mounting EFS volumes without `noexec`, signing DKIM for any source IP that can reach the daemon, accepting unbounded message sizes, and shipping a fail2ban that is wired into supervisord but commented out.
+
+None of these have produced an incident. Together they form a meaningful blast-radius surface that we can shrink in deliberate, mostly-additive PRs.
+
+This plan is the container-and-mail-tier counterpart to [`application-surface-hardening-plan.md`](./application-surface-hardening-plan.md) (which covers the Lambda Python code) and [`iac-quality-gates-plan.md`](./iac-quality-gates-plan.md) (which catches the IaC-flaggable issues). The Trivy IaC scanner from that plan will pick up a subset of these findings once it lands; this plan addresses the architectural and runtime-config issues that scanners would not catch.
+
+Six themes:
+
+1. **Runtime privilege posture.** Drop `NET_ADMIN`, set `readOnlyRootFilesystem`, `noNewPrivileges`, and a `user` override per container.
+2. **Image supply chain.** Pin `amazonlinux:2023` and the third-party Prometheus/Grafana/etc. images to digest; standardise the rebuild cadence; enable ECR scan-on-push.
+3. **Sendmail hardening.** Add `confMAX_MESSAGE_SIZE`, `confCONNECTION_RATE_THROTTLE`, `confMAX_DAEMON_CHILDREN`, `restrictmailq`. Drop weak AUTH mechanisms on smtp-in. Atomic config writes.
+4. **Dovecot hardening.** Flip `disable_plaintext_auth = yes`. Add login-attempt rate limiting via Dovecot's own knobs (the only viable replacement for fail2ban in the container-network model).
+5. **OpenDKIM scope.** Replace `TrustedHosts = 0.0.0.0/0` with `127.0.0.1` + the loopback shape sendmail actually uses to hand mail to the milter.
+6. **EFS posture.** Add `transit_encryption = ENABLED` to the IMAP mailstore mount; enforce `nosuid` and (where feasible) `noexec` on the mailstore filesystem; clean up the fail2ban dead code.
+
+The themes ship as five phases. Phase 4 (Dovecot rate limiting) is the highest-touch piece — it changes auth behaviour. The rest are largely transparent.
+
+## Goals
+
+- Every mail-tier container runs with `readOnlyRootFilesystem = true`, `linuxParameters.initProcessEnabled = true`, the `no-new-privileges` flag set, and only the capabilities it actually needs (default: drop all; opt back in per tier if and when required).
+- No tier requests `NET_ADMIN` once fail2ban is gone. The capability was added solely to support fail2ban's iptables manipulation, and fail2ban has been commented out of supervisord since before this audit.
+- Every container image — first-party and third-party — referenced by ECS is pinned to a SHA256 digest, not a floating tag. Renovate/Dependabot opens upgrade PRs.
+- OpenDKIM signs mail only from local sendmail (loopback). A misconfigured network rule that exposes port 25 publicly does not turn the container into a free DKIM-signing oracle for arbitrary external senders.
+- Dovecot rejects plaintext auth when the connection is not TLS-protected (which, behind the NLB, is "always — TLS terminates at NLB for IMAP, and end-to-end for submission"). Successive failed logins from the same source IP back off via Dovecot's `auth_failure_delay` and `process_limit`-style knobs.
+- Sendmail refuses messages larger than 50 MB, caps daemon child processes, throttles connection bursts from a single IP, and refuses non-postmaster mail-queue inspection.
+- The IMAP mailstore is mounted with transit encryption on. EFS volumes use `nosuid` at the mount layer.
+- The image rebuild path catches new CVEs within a defined window (nightly Trivy scan; quarterly base-image bump cadence).
+
+## Non-goals
+
+- Replacing sendmail. There is a separate [`docs/unreleased/sendmail-replacement.md`](../unreleased/sendmail-replacement.md) plan; the hardening here applies *to the current sendmail* and is no-impact on a future replacement (the macros described are universal enough that any maintained MTA has equivalents).
+- Replacing supervisord with a multi-container task definition (one process per container). Cost-vs-complexity calculus is unchanged from the 0.4.x decision; revisit if/when the supervisord boundary becomes a problem.
+- Adding a sidecar fail2ban or Suricata pattern. The container-network model means container-level packet inspection is the wrong layer; rate limiting belongs at the NLB or in a WAF (out of scope here — see [`identity-iam-hardening-plan.md`](./identity-iam-hardening-plan.md) for the per-endpoint rate-limit story).
+- Replacing the `amazonlinux:2023` base with a distroless variant. The sendmail + dovecot + opendkim + supervisord stack would not survive on distroless without significant work.
+- Re-encoding TLS-1.2-to-TLS-1.3 ciphers. TLS 1.2 with sane cipher preferences is the floor we ship today; TLS 1.3 is supported by both Dovecot and sendmail and we should opportunistically negotiate it, but the floor stays at 1.2 for compatibility with older IMAP clients on the user's bring-your-own-MUA path.
+- Seccomp/AppArmor profiles. ECS support is partial and per-runtime; revisit when the runtime story is stable.
+- Migrating to ECS Fargate (the no-EC2 model). Fargate constrains some of what we'd want to do here (capabilities, mount options); the EC2 launch model is fine for our shape.
+
+## Current state (audit)
+
+### Runtime privilege
+
+All three mail tiers add `NET_ADMIN` ([`terraform/infra/modules/ecs/task-definitions.tf:63-67, 134-138, 242-246`](../../terraform/infra/modules/ecs/task-definitions.tf)). The capability was added so fail2ban could manipulate iptables. fail2ban is commented out in every tier's supervisord config: [`docker/imap/supervisord.conf:37-40`](../../docker/imap/supervisord.conf), [`docker/smtp-in/supervisord.conf:38-40`](../../docker/smtp-in/supervisord.conf), [`docker/smtp-out/supervisord.conf:51-54`](../../docker/smtp-out/supervisord.conf). The capability is unused.
+
+No `readOnlyRootFilesystem`, no `linuxParameters.initProcessEnabled`, no `securityContext.noNewPrivileges`. All containers run as root for the duration of supervisord; sendmail and dovecot drop privileges via their own `User=` directives once spawned, but the container's process 1 is root, and any process the entrypoint shells out to runs as root by default.
+
+The non-mail tiers fare somewhat better. Prometheus/Alertmanager/Grafana inherit non-root users from their upstream images, but the Dockerfile `USER` directive is not set explicitly, so a change to upstream image conventions would silently switch them.
+
+### Image supply chain
+
+All `FROM` lines reference floating tags: `amazonlinux:2023`, `prom/prometheus:v3.5.0`, `grafana/grafana:11.4.0`, etc. None are digest-pinned. The CI pipeline (`.github/workflows/app.yml`) rebuilds on push but does not record provenance; tag re-pulls are silent on the next rebuild.
+
+ECR repositories are created in [`terraform/infra/modules/ecr/main.tf`](../../terraform/infra/modules/ecr/main.tf) without `image_scanning_configuration { scan_on_push = true }` and without `image_tag_mutability = "IMMUTABLE"`. Re-tagging a published image to a different SHA is permitted.
+
+### Sendmail config
+
+All three templates set `confPRIVACY_FLAGS` but omit `restrictmailq` in two of them ([`docker/templates/in-sendmail.mc:8`](../../docker/templates/in-sendmail.mc), [`docker/templates/out-sendmail.mc:8`](../../docker/templates/out-sendmail.mc)). The IMAP template has `restrictqrun` but not `restrictmailq`.
+
+No template defines `confMAX_MESSAGE_SIZE`, `confMAX_DAEMON_CHILDREN`, or `confCONNECTION_RATE_THROTTLE`. A burst of inbound connections from a single IP is bounded only by the per-tier ECS container's memory ceiling.
+
+The smtp-in template enables a generous AUTH mechanisms list — `EXTERNAL GSSAPI DIGEST-MD5 CRAM-MD5 LOGIN PLAIN` ([`docker/templates/in-sendmail.mc:27-29`](../../docker/templates/in-sendmail.mc)) — but smtp-in is the inbound relay; it should not be doing AUTH at all (submission auth is on smtp-out via Dovecot). DIGEST-MD5 and CRAM-MD5 are weak by modern standards (RFC 6331 obsoleted DIGEST-MD5).
+
+[`docker/shared/generate-config.sh`](../../docker/shared/generate-config.sh) writes sendmail maps directly to their final paths (`/etc/mail/virtusertable`, etc.) rather than write-temp-then-rename. A SIGHUP or restart that lands mid-write reads a partial file. Race window is small (millisecond-scale) but non-zero.
+
+### Dovecot config
+
+Both IMAP and SMTP-OUT submission set `disable_plaintext_auth = no` ([`docker/imap/configs/dovecot/10-auth.conf:1`](../../docker/imap/configs/dovecot/10-auth.conf), [`docker/smtp-out/configs/dovecot/10-auth.conf:1`](../../docker/smtp-out/configs/dovecot/10-auth.conf)). The architectural justification is that TLS terminates at the NLB for IMAP (port 993 → 143) and at Dovecot itself for submission (the NLB passes 587/465 through TCP unencrypted). Anything that talks to Dovecot inside the container's network namespace can therefore do plaintext auth. If the NLB is ever bypassed (operator running `kubectl port-forward`-equivalent, sidecar shipped, ECS Exec session for debugging), Dovecot will accept credentials in clear.
+
+`ssl_min_protocol = TLSv1.2` is set in the entrypoint [`docker/shared/entrypoint.sh:110`](../../docker/shared/entrypoint.sh). No explicit cipher list — Dovecot's default is fine but unspecified is unspecified.
+
+IMAP `mail_max_userip_connections = 100` is set. No `login_max_processes`, no `auth_failure_delay`, no `auth_cache_size` settings that would slow down brute-force.
+
+### OpenDKIM scope
+
+[`docker/shared/generate-config.sh:230`](../../docker/shared/generate-config.sh) writes `/etc/opendkim/TrustedHosts` with a single line: `0.0.0.0/0\n`. [`docker/smtp-out/configs/opendkim.conf:15-16`](../../docker/smtp-out/configs/opendkim.conf) references the same file for both `ExternalIgnoreList` and `InternalHosts`. The effect is "any source IP is treated as internal," meaning OpenDKIM signs any matching `From:` regardless of source.
+
+The blast radius is moderated by the SigningTable: [`gen_dkim_signingtable`](../../docker/shared/generate-config.sh) writes `*@<subdomain>.<tld> cabal._domainkey.<subdomain>.<tld>` for each configured subdomain. A message with `From: arbitrary@external.com` would not match any SigningTable entry and would not be signed. So the practical risk is bounded: an attacker who reaches port 25 on the container *and* presents a `From:` on a domain Cabalmail signs (which they cannot do unless they also pass the dovecot auth layer for that user) gets a signature.
+
+Still, defence in depth: the failure mode is "any single piece of the chain breaks and we are an open DKIM signer." That is the kind of finding worth fixing while it is cheap.
+
+### EFS posture
+
+The IMAP task's EFS mount is plain: `file_system_id = var.efs_id; root_directory = "/"` ([`terraform/infra/modules/ecs/task-definitions.tf:80-86`](../../terraform/infra/modules/ecs/task-definitions.tf)). No `transit_encryption`, no `authorization_config`. The smtp-out queue mount does set `transit_encryption = "ENABLED"` and uses an access point ([`task-definitions.tf:266-276`](../../terraform/infra/modules/ecs/task-definitions.tf:266)), so the model is there — it just was not retrofitted onto IMAP when the access-point pattern landed.
+
+The EFS filesystem itself is encrypted at rest ([`terraform/infra/modules/efs/main.tf`](../../terraform/infra/modules/efs/main.tf)); transit encryption is the missing piece for IMAP.
+
+Mount options for `noexec`/`nosuid`/`nodev` are not currently exposable through `efs_volume_configuration`. ECS sets reasonable defaults; the access-point posture is the practical control surface.
+
+### fail2ban dead config
+
+The supervisord entries are commented out; the entrypoint nevertheless writes `/etc/fail2ban/jail.local` with the VPC CIDR allowlist ([`docker/shared/entrypoint.sh:159-171`](../../docker/shared/entrypoint.sh)) and the `NET_ADMIN` capability is still requested. The image install also still pulls in `fail2ban` via `dnf install`. Code, capability, and runtime artefact are all present for a feature that is off.
+
+## Target state
+
+### Phase 1 — Drop fail2ban dead weight; drop NET_ADMIN
+
+Each tier's `Dockerfile` removes `fail2ban` from the `dnf install` line and the `supervisord.conf` `[program:fail2ban]` blocks are deleted (not just commented). [`docker/shared/entrypoint.sh:159-171`](../../docker/shared/entrypoint.sh)'s jail.local stanza is removed.
+
+[`terraform/infra/modules/ecs/task-definitions.tf`](../../terraform/infra/modules/ecs/task-definitions.tf) drops the `linuxParameters.capabilities.add = ["NET_ADMIN"]` blocks on all three mail tiers.
+
+This is a no-op for behaviour (nothing using the cap) and a real reduction in attack surface (escape-to-host scenarios that exploit `NET_ADMIN` are off the table).
+
+### Phase 2 — Container runtime posture
+
+Add to each mail-tier container definition:
+
+```hcl
+linuxParameters = {
+  initProcessEnabled = true
+  capabilities       = { drop = ["ALL"], add = [] }  # opt back in below
+}
+readonlyRootFilesystem = true
+mountPoints = concat(<existing>, [
+  { sourceVolume = "tmp",     containerPath = "/tmp",      readOnly = false },
+  { sourceVolume = "var-run", containerPath = "/var/run",  readOnly = false },
+])
+```
+
+The volumes are tmpfs (small) via:
+
+```hcl
+volume {
+  name = "tmp"
+  host_path = null  # tmpfs via docker `--tmpfs` equivalent on ECS EC2
+}
+```
+
+ECS on EC2 supports tmpfs via `linuxParameters.tmpfs`. Use that rather than the `volume` shape:
+
+```hcl
+linuxParameters = {
+  initProcessEnabled = true
+  tmpfs = [
+    { containerPath = "/tmp",     size = 64,  mountOptions = ["rw","nosuid","nodev","noexec"] },
+    { containerPath = "/var/run", size = 32,  mountOptions = ["rw","nosuid","nodev"] },
+  ]
+  capabilities = { drop = ["ALL"], add = [] }
+}
+```
+
+Per-tier capability adds:
+
+- **imap**: none beyond defaults. sendmail/dovecot drop privileges internally.
+- **smtp-in**: none.
+- **smtp-out**: none (DKIM key access is via filesystem permissions, not capabilities).
+
+`dockerSecurityOptions = ["no-new-privileges:true"]` on each container.
+
+This phase is the highest-risk single change. The migration order is dev → stage → prod with at least one mail-roundtrip end-to-end test per environment between flips. Specific things that may break:
+
+- Sendmail's per-startup config compile writes to `/etc/mail/*.db` — that path needs to be writable. Mitigate by writing the compiled `.db` files to a tmpfs path and pointing sendmail at it via `confSERVICE_SWITCH_FILE`, or by relaxing read-only-root to just the parts that don't need to mutate at runtime.
+- `/var/log` paths used by sendmail/dovecot. Stdout/stderr-route them (already mostly done) so no on-disk log file is needed.
+- `/etc/aliases.db` regeneration on entrypoint.
+
+Pre-flight: a development-environment soak under load is essential before stage rollout. If any tier proves too tightly coupled to a writable root, downgrade that single tier to `readonlyRootFilesystem = false` and capture the reason in a follow-up.
+
+### Phase 3 — Image digest pinning + ECR scan on push
+
+Three pieces:
+
+1. Each Dockerfile's `FROM` line gains a digest. `FROM amazonlinux:2023@sha256:<...>`. Renovate config gets a `docker` ecosystem entry that auto-bumps the digest when the upstream tag advances.
+2. The ECS task definitions reference ECR images by digest, not by tag. The image-tag-via-SSM pattern stays; the value in SSM is the *digest* (`<repo>@sha256:<...>`) instead of `<repo>:sha-<8>`. `.github/scripts/deploy-ecs-service.sh` extracts the digest from `docker buildx --metadata-file` and writes it to SSM.
+3. ECR repositories gain `image_scanning_configuration { scan_on_push = true }` and `image_tag_mutability = "IMMUTABLE"` in [`terraform/infra/modules/ecr/main.tf`](../../terraform/infra/modules/ecr/main.tf). Findings surfaced via the existing `app.yml` deploy job (poll `aws ecr describe-image-scan-findings` after push; warn on HIGH/CRITICAL until a baseline is established, then fail).
+
+Nightly Trivy scan against the current digest-pinned images, results to GitHub Code Scanning (same surface as the Trivy IaC scan from [`iac-quality-gates-plan.md`](./iac-quality-gates-plan.md)).
+
+### Phase 4 — Dovecot plaintext-off + login throttling
+
+Flip [`docker/imap/configs/dovecot/10-auth.conf:1`](../../docker/imap/configs/dovecot/10-auth.conf) and [`docker/smtp-out/configs/dovecot/10-auth.conf:1`](../../docker/smtp-out/configs/dovecot/10-auth.conf) to `disable_plaintext_auth = yes`. Add to both configs:
+
+```
+auth_failure_delay = 2 secs
+auth_mechanisms = plain login
+```
+
+Add to IMAP:
+
+```
+service imap-login {
+  process_limit = 1024
+  client_limit = 1
+}
+service auth {
+  client_limit = 4096
+}
+```
+
+And to submission:
+
+```
+service submission-login {
+  process_limit = 512
+  client_limit = 1
+}
+```
+
+The TLS terminator question: IMAP traffic arrives at the container in clear (NLB terminates 993→143). `disable_plaintext_auth = yes` would reject the IMAP login path unless we tell Dovecot the connection is *effectively* TLS. Two options:
+
+1. **`login_trusted_networks = <NLB subnet CIDR>`.** Dovecot treats sessions from these source IPs as already-TLS for auth purposes. The NLB source IP range is stable (the NLB IPs themselves are stable; backing them with proxy protocol is not configured today). Risk: anyone inside the VPC who can connect to the IMAP service port can bypass TLS. Acceptable given the VPC posture.
+2. **End-to-end TLS (NLB passthrough mode), Dovecot terminates TLS itself.** Higher operational complexity; cert rotation has to land at Dovecot via SSM/EFS. Defer.
+
+Recommendation: option (1), with the NLB-subnet CIDR plumbed as an env var (`LOGIN_TRUSTED_NETWORKS`) injected by the ECS task definition. The entrypoint writes it to the dovecot config.
+
+For submission, NLB does TCP passthrough; Dovecot already terminates TLS; `disable_plaintext_auth = yes` works out of the box without trusted-networks games.
+
+### Phase 5 — Sendmail and OpenDKIM hardening
+
+#### Sendmail .mc templates
+
+Add to all three:
+
+```m4
+define(`confMAX_MESSAGE_SIZE',         `52428800')dnl
+define(`confMAX_DAEMON_CHILDREN',      `40')dnl
+define(`confCONNECTION_RATE_THROTTLE', `5')dnl
+define(`confREJECT_LOG_INTERVAL',      `3h')dnl
+```
+
+Append `restrictmailq` to `confPRIVACY_FLAGS` in [`docker/templates/in-sendmail.mc:8`](../../docker/templates/in-sendmail.mc) and [`docker/templates/out-sendmail.mc:8`](../../docker/templates/out-sendmail.mc).
+
+Remove `DIGEST-MD5` and `CRAM-MD5` from `confAUTH_MECHANISMS` in [`docker/templates/in-sendmail.mc:27-29`](../../docker/templates/in-sendmail.mc); for inbound relay, the right answer is to remove `AUTH` entirely (smtp-in does not need it — submission auth is on smtp-out via Dovecot). Cut to: `define('confAUTH_MECHANISMS', 'EXTERNAL')dnl` or remove the macro.
+
+#### Atomic config writes
+
+In [`docker/shared/generate-config.sh`](../../docker/shared/generate-config.sh):
+
+```python
+def write(path, content):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        f.write(content)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, path)
+    print(f"  Generated {path}")
+```
+
+`os.replace` is atomic on POSIX filesystems.
+
+#### OpenDKIM scope
+
+[`docker/shared/generate-config.sh:230`](../../docker/shared/generate-config.sh) writes a tighter `TrustedHosts`:
+
+```python
+write("/etc/opendkim/TrustedHosts",
+      "127.0.0.1\n::1\nlocalhost\n")
+```
+
+Sendmail hands mail to OpenDKIM via the milter socket on loopback; the only legitimate signing source is local. The SigningTable still constrains *which* domain to sign for, but now both axes (network position *and* From-domain match) have to be true.
+
+### Phase 6 — EFS transit encryption on IMAP
+
+[`terraform/infra/modules/ecs/task-definitions.tf:80-86`](../../terraform/infra/modules/ecs/task-definitions.tf) is updated to:
+
+```hcl
+volume {
+  name = "mailstore"
+  efs_volume_configuration {
+    file_system_id     = var.efs_id
+    root_directory     = "/"
+    transit_encryption = "ENABLED"
+    authorization_config {
+      access_point_id = var.mailstore_access_point_id
+      iam             = "DISABLED"
+    }
+  }
+}
+```
+
+A new EFS access point on the mailstore (mirroring the existing `smtp_queue_access_point_id` pattern) constrains the IMAP task to `/maildir` (or wherever the existing mount root effectively points). Created in [`terraform/infra/modules/efs/main.tf`](../../terraform/infra/modules/efs/main.tf).
+
+The access-point creation has to land *before* the task-definition change references it; that is one Terraform apply, since both files are in the same stack.
+
+## Migration sequence
+
+Each phase is one PR (or a small PR set) and is independently revertable.
+
+| Phase                                        | Scope                                                   | Risk                                                                                                                                                                                                                  |
+| -------------------------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 — fail2ban + NET_ADMIN                     | Docker + Terraform ECS task defs                        | Low. No-op on behaviour; reduces capabilities.                                                                                                                                                                        |
+| 2 — Runtime posture (ROFS, no-new-privs, …)  | Terraform ECS task defs                                 | High. Requires soak testing in dev. Per-tier flip; if one tier rejects ROFS, drop it for that tier and capture rationale.                                                                                             |
+| 3 — Image digest pinning + ECR scan-on-push  | Dockerfiles, ECR module, deploy script, Renovate config | Medium. Build cadence changes; expect some early scan-on-push noise from the AL2023 base.                                                                                                                             |
+| 4 — Dovecot plaintext-off + throttling       | Docker dovecot configs + entrypoint                     | Medium. Auth path change; test with React webmail and Apple clients before promotion.                                                                                                                                 |
+| 5 — Sendmail/OpenDKIM hardening              | Docker .mc templates + generate-config.sh               | Low to medium. `confMAX_MESSAGE_SIZE` change is the user-visible one (50 MB cap); document in release notes. OpenDKIM scope change is invisible to clients.                                                            |
+| 6 — EFS transit encryption on IMAP           | Terraform EFS + ECS                                     | Low. Mailstore data path is unchanged; only the wire is now TLS. Brief outage on the access-point creation roll-forward (one task-set replacement).                                                                  |
+
+Each phase runs the full dev → stage → prod sequence per the standard branching rules. Phases 2 and 4 are the ones to slow-roll; the rest can move as quickly as CI feedback supports.
+
+## Rollback
+
+- Phase 1: revert PR; the fail2ban code returns commented-out. NET_ADMIN can be re-added by an Edit if a future need arises.
+- Phase 2: per-tier `readonlyRootFilesystem = false` and remove `dockerSecurityOptions`. ECS rolls back on next apply.
+- Phase 3: SSM image-tag pattern can fall back to the old `<repo>:sha-<8>` shape; ECR scan-on-push can be disabled by Terraform flag. Digest-pinned `FROM` lines can revert to tags.
+- Phase 4: `disable_plaintext_auth = no` returns. `auth_failure_delay = 0`. Throttling settings removed.
+- Phase 5: revert the .mc edits. Old maps are still valid; sendmail recompiles on next entrypoint.
+- Phase 6: revert the ECS task-def change. The access point can stay (cheap) or be destroyed in a follow-up.
+
+## CI changes
+
+- [`.github/workflows/app.yml`](../../.github/workflows/app.yml)'s `docker` matrix gains a Trivy scan step that runs `trivy image --severity HIGH,CRITICAL --exit-code 1` (with a soft-fail-then-baseline rollout matching the [`iac-quality-gates-plan.md`](./iac-quality-gates-plan.md) cadence).
+- The `deploy-ecs-service.sh` script gains digest extraction from buildx and writes the digest (not the tag) into the `/cabal/deployed_image_tag` SSM parameter.
+- Renovate (or Dependabot) gains a `docker:` config block that auto-PRs base-image and third-party-image digest bumps.
+- A nightly scheduled workflow (`.github/workflows/image-scan.yml`, new) re-runs Trivy against the currently-deployed digests and uploads SARIF to GitHub Code Scanning.
+
+## Acceptance
+
+- `aws ecs describe-task-definition` shows `readonlyRootFilesystem = true` and `linuxParameters.capabilities.drop = ["ALL"]` for all three mail tiers in stage and prod.
+- A trial `docker run` of the imap image with `--cap-add NET_ADMIN` removed and `--read-only` set boots end-to-end with no errors; supervisord, sendmail, dovecot, and opendkim are all in the "running" state at startup.
+- ECR scan-on-push has zero HIGH/CRITICAL findings against the latest build for each tier, or a baseline file with one-line justifications mirroring the IaC-baseline pattern.
+- An attacker connecting to the IMAP service over a plaintext (non-TLS) path inside the VPC (simulating an NLB bypass) is refused at auth: `BAD [PRIVACYREQUIRED] Plaintext authentication disallowed on non-secure (SSL/TLS) connections.`
+- An OpenDKIM debug log entry (toggled via env var for the verification window) shows `external host 10.x.x.x is not internal` when a message is fed via a non-loopback path.
+- `sendmail -bt` reports `MaxMessageSize = 52428800`. A test message larger than 50 MB receives a 552 from sendmail.
+- The mailstore EFS access point exists; `aws efs describe-mount-targets` shows the IMAP task connecting with `transit_encryption=true`.
+- A new HIGH-severity CVE in `amazonlinux:2023` produces a Renovate PR within 24 hours of publication and a nightly Trivy SARIF entry on the Security tab.
+
+## Open questions
+
+- **Capabilities for sendmail privilege drop.** Sendmail historically requires `setuid`/`setgid` at startup to bind port 25 as root then drop. With `no-new-privileges`, the drop still works; with `cap_drop: ALL` and no `add`, port-binding may fail. Verify in dev: if `CAP_NET_BIND_SERVICE` is required, add it back per-tier.
+- **TLS 1.3 floor.** Re-evaluate at the end of Phase 4. If client compatibility data shows no TLS-1.2-only IMAP clients, raise the floor.
+- **`amazonlinux:2023` vs `chainguard/wolfi-base`.** Chainguard's distroless-adjacent images would shrink the attack surface significantly. The sendmail+dovecot stack does not exist there out of the box — porting is a separate plan. Mention but defer.
+- **Per-recipient send-rate limiting in submission.** Dovecot's submission-login throttling is auth-side; per-recipient throttling belongs upstream (in `/send` Lambda — captured in [`application-surface-hardening-plan.md`](./application-surface-hardening-plan.md) Phase 5 follow-up).
+- **fail2ban replacement at the NLB.** If we ever observe brute-force traffic, the right answer is an NLB-side rate limit + WAF, not a per-container fail2ban. Out of scope here; flag for the identity/IAM plan.
+
+## Out of scope for 0.10.x
+
+- Multi-container task definitions (one process per container).
+- Distroless or minimal base images.
+- AppArmor/seccomp profiles.
+- Fargate migration.
+- Sendmail replacement (separate plan: [`docs/unreleased/sendmail-replacement.md`](../unreleased/sendmail-replacement.md)).
+- NLB proxy-protocol enablement and per-IP rate limiting.
