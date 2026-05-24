@@ -545,10 +545,64 @@ What this does **not** add:
 
 - No RDS, no Aurora, no Postgres.
 - No Data API, no RDS Proxy, no connection-pooling layer.
-- No VPC attachment on any RSS Lambda. DynamoDB, S3, SSM, SNS are all
-  reachable over public AWS endpoints with IAM auth.
+- No VPC attachment on any RSS Lambda. See "Lambda networking policy"
+  below for the rule. DynamoDB, S3, SSM, SNS are all reachable over
+  public AWS endpoints with IAM auth; the fetcher's outbound
+  feed-fetching is intentionally public-internet.
 - No new ECS service. The fetcher and notify components are Lambdas.
 - No new Cognito user pool, no auth changes.
+
+## Lambda networking policy
+
+Cabalmail follows a written rule for Lambda VPC attachment:
+
+> A Lambda joins the VPC if and only if it needs to reach
+> internal-only resources. Otherwise it runs outside the VPC.
+
+The rule was settled during the design of this feature in
+conjunction with a separate decision to eventually close public IMAP
+access (planned for a later hardening release, with first-party
+client parity as the gating prerequisite). The companion VPC-
+migration project for the existing `lambda/api/` functions is out of
+scope for this document; it's tracked separately.
+
+Under the rule:
+
+- **Existing `lambda/api/` functions** need internal access to
+  Dovecot (today through the public IMAP NLB; eventually through an
+  internal endpoint as part of the IMAP-closure work). They are in
+  scope for VPC migration in their own release.
+- **RSS Lambdas** (`lambda/rss/fetcher/`, `lambda/rss/notify/`,
+  `lambda/rss/image_proxy/`, `lambda/rss/api/*`) do not need
+  internal access. DynamoDB, S3, SSM, SNS, and SQS are reachable
+  over public AWS endpoints with IAM auth; the fetcher's
+  feed-fetching is intentionally outbound to the public internet.
+  None of these Lambdas has any reason to be in the VPC.
+
+So the RSS Lambdas run outside the VPC — **not as a deferral, but
+as the policy outcome.** If a future RSS-adjacent Lambda needs to
+reach an internal-only resource (a hypothetical per-user Postgres,
+say, if the data-layer cost shape ever changes), the rule applies
+to it specifically: that Lambda joins the VPC; its peers do not.
+
+Concrete benefits of keeping RSS Lambdas out:
+
+- The fetcher's external traffic does not traverse NAT, so it does
+  not load the NAT instances or expose RSS to a NAT-instance-
+  failure blast radius.
+- No VPC endpoint configuration for AWS-service access. The free
+  gateway endpoints (S3, DynamoDB) would suffice for the API
+  Lambdas, but interface endpoints for SNS/SQS/SSM cost ~$7/AZ/
+  month each and add deployment complexity that the policy avoids
+  here.
+- Slightly faster cold starts on the API Lambdas (no Hyperplane
+  ENI initialisation), which matters for the first user-facing
+  read after an idle window.
+
+The policy is also forward-protective: future RSS-related Lambdas
+inherit "out of VPC" by default. If a maintainer later argues a
+Lambda should be in-VPC, the rule forces them to identify the
+specific internal-only resource it needs to reach.
 
 ## Per-feed cookie scoping
 
