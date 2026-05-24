@@ -30,9 +30,32 @@ function Nav({
   accent,
   onSelectAccent,
   accents,
+  searchQuery = '',
+  onSearchSubmit,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
+  // The input is uncommitted: the user types here, but Enter is what hands
+  // the value over to App.jsx via `onSearchSubmit`. `searchQuery` is the
+  // committed value the rest of the app reads; this local mirror keeps the
+  // input in sync when search is cleared from elsewhere (e.g. picking a
+  // folder in the Email view, or clicking Clear in the search header).
+  const [searchInput, setSearchInput] = useState(searchQuery);
+  useEffect(() => { setSearchInput(searchQuery); }, [searchQuery]);
+
+  const submitSearch = useCallback((e) => {
+    e.preventDefault();
+    if (typeof onSearchSubmit !== 'function') return;
+    onSearchSubmit((searchInput || '').trim());
+  }, [onSearchSubmit, searchInput]);
+
+  const handleSearchKey = useCallback((e) => {
+    if (e.key === 'Escape' && searchInput) {
+      e.preventDefault();
+      setSearchInput('');
+      if (typeof onSearchSubmit === 'function') onSearchSubmit('');
+    }
+  }, [searchInput, onSearchSubmit]);
 
   useEffect(() => {
     if (!menuOpen) return undefined;
@@ -95,16 +118,19 @@ function Nav({
       </div>
 
       {loggedIn && (
-        <div className="nav__search">
+        <form className="nav__search" onSubmit={submitSearch} role="search">
           <Search className="nav__search-icon" size={14} aria-hidden="true" />
           <input
             type="search"
             className="nav__search-input"
             placeholder="Search mail, senders, attachments…"
             aria-label="Search mail"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            onKeyDown={handleSearchKey}
           />
           <kbd className="nav__search-kbd" aria-hidden="true">⌘K</kbd>
-        </div>
+        </form>
       )}
 
       <div className="nav__right">

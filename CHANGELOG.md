@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- React webmail picks up message search (Phase 2 of
+  `docs/0.9.x/imap-search-plan.md`). The Nav search bar — previously
+  decorative — now commits its text on Enter and Cmd+K, and Escape
+  clears it; an empty value reverts to the folder view. When a query
+  is active the Email middle pane swaps in a search results pane that
+  fetches against the new `/search_envelopes` endpoint with a 25 s
+  timeout, renders matches via the existing envelope row component,
+  paginates "Load more" pages through the opaque cursor, and surfaces
+  the 5,000-result truncation hint when the cap is hit. A collapsible
+  filter panel exposes the structured query fields (`from`, `to`,
+  `subject`, `since`, `before`, `unread`, `flagged`, `has_attachment`)
+  and an active-filter badge; filters re-issue the search on Apply, not
+  on every keystroke. Bulk archive / delete / mark read / mark unread /
+  flag work on selected results, swipe actions on individual rows
+  match the folder view, and any mutation re-runs the search to drop
+  stale matches. The "this folder only" toggle is shown disabled until
+  the cross-folder Lambda mode lands in Phase 3.
 - New `/search_envelopes` Lambda landing Phase 1 of
   `docs/0.9.x/imap-search-plan.md`. Accepts a structured query
   (`text`, `from`, `to`, `subject`, `since`, `before`, `unread`,

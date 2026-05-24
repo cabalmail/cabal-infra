@@ -130,6 +130,12 @@ function App() {
   // window loads.
   const [composeFromAddress, setComposeFromAddress] = useState(null);
 
+  // Phase 2 of `docs/0.9.x/imap-search-plan.md`: the Nav search bar commits
+  // its query into `searchQuery` on Enter; the Email view swaps in the
+  // Search results pane while it is non-empty. Selecting a folder, or
+  // clicking Clear in the search header, sets it back to "".
+  const [searchQuery, setSearchQuery] = useState('');
+
   // Phase 7 §3: controls the ForgotPassword success state. Set on Cognito
   // `forgotPassword` success; cleared when the user leaves the screen.
   const [forgotPasswordSent, setForgotPasswordSent] = useState(false);
@@ -603,6 +609,8 @@ function App() {
               setReaderFormat={setReaderFormat}
               composeFromAddress={composeFromAddress}
               setComposeFromAddress={setComposeFromAddress}
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
               shortcutHandlersRef={shortcutHandlersRef}
             />
           </ErrorBoundary>
@@ -680,6 +688,8 @@ function App() {
               accent={prefs.accent}
               onSelectAccent={prefs.setAccent}
               accents={prefs.accents}
+              searchQuery={searchQuery}
+              onSearchSubmit={setSearchQuery}
             />
           )}
           <div className="content">

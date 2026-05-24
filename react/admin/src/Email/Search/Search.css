@@ -1,0 +1,302 @@
+/* =========================================================================
+   Search results pane — Phase 2 of `docs/0.9.x/imap-search-plan.md`.
+   Sits where Messages would normally render when a search is active. Reuses
+   the .msglist chrome (sticky header, skeleton, scroll, envelope-list) so
+   the layout shape feels like the folder view.
+   ========================================================================= */
+
+.search-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px 12px;
+  min-height: 60px;
+  box-sizing: border-box;
+}
+
+.search-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.search-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
+  min-width: 0;
+  font-family: var(--font-display, Georgia, serif);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+  overflow: hidden;
+}
+
+.search-title-label {
+  flex: 0 0 auto;
+}
+
+.search-title-query {
+  font-family: var(--font-ui, inherit);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.search-title-query::before {
+  content: '\201C';
+  margin-right: 1px;
+}
+
+.search-title-query::after {
+  content: '\201D';
+  margin-left: 1px;
+}
+
+.search-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.search-clear:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+
+.search-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--ink-quiet);
+}
+
+.search-scope strong {
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+.search-count {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--ink-quiet);
+}
+
+.search-filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 80ms ease, color 80ms ease, border-color 80ms ease;
+}
+
+.search-filter-toggle:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+
+.search-filter-toggle.has-active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.search-filter-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-variant-numeric: tabular-nums;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* --- Filter panel ----------------------------------------------------- */
+
+.search-filters {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px 14px;
+  padding: 12px;
+  border-radius: var(--radius-md, 8px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.search-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--ink-soft);
+  font-weight: 500;
+  min-width: 0;
+}
+
+.search-field--wide {
+  grid-column: 1 / -1;
+}
+
+.search-field input {
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--pane-bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+}
+
+.search-field input:focus,
+.search-field input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.search-checks {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  padding-top: 4px;
+}
+
+.search-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.search-check input { margin: 0; cursor: pointer; }
+
+.search-check.is-disabled {
+  color: var(--ink-quiet);
+  cursor: not-allowed;
+}
+.search-check.is-disabled input { cursor: not-allowed; }
+
+.search-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.search-btn {
+  height: 30px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 80ms ease, color 80ms ease, border-color 80ms ease;
+}
+
+.search-btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+
+.search-btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}
+
+.search-btn--primary:hover:not(:disabled) {
+  filter: brightness(1.05);
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+
+.search-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* --- Empty + Load-more states ----------------------------------------- */
+
+.search-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 48px 16px;
+  color: var(--ink-quiet);
+  text-align: center;
+}
+
+.search-empty-line {
+  font-family: var(--font-display, Georgia, serif);
+  font-size: 16px;
+  color: var(--ink-soft);
+}
+
+.search-empty-hint {
+  font-size: 12px;
+}
+
+.search-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  border-top: 1px solid var(--border-faint);
+}
+
+/* --- Phone-narrow tweaks --------------------------------------------- */
+
+@media (max-width: 767px) {
+  .search-filters {
+    grid-template-columns: 1fr;
+  }
+  .search-title {
+    font-size: 20px;
+  }
+  .search-title-query {
+    font-size: 14px;
+  }
+}

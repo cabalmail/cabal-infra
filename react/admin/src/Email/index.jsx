@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import './Email.css';
 import Messages from './Messages';
+import Search from './Search';
 import MessageOverlay from './MessageOverlay';
 import ComposeOverlay from './ComposeOverlay';
 import Folders from '../Folders';
@@ -71,6 +72,7 @@ function Email({
   selected, setSelected,
   readerFormat, setReaderFormat,
   composeFromAddress, setComposeFromAddress,
+  searchQuery = '', setSearchQuery,
   shortcutHandlersRef,
 }) {
   const { token, api_url, host, domains, smtp_host } = useAuth();
@@ -130,7 +132,16 @@ function Email({
     setAddressFilter(null);
     setDrawerOpen(false);
     setOverlayVisible(false);
-  }, []);
+    // Picking a folder exits search mode — the middle pane goes back to the
+    // folder's message list.
+    if (typeof setSearchQuery === 'function') setSearchQuery('');
+  }, [setSearchQuery]);
+
+  const clearSearch = useCallback(() => {
+    if (typeof setSearchQuery === 'function') setSearchQuery('');
+  }, [setSearchQuery]);
+
+  const searchActive = !!(searchQuery && searchQuery.trim());
 
   const selectAddress = useCallback((address) => {
     setAddressFilter(address);
@@ -327,29 +338,44 @@ function Email({
           ? { '--msglist-width': `${colMiddleSplit.pct}%` }
           : undefined}
       >
-        <Messages
-          token={token}
-          api_url={api_url}
-          folder={folder}
-          host={host}
-          showOverlay={showOverlay}
-          setFolder={selectFolder}
-          setMessage={setMessage}
-          addressFilter={addressFilter}
-          filter={filter}
-          setFilter={setFilter}
-          sortKey={sortKey}
-          setSortKey={setSortKey}
-          sortDir={sortDir}
-          setSortDir={setSortDir}
-          bulkMode={bulkMode}
-          setBulkMode={setBulkMode}
-          selected={selected}
-          setSelected={setSelected}
-          layout={layout}
-          onOpenDrawer={openDrawer}
-          onCompose={newEmail}
-        />
+        {searchActive ? (
+          <Search
+            folder={folder}
+            query={searchQuery}
+            clearSearch={clearSearch}
+            showOverlay={showOverlay}
+            selected={selected}
+            setSelected={setSelected}
+            bulkMode={bulkMode}
+            setBulkMode={setBulkMode}
+            layout={layout}
+            onOpenDrawer={openDrawer}
+          />
+        ) : (
+          <Messages
+            token={token}
+            api_url={api_url}
+            folder={folder}
+            host={host}
+            showOverlay={showOverlay}
+            setFolder={selectFolder}
+            setMessage={setMessage}
+            addressFilter={addressFilter}
+            filter={filter}
+            setFilter={setFilter}
+            sortKey={sortKey}
+            setSortKey={setSortKey}
+            sortDir={sortDir}
+            setSortDir={setSortDir}
+            bulkMode={bulkMode}
+            setBulkMode={setBulkMode}
+            selected={selected}
+            setSelected={setSelected}
+            layout={layout}
+            onOpenDrawer={openDrawer}
+            onCompose={newEmail}
+          />
+        )}
         {layout !== 'phone' && (
           <Splitter
             split={colMiddleSplit}
