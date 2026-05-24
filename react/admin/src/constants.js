@@ -93,3 +93,6 @@ export const FORWARD = {
 }
 export const FOLDER_LIST = "folder_list";
 export const ADDRESS_LIST = "address_list";
+export const FOLDER_COLLAPSED_SUB = "folder_collapsed_sub";
+export const FOLDER_COLLAPSED_ALL = "folder_collapsed_all";
+export const FOLDER_COLLAPSED_PATHS = "folder_collapsed_paths";

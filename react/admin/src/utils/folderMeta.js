@@ -84,5 +84,32 @@ export function orderFolders(folders) {
     .map(folderMeta)
     .sort((a, b) => systemRank(a.kind) - systemRank(b.kind));
   const userSorted = sortUserTree(uniq.filter((n) => !isSystem(n))).map(folderMeta);
-  return [...systemSorted, ...userSorted];
+  const ordered = [...systemSorted, ...userSorted];
+  // hasChildren is true iff some other present, non-system folder lives under
+  // this one. Only used to decide whether to render a collapse chevron.
+  const present = new Set(ordered.map((f) => f.id));
+  return ordered.map((f) => ({
+    ...f,
+    hasChildren: !f.system && hasDescendant(f.id, present),
+  }));
+}
+
+function hasDescendant(id, present) {
+  const prefix = `${id}/`;
+  for (const candidate of present) {
+    if (candidate !== id && candidate.startsWith(prefix)) return true;
+  }
+  return false;
+}
+
+// Walk ancestor paths of `id`, e.g. "Work/Q1/Archive" -> ["Work", "Work/Q1"].
+export function ancestorsOf(id) {
+  const segs = id.split('/');
+  const out = [];
+  let acc = '';
+  for (let i = 0; i < segs.length - 1; i += 1) {
+    acc = acc ? `${acc}/${segs[i]}` : segs[i];
+    out.push(acc);
+  }
+  return out;
 }
