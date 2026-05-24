@@ -23,6 +23,28 @@ This is parked under `2.0.x` for directory convention. The actual scope may
 end up spanning 2.0 / 2.1 / 2.2 once the in-scope cuts below are settled —
 that is itself one of the questions for the operator.
 
+## Revisions after design exploration
+
+After the operator's inline decisions were recorded, a phase-1 design
+pass surfaced cost-shape findings that revised the data-layer choice and
+added one new requirement. The original decisions remain inline as
+historical record; **Revised decision** annotations capture the current
+state. The companion
+[`rss-implementation-plan.md`](./rss-implementation-plan.md) reflects
+the revised state throughout.
+
+- **Decisions 14 + Open Q2 (search + storage engine):** Aurora Postgres
+  has an idle floor of ~$45/env/month that scale-to-zero doesn't help in
+  practice (the fetcher tick would keep the cluster warm). Hard to
+  justify at hobby scale. **DynamoDB is now the sole data store.**
+  Server-side full-text search is deferred indefinitely; **per-feed FTS
+  moves to Apple clients only**, backed by SQLite/FTS5. React has no
+  search; cross-feed search remains out.
+- **New Decision 18 (offline reading on Apple):** the local item cache
+  that backs Apple-side FTS also serves offline reading. Promoted from
+  implicit to a first-class requirement to match the operator's
+  habitual use of offline reading on the current reader.
+
 ## Goals
 
 - Every Cabalmail user can subscribe to RSS/Atom (and JSON Feed) feeds and
@@ -496,6 +518,17 @@ Confirmed scope includes filter by read/favorite/all. Open questions:
 - Can we use Aurora Postgres with tsvector?
 - No per-feed keyword muting.
 - I don't use tags with my feed reader today, and I don't miss them, so keep it on the roadmap for other users' benefit, but not for 1.0.
+
+**Revised decision (after design exploration):** Server-side full-text
+search deferred indefinitely (the Aurora-vs-DynamoDB cost comparison
+under Open Q2 made Postgres tsvector too expensive at hobby scale, and
+OpenSearch is worse). The operator confirmed cross-feed FTS is not a
+real-world need. **Per-feed FTS moves to Apple clients only,** backed
+by a local SQLite/FTS5 item cache that doubles as the offline-reading
+store (see new Decision 18). React has no search in v1; this is a
+documented limitation. Cross-feed search remains out. The "per-feed
+keyword mute" and "tagging" decisions above are unchanged.
+
 ### Decision 15: Read-state and reading-assistance features
 
 | Feature                  | Description                                     | v1 recommendation                | Decision                                                                                                                 |
@@ -528,6 +561,30 @@ single fetch cadence — the maximum of any subscriber's requested cadence,
 clamped to the operator's bounds).
 
 **Decision:** I'd like the server to assess feed velocity over time and dynamically adjust cadence within operator-set bounds. I don't want to expose cadence settings to end users.
+
+### Decision 18: Offline reading on Apple clients
+
+*Added after design exploration; not present in the original decision set.*
+
+**Question.** The local item cache that backs Apple-side per-feed FTS
+(see **Revised decision** under Decision 14) naturally also enables
+offline reading. Should offline reading be a first-class requirement?
+
+**Decision: yes.** The operator uses offline reading regularly on the
+current reader (Reeder) and expects parity. Offline reading covers
+in-feed content (summary plus any `content_html` the feed delivered).
+Articles opened in the embedded web view still require network — per
+Decision 6 we do not extract or cache article bodies server-side, and
+the WKWebView's article rendering is a live publisher fetch. Images
+inside in-feed content rely on whatever the embedded `URLCache` happens
+to have picked up from prior online viewing; explicit aggressive
+pre-cache of image bytes is deferred.
+
+Offline mutations (mark-as-read, favorite/unfavorite) are queued in a
+small local pending-mutations table and dispatched to the server on
+reconnect with last-write-wins semantics. Cache retention defaults and
+the cross-device inconsistency story are implementation details captured
+in the companion plan.
 
 ---
 
@@ -563,6 +620,12 @@ v1 data model and are cheap if done up front, expensive if retrofitted.
    familiar to the operator?), or something else? Largely determined
    by Decision 4 (retention complexity) and Decision 14 (search).
    **Decision:** Postgres Aurora tsvector.
+   **Revised decision (after design exploration):** DynamoDB as the sole
+   data store; Aurora Postgres deferred indefinitely. The original choice
+   was undone after Aurora's ~$45/env/month idle floor (scale-to-zero
+   doesn't help in practice because the fetcher tick would keep the
+   cluster warm) proved hard to justify at hobby scale. Search moves to
+   the client per the **Revised decision** under Decision 14.
 3. **Hosting.** Does the fetcher run as its own ECS service (long-running
    pollers, conditional-GET state per feed, per-feed cadence scheduler)
    or as a scheduled Lambda (simpler, but state lives elsewhere and cold
@@ -588,9 +651,10 @@ v1 data model and are cheap if done up front, expensive if retrofitted.
 
 ## Next step
 
-When the decisions above are made (or at least narrowed), this directory
-gains a companion `rss-implementation-plan.md` modeled on the existing
-1.1.x plans. The implementation plan will sequence the changes into
-shippable phases, name the modules and services, identify the storage
-schema and API shape, and lay out the migration path from "no RSS in 1.x"
-to "RSS GA in 2.x".
+The companion [`rss-implementation-plan.md`](./rss-implementation-plan.md)
+sequences the changes into shippable phases, names the modules and
+services, identifies the data model and API shape, and lays out the
+migration path from "no RSS in 1.x" to "RSS GA in 2.x". It reflects the
+**Revised decision** annotations above (DynamoDB primary store; per-feed
+FTS on Apple clients only; offline reading on Apple as a first-class
+requirement).
