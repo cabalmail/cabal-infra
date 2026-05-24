@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- New `/search_envelopes` Lambda landing Phase 1 of
+  `docs/0.9.x/imap-search-plan.md`. Accepts a structured query
+  (`text`, `from`, `to`, `subject`, `since`, `before`, `unread`,
+  `flagged`, `has_attachment`, `limit`, `cursor`) against a required
+  `folder`, translates it to an IMAP SEARCH criteria list server-side
+  with `CHARSET UTF-8`, sorts matches newest-first by INTERNALDATE +
+  UID, and returns the same per-envelope shape as `/list_envelopes`
+  with an opaque cursor for the next page. Match sets are capped at
+  5,000 results (a `truncated` flag in the response signals the cap);
+  `has_attachment` is computed post-hoc from BODYSTRUCTURE (the
+  heuristic tightens once FTS lands in Phase 4). Single-folder only;
+  cross-folder is Phase 3. The existing raw-syntax `/search` endpoint
+  is unchanged and continues to power the Apple client until Phase 5
+  cuts it over.
+
+### Changed
+- The per-envelope JSON-decoder helpers (`decode_subject`,
+  `decode_address`, `decode_flags`, `decode_body_structure`,
+  `envelope_dict`, plus an `ENVELOPE_FETCH_KEYS` constant) now live in
+  `lambda/api/_shared/helper.py` so `/list_envelopes` and
+  `/search_envelopes` share one source of truth for the wire shape
+  consumed by the React webmail and the Apple `CabalmailKit`
+  decoders. `lambda/api/list_envelopes/function.py` is reworked to
+  import from the helper; the on-the-wire response is byte-identical.
+
 ## [0.9.28] - 2026-05-24
 
 ### Removed
