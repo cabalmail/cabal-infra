@@ -15,7 +15,7 @@ output "site_url" {
 
 output "privacy_url" {
   value       = "https://${local.site_host}/privacy.html"
-  description = "Public URL of the privacy policy page. Use this as the privacy policy URL on carrier registrations (AWS End User Messaging TFV, Twilio A2P 10DLC)."
+  description = "Public URL of the privacy policy page. Use this as the privacy policy URL on carrier registrations (AWS End User Messaging TFV)."
 }
 
 output "terms_url" {

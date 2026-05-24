@@ -67,24 +67,6 @@ variable "healthcheck_ping_param" {
   default     = ""
 }
 
-variable "sms_sender_arn" {
-  type        = string
-  description = "ARN of the SMS sender Lambda function for custom Cognito SMS. Empty string disables the custom SMS sender."
-  default     = ""
-}
-
-variable "sms_kms_key_arn" {
-  type        = string
-  description = "ARN of the KMS key for SMS sender. Required when custom_sms_sender is configured."
-  default     = ""
-}
-
-variable "use_twilio_sms" {
-  type        = bool
-  description = "Feature flag: when true, wire the custom_sms_sender (Twilio) Lambda + KMS key into the user pool. When false, Cognito stays on the SNS/EUM path."
-  default     = false
-}
-
 variable "use_eum_sms" {
   type        = bool
   description = "Feature flag: when true, provision the AWS End User Messaging toll-free phone number that backs SNS-based SMS delivery. When false, no EUM phone number is created."

@@ -94,7 +94,6 @@ Once status is `COMPLETE`:
 
 1. The number can deliver SMS via Amazon SNS (Cognito's `sms_configuration` path).
 2. Test end-to-end with a signup flow at `https://admin.<control_domain>` using a phone number you control.
-3. If you want to fully retire Twilio at this point, set `TF_VAR_USE_TWILIO_SMS=false` in the GitHub Environment and re-run `infra.yml`. Cognito will start routing SMS through SNS / EUM instead of Twilio. See [twilio.md](twilio.md) for the rollback semantics.
 
 ## Common rejection reasons
 

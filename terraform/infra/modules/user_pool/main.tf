@@ -29,33 +29,14 @@ resource "aws_cognito_user_pool" "users" {
       min_value = 2000
     }
   }
-  # custom_sms_sender (Twilio) is feature-flagged per env via
-  # var.use_twilio_sms. When the flag is true Cognito hands SMS
-  # delivery to the sms-sender Lambda, encrypts OTPs with the
-  # provided KMS key, and bypasses the SNS hot path. The
-  # sms_configuration block above stays in place because Cognito
-  # still validates it whenever a phone attribute is auto-verified.
-  # See docs/twilio.md.
   lambda_config {
     post_confirmation = aws_lambda_function.assign_osid.arn
     pre_sign_up       = aws_lambda_function.check_invite.arn
-
-    dynamic "custom_sms_sender" {
-      for_each = var.use_twilio_sms ? [1] : []
-      content {
-        lambda_arn     = var.sms_sender_arn
-        lambda_version = "V1_0"
-      }
-    }
-
-    kms_key_id = var.use_twilio_sms ? var.sms_kms_key_arn : null
   }
 }
 
-# AWS End User Messaging toll-free number used by the legacy SNS SMS
-# path. Gated on var.use_eum_sms so environments that have committed
-# to the Twilio path don't carry the EUM number (and its monthly
-# rental + pending TFV registration) as dead weight. See docs/twilio.md.
+# AWS End User Messaging toll-free number used by the SNS SMS path.
+# Gated on var.use_eum_sms.
 #
 # Note: deletion_protection_enabled = true means flipping this flag
 # from true to false will fail apply until protection is disabled in

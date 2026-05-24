@@ -1,2 +1,0 @@
-twilio==9.2.0
-aws-encryption-sdk==4.0.1

@@ -109,15 +109,7 @@ The output contains the nameservers that AWS assigned to your mail domains. To w
 
 ## SMS verification (Required for phone verification)
 
-Cabalmail supports two SMS backends. **Twilio is preferred**; the AWS path is kept as a fallback while the migration completes.
-
-### Twilio (preferred)
-
-[Set up Twilio for SMS verification](./twilio.md). Twilio handles signup verification, password reset, and MFA via a Cognito custom SMS sender Lambda. Account setup and A2P 10DLC registration take hours-to-days, vs. AWS End User Messaging's toll-free queue which has been observed to take a month or longer.
-
-### AWS SNS SMS Sandbox (legacy fallback)
-
-If you have not enabled Twilio (`TF_VAR_USE_TWILIO_SMS` is unset or `false`), Cognito sends verification SMS through AWS SNS. New AWS accounts are placed in the SNS SMS sandbox, which restricts delivery to manually verified phone numbers only. For production use on this path, you must request production access.
+Cognito sends verification SMS through AWS SNS. New AWS accounts are placed in the SNS SMS sandbox, which restricts delivery to manually verified phone numbers only. For production use, you must request production access.
 
 1. Open the [Amazon SNS console](https://console.aws.amazon.com/sns/v3/home#/mobile/text-messaging) in your production account.
 2. In the left navigation, choose **Text messaging (SMS)**.
