@@ -70,8 +70,8 @@ public enum FolderTree {
         guard segs.count > 1 else { return [] }
         var out: [String] = []
         var acc = ""
-        for i in 0..<(segs.count - 1) {
-            acc = acc.isEmpty ? segs[i] : "\(acc)/\(segs[i])"
+        for seg in segs.dropLast() {
+            acc = acc.isEmpty ? seg : "\(acc)/\(seg)"
             out.append(acc)
         }
         return out
