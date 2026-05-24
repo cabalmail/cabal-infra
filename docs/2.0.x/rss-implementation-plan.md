@@ -83,8 +83,12 @@ phase being present.
   Postgres `tsvector`, no OpenSearch, no Lambda-scanning of items.
 - **Cross-feed search**, on Apple or anywhere (revised D14; operator
   confirmed no real-world use case).
-- **FTS or offline reading in the React client.** React renders the
-  current network state; full-feature offline + search lives on Apple.
+- **FTS, offline reading, or per-feed cookie/storage partitioning in
+  the React client.** React renders the current network state with
+  the browser's default cookie behavior; full-feature offline,
+  search, and per-feed credential scoping live on Apple. Mitigations
+  for the cookie-partitioning gap were considered and deferred past
+  v1; see "Per-feed cookie scoping > Mitigations considered".
 - Third-party API compatibility — no Fever, no Google Reader (D3).
 - Email-to-feed (D7, deferred).
 - Feed-to-email digests (D8, declined).
@@ -582,6 +586,61 @@ for public feeds and for credentialed feeds where the user uses one
 identity per publisher; users who want full per-feed scoping should
 use the Apple client.
 
+### Mitigations considered (deferred past v1)
+
+A short menu was reviewed during planning. None ships in v1; the
+React limitation is documented and the cost of fixing it is recorded
+here for future reference. If hobbyist usage proves the limitation
+is a real friction point, revisit and pick from below.
+
+**Non-options** (ruled out as architecturally impossible from a web
+app):
+
+- **CHIPS / partitioned cookies** partition by top-level site, not by
+  app-controlled identity. Both Substack iframes inside `cabalmail.com`
+  share the same partition.
+- **Service workers** can intercept requests but can't read or modify
+  `Cookie` / `Set-Cookie` headers; those live in the browser's network
+  stack outside the SW boundary.
+- **`<iframe sandbox>`** restricts capabilities but has no
+  isolated-cookies flag.
+- **Storage Access API** governs cross-origin storage *permission*,
+  not per-app partitioning.
+
+**Viable options when the time comes:**
+
+- **A. Open articles in a new browser tab instead of an iframe.**
+  Effort: trivial (single-line UI change). Doesn't fix scoping but
+  reframes it — user gets browser-default behavior identical to
+  visiting the publisher directly and can apply any browser-level
+  mitigations they already use (separate profiles, container tabs).
+  Loses the embedded-reader feel; for paywalled sites that may
+  actually be preferable since the publisher's full UI loads.
+- **B. Hide credentialed-feed subscription in the React UI entirely.**
+  Effort: trivial. React handles public feeds; the credentials form
+  is Apple-only. Sidesteps the problem by removing the surface area
+  where it bites. Already partially aligned with the v1 documented-
+  limitation banner.
+- **C. Document Firefox Multi-Account Containers** for users who want
+  per-domain scoping in the browser. Effort: documentation only.
+  Firefox-only; manual per-domain setup; not turnkey but free
+  guidance.
+- **D. Server-side cookie-rewriting proxy.** Effort: high —
+  approximately a quarter-long project. A Lambda or container
+  intercepts article requests, strips and stores `Set-Cookie` headers
+  per (user, subscription), rewrites all URLs in the HTML to route
+  back through itself, injects the right cookie on outbound requests,
+  and handles JavaScript-built URL construction in publisher SPAs
+  (this last is the hardest part and the most likely failure mode).
+  Works on static publisher pages; breaks on most modern sites with
+  OAuth flows, complex SPA navigation, or heavy client-side
+  rendering. Ongoing maintenance burden whenever publishers redesign.
+  Not recommended unless usage data justifies it.
+
+If the limitation ever needs fixing, the likely sequence is **B + A
++ C** in a single small release (cheap, honest, helpful for Firefox
+users); **D** stays on the shelf unless real demand emerges.
+
 ## Phased implementation
 
 Each phase is independently shippable. Phase 1 is foundational; from
@@ -720,9 +779,16 @@ based article view.
   client-side (per open Q5).
 - Filter UI for read/favorite/all.
 - Reuse existing `AuthContext`/`AppMessageContext` patterns.
-- Known-limitation banners: (1) on the article view explaining
-  shared-cookie behavior for credentialed feeds, (2) on the feed
-  view noting that search is Apple-only.
+- Known-limitations banner on the RSS section landing screen that
+  enumerates the React client's reduced feature set vs. the Apple
+  clients: **no per-feed cookie/storage partitioning** (multiple
+  identities at the same publisher share a session — see "Per-feed
+  cookie scoping" above), no full-text search, no offline reading.
+  Each item links to documentation pointing users to the Apple
+  clients if the missing feature is important to them. The cookie-
+  partitioning bullet is the most important one to call out
+  prominently — it's the one where a user could inadvertently
+  cross-contaminate accounts without realising it.
 
 **Rollback.** Remove the route. The API endpoints continue to function
 for other clients.
