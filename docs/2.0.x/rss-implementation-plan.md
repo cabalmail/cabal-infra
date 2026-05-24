@@ -205,8 +205,10 @@ the `credentials` table reference.
 **Read path.** Clients call API Gateway endpoints (`/rss/folders`,
 `/rss/subscriptions`, `/rss/items`, `/rss/item/{id}`, `/rss/feed/{id}/
 health`). Lambdas execute DynamoDB Query/BatchGet calls directly
-(no Data API, no RDS, no VPC attachment — the API Lambdas remain
-non-VPC like the existing `lambda/api/` functions). The endpoint
+(no Data API, no RDS, no VPC attachment — RSS Lambdas run outside
+the VPC per the Lambda networking policy below; this differs from
+the `lambda/api/` functions, which by the time RSS implementation
+starts are VPC-attached for internal Dovecot access). The endpoint
 that returns an item body rewrites `<img src="...">` to the image-
 proxy URL with a Cognito-derived signed token.
 
@@ -560,18 +562,21 @@ Cabalmail follows a written rule for Lambda VPC attachment:
 > internal-only resources. Otherwise it runs outside the VPC.
 
 The rule was settled during the design of this feature in
-conjunction with a separate decision to eventually close public IMAP
-access (planned for a later hardening release, with first-party
-client parity as the gating prerequisite). The companion VPC-
-migration project for the existing `lambda/api/` functions is out of
-scope for this document; it's tracked separately.
+conjunction with a separate VPC-migration project for the existing
+`lambda/api/` functions, which is a prerequisite to the longer-term
+plan of closing public IMAP access (gated on first-party client
+parity). **The API-Lambda VPC migration completes before RSS
+implementation begins**, so by the time the phases below execute,
+the `lambda/api/` pattern is already VPC-attached; the migration
+plan itself is tracked separately and is out of scope here.
 
 Under the rule:
 
-- **Existing `lambda/api/` functions** need internal access to
-  Dovecot (today through the public IMAP NLB; eventually through an
-  internal endpoint as part of the IMAP-closure work). They are in
-  scope for VPC migration in their own release.
+- **The existing `lambda/api/` functions** need internal access to
+  Dovecot (initially through the public IMAP NLB, then through an
+  internal endpoint after their migration; eventually with the
+  public NLB retired entirely once IMAP closure ships). By the
+  time RSS lands they are inside the VPC.
 - **RSS Lambdas** (`lambda/rss/fetcher/`, `lambda/rss/notify/`,
   `lambda/rss/image_proxy/`, `lambda/rss/api/*`) do not need
   internal access. DynamoDB, S3, SSM, SNS, and SQS are reachable
@@ -589,15 +594,16 @@ Concrete benefits of keeping RSS Lambdas out:
 
 - The fetcher's external traffic does not traverse NAT, so it does
   not load the NAT instances or expose RSS to a NAT-instance-
-  failure blast radius.
-- No VPC endpoint configuration for AWS-service access. The free
-  gateway endpoints (S3, DynamoDB) would suffice for the API
-  Lambdas, but interface endpoints for SNS/SQS/SSM cost ~$7/AZ/
-  month each and add deployment complexity that the policy avoids
-  here.
-- Slightly faster cold starts on the API Lambdas (no Hyperplane
-  ENI initialisation), which matters for the first user-facing
-  read after an idle window.
+  failure blast radius. This matters more for RSS than for any of
+  the existing Lambdas because the fetcher is the only chatty
+  external-bound workload in the stack.
+- No VPC endpoint configuration for AWS-service access from the
+  RSS Lambdas. Interface endpoints for SNS/SQS/SSM cost ~$7/AZ/
+  month each, and the RSS Lambdas would need them; the policy
+  avoids that cost and the related deployment complexity.
+- Slightly faster cold starts on the RSS API Lambdas (no
+  Hyperplane ENI initialisation), which matters for the first
+  user-facing read after an idle window.
 
 The policy is also forward-protective: future RSS-related Lambdas
 inherit "out of VPC" by default. If a maintainer later argues a
