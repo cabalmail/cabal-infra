@@ -11,17 +11,19 @@ consume a Cabalmail-native API and do not need to implement RSS/Atom parsing
 themselves.
 
 This document is the requirements pass. It states goals, non-goals, and
-confirmed scope, then enumerates the decision points whose resolution is a
-precondition to writing an implementation plan. Each decision lists options,
-trade-offs, and a recommended starting position. Once the operator has worked
-through these decisions, this directory will gain a companion
-`rss-implementation-plan.md` modeled on the existing 1.1.x plans
-(see [`bimi.md`](./../1.1.x/bimi.md),
-[`push-notifications.md`](./../1.1.x/push-notifications.md)).
+confirmed scope, then enumerates the decision points the operator
+resolved. Each decision lists the options, trade-offs, and a recommended
+starting position; the operator's inline decisions follow the
+recommendations. The companion
+[`rss-implementation-plan.md`](./rss-implementation-plan.md) (modeled on
+the existing 1.1.x plans — see
+[`bimi.md`](./../1.1.x/bimi.md),
+[`push-notifications.md`](./../1.1.x/push-notifications.md)) sequences
+the work.
 
-This is parked under `2.0.x` for directory convention. The actual scope may
-end up spanning 2.0 / 2.1 / 2.2 once the in-scope cuts below are settled —
-that is itself one of the questions for the operator.
+This directory is `2.0.x` per the operator's answer to Open Q1; the
+release version is 2.0. The plan splits the work across multiple patch
+versions (2.0.0, 2.0.1, ...).
 
 ## Revisions after design exploration
 
@@ -49,8 +51,8 @@ the revised state throughout.
 
 - Every Cabalmail user can subscribe to RSS/Atom (and JSON Feed) feeds and
   read them across all Cabalmail clients with consistent per-user state.
-- Feeds are fetched server-side on a cadence the operator and (within
-  bounds) the user controls.
+- Feeds are fetched server-side on an adaptive per-feed cadence within
+  operator-set bounds (no user-exposed cadence control, per D17).
 - Per-feed display preferences (order, summary-vs-article default,
   reader-vs-native styling default, notifications) are persisted and synced
   across devices.
@@ -67,9 +69,11 @@ the revised state throughout.
 - Non-text media as a first-class concept. Audio and video play if embedded
   in an article via the web rendering engine; podcasts as a distinct media
   type with playback queue and per-episode progress sync are deferred.
-- Automated per-feed URL or content rewriting beyond simple cases. The
-  "broken-link feed fixer" idea is a follow-on; v1 ships the server-side
-  transform pipeline that makes it possible, not the rule editor.
+- Automated per-feed URL or content rewriting. The "broken-link feed
+  fixer" idea is a follow-on; v1 does not ship the server-side transform
+  infrastructure that would make it possible (per D6 = C, the server
+  does not extract, rewrite, or otherwise transform item content; it
+  fetches, parses, and stores as-delivered).
 - Social-style features (sharing to public profiles, following users,
   recommendations).
 - Native non-RSS sources (Mastodon, ATProto, YouTube as channels, GitHub
@@ -593,27 +597,25 @@ in the companion plan.
 These exist to keep doors open. They are not optional; they constrain the
 v1 data model and are cheap if done up front, expensive if retrofitted.
 
-- **Tombstone state for dropped items** (Decision 4 sub-decision). The
-  item ID must be canonical-stable so future features (cross-feed dedup,
-  retention changes) can retrofit.
-- **Per-feed transform pipeline** (Decision 6). Even if the URL-fixer
-  defers and full-text extraction is opt-in, the pipeline that runs
-  transforms on fetched-and-parsed items should exist with at least one
-  transform (extraction) implemented. Future transforms (rewrite, mute,
-  tag-on-match) plug in without re-architecting.
 - **Per-user-per-item state separate from item content.** Required by
-  Decision 1 (shared feeds) and Decision 4 (item dropping preserves
-  read state). The `(user, item_guid) -> {read, favorite, ...}` table is
-  the keystone of the storage model.
+  Decision 1 (shared feeds) so per-user mutations don't write into
+  shared item rows. The `(user, item_id) -> {read, favorite, ...}`
+  table is the keystone of the storage model.
 - **Canonical URL normalizer** (Decision 1 sub-decision). Must exist
   before two users subscribe to "the same" feed via different URL forms.
+
+*(Two items previously listed here are moot under the operator's
+decisions: a tombstone table — D4 chose "items kept forever," so items
+are never dropped — and a per-feed server-side transform pipeline — D6
+chose option C, no server-side extraction or rewriting. The
+implementation plan does not include either.)*
 
 ## Open questions for the operator
 
 1. **Roadmap version.** Does this fit at 2.0, or does it span 2.0 / 2.1 /
    2.2 once the decisions land? My instinct is that v1-as-described-here
-   is 2.0; email-to-feed (Decision 7) plus full-text extraction
-   (Decision 6) plus the basic reader UI is plenty for a single release.
+   is 2.0; the basic reader UI plus all of the in-scope items above is
+   plenty for a single release.
    **Decision**: 2.0.
 2. **Storage engine for feed items.** Extend DynamoDB usage (no joins,
    limited search), introduce Postgres (joins, full-text via tsvector,

@@ -920,9 +920,12 @@ produce APNs (and FCM-when-ready) notifications via the existing
   send.
 - iOS/macOS NSE in CabalmailKit gets a `type=rss` enrichment branch
   that calls `GET /rss/items/{id}` and populates the notification
-  body with feed name + item title. The NSE also writes the fetched
-  item into the local `ItemCache` (phase 8 dependency: ItemCache
-  must exist; sequence accordingly).
+  body with feed name + item title. **Two-step ship to handle the
+  phase-8 dependency:** the v1 of this branch (lands with phase 7)
+  enriches the notification only; the v2 of this branch (lands with
+  or after phase 8) additionally writes the fetched item into the
+  local `ItemCache`. Phase 7 is therefore independently shippable;
+  the cache-write integration follows once the cache exists.
 - Notification tap-throughs open the item in the reader UI.
 - v1 is per-subscription notifications-on, default false (per D12).
   Folder-level toggle (D12 option B) is wired up but the UI exposes
@@ -953,9 +956,14 @@ isolation, offline reading, and per-feed FTS.
 - `WKWebView` configuration uses `WKWebsiteDataStore(forIdentifier:
   subscription_uuid)`. The UUID lives in Keychain, generated on
   first article view per subscription.
-- Reader-vs-native styling: when the user picks reader, invoke
-  WebKit's reader mode via the `WKWebpagePreferences` interface
-  (iOS 18+ exposes this directly).
+- Reader-vs-native styling: Safari's reader mode is not directly
+  toggleable on `WKWebView` from app code, so the reader path is
+  implemented by injecting a Readability-style content extractor
+  (Mozilla's Readability.js port, or `swift-readability`) into the
+  loaded page and rendering the extracted content with simple
+  styling. Native styling = the publisher's page rendered as-is.
+  Exact mechanism is a phase-8 open question; the requirement
+  is that the user-facing toggle works, not which library backs it.
 - Per-feed search UI: a search field in the feed view, results from
   `ItemCache.search(query:, feedId:)`. "Search older items" affordance
   pulls more from the server and re-indexes.
@@ -1092,10 +1100,11 @@ boundary.
 ### Rollback per phase
 
 Every phase has its own rollback note above. The dependency chain is
-1 -> 2 -> 3 -> {4, 5, 6, 7 -> 8} -> 9 -> 10. Phase 7's NSE branch
-that writes to ItemCache requires phase 8's ItemCache to exist on
-device, but the server side of phase 7 can ship before phase 8 — the
-NSE branch just gracefully handles the absent cache.
+1 -> 2 -> 3 -> {4, 5, 6, 7} -> 8 -> 9 -> 10. Phase 7's notification
+flow is fully independent of phase 8 (the v1 NSE branch enriches the
+notification body and nothing more); the cache-writing v2 of the NSE
+branch ships with or after phase 8 and is the only piece that crosses
+the phase-7-to-8 boundary.
 
 ## Open questions and risks
 
