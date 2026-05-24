@@ -99,8 +99,9 @@ function FolderRow({
           <ChevronDown size={12} aria-hidden="true" />
         </button>
       ) : (
-        <FolderIcon kind={f.kind} />
+        <span className={styles.rowChevSlot} aria-hidden="true" />
       )}
+      <FolderIcon kind={f.kind} />
       <span className={styles.folderName}>{display}</span>
       <span className={styles.rowActions} onClick={(e) => e.stopPropagation()}>
         <button

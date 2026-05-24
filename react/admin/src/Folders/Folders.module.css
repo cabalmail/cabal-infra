@@ -203,8 +203,10 @@
 .folderItem {
   position: relative;
   display: grid;
-  grid-template-columns: 18px 1fr auto;
-  gap: 10px;
+  /* chevron slot (only filled on parents, empty placeholder on leaves so
+     all folder icons align), icon, name, hover-revealed actions */
+  grid-template-columns: 12px 18px 1fr auto;
+  column-gap: 6px;
   align-items: center;
   height: 32px;
   padding: 0 12px;
@@ -246,15 +248,16 @@
   color: var(--accent);
 }
 
-/* Per-folder collapse chevron — replaces the folder icon on rows that have
-   children. Sized to match the 18px icon slot so the row layout stays put. */
+/* Per-folder collapse chevron — sits in the dedicated 12px chevron slot
+   before the folder icon. Leaf rows reserve the same slot with `rowChevSlot`
+   so every folder icon column-aligns regardless of which rows have children. */
 
 .rowChev {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 12px;
+  height: 12px;
   padding: 0;
   margin: 0;
   border: 0;
@@ -270,6 +273,12 @@
 
 .folderItem.rowCollapsed .rowChev {
   transform: rotate(-90deg);
+}
+
+.rowChevSlot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
 }
 
 .folderName {
