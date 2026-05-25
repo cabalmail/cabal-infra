@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.32] - 2026-05-25
+
+### Fixed
+- Grafana "API Gateway & Lambda" dashboard's 5xx-rate, Lambda
+  duration p95, and Lambda errors/throttles panels - blank since the
+  monitoring stack shipped despite real activity in CloudWatch.
+  Two root causes:
+  - The 5xx-rate query (and the matching `Lambda5xxSpike` alert
+    rule) used `aws_apigateway_5_xx_error_sum`. cloudwatch_exporter
+    v0.16.0's `toSnakeCase` regex `([a-z0-9])([A-Z])` only inserts an
+    underscore between a digit/lowercase and an uppercase, not
+    between consecutive uppercase letters, so `5XXError` becomes
+    `5_xxerror`. Same gotcha pattern as the earlier
+    `aws_cloudfront_5_xx_error_rate` -> `5xx_error_rate` fix
+    (0.9.x, commit 3fdb8d80). Renamed to
+    `aws_apigateway_5_xxerror_sum`.
+  - The Lambda panels and the `LambdaThrottles` / `LambdaErrors`
+    alert rules filtered by `function_name=~"cabal-.+"`. Only two of
+    Cabalmail's ~45 Lambdas actually carry that prefix
+    (`cabal-certbot-renewal`, `cabal-healthchecks-iac`); the API
+    handlers and ops Lambdas are bare-named (`list`, `fetch_message`,
+    `assign_osid`, `alert_sink`, ...). Replaced with an exclusion
+    filter (`function_name!~"aws-.+"`) so any current or future Cabal
+    Lambda is covered while AWS-managed functions like
+    `aws-quicksetup-lifecycle-*` stay out. Same pattern applied to
+    `Lambda5xxSpike`'s `api_name` filter - the only API is
+    `cabal_gateway` (underscore), which a `cabal-.+` regex never
+    matched.
+  - The duration p95 panel additionally used the `_average`
+    statistic despite the title; switched to `_p95`.
+
 ## [0.9.31] - 2026-05-25
 
 ### Added

@@ -26,16 +26,25 @@ groups:
     rules:
 
       - alert: Lambda5xxSpike
-        # API Gateway 5XX for any of the cabal-* Lambdas, > 5% over 5 min
+        # API Gateway 5XX on the cabal_gateway API, > 5% over 5 min
         # (rate over a 10 min window for stability).
+        #
+        # Two cloudwatch_exporter naming gotchas to keep in mind here:
+        # 1. The CloudWatch metric is "5XXError". The exporter's snake_case
+        #    pass uses regex ([a-z0-9])([A-Z]), which inserts an underscore
+        #    before the FIRST uppercase X but not between consecutive caps,
+        #    so the Prometheus name is aws_apigateway_5_xxerror_sum (one
+        #    underscore, "xxerror" as a single run) - NOT 5_xx_error.
+        # 2. The API is named cabal_gateway (underscore). A regex like
+        #    cabal-.+ won't match it.
         expr: |
           sum by (api_name, stage) (
-            rate(aws_apigateway_5_xx_error_sum{api_name=~"cabal-.+"}[10m])
+            rate(aws_apigateway_5_xxerror_sum{api_name="cabal_gateway"}[10m])
           )
           /
           clamp_min(
             sum by (api_name, stage) (
-              rate(aws_apigateway_count_sum{api_name=~"cabal-.+"}[10m])
+              rate(aws_apigateway_count_sum{api_name="cabal_gateway"}[10m])
             ),
             1
           )
@@ -49,7 +58,13 @@ groups:
           runbook_url: "https://github.com/cabalmail/cabal-infra/blob/main/docs/operations/runbooks/lambda-5xx-spike.md"
 
       - alert: LambdaThrottles
-        expr: sum by (function_name) (rate(aws_lambda_throttles_sum{function_name=~"cabal-.+"}[5m])) > 0
+        # Cabalmail's API Lambdas are bare-named (`list`, `fetch_message`,
+        # `process_dmarc`, ...), not prefixed with `cabal-`. Only two
+        # functions actually carry the prefix (cabal-certbot-renewal,
+        # cabal-healthchecks-iac). Filter by exclusion of AWS-managed
+        # function names instead, so any future Cabal Lambda is covered
+        # automatically.
+        expr: sum by (function_name) (rate(aws_lambda_throttles_sum{function_name!~"aws-.+"}[5m])) > 0
         for: 1m
         labels:
           severity: warning
@@ -59,14 +74,17 @@ groups:
           runbook_url: "https://github.com/cabalmail/cabal-infra/blob/main/docs/operations/runbooks/lambda-throttles.md"
 
       - alert: LambdaErrors
-        # `cabal-.+` covers cabal-list, cabal-fetch-message, cabal-certbot-renewal,
-        # cabal-process-dmarc, cabal-backup-heartbeat, cabal-alert-sink, etc.
-        # `assign_osid` is the Cognito post-confirmation Lambda — included
-        # explicitly because it pre-dates the cabal- naming convention.
-        # Phase 4 §2 prefers extending this regex over a separate
-        # log-derived metric for Cognito errors; AWS/Lambda Errors covers
-        # the unhandled-exception path, which is most of what we'd catch.
-        expr: sum by (function_name) (increase(aws_lambda_errors_sum{function_name=~"cabal-.+|assign_osid"}[15m])) > 0
+        # Covers every Cabalmail-owned Lambda (the API handlers like
+        # `list` / `fetch_message`, the monitoring ones like `alert_sink`
+        # / `backup_heartbeat`, the Cognito post-confirmation
+        # `assign_osid`, and the two prefixed ones - `cabal-certbot-renewal`,
+        # `cabal-healthchecks-iac`). Excluding `aws-.+` keeps AWS-managed
+        # Lambdas like `aws-quicksetup-lifecycle-*` from triggering the
+        # rule. Phase 4 §2 prefers extending this coverage over a
+        # separate log-derived metric for Cognito errors; AWS/Lambda
+        # Errors covers the unhandled-exception path, which is most of
+        # what we'd catch.
+        expr: sum by (function_name) (increase(aws_lambda_errors_sum{function_name!~"aws-.+"}[15m])) > 0
         for: 5m
         labels:
           severity: warning
