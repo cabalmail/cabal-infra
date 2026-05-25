@@ -201,6 +201,18 @@ struct MessageListView: View {
             Task { await model.runSearch() }
         }
         #endif
+        // Drop search mode when the field is cleared. `.searchable`'s
+        // built-in × / Cancel buttons and the macOS inline field's clear
+        // button all just zero out the binding without firing
+        // `.onSubmit(of: .search)`, so without this the user would be
+        // stuck with stale search results and no path back to the
+        // folder view short of running a different query.
+        .onChange(of: model.searchQuery) { _, newValue in
+            guard model.isSearchActive,
+                  newValue.trimmingCharacters(in: .whitespaces).isEmpty
+            else { return }
+            Task { await model.clearSearch() }
+        }
         .refreshable {
             await model.refresh()
         }

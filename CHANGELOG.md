@@ -42,7 +42,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instead of the sidebar's current selection. A new in-list
   banner above the results shows the scope ("in N folders") and
   match count, surfaces the 5,000-result truncation hint when
-  the cap is hit, and exposes a one-tap clear button.
+  the cap is hit, and exposes a one-tap clear button. Clearing
+  the search field itself (the iOS / iPadOS Cancel and × buttons,
+  the macOS inline × button, or backspacing the field to empty)
+  also exits search mode and restores the selected folder's
+  messages — previously the only path out of search was running
+  a different query.
 
 ## [0.9.30] - 2026-05-24
 
