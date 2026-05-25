@@ -46,7 +46,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (api_name) (rate(aws_apigateway_5_xx_error_sum[5m])) / clamp_min(sum by (api_name) (rate(aws_apigateway_count_sum[5m])), 1)",
+          "expr": "sum by (api_name) (rate(aws_apigateway_5_xxerror_sum[5m])) / clamp_min(sum by (api_name) (rate(aws_apigateway_count_sum[5m])), 1)",
           "refId": "A",
           "legendFormat": "{{api_name}}"
         }
@@ -68,7 +68,7 @@
       },
       "targets": [
         {
-          "expr": "aws_lambda_duration_average{function_name=~\"cabal-.+\"}",
+          "expr": "aws_lambda_duration_p95{function_name!~\"aws-.+\"}",
           "refId": "A",
           "legendFormat": "{{function_name}}"
         }
@@ -90,12 +90,12 @@
       },
       "targets": [
         {
-          "expr": "sum by (function_name) (rate(aws_lambda_errors_sum{function_name=~\"cabal-.+\"}[5m]))",
+          "expr": "sum by (function_name) (rate(aws_lambda_errors_sum{function_name!~\"aws-.+\"}[5m]))",
           "refId": "A",
           "legendFormat": "errors {{function_name}}"
         },
         {
-          "expr": "sum by (function_name) (rate(aws_lambda_throttles_sum{function_name=~\"cabal-.+\"}[5m]))",
+          "expr": "sum by (function_name) (rate(aws_lambda_throttles_sum{function_name!~\"aws-.+\"}[5m]))",
           "refId": "B",
           "legendFormat": "throttles {{function_name}}"
         }
