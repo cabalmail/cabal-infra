@@ -199,10 +199,25 @@ metrics:
     aws_extended_statistics: [p95]
 
   # ── ACM ───────────────────────────────────────────────────────
+  # DaysToExpiry's only CloudWatch dimension is CertificateArn, which
+  # turns into a `certificate_arn` label whose value is the full ARN
+  # - useless in a stat panel or alert summary. aws_tag_select calls
+  # the AWS Resource Groups Tagging API to fetch the cert's tags
+  # (terraform/infra/modules/cert/main.tf sets Name="cabal-nlb") and
+  # adds them as `tag_<TagName>` labels (preserving case, per
+  # cloudwatch_exporter v0.16.0). The dashboard and CertExpiring*
+  # alerts use {{tag_Name}} to display the friendly identifier.
+  # Requires the exporter task role to have `tag:GetResources`, which
+  # terraform/infra/modules/monitoring/exporters.tf already grants.
   - aws_namespace: AWS/CertificateManager
     aws_metric_name: DaysToExpiry
     aws_dimensions: [CertificateArn]
     aws_statistics: [Minimum]
+    aws_tag_select:
+      resource_type_selection: "acm:certificate"
+      resource_id_dimension: CertificateArn
+      tag_selections:
+        Name: []
 
   # ── CloudFront (us-east-1 only) ───────────────────────────────
   # CloudFront metrics live exclusively in us-east-1. cloudwatch_exporter

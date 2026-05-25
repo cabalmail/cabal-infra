@@ -54,6 +54,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     matched.
   - The duration p95 panel additionally used the `_average`
     statistic despite the title; switched to `_p95`.
+  - The "ACM days to expiry" stat panel and both
+    `CertExpiringSoon{Warning,Critical}` alert rules referenced a
+    `{{domain_name}}` label that cloudwatch_exporter never emits.
+    `AWS/CertificateManager DaysToExpiry`'s only CloudWatch
+    dimension is `CertificateArn`, so the only available label was
+    the full ARN. Added `aws_tag_select` to the ACM rule in the
+    exporter config so the cert's existing `Name="cabal-nlb"` tag
+    (set in `terraform/infra/modules/cert/main.tf`) flows through
+    as a `tag_Name` label via the Resource Groups Tagging API; the
+    panel and alerts now interpolate `{{tag_Name}}` instead. The
+    exporter task role already had `tag:GetResources`, so no IAM
+    change was needed.
 
 ## [0.9.31] - 2026-05-25
 
