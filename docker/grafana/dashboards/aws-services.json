@@ -46,7 +46,7 @@
       },
       "targets": [
         {
-          "expr": "aws_efs_percent_io_limit_average",
+          "expr": "aws_efs_percent_iolimit_average",
           "refId": "A",
           "legendFormat": "{{file_system_id}}"
         }

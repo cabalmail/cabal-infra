@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- Grafana "EFS PercentIOLimit" panel still blank after the 0.9.33
+  exporter-abort fix surfaced the underlying CloudWatch series.
+  Same `toSnakeCase` gotcha as the `5XXError` -> `5_xxerror` fix in
+  0.9.32: cloudwatch_exporter's `([a-z0-9])([A-Z])` regex doesn't
+  split between consecutive uppercase letters, so `PercentIOLimit`
+  becomes `percent_iolimit` (one underscore, "iolimit" as a single
+  run), not `percent_io_limit`. The dashboard query was looking at
+  a series that doesn't exist. Renamed to
+  `aws_efs_percent_iolimit_average`.
+- Grafana "ACM days to expiry (min)" panel still blank after the
+  0.9.33 fix because ACM publishes `DaysToExpiry` once per day
+  (timestamp tied to each cert's issuance time), but the exporter's
+  global `range_seconds: 600` window catches that emission only
+  about 0.7% of the time. Override the ACM scrape block with
+  `period_seconds: 86400` / `range_seconds: 172800` so each scrape
+  reliably picks up yesterday's value.
+
 ## [0.9.33] - 2026-05-25
 
 ### Fixed
