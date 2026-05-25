@@ -27,6 +27,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   window toolbar's trailing edge, where it sat visually over the
   message detail column.
 
+### Added
+- Apple clients pick up the same structured filter panel as the
+  React webmail. A new filter toolbar button next to the New
+  Message button opens a sheet (iPhone) or popover (iPad / macOS)
+  with From / To / Subject text inputs, Since / Before date
+  pickers, Unread / Flagged / Has attachment toggles, and a
+  "This folder only" scope switch. Apply re-runs the search;
+  Reset wipes the form back to defaults. Cross-folder is the
+  default scope, matching the React UX; search results from
+  other folders carry their source mailbox so per-row swipe
+  actions and the opened message-detail view's mark-read /
+  archive / move operations all target the row's true folder
+  instead of the sidebar's current selection. A new in-list
+  banner above the results shows the scope ("in N folders") and
+  match count, surfaces the 5,000-result truncation hint when
+  the cap is hit, and exposes a one-tap clear button.
+
 ## [0.9.30] - 2026-05-24
 
 ### Added

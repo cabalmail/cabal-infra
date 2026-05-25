@@ -13,22 +13,25 @@ extension MessageListViewModel {
     /// `MessageDetailViewModel.setSeen` so a future "mark all" can land on
     /// the same primitive.
     func setFlag(_ flag: Flag, add: Bool, envelope: Envelope) async {
+        let source = sourceFolder(for: envelope)
         applyOptimisticFlag(uid: envelope.uid, flag: flag, add: add)
-        // Mirror the optimistic flag flip onto the folder's unread count
-        // when `.seen` changes — adding `.seen` to an unread message drops
-        // one from the badge, removing it adds one back. Only fires when
-        // the message wasn't already in the target state to avoid double-
-        // counting a no-op toggle.
+        // Mirror the optimistic flag flip onto the source folder's unread
+        // count when `.seen` changes — adding `.seen` to an unread message
+        // drops one from the badge, removing it adds one back. Only fires
+        // when the message wasn't already in the target state to avoid
+        // double-counting a no-op toggle. In cross-folder search mode the
+        // source folder is per-row, so the badge update reaches the right
+        // mailbox.
         let unreadDelta: Int
         if flag == .seen, envelope.flags.contains(.seen) != add {
             unreadDelta = add ? -1 : 1
-            appState.applyUnreadDelta(folderPath: folder.path, delta: unreadDelta)
+            appState.applyUnreadDelta(folderPath: source, delta: unreadDelta)
         } else {
             unreadDelta = 0
         }
         do {
             try await client.imapClient.setFlags(
-                folder: folder.path,
+                folder: source,
                 uids: [envelope.uid],
                 flags: [flag],
                 operation: add ? .add : .remove
@@ -36,7 +39,7 @@ extension MessageListViewModel {
         } catch {
             applyOptimisticFlag(uid: envelope.uid, flag: flag, add: !add)
             if unreadDelta != 0 {
-                appState.applyUnreadDelta(folderPath: folder.path, delta: -unreadDelta)
+                appState.applyUnreadDelta(folderPath: source, delta: -unreadDelta)
             }
             errorMessage = "\(error)"
         }
