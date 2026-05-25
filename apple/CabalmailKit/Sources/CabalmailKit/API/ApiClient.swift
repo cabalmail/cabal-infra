@@ -57,17 +57,6 @@ public protocol ApiClient: Sendable {
     ) async throws -> [UInt32]
     func listEnvelopes(host: String, folder: String, ids: [UInt32]) async throws -> [ApiEnvelope]
 
-    /// Runs an IMAP SEARCH against `folder` with the supplied raw criteria
-    /// string and returns the matching UIDs. Backed by the `/search`
-    /// Lambda; matches the wire shape `LiveImapClient` used to send
-    /// (`UID SEARCH <query>`).
-    ///
-    /// Deprecated in 0.9.x in favour of `searchEnvelopes(_:)`. Retained
-    /// during the migration window (Phase 5 of
-    /// `docs/0.9.x/imap-search-plan.md`); the raw-syntax `/search` Lambda
-    /// is deleted in Phase 6 once no callers remain.
-    func searchMessageIds(host: String, folder: String, query: String) async throws -> [UInt32]
-
     /// Structured search returning envelopes (newest-first) and a pagination
     /// cursor. Backed by the `/search_envelopes` Lambda. When
     /// `query.folder` is nil the search runs across the user's subscribed

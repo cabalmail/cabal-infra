@@ -37,16 +37,6 @@ public protocol ImapClient: Sendable {
     func setFlags(folder: String, uids: [UInt32], flags: Set<Flag>, operation: FlagOperation) async throws
     func move(folder: String, uids: [UInt32], destination: String) async throws
 
-    /// Raw-IMAP-syntax search returning matching UIDs.
-    ///
-    /// Deprecated alongside the `/search` Lambda. New code calls
-    /// `searchEnvelopes(_:)`, which sends a structured query and returns
-    /// envelopes directly (Phase 5 of `docs/0.9.x/imap-search-plan.md`).
-    /// `search(folder:query:)` stays during the migration window for
-    /// `LiveImapClient` parity; the production `ApiBackedImapClient`
-    /// continues to implement it until Phase 6 removes the surface.
-    func search(folder: String, query: String) async throws -> [UInt32]
-
     /// Structured search across one folder (`query.folder` set) or every
     /// subscribed folder (`query.folder == nil`). Returns envelopes with
     /// their source folder attached, plus the pagination cursor required

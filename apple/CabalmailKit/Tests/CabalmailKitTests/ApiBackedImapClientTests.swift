@@ -143,30 +143,6 @@ final class ApiBackedImapClientTests: XCTestCase {
         XCTAssertEqual(payload?["destination"] as? String, "Archive")
     }
 
-    func testSearchHitsLambdaAndReturnsUids() async throws {
-        let http = RecordingHTTPTransport(
-            responses: [(Data(#"{"message_ids":[7,11,42]}"#.utf8), 200)]
-        )
-        let api = URLSessionApiClient(
-            configuration: makeConfiguration(),
-            authService: StubAuthService(),
-            transport: http
-        )
-        let client = ApiBackedImapClient(api: api, host: "imap.example.com")
-        let result = try await client.search(folder: "INBOX", query: "TEXT \"hi\"")
-        XCTAssertEqual(result, [7, 11, 42])
-        let requests = await http.requests
-        XCTAssertEqual(requests.count, 1)
-        let request = requests[0]
-        XCTAssertEqual(request.httpMethod, "GET")
-        let url = request.url!.absoluteString
-        XCTAssertTrue(url.contains("/search"))
-        XCTAssertTrue(url.contains("host=imap.example.com"))
-        XCTAssertTrue(url.contains("folder=INBOX"))
-        // The query string round-trips as percent-encoded form.
-        XCTAssertTrue(url.contains("query=TEXT"))
-    }
-
     func testSendMessageHitsLambdaWithExpectedShape() async throws {
         let http = RecordingHTTPTransport(responses: [(Data(#"{"status":"submitted"}"#.utf8), 200)])
         let api = URLSessionApiClient(

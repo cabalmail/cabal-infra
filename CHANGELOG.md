@@ -65,9 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   trip instead of UID search + min...max envelope fan-out, and the
   fragile `replacingOccurrences` quote-escape hack is gone. UTF-8
   query handling moves server-side (the Lambda sets `CHARSET UTF-8`),
-  so non-ASCII queries round-trip correctly. The legacy
-  `search(folder:query:)` method and the `/search` Lambda stay in
-  place during the deprecation window and are removed in Phase 6.
+  so non-ASCII queries round-trip correctly.
   On macOS the search field now renders inline above the message
   list (matching the iPad layout) instead of being routed to the
   window toolbar's trailing edge, where it sat visually over the
@@ -82,6 +80,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   styles selected sidebar labels; macOS sidebar selection
   already uses a translucent gray that contrasts with the
   tinted icon, so it stays on the regular tint there.
+
+### Removed
+- Raw-IMAP-syntax `/search` Lambda and its API Gateway / SSM
+  registration (Phase 6 of `docs/0.9.x/imap-search-plan.md`).
+  `lambda/api/search/function.py` is deleted, the `search` entry
+  is gone from `terraform/infra/modules/app/locals.tf`'s
+  `supported_lambdas` map, and the Apple client's
+  `ImapClient.search(folder:query:)` /
+  `ApiClient.searchMessageIds(...)` surface (plus the
+  `ApiBackedImapClient` and `LiveImapClient` implementations) is
+  removed. Both clients have been on `/search_envelopes` since
+  Phases 2 and 5; nothing references the raw-syntax path. The
+  Dovecot wire-level `ImapResponse.search` parser case stays put
+  — it's protocol-level infrastructure independent of the
+  retired Lambda.
 
 ## [0.9.30] - 2026-05-24
 
