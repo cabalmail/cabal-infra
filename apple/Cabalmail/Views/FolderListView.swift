@@ -179,8 +179,7 @@ struct FolderListView: View {
             unread: appState.folderUnreadCounts[folder.path] ?? 0,
             depth: depth,
             hasChildren: model.hasChildren(folder),
-            isCollapsed: collapsed.contains(folder.path),
-            isSelected: selection?.path == folder.path
+            isCollapsed: collapsed.contains(folder.path)
         )
             .tag(folder)
             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
@@ -212,9 +211,9 @@ struct FolderListView: View {
         unread: Int,
         depth: Int,
         hasChildren: Bool,
-        isCollapsed: Bool,
-        isSelected: Bool
+        isCollapsed: Bool
     ) -> some View {
+        let isSelected = selection?.path == folder.path
         HStack {
             if depth > 0 {
                 Spacer().frame(width: CGFloat(depth) * 14)
