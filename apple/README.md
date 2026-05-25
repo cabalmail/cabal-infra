@@ -612,14 +612,80 @@ open IDLE socket. Untagged `EXISTS` / `EXPUNGE` / `FETCH` events stream
 via `AsyncThrowingStream<IdleEvent, Error>`; terminating the stream
 cancels the reader task, issues `DONE\r\n`, and closes the connection.
 
-### Rich-text editor: plain text only
+### Rich-text editor: WKWebView contenteditable + vendored marked/turndown
 
-iOS 18's selection APIs for `TextEditor<AttributedString>` aren't yet
-rich enough to drive a custom toolbar cleanly, and a
-`UITextViewRepresentable`/`NSTextViewRepresentable` wrapper is
-substantially more code than the compose-send-deliver path needs.
-`ComposeView` ships with `TextEditor(text: $body)` plain text and emits
-a `text/plain` body only.
+`ComposeView` ships a dual-mode body — segmented "Rich Text" / "Markdown"
+tabs — to match the React composer feature-for-feature. The rich pane is
+a `contenteditable` `<div>` inside a `WKWebView`, driven by a SwiftUI
+toolbar (`RichTextToolbar`) that calls `document.execCommand` through
+`RichTextEditorController`'s JS bridge. The markdown pane is a plain
+`TextEditor`; drafts persist as Markdown either way (the rich pane is
+re-seeded from the markdown source on open).
+
+At send time, `ComposeViewModel.computeMessageBodies()` runs the same
+four-way table the React `handleSend` applies: both-empty, rich-only
+(text body derived via turndown), markdown-only (html body derived via
+marked + flattenParagraphs + styleParagraphs), or both-filled. So every
+outgoing message ships with both MIME parts populated and no recipient
+sees a blank message because their mail client preferred `text/html`.
+
+#### Why a WKWebView instead of native NSTextView / UITextView
+
+Native rich-text editing on Apple platforms means `NSAttributedString`,
+and the `.data(from: ..., documentAttributes: [.documentType: .html])`
+round-trip emits HTML with heavy inline-styled spans that doesn't
+visually match what the React composer produces. Matching React's
+specific rules (Enter as hard-break in plain paragraphs but new-list-
+item inside lists, blank-line paragraph boundaries collapsed to
+`<br><br>`, ZWSP placeholder trick to defeat turndown's adjacent-
+newline collapsing) by hand against `NSAttributedString` is a much
+larger surface than letting the same JS libraries run inside a
+contenteditable.
+
+#### Why marked + turndown are vendored, not fetched at build time
+
+`apple/CabalmailKit/Sources/CabalmailKit/Compose/Resources/` ships
+`marked.umd.js` and `turndown.js` verbatim, with their MIT LICENSE
+files alongside. We considered fetching them from S3 (or npm) at build
+time. We didn't, for reasons that are worth recording so the next
+person who looks at the resource bundle doesn't relitigate them:
+
+- **`swift test` stays self-contained.** A fresh clone runs the kit
+  tests immediately with no network and no setup. A build-time fetch
+  step would couple the test target to either an S3 bucket or
+  registry.npmjs.org and break offline development.
+- **CI doesn't grow a hard S3 dependency.** A bucket outage or
+  IAM-role misconfiguration would otherwise break every Apple build.
+  Today the kit-test job needs only `xcodebuild`.
+- **License surfacing stays obvious.** The LICENSE files sit next to
+  the bundled JS, visible to anyone reviewing the resource directory
+  or browsing the bundle.
+- **PR review remains meaningful.** Bumping the version shows up as
+  a real diff a reviewer can inspect ("oh, marked v19 changed these
+  regexes"), not as a one-line manifest change with no visible
+  payload.
+- **Reproducibility doesn't actually improve when fetching.** A
+  cached artifact in our bucket is "vendoring without the audit
+  trail"; fetching from npm directly would still need a pin to be
+  reproducible.
+
+The real concern under "should we vendor?" was version drift between
+the Apple copy and the React copy (`react/admin/package.json` lists
+the same versions). The intended mitigation is a CI guard that
+`diff`s the vendored bytes against `react/admin/node_modules/...`
+after `npm ci` and fails if they diverge — make `react/admin`'s
+`package.json` the source of truth and treat the vendored Apple copy
+as a derived artifact CI keeps fresh. Not yet wired up; tracked
+informally until it bites.
+
+A root-level `vendor/` directory was also considered. SwiftPM requires
+resources to live inside the target's `path:`, so a root vendor would
+need symlinks (`Resources/marked.umd.js -> ../../../../../../vendor/...`),
+and the kit would stop being self-contained. With only one consumer
+today (and Android likely to use Kotlin-native markdown libs rather
+than re-bundling marked), the convention didn't pay off enough to
+justify the symlink indirection. Revisit if a second non-JS consumer
+of these libs appears.
 
 ### Drafts: local only
 
