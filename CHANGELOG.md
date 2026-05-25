@@ -53,6 +53,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   window toolbar's trailing edge, where it sat visually over the
   message detail column.
 
+### Fixed
+- Selected folder icon is now legible on iPadOS. The sidebar's
+  selection highlight is the accent color, and the folder icon
+  uses the same `.tint`, so the icon used to disappear into the
+  highlight. The icon now flips to white when its row is
+  selected on iOS/iPadOS/visionOS, matching how the system
+  styles selected sidebar labels; macOS sidebar selection
+  already uses a translucent gray that contrasts with the
+  tinted icon, so it stays on the regular tint there.
+
 ## [0.9.30] - 2026-05-24
 
 ### Added

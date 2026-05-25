@@ -179,7 +179,8 @@ struct FolderListView: View {
             unread: appState.folderUnreadCounts[folder.path] ?? 0,
             depth: depth,
             hasChildren: model.hasChildren(folder),
-            isCollapsed: collapsed.contains(folder.path)
+            isCollapsed: collapsed.contains(folder.path),
+            isSelected: selection?.path == folder.path
         )
             .tag(folder)
             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
@@ -211,7 +212,8 @@ struct FolderListView: View {
         unread: Int,
         depth: Int,
         hasChildren: Bool,
-        isCollapsed: Bool
+        isCollapsed: Bool,
+        isSelected: Bool
     ) -> some View {
         HStack {
             if depth > 0 {
@@ -241,7 +243,12 @@ struct FolderListView: View {
             }
             .frame(width: 14, height: 14)
             Image(systemName: iconName(for: folder))
-                .foregroundStyle(.tint)
+                // iPadOS sidebar selection paints the row in the accent color,
+                // so a tinted icon vanishes against the highlight. Flip to
+                // white when selected to keep it readable. macOS uses a
+                // translucent gray selection that already contrasts, so leave
+                // it on the regular tint.
+                .foregroundStyle(iconForeground(isSelected: isSelected))
             Text(folder.name)
             Spacer()
             if unread > 0 {
@@ -260,6 +267,14 @@ struct FolderListView: View {
         // box. `.hoverEffect(.highlight)` matches Apple Mail on visionOS.
         .contentShape(Rectangle())
         .hoverEffect(.highlight)
+        #endif
+    }
+
+    private func iconForeground(isSelected: Bool) -> AnyShapeStyle {
+        #if os(macOS)
+        return AnyShapeStyle(.tint)
+        #else
+        return isSelected ? AnyShapeStyle(Color.white) : AnyShapeStyle(.tint)
         #endif
     }
 
