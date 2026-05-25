@@ -16,10 +16,11 @@ import Foundation
 ///     folder's `UIDNEXT` advances (or `.expunge(0)` when the message count
 ///     drops). `MailboxWatcher` already coalesces bursts and applies
 ///     reconnect backoff, so callers see the same observable contract.
-///   * SEARCH is mediated by the `/search` Lambda — the client passes
-///     the raw IMAP SEARCH criteria string through (matching what
-///     `LiveImapClient` used to send as `UID SEARCH <query>`) and the
-///     Lambda returns the matching UIDs.
+///   * SEARCH is mediated by the `/search_envelopes` Lambda — clients
+///     pass a structured `SearchQuery` and receive envelopes plus a
+///     pagination cursor in a single round trip. The raw-IMAP-syntax
+///     `/search` Lambda was retired in 0.9.x (Phase 6 of
+///     `docs/0.9.x/imap-search-plan.md`).
 ///   * No APPEND — `/send` already handles the Outbox + Sent shuffle
 ///     server-side, so `CabalmailClient.send(_:)` no longer needs a
 ///     client-side APPEND. `append(_:_:_:)` here throws `protocolError`
@@ -204,10 +205,6 @@ public actor ApiBackedImapClient: ImapClient {
     }
 
     // MARK: - Search
-
-    public func search(folder: String, query: String) async throws -> [UInt32] {
-        try await api.searchMessageIds(host: host, folder: folder, query: query)
-    }
 
     // `searchEnvelopes(_:)` lives in an extension below so the primary
     // type body stays under SwiftLint's 250-line cap.

@@ -104,16 +104,6 @@ extension URLSessionApiClient {
         return try JSONDecoder().decode(MessageIdsPayload.self, from: data).messageIds
     }
 
-    public func searchMessageIds(host: String, folder: String, query: String) async throws -> [UInt32] {
-        let request = try await get("/search", query: [
-            URLQueryItem(name: "host", value: host),
-            URLQueryItem(name: "folder", value: folder),
-            URLQueryItem(name: "query", value: query),
-        ])
-        let data = try await send(request, expectedStatuses: 200..<300)
-        return try JSONDecoder().decode(MessageIdsPayload.self, from: data).messageIds
-    }
-
     public func searchEnvelopes(host: String, query: SearchQuery) async throws -> ApiSearchResponse {
         let request = try await get(
             "/search_envelopes",

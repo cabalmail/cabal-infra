@@ -256,20 +256,6 @@ public actor LiveImapClient: ImapClient {
         }
     }
 
-    public func search(folder: String, query: String) async throws -> [UInt32] {
-        try await withTransportRetry {
-            let conn = try self.requireConnection()
-            try await self.select(folder: folder, on: conn)
-            let responses = try await conn.sendCommand("UID SEARCH \(query)")
-            for response in responses {
-                if case let .search(ids) = response {
-                    return ids
-                }
-            }
-            return []
-        }
-    }
-
     public func append(folder: String, message: Data, flags: Set<Flag>) async throws {
         try await withTransportRetry {
             let conn = try self.requireConnection()
