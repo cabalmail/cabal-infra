@@ -145,6 +145,24 @@
   font-family: var(--font-ui, inherit);
 }
 
+/* Source-folder chip on rows rendered inside a cross-folder search result.
+   Sits between the from-name and the date in `.envelope-head`. */
+.envelope-folder {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--surface-hover);
+  color: var(--ink-quiet);
+  font-family: var(--font-ui, inherit);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .envelope-subject {
   font-family: var(--font-reader, Georgia, serif);
   font-size: 14px;

@@ -1,15 +1,23 @@
 /**
  * Search results pane. Replaces the folder Messages view when a search is
- * active. Phase 2 of `docs/0.9.x/imap-search-plan.md` — single-folder only
- * (the "all folders" toggle is shown disabled until Phase 3 lands the
- * cross-folder Lambda mode), no FTS yet (latency on body search is whatever
- * Dovecot's sequential scan gives us until Phase 4).
+ * active. Phases 2 + 3 of `docs/0.9.x/imap-search-plan.md`. Cross-folder is
+ * the default (the Lambda enumerates the user's subscribed folders and
+ * excludes Trash/Spam/Junk/Deleted Messages on the server side); a "This
+ * folder only" toggle scopes the search back to the currently-selected
+ * folder. No FTS yet (latency on body search is whatever Dovecot's
+ * sequential scan gives us until Phase 4).
  *
- * Owns its own search state (the structured filters) and re-runs the query
- * whenever the user submits the form. The free-text term comes in via prop
- * from the Nav search input; clearing search (Clear button or empty query)
- * lifts back up to App via `clearSearch`, which switches the middle pane
- * back to the folder view.
+ * Owns its own search state (the structured filters + the scope toggle) and
+ * re-runs the query whenever the user submits the form. The free-text term
+ * comes in via prop from the Nav search input; clearing search (Clear
+ * button or empty query) lifts back up to App via `clearSearch`, which
+ * switches the middle pane back to the folder view.
+ *
+ * Each result envelope carries a `folder` field from the Lambda naming its
+ * source folder. Bulk archive / delete / flag and per-row swipe actions
+ * group selected IDs by that folder so each backend call hits the right
+ * mailbox, and the message overlay opens against `envelope.folder` so
+ * its archive/delete/flag operations also target the correct folder.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SwipeableList, Type } from 'react-swipeable-list';
@@ -65,6 +73,12 @@ function Search({
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [submittedFilters, setSubmittedFilters] = useState(DEFAULT_FILTERS);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // Scope toggle: cross-folder is the default (sends no `folder` param,
+  // Lambda enumerates the user's subscribed folders). Flipping it on
+  // scopes the search to the currently-selected folder. Lives outside
+  // `submittedFilters` because flipping it should re-fetch immediately,
+  // not wait for the user to open the filter panel and click Apply.
+  const [thisFolderOnly, setThisFolderOnly] = useState(false);
   // `refreshTick` bumps to force a re-fetch after a mutation (archive,
   // flag, delete) without needing the user to re-submit anything.
   const [refreshTick, setRefreshTick] = useState(0);
@@ -84,11 +98,14 @@ function Search({
   useEffect(() => {
     setSelected(new Set());
     lastSelectedRef.current = null;
-  }, [folder, query, submittedFilters, setSelected]);
+  }, [folder, query, submittedFilters, thisFolderOnly, setSelected]);
 
   const buildParams = useCallback((cursor, filterSnapshot) => {
     const f = filterSnapshot || submittedFilters;
-    const params = { folder, text: query, limit: PAGE_LIMIT };
+    const params = { text: query, limit: PAGE_LIMIT };
+    // Cross-folder is the Lambda default (no `folder` param). Only include
+    // `folder` when the user has explicitly scoped the search.
+    if (thisFolderOnly) params.folder = folder;
     if (cursor) params.cursor = cursor;
     if (f.from.trim()) params.from = f.from.trim();
     if (f.to.trim()) params.to = f.to.trim();
@@ -99,7 +116,7 @@ function Search({
     if (f.flagged) params.flagged = true;
     if (f.has_attachment) params.has_attachment = true;
     return params;
-  }, [folder, query, submittedFilters]);
+  }, [folder, query, submittedFilters, thisFolderOnly]);
 
   // Fetch fires on mount and any time the committed query inputs change.
   // Typing in the filter form does NOT trigger a fetch — only Apply does
@@ -137,7 +154,7 @@ function Search({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [api, folder, query, submittedFilters, refreshTick]);
+  }, [api, folder, query, submittedFilters, thisFolderOnly, refreshTick]);
 
   const loadMore = useCallback(() => {
     if (!nextCursor || loadingMore) return;
@@ -183,57 +200,86 @@ function Search({
   const selectedIdsArray = useMemo(() => Array.from(selected), [selected]);
   const selectedCount = selected.size;
 
+  // Per-result source folder map. Results from cross-folder search carry
+  // their own `folder`; single-folder results fall back to the page folder.
+  // Operations look up the right source folder per ID so the backend call
+  // hits the mailbox that actually holds the message.
+  const folderById = useMemo(() => {
+    const m = new Map();
+    for (const e of envelopes) {
+      m.set(Number(e.id), e.folder || folder);
+    }
+    return m;
+  }, [envelopes, folder]);
+
+  const groupByFolder = useCallback((ids) => {
+    const groups = new Map();
+    for (const id of ids) {
+      const f = folderById.get(Number(id)) || folder;
+      if (!groups.has(f)) groups.set(f, []);
+      groups.get(f).push(Number(id));
+    }
+    return groups;
+  }, [folderById, folder]);
+
   const runFlagOp = useCallback((spec, ids) => {
     if (!ids.length) return;
-    api
-      .setFlag(folder, spec.imap, spec.op, ids)
+    const groups = groupByFolder(ids);
+    const calls = [];
+    for (const [src, groupIds] of groups.entries()) {
+      calls.push(api.setFlag(src, spec.imap, spec.op, groupIds));
+    }
+    Promise.all(calls)
       .then(refreshAfterMutation)
       .catch((err) => console.error(err));
-  }, [api, folder, refreshAfterMutation]);
+  }, [api, groupByFolder, refreshAfterMutation]);
 
-  const archiveSelected = useCallback(() => {
+  const moveSelectedTo = useCallback((destination) => {
     if (!selectedCount) return;
-    api
-      .moveMessages(folder, 'Archive', selectedIdsArray)
+    const groups = groupByFolder(selectedIdsArray);
+    const calls = [];
+    for (const [src, ids] of groups.entries()) {
+      calls.push(api.moveMessages(src, destination, ids));
+    }
+    Promise.all(calls)
       .then(() => {
         refreshAfterMutation();
         exitBulk();
       })
       .catch((err) => console.error(err));
-  }, [api, folder, selectedIdsArray, selectedCount, refreshAfterMutation, exitBulk]);
+  }, [api, groupByFolder, selectedIdsArray, selectedCount, refreshAfterMutation, exitBulk]);
 
-  const deleteSelected = useCallback(() => {
-    if (!selectedCount) return;
-    api
-      .moveMessages(folder, 'Deleted Messages', selectedIdsArray)
-      .then(() => {
-        refreshAfterMutation();
-        exitBulk();
-      })
-      .catch((err) => console.error(err));
-  }, [api, folder, selectedIdsArray, selectedCount, refreshAfterMutation, exitBulk]);
+  const archiveSelected = useCallback(() => moveSelectedTo('Archive'), [moveSelectedTo]);
+  const deleteSelected = useCallback(() => moveSelectedTo('Deleted Messages'), [moveSelectedTo]);
 
   const markReadSelected = useCallback(() => runFlagOp(READ, selectedIdsArray), [runFlagOp, selectedIdsArray]);
   const markUnreadSelected = useCallback(() => runFlagOp(UNREAD, selectedIdsArray), [runFlagOp, selectedIdsArray]);
   const flagSelected = useCallback(() => runFlagOp(FLAGGED, selectedIdsArray), [runFlagOp, selectedIdsArray]);
 
-  // Single-row swipe ops mirror Messages.
+  // Single-row swipe ops mirror Messages but resolve each row's source
+  // folder so cross-folder results route to the right mailbox.
+  const folderFor = useCallback(
+    (id) => folderById.get(Number(id)) || folder,
+    [folderById, folder],
+  );
   const markReadOne = useCallback(
-    (id) => api.setFlag(folder, READ.imap, READ.op, [id]).then(refreshAfterMutation).catch((e) => console.error(e)),
-    [api, folder, refreshAfterMutation],
+    (id) => api.setFlag(folderFor(id), READ.imap, READ.op, [id]).then(refreshAfterMutation).catch((e) => console.error(e)),
+    [api, folderFor, refreshAfterMutation],
   );
   const markUnreadOne = useCallback(
-    (id) => api.setFlag(folder, UNREAD.imap, UNREAD.op, [id]).then(refreshAfterMutation).catch((e) => console.error(e)),
-    [api, folder, refreshAfterMutation],
+    (id) => api.setFlag(folderFor(id), UNREAD.imap, UNREAD.op, [id]).then(refreshAfterMutation).catch((e) => console.error(e)),
+    [api, folderFor, refreshAfterMutation],
   );
   const archiveOne = useCallback(
-    (id) =>
-      api
-        .setFlag(folder, READ.imap, READ.op, [id])
-        .then(() => api.moveMessages(folder, 'Archive', [id]))
+    (id) => {
+      const src = folderFor(id);
+      return api
+        .setFlag(src, READ.imap, READ.op, [id])
+        .then(() => api.moveMessages(src, 'Archive', [id]))
         .then(refreshAfterMutation)
-        .catch((e) => console.error(e)),
-    [api, folder, refreshAfterMutation],
+        .catch((e) => console.error(e));
+    },
+    [api, folderFor, refreshAfterMutation],
   );
 
   // Optimistic local flag toggle so the row reflects changes immediately
@@ -293,7 +339,12 @@ function Search({
   );
 
   const filtersActive = activeFilterCount(filters);
-  const inFolder = foldersSearched[0] || folder;
+  const scopeLabel = thisFolderOnly
+    ? (foldersSearched[0] || folder)
+    : (foldersSearched.length > 0
+        ? `${foldersSearched.length} ${foldersSearched.length === 1 ? 'folder' : 'folders'}`
+        : 'all folders');
+  const scopeTitle = thisFolderOnly ? null : (foldersSearched.join(', ') || null);
 
   const renderHeader = () => {
     if (bulkMode) {
@@ -366,8 +417,8 @@ function Search({
           </button>
         </div>
         <div className="search-meta">
-          <span className="search-scope">
-            in <strong>{inFolder}</strong>
+          <span className="search-scope" title={scopeTitle || undefined}>
+            in <strong>{scopeLabel}</strong>
           </span>
           {!loading && (
             <span className="search-count">
@@ -463,8 +514,15 @@ function Search({
                 />
                 <span>Has attachment</span>
               </label>
-              <label className="search-check is-disabled" title="Cross-folder search arrives in Phase 3">
-                <input type="checkbox" checked disabled readOnly />
+              <label
+                className="search-check"
+                title={`Scope to ${folder} only; otherwise search every subscribed folder (Trash/Spam excluded).`}
+              >
+                <input
+                  type="checkbox"
+                  checked={thisFolderOnly}
+                  onChange={(e) => setThisFolderOnly(e.target.checked)}
+                />
                 <span>This folder only</span>
               </label>
             </div>
@@ -530,6 +588,7 @@ function Search({
                   from={e.from}
                   flags={e.flags}
                   struct={e.struct}
+                  folder={!thisFolderOnly && e.folder ? e.folder : null}
                   is_checked={selected.has(id)}
                   dom_id={e.id}
                   bulkMode={bulkMode}

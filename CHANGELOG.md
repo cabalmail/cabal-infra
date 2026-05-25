@@ -15,37 +15,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Escape. The section-header `+` and bottom "New folder" button continue
   to add at the root. Adding under a collapsed parent auto-expands it so
   the input — and the new child once created — are visible.
-- React webmail picks up message search (Phase 2 of
+- React webmail picks up message search (Phases 2 + 3 of
   `docs/0.9.x/imap-search-plan.md`). The Nav search bar — previously
   decorative — now commits its text on Enter and Cmd+K, and Escape
   clears it; an empty value reverts to the folder view. When a query
   is active the Email middle pane swaps in a search results pane that
   fetches against the new `/search_envelopes` endpoint with a 25 s
-  timeout, renders matches via the existing envelope row component,
+  timeout, renders matches via the existing envelope row component
+  (each row tags its source folder when results span more than one),
   paginates "Load more" pages through the opaque cursor, and surfaces
-  the 5,000-result truncation hint when the cap is hit. A collapsible
-  filter panel exposes the structured query fields (`from`, `to`,
-  `subject`, `since`, `before`, `unread`, `flagged`, `has_attachment`)
-  and an active-filter badge; filters re-issue the search on Apply, not
-  on every keystroke. Bulk archive / delete / mark read / mark unread /
-  flag work on selected results, swipe actions on individual rows
-  match the folder view, and any mutation re-runs the search to drop
-  stale matches. The "this folder only" toggle is shown disabled until
-  the cross-folder Lambda mode lands in Phase 3.
-- New `/search_envelopes` Lambda landing Phase 1 of
+  the 5,000-result truncation hint when the cap is hit. Cross-folder
+  is the default; a "This folder only" toggle in the filter panel
+  scopes the search back to the currently-selected folder. A
+  collapsible filter panel exposes the structured query fields
+  (`from`, `to`, `subject`, `since`, `before`, `unread`, `flagged`,
+  `has_attachment`) and an active-filter badge; filters re-issue the
+  search on Apply, not on every keystroke. Bulk archive / delete /
+  mark read / mark unread / flag work on selected results — and in
+  cross-folder mode they group selected IDs by source folder so each
+  call hits the right mailbox. Swipe actions on individual rows route
+  to the row's own folder, and the message overlay opens against the
+  envelope's source folder so its archive/delete/flag operations
+  target the correct mailbox. Any mutation re-runs the search to drop
+  stale matches.
+- New `/search_envelopes` Lambda landing Phases 1 + 3 of
   `docs/0.9.x/imap-search-plan.md`. Accepts a structured query
   (`text`, `from`, `to`, `subject`, `since`, `before`, `unread`,
-  `flagged`, `has_attachment`, `limit`, `cursor`) against a required
-  `folder`, translates it to an IMAP SEARCH criteria list server-side
-  with `CHARSET UTF-8`, sorts matches newest-first by INTERNALDATE +
-  UID, and returns the same per-envelope shape as `/list_envelopes`
-  with an opaque cursor for the next page. Match sets are capped at
-  5,000 results (a `truncated` flag in the response signals the cap);
-  `has_attachment` is computed post-hoc from BODYSTRUCTURE (the
-  heuristic tightens once FTS lands in Phase 4). Single-folder only;
-  cross-folder is Phase 3. The existing raw-syntax `/search` endpoint
-  is unchanged and continues to power the Apple client until Phase 5
-  cuts it over.
+  `flagged`, `has_attachment`, `limit`, `cursor`), translates it to
+  an IMAP SEARCH criteria list server-side with `CHARSET UTF-8`,
+  sorts matches newest-first by INTERNALDATE + folder + UID, and
+  returns the same per-envelope shape as `/list_envelopes` (each
+  envelope tagged with its source `folder`) plus an opaque cursor
+  for the next page. When `folder` is supplied the search is
+  single-folder; when omitted (the React default) the Lambda
+  enumerates the user's subscribed folders, drops `\Noselect`
+  containers and the noise-folder defaults (Trash/Spam/Junk/Deleted
+  Messages), and walks each folder in turn. Match sets are capped at
+  5,000 results across the merged set (a `truncated` flag in the
+  response signals the cap); `has_attachment` is computed post-hoc
+  from BODYSTRUCTURE (the heuristic tightens once FTS lands in
+  Phase 4). The existing raw-syntax `/search` endpoint is unchanged
+  and continues to power the Apple client until Phase 5 cuts it over.
 - Collapsible folder list on the React admin app and the Apple
   (iOS/iPadOS/macOS/visionOS) clients. The Subscribed and All
   folders section headers collapse and expand, and within All

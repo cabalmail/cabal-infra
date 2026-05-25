@@ -22,6 +22,7 @@ function Envelope({
   from,
   flags,
   struct,
+  folder,
   is_checked,
   dom_id,
   bulkMode,
@@ -37,6 +38,10 @@ function Envelope({
     && priority.some((p) => p === 'priority-1' || p === 'priority-2');
   const fromName = extractName(from && from[0]) || (from && from[0]) || '';
   const relDate = formatDate(date);
+  // `folder` is only set when the row is rendered inside a cross-folder
+  // search result. The chip names the leaf folder (last `/`-separated
+  // segment) with the full path on hover.
+  const folderLabel = folder ? folder.split('/').pop() : null;
 
   const handleRowClick = useCallback(
     (e) => {
@@ -123,6 +128,11 @@ function Envelope({
             <span className="envelope-from" title={from && from[0]}>
               {fromName}
             </span>
+            {folderLabel && (
+              <span className="envelope-folder" title={folder}>
+                {folderLabel}
+              </span>
+            )}
             <span className="envelope-date">{relDate}</span>
           </div>
           <div className="envelope-subject" title={subject}>
