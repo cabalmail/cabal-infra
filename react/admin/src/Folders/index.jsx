@@ -7,6 +7,7 @@ import {
   Inbox,
   Pencil,
   Plus,
+  RefreshCw,
   Send,
   ShieldAlert,
   Star,
@@ -14,9 +15,44 @@ import {
   X,
 } from 'lucide-react';
 import useApi from '../hooks/useApi';
-import { FOLDER_LIST, PERMANENT_FOLDERS } from '../constants';
-import { orderFolders } from '../utils/folderMeta';
+import {
+  FOLDER_COLLAPSED_ALL,
+  FOLDER_COLLAPSED_PATHS,
+  FOLDER_COLLAPSED_SUB,
+  FOLDER_LIST,
+  PERMANENT_FOLDERS,
+} from '../constants';
+import { ancestorsOf, orderFolders } from '../utils/folderMeta';
 import styles from './Folders.module.css';
+
+function readBool(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === null) return fallback;
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
+
+function readPathSet(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function writeJson(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    console.log(e);
+  }
+}
 
 const KIND_ICON = {
   inbox:   Inbox,
@@ -36,11 +72,12 @@ function FolderIcon({ kind }) {
 function FolderRow({
   f, isActive, isSubscribed, canDelete, onSelect, onToggleSubscribe, onRemove,
   depth = 0, showFullPath = false,
+  hasChildren = false, isCollapsed = false, onToggleCollapse,
 }) {
   const display = showFullPath && !f.system ? f.id : f.label;
   return (
     <li
-      className={`${styles.folderItem} ${isActive ? styles.active : ''}`}
+      className={`${styles.folderItem} ${isActive ? styles.active : ''} ${isCollapsed ? styles.rowCollapsed : ''}`}
       style={depth > 0 ? { paddingLeft: `${12 + depth * 14}px` } : undefined}
       onClick={() => onSelect(f.id)}
       role="button"
@@ -48,7 +85,23 @@ function FolderRow({
       onKeyDown={(e) => { if (e.key === 'Enter') onSelect(f.id); }}
       aria-current={isActive ? 'true' : undefined}
     >
-      <FolderIcon kind={f.kind} />
+      {hasChildren ? (
+        <button
+          type="button"
+          className={styles.rowChev}
+          title={isCollapsed ? `Expand ${f.label}` : `Collapse ${f.label}`}
+          aria-label={isCollapsed ? `Expand ${f.label}` : `Collapse ${f.label}`}
+          aria-expanded={!isCollapsed}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleCollapse(f.id);
+          }}
+        >
+          <ChevronDown size={12} aria-hidden="true" />
+        </button>
+      ) : (
+        <FolderIcon kind={f.kind} />
+      )}
       <span className={styles.folderName}>{display}</span>
       <span className={styles.rowActions} onClick={(e) => e.stopPropagation()}>
         <button
@@ -80,10 +133,15 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
   const api = useApi();
   const [folders, setFolders] = useState([]);
   const [subscribed, setSubscribed] = useState([]);
-  const [collapsedSub, setCollapsedSub] = useState(false);
-  const [collapsedAll, setCollapsedAll] = useState(false);
+  const [collapsedSub, setCollapsedSub] = useState(() => readBool(FOLDER_COLLAPSED_SUB, false));
+  const [collapsedAll, setCollapsedAll] = useState(() => readBool(FOLDER_COLLAPSED_ALL, false));
+  const [collapsedFolders, setCollapsedFolders] = useState(() => readPathSet(FOLDER_COLLAPSED_PATHS));
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
+
+  useEffect(() => { writeJson(FOLDER_COLLAPSED_SUB, collapsedSub); }, [collapsedSub]);
+  useEffect(() => { writeJson(FOLDER_COLLAPSED_ALL, collapsedAll); }, [collapsedAll]);
+  useEffect(() => { writeJson(FOLDER_COLLAPSED_PATHS, Array.from(collapsedFolders)); }, [collapsedFolders]);
 
   const refresh = useCallback(() => {
     api.getFolderList().then(data => {
@@ -110,6 +168,45 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
     () => items.filter((f) => subscribed.includes(f.id)),
     [items, subscribed]
   );
+
+  const presentIds = useMemo(() => new Set(items.map((f) => f.id)), [items]);
+
+  // Auto-expand ancestors of the active selection so the user never loses
+  // sight of the folder they're currently reading. Runs as an effect so the
+  // persisted state stays consistent with what's on screen.
+  useEffect(() => {
+    if (!folder || collapsedFolders.size === 0) return;
+    const ancestors = ancestorsOf(folder);
+    if (ancestors.length === 0) return;
+    let changed = false;
+    const next = new Set(collapsedFolders);
+    for (const a of ancestors) {
+      if (next.delete(a)) changed = true;
+    }
+    if (changed) setCollapsedFolders(next);
+  }, [folder, collapsedFolders]);
+
+  const isHidden = useCallback((id) => {
+    if (collapsedFolders.size === 0) return false;
+    for (const a of ancestorsOf(id)) {
+      if (collapsedFolders.has(a) && presentIds.has(a)) return true;
+    }
+    return false;
+  }, [collapsedFolders, presentIds]);
+
+  const visibleItems = useMemo(
+    () => items.filter((f) => !isHidden(f.id)),
+    [items, isHidden]
+  );
+
+  const toggleCollapse = useCallback((id) => {
+    setCollapsedFolders((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
   const handleSelect = useCallback((name) => {
     if (typeof setFolder === 'function') setFolder(name);
@@ -238,6 +335,19 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
             <button
               type="button"
               className={styles.sectionAction}
+              title="Reload folders"
+              aria-label="Reload folders"
+              onClick={(e) => {
+                e.stopPropagation();
+                localStorage.removeItem(FOLDER_LIST);
+                refresh();
+              }}
+            >
+              <RefreshCw size={14} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className={styles.sectionAction}
               title="New folder"
               aria-label="New folder"
               onClick={(e) => {
@@ -253,7 +363,7 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
 
         <div className={styles.sectionBody}>
           <ul className={styles.folderList}>
-            {items.map((f) => (
+            {visibleItems.map((f) => (
               <FolderRow
                 key={f.id}
                 f={f}
@@ -264,6 +374,9 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
                 onToggleSubscribe={toggleSubscribe}
                 onRemove={removeFolder}
                 depth={f.depth}
+                hasChildren={f.hasChildren}
+                isCollapsed={collapsedFolders.has(f.id)}
+                onToggleCollapse={toggleCollapse}
               />
             ))}
           </ul>

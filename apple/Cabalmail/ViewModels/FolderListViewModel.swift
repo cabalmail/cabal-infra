@@ -123,52 +123,17 @@ final class FolderListViewModel {
                 && !system.contains(folder)
                 && !folder.attributes.contains("\\Noselect")
         }
-        return inbox + sortUserTree(userFolders) + system
+        return inbox + FolderTree.sortUserTree(userFolders) + system
     }
 
-    /// DFS through the `/`-delimited tree formed by `path`s, emitting peers
-    /// alphabetically and children directly under their parent. Intermediate
-    /// path segments that aren't themselves in `input` are skipped — we
-    /// don't fabricate rows for folders that aren't on the server.
-    private func sortUserTree(_ input: [Folder]) -> [Folder] {
-        let byPath = Dictionary(uniqueKeysWithValues: input.map { ($0.path, $0) })
-        // children["parent/path"] = sorted child segment names; "" = roots.
-        var children: [String: [String]] = [:]
-        var seen: [String: Set<String>] = [:]
-        for folder in input {
-            let segs = folder.path.split(separator: "/").map(String.init)
-            var parent = ""
-            for seg in segs {
-                if seen[parent, default: []].insert(seg).inserted {
-                    children[parent, default: []].append(seg)
-                }
-                parent = parent.isEmpty ? seg : "\(parent)/\(seg)"
-            }
-        }
-        for key in children.keys {
-            children[key]?.sort { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
-        }
-        var out: [Folder] = []
-        func walk(_ parent: String) {
-            for seg in children[parent] ?? [] {
-                let path = parent.isEmpty ? seg : "\(parent)/\(seg)"
-                if let folder = byPath[path] {
-                    out.append(folder)
-                }
-                walk(path)
-            }
-        }
-        walk("")
-        return out
-    }
-
-    /// Indentation depth for the "All folders" section — system folders
-    /// (Inbox + Sent/Drafts/etc.) sit at depth 0 regardless of any `/` in
-    /// the name; user folders indent one step per path segment past the
-    /// root.
+    /// Indentation depth - delegates to `FolderTree.depth(for:)`.
     func depth(for folder: Folder) -> Int {
-        let systemNames: Set<String> = ["INBOX", "Sent", "Drafts", "Trash", "Junk", "Archive"]
-        if systemNames.contains(folder.path) { return 0 }
-        return max(0, folder.path.split(separator: "/").count - 1)
+        FolderTree.depth(for: folder)
+    }
+
+    /// True iff this folder has at least one descendant in the current list -
+    /// drives the per-folder collapse chevron in "All folders".
+    func hasChildren(_ folder: Folder) -> Bool {
+        FolderTree.hasChildren(folder, in: folders)
     }
 }

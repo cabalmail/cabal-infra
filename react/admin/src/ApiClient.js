@@ -360,6 +360,32 @@ export default class ApiClient {
     return response;
   }
 
+  // Structured single-folder search. `params` is a plain object whose keys
+  // mirror the `/search_envelopes` query string: `folder`, `text`, `from`,
+  // `to`, `subject`, `since` (YYYY-MM-DD), `before` (YYYY-MM-DD), `unread`,
+  // `flagged`, `has_attachment`, `limit`, `cursor`. Booleans are coerced to
+  // `1` so the Lambda's TRUTHY check fires; empty strings are dropped.
+  // Phase 1 of the search plan returns single-folder results; cross-folder
+  // lands in Phase 3.
+  searchEnvelopes(params) {
+    const query = { host: this.host };
+    for (const [key, value] of Object.entries(params || {})) {
+      if (value === null || value === undefined || value === '' || value === false) continue;
+      query[key] = value === true ? 1 : value;
+    }
+    const response = axios.get('/search_envelopes',
+      {
+        params: query,
+        baseURL: this.baseURL,
+        headers: {
+          'Authorization': this.token
+        },
+        timeout: ONE_SECOND * 25
+      }
+    );
+    return response;
+  }
+
   fetchImage(cid, folder, id, seen) {
     const response = axios.get('/fetch_inline_image',
       {

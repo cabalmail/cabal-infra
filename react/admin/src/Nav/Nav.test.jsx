@@ -122,4 +122,35 @@ describe('Nav', () => {
     const { container } = render(<Nav {...baseProps} loggedIn={false} />);
     expect(container.firstChild).toHaveClass('logged-out');
   });
+
+  it('reflects the committed searchQuery in the input', () => {
+    render(<Nav {...baseProps} loggedIn={true} userName="alex" searchQuery="invoices" />);
+    expect(screen.getByRole('searchbox').value).toBe('invoices');
+  });
+
+  it('commits the typed value to onSearchSubmit when Enter is pressed', () => {
+    const onSearchSubmit = vi.fn();
+    render(<Nav {...baseProps} loggedIn={true} userName="alex" onSearchSubmit={onSearchSubmit} />);
+    const input = screen.getByRole('searchbox');
+    fireEvent.change(input, { target: { value: 'hello world' } });
+    fireEvent.submit(input.closest('form'));
+    expect(onSearchSubmit).toHaveBeenCalledWith('hello world');
+  });
+
+  it('Escape clears a non-empty search and commits "" to onSearchSubmit', () => {
+    const onSearchSubmit = vi.fn();
+    render(
+      <Nav
+        {...baseProps}
+        loggedIn={true}
+        userName="alex"
+        searchQuery="prior"
+        onSearchSubmit={onSearchSubmit}
+      />,
+    );
+    const input = screen.getByRole('searchbox');
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(onSearchSubmit).toHaveBeenCalledWith('');
+    expect(input.value).toBe('');
+  });
 });

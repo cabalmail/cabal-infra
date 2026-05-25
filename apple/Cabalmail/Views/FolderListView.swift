@@ -19,7 +19,20 @@ struct FolderListView: View {
     /// (which would also hide the compose entry point on the message list).
     var onFoldersLoaded: ([Folder]) -> Void = { _ in }
 
+    // Section expand/collapse state - persisted so the sidebar comes up the
+    // way the user left it. Default expanded.
+    @AppStorage("cabalmail.folder.section.subscribed.expanded")
+    private var subscribedExpanded: Bool = true
+    @AppStorage("cabalmail.folder.section.all.expanded")
+    private var allExpanded: Bool = true
+    // Per-folder collapse state. Stored as a newline-joined string because
+    // @AppStorage doesn't natively support Set; folder paths cannot contain
+    // newlines so this is unambiguous.
+    @AppStorage("cabalmail.folder.collapsedPaths")
+    private var collapsedPathsRaw: String = ""
+
     var body: some View {
+        let collapsedSet = decodeCollapsed()
         List(selection: $selection) {
             if let model {
                 if model.isLoading && model.folders.isEmpty {
@@ -31,20 +44,39 @@ struct FolderListView: View {
                 }
                 let subscribed = filteredFolders(model.subscribedFolders)
                 let all = filteredFolders(model.folders)
+                let (visibleAll, _) = FolderTree.visibleFolders(
+                    from: all,
+                    collapsed: collapsedSet,
+                    activeSelection: selection?.path
+                )
                 if !model.subscribedFolders.isEmpty {
-                    Section("Subscribed") {
+                    DisclosureGroup(isExpanded: $subscribedExpanded) {
                         ForEach(subscribed, id: \.path) { folder in
-                            folderRow(folder, model: model, depth: 0)
+                            folderRow(folder, model: model, depth: 0, collapsed: collapsedSet)
                         }
+                    } label: {
+                        Text("Subscribed")
                     }
-                    Section("All folders") {
-                        ForEach(all, id: \.path) { folder in
-                            folderRow(folder, model: model, depth: model.depth(for: folder))
+                    DisclosureGroup(isExpanded: $allExpanded) {
+                        ForEach(visibleAll, id: \.path) { folder in
+                            folderRow(
+                                folder,
+                                model: model,
+                                depth: model.depth(for: folder),
+                                collapsed: collapsedSet
+                            )
                         }
+                    } label: {
+                        Text("All folders")
                     }
                 } else {
-                    ForEach(all, id: \.path) { folder in
-                        folderRow(folder, model: model, depth: model.depth(for: folder))
+                    ForEach(visibleAll, id: \.path) { folder in
+                        folderRow(
+                            folder,
+                            model: model,
+                            depth: model.depth(for: folder),
+                            collapsed: collapsedSet
+                        )
                     }
                 }
             }
@@ -89,6 +121,9 @@ struct FolderListView: View {
                 await newModel.refreshUnreadCounts()
             }
         }
+        .onChange(of: selection?.path) { _, newPath in
+            autoExpandAncestors(of: newPath)
+        }
     }
 
     private func manualRefresh() async {
@@ -107,9 +142,45 @@ struct FolderListView: View {
         }
     }
 
+    private func decodeCollapsed() -> Set<String> {
+        guard !collapsedPathsRaw.isEmpty else { return [] }
+        return Set(collapsedPathsRaw.split(separator: "\n").map(String.init))
+    }
+
+    private func encodeCollapsed(_ set: Set<String>) -> String {
+        set.sorted().joined(separator: "\n")
+    }
+
+    private func toggleCollapse(_ path: String) {
+        var set = decodeCollapsed()
+        if set.contains(path) { set.remove(path) } else { set.insert(path) }
+        collapsedPathsRaw = encodeCollapsed(set)
+    }
+
+    private func autoExpandAncestors(of path: String?) {
+        guard let path else { return }
+        var set = decodeCollapsed()
+        var changed = false
+        for ancestor in FolderTree.ancestors(of: path) where set.remove(ancestor) != nil {
+            changed = true
+        }
+        if changed { collapsedPathsRaw = encodeCollapsed(set) }
+    }
+
     @ViewBuilder
-    private func folderRow(_ folder: Folder, model: FolderListViewModel, depth: Int) -> some View {
-        row(for: folder, unread: appState.folderUnreadCounts[folder.path] ?? 0, depth: depth)
+    private func folderRow(
+        _ folder: Folder,
+        model: FolderListViewModel,
+        depth: Int,
+        collapsed: Set<String>
+    ) -> some View {
+        row(
+            for: folder,
+            unread: appState.folderUnreadCounts[folder.path] ?? 0,
+            depth: depth,
+            hasChildren: model.hasChildren(folder),
+            isCollapsed: collapsed.contains(folder.path)
+        )
             .tag(folder)
             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                 Button {
@@ -135,11 +206,40 @@ struct FolderListView: View {
     }
 
     @ViewBuilder
-    private func row(for folder: Folder, unread: Int, depth: Int) -> some View {
+    private func row(
+        for folder: Folder,
+        unread: Int,
+        depth: Int,
+        hasChildren: Bool,
+        isCollapsed: Bool
+    ) -> some View {
         HStack {
             if depth > 0 {
                 Spacer().frame(width: CGFloat(depth) * 14)
             }
+            // Always reserve the chevron slot so the folder icon column
+            // stays aligned across leaf and parent rows at the same depth.
+            // Without the placeholder, parent rows shift right by the
+            // chevron's width and visually read as one indent level deeper
+            // than their peers.
+            Group {
+                if hasChildren {
+                    Button {
+                        toggleCollapse(folder.path)
+                    } label: {
+                        Image(systemName: "chevron.right")
+                            .rotationEffect(.degrees(isCollapsed ? 0 : 90))
+                            .foregroundStyle(.secondary)
+                    }
+                    // Borderless lets the chevron handle taps without also
+                    // triggering row selection in the surrounding List.
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel(isCollapsed ? "Expand \(folder.name)" : "Collapse \(folder.name)")
+                } else {
+                    Color.clear
+                }
+            }
+            .frame(width: 14, height: 14)
             Image(systemName: iconName(for: folder))
                 .foregroundStyle(.tint)
             Text(folder.name)

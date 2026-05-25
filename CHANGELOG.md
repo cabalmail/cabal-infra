@@ -5,6 +5,60 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.29] - 2026-05-24
+
+### Added
+- React webmail picks up message search (Phase 2 of
+  `docs/0.9.x/imap-search-plan.md`). The Nav search bar — previously
+  decorative — now commits its text on Enter and Cmd+K, and Escape
+  clears it; an empty value reverts to the folder view. When a query
+  is active the Email middle pane swaps in a search results pane that
+  fetches against the new `/search_envelopes` endpoint with a 25 s
+  timeout, renders matches via the existing envelope row component,
+  paginates "Load more" pages through the opaque cursor, and surfaces
+  the 5,000-result truncation hint when the cap is hit. A collapsible
+  filter panel exposes the structured query fields (`from`, `to`,
+  `subject`, `since`, `before`, `unread`, `flagged`, `has_attachment`)
+  and an active-filter badge; filters re-issue the search on Apply, not
+  on every keystroke. Bulk archive / delete / mark read / mark unread /
+  flag work on selected results, swipe actions on individual rows
+  match the folder view, and any mutation re-runs the search to drop
+  stale matches. The "this folder only" toggle is shown disabled until
+  the cross-folder Lambda mode lands in Phase 3.
+- New `/search_envelopes` Lambda landing Phase 1 of
+  `docs/0.9.x/imap-search-plan.md`. Accepts a structured query
+  (`text`, `from`, `to`, `subject`, `since`, `before`, `unread`,
+  `flagged`, `has_attachment`, `limit`, `cursor`) against a required
+  `folder`, translates it to an IMAP SEARCH criteria list server-side
+  with `CHARSET UTF-8`, sorts matches newest-first by INTERNALDATE +
+  UID, and returns the same per-envelope shape as `/list_envelopes`
+  with an opaque cursor for the next page. Match sets are capped at
+  5,000 results (a `truncated` flag in the response signals the cap);
+  `has_attachment` is computed post-hoc from BODYSTRUCTURE (the
+  heuristic tightens once FTS lands in Phase 4). Single-folder only;
+  cross-folder is Phase 3. The existing raw-syntax `/search` endpoint
+  is unchanged and continues to power the Apple client until Phase 5
+  cuts it over.
+- Collapsible folder list on the React admin app and the Apple
+  (iOS/iPadOS/macOS/visionOS) clients. The Subscribed and All
+  folders section headers collapse and expand, and within All
+  folders any parent that has child folders gets a chevron that
+  hides or shows its descendants. All collapse state is persisted
+  (localStorage on React, `@AppStorage` on Apple) so the sidebar
+  comes up the way the user left it. Selecting a folder
+  auto-expands any of its collapsed ancestors so the active
+  selection never disappears behind a stale collapse.
+
+### Changed
+- The per-envelope JSON-decoder helpers (`decode_subject`,
+  `decode_address`, `decode_flags`, `decode_body_structure`,
+  `envelope_dict`, plus an `ENVELOPE_FETCH_KEYS` constant) now live in
+  `lambda/api/_shared/helper.py` so `/list_envelopes` and
+  `/search_envelopes` share one source of truth for the wire shape
+  consumed by the React webmail and the Apple `CabalmailKit`
+  decoders. `lambda/api/list_envelopes/function.py` is reworked to
+  import from the helper; the on-the-wire response is byte-identical.
+
 ## [0.9.28] - 2026-05-24
 
 ### Removed
