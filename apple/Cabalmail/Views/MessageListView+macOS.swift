@@ -26,8 +26,11 @@ extension MessageListView {
                 }
             if !model.searchQuery.isEmpty {
                 Button {
+                    // Just zero out the text — `MessageListView`'s
+                    // `.onChange(of: model.searchQuery)` handler picks up
+                    // the empty value and drops back to the folder view
+                    // when a search is currently active.
                     model.searchQuery = ""
-                    Task { await model.runSearch() }
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(.secondary)
