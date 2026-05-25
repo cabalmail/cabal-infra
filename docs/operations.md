@@ -28,7 +28,7 @@ The `imap` container ships [dovecot-fts-flatcurve](https://github.com/slusarz/do
 
 ## What the plugin indexes (and what it does not)
 
-Header and body text only, per `fts_autoindex = yes`. The autoindex exclude list skips Trash and Junk so we don't waste EFS throughput on folders the `/search_envelopes` defaults already exclude. Attachments are not decoded — searching for a phrase that lives only inside a PDF or Office document will not find it. That is the design.
+Header and body text only, per `fts_autoindex = yes`. The autoindex exclude list skips Trash — the only folder `/search_envelopes` excludes by default — so we don't waste EFS throughput indexing mail we never search. Spam and Junk are searchable (users do need to find misclassified mail), so they're indexed too. Attachments are not decoded — searching for a phrase that lives only inside a PDF or Office document will not find it. That is the design.
 
 Each user's index sits next to their `Maildir` on EFS (under per-mailbox `.fts/` directories). Steady-state index size is roughly 10-20% of mail volume.
 
