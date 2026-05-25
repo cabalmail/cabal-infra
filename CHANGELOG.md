@@ -46,6 +46,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cross-folder is Phase 3. The existing raw-syntax `/search` endpoint
   is unchanged and continues to power the Apple client until Phase 5
   cuts it over.
+- `scripts/test-mail-loop.py` now generates a different subject and
+  body for every message it sends, sampling from a bundled 3000-word
+  English vocabulary with Zipf's law so the corpus has a realistic mix
+  of common and uncommon words. Each message's text is seeded from
+  `--seed + sequence` for reproducibility (default seed is randomized
+  and logged at startup). Intended for populating a UAT mailbox with
+  varied content for the new message search feature.
 - Collapsible folder list on the React admin app and the Apple
   (iOS/iPadOS/macOS/visionOS) clients. The Subscribed and All
   folders section headers collapse and expand, and within All
