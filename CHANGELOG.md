@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so non-ASCII queries round-trip correctly. The legacy
   `search(folder:query:)` method and the `/search` Lambda stay in
   place during the deprecation window and are removed in Phase 6.
+  On macOS the search field now renders inline above the message
+  list (matching the iPad layout) instead of being routed to the
+  window toolbar's trailing edge, where it sat visually over the
+  message detail column.
 
 ## [0.9.30] - 2026-05-24
 
