@@ -199,10 +199,18 @@ metrics:
     aws_extended_statistics: [p95]
 
   # ── ACM ───────────────────────────────────────────────────────
+  # ACM publishes DaysToExpiry once per day (timestamp tied to the
+  # cert's issuance time of day). The global range_seconds: 600 above
+  # means the exporter's scrape window catches the daily emission
+  # ~0.7% of the time and reports [] otherwise, so the Prometheus
+  # series is sparse to non-existent. Override to a 48h window scraped
+  # daily so we always pick up yesterday's value.
   - aws_namespace: AWS/CertificateManager
     aws_metric_name: DaysToExpiry
     aws_dimensions: [CertificateArn]
     aws_statistics: [Minimum]
+    period_seconds: 86400
+    range_seconds: 172800
 
   # ── CloudFront (us-east-1 only) ───────────────────────────────
   # CloudFront metrics live exclusively in us-east-1. cloudwatch_exporter
