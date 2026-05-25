@@ -160,19 +160,38 @@ struct MessageListView: View {
                     .frame(maxWidth: .infinity)
             }
         }
+        // iPadOS/iOS/visionOS — `.searchable` lands the search bar above
+        // the content column's list, exactly where we want it. macOS
+        // routes the same modifier to the window toolbar at the trailing
+        // edge, which visually parks the search box over the detail
+        // (message body) column. Rendering an inline search field via
+        // `.safeAreaInset` below keeps macOS looking like iPad.
+        #if !os(macOS)
         .searchable(text: $model.searchQuery, prompt: "Search mailbox")
         .onSubmit(of: .search) {
             Task { await model.runSearch() }
         }
+        #endif
         .refreshable {
             await model.refresh()
         }
         .safeAreaInset(edge: .top, spacing: 0) {
-            if let addressFilter, !addressFilter.isEmpty {
-                addressFilterChip(addressFilter)
+            VStack(spacing: 0) {
+                #if os(macOS)
+                inlineSearchField(model: model)
+                #endif
+                if let addressFilter, !addressFilter.isEmpty {
+                    addressFilterChip(addressFilter)
+                }
             }
         }
     }
+
+    // The macOS-only `inlineSearchField(model:)` lives in
+    // `MessageListView+macOS.swift` so the primary struct body stays
+    // under SwiftLint's 250-line cap. Same-module extension; the iPad /
+    // iOS / visionOS targets compile that file's `#if os(macOS)` block
+    // away.
 
     @ViewBuilder
     private func addressFilterChip(_ address: String) -> some View {
