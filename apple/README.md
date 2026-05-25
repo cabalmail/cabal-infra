@@ -18,18 +18,27 @@ apple/
 
 ## Bootstrap
 
-The `.xcodeproj` is not committed. Generate it before opening the workspace:
+The `.xcodeproj` is not committed. Generate it before opening the
+workspace. The rich-text composer's marked + turndown bundles are also
+not committed (see [Rich-text editor](#rich-text-editor-wkwebview-contenteditable--fetched-markedturndown))
+— they materialize from `react/admin/node_modules/` via a sync script.
+Run both before your first `swift test` or `xcodebuild`:
 
 ```sh
-brew install xcodegen    # one-time
+brew install xcodegen node    # one-time
 cd apple
 xcodegen generate
+scripts/sync-vendored.sh      # fetches marked + turndown into CabalmailKit
 open Cabalmail.xcworkspace
 ```
 
-CI (`.github/workflows/apple.yml`) runs `xcodegen generate` before every
-`xcodebuild` invocation, so contributors never need to commit generated
-project files.
+CI (`.github/workflows/apple.yml`) runs both steps before every
+`xcodebuild` and `swift test` invocation, so contributors never need to
+commit generated project files or vendored JS.
+
+Re-run `scripts/sync-vendored.sh` any time `react/admin/package.json`
+bumps the `marked` or `turndown` version (`swift test` will fail with a
+missing-resource error if you skip it).
 
 ### Prerequisites for local builds
 
@@ -612,7 +621,7 @@ open IDLE socket. Untagged `EXISTS` / `EXPUNGE` / `FETCH` events stream
 via `AsyncThrowingStream<IdleEvent, Error>`; terminating the stream
 cancels the reader task, issues `DONE\r\n`, and closes the connection.
 
-### Rich-text editor: WKWebView contenteditable + vendored marked/turndown
+### Rich-text editor: WKWebView contenteditable + fetched marked/turndown
 
 `ComposeView` ships a dual-mode body — segmented "Rich Text" / "Markdown"
 tabs — to match the React composer feature-for-feature. The rich pane is
@@ -642,50 +651,51 @@ newline collapsing) by hand against `NSAttributedString` is a much
 larger surface than letting the same JS libraries run inside a
 contenteditable.
 
-#### Why marked + turndown are vendored, not fetched at build time
+#### Why marked + turndown are fetched, not committed
 
-`apple/CabalmailKit/Sources/CabalmailKit/Compose/Resources/` ships
-`marked.umd.js` and `turndown.js` verbatim, with their MIT LICENSE
-files alongside. We considered fetching them from S3 (or npm) at build
-time. We didn't, for reasons that are worth recording so the next
-person who looks at the resource bundle doesn't relitigate them:
+`apple/CabalmailKit/Sources/CabalmailKit/Compose/Resources/` is the
+SwiftPM resource directory `editor.html` looks up its sibling scripts
+from. `editor.html` and `editor-bridge.js` are first-party and
+committed; `marked.umd.js`, `turndown.js`, and their MIT LICENSE files
+are gitignored and materialize at build time from
+`react/admin/node_modules/` via `apple/scripts/sync-vendored.sh`.
 
-- **`swift test` stays self-contained.** A fresh clone runs the kit
-  tests immediately with no network and no setup. A build-time fetch
-  step would couple the test target to either an S3 bucket or
-  registry.npmjs.org and break offline development.
-- **CI doesn't grow a hard S3 dependency.** A bucket outage or
-  IAM-role misconfiguration would otherwise break every Apple build.
-  Today the kit-test job needs only `xcodebuild`.
-- **License surfacing stays obvious.** The LICENSE files sit next to
-  the bundled JS, visible to anyone reviewing the resource directory
-  or browsing the bundle.
-- **PR review remains meaningful.** Bumping the version shows up as
-  a real diff a reviewer can inspect ("oh, marked v19 changed these
-  regexes"), not as a one-line manifest change with no visible
-  payload.
-- **Reproducibility doesn't actually improve when fetching.** A
-  cached artifact in our bucket is "vendoring without the audit
-  trail"; fetching from npm directly would still need a pin to be
-  reproducible.
+The version pins live in `react/admin/package.json`. The React composer
+already lists these exact libraries as runtime dependencies, so we get
+three useful properties for free by making React's manifest the single
+source of truth:
 
-The real concern under "should we vendor?" was version drift between
-the Apple copy and the React copy (`react/admin/package.json` lists
-the same versions). The intended mitigation is a CI guard that
-`diff`s the vendored bytes against `react/admin/node_modules/...`
-after `npm ci` and fails if they diverge — make `react/admin`'s
-`package.json` the source of truth and treat the vendored Apple copy
-as a derived artifact CI keeps fresh. Not yet wired up; tracked
-informally until it bites.
+- **Dependabot already watches `react/admin/package.json`** and opens
+  PRs against it when CVEs land for marked or turndown. The next
+  `apple.yml` run after that PR merges pulls the patched bytes
+  automatically.
+- **No drift between the Apple copy and the React copy is possible.**
+  The CI sync step always copies from a freshly-installed
+  `node_modules`, so the Apple WKWebView and the React TipTap editor
+  cannot diverge on the underlying library version.
+- **CodeQL doesn't scan a vendored third-party library we don't
+  maintain.** The bytes aren't in the repo for it to alarm on.
+
+We considered the obvious alternative — committing the JS verbatim
+into the resource directory with a CI drift-check that diffs against
+`react/admin/node_modules/` after `npm ci`. That works, but it requires
+exactly the same `npm ci` step in CI, just to *verify* what we could
+have *produced* instead. The fetched-not-committed design pays the
+same CI cost and produces a strictly cleaner repo (no committed
+upstream bytes, no manual sync flow on version bumps).
+
+The one cost we explicitly accept: a fresh clone can't `swift test`
+the kit before running `apple/scripts/sync-vendored.sh`. The error is
+self-explanatory (SwiftPM names the missing resource) and the script
+is a one-liner; the Bootstrap section covers it.
 
 A root-level `vendor/` directory was also considered. SwiftPM requires
 resources to live inside the target's `path:`, so a root vendor would
 need symlinks (`Resources/marked.umd.js -> ../../../../../../vendor/...`),
-and the kit would stop being self-contained. With only one consumer
-today (and Android likely to use Kotlin-native markdown libs rather
-than re-bundling marked), the convention didn't pay off enough to
-justify the symlink indirection. Revisit if a second non-JS consumer
-of these libs appears.
+and the kit would stop being self-contained. With these particular
+libraries now sourced from npm via the React manifest, the symlink
+convention has even less to recommend it. Revisit if a non-JS,
+non-npm-managed vendored dep ever appears.
 
 ### Drafts: local only
 

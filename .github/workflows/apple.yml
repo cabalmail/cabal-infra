@@ -67,6 +67,15 @@ jobs:
         working-directory: apple
         run: xcodegen generate
 
+      - name: Sync vendored CabalmailKit resources (marked + turndown)
+        # marked.umd.js + turndown.js live in react/admin/package.json as
+        # the version-of-truth and are gitignored under apple/. The script
+        # runs `npm ci` (react/admin/node_modules isn't cached between
+        # jobs) and copies the four files into Compose/Resources so
+        # SwiftPM can find them when xcodebuild test compiles CabalmailKit.
+        working-directory: apple
+        run: scripts/sync-vendored.sh
+
       - name: SwiftLint
         if: matrix.platform == 'macOS'
         working-directory: apple
@@ -179,6 +188,11 @@ jobs:
         working-directory: apple
         run: xcodegen generate
 
+      - name: Sync vendored CabalmailKit resources (marked + turndown)
+        # See the kit-test job for the rationale. Same script, same files.
+        working-directory: apple
+        run: scripts/sync-vendored.sh
+
       - name: Cache DerivedData
         uses: actions/cache@v5
         with:
@@ -259,6 +273,12 @@ jobs:
         if: steps.check.outputs.enabled == 'true'
         working-directory: apple
         run: xcodegen generate
+
+      - name: Sync vendored CabalmailKit resources (marked + turndown)
+        # See the kit-test job for the rationale. Same script, same files.
+        if: steps.check.outputs.enabled == 'true'
+        working-directory: apple
+        run: scripts/sync-vendored.sh
 
       - name: Import signing certificate
         if: steps.check.outputs.enabled == 'true'
@@ -513,6 +533,11 @@ jobs:
       - name: Generate Xcode project
         working-directory: apple
         run: xcodegen generate
+
+      - name: Sync vendored CabalmailKit resources (marked + turndown)
+        # See the kit-test job for the rationale. Same script, same files.
+        working-directory: apple
+        run: scripts/sync-vendored.sh
 
       - name: Import signing certificates
         env:

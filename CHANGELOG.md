@@ -40,6 +40,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   user-defined setting (`IOS_APP_STORE_PROFILE_UUID` /
   `MAC_APP_STORE_PROFILE_UUID`), resolved exclusively by the app
   target's `PROVISIONING_PROFILE_SPECIFIER` reference.
+- The rich-text composer's `marked.umd.js` and `turndown.js` (plus
+  their MIT LICENSE files) are no longer committed under
+  `apple/CabalmailKit/Sources/CabalmailKit/Compose/Resources/`.
+  `react/admin/package.json` is now the single source of truth for
+  both versions; `apple/scripts/sync-vendored.sh` materializes the
+  Apple copy from `react/admin/node_modules/` and the four files are
+  gitignored. CI runs the sync step before every `swift test`,
+  unsigned `xcodebuild build`, and TestFlight archive. Dependabot's
+  existing watch on `react/admin/package.json` now covers the Apple
+  composer's library versions too, and CodeQL no longer has
+  third-party JS to alarm on.
 
 ## [0.9.32] - 2026-05-25
 

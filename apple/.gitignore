@@ -16,3 +16,12 @@ build/
 *.xccheckout
 .swiftpm/
 Package.resolved
+
+# Vendored marked + turndown bundles. Materialized from
+# react/admin/node_modules by apple/scripts/sync-vendored.sh; the canonical
+# version pins live in react/admin/package.json. CI runs the sync script
+# before any swift test / xcodebuild step.
+CabalmailKit/Sources/CabalmailKit/Compose/Resources/marked.umd.js
+CabalmailKit/Sources/CabalmailKit/Compose/Resources/turndown.js
+CabalmailKit/Sources/CabalmailKit/Compose/Resources/marked-LICENSE.md
+CabalmailKit/Sources/CabalmailKit/Compose/Resources/turndown-LICENSE
