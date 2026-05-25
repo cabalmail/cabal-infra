@@ -209,6 +209,9 @@ public actor ApiBackedImapClient: ImapClient {
         try await api.searchMessageIds(host: host, folder: folder, query: query)
     }
 
+    // `searchEnvelopes(_:)` lives in an extension below so the primary
+    // type body stays under SwiftLint's 250-line cap.
+
     // MARK: - Append (unsupported)
 
     public func append(folder: String, message: Data, flags: Set<Flag>) async throws {
@@ -351,5 +354,37 @@ public actor ApiBackedImapClient: ImapClient {
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
         formatter.dateFormat = format
         return formatter
+    }
+}
+
+// MARK: - Search (extension)
+
+// `searchEnvelopes(_:)` lives in its own extension so the primary actor
+// body stays under SwiftLint's 250-line cap; same-module extension, all
+// `internal` helpers from the type are reachable.
+extension ApiBackedImapClient {
+    public func searchEnvelopes(_ query: SearchQuery) async throws -> SearchResult {
+        let raw = try await api.searchEnvelopes(host: host, query: query)
+        let envelopes = raw.envelopes.map { wire -> SearchedEnvelope in
+            let inner = ApiEnvelope(
+                id: wire.id,
+                date: wire.date,
+                subject: wire.subject,
+                from: wire.from,
+                to: wire.to,
+                cc: wire.cc,
+                flags: wire.flags,
+                structure: wire.structure,
+                priority: wire.priority
+            )
+            return SearchedEnvelope(envelope: Self.makeEnvelope(inner), folder: wire.folder)
+        }
+        return SearchResult(
+            envelopes: envelopes,
+            totalEstimate: raw.totalEstimate,
+            nextCursor: raw.nextCursor,
+            foldersSearched: raw.foldersSearched,
+            truncated: raw.truncated
+        )
     }
 }

@@ -148,6 +148,125 @@ public struct ApiAttachmentDescriptor: Sendable, Codable, Hashable {
     public let id: Int
 }
 
+/// Structured query for `/search_envelopes`. Mirrors the keys the React
+/// `ApiClient.searchEnvelopes(...)` wraps onto its axios call, so both
+/// clients speak the same contract.
+///
+/// `folder == nil` triggers cross-folder mode. Date fields use day
+/// granularity (the Lambda parses them as `YYYY-MM-DD`). Booleans send
+/// `1` to satisfy the Lambda's TRUTHY check and are omitted otherwise.
+public struct SearchQuery: Sendable, Hashable {
+    public let folder: String?
+    public let text: String?
+    public let from: String?
+    public let to: String?
+    public let subject: String?
+    public let since: Date?
+    public let before: Date?
+    public let unread: Bool
+    public let flagged: Bool
+    public let hasAttachment: Bool
+    public let limit: Int?
+    public let cursor: String?
+
+    public init(
+        folder: String? = nil,
+        text: String? = nil,
+        from: String? = nil,
+        to: String? = nil,
+        subject: String? = nil,
+        since: Date? = nil,
+        before: Date? = nil,
+        unread: Bool = false,
+        flagged: Bool = false,
+        hasAttachment: Bool = false,
+        limit: Int? = nil,
+        cursor: String? = nil
+    ) {
+        self.folder = folder
+        self.text = text
+        self.from = from
+        self.to = to
+        self.subject = subject
+        self.since = since
+        self.before = before
+        self.unread = unread
+        self.flagged = flagged
+        self.hasAttachment = hasAttachment
+        self.limit = limit
+        self.cursor = cursor
+    }
+}
+
+/// `/search_envelopes` response. Each envelope is tagged with its source
+/// folder (always set, even in single-folder mode) so operations on
+/// cross-folder results can route per-row to the right mailbox.
+public struct ApiSearchResponse: Sendable, Hashable {
+    public let envelopes: [ApiSearchEnvelope]
+    public let totalEstimate: Int
+    public let nextCursor: String?
+    public let foldersSearched: [String]
+    public let truncated: Bool
+
+    public init(
+        envelopes: [ApiSearchEnvelope],
+        totalEstimate: Int,
+        nextCursor: String?,
+        foldersSearched: [String],
+        truncated: Bool
+    ) {
+        self.envelopes = envelopes
+        self.totalEstimate = totalEstimate
+        self.nextCursor = nextCursor
+        self.foldersSearched = foldersSearched
+        self.truncated = truncated
+    }
+}
+
+/// One envelope as returned by `/search_envelopes` — the `/list_envelopes`
+/// shape plus a `folder` field naming the source mailbox.
+public struct ApiSearchEnvelope: Sendable, Hashable, Codable {
+    public let id: UInt32
+    public let date: String?
+    public let subject: String?
+    public let from: [String]
+    public let to: [String]
+    public let cc: [String]
+    public let flags: [String]
+    public let structure: BodyStructureNode?
+    public let priority: [String]?
+    public let folder: String
+
+    private enum CodingKeys: String, CodingKey {
+        case id, date, subject, from, to, cc, flags, priority, folder
+        case structure = "struct"
+    }
+
+    public init(
+        id: UInt32,
+        date: String?,
+        subject: String?,
+        from: [String],
+        to: [String],
+        cc: [String],
+        flags: [String],
+        structure: BodyStructureNode?,
+        priority: [String]?,
+        folder: String
+    ) {
+        self.id = id
+        self.date = date
+        self.subject = subject
+        self.from = from
+        self.to = to
+        self.cc = cc
+        self.flags = flags
+        self.structure = structure
+        self.priority = priority
+        self.folder = folder
+    }
+}
+
 /// `other_headers` sub-object carried by `/send`. Keys mirror the React
 /// client's call shape so the Lambda stays a single endpoint.
 public struct ApiSendOtherHeaders: Sendable, Codable, Hashable {

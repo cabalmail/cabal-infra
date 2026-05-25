@@ -33,6 +33,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every `Maildir` message file off EFS; attachments are still
   not decoded.
 
+### Changed
+- Apple clients now hit the structured `/search_envelopes` endpoint
+  (Phase 5 of `docs/0.9.x/imap-search-plan.md`). `ImapClient` gains a
+  `searchEnvelopes(_:)` method that takes a `SearchQuery` struct
+  (`folder`, `text`, `from`, `to`, `subject`, `since`, `before`,
+  `unread`, `flagged`, `hasAttachment`, `limit`, `cursor`) and
+  returns envelopes with their source folder attached plus the
+  pagination cursor. `MessageListViewModel.runSearch` switches off
+  the raw IMAP-SEARCH passthrough — the wire path is now one round
+  trip instead of UID search + min...max envelope fan-out, and the
+  fragile `replacingOccurrences` quote-escape hack is gone. UTF-8
+  query handling moves server-side (the Lambda sets `CHARSET UTF-8`),
+  so non-ASCII queries round-trip correctly. The legacy
+  `search(folder:query:)` method and the `/search` Lambda stay in
+  place during the deprecation window and are removed in Phase 6.
+
 ## [0.9.30] - 2026-05-24
 
 ### Added
