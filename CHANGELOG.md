@@ -8,10 +8,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
-- Grafana "API Gateway & Lambda" dashboard's 5xx-rate, Lambda
-  duration p95, and Lambda errors/throttles panels - blank since the
-  monitoring stack shipped despite real activity in CloudWatch.
-  Two root causes:
+- Grafana monitoring panels blank since the monitoring stack shipped
+  despite real activity in CloudWatch. Three root causes layered on
+  top of each other, the deepest one suppressing nearly every panel
+  on the "AWS Services" dashboard plus several on "API Gateway &
+  Lambda":
+  - cloudwatch_exporter v0.16.0 mixed `p95` / `p99` into
+    `aws_statistics` for `AWS/ApiGateway IntegrationLatency`,
+    `AWS/Lambda Duration`, `AWS/DynamoDB SuccessfulRequestLatency`,
+    and `AWS/ApplicationELB TargetResponseTime`. CloudWatch's
+    `GetMetricStatistics` only accepts basic stats there; percentiles
+    must go in the `ExtendedStatistics` parameter. The exporter's
+    scrape loop aborts the entire scrape at the first rule that
+    `InvalidParameterValueException`s, so every metric configured
+    *after* the first percentile-bearing rule (Lambda, DynamoDB, EFS,
+    ECS/ContainerInsights, ALB, ACM, Cognito, the Cabalmail/Logs
+    metric filters) was silently dropped. Only API Gateway Count /
+    5XXError / 4XXError, which precede IntegrationLatency, made it
+    through - that's why those three panels alone showed data.
+    Split each percentile-bearing rule into `aws_statistics:
+    [Average]` plus `aws_extended_statistics: [p95, p99]` and added a
+    cross-reference comment explaining the gotcha. Requires a
+    cloudwatch-exporter image rebuild + ECS update-service to pick
+    up.
   - The 5xx-rate query (and the matching `Lambda5xxSpike` alert
     rule) used `aws_apigateway_5_xx_error_sum`. cloudwatch_exporter
     v0.16.0's `toSnakeCase` regex `([a-z0-9])([A-Z])` only inserts an
