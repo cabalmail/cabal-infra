@@ -1,11 +1,18 @@
-'''Structured single-folder search returning envelopes plus a pagination cursor.
+'''Structured search returning envelopes plus a pagination cursor.
 
-Phase 1 of `docs/0.9.x/imap-search-plan.md`. The endpoint accepts a structured
-query (no raw IMAP-SEARCH syntax leaks across the wire), translates it to an
-IMAP SEARCH criteria list server-side, sorts matches newest-first, and returns
-the same per-envelope shape as `/list_envelopes` together with an opaque
-cursor for the next page. Single-folder only - cross-folder is Phase 3. No FTS
-yet (Phase 4), so body search is whatever Dovecot's sequential scan gives us.
+Phases 1 + 3 of `docs/0.9.x/imap-search-plan.md`. The endpoint accepts a
+structured query (no raw IMAP-SEARCH syntax leaks across the wire), translates
+it to an IMAP SEARCH criteria list server-side, sorts matches newest-first,
+and returns the same per-envelope shape as `/list_envelopes` together with an
+opaque cursor for the next page.
+
+When `folder` is supplied the search is single-folder. When `folder` is
+omitted (or empty) the Lambda enumerates the user's subscribed folders,
+excludes the default noise folders (Trash/Spam/Junk/Deleted Messages), runs
+SEARCH against each in turn, merges the matches newest-first, and stamps
+each result envelope with its source folder. The 5,000-result cap applies
+to the merged match set. No FTS yet (Phase 4), so body search is whatever
+Dovecot's sequential scan gives us.
 
 The old raw-syntax `/search` endpoint stays in place during the migration
 window so the Apple client keeps working until Phase 5 cuts it over.
@@ -24,31 +31,41 @@ DEFAULT_LIMIT = 50
 MAX_LIMIT = 200
 TRUTHY = {'1', 'true', 'True', 'yes', 'YES'}
 
+# Path segments excluded from cross-folder ("all folders") search by default.
+# Matched case-insensitively against each `/`-separated segment, so a
+# nested `Archive/Spam` is also excluded. The exclude list is intended to
+# line up with the FTS-autoindex exclude list that Phase 4 ships.
+CROSS_FOLDER_EXCLUDES = {'trash', 'spam', 'junk', 'deleted messages'}
+
 
 def handler(event, _context):
-    '''Searches one folder using structured query params and returns envelopes.
+    '''Searches one folder (or every subscribed folder) and returns envelopes.
 
-    Required query params: `host`, `folder`. Optional: `text`, `from`, `to`,
-    `subject`, `since` (YYYY-MM-DD), `before` (YYYY-MM-DD), `unread`,
-    `flagged`, `has_attachment`, `limit` (default 50, max 200), `cursor`.
+    Required query params: `host`. Optional: `folder` (omit for cross-folder
+    search), `text`, `from`, `to`, `subject`, `since` (YYYY-MM-DD), `before`
+    (YYYY-MM-DD), `unread`, `flagged`, `has_attachment`, `limit` (default 50,
+    max 200), `cursor`.
 
     Response shape:
 
         {
           "envelopes": [...],            // newest-first; per-envelope shape
-                                         // matches /list_envelopes
+                                         // matches /list_envelopes plus a
+                                         // `folder` field naming the source
+                                         // folder (always set, even in
+                                         // single-folder mode)
           "total_estimate": 137,         // exact unless truncated == true
           "next_cursor": "...",          // null on the last page
-          "folders_searched": ["INBOX"],
+          "folders_searched": ["INBOX", "Archive", ...],
           "truncated": false             // true when the match set hit
                                          // MAX_RESULTS before pagination
         }
 
-    The cursor is opaque to clients. It encodes (last_internal_date, last_uid)
-    of the previous page tail so successive pages survive modest mailbox churn
-    without holding server-side state. UTF-8 is the only accepted charset; the
-    Lambda sets `CHARSET UTF-8` on every SEARCH so non-ASCII literals are
-    interpreted consistently.
+    The cursor is opaque to clients. It encodes (last_internal_date,
+    last_folder, last_uid) of the previous page tail so successive pages
+    survive modest mailbox churn without holding server-side state. UTF-8
+    is the only accepted charset; the Lambda sets `CHARSET UTF-8` on every
+    SEARCH so non-ASCII literals are interpreted consistently.
     '''
     qs = event.get('queryStringParameters') or {}
     user = event['requestContext']['authorizer']['claims']['cognito:username']
@@ -58,12 +75,22 @@ def handler(event, _context):
     except ValueError as exc:
         return _error(400, str(exc))
 
-    client = get_imap_client(req['host'], user, req['folder'].replace('/', '.'), True)
+    # Cross-folder mode discovers folders via LIST on a logged-in session,
+    # so we have to be logged in before we know the folder set. INBOX is the
+    # safe initial selection; the per-folder loop re-selects as needed.
+    initial = req['folder'] or 'INBOX'
+    client = get_imap_client(req['host'], user, initial.replace('/', '.'), True)
     try:
-        pairs, truncated = search_and_sort(client, req['criteria'], req['want_attachment'])
-        remaining = apply_cursor(pairs, req['cursor'])
+        if req['folder'] is not None:
+            folders_searched = [req['folder']]
+        else:
+            folders_searched = enumerate_cross_folder(client)
+        triples, truncated = search_folders(
+            client, folders_searched, req['criteria'], req['want_attachment'],
+        )
+        remaining = apply_cursor(triples, req['cursor'])
         page = remaining[:req['limit']]
-        envelopes = fetch_envelopes(client, [u for _, u in page])
+        envelopes = fetch_envelopes_grouped(client, page)
         next_cursor = build_next_cursor(remaining, page)
     finally:
         client.logout()
@@ -72,20 +99,26 @@ def handler(event, _context):
         "statusCode": 200,
         "body": json.dumps({
             "envelopes": envelopes,
-            "total_estimate": len(pairs),
+            "total_estimate": len(triples),
             "next_cursor": next_cursor,
-            "folders_searched": [req['folder']],
+            "folders_searched": folders_searched,
             "truncated": truncated,
         })
     }
 
 
 def parse_request(qs):
-    '''Extracts and validates request parameters. Raises ValueError on bad input.'''
-    folder = qs.get('folder')
+    '''Extracts and validates request parameters. Raises ValueError on bad input.
+
+    `folder` is optional; omitting it (or passing an empty string) triggers
+    cross-folder mode. `host` remains required.
+    '''
     host = qs.get('host')
-    if not folder or not host:
-        raise ValueError('host and folder are required')
+    if not host:
+        raise ValueError('host is required')
+    folder = qs.get('folder')
+    if folder == '':
+        folder = None
     cursor = decode_cursor(qs.get('cursor'))
     return {
         'host': host,
@@ -105,7 +138,7 @@ def build_criteria(qs, cursor):
     if text:
         # Tokenize on whitespace; AND-of-terms via repeated TEXT keys. TEXT
         # matches both headers and body. Phrase quoting and boolean operators
-        # are deliberately out of scope for the Phase 1 contract.
+        # are deliberately out of scope for the structured contract.
         for token in text.split():
             criteria.extend(['TEXT', token])
 
@@ -126,8 +159,10 @@ def build_criteria(qs, cursor):
 
     # IMAP BEFORE is day-granular, so cursor pruning adds
     # `BEFORE (cursor_date + 1)` to constrain to same-day-or-older messages.
-    # The same-day boundary (already-seen UIDs from the previous page) is
-    # filtered precisely in Python once INTERNALDATE is fetched.
+    # The same-day boundary (already-seen UIDs / earlier-sort folders from
+    # the previous page) is filtered precisely in Python once INTERNALDATE
+    # is fetched. Folder-agnostic - the same date prune applies to every
+    # folder we walk in cross-folder mode.
     if cursor is not None:
         cur_d = datetime.date.fromisoformat(cursor['last_date'])
         criteria.extend(['BEFORE', cur_d + datetime.timedelta(days=1)])
@@ -135,19 +170,64 @@ def build_criteria(qs, cursor):
     return criteria or ['ALL']
 
 
-def search_and_sort(client, criteria, want_attachment):
-    '''Runs SEARCH, applies the MAX_RESULTS cap, fetches metadata, and sorts
-    newest-first. Returns (sorted_pairs, truncated_flag).'''
-    uids = list(client.search(criteria, charset='UTF-8'))
-    truncated = len(uids) > MAX_RESULTS
-    if truncated:
-        uids = uids[:MAX_RESULTS]
-    return _sort_pairs(client, uids, want_attachment), truncated
+def enumerate_cross_folder(client):
+    '''Subscribed folders in `/`-separated display form, minus the cross-folder
+    noise list and `\\Noselect` containers. INBOX is hoisted to the top so the
+    walk order is deterministic and matches the helper's folder sort.'''
+    raw = client.list_sub_folders()
+    folders = []
+    for entry in raw:
+        flags = entry[0] or ()
+        name = entry[2]
+        if any(_flag_str(f).lower() == '\\noselect' for f in flags):
+            continue
+        display = name.replace('.', '/')
+        segments = [s.lower() for s in display.split('/')]
+        if any(s in CROSS_FOLDER_EXCLUDES for s in segments):
+            continue
+        folders.append(display)
+    folders.sort(key=lambda k: k if k == 'INBOX' else k.lower())
+    return folders
 
 
-def _sort_pairs(client, uids, want_attachment):
+def _flag_str(value):
+    if isinstance(value, bytes):
+        return value.decode('ascii', errors='replace')
+    if isinstance(value, str):
+        return value
+    return ''
+
+
+def search_folders(client, folders, criteria, want_attachment):
+    '''Runs SEARCH against each folder in turn, accumulates the matches with
+    their per-folder metadata, and returns the merged list sorted newest-first
+    plus a truncation flag.
+
+    Per-folder cap and merged cap both observe MAX_RESULTS. A single overflowing
+    folder marks the query truncated and consumes the remaining budget; the
+    walk stops once the budget is exhausted.
+    '''
+    all_triples = []
+    truncated = False
+    for folder in folders:
+        remaining_cap = MAX_RESULTS - len(all_triples)
+        if remaining_cap <= 0:
+            truncated = True
+            break
+        client.select_folder(folder.replace('/', '.'), readonly=True)
+        uids = list(client.search(criteria, charset='UTF-8'))
+        if len(uids) > remaining_cap:
+            uids = uids[:remaining_cap]
+            truncated = True
+        all_triples.extend(_triples_for(client, folder, uids, want_attachment))
+    all_triples.sort(key=lambda t: (t[0], t[1], t[2]), reverse=True)
+    return all_triples, truncated
+
+
+def _triples_for(client, folder, uids, want_attachment):
     '''Fetches INTERNALDATE (and BODYSTRUCTURE when filtering attachments) for
-    `uids` and returns a (date, uid) list sorted newest-first.'''
+    `uids` in the currently-selected `folder` and returns a list of
+    (date, folder, uid) triples.'''
     if not uids:
         return []
     fetch_keys = ['INTERNALDATE']
@@ -161,7 +241,7 @@ def _sort_pairs(client, uids, want_attachment):
             if u in meta and bodystructure_has_attachment(meta[u].get(b'BODYSTRUCTURE'))
         ]
 
-    pairs = []
+    triples = []
     for u in uids:
         data = meta.get(u)
         if not data:
@@ -169,18 +249,18 @@ def _sort_pairs(client, uids, want_attachment):
         idate = data.get(b'INTERNALDATE')
         if idate is None:
             continue
-        pairs.append((idate.date(), u))
-    pairs.sort(key=lambda p: (p[0], p[1]), reverse=True)
-    return pairs
+        triples.append((idate.date(), folder, u))
+    return triples
 
 
-def apply_cursor(pairs, cursor):
-    '''Drops everything in `pairs` that the previous page already returned.'''
+def apply_cursor(triples, cursor):
+    '''Drops everything in `triples` that the previous page already returned.'''
     if cursor is None:
-        return pairs
+        return triples
     cur_d = datetime.date.fromisoformat(cursor['last_date'])
+    cur_f = cursor['last_folder']
     cur_u = int(cursor['last_uid'])
-    return [p for p in pairs if (p[0], p[1]) < (cur_d, cur_u)]
+    return [t for t in triples if (t[0], t[1], t[2]) < (cur_d, cur_f, cur_u)]
 
 
 def build_next_cursor(remaining, page):
@@ -188,11 +268,41 @@ def build_next_cursor(remaining, page):
     when `page` already exhausts `remaining`.'''
     if not page or len(remaining) <= len(page):
         return None
-    last_d, last_u = page[-1]
+    last_d, last_f, last_u = page[-1]
     return encode_cursor({
         'last_date': last_d.isoformat(),
+        'last_folder': last_f,
         'last_uid': int(last_u),
     })
+
+
+def fetch_envelopes_grouped(client, triples):
+    '''Hydrates `triples` into envelope dicts, preserving the input order.
+
+    Groups by folder and SELECTs each one in turn before fetching, so cross-
+    folder results pay one extra SELECT per unique folder per page rather
+    than per envelope. Single-folder results pay one SELECT (the folder
+    is already selected from `search_folders`, but a defensive re-select
+    is cheap).
+    '''
+    if not triples:
+        return []
+    by_folder = {}
+    for index, (_date, folder, uid) in enumerate(triples):
+        by_folder.setdefault(folder, []).append((index, uid))
+    results = [None] * len(triples)
+    for folder, items in by_folder.items():
+        ids = [uid for _, uid in items]
+        client.select_folder(folder.replace('/', '.'), readonly=True)
+        fetched = client.fetch(ids, ENVELOPE_FETCH_KEYS)
+        for index, uid in items:
+            data = fetched.get(uid)
+            if data is None:
+                continue
+            env = envelope_dict(uid, data)
+            env['folder'] = folder
+            results[index] = env
+    return [r for r in results if r is not None]
 
 
 def clamp_limit(raw):
@@ -221,13 +331,18 @@ def decode_cursor(token):
         payload = json.loads(raw.decode('utf-8'))
     except (ValueError, UnicodeDecodeError) as exc:
         raise ValueError('invalid cursor') from exc
-    if not isinstance(payload, dict) or 'last_date' not in payload or 'last_uid' not in payload:
+    if not isinstance(payload, dict):
         raise ValueError('invalid cursor')
+    for key in ('last_date', 'last_folder', 'last_uid'):
+        if key not in payload:
+            raise ValueError('invalid cursor')
     try:
         datetime.date.fromisoformat(payload['last_date'])
         int(payload['last_uid'])
     except (TypeError, ValueError) as exc:
         raise ValueError('invalid cursor') from exc
+    if not isinstance(payload['last_folder'], str) or not payload['last_folder']:
+        raise ValueError('invalid cursor')
     return payload
 
 
@@ -252,25 +367,6 @@ def bodystructure_has_attachment(bs):
         if bodystructure_has_attachment(child):
             return True
     return False
-
-
-def fetch_envelopes(client, ids):
-    '''Hydrates `ids` into the envelope shape used by /list_envelopes.
-
-    Returns a list whose order matches `ids` so the caller's newest-first
-    sort survives the IMAP fetch round-trip (the server is free to return
-    fetched items in any order).
-    '''
-    if not ids:
-        return []
-    fetched = client.fetch(ids, ENVELOPE_FETCH_KEYS)
-    envelopes = []
-    for msgid in ids:
-        data = fetched.get(msgid)
-        if data is None:
-            continue
-        envelopes.append(envelope_dict(msgid, data))
-    return envelopes
 
 
 def _parse_iso_date(value, field):

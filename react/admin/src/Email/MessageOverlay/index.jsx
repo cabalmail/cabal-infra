@@ -28,7 +28,7 @@ import { folderMeta } from '../../utils/folderMeta';
 import './MessageOverlay.css';
 
 function MessageOverlay({
-  envelope, folder, visible, flags,
+  envelope, folder: folderProp, visible, flags,
   hide: hideProp, updateOverlay,
   reply: replyProp, replyAll: replyAllProp, forward: forwardProp,
   readerFormat, setReaderFormat,
@@ -36,6 +36,11 @@ function MessageOverlay({
 }) {
   const api = useApi();
   const { setMessage } = useAppMessage();
+  // When the overlay opens on a cross-folder search result the envelope
+  // carries its own source folder; otherwise we fall back to the page-
+  // level folder. Every IMAP-side call (fetch, setFlag, move) needs to
+  // hit the source folder, not the page's selected folder.
+  const folder = (envelope && envelope.folder) || folderProp;
 
   const [messageBodyPlain, setMessageBodyPlain] = useState('');
   const [messageBodyHtml, setMessageBodyHtml] = useState('');

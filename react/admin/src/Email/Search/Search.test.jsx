@@ -71,13 +71,30 @@ describe('Search results pane', () => {
     mockMoveMessages.mockResolvedValue({ data: { ok: true } });
   });
 
-  it('calls /search_envelopes with the active folder + query on mount', async () => {
+  it('calls /search_envelopes cross-folder by default (no folder param)', async () => {
     render(<Harness query="invoices" folder="INBOX" />);
     await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
 
     expect(mockSearchEnvelopes).toHaveBeenCalledTimes(1);
     const params = mockSearchEnvelopes.mock.calls[0][0];
-    expect(params).toMatchObject({ folder: 'INBOX', text: 'invoices', limit: 50 });
+    expect(params).toMatchObject({ text: 'invoices', limit: 50 });
+    expect(params.folder).toBeUndefined();
+  });
+
+  it('scopes the search to the current folder when "This folder only" is checked', async () => {
+    render(<Harness query="invoices" folder="INBOX" />);
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+
+    fireEvent.click(screen.getByRole('button', { name: /filters/i }));
+    const check = screen.getByLabelText('This folder only');
+    fireEvent.click(check);
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+
+    expect(mockSearchEnvelopes).toHaveBeenCalledTimes(2);
+    expect(mockSearchEnvelopes.mock.calls[1][0]).toMatchObject({
+      folder: 'INBOX',
+      text: 'invoices',
+    });
   });
 
   it('renders one envelope row per result envelope', async () => {
@@ -160,10 +177,73 @@ describe('Search results pane', () => {
 
     expect(mockSearchEnvelopes).toHaveBeenCalledTimes(2);
     expect(mockSearchEnvelopes.mock.calls[1][0]).toMatchObject({
-      folder: 'INBOX',
       text: 'meeting',
       from: 'alice@example.com',
     });
+    // Cross-folder default — folder is omitted.
+    expect(mockSearchEnvelopes.mock.calls[1][0].folder).toBeUndefined();
+  });
+
+  it('routes single-row archive to the envelope\'s source folder, not the page folder', async () => {
+    mockSearchEnvelopes.mockResolvedValueOnce({
+      data: {
+        envelopes: [makeEnvelope(7, { folder: 'Archive/2024' })],
+        total_estimate: 1,
+        next_cursor: null,
+        truncated: false,
+        folders_searched: ['INBOX', 'Archive/2024'],
+      },
+    });
+    render(<Harness query="receipt" folder="INBOX" />);
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+
+    // The Envelope row exposes archive via a swipe action; tap it.
+    fireEvent.click(screen.getByText('Archive'));
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+
+    expect(mockMoveMessages).toHaveBeenCalled();
+    const [src, dest] = mockMoveMessages.mock.calls[0];
+    expect(src).toBe('Archive/2024');
+    expect(dest).toBe('Archive');
+  });
+
+  it('groups bulk move calls by each selected envelope\'s source folder', async () => {
+    mockSearchEnvelopes.mockResolvedValueOnce({
+      data: {
+        envelopes: [
+          makeEnvelope(1, { folder: 'INBOX' }),
+          makeEnvelope(2, { folder: 'Archive/2024' }),
+          makeEnvelope(3, { folder: 'INBOX' }),
+        ],
+        total_estimate: 3,
+        next_cursor: null,
+        truncated: false,
+        folders_searched: ['INBOX', 'Archive/2024'],
+      },
+    });
+
+    const { container } = render(<Harness query="receipt" folder="INBOX" />);
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+
+    // Pick all three rows via the row checkbox; Search auto-flips into
+    // bulk mode on first selection. Selection state lives in Harness,
+    // so the clear-on-mount effect runs once before this.
+    const leadings = container.querySelectorAll('.envelope-leading');
+    expect(leadings.length).toBe(3);
+    fireEvent.click(leadings[0]);
+    fireEvent.click(leadings[1]);
+    fireEvent.click(leadings[2]);
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+
+    fireEvent.click(screen.getByRole('button', { name: /^Archive$/i }));
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+
+    expect(mockMoveMessages).toHaveBeenCalledTimes(2);
+    const byFolder = Object.fromEntries(
+      mockMoveMessages.mock.calls.map(([src, dest, ids]) => [src, { dest, ids: ids.slice().sort() }]),
+    );
+    expect(byFolder['INBOX']).toEqual({ dest: 'Archive', ids: [1, 3] });
+    expect(byFolder['Archive/2024']).toEqual({ dest: 'Archive', ids: [2] });
   });
 
   it('Clear button invokes clearSearch', async () => {

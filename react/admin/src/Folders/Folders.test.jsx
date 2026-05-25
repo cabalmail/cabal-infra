@@ -117,6 +117,82 @@ describe('Folders rail', () => {
     expect(screen.queryByRole('button', { name: /remove drafts/i })).not.toBeInTheDocument();
   });
 
+  describe('add folder', () => {
+    it('creates a top-level folder via the section + button', async () => {
+      mockNewFolder.mockResolvedValue({ data: { folders: [], sub_folders: [] } });
+      renderFolders();
+      await waitFor(() => expect(screen.getByText('Inbox')).toBeInTheDocument());
+      // Both the section-header + icon and the bottom "New folder" row carry
+      // the same accessible name; either opens the same input.
+      const addBtns = screen.getAllByRole('button', { name: /^new folder$/i });
+      await act(async () => { fireEvent.click(addBtns[0]); });
+      const input = screen.getByPlaceholderText('New folder name');
+      await act(async () => {
+        fireEvent.change(input, { target: { value: 'Projects' } });
+        fireEvent.keyDown(input, { key: 'Enter' });
+      });
+      expect(mockNewFolder).toHaveBeenCalledWith('', 'Projects');
+    });
+
+    it('creates a child folder via the per-row + action', async () => {
+      mockGetFolderList.mockResolvedValue({
+        data: {
+          folders: ['INBOX', 'Work'],
+          sub_folders: [],
+        },
+      });
+      mockNewFolder.mockResolvedValue({ data: { folders: [], sub_folders: [] } });
+      renderFolders({ folder: 'INBOX' });
+      await waitFor(() => expect(screen.getByText('Work')).toBeInTheDocument());
+      const addChildBtn = screen.getByRole('button', { name: /new folder inside work/i });
+      await act(async () => { fireEvent.click(addChildBtn); });
+      const input = screen.getByPlaceholderText('New folder name');
+      await act(async () => {
+        fireEvent.change(input, { target: { value: 'Q1' } });
+        fireEvent.keyDown(input, { key: 'Enter' });
+      });
+      expect(mockNewFolder).toHaveBeenCalledWith('Work', 'Q1');
+    });
+
+    it('auto-expands a collapsed parent when adding a child under it', async () => {
+      mockGetFolderList.mockResolvedValue({
+        data: {
+          folders: ['INBOX', 'Work', 'Work/Q1'],
+          sub_folders: [],
+        },
+      });
+      localStorage.setItem('folder_collapsed_paths', JSON.stringify(['Work']));
+      renderFolders({ folder: 'INBOX' });
+      await waitFor(() => expect(screen.getByText('Work')).toBeInTheDocument());
+      expect(screen.queryByText('Q1')).not.toBeInTheDocument();
+      const addChildBtn = screen.getByRole('button', { name: /new folder inside work/i });
+      await act(async () => { fireEvent.click(addChildBtn); });
+      // Parent expanded -> previously-hidden Q1 now visible, and the input renders inline.
+      expect(screen.getByText('Q1')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('New folder name')).toBeInTheDocument();
+    });
+
+    it('rejects names containing "." or "/" and surfaces a message', async () => {
+      const setMessage = vi.fn();
+      renderFolders({ setMessage });
+      await waitFor(() => expect(screen.getByText('Inbox')).toBeInTheDocument());
+      // Both the section-header + icon and the bottom "New folder" row carry
+      // the same accessible name; either opens the same input.
+      const addBtns = screen.getAllByRole('button', { name: /^new folder$/i });
+      await act(async () => { fireEvent.click(addBtns[0]); });
+      const input = screen.getByPlaceholderText('New folder name');
+      await act(async () => {
+        fireEvent.change(input, { target: { value: 'bad/name' } });
+        fireEvent.keyDown(input, { key: 'Enter' });
+      });
+      expect(mockNewFolder).not.toHaveBeenCalled();
+      expect(setMessage).toHaveBeenCalledWith(
+        expect.stringContaining("must not contain"),
+        true,
+      );
+    });
+  });
+
   it('toggles subscription from a folder row', async () => {
     mockUnsubscribe.mockResolvedValue({});
     renderFolders();
