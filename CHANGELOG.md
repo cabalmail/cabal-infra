@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Dovecot full-text search index via `fts_flatcurve` (Phase 4 of
+  `docs/0.9.x/imap-search-plan.md`). The `imap` container's
+  Dockerfile gains a multi-stage builder that compiles
+  `dovecot-fts-flatcurve` (pinned to upstream tag `v1.0.5`,
+  commit `cdfdb18a`) against the same `amazonlinux:2023`
+  Dovecot the runtime stage installs, then copies the plugin
+  `.so` plus its LGPL-2.1 `COPYING`, `AUTHORS`, and a
+  `THIRD-PARTY-LICENSES` manifest into the final image at
+  `/usr/share/doc/fts-flatcurve/`. A new
+  `docker/imap/configs/dovecot/90-fts.conf` enables the `fts`
+  and `fts_flatcurve` mail plugins with `fts = flatcurve`,
+  `fts_autoindex = yes` (with `\Trash` and `\Junk` excluded so
+  the index lines up with the `/search_envelopes` noise-folder
+  defaults), `fts_enforced = yes` (refuses silent fallback to
+  sequential scan), `fts_flatcurve_min_term_size = 2`, and
+  `fts_flatcurve_substring_search = no`. Operator instructions
+  for the one-shot historical reindex (`doveadm fts rescan -u
+  <user>`), EFS throughput considerations during the rescan,
+  backup interaction with the per-user `.fts/` directories, and
+  the search-content logging policy land in `docs/operations.md`
+  under a new "IMAP full-text search index" section. Body and
+  header searches now hit an inverted index instead of reading
+  every `Maildir` message file off EFS; attachments are still
+  not decoded.
+
 ## [0.9.30] - 2026-05-24
 
 ### Added
