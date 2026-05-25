@@ -2,10 +2,8 @@
  * Search results pane. Replaces the folder Messages view when a search is
  * active. Phases 2 + 3 of `docs/0.9.x/imap-search-plan.md`. Cross-folder is
  * the default (the Lambda enumerates the user's subscribed folders and
- * excludes Trash/Spam/Junk/Deleted Messages on the server side); a "This
- * folder only" toggle scopes the search back to the currently-selected
- * folder. No FTS yet (latency on body search is whatever Dovecot's
- * sequential scan gives us until Phase 4).
+ * excludes Trash on the server side); a "This folder only" toggle scopes
+ * the search back to the currently-selected folder.
  *
  * Owns its own search state (the structured filters + the scope toggle) and
  * re-runs the query whenever the user submits the form. The free-text term
@@ -516,7 +514,7 @@ function Search({
               </label>
               <label
                 className="search-check"
-                title={`Scope to ${folder} only; otherwise search every subscribed folder (Trash/Spam excluded).`}
+                title={`Scope to ${folder} only; otherwise search every subscribed folder except Trash.`}
               >
                 <input
                   type="checkbox"

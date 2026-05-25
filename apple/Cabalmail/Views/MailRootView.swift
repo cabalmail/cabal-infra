@@ -25,10 +25,24 @@ struct MailRootView: View {
     @State private var selectedFolder: Folder?
     @State private var selectedEnvelope: Envelope?
     @State private var selectedAddress: Address?
+    /// Override for the message detail's folder context when the selected
+    /// envelope is a cross-folder search result. `MessageListView` reports
+    /// the source folder via `onSearchResultSelected`; we wrap it in a
+    /// synthetic `Folder` so `MessageDetailView`'s mark-read / archive /
+    /// move operations target the message's true mailbox rather than the
+    /// sidebar's current selection. Nil for same-folder rows and folder-
+    /// mode lists, so `detailFolder` falls back to `selectedFolder`.
+    @State private var crossFolderDetail: Folder?
     @AppStorage("cabalmail.sidebar.tab") private var sidebarTabRaw: String = SidebarTab.folders.rawValue
 
     private var sidebarTab: SidebarTab {
         SidebarTab(rawValue: sidebarTabRaw) ?? .folders
+    }
+
+    /// Folder that drives `MessageDetailView`. Cross-folder search results
+    /// override the sidebar selection; everything else uses it directly.
+    private var detailFolder: Folder? {
+        crossFolderDetail ?? selectedFolder
     }
 
     var body: some View {
@@ -40,7 +54,10 @@ struct MailRootView: View {
                     folder: selectedFolder,
                     selection: $selectedEnvelope,
                     addressFilter: selectedAddress?.address,
-                    onClearAddressFilter: { selectedAddress = nil }
+                    onClearAddressFilter: { selectedAddress = nil },
+                    onSearchResultSelected: { sourceFolderPath in
+                        crossFolderDetail = sourceFolderPath.map { Folder(path: $0) }
+                    }
                 )
                 .id(selectedFolder.path)
             } else {
@@ -51,12 +68,12 @@ struct MailRootView: View {
                 )
             }
         } detail: {
-            if let selectedFolder, let selectedEnvelope {
+            if let folder = detailFolder, let selectedEnvelope {
                 MessageDetailView(
-                    folder: selectedFolder,
+                    folder: folder,
                     envelope: selectedEnvelope
                 )
-                .id("\(selectedFolder.path)#\(selectedEnvelope.uid)")
+                .id("\(folder.path)#\(selectedEnvelope.uid)")
             } else {
                 ContentUnavailableView(
                     "No message selected",
@@ -72,6 +89,7 @@ struct MailRootView: View {
         .onChange(of: selectedFolder) { _, _ in
             selectedEnvelope = nil
             selectedAddress = nil
+            crossFolderDetail = nil
         }
     }
 

@@ -36,7 +36,19 @@ public protocol ImapClient: Sendable {
     func fetchPart(folder: String, uid: UInt32, partId: String) async throws -> Data
     func setFlags(folder: String, uids: [UInt32], flags: Set<Flag>, operation: FlagOperation) async throws
     func move(folder: String, uids: [UInt32], destination: String) async throws
-    func search(folder: String, query: String) async throws -> [UInt32]
+
+    /// Structured search across one folder (`query.folder` set) or every
+    /// subscribed folder (`query.folder == nil`). Returns envelopes with
+    /// their source folder attached, plus the pagination cursor required
+    /// to fetch the next page. The wire path is one round trip — no
+    /// post-fetch UID range expansion at the call site.
+    ///
+    /// The default extension throws `protocolError`; the API-backed
+    /// implementation overrides it. `LiveImapClient` inherits the
+    /// default — production traffic never goes through it (see the
+    /// CLAUDE.md note on `ApiBackedImapClient`).
+    func searchEnvelopes(_ query: SearchQuery) async throws -> SearchResult
+
     func append(folder: String, message: Data, flags: Set<Flag>) async throws
     func disconnect() async
 
@@ -64,6 +76,58 @@ public extension ImapClient {
     /// reconnect backoff — cheap, correct, and no per-mock boilerplate.
     func idle(folder: String) async throws -> AsyncThrowingStream<IdleEvent, Error> {
         AsyncThrowingStream { $0.finish() }
+    }
+
+    /// Default implementation: only the API-backed client speaks the
+    /// `/search_envelopes` contract today. `LiveImapClient` could grow a
+    /// native translator (criteria list + `UID FETCH ENVELOPE`) but
+    /// production never calls it, so the cheap default protects test
+    /// doubles without forcing every conformer to ship a stub.
+    func searchEnvelopes(_ query: SearchQuery) async throws -> SearchResult {
+        throw CabalmailError.protocolError(
+            "searchEnvelopes is not implemented by this ImapClient"
+        )
+    }
+}
+
+/// One envelope returned by `searchEnvelopes(_:)` plus its source folder.
+/// Cross-folder results carry the folder per row so operations on the
+/// result set can route to the right mailbox; single-folder results set
+/// `folder` to the query's folder so callers can treat the field as
+/// always-present.
+public struct SearchedEnvelope: Sendable, Hashable {
+    public let envelope: Envelope
+    public let folder: String
+
+    public init(envelope: Envelope, folder: String) {
+        self.envelope = envelope
+        self.folder = folder
+    }
+}
+
+/// Decoded `/search_envelopes` response. Mirrors the wire payload but
+/// uses parsed `Envelope`s rather than the on-the-wire `ApiSearchEnvelope`
+/// shape, so view models see the same envelope type as the rest of the
+/// mailbox surface.
+public struct SearchResult: Sendable, Hashable {
+    public let envelopes: [SearchedEnvelope]
+    public let totalEstimate: Int
+    public let nextCursor: String?
+    public let foldersSearched: [String]
+    public let truncated: Bool
+
+    public init(
+        envelopes: [SearchedEnvelope],
+        totalEstimate: Int,
+        nextCursor: String?,
+        foldersSearched: [String],
+        truncated: Bool
+    ) {
+        self.envelopes = envelopes
+        self.totalEstimate = totalEstimate
+        self.nextCursor = nextCursor
+        self.foldersSearched = foldersSearched
+        self.truncated = truncated
     }
 }
 

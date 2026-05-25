@@ -8,11 +8,10 @@ opaque cursor for the next page.
 
 When `folder` is supplied the search is single-folder. When `folder` is
 omitted (or empty) the Lambda enumerates the user's subscribed folders,
-excludes the default noise folders (Trash/Spam/Junk/Deleted Messages), runs
-SEARCH against each in turn, merges the matches newest-first, and stamps
-each result envelope with its source folder. The 5,000-result cap applies
-to the merged match set. No FTS yet (Phase 4), so body search is whatever
-Dovecot's sequential scan gives us.
+excludes Trash, runs SEARCH against each in turn, merges the matches
+newest-first, and stamps each result envelope with its source folder. The
+5,000-result cap applies to the merged match set. No FTS yet (Phase 4),
+so body search is whatever Dovecot's sequential scan gives us.
 
 The old raw-syntax `/search` endpoint stays in place during the migration
 window so the Apple client keeps working until Phase 5 cuts it over.
@@ -32,10 +31,12 @@ MAX_LIMIT = 200
 TRUTHY = {'1', 'true', 'True', 'yes', 'YES'}
 
 # Path segments excluded from cross-folder ("all folders") search by default.
-# Matched case-insensitively against each `/`-separated segment, so a
-# nested `Archive/Spam` is also excluded. The exclude list is intended to
-# line up with the FTS-autoindex exclude list that Phase 4 ships.
-CROSS_FOLDER_EXCLUDES = {'trash', 'spam', 'junk', 'deleted messages'}
+# Matched case-insensitively against each `/`-separated segment, so a nested
+# `Archive/Trash` is also excluded. Trash is the only excluded folder —
+# Spam / Junk / Deleted Messages are searchable because users do legitimately
+# need to find misclassified mail in them. The list is intended to line up
+# with the FTS-autoindex exclude list that Phase 4 ships.
+CROSS_FOLDER_EXCLUDES = {'trash'}
 
 
 def handler(event, _context):

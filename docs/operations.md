@@ -22,6 +22,48 @@ Setting `TF_VAR_MONITORING` to `true` in a GitHub environment adds [monitoring](
 
 The `quiesce` GitHub workflow scales a development or stage environment's running compute (ECS services, the ECS-instance ASG, NAT instances) to zero so it stops accruing hourly charges. Data is preserved. The workflow refuses to run against prod. See [Quiesce: scale a non-prod environment to zero](./quiesce.md) for the full list of what gets scaled, what is preserved, and how to make the quiesce durable across other Terraform runs.
 
+# IMAP full-text search index
+
+The `imap` container ships [dovecot-fts-flatcurve](https://github.com/slusarz/dovecot-fts-flatcurve) (pinned upstream tag and commit baked into `docker/imap/Dockerfile`, licence preserved at `/usr/share/doc/fts-flatcurve/` inside the image). The plugin gives `/search_envelopes` an inverted index instead of a sequential body scan; configuration lives in `docker/imap/configs/dovecot/90-fts.conf`.
+
+## What the plugin indexes (and what it does not)
+
+Header and body text only, per `fts_autoindex = yes`. The autoindex exclude list skips Trash — the only folder `/search_envelopes` excludes by default — so we don't waste EFS throughput indexing mail we never search. Spam and Junk are searchable (users do need to find misclassified mail), so they're indexed too. Attachments are not decoded — searching for a phrase that lives only inside a PDF or Office document will not find it. That is the design.
+
+Each user's index sits next to their `Maildir` on EFS (under per-mailbox `.fts/` directories). Steady-state index size is roughly 10-20% of mail volume.
+
+## One-shot reindex when the plugin first lights up
+
+When the FTS plugin first ships to an environment, no mailbox has an index yet. New mail will autoindex as it arrives, but historical mail stays invisible to FTS searches until you backfill. `fts_enforced = yes` is set, so a SEARCH that needs unindexed mail returns an error rather than silently falling back to a sequential scan — the rescan is a required deploy step, not a "do it later" nicety.
+
+From inside an `imap` task (`aws ecs execute-command` into the running container), reindex every existing user:
+
+```bash
+for u in $(cut -d: -f1 /etc/passwd | awk '$1 ~ /^[a-z0-9]/ && $1 != "admin"'); do
+  doveadm fts rescan -u "$u"
+done
+```
+
+For one user:
+
+```bash
+doveadm fts rescan -u "$USERNAME"
+```
+
+`doveadm fts rescan` queues the rebuild; the actual indexing runs on the next mailbox access (or immediately if `doveadm index -u $USER '*'` is run afterwards). On a multi-gigabyte mailbox the indexer burns CPU and EFS throughput for several minutes per user. Run during off hours.
+
+## EFS throughput during a rescan
+
+Reindexing is small-file-heavy. If a backfill saturates the filesystem, raise `provisioned_throughput_in_mibps` in [`terraform/infra/modules/efs/main.tf`](../terraform/infra/modules/efs/main.tf) for the duration of the rescan and roll it back once the per-user `.fts/` directories stop growing. The plan's expectation is that the steady-state footprint sits well inside whatever throughput the mail tier already needs, so this is a rollout-window concern only.
+
+## Backup interaction
+
+The `.fts/` directories are derived data. If AWS Backup includes them, restores carry the index with them and search works immediately after restore. If a restore arrives with missing or corrupt `.fts/` content, re-run the rescan above to rebuild from the underlying `Maildir` — no mail is lost either way. There is no special handling required in Terraform; the EFS backup plan already covers the entire filesystem.
+
+## Search-content logging policy
+
+Per the privacy goal in `docs/0.9.x/imap-search-plan.md`, the system does not log query terms, result UIDs, or result counts. Dovecot's `mail_debug = no` and `auth_debug = no` defaults keep SEARCH arguments out of syslog, and `docker/imap/configs/dovecot/10-logging.conf` does not flip either on. If you ever enable `mail_debug` for incident investigation, disable it again as soon as the investigation is done — leaving it on would route SEARCH arguments through the container's stderr into CloudWatch Logs, which is exactly what the privacy stance disallows. The same applies to `fts_flatcurve_debug` and any `log_debug` toggles: do not bake them into the image.
+
 # Test fixtures and pre-promotion verification
 
 Setting `TF_VAR_SINKHOLE` to `true` in a non-prod GitHub environment deploys the [SMTP sinkhole test fixture](./0.9.x/sinkhole-test-harness-plan.md), a tiny configurable SMTP listener fronted by Cloud Map. It exists so test sequences that need a deterministic 4xx response on demand (queue persistence, DSN handling, large-message timeouts, STARTTLS fallback) are reproducible. The flag is refused in prod by the Terraform variable's validation block.

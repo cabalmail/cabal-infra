@@ -25,7 +25,27 @@ final class MessageListViewModel {
     var isLoading = false
     var isLoadingMore = false
     var errorMessage: String?
+
+    /// Free-text term submitted from the search field. Filters live in
+    /// `searchFilters`; the two are sent together when `runSearch()` runs.
     var searchQuery: String = ""
+
+    /// Structured filter form state — mirrors the React filter panel.
+    var searchFilters = MessageSearchFilters()
+
+    /// `true` while search results are showing in `envelopes`.
+    var isSearchActive: Bool = false
+
+    /// Search-banner metadata. All zero when no search is active.
+    var searchTotalEstimate: Int = 0
+    var searchTruncated: Bool = false
+    var searchFoldersSearched: [String] = []
+
+    /// Per-uid source folder for cross-folder results. Empty in folder
+    /// mode and single-folder searches; `sourceFolder(for:)` falls back
+    /// to `folder.path` then. Internal (not private) so the search
+    /// extension in `+Search.swift` can populate it.
+    var sourceFolderByUID: [UInt32: String] = [:]
 
     private var uidValidity: UInt32?
     private var lowestUID: UInt32?
@@ -112,6 +132,15 @@ final class MessageListViewModel {
     }
 
     func refresh() async {
+        // Re-route while a search is showing — pull-to-refresh and the
+        // IDLE / 60-second background refreshes shouldn't silently wipe
+        // active search results back to the folder view. Re-running the
+        // search keeps the result set fresh against any concurrent
+        // mailbox churn.
+        if isSearchActive {
+            await runSearch()
+            return
+        }
         isLoading = true
         defer { isLoading = false }
         do {
@@ -180,33 +209,9 @@ final class MessageListViewModel {
         }
     }
 
-    func runSearch() async {
-        guard !searchQuery.trimmingCharacters(in: .whitespaces).isEmpty else {
-            await refresh()
-            return
-        }
-        isLoading = true
-        defer { isLoading = false }
-        do {
-            try await client.imapClient.connectAndAuthenticate()
-            let query = "TEXT \"\(searchQuery.replacingOccurrences(of: "\"", with: "\\\""))\""
-            let matches = try await client.imapClient.search(folder: folder.path, query: query)
-            guard !matches.isEmpty else {
-                envelopes = []
-                return
-            }
-            let sorted = matches.sorted()
-            let fetched = try await client.imapClient.envelopes(
-                folder: folder.path,
-                range: (sorted.first ?? 1)...(sorted.last ?? 1)
-            )
-            envelopes = fetched
-                .filter { matches.contains($0.uid) }
-                .sorted { $0.uid > $1.uid }
-        } catch {
-            errorMessage = "\(error)"
-        }
-    }
+    // Structured search (`runSearch`, `clearSearch`, `sourceFolder(for:)`,
+    // and the query builder) lives in `MessageListViewModel+Search.swift`
+    // so the primary type body stays under SwiftLint's length cap.
 
     func markRead(_ envelope: Envelope) async {
         await setFlag(.seen, add: true, envelope: envelope)
@@ -245,6 +250,7 @@ final class MessageListViewModel {
         defer { pendingDisposeUIDs.remove(envelope.uid) }
 
         let destination = preferences.disposeAction.destinationFolder
+        let source = sourceFolder(for: envelope)
         let originalIndex = envelopes.firstIndex { $0.uid == envelope.uid }
         let wasUnread = !envelope.flags.contains(.seen)
         envelopes.removeAll { $0.uid == envelope.uid }
@@ -252,32 +258,33 @@ final class MessageListViewModel {
         // marks the message `\Seen` before moving, so an unread message
         // both loses its unread state AND leaves the folder. One -1 covers
         // both — the post-move STATUS walk will fix it if the server
-        // disagrees.
+        // disagrees. In cross-folder search mode `source` may differ from
+        // `folder.path`; the unread delta routes to the row's true mailbox.
         if wasUnread {
-            appState.applyUnreadDelta(folderPath: folder.path, delta: -1)
+            appState.applyUnreadDelta(folderPath: source, delta: -1)
         }
 
         do {
             if !envelope.flags.contains(.seen) {
                 try await client.imapClient.setFlags(
-                    folder: folder.path,
+                    folder: source,
                     uids: [envelope.uid],
                     flags: [.seen],
                     operation: .add
                 )
             }
             try await client.imapClient.move(
-                folder: folder.path,
+                folder: source,
                 uids: [envelope.uid],
                 destination: destination
             )
             if let uidValidity {
                 try? await client.envelopeCache.remove(
                     uids: [envelope.uid],
-                    folder: folder.path
+                    folder: source
                 )
                 await client.bodyCache.remove(
-                    folder: folder.path,
+                    folder: source,
                     uidValidity: uidValidity,
                     uid: envelope.uid
                 )
@@ -285,7 +292,7 @@ final class MessageListViewModel {
         } catch {
             restoreEnvelope(envelope, at: originalIndex)
             if wasUnread {
-                appState.applyUnreadDelta(folderPath: folder.path, delta: 1)
+                appState.applyUnreadDelta(folderPath: source, delta: 1)
             }
             errorMessage = "\(error)"
         }

@@ -29,6 +29,62 @@ private struct MessageIdsOptionalPayload: Decodable {
     }
 }
 
+/// Day-granular date formatter matching `/search_envelopes`'s YYYY-MM-DD
+/// expectation. UTC so a calendar date chosen in the UI maps to the same
+/// IMAP SINCE/BEFORE day server-side regardless of the user's local zone.
+private enum SearchDateFormatter {
+    static let shared: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+}
+
+/// Decoded `/search_envelopes` body. Lifted to file scope so the nested
+/// types stay within SwiftLint's `nesting` rule (one level inside the
+/// extension already).
+private struct SearchEnvelopesPayload: Decodable {
+    let envelopes: [ApiSearchEnvelope]
+    let totalEstimate: Int
+    let nextCursor: String?
+    let foldersSearched: [String]
+    let truncated: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case envelopes, truncated
+        case totalEstimate = "total_estimate"
+        case nextCursor = "next_cursor"
+        case foldersSearched = "folders_searched"
+    }
+}
+
+private func searchEnvelopesQueryItems(host: String, query: SearchQuery) -> [URLQueryItem] {
+    var items: [URLQueryItem] = [URLQueryItem(name: "host", value: host)]
+    func appendIfPresent(_ name: String, _ value: String?) {
+        guard let value, !value.isEmpty else { return }
+        items.append(URLQueryItem(name: name, value: value))
+    }
+    appendIfPresent("folder", query.folder)
+    appendIfPresent("text", query.text)
+    appendIfPresent("from", query.from)
+    appendIfPresent("to", query.to)
+    appendIfPresent("subject", query.subject)
+    if let since = query.since {
+        items.append(URLQueryItem(name: "since", value: SearchDateFormatter.shared.string(from: since)))
+    }
+    if let before = query.before {
+        items.append(URLQueryItem(name: "before", value: SearchDateFormatter.shared.string(from: before)))
+    }
+    if query.unread { items.append(URLQueryItem(name: "unread", value: "1")) }
+    if query.flagged { items.append(URLQueryItem(name: "flagged", value: "1")) }
+    if query.hasAttachment { items.append(URLQueryItem(name: "has_attachment", value: "1")) }
+    if let limit = query.limit { items.append(URLQueryItem(name: "limit", value: String(limit))) }
+    appendIfPresent("cursor", query.cursor)
+    return items
+}
+
 extension URLSessionApiClient {
     // MARK: - Messages
 
@@ -48,14 +104,20 @@ extension URLSessionApiClient {
         return try JSONDecoder().decode(MessageIdsPayload.self, from: data).messageIds
     }
 
-    public func searchMessageIds(host: String, folder: String, query: String) async throws -> [UInt32] {
-        let request = try await get("/search", query: [
-            URLQueryItem(name: "host", value: host),
-            URLQueryItem(name: "folder", value: folder),
-            URLQueryItem(name: "query", value: query),
-        ])
+    public func searchEnvelopes(host: String, query: SearchQuery) async throws -> ApiSearchResponse {
+        let request = try await get(
+            "/search_envelopes",
+            query: searchEnvelopesQueryItems(host: host, query: query)
+        )
         let data = try await send(request, expectedStatuses: 200..<300)
-        return try JSONDecoder().decode(MessageIdsPayload.self, from: data).messageIds
+        let decoded = try JSONDecoder().decode(SearchEnvelopesPayload.self, from: data)
+        return ApiSearchResponse(
+            envelopes: decoded.envelopes,
+            totalEstimate: decoded.totalEstimate,
+            nextCursor: decoded.nextCursor,
+            foldersSearched: decoded.foldersSearched,
+            truncated: decoded.truncated
+        )
     }
 
     public func listEnvelopes(host: String, folder: String, ids: [UInt32]) async throws -> [ApiEnvelope] {

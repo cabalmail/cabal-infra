@@ -169,6 +169,16 @@ are expanded in the sections further down.
    never shown publicly. Primary language English (U.S.) or whichever
    fits.
 
+   The "Cabalmail Mac" name is deliberate: App Store Connect requires
+   each record's name to be unique across your account, so the macOS
+   app can't reuse the iOS app's "Cabalmail" listing. The mismatch is
+   confined to App Store Connect and TestFlight metadata — the
+   installed macOS app overrides `CFBundleName` and `PRODUCT_NAME`
+   back to `Cabalmail` (see `apple/project.yml`), so the menu bar and
+   the `.app` bundle on disk both read "Cabalmail". Don't try to
+   rename the App Store Connect record to "Cabalmail" to "fix" the
+   apparent inconsistency; Apple will reject the name as conflicting.
+
    Without these records, CI uploads land in App Store Connect but
    aren't attached to anything visible and you cannot distribute the
    build.

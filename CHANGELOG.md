@@ -5,6 +5,112 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.31] - 2026-05-25
+
+### Added
+- Dovecot full-text search index via `fts_flatcurve` (Phase 4 of
+  `docs/0.9.x/imap-search-plan.md`). The `imap` container's
+  Dockerfile gains a multi-stage builder that compiles
+  `dovecot-fts-flatcurve` (pinned to upstream tag `v1.0.5`,
+  commit `cdfdb18a`) against the same `amazonlinux:2023`
+  Dovecot the runtime stage installs, then copies the plugin
+  `.so` plus its LGPL-2.1 `COPYING`, `AUTHORS`, and a
+  `THIRD-PARTY-LICENSES` manifest into the final image at
+  `/usr/share/doc/fts-flatcurve/`. A new
+  `docker/imap/configs/dovecot/90-fts.conf` enables the `fts`
+  and `fts_flatcurve` mail plugins with `fts = flatcurve`,
+  `fts_autoindex = yes` (with `\Trash` excluded so the index
+  lines up with `/search_envelopes`'s cross-folder exclude
+  list), `fts_enforced = yes` (refuses silent fallback to
+  sequential scan), `fts_flatcurve_min_term_size = 2`, and
+  `fts_flatcurve_substring_search = no`. Operator instructions
+  for the one-shot historical reindex (`doveadm fts rescan -u
+  <user>`), EFS throughput considerations during the rescan,
+  backup interaction with the per-user `.fts/` directories, and
+  the search-content logging policy land in `docs/operations.md`
+  under a new "IMAP full-text search index" section. Body and
+  header searches now hit an inverted index instead of reading
+  every `Maildir` message file off EFS; attachments are still
+  not decoded.
+- Apple clients pick up the same structured filter panel as the
+  React webmail. A new filter toolbar button next to the New
+  Message button opens a sheet (iPhone) or popover (iPad / macOS)
+  with From / To / Subject text inputs, Since / Before date
+  pickers, Unread / Flagged / Has attachment toggles, and a
+  "This folder only" scope switch. Apply re-runs the search;
+  Reset wipes the form back to defaults. Cross-folder is the
+  default scope, matching the React UX; search results from
+  other folders carry their source mailbox so per-row swipe
+  actions and the opened message-detail view's mark-read /
+  archive / move operations all target the row's true folder
+  instead of the sidebar's current selection. A new in-list
+  banner above the results shows the scope ("in N folders") and
+  match count, surfaces the 5,000-result truncation hint when
+  the cap is hit, and exposes a one-tap clear button. Clearing
+  the search field itself (the iOS / iPadOS Cancel and × buttons,
+  the macOS inline × button, or backspacing the field to empty)
+  also exits search mode and restores the selected folder's
+  messages — previously the only path out of search was running
+  a different query.
+
+### Changed
+- Apple clients now hit the structured `/search_envelopes` endpoint
+  (Phase 5 of `docs/0.9.x/imap-search-plan.md`). `ImapClient` gains a
+  `searchEnvelopes(_:)` method that takes a `SearchQuery` struct
+  (`folder`, `text`, `from`, `to`, `subject`, `since`, `before`,
+  `unread`, `flagged`, `hasAttachment`, `limit`, `cursor`) and
+  returns envelopes with their source folder attached plus the
+  pagination cursor. `MessageListViewModel.runSearch` switches off
+  the raw IMAP-SEARCH passthrough — the wire path is now one round
+  trip instead of UID search + min...max envelope fan-out, and the
+  fragile `replacingOccurrences` quote-escape hack is gone. UTF-8
+  query handling moves server-side (the Lambda sets `CHARSET UTF-8`),
+  so non-ASCII queries round-trip correctly.
+  On macOS the search field now renders inline above the message
+  list (matching the iPad layout) instead of being routed to the
+  window toolbar's trailing edge, where it sat visually over the
+  message detail column.
+
+### Fixed
+- macOS app presents as "Cabalmail" everywhere a user sees it
+  even though App Store Connect knows it as "Cabalmail Mac"
+  (App Store Connect requires a unique app name per record, so
+  the macOS sibling can't reuse the iOS app's listing name).
+  The `CabalmailMac` XcodeGen target now sets `CFBundleName:
+  Cabalmail` so the macOS app menu (the bold entry next to the
+  Apple logo) reads "Cabalmail" instead of falling through to
+  the default `$(PRODUCT_NAME)`, and `PRODUCT_NAME: Cabalmail`
+  ships the bundle on disk as `Cabalmail.app` rather than
+  `CabalmailMac.app`. The bundle identifier stays
+  `com.cabalmail.CabalmailMac` so the two App Store Connect
+  records remain distinct, and the TestFlight listing keeps
+  the "Cabalmail Mac" name. `CFBundleDisplayName` was already
+  "Cabalmail" so Finder labels were correct; this rounds out
+  the remaining surfaces.
+- Selected folder icon is now legible on iPadOS. The sidebar's
+  selection highlight is the accent color, and the folder icon
+  uses the same `.tint`, so the icon used to disappear into the
+  highlight. The icon now flips to white when its row is
+  selected on iOS/iPadOS/visionOS, matching how the system
+  styles selected sidebar labels; macOS sidebar selection
+  already uses a translucent gray that contrasts with the
+  tinted icon, so it stays on the regular tint there.
+
+### Removed
+- Raw-IMAP-syntax `/search` Lambda and its API Gateway / SSM
+  registration (Phase 6 of `docs/0.9.x/imap-search-plan.md`).
+  `lambda/api/search/function.py` is deleted, the `search` entry
+  is gone from `terraform/infra/modules/app/locals.tf`'s
+  `supported_lambdas` map, and the Apple client's
+  `ImapClient.search(folder:query:)` /
+  `ApiClient.searchMessageIds(...)` surface (plus the
+  `ApiBackedImapClient` and `LiveImapClient` implementations) is
+  removed. Both clients have been on `/search_envelopes` since
+  Phases 2 and 5; nothing references the raw-syntax path. The
+  Dovecot wire-level `ImapResponse.search` parser case stays put
+  — it's protocol-level infrastructure independent of the
+  retired Lambda.
+
 ## [0.9.30] - 2026-05-24
 
 ### Added
@@ -60,9 +166,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for the next page. When `folder` is supplied the search is
   single-folder; when omitted (the React default) the Lambda
   enumerates the user's subscribed folders, drops `\Noselect`
-  containers and the noise-folder defaults (Trash/Spam/Junk/Deleted
-  Messages), and walks each folder in turn. Match sets are capped at
-  5,000 results across the merged set (a `truncated` flag in the
+  containers and Trash, and walks each folder in turn. Match sets
+  are capped at 5,000 results across the merged set (a `truncated` flag in the
   response signals the cap); `has_attachment` is computed post-hoc
   from BODYSTRUCTURE (the heuristic tightens once FTS lands in
   Phase 4). The existing raw-syntax `/search` endpoint is unchanged

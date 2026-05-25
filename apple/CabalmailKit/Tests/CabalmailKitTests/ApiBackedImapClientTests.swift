@@ -143,30 +143,6 @@ final class ApiBackedImapClientTests: XCTestCase {
         XCTAssertEqual(payload?["destination"] as? String, "Archive")
     }
 
-    func testSearchHitsLambdaAndReturnsUids() async throws {
-        let http = RecordingHTTPTransport(
-            responses: [(Data(#"{"message_ids":[7,11,42]}"#.utf8), 200)]
-        )
-        let api = URLSessionApiClient(
-            configuration: makeConfiguration(),
-            authService: StubAuthService(),
-            transport: http
-        )
-        let client = ApiBackedImapClient(api: api, host: "imap.example.com")
-        let result = try await client.search(folder: "INBOX", query: "TEXT \"hi\"")
-        XCTAssertEqual(result, [7, 11, 42])
-        let requests = await http.requests
-        XCTAssertEqual(requests.count, 1)
-        let request = requests[0]
-        XCTAssertEqual(request.httpMethod, "GET")
-        let url = request.url!.absoluteString
-        XCTAssertTrue(url.contains("/search"))
-        XCTAssertTrue(url.contains("host=imap.example.com"))
-        XCTAssertTrue(url.contains("folder=INBOX"))
-        // The query string round-trips as percent-encoded form.
-        XCTAssertTrue(url.contains("query=TEXT"))
-    }
-
     func testSendMessageHitsLambdaWithExpectedShape() async throws {
         let http = RecordingHTTPTransport(responses: [(Data(#"{"status":"submitted"}"#.utf8), 200)])
         let api = URLSessionApiClient(
@@ -240,4 +216,148 @@ final class ApiBackedImapClientTests: XCTestCase {
         XCTAssertNil(attachments?[0]["data"])
     }
 
+}
+
+// MARK: - searchEnvelopes
+//
+// `searchEnvelopes(_:)` tests live in their own extension so the primary
+// XCTestCase body stays under SwiftLint's 250-line cap. XCTest still
+// discovers the methods via the runtime, so no further wiring is needed.
+extension ApiBackedImapClientTests {
+    func testSearchEnvelopesSingleFolderRoundTrip() async throws {
+        let body = """
+        {
+          "envelopes": [
+            {"id": 42, "date": "2024-03-01 09:00:00+00:00", "subject": "hello",
+             "from": ["a@x.com"], "to": ["b@y.com"], "cc": [], "flags": [],
+             "struct": null, "folder": "INBOX"},
+            {"id": 17, "date": "2024-02-12 18:30:00+00:00", "subject": "older",
+             "from": ["c@x.com"], "to": [], "cc": [], "flags": ["\\\\Seen"],
+             "struct": null, "folder": "INBOX"}
+          ],
+          "total_estimate": 2,
+          "next_cursor": null,
+          "folders_searched": ["INBOX"],
+          "truncated": false
+        }
+        """
+        let http = RecordingHTTPTransport(responses: [(Data(body.utf8), 200)])
+        let api = URLSessionApiClient(
+            configuration: searchTestConfiguration(),
+            authService: StubAuthService(),
+            transport: http
+        )
+        let client = ApiBackedImapClient(api: api, host: "imap.example.com")
+        let result = try await client.searchEnvelopes(
+            SearchQuery(folder: "INBOX", text: "hello")
+        )
+        XCTAssertEqual(result.envelopes.count, 2)
+        XCTAssertEqual(result.envelopes[0].envelope.uid, 42)
+        XCTAssertEqual(result.envelopes[0].folder, "INBOX")
+        XCTAssertEqual(result.envelopes[1].envelope.uid, 17)
+        XCTAssertTrue(result.envelopes[1].envelope.flags.contains(.seen))
+        XCTAssertEqual(result.totalEstimate, 2)
+        XCTAssertNil(result.nextCursor)
+        XCTAssertEqual(result.foldersSearched, ["INBOX"])
+        XCTAssertFalse(result.truncated)
+
+        let requests = await http.requests
+        XCTAssertEqual(requests.count, 1)
+        let url = requests[0].url!.absoluteString
+        XCTAssertTrue(url.contains("/search_envelopes"))
+        XCTAssertTrue(url.contains("host=imap.example.com"))
+        XCTAssertTrue(url.contains("folder=INBOX"))
+        XCTAssertTrue(url.contains("text=hello"))
+    }
+
+    func testSearchEnvelopesCrossFolderOmitsFolderParam() async throws {
+        let body = """
+        {
+          "envelopes": [
+            {"id": 5, "date": "2024-04-02 11:00:00+00:00", "subject": "x",
+             "from": ["a@x.com"], "to": [], "cc": [], "flags": [],
+             "struct": null, "folder": "Archive/2024"}
+          ],
+          "total_estimate": 1,
+          "next_cursor": "abc",
+          "folders_searched": ["INBOX", "Archive/2024"],
+          "truncated": false
+        }
+        """
+        let http = RecordingHTTPTransport(responses: [(Data(body.utf8), 200)])
+        let api = URLSessionApiClient(
+            configuration: searchTestConfiguration(),
+            authService: StubAuthService(),
+            transport: http
+        )
+        let client = ApiBackedImapClient(api: api, host: "imap.example.com")
+        let result = try await client.searchEnvelopes(
+            SearchQuery(text: "invoice", unread: true, limit: 25)
+        )
+        XCTAssertEqual(result.envelopes.first?.folder, "Archive/2024")
+        XCTAssertEqual(result.nextCursor, "abc")
+
+        let requests = await http.requests
+        let url = requests[0].url!.absoluteString
+        XCTAssertFalse(url.contains("folder="), "cross-folder mode must omit folder param: \(url)")
+        XCTAssertTrue(url.contains("text=invoice"))
+        XCTAssertTrue(url.contains("unread=1"))
+        XCTAssertTrue(url.contains("limit=25"))
+    }
+
+    func testSearchEnvelopesEncodesStructuredFilters() async throws {
+        let body = """
+        {"envelopes": [], "total_estimate": 0, "next_cursor": null,
+         "folders_searched": [], "truncated": false}
+        """
+        let http = RecordingHTTPTransport(responses: [(Data(body.utf8), 200)])
+        let api = URLSessionApiClient(
+            configuration: searchTestConfiguration(),
+            authService: StubAuthService(),
+            transport: http
+        )
+        let client = ApiBackedImapClient(api: api, host: "imap.example.com")
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let since = calendar.date(from: DateComponents(year: 2026, month: 1, day: 1))!
+        let before = calendar.date(from: DateComponents(year: 2026, month: 4, day: 1))!
+        _ = try await client.searchEnvelopes(SearchQuery(
+            folder: "INBOX",
+            text: "report",
+            from: "alice@example.com",
+            to: "bob@example.com",
+            subject: "Q1",
+            since: since,
+            before: before,
+            unread: false,
+            flagged: true,
+            hasAttachment: true,
+            limit: 50,
+            cursor: "cur42"
+        ))
+        let requests = await http.requests
+        let url = requests[0].url!.absoluteString
+        // URLComponents does not percent-encode `@` in query values (it's
+        // valid per RFC 3986 sub-delims-in-query) — compare against the
+        // raw form rather than the percent-encoded one.
+        XCTAssertTrue(url.contains("from=alice@example.com"))
+        XCTAssertTrue(url.contains("to=bob@example.com"))
+        XCTAssertTrue(url.contains("subject=Q1"))
+        XCTAssertTrue(url.contains("since=2026-01-01"))
+        XCTAssertTrue(url.contains("before=2026-04-01"))
+        XCTAssertFalse(url.contains("unread="), "false flag should be omitted")
+        XCTAssertTrue(url.contains("flagged=1"))
+        XCTAssertTrue(url.contains("has_attachment=1"))
+        XCTAssertTrue(url.contains("limit=50"))
+        XCTAssertTrue(url.contains("cursor=cur42"))
+    }
+
+    private func searchTestConfiguration() -> Configuration {
+        Configuration(
+            controlDomain: "cabalmail.example",
+            domains: [MailDomain(domain: "cabalmail.example")],
+            invokeUrl: URL(string: "https://api.cabalmail.example/prod")!,
+            cognito: .init(region: "us-east-1", userPoolId: "u", clientId: "c")
+        )
+    }
 }
