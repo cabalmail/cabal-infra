@@ -7,6 +7,7 @@ import {
   Inbox,
   Pencil,
   Plus,
+  RefreshCw,
   Send,
   ShieldAlert,
   Star,
@@ -331,6 +332,19 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
           </span>
           <span className={styles.sectionLabel}>All folders</span>
           <span className={styles.sectionActions}>
+            <button
+              type="button"
+              className={styles.sectionAction}
+              title="Reload folders"
+              aria-label="Reload folders"
+              onClick={(e) => {
+                e.stopPropagation();
+                localStorage.removeItem(FOLDER_LIST);
+                refresh();
+              }}
+            >
+              <RefreshCw size={14} aria-hidden="true" />
+            </button>
             <button
               type="button"
               className={styles.sectionAction}
