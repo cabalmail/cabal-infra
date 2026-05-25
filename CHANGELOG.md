@@ -66,6 +66,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     panel and alerts now interpolate `{{tag_Name}}` instead. The
     exporter task role already had `tag:GetResources`, so no IAM
     change was needed.
+  - Mail Tiers dashboard's "TLS days to expiry - IMAP 993" panel
+    (and `BlackboxTLSCertExpiringSoon` alert) blank because
+    `imap.<control_domain>` resolved inside the VPC to a stale
+    private-zone A record (`10.0.0.175`, a decommissioned
+    container IP no longer attached to any ENI). The
+    blackbox-exporter's `tcp_tls` probe couldn't complete the TCP
+    handshake, so `probe_ssl_earliest_cert_expiry` never landed.
+    The IMAP NLB target group was deliberately excluded from the
+    private-zone aliases in `terraform/infra/modules/elb/dns.tf`,
+    based on a theoretical port-25 misdirection concern that
+    doesn't materialize in practice (no MX uses `imap`; the same
+    alias has lived in the public zone since day one without
+    incident). Dropped the exclusion, added `allow_overwrite =
+    true` so the apply replaces the stale drift A record without
+    manual cleanup, and refreshed the comment to document the
+    blackbox path. Container-to-container IMAP delivery continues
+    to use Cloud Map's `imap.cabal.internal` unchanged.
 
 ## [0.9.31] - 2026-05-25
 
