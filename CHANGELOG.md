@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- React admin can create folders as children of existing folders. Each
+  row in the All folders list now has a hover-revealed `+` action that
+  opens an inline rename-style input directly under that row, indented
+  one level deeper. The input commits on Enter (or blur) and cancels on
+  Escape. The section-header `+` and bottom "New folder" button continue
+  to add at the root. Adding under a collapsed parent auto-expands it so
+  the input — and the new child once created — are visible.
 - React webmail picks up message search (Phase 2 of
   `docs/0.9.x/imap-search-plan.md`). The Nav search bar — previously
   decorative — now commits its text on Enter and Cmd+K, and Escape

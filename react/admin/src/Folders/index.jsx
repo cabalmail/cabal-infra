@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Archive,
   ChevronDown,
@@ -71,6 +71,7 @@ function FolderIcon({ kind }) {
 
 function FolderRow({
   f, isActive, isSubscribed, canDelete, onSelect, onToggleSubscribe, onRemove,
+  onAddChild,
   depth = 0, showFullPath = false,
   hasChildren = false, isCollapsed = false, onToggleCollapse,
 }) {
@@ -104,6 +105,17 @@ function FolderRow({
       )}
       <span className={styles.folderName}>{display}</span>
       <span className={styles.rowActions} onClick={(e) => e.stopPropagation()}>
+        {onAddChild && (
+          <button
+            type="button"
+            className={styles.rowAction}
+            title={`New folder inside ${f.label}`}
+            aria-label={`New folder inside ${f.label}`}
+            onClick={(e) => onAddChild(e, f.id)}
+          >
+            <Plus size={12} aria-hidden="true" />
+          </button>
+        )}
         <button
           type="button"
           className={`${styles.rowAction} ${isSubscribed ? styles.favActive : ''}`}
@@ -129,6 +141,32 @@ function FolderRow({
   );
 }
 
+function AddFolderInput({ value, onChange, onCommit, onCancel, depth = 0, asListItem = false }) {
+  const style = depth > 0 ? { paddingLeft: `${12 + depth * 14}px` } : undefined;
+  const content = (
+    <>
+      <Pencil size={14} aria-hidden="true" />
+      <input
+        autoFocus
+        className={styles.addInput}
+        placeholder="New folder name"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={onCommit}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') onCommit();
+          else if (e.key === 'Escape') onCancel();
+        }}
+      />
+    </>
+  );
+  if (asListItem) {
+    return <li className={styles.addRow} style={style}>{content}</li>;
+  }
+  return <div className={styles.addRow} style={style}>{content}</div>;
+}
+
 function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false, onClose }) {
   const api = useApi();
   const [folders, setFolders] = useState([]);
@@ -136,7 +174,8 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
   const [collapsedSub, setCollapsedSub] = useState(() => readBool(FOLDER_COLLAPSED_SUB, false));
   const [collapsedAll, setCollapsedAll] = useState(() => readBool(FOLDER_COLLAPSED_ALL, false));
   const [collapsedFolders, setCollapsedFolders] = useState(() => readPathSet(FOLDER_COLLAPSED_PATHS));
-  const [adding, setAdding] = useState(false);
+  // null = not adding; '' = adding at root; folder id = adding under that folder
+  const [addingParent, setAddingParent] = useState(null);
   const [newName, setNewName] = useState('');
 
   useEffect(() => { writeJson(FOLDER_COLLAPSED_SUB, collapsedSub); }, [collapsedSub]);
@@ -234,26 +273,42 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
   }, [api, refresh, setMessage]);
 
   const commitAdd = useCallback(() => {
+    if (addingParent === null) return;
     const name = newName.trim();
-    if (!name) { setAdding(false); return; }
+    if (!name) { setAddingParent(null); return; }
     if (name.includes('.') || name.includes('/')) {
       setMessage && setMessage("Folder names must not contain '.' or '/'.", true);
       return;
     }
-    api.newFolder('', name).then(() => {
-      setAdding(false);
+    const parent = addingParent;
+    api.newFolder(parent, name).then(() => {
+      setAddingParent(null);
       setNewName('');
       localStorage.removeItem(FOLDER_LIST);
       refresh();
     }).catch(() => {
       setMessage && setMessage('Unable to create folder.', true);
     });
-  }, [api, newName, refresh, setMessage]);
+  }, [addingParent, api, newName, refresh, setMessage]);
 
   const cancelAdd = useCallback(() => {
-    setAdding(false);
+    setAddingParent(null);
     setNewName('');
   }, []);
+
+  const startAddChild = useCallback((e, id) => {
+    e.stopPropagation();
+    // Make sure the parent is expanded so the input — and the eventual new
+    // child row — are visible.
+    setCollapsedFolders((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    if (collapsedAll) setCollapsedAll(false);
+    setAddingParent(id);
+  }, [collapsedAll]);
 
   return (
     <section
@@ -353,7 +408,7 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
               onClick={(e) => {
                 e.stopPropagation();
                 if (collapsedAll) setCollapsedAll(false);
-                setAdding(true);
+                setAddingParent('');
               }}
             >
               <Plus size={14} aria-hidden="true" />
@@ -364,49 +419,52 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
         <div className={styles.sectionBody}>
           <ul className={styles.folderList}>
             {visibleItems.map((f) => (
-              <FolderRow
-                key={f.id}
-                f={f}
-                isActive={folder === f.id}
-                isSubscribed={subscribed.includes(f.id)}
-                canDelete={!PERMANENT_FOLDERS.includes(f.id)}
-                onSelect={handleSelect}
-                onToggleSubscribe={toggleSubscribe}
-                onRemove={removeFolder}
-                depth={f.depth}
-                hasChildren={f.hasChildren}
-                isCollapsed={collapsedFolders.has(f.id)}
-                onToggleCollapse={toggleCollapse}
-              />
+              <Fragment key={f.id}>
+                <FolderRow
+                  f={f}
+                  isActive={folder === f.id}
+                  isSubscribed={subscribed.includes(f.id)}
+                  canDelete={!PERMANENT_FOLDERS.includes(f.id)}
+                  onSelect={handleSelect}
+                  onToggleSubscribe={toggleSubscribe}
+                  onRemove={removeFolder}
+                  onAddChild={startAddChild}
+                  depth={f.depth}
+                  hasChildren={f.hasChildren}
+                  isCollapsed={collapsedFolders.has(f.id)}
+                  onToggleCollapse={toggleCollapse}
+                />
+                {addingParent === f.id && (
+                  <AddFolderInput
+                    asListItem
+                    depth={(f.depth || 0) + 1}
+                    value={newName}
+                    onChange={setNewName}
+                    onCommit={commitAdd}
+                    onCancel={cancelAdd}
+                  />
+                )}
+              </Fragment>
             ))}
           </ul>
 
-          {adding ? (
-            <div className={styles.addRow}>
-              <Pencil size={14} aria-hidden="true" />
-              <input
-                autoFocus
-                className={styles.addInput}
-                placeholder="New folder name"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                onBlur={commitAdd}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') commitAdd();
-                  else if (e.key === 'Escape') cancelAdd();
-                }}
-              />
-            </div>
-          ) : (
+          {addingParent === '' ? (
+            <AddFolderInput
+              value={newName}
+              onChange={setNewName}
+              onCommit={commitAdd}
+              onCancel={cancelAdd}
+            />
+          ) : addingParent === null ? (
             <button
               type="button"
               className={styles.addRow}
-              onClick={() => setAdding(true)}
+              onClick={() => setAddingParent('')}
             >
               <Plus size={14} aria-hidden="true" />
               <span>New folder</span>
             </button>
-          )}
+          ) : null}
         </div>
       </div>
     </section>
