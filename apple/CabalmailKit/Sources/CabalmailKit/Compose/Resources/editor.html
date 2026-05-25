@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Cabalmail rich text editor</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --editor-bg: transparent;
+    --editor-fg: -apple-system-label, CanvasText;
+    --editor-link: -apple-system-blue, LinkText;
+  }
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: var(--editor-bg);
+    color: var(--editor-fg);
+    font: -apple-system-body, system-ui, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  #editor {
+    box-sizing: border-box;
+    min-height: 100%;
+    padding: 8px 12px;
+    outline: none;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    -webkit-user-select: text;
+    user-select: text;
+  }
+  #editor p { margin: 0; }
+  #editor h1, #editor h2, #editor h3, #editor h4, #editor h5, #editor h6 {
+    margin: 0.5em 0 0.25em;
+    font-weight: 600;
+  }
+  #editor ul, #editor ol { margin: 0 0 0 1.25em; padding: 0; }
+  #editor li { margin: 0; }
+  #editor blockquote {
+    margin: 0;
+    padding: 0 0 0 0.75em;
+    border-left: 3px solid color-mix(in srgb, var(--editor-fg) 30%, transparent);
+    color: color-mix(in srgb, var(--editor-fg) 75%, transparent);
+  }
+  #editor pre {
+    margin: 0;
+    padding: 0.5em 0.75em;
+    background: color-mix(in srgb, var(--editor-fg) 8%, transparent);
+    border-radius: 4px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    white-space: pre-wrap;
+  }
+  #editor code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: color-mix(in srgb, var(--editor-fg) 8%, transparent);
+    padding: 1px 4px;
+    border-radius: 3px;
+  }
+  #editor pre code { background: transparent; padding: 0; }
+  #editor a { color: var(--editor-link); }
+  #editor hr {
+    border: none;
+    border-top: 1px solid color-mix(in srgb, var(--editor-fg) 30%, transparent);
+    margin: 0.5em 0;
+  }
+  #editor[data-placeholder]:empty::before {
+    content: attr(data-placeholder);
+    color: color-mix(in srgb, var(--editor-fg) 50%, transparent);
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div id="editor" contenteditable="true" spellcheck="true" autocorrect="on"></div>
+<script src="marked.umd.js"></script>
+<script src="turndown.js"></script>
+<script src="editor-bridge.js"></script>
+</body>
+</html>

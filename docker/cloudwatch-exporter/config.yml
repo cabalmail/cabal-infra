@@ -199,20 +199,32 @@ metrics:
     aws_extended_statistics: [p95]
 
   # ── ACM ───────────────────────────────────────────────────────
-  # DaysToExpiry's only CloudWatch dimension is CertificateArn, which
-  # turns into a `certificate_arn` label whose value is the full ARN
-  # - useless in a stat panel or alert summary. aws_tag_select calls
-  # the AWS Resource Groups Tagging API to fetch the cert's tags
-  # (terraform/infra/modules/cert/main.tf sets Name="cabal-nlb") and
-  # adds them as `tag_<TagName>` labels (preserving case, per
-  # cloudwatch_exporter v0.16.0). The dashboard and CertExpiring*
-  # alerts use {{tag_Name}} to display the friendly identifier.
-  # Requires the exporter task role to have `tag:GetResources`, which
-  # terraform/infra/modules/monitoring/exporters.tf already grants.
+  # Two overrides on this block, both addressing "no data" symptoms on
+  # the AWS Services / ACM panel:
+  #
+  # 1. period_seconds / range_seconds. ACM publishes DaysToExpiry once
+  #    per day (timestamp tied to each cert's issuance time of day).
+  #    The global range_seconds: 600 catches that emission ~0.7% of
+  #    the time, so the Prometheus series was sparse to non-existent.
+  #    A 48h window scraped daily always picks up yesterday's value.
+  #
+  # 2. aws_tag_select. DaysToExpiry's only CloudWatch dimension is
+  #    CertificateArn, which surfaces as a `certificate_arn` label
+  #    whose value is the full ARN - useless in a stat panel or alert
+  #    summary. aws_tag_select calls the AWS Resource Groups Tagging
+  #    API to fetch each cert's tags (terraform/infra/modules/cert/
+  #    main.tf sets Name="cabal-nlb") and adds them as `tag_<TagName>`
+  #    labels (preserving case, per cloudwatch_exporter v0.16.0). The
+  #    dashboard and CertExpiring* alerts interpolate {{tag_Name}}.
+  #    Requires the exporter task role to have `tag:GetResources`,
+  #    which terraform/infra/modules/monitoring/exporters.tf already
+  #    grants.
   - aws_namespace: AWS/CertificateManager
     aws_metric_name: DaysToExpiry
     aws_dimensions: [CertificateArn]
     aws_statistics: [Minimum]
+    period_seconds: 86400
+    range_seconds: 172800
     aws_tag_select:
       resource_type_selection: "acm:certificate"
       resource_id_dimension: CertificateArn

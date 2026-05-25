@@ -93,6 +93,26 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+      configs:
+        # Manual-signing settings live ON THE APP TARGET ONLY, not in the
+        # xcodebuild command line. CabalmailKit ships resources, which
+        # makes Xcode auto-generate a `CabalmailKit_CabalmailKit` resource
+        # bundle target during the SPM integration step. A top-level
+        # `PROVISIONING_PROFILE_SPECIFIER=...` on the xcodebuild command
+        # line propagates to that resource bundle and the archive fails
+        # ("resource bundles do not support provisioning profiles"). Per-
+        # target settings here are only seen by Cabalmail, not by the
+        # synthetic SPM resource bundle.
+        #
+        # Local dev still works: Debug uses Automatic signing inherited
+        # from the project-level `CODE_SIGN_STYLE: Automatic`. Release is
+        # the archive path and expects `IOS_APP_STORE_PROFILE_UUID` to be
+        # injected by CI as a user-defined setting (apple.yml passes it
+        # via `xcodebuild ... IOS_APP_STORE_PROFILE_UUID=$UUID`).
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "Apple Distribution"
+          PROVISIONING_PROFILE_SPECIFIER: "$(IOS_APP_STORE_PROFILE_UUID)"
 
   CabalmailMac:
     type: application
@@ -147,6 +167,14 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         ENABLE_HARDENED_RUNTIME: YES
         CODE_SIGN_ENTITLEMENTS: CabalmailMac/CabalmailMac.entitlements
+      configs:
+        # See the Cabalmail target's matching block for why these settings
+        # live here instead of on the xcodebuild command line. CI injects
+        # MAC_APP_STORE_PROFILE_UUID as a user-defined setting.
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "Apple Distribution"
+          PROVISIONING_PROFILE_SPECIFIER: "$(MAC_APP_STORE_PROFILE_UUID)"
 
 schemes:
   Cabalmail:
