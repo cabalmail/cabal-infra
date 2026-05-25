@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.9.29] - 2026-05-24
+## [0.9.30] - Unreleased
 
 ### Added
 - React admin can create folders as children of existing folders. Each
@@ -15,6 +15,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Escape. The section-header `+` and bottom "New folder" button continue
   to add at the root. Adding under a collapsed parent auto-expands it so
   the input — and the new child once created — are visible.
+- `scripts/test-mail-loop.py` now generates a different subject and
+  body for every message it sends, sampling from a bundled 3000-word
+  English vocabulary with Zipf's law so the corpus has a realistic mix
+  of common and uncommon words. Each message's text is seeded from
+  `--seed + sequence` for reproducibility (default seed is randomized
+  and logged at startup). Intended for populating a UAT mailbox with
+  varied content for the new message search feature.
+
+## [0.9.29] - 2026-05-24
+
+### Added
 - React webmail picks up message search (Phases 2 + 3 of
   `docs/0.9.x/imap-search-plan.md`). The Nav search bar — previously
   decorative — now commits its text on Enter and Cmd+K, and Escape
@@ -56,13 +67,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from BODYSTRUCTURE (the heuristic tightens once FTS lands in
   Phase 4). The existing raw-syntax `/search` endpoint is unchanged
   and continues to power the Apple client until Phase 5 cuts it over.
-- `scripts/test-mail-loop.py` now generates a different subject and
-  body for every message it sends, sampling from a bundled 3000-word
-  English vocabulary with Zipf's law so the corpus has a realistic mix
-  of common and uncommon words. Each message's text is seeded from
-  `--seed + sequence` for reproducibility (default seed is randomized
-  and logged at startup). Intended for populating a UAT mailbox with
-  varied content for the new message search feature.
 - Collapsible folder list on the React admin app and the Apple
   (iOS/iPadOS/macOS/visionOS) clients. The Subscribed and All
   folders section headers collapse and expand, and within All
