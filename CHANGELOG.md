@@ -72,6 +72,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   message detail column.
 
 ### Fixed
+- macOS app presents as "Cabalmail" everywhere a user sees it
+  even though App Store Connect knows it as "Cabalmail Mac"
+  (App Store Connect requires a unique app name per record, so
+  the macOS sibling can't reuse the iOS app's listing name).
+  The `CabalmailMac` XcodeGen target now sets `CFBundleName:
+  Cabalmail` so the macOS app menu (the bold entry next to the
+  Apple logo) reads "Cabalmail" instead of falling through to
+  the default `$(PRODUCT_NAME)`, and `PRODUCT_NAME: Cabalmail`
+  ships the bundle on disk as `Cabalmail.app` rather than
+  `CabalmailMac.app`. The bundle identifier stays
+  `com.cabalmail.CabalmailMac` so the two App Store Connect
+  records remain distinct, and the TestFlight listing keeps
+  the "Cabalmail Mac" name. `CFBundleDisplayName` was already
+  "Cabalmail" so Finder labels were correct; this rounds out
+  the remaining surfaces.
 - Selected folder icon is now legible on iPadOS. The sidebar's
   selection highlight is the accent color, and the folder icon
   uses the same `.tint`, so the icon used to disappear into the

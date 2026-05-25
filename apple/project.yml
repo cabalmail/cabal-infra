@@ -114,6 +114,13 @@ targets:
     info:
       path: CabalmailMac/Info.plist
       properties:
+        # App Store Connect requires a unique app name per record, so the
+        # macOS app is registered there as "Cabalmail Mac". CFBundleName
+        # drives the macOS app menu (the bold entry next to the Apple
+        # menu), so we override it back to "Cabalmail" — the TestFlight
+        # listing keeps the unique name while the running app looks like
+        # a normal "Cabalmail" alongside its iOS sibling.
+        CFBundleName: Cabalmail
         CFBundleDisplayName: Cabalmail
         CFBundleIconName: AppIcon
         ITSAppUsesNonExemptEncryption: false
@@ -127,6 +134,12 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.cabalmail.CabalmailMac
+        # On-disk .app filename. Defaults to the target name
+        # ("CabalmailMac"); overriding to "Cabalmail" ships the bundle as
+        # Cabalmail.app. The iOS and macOS apps never coexist on the same
+        # device (different platforms), so the filename collision risk is
+        # theoretical.
+        PRODUCT_NAME: Cabalmail
         MARKETING_VERSION: "0.6.0"
         CURRENT_PROJECT_VERSION: "1"
         GENERATE_INFOPLIST_FILE: NO
