@@ -27,6 +27,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that prefer `text/html` (most of them) no longer see blank
   messages from the Apple clients.
 
+### Changed
+- iOS and macOS TestFlight archive jobs now scope manual-signing
+  settings (`CODE_SIGN_STYLE`, `CODE_SIGN_IDENTITY`,
+  `PROVISIONING_PROFILE_SPECIFIER`) to the app targets in
+  `project.yml` instead of passing them on the xcodebuild command
+  line. The new CabalmailKit resource bundle target (auto-generated
+  by Xcode's SPM integration once the kit ships JS resources for the
+  rich-text composer) doesn't support provisioning profiles, and
+  top-level command-line settings propagated to it caused the
+  archive step to fail. CI now injects only the profile UUID as a
+  user-defined setting (`IOS_APP_STORE_PROFILE_UUID` /
+  `MAC_APP_STORE_PROFILE_UUID`), resolved exclusively by the app
+  target's `PROVISIONING_PROFILE_SPECIFIER` reference.
+
 ## [0.9.32] - 2026-05-25
 
 ### Fixed
