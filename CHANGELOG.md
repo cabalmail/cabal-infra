@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Apple clients (iOS + macOS) now ship a dual-mode compose body with
+  parity to the React composer: a WKWebView-hosted contenteditable
+  rich-text surface with a SwiftUI toolbar (bold/italic/underline/
+  strikethrough, H1-H4, bullet/numbered lists, alignment, links,
+  horizontal rule, undo/redo) sitting next to a Markdown source pane
+  the user can toggle to and back. The compose view's old plain-text
+  `TextEditor` is gone; drafts continue to persist as Markdown and
+  the rich pane round-trips through the same marked + turndown
+  libraries the React composer uses (vendored into CabalmailKit so
+  the bytes match — flattenParagraphs, the ZWSP-trick paragraph and
+  line-break turndown rules, styleParagraphs all reproduced).
+- macOS / iOS compose now populates *both* MIME parts on every send,
+  matching the React composer's rules: rich-only composes derive the
+  `text/plain` body from `htmlToMarkdown(html)`; Markdown-only
+  composes derive the `text/html` body from
+  `styleParagraphs(markdownToHtml(md))`. Recipients on mail clients
+  that prefer `text/html` (most of them) no longer see blank
+  messages from the Apple clients.
+
 ## [0.9.32] - 2026-05-25
 
 ### Fixed

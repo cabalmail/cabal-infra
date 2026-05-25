@@ -6,12 +6,20 @@ import CabalmailKit
 /// the From picker is seeded from, and attachment + error state; drives the
 /// on-disk autosave loop and the send flow through `CabalmailClient`.
 ///
-/// Phase 5 scope:
-/// - Body is plain text — rich-text editor is Phase 5.1 (see `apple/README.md`).
-/// - Drafts persist locally via `DraftStore` (autosave every 5 s).
-///   Cross-device IMAP `Drafts` sync is Phase 5.1.
-/// - Sending uses `CabalmailClient.send(_:)`, which performs the SMTP
-///   submission and then best-effort `APPEND`s to the Sent folder.
+/// Body editing is dual-mode (rich text + Markdown), matching the React
+/// composer. The canonical persisted form is Markdown — the rich editor is a
+/// WebKit-backed surface owned by `editorController`, which also hosts the
+/// marked + turndown libraries used for conversion. At send time the same
+/// rules React applies decide which MIME part is empty and convert the other:
+///
+///   - both empty  -> both empty
+///   - rich only   -> html = rich, text = turndown(rich)
+///   - md only     -> text = md, html = styleParagraphs(marked(md))
+///   - both filled -> send each as the author wrote it
+///
+/// Drafts persist locally via `DraftStore` (autosave every 5 s) and store the
+/// Markdown source plus the user's editor-mode preference. Cross-device IMAP
+/// `Drafts` sync is Phase 5.1.
 @Observable
 @MainActor
 final class ComposeViewModel {
@@ -24,6 +32,11 @@ final class ComposeViewModel {
     /// React composer's threshold.
     static let attachmentWarnBytes = 20 * 1024 * 1024
 
+    /// Which compose editor pane the user is looking at. The Markdown pane
+    /// is the canonical persistence surface; rich-text state lives only in
+    /// the WebKit editor until send time.
+    enum EditorMode: String, Codable, Sendable { case rich, markdown }
+
     let client: CabalmailClient
     private(set) var draftId: UUID
     private let draftStore: DraftStore
@@ -35,7 +48,9 @@ final class ComposeViewModel {
     var ccText: String = ""
     var bccText: String = ""
     var subject: String = ""
-    var body: String = ""
+    /// Markdown source — survives autosave and persists across launches.
+    var markdownBody: String = ""
+    var editorMode: EditorMode = .rich
     var attachments: [ComposeAttachment] = []
 
     var availableAddresses: [Address] = []
@@ -47,12 +62,25 @@ final class ComposeViewModel {
     /// send when back online." Reset whenever the user edits the form.
     var lastSendOutcome: SendOutcome?
 
+    /// WebKit-backed rich-text editor + marked/turndown sandbox. Created
+    /// eagerly so the user can start typing immediately, and reused for
+    /// every conversion call so the bridge stays warm.
+    let editorController: RichTextEditorController
+    /// Latest selection snapshot from the rich editor; drives the toolbar's
+    /// active states.
+    var richSelection: RichTextEditorController.Selection = .init()
+
     /// Immutable compose-context bits; only set during init from a reply /
     /// forward / new-message seed, never mutated after.
     private let inReplyTo: String?
     private let references: [String]
 
     private var autosaveTask: Task<Void, Never>?
+    /// When true, the rich editor and the markdown source are in sync — the
+    /// user hasn't typed in the rich pane since the last seed/import. The
+    /// send logic treats them as "rich is empty" so single-mode markdown
+    /// composes don't double-up the text part.
+    private var richMirrorsMarkdown: Bool = true
 
     struct ComposeAttachment: Identifiable, Hashable {
         let id: UUID
@@ -95,10 +123,21 @@ final class ComposeViewModel {
         // signature goes *above* that block so the user's reply text lands
         // with the signature on the line above the quoted original (the
         // same shape every UNIX mail client has produced since Pine).
-        self.body = SignatureFormatter.seedBody(
+        self.markdownBody = SignatureFormatter.seedBody(
             base: seed.body,
             signature: preferences.signature
         )
+        self.editorController = RichTextEditorController(placeholder: "Compose your message…")
+        self.editorMode = .rich
+        self.editorController.onSelectionChanged = { [weak self] selection in
+            self?.richSelection = selection
+        }
+        // The user's first character mutates rich-only state; the mirror
+        // flag flips and the send logic stops treating the rich pane as a
+        // pure echo of the markdown source.
+        self.editorController.onContentChanged = { [weak self] in
+            self?.richMirrorsMarkdown = false
+        }
     }
 
     /// Cancel the autosave loop. Called from the view's `onDisappear` and
@@ -120,6 +159,7 @@ final class ComposeViewModel {
                 await self?.persistCurrentDraft()
             }
         }
+        await seedRichFromMarkdown()
         await refreshAddresses()
     }
 
@@ -157,6 +197,46 @@ final class ComposeViewModel {
         attachmentTotalBytes > Self.attachmentWarnBytes
     }
 
+    // MARK: - Editor mode + cross-pane imports
+
+    /// Convert the current Markdown source into HTML (via marked +
+    /// flattenParagraphs) and load it into the rich editor, then switch the
+    /// active pane to rich. Mirrors the React composer's "Import from
+    /// Markdown" toolbar button.
+    func importFromMarkdown() async {
+        let html = await editorController.markdownToHtml(markdownBody)
+        await editorController.setHTML(html)
+        richMirrorsMarkdown = false
+        editorMode = .rich
+    }
+
+    /// Convert the rich editor's current HTML back to Markdown (via
+    /// turndown's React-tuned rules) and load it into the markdown buffer,
+    /// then switch the active pane to markdown. Mirrors the React
+    /// composer's "Import from Rich Text" button.
+    func importFromRichText() async {
+        let html = await editorController.getHTML()
+        let markdown = await editorController.htmlToMarkdown(html)
+        markdownBody = markdown
+        richMirrorsMarkdown = true
+        editorMode = .markdown
+    }
+
+    /// Loads the (current) markdown body into the rich editor as HTML, so
+    /// new sessions and reopened drafts start with the rich pane already
+    /// populated. The mirror flag stays `true` until the user types — at
+    /// which point send-time treats rich + markdown as independent surfaces.
+    private func seedRichFromMarkdown() async {
+        let html: String
+        if markdownBody.isEmpty {
+            html = ""
+        } else {
+            html = await editorController.markdownToHtml(markdownBody)
+        }
+        await editorController.setHTML(html)
+        richMirrorsMarkdown = true
+    }
+
     func send() async -> Bool {
         guard canSend, let fromAddress else { return false }
         isSending = true
@@ -166,14 +246,16 @@ final class ComposeViewModel {
                 errorMessage = "Invalid From address."
                 return false
             }
+
+            let bodies = await computeMessageBodies()
             let message = OutgoingMessage(
                 from: fromEmail,
                 to: parseRecipients(toText),
                 cc: parseRecipients(ccText),
                 bcc: parseRecipients(bccText),
                 subject: subject,
-                textBody: body,
-                htmlBody: nil,
+                textBody: bodies.text,
+                htmlBody: bodies.html,
                 inReplyTo: inReplyTo,
                 references: references,
                 attachments: attachments.map(\.asKitAttachment)
@@ -232,6 +314,31 @@ final class ComposeViewModel {
 
     // MARK: - Internals
 
+    /// Resolves the (text, html) MIME-part bodies using the same four-way
+    /// table the React composer applies. The mirror flag treats a rich
+    /// pane that's only ever been seeded from markdown as "empty," so a
+    /// pure-markdown compose doesn't ship the seed HTML as if the user
+    /// had hand-edited it.
+    private func computeMessageBodies() async -> (text: String, html: String) {
+        let richHtml = await editorController.getHTML()
+        let richEmpty = richHtml.isEmpty || richMirrorsMarkdown
+        let mdEmpty = markdownBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+
+        switch (richEmpty, mdEmpty) {
+        case (true, true):
+            return ("", "")
+        case (false, true):
+            let text = await editorController.htmlToMarkdown(richHtml)
+            return (text, richHtml)
+        case (true, false):
+            let raw = await editorController.markdownToHtml(markdownBody)
+            let styled = await editorController.styleParagraphs(raw)
+            return (markdownBody, styled)
+        case (false, false):
+            return (markdownBody, richHtml)
+        }
+    }
+
     private func persistCurrentDraft() async {
         let snapshot = Draft(
             id: draftId,
@@ -240,7 +347,7 @@ final class ComposeViewModel {
             cc: parseRecipients(ccText).map(formatAddress),
             bcc: parseRecipients(bccText).map(formatAddress),
             subject: subject,
-            body: body,
+            body: markdownBody,
             inReplyTo: inReplyTo,
             references: references
         )
