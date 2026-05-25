@@ -116,7 +116,7 @@ The Lambda translates structured params into an IMAP SEARCH criteria list server
 
 1.2 **`has_attachment` predicate.** Implemented in two phases: until FTS lands (Layer 2), the Lambda computes it from envelope `BODYSTRUCTURE` for matched UIDs and filters post-hoc. Once FTS lands, it can be expressed as a header predicate (`HEADER Content-Type multipart/mixed` plus tighter shape checks) or via a dedicated FTS field if the indexer supports it.
 
-1.3 **Cross-folder mode.** When `folder` is omitted, the Lambda enumerates the user's subscribed folders (via `client.list_sub_folders()`), excludes a configurable set of "noise" folders (default: `Trash`, `Spam`, `Junk`, `Deleted Messages`), and runs the SEARCH against each. Implementation options:
+1.3 **Cross-folder mode.** When `folder` is omitted, the Lambda enumerates the user's subscribed folders (via `client.list_sub_folders()`), excludes `Trash` (the one folder users genuinely don't want search results from — Spam / Junk stay searchable because misclassified mail is a real use case for "search everything"), and runs the SEARCH against each. Implementation options:
 
 - **Sequential SELECT/SEARCH per folder, merge results, sort newest-first.** Simplest; latency scales with folder count. Acceptable on typical mailboxes (handful to dozens of folders).
 - **Dovecot virtual folders.** Configure a virtual `Virtual/AllMail` namespace at the server side; the Lambda SELECTs that one folder and runs SEARCH once. Faster but requires Dovecot config changes (`mail_plugins = ... virtual`) and a per-user namespace declaration synced from the user list.
@@ -168,20 +168,19 @@ plugin {
   fts = flatcurve
   fts_autoindex = yes
   fts_autoindex_exclude = \Trash
-  fts_autoindex_exclude2 = \Junk
   fts_enforced = yes
   fts_flatcurve_min_term_size = 2
   fts_flatcurve_substring_search = no    // exact-term first; substring is expensive
 }
 ```
 
-`fts_enforced = yes` makes Dovecot refuse to fall back to sequential scan when the index is unavailable — preferable to a silent slow path. Tune `fts_autoindex_exclude*` to match the same noise-folder list as the cross-folder search.
+`fts_enforced = yes` makes Dovecot refuse to fall back to sequential scan when the index is unavailable — preferable to a silent slow path. The autoindex exclude list matches the cross-folder search's exclude list (Trash only).
 
 2.4 **One-shot reindex for existing mailboxes.** When the FTS plugin first lights up, no mailbox has an index yet. Provide a manual reindex command (`doveadm fts rescan -u <user>`) and run it for every existing user during the rollout window. Document in the release notes. On a multi-gigabyte mailbox this is minutes-of-CPU work; acceptable as a one-time cost.
 
 2.5 **EFS performance considerations.** FTS indexing is small-file-heavy. EFS throughput scales with provisioned capacity; if reindex throttles, bump `provisioned_throughput_in_mibps` in [`terraform/infra/modules/efs/main.tf`](../../terraform/infra/modules/efs/main.tf) for the duration of the reindex and back off afterward. Document the steady-state index size in `docs/operations.md` once measured.
 
-2.6 **Trash/Spam are excluded from the index.** Two reasons: those folders are noise in search results, and they're high-churn (especially Spam, after sieve filtering lands), so indexing them is wasted work. The Lambda's cross-folder search already excludes them by default; the FTS exclude list lines up with that.
+2.6 **Trash is excluded from the index.** Trash is the one folder users don't want search results from, so indexing it would be wasted EFS throughput. Spam and Junk stay indexed: misclassified mail is a real use case for "search everything," and the cost of indexing them is small compared to the user-value of finding a legitimate message that ended up in Spam. The FTS exclude list matches the Lambda's cross-folder default — Trash only.
 
 2.7 **No attachment-text indexing — not in this plan, not as a follow-on.** `fts_flatcurve` can be paired with a decoder pipeline (`tika` or similar) to index attachment text. Cabalmail is not adopting that. The decode CPU cost is large, the user value at our scale is marginal, and bringing it in would force decisions about decoder lifecycle, format support, and re-decode-on-failure that this plan should not pick up. Captured in the non-goals; if it ever comes back, it is a separate plan.
 
@@ -248,7 +247,7 @@ Each phase is a candidate PR or small set of PRs. Phases are ordered cost/risk-f
 
 **Phase 2 — React webmail picks up search.** Search bar in the Email view; result envelopes rendered via the existing component; filter sidebar with the structured params; cross-folder default off (since the Lambda doesn't support it yet). This is the most user-visible change in the plan and the one that closes the biggest current gap (React has no search at all today).
 
-**Phase 3 — Cross-folder search in the Lambda.** Add the "no folder specified -> enumerate subscribed folders" path. Sequential per-folder SEARCH, merge results newest-first, exclude Trash/Spam by default. React's "search all folders" toggle becomes the default; Apple's existing UI keeps single-folder semantics for now.
+**Phase 3 — Cross-folder search in the Lambda.** Add the "no folder specified -> enumerate subscribed folders" path. Sequential per-folder SEARCH, merge results newest-first, exclude Trash by default. React's "search all folders" toggle becomes the default; Apple's existing UI keeps single-folder semantics for now.
 
 **Phase 4 — Dovecot fts_flatcurve.** Build into the `imap` container; configure the plugin; one-shot reindex of existing mailboxes. Document the operation in `docs/operations.md`. This is the phase that makes body search actually fast — Phases 1-3 stand without it but search latency on large folders is unsatisfying until it ships.
 

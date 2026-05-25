@@ -105,7 +105,7 @@ struct SearchFiltersSheet: View {
                     Text(
                         draft.thisFolderOnly
                             ? "Search restricted to \(currentFolderName)."
-                            : "Search every subscribed folder (Trash, Spam, Junk excluded)."
+                            : "Search every subscribed folder except Trash."
                     )
                 }
             }

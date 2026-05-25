@@ -71,7 +71,7 @@ public protocol ApiClient: Sendable {
     /// Structured search returning envelopes (newest-first) and a pagination
     /// cursor. Backed by the `/search_envelopes` Lambda. When
     /// `query.folder` is nil the search runs across the user's subscribed
-    /// folders (excluding Trash/Spam/Junk/Deleted Messages by default).
+    /// folders, excluding Trash by default.
     func searchEnvelopes(host: String, query: SearchQuery) async throws -> ApiSearchResponse
     func fetchMessage(
         host: String,

@@ -19,9 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/usr/share/doc/fts-flatcurve/`. A new
   `docker/imap/configs/dovecot/90-fts.conf` enables the `fts`
   and `fts_flatcurve` mail plugins with `fts = flatcurve`,
-  `fts_autoindex = yes` (with `\Trash` and `\Junk` excluded so
-  the index lines up with the `/search_envelopes` noise-folder
-  defaults), `fts_enforced = yes` (refuses silent fallback to
+  `fts_autoindex = yes` (with `\Trash` excluded so the index
+  lines up with `/search_envelopes`'s cross-folder exclude
+  list), `fts_enforced = yes` (refuses silent fallback to
   sequential scan), `fts_flatcurve_min_term_size = 2`, and
   `fts_flatcurve_substring_search = no`. Operator instructions
   for the one-shot historical reindex (`doveadm fts rescan -u
@@ -138,9 +138,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for the next page. When `folder` is supplied the search is
   single-folder; when omitted (the React default) the Lambda
   enumerates the user's subscribed folders, drops `\Noselect`
-  containers and the noise-folder defaults (Trash/Spam/Junk/Deleted
-  Messages), and walks each folder in turn. Match sets are capped at
-  5,000 results across the merged set (a `truncated` flag in the
+  containers and Trash, and walks each folder in turn. Match sets
+  are capped at 5,000 results across the merged set (a `truncated` flag in the
   response signals the cap); `has_attachment` is computed post-hoc
   from BODYSTRUCTURE (the heuristic tightens once FTS lands in
   Phase 4). The existing raw-syntax `/search` endpoint is unchanged
