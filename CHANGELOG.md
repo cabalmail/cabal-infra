@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.9.32] - 2026-05-25
+## [0.9.33] - 2026-05-25
 
 ### Fixed
 - Grafana monitoring panels blank since the monitoring stack shipped
@@ -31,6 +31,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     cross-reference comment explaining the gotcha. Requires a
     cloudwatch-exporter image rebuild + ECS update-service to pick
     up.
+
+## [0.9.32] - 2026-05-25
+
+### Fixed
+- Grafana "API Gateway & Lambda" dashboard's 5xx-rate, Lambda
+  duration p95, and Lambda errors/throttles panels - blank since the
+  monitoring stack shipped despite real activity in CloudWatch.
+  Two root causes:
   - The 5xx-rate query (and the matching `Lambda5xxSpike` alert
     rule) used `aws_apigateway_5_xx_error_sum`. cloudwatch_exporter
     v0.16.0's `toSnakeCase` regex `([a-z0-9])([A-Z])` only inserts an
