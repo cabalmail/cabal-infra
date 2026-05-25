@@ -180,6 +180,16 @@ final class MessageListViewModel {
         }
     }
 
+    /// Runs a structured search against the currently-selected folder.
+    /// Switched off the raw IMAP-SEARCH passthrough in 0.9.x (Phase 5 of
+    /// `docs/0.9.x/imap-search-plan.md`) — the new path is one round trip
+    /// against `/search_envelopes` that returns envelopes directly, so the
+    /// old min...max UID range expansion and post-fetch filter step are
+    /// gone.
+    ///
+    /// Scope is still single-folder; the React client's cross-folder
+    /// default is a follow-on once the view-model can route per-envelope
+    /// operations to the right mailbox.
     func runSearch() async {
         guard !searchQuery.trimmingCharacters(in: .whitespaces).isEmpty else {
             await refresh()
@@ -189,20 +199,10 @@ final class MessageListViewModel {
         defer { isLoading = false }
         do {
             try await client.imapClient.connectAndAuthenticate()
-            let query = "TEXT \"\(searchQuery.replacingOccurrences(of: "\"", with: "\\\""))\""
-            let matches = try await client.imapClient.search(folder: folder.path, query: query)
-            guard !matches.isEmpty else {
-                envelopes = []
-                return
-            }
-            let sorted = matches.sorted()
-            let fetched = try await client.imapClient.envelopes(
-                folder: folder.path,
-                range: (sorted.first ?? 1)...(sorted.last ?? 1)
-            )
-            envelopes = fetched
-                .filter { matches.contains($0.uid) }
-                .sorted { $0.uid > $1.uid }
+            let query = SearchQuery(folder: folder.path, text: searchQuery)
+            let result = try await client.imapClient.searchEnvelopes(query)
+            envelopes = result.envelopes.map(\.envelope)
+            errorMessage = nil
         } catch {
             errorMessage = "\(error)"
         }
