@@ -12,12 +12,24 @@ struct MessageListView: View {
     let addressFilter: String?
     /// Tapped on the filter chip to drop the address scope.
     let onClearAddressFilter: () -> Void
+    /// Fires when the selected envelope is a cross-folder search result.
+    /// The string is the result's source folder path — `MailRootView` uses
+    /// it to build a synthetic `Folder` for `MessageDetailView` so the
+    /// detail's mark-read / archive / move operations target the message's
+    /// true mailbox rather than the sidebar's current selection. `nil`
+    /// fires when the selection clears or returns to a same-folder row.
+    let onSearchResultSelected: (String?) -> Void
 
     @Environment(AppState.self) private var appState
     @Environment(Preferences.self) private var preferences
     @Environment(\.openWindow) private var openWindow
-    @State private var model: MessageListViewModel?
+    // `model` and `filtersPresented` are module-internal (no access
+    // modifier) so the same-module extensions in `+Search` and `+macOS`
+    // can read them without round-tripping through accessors.
+    @State var model: MessageListViewModel?
     @State private var composeSeed: Draft?
+    /// `true` while the filter sheet is presented over the message list.
+    @State var filtersPresented = false
 
     var body: some View {
         Group {
@@ -30,6 +42,9 @@ struct MessageListView: View {
         .navigationTitle(folder.name)
         .toolbar {
             ToolbarItem {
+                filterButton
+            }
+            ToolbarItem {
                 Button {
                     presentCompose(seed: ReplyBuilder.newDraft())
                 } label: {
@@ -38,6 +53,9 @@ struct MessageListView: View {
                 }
                 .keyboardShortcut("n", modifiers: .command)
             }
+        }
+        .sheet(isPresented: $filtersPresented) {
+            filtersSheet
         }
         .sheet(item: $composeSeed) { seed in
             composeSheet(for: seed)
@@ -111,6 +129,17 @@ struct MessageListView: View {
                 added: signal.added
             )
         }
+        // Push the selected envelope's true source folder up to the
+        // root view. In folder mode this is always `folder.path`; in
+        // cross-folder search mode the model's `sourceFolder(for:)`
+        // returns the per-row mailbox so the detail view's operations
+        // (mark read, archive, move) land in the right place.
+        .onChange(of: selection) { _, newSelection in
+            guard let model else { return }
+            let resolved = newSelection.map(model.sourceFolder(for:))
+            let projected = resolved.flatMap { $0 == folder.path ? nil : $0 }
+            onSearchResultSelected(projected)
+        }
     }
 
     @ViewBuilder
@@ -172,6 +201,18 @@ struct MessageListView: View {
             Task { await model.runSearch() }
         }
         #endif
+        // Drop search mode when the field is cleared. `.searchable`'s
+        // built-in × / Cancel buttons and the macOS inline field's clear
+        // button all just zero out the binding without firing
+        // `.onSubmit(of: .search)`, so without this the user would be
+        // stuck with stale search results and no path back to the
+        // folder view short of running a different query.
+        .onChange(of: model.searchQuery) { _, newValue in
+            guard model.isSearchActive,
+                  newValue.trimmingCharacters(in: .whitespaces).isEmpty
+            else { return }
+            Task { await model.clearSearch() }
+        }
         .refreshable {
             await model.refresh()
         }
@@ -180,6 +221,9 @@ struct MessageListView: View {
                 #if os(macOS)
                 inlineSearchField(model: model)
                 #endif
+                if model.isSearchActive {
+                    searchMetadataBanner(model: model)
+                }
                 if let addressFilter, !addressFilter.isEmpty {
                     addressFilterChip(addressFilter)
                 }
@@ -187,193 +231,8 @@ struct MessageListView: View {
         }
     }
 
-    // The macOS-only `inlineSearchField(model:)` lives in
-    // `MessageListView+macOS.swift` so the primary struct body stays
-    // under SwiftLint's 250-line cap. Same-module extension; the iPad /
-    // iOS / visionOS targets compile that file's `#if os(macOS)` block
-    // away.
-
-    @ViewBuilder
-    private func addressFilterChip(_ address: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: "line.3.horizontal.decrease.circle")
-                .foregroundStyle(.tint)
-            Text("Filtered to ")
-                .foregroundStyle(.secondary)
-            + Text(address)
-                .fontWeight(.medium)
-            Spacer()
-            Button {
-                onClearAddressFilter()
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .foregroundStyle(.secondary)
-                    .accessibilityLabel("Clear address filter")
-            }
-            .buttonStyle(.plain)
-        }
-        .font(.subheadline)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(.thinMaterial)
-    }
-
-    private func filteredEnvelopes(_ envelopes: [Envelope]) -> [Envelope] {
-        guard let needle = addressFilter?.lowercased(), !needle.isEmpty else {
-            return envelopes
-        }
-        return envelopes.filter { envelope in
-            let recipients = envelope.to + envelope.cc
-            return recipients.contains { recipient in
-                "\(recipient.mailbox)@\(recipient.host)".lowercased().contains(needle)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func row(
-        for envelope: Envelope,
-        model: MessageListViewModel,
-        isSelected: Bool
-    ) -> some View {
-        MessageRow(envelope: envelope, isSelected: isSelected)
-            .tag(envelope)
-            #if os(visionOS)
-            .contentShape(Rectangle())
-            .hoverEffect(.highlight)
-            #endif
-            .swipeActions(edge: .trailing) {
-                Button(role: .destructive) {
-                    Task { await model.dispose(envelope) }
-                } label: {
-                    disposeActionLabel(for: model.disposeAction)
-                }
-            }
-            .swipeActions(edge: .leading) {
-                Button {
-                    Task { await model.toggleSeen(envelope) }
-                } label: {
-                    markReadLabel(for: envelope)
-                }
-                .tint(.blue)
-            }
-            .contextMenu { rowContextMenu(for: envelope, model: model) }
-            .task {
-                await model.loadMoreIfNeeded(currentItem: envelope)
-            }
-    }
-
-    @ViewBuilder
-    private func rowContextMenu(
-        for envelope: Envelope,
-        model: MessageListViewModel
-    ) -> some View {
-        Button {
-            Task { await model.toggleFlag(envelope) }
-        } label: {
-            Label(
-                envelope.flags.contains(.flagged) ? "Unflag" : "Flag",
-                systemImage: envelope.flags.contains(.flagged) ? "flag.slash" : "flag"
-            )
-        }
-        Button {
-            Task { await model.toggleSeen(envelope) }
-        } label: {
-            Label(
-                envelope.flags.contains(.seen) ? "Mark as Unread" : "Mark as Read",
-                systemImage: envelope.flags.contains(.seen) ? "envelope.badge" : "envelope.open"
-            )
-        }
-        Button(role: .destructive) {
-            Task { await model.dispose(envelope) }
-        } label: {
-            disposeActionLabel(for: model.disposeAction)
-        }
-    }
-
-    @ViewBuilder
-    private func disposeActionLabel(for action: DisposeAction) -> some View {
-        switch action {
-        case .archive: Label("Archive", systemImage: "archivebox")
-        case .trash:   Label("Trash", systemImage: "trash")
-        }
-    }
-
-    @ViewBuilder
-    private func markReadLabel(for envelope: Envelope) -> some View {
-        if envelope.flags.contains(.seen) {
-            Label("Unread", systemImage: "envelope.badge")
-        } else {
-            Label("Read", systemImage: "envelope.open")
-        }
-    }
-}
-
-private struct MessageRow: View {
-    let envelope: Envelope
-    let isSelected: Bool
-
-    var body: some View {
-        HStack(alignment: .top) {
-            Circle()
-                .fill(unreadDotColor)
-                .frame(width: 8, height: 8)
-                .padding(.top, 6)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack {
-                    Text(senderLabel)
-                        .font(.subheadline)
-                        .fontWeight(envelope.flags.contains(.seen) ? .regular : .semibold)
-                    Spacer()
-                    if envelope.hasAttachments {
-                        Image(systemName: "paperclip")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    if envelope.flags.contains(.flagged) {
-                        Image(systemName: "flag.fill")
-                            .font(.caption)
-                            .foregroundStyle(.orange)
-                    }
-                    Text(dateLabel)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Text(envelope.subject ?? "(no subject)")
-                    .font(.subheadline)
-                    .lineLimit(2)
-                    .foregroundStyle(.primary)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    // Read/unread indicator. We deliberately avoid `Color.accentColor` here:
-    // on iOS the accent is system blue, which is also the row-selection
-    // highlight, so the dot becomes invisible the moment the user picks the
-    // message. A fixed `.blue` keeps the conventional look against the list
-    // background, and switching to `.white` when the row is selected keeps
-    // the dot legible against the highlight on every platform.
-    private var unreadDotColor: Color {
-        guard !envelope.flags.contains(.seen) else { return .clear }
-        return isSelected ? .white : .blue
-    }
-
-    private var senderLabel: String {
-        envelope.from.first?.displayName ?? envelope.from.first?.mailbox ?? "unknown"
-    }
-
-    private var dateLabel: String {
-        guard let date = envelope.date ?? envelope.internalDate else { return "" }
-        let formatter = DateFormatter()
-        formatter.locale = Locale.autoupdatingCurrent
-        if Calendar.current.isDateInToday(date) {
-            formatter.dateStyle = .none
-            formatter.timeStyle = .short
-        } else {
-            formatter.dateStyle = .short
-            formatter.timeStyle = .none
-        }
-        return formatter.string(from: date)
-    }
+    // Row rendering, address-filter chip, swipe / context-menu actions,
+    // and the macOS inline search field all live in same-module extension
+    // files (`+Rows.swift`, `+Search.swift`, `+macOS.swift`) so the
+    // primary struct body stays under SwiftLint's 250-line cap.
 }
