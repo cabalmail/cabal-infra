@@ -217,20 +217,29 @@ struct FolderListView: View {
             if depth > 0 {
                 Spacer().frame(width: CGFloat(depth) * 14)
             }
-            if hasChildren {
-                Button {
-                    toggleCollapse(folder.path)
-                } label: {
-                    Image(systemName: "chevron.right")
-                        .rotationEffect(.degrees(isCollapsed ? 0 : 90))
-                        .frame(width: 14, height: 14)
-                        .foregroundStyle(.secondary)
+            // Always reserve the chevron slot so the folder icon column
+            // stays aligned across leaf and parent rows at the same depth.
+            // Without the placeholder, parent rows shift right by the
+            // chevron's width and visually read as one indent level deeper
+            // than their peers.
+            Group {
+                if hasChildren {
+                    Button {
+                        toggleCollapse(folder.path)
+                    } label: {
+                        Image(systemName: "chevron.right")
+                            .rotationEffect(.degrees(isCollapsed ? 0 : 90))
+                            .foregroundStyle(.secondary)
+                    }
+                    // Borderless lets the chevron handle taps without also
+                    // triggering row selection in the surrounding List.
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel(isCollapsed ? "Expand \(folder.name)" : "Collapse \(folder.name)")
+                } else {
+                    Color.clear
                 }
-                // Borderless lets the chevron handle taps without also
-                // triggering row selection in the surrounding List.
-                .buttonStyle(.borderless)
-                .accessibilityLabel(isCollapsed ? "Expand \(folder.name)" : "Collapse \(folder.name)")
             }
+            .frame(width: 14, height: 14)
             Image(systemName: iconName(for: folder))
                 .foregroundStyle(.tint)
             Text(folder.name)
