@@ -34,16 +34,29 @@ metrics:
     aws_dimensions: [ApiName, Stage]
     aws_statistics: [Sum]
 
+  # CloudWatch's GetMetricStatistics API splits statistics into two
+  # parameters: a fixed set of basic stats (Sum/Average/Sample/Min/Max)
+  # goes in `Statistics`, and percentiles like p95/p99 go in
+  # `ExtendedStatistics`. Mixing them produces
+  # `InvalidParameterValueException: The parameter
+  # Statistics.member.<N>.<list element> must be a value in the set
+  # [SampleCount, Average, Sum, Minimum, Maximum]`, which aborts the
+  # ENTIRE scrape at the first offending rule, dropping every metric
+  # configured below it. cloudwatch_exporter exposes the split as
+  # `aws_statistics` (basic) vs `aws_extended_statistics` (percentiles)
+  # - keep them strictly separate.
   - aws_namespace: AWS/ApiGateway
     aws_metric_name: IntegrationLatency
     aws_dimensions: [ApiName, Stage]
-    aws_statistics: [Average, p95, p99]
+    aws_statistics: [Average]
+    aws_extended_statistics: [p95, p99]
 
   # ── Lambda ────────────────────────────────────────────────────
   - aws_namespace: AWS/Lambda
     aws_metric_name: Duration
     aws_dimensions: [FunctionName]
-    aws_statistics: [Average, p95, p99]
+    aws_statistics: [Average]
+    aws_extended_statistics: [p95, p99]
 
   - aws_namespace: AWS/Lambda
     aws_metric_name: Errors
@@ -78,7 +91,8 @@ metrics:
   - aws_namespace: AWS/DynamoDB
     aws_metric_name: SuccessfulRequestLatency
     aws_dimensions: [TableName, Operation]
-    aws_statistics: [Average, p95]
+    aws_statistics: [Average]
+    aws_extended_statistics: [p95]
 
   - aws_namespace: AWS/DynamoDB
     aws_metric_name: ConsumedReadCapacityUnits
@@ -181,7 +195,8 @@ metrics:
   - aws_namespace: AWS/ApplicationELB
     aws_metric_name: TargetResponseTime
     aws_dimensions: [LoadBalancer]
-    aws_statistics: [Average, p95]
+    aws_statistics: [Average]
+    aws_extended_statistics: [p95]
 
   # ── ACM ───────────────────────────────────────────────────────
   - aws_namespace: AWS/CertificateManager
