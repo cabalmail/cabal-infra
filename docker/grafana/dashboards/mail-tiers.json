@@ -81,7 +81,7 @@
       "id": 4,
       "type": "stat",
       "title": "TLS days to expiry — IMAP 993 (ACM)",
-      "description": "Cert is served by the NLB (TLS terminated there) using the ACM-managed *.cabalmail.net cert. Observed via blackbox-tls tcp_tls probe.",
+      "description": "Cert is served by the NLB (TLS terminated there) using the ACM-managed *.cabalmail.net cert. Observed via blackbox-tls tcp_tls probe. Thresholds match the BlackboxTLSCertExpiringSoon{Warning,Critical} alert thresholds (21d warning, 7d critical).",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -92,6 +92,20 @@
           "refId": "A"
         }
       ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "d",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "orange", "value": 7},
+              {"color": "green", "value": 21}
+            ]
+          }
+        }
+      },
       "gridPos": {
         "h": 4,
         "w": 12,
@@ -103,7 +117,7 @@
       "id": 6,
       "type": "stat",
       "title": "TLS days to expiry — Submission 465 (Let's Encrypt)",
-      "description": "Cert is served by the smtp-out container (TLS terminated in-container by Dovecot) using the Let's Encrypt cert managed by the cabal-certbot-renewal Lambda. Observed via blackbox-tls tcp_tls probe.",
+      "description": "Cert is served by the smtp-out container (TLS terminated in-container by Dovecot) using the Let's Encrypt cert managed by the cabal-certbot-renewal Lambda. Observed via blackbox-tls tcp_tls probe. Thresholds match the BlackboxTLSCertExpiringSoon{Warning,Critical} alert thresholds (21d warning, 7d critical).",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -114,6 +128,20 @@
           "refId": "A"
         }
       ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "d",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "orange", "value": 7},
+              {"color": "green", "value": 21}
+            ]
+          }
+        }
+      },
       "gridPos": {
         "h": 4,
         "w": 12,
