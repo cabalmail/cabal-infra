@@ -199,37 +199,29 @@ metrics:
     aws_extended_statistics: [p95]
 
   # ── ACM ───────────────────────────────────────────────────────
-  # Two overrides on this block, both addressing "no data" symptoms on
-  # the AWS Services / ACM panel:
+  # ACM publishes DaysToExpiry once per day (timestamp tied to each
+  # cert's issuance time of day). The global range_seconds: 600 catches
+  # that emission ~0.7% of the time, so the Prometheus series is sparse
+  # to non-existent. Override to a 48h window scraped daily so the
+  # exporter always picks up yesterday's value.
   #
-  # 1. period_seconds / range_seconds. ACM publishes DaysToExpiry once
-  #    per day (timestamp tied to each cert's issuance time of day).
-  #    The global range_seconds: 600 catches that emission ~0.7% of
-  #    the time, so the Prometheus series was sparse to non-existent.
-  #    A 48h window scraped daily always picks up yesterday's value.
-  #
-  # 2. aws_tag_select. DaysToExpiry's only CloudWatch dimension is
-  #    CertificateArn, which surfaces as a `certificate_arn` label
-  #    whose value is the full ARN - useless in a stat panel or alert
-  #    summary. aws_tag_select calls the AWS Resource Groups Tagging
-  #    API to fetch each cert's tags (terraform/infra/modules/cert/
-  #    main.tf sets Name="cabal-nlb") and adds them as `tag_<TagName>`
-  #    labels (preserving case, per cloudwatch_exporter v0.16.0). The
-  #    dashboard and CertExpiring* alerts interpolate {{tag_Name}}.
-  #    Requires the exporter task role to have `tag:GetResources`,
-  #    which terraform/infra/modules/monitoring/exporters.tf already
-  #    grants.
+  # Note on the missing friendly label: an earlier revision added
+  # aws_tag_select here to pick up each cert's Name tag and expose it as
+  # `tag_Name`, replacing the unwieldy `certificate_arn` ARN. With
+  # cloudwatch_exporter v0.16.0 that combination silently produced zero
+  # metrics (the tag:GetResources call returned the cert correctly,
+  # CloudTrail confirmed the call, but the metric never reached
+  # Prometheus - the tag-select filter chain rejected it without an
+  # error). Reverted to plain dimension labels; the dashboard panel and
+  # CertExpiringSoon* alert summaries interpolate {{certificate_arn}}.
+  # Upstream issue worth opening for the tag-select + per-metric-override
+  # interaction; until then, ugly-but-working beats friendly-but-blank.
   - aws_namespace: AWS/CertificateManager
     aws_metric_name: DaysToExpiry
     aws_dimensions: [CertificateArn]
     aws_statistics: [Minimum]
     period_seconds: 86400
     range_seconds: 172800
-    aws_tag_select:
-      resource_type_selection: "acm:certificate"
-      resource_id_dimension: CertificateArn
-      tag_selections:
-        Name: []
 
   # ── CloudFront (us-east-1 only) ───────────────────────────────
   # CloudFront metrics live exclusively in us-east-1. cloudwatch_exporter

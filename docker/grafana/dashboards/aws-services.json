@@ -117,7 +117,7 @@
       },
       "targets": [
         {
-          "expr": "aws_ecs_containerinsights_running_task_count_average",
+          "expr": "ecs_containerinsights_running_task_count_average",
           "refId": "A",
           "legendFormat": "{{service_name}}"
         }
@@ -139,9 +139,9 @@
       },
       "targets": [
         {
-          "expr": "min by (tag_Name) (aws_certificatemanager_days_to_expiry_minimum)",
+          "expr": "min by (certificate_arn) (aws_certificatemanager_days_to_expiry_minimum)",
           "refId": "A",
-          "legendFormat": "{{tag_Name}}"
+          "legendFormat": "{{certificate_arn}}"
         }
       ],
       "gridPos": {
