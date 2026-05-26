@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.35] - 2026-05-25
+
+### Changed
+- Apple clients' reader-view stylesheet now forces white-ish text on
+  every element in dark mode, not just `html, body`. Author-supplied
+  inline `color` declarations (`<font color="#000">`, inline styles)
+  were inheriting through descendants and rendering as dark-on-dark.
+  A universal `color: #f2f2f7 !important` rule inside the dark-mode
+  `@media` block in `HTMLBodyView.swift` overrides those; the
+  existing `a` rule still wins for links via specificity.
+
 ## [0.9.34] - 2026-05-25
 
 ### Added
