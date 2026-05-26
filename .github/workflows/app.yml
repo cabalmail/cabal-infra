@@ -15,13 +15,18 @@ on:
   workflow_dispatch:
     inputs:
       areas:
-        description: >-
-          Comma-separated areas to build and deploy. Allowed values:
-          all, docker, lambda_api, lambda_counter, lambda_certbot,
-          react, front_door. Defaults to "all".
+        description: 'Area to build and deploy.'
         required: false
         default: all
-        type: string
+        type: choice
+        options:
+          - all
+          - docker
+          - lambda_api
+          - lambda_counter
+          - lambda_certbot
+          - react
+          - front_door
   push:
     # Only the three named branches deploy. Pushes from feature branches
     # or tags do not trigger this workflow. See CLAUDE.md "Branches and
