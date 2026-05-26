@@ -112,6 +112,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   folder itself is unchanged - users can still subscribe to it and
   move messages there via the general move-to-folder UI.
 
+### Fixed
+- API Lambda log writes. The `call` Terraform module pointed each
+  function's `logging_config` at `/cabal/lambda/<name>` but kept
+  the IAM policy's `logs:CreateLogStream` / `logs:PutLogEvents`
+  resource scoped to `/aws/lambda/<name>:*` (a leftover from before
+  the explicit log group was introduced). CloudWatch silently
+  dropped every write, so every API Lambda's log group stayed
+  empty regardless of how many times the function ran. The policy
+  now references `aws_cloudwatch_log_group.lambda_log.arn` so the
+  authorized resource tracks the configured log group and cannot
+  drift again.
+
 ## [0.9.38] - 2026-05-26
 
 ### Added
