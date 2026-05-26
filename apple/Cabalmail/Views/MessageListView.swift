@@ -40,6 +40,12 @@ struct MessageListView: View {
     @State var envelopeToMove: Envelope?
     /// `true` while the bulk-move destination picker is presented.
     @State var bulkMoveSheetPresented = false
+    /// macOS focus state for the inline search field. Drives the
+    /// "show the search-refinement filter button only while the user
+    /// is engaged with search" rule. The iOS / iPadOS / visionOS path
+    /// reads `\.isSearching` from the `.searchable` scope instead — see
+    /// `SearchActiveScope` in `MessageListView+Filter.swift`.
+    @FocusState var inlineSearchFocused: Bool
 
     var body: some View {
         Group {
@@ -270,7 +276,7 @@ struct MessageListView: View {
     private func topInset(model: MessageListViewModel) -> some View {
         VStack(spacing: 0) {
             #if os(macOS)
-            inlineSearchField(model: model)
+            inlineSearchField(model: model, focused: $inlineSearchFocused)
             #endif
             if model.isSearchActive {
                 searchMetadataBanner(model: model)
@@ -278,7 +284,22 @@ struct MessageListView: View {
             if let addressFilter, !addressFilter.isEmpty {
                 addressFilterChip(addressFilter)
             }
-            filterTabsBar(model: model)
+            // The filter button is search refinement, not list filtering,
+            // so it only surfaces once the user is engaged with the
+            // search field — preventing the conceptual collision with
+            // the All / Unread / Flagged pills next to it. macOS uses
+            // our own @FocusState on the inline TextField; everywhere
+            // else reads `\.isSearching` from the `.searchable` scope.
+            #if os(macOS)
+            filterTabsBar(
+                model: model,
+                searchActive: inlineSearchFocused || model.isSearchActive
+            )
+            #else
+            SearchActiveScope { isSearching in
+                filterTabsBar(model: model, searchActive: isSearching)
+            }
+            #endif
         }
     }
 

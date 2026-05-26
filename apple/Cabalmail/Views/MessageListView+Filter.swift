@@ -35,7 +35,7 @@ public enum MessageFilter: String, CaseIterable, Identifiable {
 // message list: three tabs with counts.
 extension MessageListView {
     @ViewBuilder
-    func filterTabsBar(model: MessageListViewModel) -> some View {
+    func filterTabsBar(model: MessageListViewModel, searchActive: Bool) -> some View {
         @Bindable var bindable = model
         HStack(spacing: 6) {
             ForEach(MessageFilter.allCases) { filter in
@@ -64,8 +64,13 @@ extension MessageListView {
             Spacer()
             // Right-side controls live with the filter tabs so list-
             // shaping actions sit one row above the list rather than at
-            // the far edge of the window toolbar.
-            filterButton
+            // the far edge of the window toolbar. The search-refinement
+            // filter button only surfaces while the user is engaged with
+            // the search field — see `topInset` in MessageListView.swift
+            // for the cross-platform focus / `isSearching` routing.
+            if searchActive {
+                filterButton
+            }
             sortMenu
             selectButton
         }
@@ -77,4 +82,17 @@ extension MessageListView {
     private func count(_ filter: MessageFilter, in envelopes: [Envelope]) -> Int {
         envelopes.filter { filter.includes($0) }.count
     }
+}
+
+/// Thin wrapper that reads `\.isSearching` from inside the `.searchable`
+/// scope and hands it to a child view. `@Environment(\.isSearching)`
+/// returns a meaningful value only when read from a view rendered
+/// underneath the `.searchable` modifier; reading it on `MessageListView`
+/// itself (which is where the modifier is applied) always returns false.
+/// Used by `topInset` on every non-macOS platform to gate the search-
+/// refinement filter button.
+struct SearchActiveScope<Content: View>: View {
+    @Environment(\.isSearching) private var isSearching
+    @ViewBuilder let content: (Bool) -> Content
+    var body: some View { content(isSearching) }
 }

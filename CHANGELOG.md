@@ -77,6 +77,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dispose preference). Mirrors Mail.app conventions.
 
 ### Changed
+- The Apple clients' search-filters button only appears while the
+  user is engaged with the search field — focused (or has text)
+  on iOS / iPadOS / visionOS via `\.isSearching`, focused on
+  macOS via `@FocusState` on the inline TextField. Previously the
+  button sat permanently in the inline action bar next to the
+  All / Unread / Flagged pills, which conflated two very different
+  operations: those pills filter the already-loaded envelopes
+  client-side and are instant; the filter button submits a
+  `/search_envelopes` query that walks IMAP folders server-side
+  and applies its checkboxes as search refinements. Hiding the
+  button until search is engaged removes that conceptual collision
+  without losing any functionality — when the user does engage
+  search, the filter button surfaces alongside it.
 - Uptime Kuma's API probe is now an unauthenticated liveness check
   against `https://admin.<control-domain>/prod/list` that accepts
   `401` as healthy, renamed from `API round-trip (/list)` to
