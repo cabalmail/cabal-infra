@@ -74,6 +74,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   content, and Cmd+Delete archives or trashes (per the user's
   dispose preference). Mirrors Mail.app conventions.
 
+### Changed
+- Uptime Kuma's API probe is now an unauthenticated liveness check
+  against `https://admin.<control-domain>/prod/list` that accepts
+  `401` as healthy, renamed from `API round-trip (/list)` to
+  `API reachable (/list)`. The original monitor signed requests
+  with a hand-pasted Cognito `id_token`, but ID tokens expire in
+  1-24 hours, so the probe sat red between manual rotations and
+  the alert lost its signal value. Liveness-only still confirms
+  CloudFront -> API Gateway -> Cognito-authorizer is up and the
+  route is wired; it no longer exercises Lambda or IMAP. The
+  rename keeps `_RUNBOOK_MAP` in `lambda/api/alert_sink/function.py`
+  in sync so probe-failure pushes still carry a runbook link.
+
 ### Removed
 - "Mark as spam" item from the React webmail reader's overflow
   menu. Marking spam was a thin wrapper around a move-to-Junk that
