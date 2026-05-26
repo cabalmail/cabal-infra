@@ -162,4 +162,41 @@ extension MessageDetailView {
         }
         return "Couldn't \(verb) message: \(error.localizedDescription)"
     }
+
+    /// Overflow menu (•••) — houses the actions that don't earn their own
+    /// toolbar slot. "Move to folder…" closes the same parity gap with the
+    /// React reader; "View source" / "View headers" expose the raw RFC 5322
+    /// the reader has already fetched. Cmd+Shift+M and Cmd+U match the
+    /// shortcuts on the existing macOS Reply/Forward menu pattern (the
+    /// button-level shortcut only fires when this scene is focused, which
+    /// matches the existing macOS mail-client convention).
+    @ViewBuilder
+    var overflowMenuButton: some View {
+        Menu {
+            Button {
+                moveSheetPresented = true
+            } label: {
+                Label("Move to folder…", systemImage: "folder")
+            }
+            .keyboardShortcut("m", modifiers: [.command, .shift])
+
+            Divider()
+
+            Button {
+                sourceSheetTab = .full
+            } label: {
+                Label("View source", systemImage: "chevron.left.forwardslash.chevron.right")
+            }
+            .keyboardShortcut("u", modifiers: .command)
+
+            Button {
+                sourceSheetTab = .headers
+            } label: {
+                Label("View headers", systemImage: "list.bullet.rectangle")
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .accessibilityLabel("More actions")
+        }
+    }
 }

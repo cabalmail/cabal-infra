@@ -66,6 +66,11 @@ extension MessageListView {
                 systemImage: envelope.flags.contains(.seen) ? "envelope.badge" : "envelope.open"
             )
         }
+        Button {
+            envelopeToMove = envelope
+        } label: {
+            Label("Move to folder…", systemImage: "folder")
+        }
         Button(role: .destructive) {
             Task { await model.dispose(envelope) }
         } label: {

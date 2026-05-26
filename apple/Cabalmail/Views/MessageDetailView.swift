@@ -26,6 +26,8 @@ struct MessageDetailView: View {
     @Environment(\.openWindow) private var openWindow
     @State var model: MessageDetailViewModel?
     @State private var composeSeed: Draft?
+    @State var moveSheetPresented = false
+    @State var sourceSheetTab: MessageSourceSheet.Tab?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -58,6 +60,12 @@ struct MessageDetailView: View {
         .toolbar { toolbarContent }
         .sheet(item: $composeSeed) { seed in
             composeSheet(for: seed)
+        }
+        .sheet(isPresented: $moveSheetPresented) {
+            moveSheet
+        }
+        .sheet(item: $sourceSheetTab) { tab in
+            sourceSheet(initialTab: tab)
         }
         .onAppear {
             BodyFetchLog.appear(uid: envelope.uid, modelExists: model != nil)
@@ -117,6 +125,57 @@ struct MessageDetailView: View {
             .environment(appState)
             .environment(preferences)
         }
+    }
+
+    @ViewBuilder
+    private var moveSheet: some View {
+        if let client = appState.client {
+            MoveToFolderSheet(
+                currentFolder: folder,
+                client: client,
+                onSelect: { destination in
+                    moveSheetPresented = false
+                    Task { await performMove(to: destination.path) }
+                },
+                onCancel: { moveSheetPresented = false }
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func sourceSheet(initialTab: MessageSourceSheet.Tab) -> some View {
+        if let model {
+            MessageSourceSheet(
+                model: model,
+                initialTab: initialTab,
+                onClose: { sourceSheetTab = nil }
+            )
+        }
+    }
+
+    private func performMove(to destination: String) async {
+        guard let model else { return }
+        let sourceFolderPath = folder.path
+        let movedUID = envelope.uid
+        await model.move(
+            to: destination,
+            onSuccess: {
+                // Match dispose's signal so MessageListView prunes the row
+                // and advances selection to the next unread message — same
+                // optimistic UX, just routed through `signalDisposed` since
+                // the row is gone from the source folder either way.
+                appState.signalDisposed(
+                    folderPath: sourceFolderPath,
+                    uid: movedUID
+                )
+            },
+            onFailure: { error in
+                appState.showToast(Toast(
+                    kind: .error,
+                    message: "Couldn't move message: \(error.localizedDescription)"
+                ))
+            }
+        )
     }
 
     /// Opens compose pre-populated for a `reply` / `replyAll` / `forward`.
@@ -241,6 +300,8 @@ struct MessageDetailView: View {
             readerModeButton
             Spacer()
             disposeButton
+            Spacer()
+            overflowMenuButton
         }
         #else
         ToolbarItem { replyButton }
@@ -249,6 +310,7 @@ struct MessageDetailView: View {
         ToolbarItem { remoteContentButton }
         ToolbarItem { readerModeButton }
         ToolbarItem { disposeButton }
+        ToolbarItem { overflowMenuButton }
         #endif
     }
 

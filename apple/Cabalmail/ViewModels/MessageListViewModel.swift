@@ -278,17 +278,7 @@ final class MessageListViewModel {
                 uids: [envelope.uid],
                 destination: destination
             )
-            if let uidValidity {
-                try? await client.envelopeCache.remove(
-                    uids: [envelope.uid],
-                    folder: source
-                )
-                await client.bodyCache.remove(
-                    folder: source,
-                    uidValidity: uidValidity,
-                    uid: envelope.uid
-                )
-            }
+            await pruneCachesAfter(move: source, uid: envelope.uid)
         } catch {
             restoreEnvelope(envelope, at: originalIndex)
             if wasUnread {
@@ -296,6 +286,19 @@ final class MessageListViewModel {
             }
             errorMessage = "\(error)"
         }
+    }
+
+    /// Cache cleanup after a successful move out of `folder`. Pulled out
+    /// of `dispose(_:)` so `moveTo` (in the sibling extension) can share
+    /// the path without needing access to the private `uidValidity`.
+    func pruneCachesAfter(move folder: String, uid: UInt32) async {
+        guard let uidValidity else { return }
+        try? await client.envelopeCache.remove(uids: [uid], folder: folder)
+        await client.bodyCache.remove(
+            folder: folder,
+            uidValidity: uidValidity,
+            uid: uid
+        )
     }
 
     /// The currently-configured dispose action, exposed so the view can

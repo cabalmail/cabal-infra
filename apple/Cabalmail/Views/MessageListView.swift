@@ -30,6 +30,11 @@ struct MessageListView: View {
     @State private var composeSeed: Draft?
     /// `true` while the filter sheet is presented over the message list.
     @State var filtersPresented = false
+    /// Set by the row context menu's "Move to folder…" item; presents the
+    /// MoveToFolderSheet anchored to this envelope. `Envelope` is
+    /// `Identifiable` so `.sheet(item:)` reuses the same presentation
+    /// machinery as composeSeed.
+    @State var envelopeToMove: Envelope?
 
     var body: some View {
         Group {
@@ -59,6 +64,9 @@ struct MessageListView: View {
         }
         .sheet(item: $composeSeed) { seed in
             composeSheet(for: seed)
+        }
+        .sheet(item: $envelopeToMove) { envelope in
+            moveSheet(for: envelope)
         }
         .task {
             if model == nil, let client = appState.client {
@@ -154,6 +162,28 @@ struct MessageListView: View {
             ))
             .environment(appState)
             .environment(preferences)
+        }
+    }
+
+    @ViewBuilder
+    private func moveSheet(for envelope: Envelope) -> some View {
+        if let client = appState.client {
+            // Cross-folder search rows live in `sourceFolderByUID`; the
+            // sidebar's `folder` is the search scope, not the row's true
+            // mailbox. Excluding the row's actual source folder from the
+            // picker is what the user expects.
+            let sourcePath = model?.sourceFolder(for: envelope) ?? folder.path
+            MoveToFolderSheet(
+                currentFolder: Folder(path: sourcePath),
+                client: client,
+                onSelect: { destination in
+                    envelopeToMove = nil
+                    if let model {
+                        Task { await model.moveTo(envelope, destination: destination.path) }
+                    }
+                },
+                onCancel: { envelopeToMove = nil }
+            )
         }
     }
 

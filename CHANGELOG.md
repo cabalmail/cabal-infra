@@ -14,6 +14,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `var.monitoring = true`. The new `monitoring` field on
   `/config.js` (and `/config.json` for the Apple client) carries
   the per-environment flag forward from the `admin` module.
+- Move to arbitrary folder on the Apple clients. The reader's new
+  overflow menu carries a "Move to folder…" item that presents a
+  searchable, hierarchically-indented picker of subscribed folders
+  (excluding the current one), and the message-list row context
+  menu has the same item. Tapping a destination optimistically
+  prunes the row and signals the list to advance to the next unread
+  message, matching the existing Archive behavior; the move itself
+  does NOT mark the message `\Seen` (Archive implies "I'm done with
+  this," but filing into a project folder doesn't, and forcing the
+  read bit would surprise users who file unread messages on
+  purpose). Closes the parity gap with the React webmail, which
+  has had arbitrary-folder move since 0.2.0.
+- View Source on the Apple clients. A new reader-overflow item
+  ("View source", Cmd+U on macOS) opens a sheet with segmented
+  Full / Headers / Body tabs over the raw RFC 5322 source. Bytes
+  come through the same body cache as the in-pane render, so
+  opening source after reading the message is instant. The sheet
+  exposes Copy and Share .eml actions and is selectable for direct
+  copy/paste of individual headers. A separate "View headers" item
+  opens the same sheet pre-set to the Headers tab.
 
 ### Removed
 - "Mark as spam" item from the React webmail reader's overflow
