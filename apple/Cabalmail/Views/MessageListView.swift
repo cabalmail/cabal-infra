@@ -20,7 +20,10 @@ struct MessageListView: View {
     /// fires when the selection clears or returns to a same-folder row.
     let onSearchResultSelected: (String?) -> Void
 
-    @Environment(AppState.self) private var appState
+    // `appState` is not private so the +Bulk sibling can reach it for
+    // the move-destination sheet's `client` lookup; matches the pattern
+    // used for `model` and `filtersPresented` further down.
+    @Environment(AppState.self) var appState
     @Environment(Preferences.self) private var preferences
     @Environment(\.openWindow) private var openWindow
     // `model` and `filtersPresented` are module-internal (no access
@@ -35,6 +38,8 @@ struct MessageListView: View {
     /// `Identifiable` so `.sheet(item:)` reuses the same presentation
     /// machinery as composeSeed.
     @State var envelopeToMove: Envelope?
+    /// `true` while the bulk-move destination picker is presented.
+    @State var bulkMoveSheetPresented = false
 
     var body: some View {
         Group {
@@ -48,6 +53,12 @@ struct MessageListView: View {
         .toolbar {
             ToolbarItem {
                 filterButton
+            }
+            ToolbarItem {
+                sortMenu
+            }
+            ToolbarItem {
+                selectButton
             }
             ToolbarItem {
                 Button {
@@ -67,6 +78,11 @@ struct MessageListView: View {
         }
         .sheet(item: $envelopeToMove) { envelope in
             moveSheet(for: envelope)
+        }
+        .sheet(isPresented: $bulkMoveSheetPresented) {
+            if let model {
+                bulkMoveSheet(model: model)
+            }
         }
         .task {
             if model == nil, let client = appState.client {
@@ -246,18 +262,25 @@ struct MessageListView: View {
         .refreshable {
             await model.refresh()
         }
-        .safeAreaInset(edge: .top, spacing: 0) {
-            VStack(spacing: 0) {
-                #if os(macOS)
-                inlineSearchField(model: model)
-                #endif
-                if model.isSearchActive {
-                    searchMetadataBanner(model: model)
-                }
-                if let addressFilter, !addressFilter.isEmpty {
-                    addressFilterChip(addressFilter)
-                }
+        .safeAreaInset(edge: .top, spacing: 0) { topInset(model: model) }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if model.bulkMode { bulkActionBar(model: model) }
+        }
+    }
+
+    @ViewBuilder
+    private func topInset(model: MessageListViewModel) -> some View {
+        VStack(spacing: 0) {
+            #if os(macOS)
+            inlineSearchField(model: model)
+            #endif
+            if model.isSearchActive {
+                searchMetadataBanner(model: model)
             }
+            if let addressFilter, !addressFilter.isEmpty {
+                addressFilterChip(addressFilter)
+            }
+            filterTabsBar(model: model)
         }
     }
 

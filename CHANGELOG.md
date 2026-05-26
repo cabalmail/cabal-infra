@@ -5,15 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.9.38] - 2026-05-26
+## [Unreleased]
 
 ### Added
-- Monitoring entries in the admin app's Nav (Uptime Kuma,
-  Healthchecks, Grafana) opening each subdomain in a new tab.
-  Visible only to admins, and only when the environment has
-  `var.monitoring = true`. The new `monitoring` field on
-  `/config.js` (and `/config.json` for the Apple client) carries
-  the per-environment flag forward from the `admin` module.
 - Move to arbitrary folder on the Apple clients. The reader's new
   overflow menu carries a "Move to folder…" item that presents a
   searchable, hierarchically-indented picker of subscribed folders
@@ -34,6 +28,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exposes Copy and Share .eml actions and is selectable for direct
   copy/paste of individual headers. A separate "View headers" item
   opens the same sheet pre-set to the Headers tab.
+- Sort selection on the Apple message list. A new toolbar menu
+  picks the sort field (Date Received, Date Sent, From, Subject)
+  and toggles direction; the chosen sort is sent to the Lambda's
+  IMAP SORT call so the top page actually contains the items that
+  belong at the top. Default stays REVERSE ARRIVAL (newest first).
+  Pagination beyond the top page works best on the default sort;
+  other sorts retain the visible top page and integrate older
+  messages into the sort as they load.
+- Filter tabs (All / Unread / Flagged) above the Apple message
+  list. Pure client-side narrowing of the loaded envelopes with
+  per-tab counts, mirroring the React webmail's pill row. Resets
+  to "All" on folder switch.
+- Multi-select and bulk actions on the Apple message list. A
+  Select toolbar button enters edit mode; rows render a leading
+  checkbox and a bottom action bar appears with Archive, Move…,
+  Mark Read/Unread, and Flag/Unflag. Selection survives sort and
+  filter changes within the same folder. Cross-folder search
+  results group selected UIDs by source mailbox before the wire
+  call so each operation lands in the right folder. Optimistic
+  prune + revert-on-failure matches the per-row flows.
 
 ### Removed
 - "Mark as spam" item from the React webmail reader's overflow
@@ -44,6 +58,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   implied behavior the system doesn't actually deliver. The Junk
   folder itself is unchanged - users can still subscribe to it and
   move messages there via the general move-to-folder UI.
+
+## [0.9.38] - 2026-05-26
+
+### Added
+- Monitoring entries in the admin app's Nav (Uptime Kuma,
+  Healthchecks, Grafana) opening each subdomain in a new tab.
+  Visible only to admins, and only when the environment has
+  `var.monitoring = true`. The new `monitoring` field on
+  `/config.js` (and `/config.json` for the Apple client) carries
+  the per-environment flag forward from the `admin` module.
 
 ## [0.9.37] - 2026-05-26
 

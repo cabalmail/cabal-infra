@@ -26,6 +26,25 @@ final class MessageListViewModel {
     var isLoadingMore = false
     var errorMessage: String?
 
+    /// Active sort key. Drives both the in-memory display order and the
+    /// wire sort the Lambda applies. Mutated via `setSort(_:)`.
+    var sortCriterion: SortCriterion = .default
+
+    /// Active filter tab. A client-side filter over the loaded envelopes,
+    /// not a wire predicate — purely a display narrowing. Resets to
+    /// `.all` when the view-model is rebuilt (folder switch).
+    var filterTab: MessageFilter = .all
+
+    /// True when the user has tapped Select; rows render checkboxes and
+    /// the per-row tap selects rather than opening the detail pane.
+    var bulkMode: Bool = false
+
+    /// UIDs the user has selected while `bulkMode` is on. Keyed by UID
+    /// only — cross-folder search rows look up their source via
+    /// `sourceFolder(for:)`, which is the same path single-row operations
+    /// already use.
+    var selectedUIDs: Set<UInt32> = []
+
     /// Free-text term submitted from the search field. Filters live in
     /// `searchFilters`; the two are sent together when `runSearch()` runs.
     var searchQuery: String = ""
@@ -48,8 +67,10 @@ final class MessageListViewModel {
     var sourceFolderByUID: [UInt32: String] = [:]
 
     private var uidValidity: UInt32?
-    private var lowestUID: UInt32?
-    private var hasMore = true
+    // Internal so the +Refresh sibling extension can update them after a
+    // page merge; they're otherwise driven from the main view-model only.
+    var lowestUID: UInt32?
+    var hasMore = true
 
     /// Foreground-only IDLE loop. Nil when the view is offscreen; started on
     /// `task`, stopped on `onDisappear`. Separated from the refresh path so
@@ -162,7 +183,8 @@ final class MessageListViewModel {
             let fetched = try await client.imapClient.topEnvelopes(
                 folder: folder.path,
                 limit: pageSize,
-                totalMessages: messages
+                totalMessages: messages,
+                sort: sortCriterion
             )
             try await applyRefreshPage(fetched, uidNext: uidNext, uidValidity: uidValidity)
             errorMessage = nil
@@ -186,7 +208,8 @@ final class MessageListViewModel {
             let lower = upper > pageSize ? upper - pageSize : 1
             let fetched = try await client.imapClient.envelopes(
                 folder: folder.path,
-                range: lower...upper
+                range: lower...upper,
+                sort: sortCriterion
             )
             mergeFetched(fetched)
             // An empty fetch on a range above UID 1 means the server has no
@@ -292,13 +315,22 @@ final class MessageListViewModel {
     /// of `dispose(_:)` so `moveTo` (in the sibling extension) can share
     /// the path without needing access to the private `uidValidity`.
     func pruneCachesAfter(move folder: String, uid: UInt32) async {
-        guard let uidValidity else { return }
-        try? await client.envelopeCache.remove(uids: [uid], folder: folder)
-        await client.bodyCache.remove(
-            folder: folder,
-            uidValidity: uidValidity,
-            uid: uid
-        )
+        await pruneCachesAfter(move: folder, uids: [uid])
+    }
+
+    /// Batch variant for the bulk-action paths. `EnvelopeCache.remove`
+    /// already takes an array; `MessageBodyCache.remove` is per-uid so
+    /// we loop.
+    func pruneCachesAfter(move folder: String, uids: [UInt32]) async {
+        guard let uidValidity, !uids.isEmpty else { return }
+        try? await client.envelopeCache.remove(uids: uids, folder: folder)
+        for uid in uids {
+            await client.bodyCache.remove(
+                folder: folder,
+                uidValidity: uidValidity,
+                uid: uid
+            )
+        }
     }
 
     /// The currently-configured dispose action, exposed so the view can
@@ -333,20 +365,9 @@ extension MessageListViewModel {
     private func hydrateFromCache() async {
         if let snapshot = await client.envelopeCache.snapshot(for: folder.path) {
             uidValidity = snapshot.uidValidity
-            envelopes = snapshot.envelopes.values
-                .sorted { $0.uid > $1.uid }
+            envelopes = snapshot.envelopes.values.sorted(by: envelopeOrder)
             lowestUID = envelopes.map(\.uid).min()
         }
-    }
-
-    private func mergeFetched(_ fetched: [Envelope]) {
-        var byUID: [UInt32: Envelope] = Dictionary(
-            uniqueKeysWithValues: envelopes.map { ($0.uid, $0) }
-        )
-        for envelope in fetched {
-            byUID[envelope.uid] = envelope
-        }
-        envelopes = byUID.values.sorted { $0.uid > $1.uid }
     }
 
     private func persistCache(uidValidity: UInt32, uidNext: UInt32) async throws {
@@ -354,45 +375,6 @@ extension MessageListViewModel {
             envelopes: envelopes,
             uidValidity: uidValidity,
             uidNext: uidNext,
-            into: folder.path
-        )
-    }
-
-    /// Merges a top-page fetch into in-memory state and the envelope cache.
-    /// `keepingRange` covers `min(fetched.uid)...uidNext`: any in-memory
-    /// envelope in that band but missing from the fetch was moved or
-    /// expunged elsewhere. An empty fetch means the folder is empty, so we
-    /// replace the full cache.
-    func applyRefreshPage(
-        _ fetched: [Envelope],
-        uidNext: UInt32,
-        uidValidity: UInt32
-    ) async throws {
-        let fetchedUIDs = Set(fetched.map(\.uid))
-        let keepingRange: ClosedRange<UInt32>? = fetched
-            .map(\.uid).min()
-            .map { lower in lower...max(uidNext, lower) }
-        let disappeared: [UInt32] = keepingRange.map { range in
-            envelopes.map(\.uid).filter { range.contains($0) && !fetchedUIDs.contains($0) }
-        } ?? envelopes.map(\.uid)
-        if !disappeared.isEmpty {
-            envelopes.removeAll { disappeared.contains($0.uid) }
-            for uid in disappeared {
-                await client.bodyCache.remove(
-                    folder: folder.path,
-                    uidValidity: uidValidity,
-                    uid: uid
-                )
-            }
-        }
-        mergeFetched(fetched)
-        lowestUID = envelopes.map(\.uid).min() ?? lowestUID
-        hasMore = (lowestUID ?? 0) > 1
-        try await client.envelopeCache.replace(
-            envelopes: fetched,
-            uidValidity: uidValidity,
-            uidNext: uidNext,
-            keepingRange: keepingRange,
             into: folder.path
         )
     }

@@ -1,0 +1,74 @@
+import SwiftUI
+import CabalmailKit
+
+/// Client-side narrowing of the loaded envelopes — the three tabs the
+/// React webmail shows (`react/admin/src/Email/Messages/index.jsx`),
+/// translated to a SwiftUI segmented control.
+public enum MessageFilter: String, CaseIterable, Identifiable {
+    case all
+    case unread
+    case flagged
+
+    public var id: String { rawValue }
+
+    public var label: String {
+        switch self {
+        case .all:     return "All"
+        case .unread:  return "Unread"
+        case .flagged: return "Flagged"
+        }
+    }
+
+    /// True when the envelope passes this filter.
+    public func includes(_ envelope: Envelope) -> Bool {
+        switch self {
+        case .all:     return true
+        case .unread:  return !envelope.flags.contains(.seen)
+        case .flagged: return envelope.flags.contains(.flagged)
+        }
+    }
+}
+
+// UI helpers for the filter tabs. Lives in a sibling extension so the
+// primary MessageListView body stays under SwiftLint's
+// `type_body_length` cap. The bar mirrors React's pill row above the
+// message list: three tabs with counts.
+extension MessageListView {
+    @ViewBuilder
+    func filterTabsBar(model: MessageListViewModel) -> some View {
+        @Bindable var bindable = model
+        HStack(spacing: 6) {
+            ForEach(MessageFilter.allCases) { filter in
+                Button {
+                    bindable.filterTab = filter
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(filter.label)
+                            .font(.subheadline.weight(filter == model.filterTab ? .semibold : .regular))
+                        Text("\(count(filter, in: model.envelopes))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(filter == model.filterTab
+                                  ? Color.accentColor.opacity(0.18)
+                                  : Color.clear)
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(filter.label), \(count(filter, in: model.envelopes))")
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(.bar)
+    }
+
+    private func count(_ filter: MessageFilter, in envelopes: [Envelope]) -> Int {
+        envelopes.filter { filter.includes($0) }.count
+    }
+}

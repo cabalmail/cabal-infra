@@ -171,7 +171,18 @@ public actor LiveImapClient: ImapClient {
 
     // MARK: - Messages
 
-    public func envelopes(folder: String, range: ClosedRange<UInt32>) async throws -> [Envelope] {
+    /// `sort:` is accepted but not honored here — `LiveImapClient` returns
+    /// envelopes in the server's natural UID order. Production traffic
+    /// never hits this path (CLAUDE.md: "production paths don't use
+    /// LiveImapClient"); the API-backed client routes sort criteria to
+    /// the Lambda's IMAP SORT call. If LiveImapClient ever ships, swap
+    /// the FETCH for `UID SORT` (RFC 5256) and translate `SortCriterion`
+    /// into the corresponding token list.
+    public func envelopes(
+        folder: String,
+        range: ClosedRange<UInt32>,
+        sort: SortCriterion
+    ) async throws -> [Envelope] {
         try await withTransportRetry {
             let conn = try self.requireConnection()
             try await self.select(folder: folder, on: conn)
@@ -186,7 +197,8 @@ public actor LiveImapClient: ImapClient {
     public func topEnvelopes(
         folder: String,
         limit: UInt32,
-        totalMessages: UInt32
+        totalMessages: UInt32,
+        sort: SortCriterion
     ) async throws -> [Envelope] {
         guard totalMessages > 0, limit > 0 else { return [] }
         return try await withTransportRetry {

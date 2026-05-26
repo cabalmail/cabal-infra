@@ -102,15 +102,19 @@ public actor ApiBackedImapClient: ImapClient {
 
     // MARK: - Envelopes
 
-    public func envelopes(folder: String, range: ClosedRange<UInt32>) async throws -> [Envelope] {
+    public func envelopes(
+        folder: String,
+        range: ClosedRange<UInt32>,
+        sort: SortCriterion
+    ) async throws -> [Envelope] {
         // The Lambda has no UID-range endpoint. Pull the sorted UID list,
         // filter to the requested window, then fetch envelopes for that
         // subset. For typical folder sizes the filter is the cheap part.
         let allIds = try await api.listMessageIds(
             host: host,
             folder: folder,
-            sortOrder: defaultSortOrder,
-            sortField: defaultSortField
+            sortOrder: sort.direction.wireOrder,
+            sortField: sort.field.wireField
         )
         let windowed = allIds.filter { range.contains($0) }
         guard !windowed.isEmpty else { return [] }
@@ -118,16 +122,21 @@ public actor ApiBackedImapClient: ImapClient {
         return raw.map { Self.makeEnvelope($0) }
     }
 
-    public func topEnvelopes(folder: String, limit: UInt32, totalMessages: UInt32) async throws -> [Envelope] {
+    public func topEnvelopes(
+        folder: String,
+        limit: UInt32,
+        totalMessages: UInt32,
+        sort: SortCriterion
+    ) async throws -> [Envelope] {
         if totalMessages == 0 { return [] }
         let allIds = try await api.listMessageIds(
             host: host,
             folder: folder,
-            sortOrder: defaultSortOrder,
-            sortField: defaultSortField
+            sortOrder: sort.direction.wireOrder,
+            sortField: sort.field.wireField
         )
-        // The Lambda already applies REVERSE ARRIVAL — newest first — so
-        // the prefix is the top page. Trim to the requested page size.
+        // The Lambda already applies the requested sort, so the prefix is
+        // the top page. Trim to the requested page size.
         let head = Array(allIds.prefix(Int(limit)))
         guard !head.isEmpty else { return [] }
         let raw = try await api.listEnvelopes(host: host, folder: folder, ids: head)
