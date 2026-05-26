@@ -15,6 +15,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/config.js` (and `/config.json` for the Apple client) carries
   the per-environment flag forward from the `admin` module.
 
+### Removed
+- "Mark as spam" item from the React webmail reader's overflow
+  menu. Marking spam was a thin wrapper around a move-to-Junk that
+  doesn't train any filter, and the action was never carried over
+  to the Apple clients during the parity push. Dropping it from
+  React keeps the two clients consistent and removes UI that
+  implied behavior the system doesn't actually deliver. The Junk
+  folder itself is unchanged - users can still subscribe to it and
+  move messages there via the general move-to-folder UI.
+
 ## [0.9.37] - 2026-05-26
 
 ### Changed

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   MoreHorizontal, Check,
   Code, Info, Forward, Printer,
-  Archive, Ban, ShieldOff,
+  Archive, ShieldOff,
 } from 'lucide-react';
 
 /* =========================================================================
@@ -16,7 +16,6 @@ import {
      - Forward as attachment
      - Print…
      - Archive
-     - Mark as spam
      - Block sender  (destructive, --ink-danger)
 
    Keyboard behavior follows the pattern already established elsewhere in
@@ -70,7 +69,7 @@ function Separator() {
 function OverflowMenu({
   format, setFormat, hasRich, hasPlain,
   onViewSource, onShowHeaders, onForwardAsAttachment, onPrint,
-  onArchive, onMarkSpam, onBlockSender,
+  onArchive, onBlockSender,
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
@@ -203,13 +202,6 @@ function OverflowMenu({
             disabled={!onArchive}
           >
             Archive
-          </MenuActionItem>
-          <MenuActionItem
-            icon={Ban}
-            onClick={run(onMarkSpam)}
-            disabled={!onMarkSpam}
-          >
-            Mark as spam
           </MenuActionItem>
           <Separator />
           <MenuActionItem
