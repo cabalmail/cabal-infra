@@ -99,3 +99,9 @@ variable "invitation_required" {
   description = "When true, the React signup form renders the invitation-code field and requires a non-empty value. Plumbed into /config.js so the client can mirror the server-side check_invite gate."
   default     = false
 }
+
+variable "monitoring" {
+  type        = bool
+  description = "Mirror of the top-level var.monitoring. When true, /config.js advertises the monitoring stack so the admin app's Nav can surface Uptime Kuma, Healthchecks, and Grafana entries (which target uptime/heartbeat/metrics.<control-domain>)."
+  default     = false
+}

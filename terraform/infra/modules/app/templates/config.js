@@ -3,6 +3,7 @@
   "domains": ${jsonencode(domains)},
   "invokeUrl": "${invoke_url}",
   "invitation_required": ${jsonencode(invitation_required)},
+  "monitoring": ${jsonencode(monitoring)},
   "cognitoConfig": {
     "region": "${region}",
     "poolData": {

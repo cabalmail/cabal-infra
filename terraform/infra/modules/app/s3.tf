@@ -17,7 +17,8 @@ resource "aws_s3_object" "website_config" {
     invoke_url          = "https://${aws_api_gateway_rest_api.gateway.id}.execute-api.${var.region}.amazonaws.com/${var.stage_name}",
     domains             = var.domains,
     control_domain      = var.control_domain,
-    invitation_required = var.invitation_required
+    invitation_required = var.invitation_required,
+    monitoring          = var.monitoring
   })
   etag = md5(templatefile("${path.module}/templates/config.js", {
     pool_id             = var.user_pool_id,
@@ -26,7 +27,8 @@ resource "aws_s3_object" "website_config" {
     invoke_url          = "https://${aws_api_gateway_rest_api.gateway.id}.execute-api.${var.region}.amazonaws.com/${var.stage_name}",
     domains             = var.domains,
     control_domain      = var.control_domain,
-    invitation_required = var.invitation_required
+    invitation_required = var.invitation_required,
+    monitoring          = var.monitoring
     })
   )
 }
@@ -48,7 +50,8 @@ resource "aws_s3_object" "website_config_json" {
     invoke_url          = "https://${aws_api_gateway_rest_api.gateway.id}.execute-api.${var.region}.amazonaws.com/${var.stage_name}",
     domains             = var.domains,
     control_domain      = var.control_domain,
-    invitation_required = var.invitation_required
+    invitation_required = var.invitation_required,
+    monitoring          = var.monitoring
   })
   etag = md5(templatefile("${path.module}/templates/config.js", {
     pool_id             = var.user_pool_id,
@@ -57,7 +60,8 @@ resource "aws_s3_object" "website_config_json" {
     invoke_url          = "https://${aws_api_gateway_rest_api.gateway.id}.execute-api.${var.region}.amazonaws.com/${var.stage_name}",
     domains             = var.domains,
     control_domain      = var.control_domain,
-    invitation_required = var.invitation_required
+    invitation_required = var.invitation_required,
+    monitoring          = var.monitoring
     })
   )
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Search, Check, PanelLeft } from 'lucide-react';
+import { Search, Check, PanelLeft, ExternalLink } from 'lucide-react';
 import logoMarkup from '../assets/logo.svg?raw';
 import './Nav.css';
 
@@ -9,6 +9,15 @@ const NAV_VIEWS = [
   { id: 'users',     name: 'Users',     label: 'Users',     requiresAdmin: true  },
   { id: 'dmarc',     name: 'DMARC',     label: 'DMARC',     requiresAdmin: true  },
   { id: 'about',     name: 'About',     label: 'About',     requiresAdmin: false },
+];
+
+// Monitoring tools live on sibling subdomains behind the ALB's Cognito-auth
+// action, not inside the React app. Open in a new tab; each first visit per
+// 12h session runs through the existing Hosted-UI redirect.
+const MONITORING_LINKS = [
+  { id: 'uptime',    label: 'Uptime Kuma',  subdomain: 'uptime'    },
+  { id: 'heartbeat', label: 'Healthchecks', subdomain: 'heartbeat' },
+  { id: 'metrics',   label: 'Grafana',      subdomain: 'metrics'   },
 ];
 
 function initialsFor(name) {
@@ -32,6 +41,8 @@ function Nav({
   accents,
   searchQuery = '',
   onSearchSubmit,
+  controlDomain = null,
+  monitoring = false,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -84,6 +95,7 @@ function Nav({
   }, [doLogout]);
 
   const visibleViews = NAV_VIEWS.filter((v) => !v.requiresAdmin || isAdmin);
+  const showMonitoring = isAdmin && monitoring && !!controlDomain;
 
   const openDrawer = useCallback(() => {
     // Email listens for this event and toggles its folder drawer. Using a
@@ -189,6 +201,28 @@ function Nav({
                     {v.label}
                   </button>
                 ))}
+
+                {showMonitoring && (
+                  <>
+                    <div className="nav__menu-sep" role="separator" />
+                    <div className="nav__menu-section-label">Monitoring</div>
+                    {MONITORING_LINKS.map((link) => (
+                      <a
+                        key={link.id}
+                        id={link.id}
+                        role="menuitem"
+                        href={`https://${link.subdomain}.${controlDomain}/`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="nav__menu-item nav__menu-item--external"
+                        onClick={() => setMenuOpen(false)}
+                      >
+                        <span className="nav__menu-item-label">{link.label}</span>
+                        <ExternalLink size={12} aria-hidden="true" />
+                      </a>
+                    ))}
+                  </>
+                )}
 
                 <div className="nav__menu-sep" role="separator" />
 
