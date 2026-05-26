@@ -46,7 +46,7 @@
       },
       "targets": [
         {
-          "expr": "aws_efs_percent_io_limit_average",
+          "expr": "aws_efs_percent_iolimit_average",
           "refId": "A",
           "legendFormat": "{{file_system_id}}"
         }
@@ -139,9 +139,9 @@
       },
       "targets": [
         {
-          "expr": "min by (domain_name) (aws_certificatemanager_days_to_expiry_minimum)",
+          "expr": "min by (tag_Name) (aws_certificatemanager_days_to_expiry_minimum)",
           "refId": "A",
-          "legendFormat": "{{domain_name}}"
+          "legendFormat": "{{tag_Name}}"
         }
       ],
       "gridPos": {

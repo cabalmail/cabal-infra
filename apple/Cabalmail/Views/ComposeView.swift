@@ -11,11 +11,11 @@ import UniformTypeIdentifiers
 /// mailbox they were just reading on a single-scene device.
 ///
 /// The form is four labeled fields (From picker, To/Cc/Bcc tokens, subject,
-/// plain-text body) plus an attachment strip and a Send button. The primary
-/// affordance of the From picker is **"Create new address…"** — per
-/// `docs/README.md`, minting a fresh subdomain-scoped address per contact
-/// is Cabalmail's core idiom, so the picker never silently preselects one
-/// and Send stays disabled until the user chooses.
+/// dual-mode rich-text + Markdown body) plus an attachment strip and a Send
+/// button. The primary affordance of the From picker is **"Create new
+/// address…"** — per `docs/README.md`, minting a fresh subdomain-scoped
+/// address per contact is Cabalmail's core idiom, so the picker never
+/// silently preselects one and Send stays disabled until the user chooses.
 struct ComposeView: View {
     @State var model: ComposeViewModel
     @Environment(AppState.self) private var appState
@@ -48,9 +48,7 @@ struct ComposeView: View {
                     TextField("Subject", text: $model.subject)
                 }
                 Section("Message") {
-                    TextEditor(text: $model.body)
-                        .frame(minHeight: 180)
-                        .font(.body)
+                    ComposerBody(model: model)
                 }
                 if !model.attachments.isEmpty {
                     Section("Attachments") {

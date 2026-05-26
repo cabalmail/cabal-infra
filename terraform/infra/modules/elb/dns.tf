@@ -22,14 +22,33 @@ resource "aws_route53_record" "cname" {
 # tier hostnames.
 
 resource "aws_route53_record" "private" {
-  # imap is intentionally excluded - its NLB port 25 listener routes to
-  # smtp-in, not imap, so an NLB alias here would misdirect mail delivery.
-  # Internal access to the IMAP container uses Cloud Map (imap.cabal.internal)
-  # instead.  See modules/ecs/service_discovery.tf.
-  for_each = toset(["smtp-out", "smtp-in"])
-  zone_id  = var.private_zone_id
-  name     = each.key
-  type     = "A"
+  # imap is included so internal probes (blackbox-exporter's blackbox-tls
+  # job hits imap.<control_domain>:993 from inside the VPC to populate
+  # probe_ssl_earliest_cert_expiry, which feeds the Mail Tiers dashboard's
+  # "TLS days to expiry - IMAP 993" panel and BlackboxTLSCertExpiringSoon
+  # alert) can resolve the hostname to the NLB and reach the TLS listener.
+  #
+  # Container-to-container IMAP delivery (smtp-out -> imap LMTP/SMTP) still
+  # uses Cloud Map's imap.cabal.internal, which routes directly to the
+  # container's private IP on port 143 and bypasses the NLB. See
+  # modules/ecs/service_discovery.tf.
+  #
+  # The theoretical concern with aliasing imap to the NLB is that
+  # imap.<control_domain>:25 would then reach the smtp-in listener instead
+  # of erroring out; in practice nothing uses that name on that port (no
+  # MX record points at imap, and the same alias has existed in the
+  # PUBLIC zone since day one with no observed harm).
+  #
+  # allow_overwrite covers a legacy drift case: prod's private zone has
+  # historically held a manually-added A record for imap pointing at a
+  # since-decommissioned container IP. With this flag set, the apply
+  # replaces that drift with the alias instead of failing on a "record
+  # already exists" conflict.
+  for_each        = toset(["imap", "smtp-out", "smtp-in"])
+  zone_id         = var.private_zone_id
+  name            = each.key
+  type            = "A"
+  allow_overwrite = true
 
   alias {
     name                   = aws_lb.elb.dns_name

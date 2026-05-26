@@ -154,7 +154,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "ACM cert {{ $labels.domain_name }} expires in <21 days"
+          summary: "ACM cert {{ $labels.tag_Name }} expires in <21 days"
           description: "ACM auto-renewal usually happens around 30 days out. <21 days suggests the renewal is stuck."
           runbook_url: "https://github.com/cabalmail/cabal-infra/blob/main/docs/operations/runbooks/cert-expiring.md"
 
@@ -164,7 +164,7 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "ACM cert {{ $labels.domain_name }} expires in <7 days"
+          summary: "ACM cert {{ $labels.tag_Name }} expires in <7 days"
           description: "Manual intervention required — the certbot Lambda or ACM auto-renew has not refreshed this cert."
           runbook_url: "https://github.com/cabalmail/cabal-infra/blob/main/docs/operations/runbooks/cert-expiring.md"
 

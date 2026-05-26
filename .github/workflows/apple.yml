@@ -67,6 +67,15 @@ jobs:
         working-directory: apple
         run: xcodegen generate
 
+      - name: Sync vendored CabalmailKit resources (marked + turndown)
+        # marked.umd.js + turndown.js live in react/admin/package.json as
+        # the version-of-truth and are gitignored under apple/. The script
+        # runs `npm ci` (react/admin/node_modules isn't cached between
+        # jobs) and copies the four files into Compose/Resources so
+        # SwiftPM can find them when xcodebuild test compiles CabalmailKit.
+        working-directory: apple
+        run: scripts/sync-vendored.sh
+
       - name: SwiftLint
         if: matrix.platform == 'macOS'
         working-directory: apple
@@ -179,6 +188,11 @@ jobs:
         working-directory: apple
         run: xcodegen generate
 
+      - name: Sync vendored CabalmailKit resources (marked + turndown)
+        # See the kit-test job for the rationale. Same script, same files.
+        working-directory: apple
+        run: scripts/sync-vendored.sh
+
       - name: Cache DerivedData
         uses: actions/cache@v5
         with:
@@ -259,6 +273,12 @@ jobs:
         if: steps.check.outputs.enabled == 'true'
         working-directory: apple
         run: xcodegen generate
+
+      - name: Sync vendored CabalmailKit resources (marked + turndown)
+        # See the kit-test job for the rationale. Same script, same files.
+        if: steps.check.outputs.enabled == 'true'
+        working-directory: apple
+        run: scripts/sync-vendored.sh
 
       - name: Import signing certificate
         if: steps.check.outputs.enabled == 'true'
@@ -348,6 +368,15 @@ jobs:
           BUILD_NUMBER="$(date -u +%s)"
           echo "Marketing version: $MARKETING_VERSION" >> "$GITHUB_STEP_SUMMARY"
           echo "Build number: $BUILD_NUMBER" >> "$GITHUB_STEP_SUMMARY"
+          # CODE_SIGN_STYLE / CODE_SIGN_IDENTITY / PROVISIONING_PROFILE_SPECIFIER
+          # live on the Cabalmail target in project.yml's Release config and
+          # are NOT passed here — top-level xcodebuild build settings
+          # propagate to every target in the build, including the
+          # `CabalmailKit_CabalmailKit` SPM-generated resource bundle, which
+          # rejects provisioning profiles ("resource bundles do not support
+          # provisioning profiles"). The Release config in project.yml
+          # references `$(IOS_APP_STORE_PROFILE_UUID)`; we inject it below
+          # as a user-defined setting so it only resolves on the app target.
           xcodebuild archive \
             -workspace Cabalmail.xcworkspace \
             -scheme Cabalmail \
@@ -355,9 +384,7 @@ jobs:
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/Cabalmail.xcarchive" \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
-            PROVISIONING_PROFILE_SPECIFIER="$IOS_APP_STORE_PROFILE_UUID" \
+            IOS_APP_STORE_PROFILE_UUID="$IOS_APP_STORE_PROFILE_UUID" \
             MARKETING_VERSION="$MARKETING_VERSION" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             | xcbeautify --renderer github-actions
@@ -507,6 +534,11 @@ jobs:
         working-directory: apple
         run: xcodegen generate
 
+      - name: Sync vendored CabalmailKit resources (marked + turndown)
+        # See the kit-test job for the rationale. Same script, same files.
+        working-directory: apple
+        run: scripts/sync-vendored.sh
+
       - name: Import signing certificates
         env:
           APPLE_DIST_P12: ${{ secrets.APPLE_DISTRIBUTION_CERT_P12 }}
@@ -596,6 +628,11 @@ jobs:
           BUILD_NUMBER="$(date -u +%s)"
           echo "Marketing version: $MARKETING_VERSION" >> "$GITHUB_STEP_SUMMARY"
           echo "Build number: $BUILD_NUMBER" >> "$GITHUB_STEP_SUMMARY"
+          # See the iOS archive step for why the signing settings live on
+          # the CabalmailMac target in project.yml instead of here. The
+          # MAC_APP_STORE_PROFILE_UUID below is injected as a user-defined
+          # setting and resolved only by the app target's
+          # `PROVISIONING_PROFILE_SPECIFIER = $(MAC_APP_STORE_PROFILE_UUID)`.
           xcodebuild archive \
             -workspace Cabalmail.xcworkspace \
             -scheme CabalmailMac \
@@ -603,9 +640,7 @@ jobs:
             -destination 'generic/platform=macOS' \
             -archivePath "$RUNNER_TEMP/CabalmailMac.xcarchive" \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
-            PROVISIONING_PROFILE_SPECIFIER="$MAC_APP_STORE_PROFILE_UUID" \
+            MAC_APP_STORE_PROFILE_UUID="$MAC_APP_STORE_PROFILE_UUID" \
             MARKETING_VERSION="$MARKETING_VERSION" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             | xcbeautify --renderer github-actions

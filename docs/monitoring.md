@@ -211,8 +211,8 @@ Expected output: `{"status":"ok","reconciled":6,"failed":0,"extras":[],"checks":
 | Check name             | Schedule          | Grace | Pinged by                                                       |
 | ---------------------- | ----------------- | ----- | --------------------------------------------------------------- |
 | `certbot-renewal`      | Every 60 days     | 24 h  | `cabal-certbot-renewal` Lambda (EventBridge Scheduler).         |
-| `aws-backup`           | Every 1 day       | 6 h   | `cabal-backup-heartbeat` Lambda (EventBridge `JOB_COMPLETED`).  |
-| `dmarc-ingest`         | Every 6 hours     | 2 h   | `cabal-process-dmarc` Lambda.                                   |
+| `aws-backup`           | Every 1 day       | 6 h   | `backup_heartbeat` Lambda (EventBridge `JOB_COMPLETED`).        |
+| `dmarc-ingest`         | Every 6 hours     | 2 h   | `process_dmarc` Lambda.                                         |
 | `ecs-reconfigure`      | Every 30 minutes  | 30 m  | `reconfigure.sh` loop in mail-tier containers.                  |
 | `cognito-user-sync`    | Every 30 days     | 7 d   | `assign_osid` post-confirmation Lambda. Fires only on user signup. |
 | `quarterly-review`     | Every 90 days     | 14 d  | Manual operator ping (see step 15).                             |

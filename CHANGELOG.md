@@ -5,6 +5,77 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.34] - 2026-05-25
+
+### Added
+- Apple clients (iOS + macOS) now ship a dual-mode compose body with
+  parity to the React composer: a WKWebView-hosted contenteditable
+  rich-text surface with a SwiftUI toolbar (bold/italic/underline/
+  strikethrough, H1-H4, bullet/numbered lists, alignment, links,
+  horizontal rule, undo/redo) sitting next to a Markdown source pane
+  the user can toggle to and back. The compose view's old plain-text
+  `TextEditor` is gone; drafts continue to persist as Markdown and
+  the rich pane round-trips through the same marked + turndown
+  libraries the React composer uses (vendored into CabalmailKit so
+  the bytes match — flattenParagraphs, the ZWSP-trick paragraph and
+  line-break turndown rules, styleParagraphs all reproduced).
+- macOS / iOS compose now populates *both* MIME parts on every send,
+  matching the React composer's rules: rich-only composes derive the
+  `text/plain` body from `htmlToMarkdown(html)`; Markdown-only
+  composes derive the `text/html` body from
+  `styleParagraphs(markdownToHtml(md))`. Recipients on mail clients
+  that prefer `text/html` (most of them) no longer see blank
+  messages from the Apple clients.
+
+### Fixed
+- Grafana "EFS PercentIOLimit" panel still blank after the 0.9.33
+  exporter-abort fix surfaced the underlying CloudWatch series.
+  Same `toSnakeCase` gotcha as the `5XXError` -> `5_xxerror` fix in
+  0.9.32: cloudwatch_exporter's `([a-z0-9])([A-Z])` regex doesn't
+  split between consecutive uppercase letters, so `PercentIOLimit`
+  becomes `percent_iolimit` (one underscore, "iolimit" as a single
+  run), not `percent_io_limit`. The dashboard query was looking at
+  a series that doesn't exist. Renamed to
+  `aws_efs_percent_iolimit_average`.
+- Grafana "ACM days to expiry (min)" panel still blank after the
+  0.9.33 fix because ACM publishes `DaysToExpiry` once per day
+  (timestamp tied to each cert's issuance time), but the exporter's
+  global `range_seconds: 600` window catches that emission only
+  about 0.7% of the time. Override the ACM scrape block with
+  `period_seconds: 86400` / `range_seconds: 172800` so each scrape
+  reliably picks up yesterday's value.
+- Same "ACM days to expiry (min)" stat panel rendered an unlabeled
+  number once the scrape-cadence fix above started filling it in,
+  because the panel and the two `CertExpiringSoon{Warning,Critical}`
+  alert summaries interpolated a `{{domain_name}}` label that
+  cloudwatch_exporter never emitted. `AWS/CertificateManager
+  DaysToExpiry`'s only CloudWatch dimension is `CertificateArn`, so
+  the only available label out of the box was the full ARN. Added
+  `aws_tag_select` to the ACM rule so the cert's existing
+  `Name="cabal-nlb"` tag (set in
+  `terraform/infra/modules/cert/main.tf`) flows through as a
+  `tag_Name` label via the AWS Resource Groups Tagging API; switched
+  the panel and both alerts to interpolate `{{tag_Name}}`. The
+  exporter task role already had `tag:GetResources`, so no IAM
+  change was needed.
+- Mail Tiers dashboard's "TLS days to expiry - IMAP 993" panel and
+  the `BlackboxTLSCertExpiringSoon` alert blank because
+  `imap.<control_domain>` resolved inside the VPC to a stale
+  private-zone A record (`10.0.0.175`, a since-decommissioned
+  container IP no longer attached to any ENI). The blackbox-exporter
+  task in the private subnets couldn't complete TCP, let alone TLS,
+  so `probe_ssl_earliest_cert_expiry` never landed. The IMAP NLB
+  target group was deliberately excluded from the private-zone
+  aliases in `terraform/infra/modules/elb/dns.tf` on the basis of a
+  theoretical port-25 misdirection concern that doesn't materialize
+  in practice (no MX uses `imap`; the same alias has lived in the
+  public zone since day one without incident). Dropped the
+  exclusion, added `allow_overwrite = true` so the prod apply
+  replaces the stale drift A record without a manual cleanup step,
+  and refreshed the comment to document the blackbox probe path.
+  Container-to-container IMAP delivery still uses Cloud Map's
+  `imap.cabal.internal` unchanged.
+
 ## [0.9.33] - 2026-05-25
 
 ### Fixed
@@ -31,6 +102,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     cross-reference comment explaining the gotcha. Requires a
     cloudwatch-exporter image rebuild + ECS update-service to pick
     up.
+
+### Changed
+- iOS and macOS TestFlight archive jobs now scope manual-signing
+  settings (`CODE_SIGN_STYLE`, `CODE_SIGN_IDENTITY`,
+  `PROVISIONING_PROFILE_SPECIFIER`) to the app targets in
+  `project.yml` instead of passing them on the xcodebuild command
+  line. The new CabalmailKit resource bundle target (auto-generated
+  by Xcode's SPM integration once the kit ships JS resources for the
+  rich-text composer) doesn't support provisioning profiles, and
+  top-level command-line settings propagated to it caused the
+  archive step to fail. CI now injects only the profile UUID as a
+  user-defined setting (`IOS_APP_STORE_PROFILE_UUID` /
+  `MAC_APP_STORE_PROFILE_UUID`), resolved exclusively by the app
+  target's `PROVISIONING_PROFILE_SPECIFIER` reference.
+- The rich-text composer's `marked.umd.js` and `turndown.js` (plus
+  their MIT LICENSE files) are no longer committed under
+  `apple/CabalmailKit/Sources/CabalmailKit/Compose/Resources/`.
+  `react/admin/package.json` is now the single source of truth for
+  both versions; `apple/scripts/sync-vendored.sh` materializes the
+  Apple copy from `react/admin/node_modules/` and the four files are
+  gitignored. CI runs the sync step before every `swift test`,
+  unsigned `xcodebuild build`, and TestFlight archive. Dependabot's
+  existing watch on `react/admin/package.json` now covers the Apple
+  composer's library versions too, and CodeQL no longer has
+  third-party JS to alarm on.
 
 ## [0.9.32] - 2026-05-25
 
@@ -62,6 +158,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     matched.
   - The duration p95 panel additionally used the `_average`
     statistic despite the title; switched to `_p95`.
+  - The "ACM days to expiry" stat panel and both
+    `CertExpiringSoon{Warning,Critical}` alert rules referenced a
+    `{{domain_name}}` label that cloudwatch_exporter never emits.
+    `AWS/CertificateManager DaysToExpiry`'s only CloudWatch
+    dimension is `CertificateArn`, so the only available label was
+    the full ARN. Added `aws_tag_select` to the ACM rule in the
+    exporter config so the cert's existing `Name="cabal-nlb"` tag
+    (set in `terraform/infra/modules/cert/main.tf`) flows through
+    as a `tag_Name` label via the Resource Groups Tagging API; the
+    panel and alerts now interpolate `{{tag_Name}}` instead. The
+    exporter task role already had `tag:GetResources`, so no IAM
+    change was needed.
+  - Mail Tiers dashboard's "TLS days to expiry - IMAP 993" panel
+    (and `BlackboxTLSCertExpiringSoon` alert) blank because
+    `imap.<control_domain>` resolved inside the VPC to a stale
+    private-zone A record (`10.0.0.175`, a decommissioned
+    container IP no longer attached to any ENI). The
+    blackbox-exporter's `tcp_tls` probe couldn't complete the TCP
+    handshake, so `probe_ssl_earliest_cert_expiry` never landed.
+    The IMAP NLB target group was deliberately excluded from the
+    private-zone aliases in `terraform/infra/modules/elb/dns.tf`,
+    based on a theoretical port-25 misdirection concern that
+    doesn't materialize in practice (no MX uses `imap`; the same
+    alias has lived in the public zone since day one without
+    incident). Dropped the exclusion, added `allow_overwrite =
+    true` so the apply replaces the stale drift A record without
+    manual cleanup, and refreshed the comment to document the
+    blackbox path. Container-to-container IMAP delivery continues
+    to use Cloud Map's `imap.cabal.internal` unchanged.
 
 ## [0.9.31] - 2026-05-25
 
