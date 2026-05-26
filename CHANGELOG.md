@@ -37,25 +37,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   run), not `percent_io_limit`. The dashboard query was looking at
   a series that doesn't exist. Renamed to
   `aws_efs_percent_iolimit_average`.
-- Grafana "ACM days to expiry (min)" panel still blank after the
-  0.9.33 fix because ACM publishes `DaysToExpiry` once per day
-  (timestamp tied to each cert's issuance time), but the exporter's
-  global `range_seconds: 600` window catches that emission only
-  about 0.7% of the time. Override the ACM scrape block with
-  `period_seconds: 86400` / `range_seconds: 172800` so each scrape
-  reliably picks up yesterday's value.
-- "ACM days to expiry (min)" stat panel and both
-  `CertExpiringSoon{Warning,Critical}` alert summaries interpolated
-  a `{{domain_name}}` label that cloudwatch_exporter never emitted.
-  `AWS/CertificateManager DaysToExpiry`'s only CloudWatch dimension
-  is `CertificateArn`. Switched the panel and alerts to interpolate
-  `{{certificate_arn}}`. (An earlier attempt to wire up the cert's
-  `Name="cabal-nlb"` tag via `aws_tag_select` silently produced zero
-  metrics in v0.16.0 despite the underlying tag:GetResources call
-  succeeding - reverted; the full ARN as a label is ugly but
-  bulletproof. Worth opening an upstream issue against
-  cloudwatch_exporter for the tag-select silent-skip with
-  per-metric range/period overrides.)
+- Cert-expiry monitoring migrated off the (silently-broken) ACM
+  CloudWatch metric and onto blackbox-tls probes of the live TLS
+  endpoints. The AWS Services dashboard's "ACM days to expiry (min)"
+  stat panel and the `CertExpiringSoon{Warning,Critical}` alert
+  pair were sourced from `aws_certificatemanager_days_to_expiry_minimum`;
+  cloudwatch_exporter v0.16.0 dropped that metric under every
+  configuration we tried (with and without `aws_tag_select`, with
+  the global `range_seconds` and with per-rule `range_seconds:
+  172800` + `period_seconds: 86400` to defeat the
+  `recently_active=PT3H` discovery filter - all gave
+  `count({__name__=~".*certificatemanager.*"}) -> no data` in
+  Grafana Explore, even though the same CloudWatch call works fine
+  via the AWS CLI). Removed the panel, the alert pair, and the
+  `AWS/CertificateManager` rule from the exporter config; left a
+  comment in `config.yml` documenting the failure mode for the next
+  reader. The Mail Tiers dashboard already had a "TLS days to
+  expiry - IMAP 993" panel sourced from
+  `probe_ssl_earliest_cert_expiry` (the same cert ACM manages,
+  observed at the wire); added a sibling "TLS days to expiry -
+  Submission 465 (Let's Encrypt)" panel for the second cert in the
+  system (the per-host LE cert the smtp-out container terminates
+  with on :465/:587, managed by `cabal-certbot-renewal`). The two
+  panels now sit side by side on a dedicated cert-health row in
+  the dashboard. Renamed the existing `BlackboxTLSCertExpiringSoon`
+  alert to `...Warning` (<21d) and added a `...Critical` companion
+  (<7d), restoring the severity tiers the removed CertExpiringSoon*
+  rules used to provide. Alertmanager inhibit rule updated to
+  suppress the warning when the critical fires on the same
+  `instance`. `docs/operations/runbooks/cert-expiring.md` rewritten
+  to cover both renewal pipelines (ACM auto-renewal for `:993`,
+  certbot Lambda for `:465`/`:587`), branched by the alert's
+  `instance` label.
 - "ECS RunningTaskCount per service" timeseries panel (and the
   matching `ContainerRestartLoop` alert rule, which had quietly
   never been able to fire) referenced

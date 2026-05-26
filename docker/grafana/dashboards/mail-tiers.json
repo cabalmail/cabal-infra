@@ -17,7 +17,7 @@
     {
       "id": 1,
       "type": "stat",
-      "title": "TCP probe \u2014 IMAP 993",
+      "title": "TCP probe — IMAP 993",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -30,7 +30,7 @@
       ],
       "gridPos": {
         "h": 4,
-        "w": 6,
+        "w": 8,
         "x": 0,
         "y": 0
       }
@@ -38,7 +38,7 @@
     {
       "id": 2,
       "type": "stat",
-      "title": "TCP probe \u2014 SMTP-IN 25",
+      "title": "TCP probe — SMTP-IN 25",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -51,15 +51,15 @@
       ],
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 6,
+        "w": 8,
+        "x": 8,
         "y": 0
       }
     },
     {
       "id": 3,
       "type": "stat",
-      "title": "TCP probe \u2014 Submission 465/587",
+      "title": "TCP probe — Submission 465/587",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -72,15 +72,16 @@
       ],
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 12,
+        "w": 8,
+        "x": 16,
         "y": 0
       }
     },
     {
       "id": 4,
       "type": "stat",
-      "title": "TLS days to expiry \u2014 IMAP 993",
+      "title": "TLS days to expiry — IMAP 993 (ACM)",
+      "description": "Cert is served by the NLB (TLS terminated there) using the ACM-managed *.cabalmail.net cert. Observed via blackbox-tls tcp_tls probe.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -93,9 +94,31 @@
       ],
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 18,
-        "y": 0
+        "w": 12,
+        "x": 0,
+        "y": 4
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "TLS days to expiry — Submission 465 (Let's Encrypt)",
+      "description": "Cert is served by the smtp-out container (TLS terminated in-container by Dovecot) using the Let's Encrypt cert managed by the cabal-certbot-renewal Lambda. Observed via blackbox-tls tcp_tls probe.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "(probe_ssl_earliest_cert_expiry{instance=~\".*:465\"} - time()) / 86400",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {
+        "h": 4,
+        "w": 12,
+        "x": 12,
+        "y": 4
       }
     },
     {
@@ -117,7 +140,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 4
+        "y": 8
       }
     }
   ]
