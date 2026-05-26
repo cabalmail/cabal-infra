@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- IMAP full-text search initialization. `90-fts.conf` was missing
+  `fts_languages`, which the `fts_flatcurve` plugin requires to
+  initialize — without it, `doveadm fts rescan -u <user>` errored
+  out with "fts_languages setting is missing" and FTS was non-
+  functional, so every `/search_envelopes` query that needed the
+  index returned `NO` from Dovecot (with `fts_enforced = yes` on)
+  and the Lambda surfaced that as a 502 to the client. The config
+  now declares `fts_languages = en`, plus an `email-address`
+  tokenizer (capped at 100 chars) so address searches index
+  `user@example.com` as one term rather than three. Stemming /
+  stopwords filters are deliberately left off for now — the cost
+  of "running" not matching "runs" on day one is acceptable, and
+  adding ICU-based filters needs a separate dovecot package audit.
+  After the imap image redeploys, run the one-shot reindex from
+  [docs/operations.md](docs/operations.md) for existing mailboxes.
+
 ## [0.9.39] - 2026-05-26
 
 ### Added
