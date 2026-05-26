@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.37] - 2026-05-26
+
+### Changed
+- Grafana cert-expiry monitoring: Both TLS-days stat panels now
+  carry explicit thresholds aligned with the alert pair (red <7d,
+  orange 7-21d, green >=21d) so the tile color matches the
+  operational severity instead of Grafana's default
+  "bigger value = worse" assumption.
+- Switch the areas input from type: string to type: choice with
+  an options: list.
+
 ## [0.9.36] - 2026-05-26
 
 ### Changed
@@ -37,10 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     :465/:587, managed by `cabal-certbot-renewal` - which the
     ACM-based monitoring never touched. Restructured the dashboard
     so connectivity probes / cert health / probe latency each get
-    their own row. Both TLS-days stat panels carry explicit
-    thresholds aligned with the alert pair (red <7d, orange 7-21d,
-    green >=21d) so the tile color matches the operational severity
-    instead of Grafana's default "bigger value = worse" assumption.
+    their own row.
   - Deleted `CertExpiringSoon{Warning,Critical}` from the alert
     rules. Renamed `BlackboxTLSCertExpiringSoon` to `...Warning`
     for symmetry, added `BlackboxTLSCertExpiringSoonCritical` at
