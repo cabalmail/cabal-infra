@@ -46,6 +46,10 @@ extension MessageDetailView {
                 Image(systemName: model.isSeen ? "envelope.open" : "envelope.badge")
                     .accessibilityLabel(model.isSeen ? "Mark as unread" : "Mark as read")
             }
+            // Cmd+Shift+U — Mail.app's mark-unread shortcut. We toggle
+            // both ways from the same chord; the icon labels which
+            // direction the next press goes.
+            .keyboardShortcut("u", modifiers: [.command, .shift])
         }
     }
 
@@ -58,6 +62,8 @@ extension MessageDetailView {
                 Image(systemName: model.isFlagged ? "flag.slash" : "flag")
                     .accessibilityLabel(model.isFlagged ? "Unflag" : "Flag")
             }
+            // Cmd+Shift+L — Mail.app's flag shortcut.
+            .keyboardShortcut("l", modifiers: [.command, .shift])
         }
     }
 
@@ -79,6 +85,7 @@ extension MessageDetailView {
                         : "Show remote content"
                     )
             }
+            .keyboardShortcut("i", modifiers: [.command, .shift])
             .disabled(model.htmlBody == nil)
         }
     }
@@ -132,6 +139,11 @@ extension MessageDetailView {
             } label: {
                 disposeToolbarLabel(for: model.disposeAction)
             }
+            // Cmd+Delete — the same chord Mail.app and most macOS list
+            // apps bind to "remove from list." Routes through dispose so
+            // it follows the user's Archive/Trash preference rather than
+            // hard-coding one or the other.
+            .keyboardShortcut(.delete, modifiers: .command)
         }
     }
 
@@ -161,5 +173,79 @@ extension MessageDetailView {
         case .trash:   verb = "delete"
         }
         return "Couldn't \(verb) message: \(error.localizedDescription)"
+    }
+
+    /// Print item shown in the overflow menu. Cmd+P on macOS; the same
+    /// shortcut also activates on iPad/iPhone hardware keyboards. Disabled
+    /// when the body hasn't loaded yet — printing an empty WKWebView is a
+    /// non-action that hides the menu's intent.
+    @ViewBuilder
+    var printMenuItem: some View {
+        if let model {
+            Button {
+                model.requestPrint()
+            } label: {
+                Label("Print…", systemImage: "printer")
+            }
+            .keyboardShortcut("p", modifiers: .command)
+            .disabled(model.htmlBody == nil && model.plainText == nil)
+        }
+    }
+
+    /// Overflow menu (•••) — houses the actions that don't earn their own
+    /// toolbar slot. "Move to folder…" closes the same parity gap with the
+    /// React reader; "View source" / "View headers" expose the raw RFC 5322
+    /// the reader has already fetched. Cmd+Shift+M and Cmd+U match the
+    /// shortcuts on the existing macOS Reply/Forward menu pattern (the
+    /// button-level shortcut only fires when this scene is focused, which
+    /// matches the existing macOS mail-client convention).
+    @ViewBuilder
+    var overflowMenuButton: some View {
+        Menu {
+            if let model {
+                Button {
+                    moveSheetPresented = true
+                } label: {
+                    Label("Move to folder…", systemImage: "folder")
+                }
+                .keyboardShortcut("m", modifiers: [.command, .shift])
+
+                // Plain text alternative only makes sense when both parts
+                // exist; suppress the item otherwise so we don't show a
+                // toggle that does nothing.
+                if model.htmlBody != nil && model.plainText != nil {
+                    Button {
+                        model.forcePlainText.toggle()
+                    } label: {
+                        Label(
+                            model.forcePlainText ? "Show HTML" : "Show plain text",
+                            systemImage: model.forcePlainText ? "doc.richtext" : "doc.plaintext"
+                        )
+                    }
+                }
+
+                Divider()
+
+                Button {
+                    sourceSheetTab = .full
+                } label: {
+                    Label("View source", systemImage: "chevron.left.forwardslash.chevron.right")
+                }
+                .keyboardShortcut("u", modifiers: .command)
+
+                Button {
+                    sourceSheetTab = .headers
+                } label: {
+                    Label("View headers", systemImage: "list.bullet.rectangle")
+                }
+
+                Divider()
+
+                printMenuItem
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .accessibilityLabel("More actions")
+        }
     }
 }

@@ -86,7 +86,8 @@ extension MessageListViewModel {
             flags: flags,
             internalDate: source.internalDate,
             size: source.size,
-            hasAttachments: source.hasAttachments
+            hasAttachments: source.hasAttachments,
+            isImportant: source.isImportant
         )
     }
 }

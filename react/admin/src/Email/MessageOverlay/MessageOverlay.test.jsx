@@ -235,13 +235,13 @@ describe('MessageOverlay (Reader)', () => {
     }
   });
 
-  it('overflow menu exposes Archive, Mark as spam, Block sender, Print', async () => {
+  it('overflow menu exposes Archive, Block sender, Print', async () => {
     const { unmount } = renderOverlay();
     try {
       await waitFor(() => expect(mockGetMessage).toHaveBeenCalled());
       fireEvent.click(screen.getByLabelText('More actions'));
       expect(screen.getByText('Archive')).toBeInTheDocument();
-      expect(screen.getByText('Mark as spam')).toBeInTheDocument();
+      expect(screen.queryByText('Mark as spam')).not.toBeInTheDocument();
       expect(screen.getByText('Block sender')).toBeInTheDocument();
       expect(screen.getByText('Print…')).toBeInTheDocument();
     } finally {

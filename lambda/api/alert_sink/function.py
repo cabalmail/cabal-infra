@@ -69,7 +69,7 @@ _RUNBOOK_MAP = {
     'kuma/Submission (STARTTLS)':    _RUNBOOK_BASE + 'probe-failure.md',
     'kuma/Submission (implicit TLS)':_RUNBOOK_BASE + 'probe-failure.md',
     'kuma/Admin app':                _RUNBOOK_BASE + 'probe-failure.md',
-    'kuma/API round-trip (/list)':   _RUNBOOK_BASE + 'probe-failure.md',
+    'kuma/API reachable (/list)':    _RUNBOOK_BASE + 'probe-failure.md',
     'kuma/ntfy server health':       _RUNBOOK_BASE + 'probe-failure.md',
     'kuma/Control-domain cert':      _RUNBOOK_BASE + 'cert-expiring.md',
     # Healthchecks check names — match the names in docs/monitoring.md §12.

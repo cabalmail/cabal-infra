@@ -92,7 +92,7 @@ resource "aws_iam_role_policy" "lambda" {
                 "logs:PutLogEvents"
             ],
             "Resource": [
-                "arn:aws:logs:${var.region}:${var.account}:log-group:/aws/lambda/${aws_lambda_function.api_call.function_name}:${local.wildcard}"
+                "${aws_cloudwatch_log_group.lambda_log.arn}:${local.wildcard}"
             ]
         },
         {

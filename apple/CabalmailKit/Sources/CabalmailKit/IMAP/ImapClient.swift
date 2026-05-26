@@ -19,7 +19,11 @@ public protocol ImapClient: Sendable {
     func subscribe(path: String) async throws
     func unsubscribe(path: String) async throws
     func status(path: String) async throws -> FolderStatus
-    func envelopes(folder: String, range: ClosedRange<UInt32>) async throws -> [Envelope]
+    func envelopes(
+        folder: String,
+        range: ClosedRange<UInt32>,
+        sort: SortCriterion
+    ) async throws -> [Envelope]
 
     /// Fetches up to `limit` most-recent envelopes by sequence number. Use
     /// this for the first/top page of a folder — a UID range window can
@@ -31,7 +35,12 @@ public protocol ImapClient: Sendable {
     /// messages. `totalMessages` comes from a prior `STATUS` (MESSAGES) or
     /// `SELECT`'s EXISTS response; a count of 0 returns `[]` without
     /// touching the wire.
-    func topEnvelopes(folder: String, limit: UInt32, totalMessages: UInt32) async throws -> [Envelope]
+    func topEnvelopes(
+        folder: String,
+        limit: UInt32,
+        totalMessages: UInt32,
+        sort: SortCriterion
+    ) async throws -> [Envelope]
     func fetchBody(folder: String, uid: UInt32) async throws -> RawMessage
     func fetchPart(folder: String, uid: UInt32, partId: String) async throws -> Data
     func setFlags(folder: String, uids: [UInt32], flags: Set<Flag>, operation: FlagOperation) async throws
@@ -70,6 +79,28 @@ public protocol ImapClient: Sendable {
 }
 
 public extension ImapClient {
+    /// Convenience overload — delegates to the sorted variant with
+    /// `SortCriterion.default` (REVERSE ARRIVAL). Lets existing callers
+    /// and test doubles stay sort-agnostic when the conventional Inbox
+    /// order is all they need.
+    func envelopes(folder: String, range: ClosedRange<UInt32>) async throws -> [Envelope] {
+        try await envelopes(folder: folder, range: range, sort: .default)
+    }
+
+    /// Convenience overload — see `envelopes(folder:range:)` above.
+    func topEnvelopes(
+        folder: String,
+        limit: UInt32,
+        totalMessages: UInt32
+    ) async throws -> [Envelope] {
+        try await topEnvelopes(
+            folder: folder,
+            limit: limit,
+            totalMessages: totalMessages,
+            sort: .default
+        )
+    }
+
     /// Default implementation used by test doubles and any client that
     /// doesn't yet support IDLE. Returning an immediately-finished stream
     /// means the watcher yields one `.active` event and then sits in the

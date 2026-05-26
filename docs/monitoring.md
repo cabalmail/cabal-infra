@@ -156,11 +156,11 @@ In the Kuma dashboard, add one monitor for each row below. Attach the webhook no
 | Submission (STARTTLS)          | TCP port    | `smtp-out.<control-domain>:587`            | 60 s     | 2       |
 | Submission (implicit TLS)      | TCP port    | `smtp-out.<control-domain>:465`            | 60 s     | 2       |
 | Admin app                      | HTTP(s)     | `https://admin.<control-domain>/`          | 120 s    | 2       |
-| API round-trip (`/list`)       | HTTP(s)     | `https://admin.<control-domain>/prod/list` | 5 min    | 2       |
+| API reachable (`/list`)        | HTTP(s)     | `https://admin.<control-domain>/prod/list`, Accepted Status Codes: `200-299`, `401` | 5 min | 2 |
 | ntfy server health             | HTTP(s)     | `https://ntfy.<control-domain>/v1/health`  | 120 s    | 2       |
 | Control-domain cert            | Keyword     | `https://admin.<control-domain>/`, keyword: any. Enable **Certificate expiration notification**: 21 / 7 / 1 days. | 4 h | 2 |
 
-The `/list` probe needs a valid Cognito JWT. Seed it manually: sign in to the admin app, copy your `id_token` out of DevTools, and paste it as `Authorization: Bearer <token>` in the monitor's headers. Rotate it monthly.
+The `/list` probe runs unauthenticated and accepts `401` as a healthy response. That signal confirms the CloudFront -> API Gateway -> Cognito-authorizer path is up and the `/prod/list` route is wired; it does not exercise the Lambda or the IMAP backend. An earlier iteration of this monitor sent a pasted Cognito `id_token` to get a true end-to-end probe, but Cognito ID tokens expire in 1-24 hours, so the monitor sat red between manual rotations and the alert lost its signal value. Liveness-only is the trade-off until something like a scheduled Lambda + Kuma Push monitor replaces it.
 
 ## 11. First-boot configuration in Healthchecks
 

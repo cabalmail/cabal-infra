@@ -26,6 +26,8 @@ struct MessageDetailView: View {
     @Environment(\.openWindow) private var openWindow
     @State var model: MessageDetailViewModel?
     @State private var composeSeed: Draft?
+    @State var moveSheetPresented = false
+    @State var sourceSheetTab: MessageSourceSheet.Tab?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -58,6 +60,12 @@ struct MessageDetailView: View {
         .toolbar { toolbarContent }
         .sheet(item: $composeSeed) { seed in
             composeSheet(for: seed)
+        }
+        .sheet(isPresented: $moveSheetPresented) {
+            moveSheet
+        }
+        .sheet(item: $sourceSheetTab) { tab in
+            sourceSheet(initialTab: tab)
         }
         .onAppear {
             BodyFetchLog.appear(uid: envelope.uid, modelExists: model != nil)
@@ -119,6 +127,57 @@ struct MessageDetailView: View {
         }
     }
 
+    @ViewBuilder
+    private var moveSheet: some View {
+        if let client = appState.client {
+            MoveToFolderSheet(
+                currentFolder: folder,
+                client: client,
+                onSelect: { destination in
+                    moveSheetPresented = false
+                    Task { await performMove(to: destination.path) }
+                },
+                onCancel: { moveSheetPresented = false }
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func sourceSheet(initialTab: MessageSourceSheet.Tab) -> some View {
+        if let model {
+            MessageSourceSheet(
+                model: model,
+                initialTab: initialTab,
+                onClose: { sourceSheetTab = nil }
+            )
+        }
+    }
+
+    private func performMove(to destination: String) async {
+        guard let model else { return }
+        let sourceFolderPath = folder.path
+        let movedUID = envelope.uid
+        await model.move(
+            to: destination,
+            onSuccess: {
+                // Match dispose's signal so MessageListView prunes the row
+                // and advances selection to the next unread message — same
+                // optimistic UX, just routed through `signalDisposed` since
+                // the row is gone from the source folder either way.
+                appState.signalDisposed(
+                    folderPath: sourceFolderPath,
+                    uid: movedUID
+                )
+            },
+            onFailure: { error in
+                appState.showToast(Toast(
+                    kind: .error,
+                    message: "Couldn't move message: \(error.localizedDescription)"
+                ))
+            }
+        )
+    }
+
     /// Opens compose pre-populated for a `reply` / `replyAll` / `forward`.
     /// Pulls the user's address list so `ReplyBuilder` can pick a default
     /// From by matching the original message's recipients against owned
@@ -149,26 +208,32 @@ struct MessageDetailView: View {
 
     @ViewBuilder
     private var headerBlock: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            if let from = envelope.from.first {
-                Text(from.formatted)
-                    .font(.headline)
+        HStack(alignment: .top, spacing: 12) {
+            if let apiClient = appState.client?.apiClient {
+                AvatarView(sender: envelope.from.first, apiClient: apiClient)
             }
-            if !envelope.to.isEmpty {
-                Text("To: \(envelope.to.map(\.formatted).joined(separator: ", "))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 4) {
+                if let from = envelope.from.first {
+                    Text(from.formatted)
+                        .font(.headline)
+                }
+                if !envelope.to.isEmpty {
+                    Text("To: \(envelope.to.map(\.formatted).joined(separator: ", "))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if !envelope.cc.isEmpty {
+                    Text("Cc: \(envelope.cc.map(\.formatted).joined(separator: ", "))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if let date = envelope.date ?? envelope.internalDate {
+                    Text(date.formatted(date: .abbreviated, time: .shortened))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
-            if !envelope.cc.isEmpty {
-                Text("Cc: \(envelope.cc.map(\.formatted).joined(separator: ", "))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            if let date = envelope.date ?? envelope.internalDate {
-                Text(date.formatted(date: .abbreviated, time: .shortened))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+            Spacer(minLength: 0)
         }
     }
 
@@ -181,14 +246,15 @@ struct MessageDetailView: View {
         if model.isLoading || !model.hasAttemptedLoad {
             ProgressView("Fetching message…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if let html = model.htmlBody {
+        } else if let html = model.htmlBody, !model.forcePlainText {
             // WKWebView manages its own scrolling; fill the available space
             // and let it page through tall messages internally.
             HTMLBodyView(
                 html: html,
                 inlineImages: model.inlineImages,
                 allowRemote: model.remoteContentAllowed,
-                readerMode: model.readerMode
+                readerMode: model.readerMode,
+                printRequestTick: model.printRequestTick
             )
         } else if let plain = model.plainText {
             // `.primary` foreground adapts to light/dark mode and gives
@@ -241,6 +307,8 @@ struct MessageDetailView: View {
             readerModeButton
             Spacer()
             disposeButton
+            Spacer()
+            overflowMenuButton
         }
         #else
         ToolbarItem { replyButton }
@@ -249,6 +317,7 @@ struct MessageDetailView: View {
         ToolbarItem { remoteContentButton }
         ToolbarItem { readerModeButton }
         ToolbarItem { disposeButton }
+        ToolbarItem { overflowMenuButton }
         #endif
     }
 

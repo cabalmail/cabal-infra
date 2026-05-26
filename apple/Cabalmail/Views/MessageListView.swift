@@ -20,7 +20,10 @@ struct MessageListView: View {
     /// fires when the selection clears or returns to a same-folder row.
     let onSearchResultSelected: (String?) -> Void
 
-    @Environment(AppState.self) private var appState
+    // `appState` is not private so the +Bulk sibling can reach it for
+    // the move-destination sheet's `client` lookup; matches the pattern
+    // used for `model` and `filtersPresented` further down.
+    @Environment(AppState.self) var appState
     @Environment(Preferences.self) private var preferences
     @Environment(\.openWindow) private var openWindow
     // `model` and `filtersPresented` are module-internal (no access
@@ -30,6 +33,19 @@ struct MessageListView: View {
     @State private var composeSeed: Draft?
     /// `true` while the filter sheet is presented over the message list.
     @State var filtersPresented = false
+    /// Set by the row context menu's "Move to folder…" item; presents the
+    /// MoveToFolderSheet anchored to this envelope. `Envelope` is
+    /// `Identifiable` so `.sheet(item:)` reuses the same presentation
+    /// machinery as composeSeed.
+    @State var envelopeToMove: Envelope?
+    /// `true` while the bulk-move destination picker is presented.
+    @State var bulkMoveSheetPresented = false
+    /// macOS focus state for the inline search field. Drives the
+    /// "show the search-refinement filter button only while the user
+    /// is engaged with search" rule. The iOS / iPadOS / visionOS path
+    /// reads `\.isSearching` from the `.searchable` scope instead — see
+    /// `SearchActiveScope` in `MessageListView+Filter.swift`.
+    @FocusState var inlineSearchFocused: Bool
 
     var body: some View {
         Group {
@@ -41,9 +57,13 @@ struct MessageListView: View {
         }
         .navigationTitle(folder.name)
         .toolbar {
-            ToolbarItem {
-                filterButton
-            }
+            // Compose stays as a toolbar item — it's a primary action
+            // pinned to the top edge in every Mac mail client. The list-
+            // shaping controls (filter / sort / select) moved into an
+            // inline action bar above the list (see `topInset` below);
+            // on wide screens the right-edge toolbar placement put them
+            // visually farther from the list they affect than the
+            // filter tabs that sat one row higher.
             ToolbarItem {
                 Button {
                     presentCompose(seed: ReplyBuilder.newDraft())
@@ -59,6 +79,14 @@ struct MessageListView: View {
         }
         .sheet(item: $composeSeed) { seed in
             composeSheet(for: seed)
+        }
+        .sheet(item: $envelopeToMove) { envelope in
+            moveSheet(for: envelope)
+        }
+        .sheet(isPresented: $bulkMoveSheetPresented) {
+            if let model {
+                bulkMoveSheet(model: model)
+            }
         }
         .task {
             if model == nil, let client = appState.client {
@@ -157,6 +185,28 @@ struct MessageListView: View {
         }
     }
 
+    @ViewBuilder
+    private func moveSheet(for envelope: Envelope) -> some View {
+        if let client = appState.client {
+            // Cross-folder search rows live in `sourceFolderByUID`; the
+            // sidebar's `folder` is the search scope, not the row's true
+            // mailbox. Excluding the row's actual source folder from the
+            // picker is what the user expects.
+            let sourcePath = model?.sourceFolder(for: envelope) ?? folder.path
+            MoveToFolderSheet(
+                currentFolder: Folder(path: sourcePath),
+                client: client,
+                onSelect: { destination in
+                    envelopeToMove = nil
+                    if let model {
+                        Task { await model.moveTo(envelope, destination: destination.path) }
+                    }
+                },
+                onCancel: { envelopeToMove = nil }
+            )
+        }
+    }
+
     /// Hands off to the standalone compose window where the platform
     /// supports it (macOS, iPadOS, visionOS); the iPhone path keeps
     /// the existing sheet so the user doesn't lose the mailbox they
@@ -216,18 +266,40 @@ struct MessageListView: View {
         .refreshable {
             await model.refresh()
         }
-        .safeAreaInset(edge: .top, spacing: 0) {
-            VStack(spacing: 0) {
-                #if os(macOS)
-                inlineSearchField(model: model)
-                #endif
-                if model.isSearchActive {
-                    searchMetadataBanner(model: model)
-                }
-                if let addressFilter, !addressFilter.isEmpty {
-                    addressFilterChip(addressFilter)
-                }
+        .safeAreaInset(edge: .top, spacing: 0) { topInset(model: model) }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if model.bulkMode { bulkActionBar(model: model) }
+        }
+    }
+
+    @ViewBuilder
+    private func topInset(model: MessageListViewModel) -> some View {
+        VStack(spacing: 0) {
+            #if os(macOS)
+            inlineSearchField(model: model, focused: $inlineSearchFocused)
+            #endif
+            if model.isSearchActive {
+                searchMetadataBanner(model: model)
             }
+            if let addressFilter, !addressFilter.isEmpty {
+                addressFilterChip(addressFilter)
+            }
+            // The filter button is search refinement, not list filtering,
+            // so it only surfaces once the user is engaged with the
+            // search field — preventing the conceptual collision with
+            // the All / Unread / Flagged pills next to it. macOS uses
+            // our own @FocusState on the inline TextField; everywhere
+            // else reads `\.isSearching` from the `.searchable` scope.
+            #if os(macOS)
+            filterTabsBar(
+                model: model,
+                searchActive: inlineSearchFocused || model.isSearchActive
+            )
+            #else
+            SearchActiveScope { isSearching in
+                filterTabsBar(model: model, searchActive: isSearching)
+            }
+            #endif
         }
     }
 

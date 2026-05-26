@@ -5,6 +5,125 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.39] - 2026-05-26
+
+### Added
+- Move to arbitrary folder on the Apple clients. The reader's new
+  overflow menu carries a "Move to folder…" item that presents a
+  searchable, hierarchically-indented picker of subscribed folders
+  (excluding the current one), and the message-list row context
+  menu has the same item. Tapping a destination optimistically
+  prunes the row and signals the list to advance to the next unread
+  message, matching the existing Archive behavior; the move itself
+  does NOT mark the message `\Seen` (Archive implies "I'm done with
+  this," but filing into a project folder doesn't, and forcing the
+  read bit would surprise users who file unread messages on
+  purpose). Closes the parity gap with the React webmail, which
+  has had arbitrary-folder move since 0.2.0.
+- View Source on the Apple clients. A new reader-overflow item
+  ("View source", Cmd+U on macOS) opens a sheet with segmented
+  Full / Headers / Body tabs over the raw RFC 5322 source. Bytes
+  come through the same body cache as the in-pane render, so
+  opening source after reading the message is instant. The sheet
+  exposes Copy and Share .eml actions and is selectable for direct
+  copy/paste of individual headers. A separate "View headers" item
+  opens the same sheet pre-set to the Headers tab.
+- Sort selection on the Apple message list. A menu in the inline
+  action bar above the list picks the sort field (Date Received,
+  Date Sent, From, Subject) and toggles direction; the chosen
+  sort is sent to the Lambda's IMAP SORT call so the top page
+  actually contains the items that belong at the top. Default
+  stays REVERSE ARRIVAL (newest first). Pagination beyond the top
+  page works best on the default sort; other sorts retain the
+  visible top page and integrate older messages into the sort as
+  they load.
+- Filter tabs (All / Unread / Flagged) above the Apple message
+  list. Pure client-side narrowing of the loaded envelopes with
+  per-tab counts, mirroring the React webmail's pill row. Resets
+  to "All" on folder switch.
+- Multi-select and bulk actions on the Apple message list. A
+  Select button in the inline action bar above the list enters
+  edit mode; rows render a leading checkbox and a bottom action
+  bar appears with Archive, Move…, Mark Read/Unread, and Flag /
+  Unflag. Selection survives sort and filter changes within the
+  same folder. Cross-folder search results group selected UIDs
+  by source mailbox before the wire call so each operation lands
+  in the right folder. Optimistic prune + revert-on-failure
+  matches the per-row flows.
+- Sender avatar in the Apple reader header. Shows the sender
+  domain's BIMI logo when one is published (fetched through our
+  Lambda's `/fetch_bimi`, which resolves the BIMI DNS record and
+  caches the signed asset in S3) and falls back to a deterministic
+  colored circle with initials otherwise. No tracking-pixel risk:
+  the avatar comes from our own backend, not the sender's domain.
+- Importance badge in the Apple message list. Senders who set
+  X-Priority / Importance / Priority headers to a high value
+  (`priority-1` or `priority-2`, matching React's interpretation)
+  get a red badge next to the existing attachment / flag icons.
+  Pure visual surface — no automatic filtering or sorting.
+- Plain-text alternative toggle in the Apple reader. New overflow-
+  menu item that flips the body view to the message's text/plain
+  alternative when one exists, for users who prefer plain text or
+  are debugging an HTML rendering issue. No-op when the message
+  has no plain part.
+- Print menu item (Cmd+P) in the Apple reader. macOS routes through
+  WKWebView's `printOperation(with:)` against the system print
+  panel; iOS / visionOS use `UIPrintInteractionController` against
+  the web view's print formatter. Disabled until the message body
+  has loaded.
+- Reader keyboard shortcuts on Apple — Cmd+Shift+U toggles read /
+  unread, Cmd+Shift+L toggles flagged, Cmd+Shift+I toggles remote
+  content, and Cmd+Delete archives or trashes (per the user's
+  dispose preference). Mirrors Mail.app conventions.
+
+### Changed
+- The Apple clients' search-filters button only appears while the
+  user is engaged with the search field — focused (or has text)
+  on iOS / iPadOS / visionOS via `\.isSearching`, focused on
+  macOS via `@FocusState` on the inline TextField. Previously the
+  button sat permanently in the inline action bar next to the
+  All / Unread / Flagged pills, which conflated two very different
+  operations: those pills filter the already-loaded envelopes
+  client-side and are instant; the filter button submits a
+  `/search_envelopes` query that walks IMAP folders server-side
+  and applies its checkboxes as search refinements. Hiding the
+  button until search is engaged removes that conceptual collision
+  without losing any functionality — when the user does engage
+  search, the filter button surfaces alongside it.
+- Uptime Kuma's API probe is now an unauthenticated liveness check
+  against `https://admin.<control-domain>/prod/list` that accepts
+  `401` as healthy, renamed from `API round-trip (/list)` to
+  `API reachable (/list)`. The original monitor signed requests
+  with a hand-pasted Cognito `id_token`, but ID tokens expire in
+  1-24 hours, so the probe sat red between manual rotations and
+  the alert lost its signal value. Liveness-only still confirms
+  CloudFront -> API Gateway -> Cognito-authorizer is up and the
+  route is wired; it no longer exercises Lambda or IMAP. The
+  rename keeps `_RUNBOOK_MAP` in `lambda/api/alert_sink/function.py`
+  in sync so probe-failure pushes still carry a runbook link.
+
+### Removed
+- "Mark as spam" item from the React webmail reader's overflow
+  menu. Marking spam was a thin wrapper around a move-to-Junk that
+  doesn't train any filter, and the action was never carried over
+  to the Apple clients during the parity push. Dropping it from
+  React keeps the two clients consistent and removes UI that
+  implied behavior the system doesn't actually deliver. The Junk
+  folder itself is unchanged - users can still subscribe to it and
+  move messages there via the general move-to-folder UI.
+
+### Fixed
+- API Lambda log writes. The `call` Terraform module pointed each
+  function's `logging_config` at `/cabal/lambda/<name>` but kept
+  the IAM policy's `logs:CreateLogStream` / `logs:PutLogEvents`
+  resource scoped to `/aws/lambda/<name>:*` (a leftover from before
+  the explicit log group was introduced). CloudWatch silently
+  dropped every write, so every API Lambda's log group stayed
+  empty regardless of how many times the function ran. The policy
+  now references `aws_cloudwatch_log_group.lambda_log.arn` so the
+  authorized resource tracks the configured log group and cannot
+  drift again.
+
 ## [0.9.38] - 2026-05-26
 
 ### Added

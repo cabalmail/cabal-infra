@@ -164,16 +164,6 @@ function MessageOverlay({
       });
   }, [api, folder, envelopeId, hide, setMessage]);
 
-  const doMarkSpam = useCallback(() => {
-    if (!envelopeId) return;
-    api.moveMessages(folder, 'Junk', [envelopeId], '', ARRIVAL.imap)
-      .then(() => hide())
-      .catch((err) => {
-        setMessage('Unable to mark as spam.', true);
-        console.log(err);
-      });
-  }, [api, folder, envelopeId, hide, setMessage]);
-
   const toggleFlagged = useCallback(() => {
     runFlag(isFlagged ? { ...FLAGGED, op: 'unset' } : FLAGGED);
   }, [isFlagged, runFlag]);
@@ -443,7 +433,6 @@ function MessageOverlay({
           onForwardAsAttachment={forwardAsAttachment}
           onPrint={doPrint}
           onArchive={doArchive}
-          onMarkSpam={doMarkSpam}
           onBlockSender={blockSender}
         />
 

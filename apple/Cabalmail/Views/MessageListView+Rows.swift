@@ -18,31 +18,47 @@ extension MessageListView {
         model: MessageListViewModel,
         isSelected: Bool
     ) -> some View {
-        MessageRow(envelope: envelope, isSelected: isSelected)
-            .tag(envelope)
-            #if os(visionOS)
-            .contentShape(Rectangle())
-            .hoverEffect(.highlight)
-            #endif
-            .swipeActions(edge: .trailing) {
-                Button(role: .destructive) {
-                    Task { await model.dispose(envelope) }
-                } label: {
-                    disposeActionLabel(for: model.disposeAction)
-                }
-            }
-            .swipeActions(edge: .leading) {
+        let bulkMode = model.bulkMode
+        let isChecked = model.selectedUIDs.contains(envelope.uid)
+        Group {
+            if bulkMode {
+                // No .tag() while in bulk mode — the list's selection
+                // binding drives the detail pane, and we don't want a
+                // checkbox tap to also pop the reader.
                 Button {
-                    Task { await model.toggleSeen(envelope) }
+                    model.toggleSelection(envelope)
                 } label: {
-                    markReadLabel(for: envelope)
+                    MessageRow(envelope: envelope, isSelected: isChecked, isChecked: isChecked, bulkMode: true)
                 }
-                .tint(.blue)
+                .buttonStyle(.plain)
+            } else {
+                MessageRow(envelope: envelope, isSelected: isSelected, isChecked: false, bulkMode: false)
+                    .tag(envelope)
             }
-            .contextMenu { rowContextMenu(for: envelope, model: model) }
-            .task {
-                await model.loadMoreIfNeeded(currentItem: envelope)
+        }
+        #if os(visionOS)
+        .contentShape(Rectangle())
+        .hoverEffect(.highlight)
+        #endif
+        .swipeActions(edge: .trailing) {
+            Button(role: .destructive) {
+                Task { await model.dispose(envelope) }
+            } label: {
+                disposeActionLabel(for: model.disposeAction)
             }
+        }
+        .swipeActions(edge: .leading) {
+            Button {
+                Task { await model.toggleSeen(envelope) }
+            } label: {
+                markReadLabel(for: envelope)
+            }
+            .tint(.blue)
+        }
+        .contextMenu { rowContextMenu(for: envelope, model: model) }
+        .task {
+            await model.loadMoreIfNeeded(currentItem: envelope)
+        }
     }
 
     @ViewBuilder
@@ -65,6 +81,11 @@ extension MessageListView {
                 envelope.flags.contains(.seen) ? "Mark as Unread" : "Mark as Read",
                 systemImage: envelope.flags.contains(.seen) ? "envelope.badge" : "envelope.open"
             )
+        }
+        Button {
+            envelopeToMove = envelope
+        } label: {
+            Label("Move to folder…", systemImage: "folder")
         }
         Button(role: .destructive) {
             Task { await model.dispose(envelope) }
@@ -116,10 +137,11 @@ extension MessageListView {
     }
 
     func filteredEnvelopes(_ envelopes: [Envelope]) -> [Envelope] {
-        guard let needle = addressFilter?.lowercased(), !needle.isEmpty else {
-            return envelopes
-        }
+        let tab = model?.filterTab ?? .all
+        let needle = addressFilter?.lowercased() ?? ""
         return envelopes.filter { envelope in
+            guard tab.includes(envelope) else { return false }
+            guard !needle.isEmpty else { return true }
             let recipients = envelope.to + envelope.cc
             return recipients.contains { recipient in
                 "\(recipient.mailbox)@\(recipient.host)".lowercased().contains(needle)
@@ -131,9 +153,17 @@ extension MessageListView {
 private struct MessageRow: View {
     let envelope: Envelope
     let isSelected: Bool
+    let isChecked: Bool
+    let bulkMode: Bool
 
     var body: some View {
         HStack(alignment: .top) {
+            if bulkMode {
+                Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(isChecked ? Color.accentColor : Color.secondary)
+                    .padding(.top, 2)
+                    .accessibilityLabel(isChecked ? "Selected" : "Not selected")
+            }
             Circle()
                 .fill(unreadDotColor)
                 .frame(width: 8, height: 8)
@@ -148,6 +178,12 @@ private struct MessageRow: View {
                         Image(systemName: "paperclip")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                    }
+                    if envelope.isImportant {
+                        Image(systemName: "exclamationmark.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                            .accessibilityLabel("High importance")
                     }
                     if envelope.flags.contains(.flagged) {
                         Image(systemName: "flag.fill")

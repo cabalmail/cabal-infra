@@ -14,13 +14,17 @@ import CabalmailKit
 // (everything else).
 extension MessageListView {
     @ViewBuilder
-    func inlineSearchField(model: MessageListViewModel) -> some View {
+    func inlineSearchField(
+        model: MessageListViewModel,
+        focused: FocusState<Bool>.Binding
+    ) -> some View {
         @Bindable var model = model
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
             TextField("Search mailbox", text: $model.searchQuery)
                 .textFieldStyle(.plain)
+                .focused(focused)
                 .onSubmit {
                     Task { await model.runSearch() }
                 }

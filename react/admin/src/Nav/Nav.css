@@ -373,6 +373,8 @@
 a.nav__menu-item {
   text-decoration: none;
   color: var(--ink);
+  width: 100%;
+  max-width: 240px;
 }
 
 .nav__menu-item--external {

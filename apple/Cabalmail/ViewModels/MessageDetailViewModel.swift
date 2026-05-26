@@ -55,6 +55,23 @@ final class MessageDetailViewModel {
     /// preference.
     var readerMode: Bool
 
+    /// Per-message override that bypasses the HTML body and renders the
+    /// `text/plain` alternative directly. Off by default; the overflow
+    /// menu's "Plain text alternative" item flips it so users who prefer
+    /// plain text (or who are debugging an HTML rendering quirk) can
+    /// fall back to the text part without changing global settings.
+    /// No-op when the message has no plain alternative.
+    var forcePlainText: Bool = false
+
+    /// Monotonic counter the overflow menu's Print item bumps. The HTML
+    /// body view's Representable observes it via `update*View` and routes
+    /// the WKWebView through the system print stack on every increment.
+    /// Plain `Int` instead of a Combine subject keeps the surface
+    /// @Observable-friendly without pulling extra dependencies in.
+    var printRequestTick: Int = 0
+
+    func requestPrint() { printRequestTick += 1 }
+
     /// Pending mark-as-read task for the `.afterDelay` behavior. Cancelled
     /// if the user navigates away before the 2-second threshold or marks the
     /// message read manually in the meantime.
@@ -325,6 +342,55 @@ final class MessageDetailViewModel {
     /// render the right icon and label without reaching into the preferences
     /// environment itself.
     var disposeAction: DisposeAction { preferences.disposeAction }
+
+    /// Move the current message to an arbitrary folder. Mirrors `dispose`
+    /// but accepts a destination path and does NOT mark `\Seen` — archive
+    /// is "I'm done with this," whereas Move is "file this for later."
+    /// Forcing the seen bit there would surprise users filing unread
+    /// messages into project folders.
+    ///
+    /// Optimistic UI: `onSuccess` fires before the server round trip so
+    /// the list view can prune the row immediately. On failure the caller
+    /// surfaces a toast; cache pruning still waits for confirmation so a
+    /// transient error doesn't leave the persistent snapshot disagreeing
+    /// with the server.
+    func move(
+        to destination: String,
+        onSuccess: (() -> Void)? = nil,
+        onFailure: ((Error) -> Void)? = nil
+    ) async {
+        onSuccess?()
+        do {
+            try await client.imapClient.move(
+                folder: folder.path,
+                uids: [envelope.uid],
+                destination: destination
+            )
+            let uidValidity = try? await currentUIDValidity()
+            try? await client.envelopeCache.remove(
+                uids: [envelope.uid],
+                folder: folder.path
+            )
+            if let uidValidity {
+                await client.bodyCache.remove(
+                    folder: folder.path,
+                    uidValidity: uidValidity,
+                    uid: envelope.uid
+                )
+            }
+        } catch {
+            errorMessage = "\(error)"
+            onFailure?(error)
+        }
+    }
+
+    /// Returns the raw RFC 5322 bytes for the current message, going
+    /// through the same body cache as the in-pane render. Powers the
+    /// View Source sheet — first open is a fetch, subsequent opens hit
+    /// the cache that the in-pane render already populated.
+    func rawSourceBytes() async throws -> Data {
+        try await fetchBodyBytes()
+    }
 }
 
 // MARK: - Internals
