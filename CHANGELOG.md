@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Cert-expiry monitoring moved off the (silently-broken) ACM
+  CloudWatch metric and onto blackbox-tls probes of the live TLS
+  endpoints. 0.9.34's run at this signal kept the
+  `aws_certificatemanager_days_to_expiry_minimum` panel and the
+  `CertExpiringSoon{Warning,Critical}` alerts; the metric never
+  appeared in Prometheus despite the period-cadence and label fixes
+  in that release (confirmed post-deploy:
+  `count({__name__=~".*certificatemanager.*"})` in Grafana Explore
+  returned no data, even though the same CloudWatch call works
+  fine via the AWS CLI). Tried with and without `aws_tag_select`,
+  with the global `range_seconds` and with per-rule `range_seconds:
+  172800` + `period_seconds: 86400` to defeat the
+  `recently_active=PT3H` discovery filter - cloudwatch_exporter
+  v0.16.0 silently drops this rule in every configuration. Pivoted
+  entirely onto blackbox:
+  - Removed the AWS/CertificateManager rule from
+    `docker/cloudwatch-exporter/config.yml` and the "ACM days to
+    expiry (min)" stat panel from `docker/grafana/dashboards/aws-services.json`.
+    Left a comment in the exporter config recording what we tried
+    and why we gave up.
+  - Added a "TLS days to expiry - Submission 465 (Let's Encrypt)"
+    stat panel to the Mail Tiers dashboard, paired with the
+    existing "TLS days to expiry - IMAP 993" panel (retitled
+    "IMAP 993 (ACM)" for disambiguation). This adds coverage for
+    the second cert in the system - the per-host Let's Encrypt
+    cert that the smtp-out container terminates TLS with on
+    :465/:587, managed by `cabal-certbot-renewal` - which the
+    ACM-based monitoring never touched. Restructured the dashboard
+    so connectivity probes / cert health / probe latency each get
+    their own row.
+  - Deleted `CertExpiringSoon{Warning,Critical}` from the alert
+    rules. Renamed `BlackboxTLSCertExpiringSoon` to `...Warning`
+    for symmetry, added `BlackboxTLSCertExpiringSoonCritical` at
+    <7 days. Updated the Alertmanager inhibit rule to suppress
+    warning when critical fires on the same `instance` (was
+    matching on a `domain_name` label that never existed).
+  - Rewrote `docs/operations/runbooks/cert-expiring.md` to cover
+    both renewal pipelines branched by the alert's `instance`
+    label: the `:993` branch keeps the ACM auto-renewal checks,
+    the new `:465`/`:587` branch documents the certbot Lambda path
+    (invoke the Lambda, redeploy smtp-out to pick up the new cert,
+    check the Let's Encrypt per-domain rate limit).
+
+## [0.9.35] - 2026-05-25
+
+### Changed
+- Apple clients' reader-view stylesheet now forces white-ish text on
+  every element in dark mode, not just `html, body`. Author-supplied
+  inline `color` declarations (`<font color="#000">`, inline styles)
+  were inheriting through descendants and rendering as dark-on-dark.
+  A universal `color: #f2f2f7 !important` rule inside the dark-mode
+  `@media` block in `HTMLBodyView.swift` overrides those; the
+  existing `a` rule still wins for links via specificity.
+
+## [0.9.34] - 2026-05-25
+
 ### Added
 - Apple clients (iOS + macOS) now ship a dual-mode compose body with
   parity to the React composer: a WKWebView-hosted contenteditable
@@ -140,6 +197,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   user-defined setting (`IOS_APP_STORE_PROFILE_UUID` /
   `MAC_APP_STORE_PROFILE_UUID`), resolved exclusively by the app
   target's `PROVISIONING_PROFILE_SPECIFIER` reference.
+- The rich-text composer's `marked.umd.js` and `turndown.js` (plus
+  their MIT LICENSE files) are no longer committed under
+  `apple/CabalmailKit/Sources/CabalmailKit/Compose/Resources/`.
+  `react/admin/package.json` is now the single source of truth for
+  both versions; `apple/scripts/sync-vendored.sh` materializes the
+  Apple copy from `react/admin/node_modules/` and the four files are
+  gitignored. CI runs the sync step before every `swift test`,
+  unsigned `xcodebuild build`, and TestFlight archive. Dependabot's
+  existing watch on `react/admin/package.json` now covers the Apple
+  composer's library versions too, and CodeQL no longer has
+  third-party JS to alarm on.
 
 ## [0.9.32] - 2026-05-25
 

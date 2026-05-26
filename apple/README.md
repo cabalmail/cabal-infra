@@ -18,18 +18,27 @@ apple/
 
 ## Bootstrap
 
-The `.xcodeproj` is not committed. Generate it before opening the workspace:
+The `.xcodeproj` is not committed. Generate it before opening the
+workspace. The rich-text composer's marked + turndown bundles are also
+not committed (see [Rich-text editor](#rich-text-editor-wkwebview-contenteditable--fetched-markedturndown))
+— they materialize from `react/admin/node_modules/` via a sync script.
+Run both before your first `swift test` or `xcodebuild`:
 
 ```sh
-brew install xcodegen    # one-time
+brew install xcodegen node    # one-time
 cd apple
 xcodegen generate
+scripts/sync-vendored.sh      # fetches marked + turndown into CabalmailKit
 open Cabalmail.xcworkspace
 ```
 
-CI (`.github/workflows/apple.yml`) runs `xcodegen generate` before every
-`xcodebuild` invocation, so contributors never need to commit generated
-project files.
+CI (`.github/workflows/apple.yml`) runs both steps before every
+`xcodebuild` and `swift test` invocation, so contributors never need to
+commit generated project files or vendored JS.
+
+Re-run `scripts/sync-vendored.sh` any time `react/admin/package.json`
+bumps the `marked` or `turndown` version (`swift test` will fail with a
+missing-resource error if you skip it).
 
 ### Prerequisites for local builds
 
@@ -612,14 +621,81 @@ open IDLE socket. Untagged `EXISTS` / `EXPUNGE` / `FETCH` events stream
 via `AsyncThrowingStream<IdleEvent, Error>`; terminating the stream
 cancels the reader task, issues `DONE\r\n`, and closes the connection.
 
-### Rich-text editor: plain text only
+### Rich-text editor: WKWebView contenteditable + fetched marked/turndown
 
-iOS 18's selection APIs for `TextEditor<AttributedString>` aren't yet
-rich enough to drive a custom toolbar cleanly, and a
-`UITextViewRepresentable`/`NSTextViewRepresentable` wrapper is
-substantially more code than the compose-send-deliver path needs.
-`ComposeView` ships with `TextEditor(text: $body)` plain text and emits
-a `text/plain` body only.
+`ComposeView` ships a dual-mode body — segmented "Rich Text" / "Markdown"
+tabs — to match the React composer feature-for-feature. The rich pane is
+a `contenteditable` `<div>` inside a `WKWebView`, driven by a SwiftUI
+toolbar (`RichTextToolbar`) that calls `document.execCommand` through
+`RichTextEditorController`'s JS bridge. The markdown pane is a plain
+`TextEditor`; drafts persist as Markdown either way (the rich pane is
+re-seeded from the markdown source on open).
+
+At send time, `ComposeViewModel.computeMessageBodies()` runs the same
+four-way table the React `handleSend` applies: both-empty, rich-only
+(text body derived via turndown), markdown-only (html body derived via
+marked + flattenParagraphs + styleParagraphs), or both-filled. So every
+outgoing message ships with both MIME parts populated and no recipient
+sees a blank message because their mail client preferred `text/html`.
+
+#### Why a WKWebView instead of native NSTextView / UITextView
+
+Native rich-text editing on Apple platforms means `NSAttributedString`,
+and the `.data(from: ..., documentAttributes: [.documentType: .html])`
+round-trip emits HTML with heavy inline-styled spans that doesn't
+visually match what the React composer produces. Matching React's
+specific rules (Enter as hard-break in plain paragraphs but new-list-
+item inside lists, blank-line paragraph boundaries collapsed to
+`<br><br>`, ZWSP placeholder trick to defeat turndown's adjacent-
+newline collapsing) by hand against `NSAttributedString` is a much
+larger surface than letting the same JS libraries run inside a
+contenteditable.
+
+#### Why marked + turndown are fetched, not committed
+
+`apple/CabalmailKit/Sources/CabalmailKit/Compose/Resources/` is the
+SwiftPM resource directory `editor.html` looks up its sibling scripts
+from. `editor.html` and `editor-bridge.js` are first-party and
+committed; `marked.umd.js`, `turndown.js`, and their MIT LICENSE files
+are gitignored and materialize at build time from
+`react/admin/node_modules/` via `apple/scripts/sync-vendored.sh`.
+
+The version pins live in `react/admin/package.json`. The React composer
+already lists these exact libraries as runtime dependencies, so we get
+three useful properties for free by making React's manifest the single
+source of truth:
+
+- **Dependabot already watches `react/admin/package.json`** and opens
+  PRs against it when CVEs land for marked or turndown. The next
+  `apple.yml` run after that PR merges pulls the patched bytes
+  automatically.
+- **No drift between the Apple copy and the React copy is possible.**
+  The CI sync step always copies from a freshly-installed
+  `node_modules`, so the Apple WKWebView and the React TipTap editor
+  cannot diverge on the underlying library version.
+- **CodeQL doesn't scan a vendored third-party library we don't
+  maintain.** The bytes aren't in the repo for it to alarm on.
+
+We considered the obvious alternative — committing the JS verbatim
+into the resource directory with a CI drift-check that diffs against
+`react/admin/node_modules/` after `npm ci`. That works, but it requires
+exactly the same `npm ci` step in CI, just to *verify* what we could
+have *produced* instead. The fetched-not-committed design pays the
+same CI cost and produces a strictly cleaner repo (no committed
+upstream bytes, no manual sync flow on version bumps).
+
+The one cost we explicitly accept: a fresh clone can't `swift test`
+the kit before running `apple/scripts/sync-vendored.sh`. The error is
+self-explanatory (SwiftPM names the missing resource) and the script
+is a one-liner; the Bootstrap section covers it.
+
+A root-level `vendor/` directory was also considered. SwiftPM requires
+resources to live inside the target's `path:`, so a root vendor would
+need symlinks (`Resources/marked.umd.js -> ../../../../../../vendor/...`),
+and the kit would stop being self-contained. With these particular
+libraries now sourced from npm via the React manifest, the symlink
+convention has even less to recommend it. Revisit if a non-JS,
+non-npm-managed vendored dep ever appears.
 
 ### Drafts: local only
 

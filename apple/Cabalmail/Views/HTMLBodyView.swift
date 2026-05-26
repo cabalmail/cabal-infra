@@ -321,6 +321,7 @@ private let readerStylesheet = """
       background: #1c1c1e !important;
       color: #f2f2f7 !important;
     }
+    *, *::before, *::after { color: #f2f2f7 !important; }
     a { color: #0a84ff !important; }
   }
 </style>
