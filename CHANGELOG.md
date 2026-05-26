@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- Cert-expiry monitoring moved off the (silently-broken) ACM
+  CloudWatch metric and onto blackbox-tls probes of the live TLS
+  endpoints. 0.9.34's run at this signal kept the
+  `aws_certificatemanager_days_to_expiry_minimum` panel and the
+  `CertExpiringSoon{Warning,Critical}` alerts; the metric never
+  appeared in Prometheus despite the period-cadence and label fixes
+  in that release (confirmed post-deploy:
+  `count({__name__=~".*certificatemanager.*"})` in Grafana Explore
+  returned no data, even though the same CloudWatch call works
+  fine via the AWS CLI). Tried with and without `aws_tag_select`,
+  with the global `range_seconds` and with per-rule `range_seconds:
+  172800` + `period_seconds: 86400` to defeat the
+  `recently_active=PT3H` discovery filter - cloudwatch_exporter
+  v0.16.0 silently drops this rule in every configuration. Pivoted
+  entirely onto blackbox:
+  - Removed the AWS/CertificateManager rule from
+    `docker/cloudwatch-exporter/config.yml` and the "ACM days to
+    expiry (min)" stat panel from `docker/grafana/dashboards/aws-services.json`.
+    Left a comment in the exporter config recording what we tried
+    and why we gave up.
+  - Added a "TLS days to expiry - Submission 465 (Let's Encrypt)"
+    stat panel to the Mail Tiers dashboard, paired with the
+    existing "TLS days to expiry - IMAP 993" panel (retitled
+    "IMAP 993 (ACM)" for disambiguation). This adds coverage for
+    the second cert in the system - the per-host Let's Encrypt
+    cert that the smtp-out container terminates TLS with on
+    :465/:587, managed by `cabal-certbot-renewal` - which the
+    ACM-based monitoring never touched. Restructured the dashboard
+    so connectivity probes / cert health / probe latency each get
+    their own row.
+  - Deleted `CertExpiringSoon{Warning,Critical}` from the alert
+    rules. Renamed `BlackboxTLSCertExpiringSoon` to `...Warning`
+    for symmetry, added `BlackboxTLSCertExpiringSoonCritical` at
+    <7 days. Updated the Alertmanager inhibit rule to suppress
+    warning when critical fires on the same `instance` (was
+    matching on a `domain_name` label that never existed).
+  - Rewrote `docs/operations/runbooks/cert-expiring.md` to cover
+    both renewal pipelines branched by the alert's `instance`
+    label: the `:993` branch keeps the ACM auto-renewal checks,
+    the new `:465`/`:587` branch documents the certbot Lambda path
+    (invoke the Lambda, redeploy smtp-out to pick up the new cert,
+    check the Let's Encrypt per-domain rate limit).
+
 ## [0.9.35] - 2026-05-25
 
 ### Changed
