@@ -30,6 +30,30 @@ final class ApiBackedImapClientParserTests: XCTestCase {
         XCTAssertTrue(env.flags.contains(.keyword("Junk")))
     }
 
+    func testIsImportantMatchesReactRule() {
+        XCTAssertTrue(ApiBackedImapClient.isImportant(priority: ["priority-1"]))
+        XCTAssertTrue(ApiBackedImapClient.isImportant(priority: ["priority-2"]))
+        XCTAssertTrue(ApiBackedImapClient.isImportant(priority: ["priority-1", "priority-3"]))
+        XCTAssertFalse(ApiBackedImapClient.isImportant(priority: ["priority-3"]))
+        XCTAssertFalse(ApiBackedImapClient.isImportant(priority: ["priority-4", "priority-5"]))
+        XCTAssertFalse(ApiBackedImapClient.isImportant(priority: []))
+        XCTAssertFalse(ApiBackedImapClient.isImportant(priority: nil))
+    }
+
+    func testMakeEnvelopePopulatesIsImportant() {
+        let highPriority = ApiEnvelope(
+            id: 1, date: nil, subject: nil, from: [], to: [], cc: [],
+            flags: [], structure: nil, priority: ["priority-1"]
+        )
+        XCTAssertTrue(ApiBackedImapClient.makeEnvelope(highPriority).isImportant)
+
+        let normalPriority = ApiEnvelope(
+            id: 2, date: nil, subject: nil, from: [], to: [], cc: [],
+            flags: [], structure: nil, priority: ["priority-3"]
+        )
+        XCTAssertFalse(ApiBackedImapClient.makeEnvelope(normalPriority).isImportant)
+    }
+
     func testParseLambdaDateHandlesPythonStrFormat() {
         let date = ApiBackedImapClient.parseLambdaDate("2024-01-15 10:30:45+00:00")
         XCTAssertNotNil(date)

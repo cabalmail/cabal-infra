@@ -1,5 +1,10 @@
 import SwiftUI
 @preconcurrency import WebKit
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 /// Renders HTML message bodies inside a `WKWebView` configured for safe
 /// mail display:
@@ -23,6 +28,12 @@ struct HTMLBodyView: View {
     /// light/dark appearance. When false, the author's CSS renders as-is
     /// against a pinned-light WebKit page.
     let readerMode: Bool
+    /// Monotonic tick the parent bumps via `MessageDetailViewModel.requestPrint()`
+    /// to invoke the system print stack on the embedded `WKWebView`. The
+    /// Coordinator tracks the last seen value and only fires when it
+    /// advances, so a SwiftUI re-layout (which re-runs `update*View` with
+    /// the same tick) doesn't re-trigger printing.
+    var printRequestTick: Int = 0
 
     var body: some View {
         #if os(macOS)
@@ -30,14 +41,16 @@ struct HTMLBodyView: View {
             html: html,
             inlineImages: inlineImages,
             allowRemote: allowRemote,
-            readerMode: readerMode
+            readerMode: readerMode,
+            printRequestTick: printRequestTick
         )
         #else
         MobileHTMLView(
             html: html,
             inlineImages: inlineImages,
             allowRemote: allowRemote,
-            readerMode: readerMode
+            readerMode: readerMode,
+            printRequestTick: printRequestTick
         )
         #endif
     }
@@ -51,6 +64,7 @@ private struct MobileHTMLView: UIViewRepresentable {
     let inlineImages: [String: URL]
     let allowRemote: Bool
     let readerMode: Bool
+    let printRequestTick: Int
 
     func makeCoordinator() -> HTMLBodyCoordinator {
         HTMLBodyCoordinator(allowRemote: allowRemote)
@@ -84,6 +98,7 @@ private struct MobileHTMLView: UIViewRepresentable {
             readerMode: readerMode
         )
         uiView.loadHTMLString(rewritten, baseURL: nil)
+        context.coordinator.handlePrintTick(printRequestTick, for: uiView)
     }
 }
 #endif
@@ -96,6 +111,7 @@ private struct MacHTMLView: NSViewRepresentable {
     let inlineImages: [String: URL]
     let allowRemote: Bool
     let readerMode: Bool
+    let printRequestTick: Int
 
     func makeCoordinator() -> HTMLBodyCoordinator {
         HTMLBodyCoordinator(allowRemote: allowRemote)
@@ -125,6 +141,7 @@ private struct MacHTMLView: NSViewRepresentable {
             readerMode: readerMode
         )
         nsView.loadHTMLString(rewritten, baseURL: nil)
+        context.coordinator.handlePrintTick(printRequestTick, for: nsView)
     }
 }
 #endif
@@ -144,9 +161,43 @@ private struct MacHTMLView: NSViewRepresentable {
 final class HTMLBodyCoordinator: NSObject, WKNavigationDelegate {
     var allowRemote: Bool
     private var installedBlocker: WKContentRuleList?
+    /// Last `printRequestTick` we acted on. `update*View` runs on every
+    /// SwiftUI re-layout; comparing against this value ensures the system
+    /// print sheet only opens when the parent's counter actually advances.
+    private var lastPrintTick: Int = 0
 
     init(allowRemote: Bool) {
         self.allowRemote = allowRemote
+    }
+
+    /// Called from `update*View` with the current tick. Triggers the
+    /// platform print stack against `webView` when the tick has advanced
+    /// since our last invocation; no-op otherwise. The initial value (0
+    /// matching the view-model default) deliberately doesn't fire so the
+    /// first `update*View` after view creation isn't treated as a print
+    /// request.
+    func handlePrintTick(_ tick: Int, for webView: WKWebView) {
+        guard tick > lastPrintTick else {
+            // First time we see the view (lastPrintTick still 0) and the
+            // tick is also 0: nothing to do but record the baseline.
+            lastPrintTick = max(lastPrintTick, tick)
+            return
+        }
+        lastPrintTick = tick
+        triggerPrint(on: webView)
+    }
+
+    private func triggerPrint(on webView: WKWebView) {
+        #if canImport(UIKit)
+        let controller = UIPrintInteractionController.shared
+        controller.printFormatter = webView.viewPrintFormatter()
+        controller.present(animated: true, completionHandler: nil)
+        #elseif canImport(AppKit)
+        let info = NSPrintInfo.shared
+        let operation = webView.printOperation(with: info)
+        operation.view?.frame = webView.bounds
+        operation.run()
+        #endif
     }
 
     // Async variant of the protocol requirement. The completion-handler

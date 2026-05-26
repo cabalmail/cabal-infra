@@ -48,6 +48,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   results group selected UIDs by source mailbox before the wire
   call so each operation lands in the right folder. Optimistic
   prune + revert-on-failure matches the per-row flows.
+- Sender avatar in the Apple reader header. Shows the sender
+  domain's BIMI logo when one is published (fetched through our
+  Lambda's `/fetch_bimi`, which resolves the BIMI DNS record and
+  caches the signed asset in S3) and falls back to a deterministic
+  colored circle with initials otherwise. No tracking-pixel risk:
+  the avatar comes from our own backend, not the sender's domain.
+- Importance badge in the Apple message list. Senders who set
+  X-Priority / Importance / Priority headers to a high value
+  (`priority-1` or `priority-2`, matching React's interpretation)
+  get a red badge next to the existing attachment / flag icons.
+  Pure visual surface — no automatic filtering or sorting.
+- Plain-text alternative toggle in the Apple reader. New overflow-
+  menu item that flips the body view to the message's text/plain
+  alternative when one exists, for users who prefer plain text or
+  are debugging an HTML rendering issue. No-op when the message
+  has no plain part.
+- Print menu item (Cmd+P) in the Apple reader. macOS routes through
+  WKWebView's `printOperation(with:)` against the system print
+  panel; iOS / visionOS use `UIPrintInteractionController` against
+  the web view's print formatter. Disabled until the message body
+  has loaded.
+- Reader keyboard shortcuts on Apple — Cmd+Shift+U toggles read /
+  unread, Cmd+Shift+L toggles flagged, Cmd+Shift+I toggles remote
+  content, and Cmd+Delete archives or trashes (per the user's
+  dispose preference). Mirrors Mail.app conventions.
 
 ### Removed
 - "Mark as spam" item from the React webmail reader's overflow

@@ -268,12 +268,9 @@ public actor ApiBackedImapClient: ImapClient {
     private var defaultSortOrder: String { "REVERSE " }
     private var defaultSortField: String { "ARRIVAL" }
 
-    /// Builds an `Envelope` from the simplified Lambda payload.
-    ///
-    /// `messageId` is unavailable — the Lambda doesn't surface it from the
-    /// ENVELOPE struct. `internalDate` and `size` are likewise omitted;
-    /// the cache uses UID + UIDVALIDITY as keys, so no behavior depends on
-    /// these.
+    /// Builds an `Envelope` from the Lambda payload. `messageId`,
+    /// `internalDate`, and `size` are omitted — the Lambda doesn't surface
+    /// them and the cache keys on UID + UIDVALIDITY, so no behavior depends.
     static func makeEnvelope(_ raw: ApiEnvelope) -> Envelope {
         let date = parseLambdaDate(raw.date)
         let flags = Set(raw.flags.map { Flag(wireValue: $0) })
@@ -292,8 +289,15 @@ public actor ApiBackedImapClient: ImapClient {
             flags: flags,
             internalDate: date,
             size: nil,
-            hasAttachments: raw.structure?.hasAttachments ?? false
+            hasAttachments: raw.structure?.hasAttachments ?? false,
+            isImportant: Self.isImportant(priority: raw.priority)
         )
+    }
+
+    /// Mirrors React (`Envelope.jsx`): the Lambda emits `priority-1`
+    /// through `priority-5` tokens; 1 and 2 mean "high."
+    static func isImportant(priority: [String]?) -> Bool {
+        priority?.contains { $0 == "priority-1" || $0 == "priority-2" } ?? false
     }
 
     /// Parses an address from the Lambda's wire format.

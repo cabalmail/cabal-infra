@@ -208,26 +208,32 @@ struct MessageDetailView: View {
 
     @ViewBuilder
     private var headerBlock: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            if let from = envelope.from.first {
-                Text(from.formatted)
-                    .font(.headline)
+        HStack(alignment: .top, spacing: 12) {
+            if let apiClient = appState.client?.apiClient {
+                AvatarView(sender: envelope.from.first, apiClient: apiClient)
             }
-            if !envelope.to.isEmpty {
-                Text("To: \(envelope.to.map(\.formatted).joined(separator: ", "))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 4) {
+                if let from = envelope.from.first {
+                    Text(from.formatted)
+                        .font(.headline)
+                }
+                if !envelope.to.isEmpty {
+                    Text("To: \(envelope.to.map(\.formatted).joined(separator: ", "))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if !envelope.cc.isEmpty {
+                    Text("Cc: \(envelope.cc.map(\.formatted).joined(separator: ", "))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if let date = envelope.date ?? envelope.internalDate {
+                    Text(date.formatted(date: .abbreviated, time: .shortened))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
-            if !envelope.cc.isEmpty {
-                Text("Cc: \(envelope.cc.map(\.formatted).joined(separator: ", "))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            if let date = envelope.date ?? envelope.internalDate {
-                Text(date.formatted(date: .abbreviated, time: .shortened))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+            Spacer(minLength: 0)
         }
     }
 
@@ -240,14 +246,15 @@ struct MessageDetailView: View {
         if model.isLoading || !model.hasAttemptedLoad {
             ProgressView("Fetching message…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if let html = model.htmlBody {
+        } else if let html = model.htmlBody, !model.forcePlainText {
             // WKWebView manages its own scrolling; fill the available space
             // and let it page through tall messages internally.
             HTMLBodyView(
                 html: html,
                 inlineImages: model.inlineImages,
                 allowRemote: model.remoteContentAllowed,
-                readerMode: model.readerMode
+                readerMode: model.readerMode,
+                printRequestTick: model.printRequestTick
             )
         } else if let plain = model.plainText {
             // `.primary` foreground adapts to light/dark mode and gives

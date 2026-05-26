@@ -55,6 +55,23 @@ final class MessageDetailViewModel {
     /// preference.
     var readerMode: Bool
 
+    /// Per-message override that bypasses the HTML body and renders the
+    /// `text/plain` alternative directly. Off by default; the overflow
+    /// menu's "Plain text alternative" item flips it so users who prefer
+    /// plain text (or who are debugging an HTML rendering quirk) can
+    /// fall back to the text part without changing global settings.
+    /// No-op when the message has no plain alternative.
+    var forcePlainText: Bool = false
+
+    /// Monotonic counter the overflow menu's Print item bumps. The HTML
+    /// body view's Representable observes it via `update*View` and routes
+    /// the WKWebView through the system print stack on every increment.
+    /// Plain `Int` instead of a Combine subject keeps the surface
+    /// @Observable-friendly without pulling extra dependencies in.
+    var printRequestTick: Int = 0
+
+    func requestPrint() { printRequestTick += 1 }
+
     /// Pending mark-as-read task for the `.afterDelay` behavior. Cancelled
     /// if the user navigates away before the 2-second threshold or marks the
     /// message read manually in the meantime.

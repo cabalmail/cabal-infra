@@ -179,6 +179,12 @@ private struct MessageRow: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+                    if envelope.isImportant {
+                        Image(systemName: "exclamationmark.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                            .accessibilityLabel("High importance")
+                    }
                     if envelope.flags.contains(.flagged) {
                         Image(systemName: "flag.fill")
                             .font(.caption)
