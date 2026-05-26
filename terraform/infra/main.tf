@@ -101,6 +101,7 @@ module "admin" {
   dmarc_healthcheck_ping_param = local.hc_ping_dmarc
 
   invitation_required = module.pool.invitation_required
+  monitoring          = var.monitoring
 }
 
 # Creates a DynamoDB table for storing address data

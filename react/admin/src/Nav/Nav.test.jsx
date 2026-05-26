@@ -153,4 +153,48 @@ describe('Nav', () => {
     expect(onSearchSubmit).toHaveBeenCalledWith('');
     expect(input.value).toBe('');
   });
+
+  describe('monitoring entries', () => {
+    const adminMonitoringProps = {
+      ...baseProps,
+      loggedIn: true,
+      userName: 'alex',
+      isAdmin: true,
+      monitoring: true,
+      controlDomain: 'cabalmail.com',
+    };
+
+    it('renders Uptime/Healthchecks/Grafana as external links when admin + monitoring', () => {
+      render(<Nav {...adminMonitoringProps} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Account menu' }));
+      const kuma = screen.getByRole('menuitem', { name: /Uptime Kuma/ });
+      const hc = screen.getByRole('menuitem', { name: /Healthchecks/ });
+      const grafana = screen.getByRole('menuitem', { name: /Grafana/ });
+      expect(kuma).toHaveAttribute('href', 'https://uptime.cabalmail.com/');
+      expect(kuma).toHaveAttribute('target', '_blank');
+      expect(kuma).toHaveAttribute('rel', expect.stringContaining('noopener'));
+      expect(hc).toHaveAttribute('href', 'https://heartbeat.cabalmail.com/');
+      expect(grafana).toHaveAttribute('href', 'https://metrics.cabalmail.com/');
+    });
+
+    it('hides monitoring entries when monitoring is disabled', () => {
+      render(<Nav {...adminMonitoringProps} monitoring={false} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Account menu' }));
+      expect(screen.queryByRole('menuitem', { name: /Uptime Kuma/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: /Healthchecks/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: /Grafana/ })).not.toBeInTheDocument();
+    });
+
+    it('hides monitoring entries from non-admin users even when monitoring is enabled', () => {
+      render(<Nav {...adminMonitoringProps} isAdmin={false} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Account menu' }));
+      expect(screen.queryByRole('menuitem', { name: /Uptime Kuma/ })).not.toBeInTheDocument();
+    });
+
+    it('hides monitoring entries until controlDomain is known', () => {
+      render(<Nav {...adminMonitoringProps} controlDomain={null} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Account menu' }));
+      expect(screen.queryByRole('menuitem', { name: /Uptime Kuma/ })).not.toBeInTheDocument();
+    });
+  });
 });

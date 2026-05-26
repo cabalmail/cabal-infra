@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Monitoring entries in the admin app's Nav (Uptime Kuma,
+  Healthchecks, Grafana) opening each subdomain in a new tab.
+  Visible only to admins, and only when the environment has
+  `var.monitoring = true`. The new `monitoring` field on
+  `/config.js` (and `/config.json` for the Apple client) carries
+  the per-environment flag forward from the `admin` module.
+
 ## [0.9.37] - 2026-05-26
 
 ### Changed

@@ -73,6 +73,7 @@ function loadSavedState() {
     domains: {},
     api_url: null,
     invitation_required: false,
+    monitoring: false,
   };
   const saved = JSON.parse(window.localStorage.getItem('state'));
   return saved ? { ...defaults, ...saved, password: null, inviteCode: null } : defaults;
@@ -211,7 +212,7 @@ function App() {
   // Returning visits keep working from the loadSavedState snapshot.
   useEffect(() => {
     axios.get('/config.js').then(({ data }) => {
-      const { control_domain, domains, cognitoConfig, invitation_required } = data;
+      const { control_domain, domains, cognitoConfig, invitation_required, monitoring } = data;
       UserPool = new CognitoUserPool(cognitoConfig.poolData);
       setState({
         poolData: cognitoConfig.poolData,
@@ -221,7 +222,8 @@ function App() {
           : "imap." + control_domain,
         domains,
         api_url: "https://admin." + control_domain + "/prod",
-        invitation_required: invitation_required === true
+        invitation_required: invitation_required === true,
+        monitoring: monitoring === true
       });
       const cognitoUser = UserPool.getCurrentUser();
       if (cognitoUser) {
@@ -690,6 +692,8 @@ function App() {
               accents={prefs.accents}
               searchQuery={searchQuery}
               onSearchSubmit={setSearchQuery}
+              controlDomain={state.control_domain}
+              monitoring={state.monitoring}
             />
           )}
           <div className="content">

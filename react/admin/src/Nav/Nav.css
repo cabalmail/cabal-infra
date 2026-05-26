@@ -370,6 +370,20 @@
 
 .nav__menu-item--danger { color: var(--ink-danger); }
 
+a.nav__menu-item {
+  text-decoration: none;
+  color: var(--ink);
+}
+
+.nav__menu-item--external {
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.nav__menu-item--external svg { color: var(--ink-quiet); flex-shrink: 0; }
+.nav__menu-item--external:hover svg { color: var(--ink); }
+.nav__menu-item-label { min-width: 0; }
+
 /* Responsive ----------------------------------------------------------- */
 
 @media (max-width: 767px) {
