@@ -44,20 +44,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   about 0.7% of the time. Override the ACM scrape block with
   `period_seconds: 86400` / `range_seconds: 172800` so each scrape
   reliably picks up yesterday's value.
-- Same "ACM days to expiry (min)" stat panel rendered an unlabeled
-  number once the scrape-cadence fix above started filling it in,
-  because the panel and the two `CertExpiringSoon{Warning,Critical}`
-  alert summaries interpolated a `{{domain_name}}` label that
-  cloudwatch_exporter never emitted. `AWS/CertificateManager
-  DaysToExpiry`'s only CloudWatch dimension is `CertificateArn`, so
-  the only available label out of the box was the full ARN. Added
-  `aws_tag_select` to the ACM rule so the cert's existing
-  `Name="cabal-nlb"` tag (set in
-  `terraform/infra/modules/cert/main.tf`) flows through as a
-  `tag_Name` label via the AWS Resource Groups Tagging API; switched
-  the panel and both alerts to interpolate `{{tag_Name}}`. The
-  exporter task role already had `tag:GetResources`, so no IAM
-  change was needed.
+- "ACM days to expiry (min)" stat panel and both
+  `CertExpiringSoon{Warning,Critical}` alert summaries interpolated
+  a `{{domain_name}}` label that cloudwatch_exporter never emitted.
+  `AWS/CertificateManager DaysToExpiry`'s only CloudWatch dimension
+  is `CertificateArn`. Switched the panel and alerts to interpolate
+  `{{certificate_arn}}`. (An earlier attempt to wire up the cert's
+  `Name="cabal-nlb"` tag via `aws_tag_select` silently produced zero
+  metrics in v0.16.0 despite the underlying tag:GetResources call
+  succeeding - reverted; the full ARN as a label is ugly but
+  bulletproof. Worth opening an upstream issue against
+  cloudwatch_exporter for the tag-select silent-skip with
+  per-metric range/period overrides.)
+- "ECS RunningTaskCount per service" timeseries panel (and the
+  matching `ContainerRestartLoop` alert rule, which had quietly
+  never been able to fire) referenced
+  `aws_ecs_containerinsights_running_task_count_average`.
+  cloudwatch_exporter v0.16.0 only prepends `aws_` to the Prometheus
+  metric name when the CloudWatch namespace literally starts with
+  `AWS/`; for custom namespaces like `ECS/ContainerInsights` the
+  prefix is dropped entirely (slashes become underscores). The real
+  series name is `ecs_containerinsights_running_task_count_average`.
+  Same correction applied to `ContainerRestartLoop`'s expression
+  (which compares running vs desired task counts) and noted in a
+  comment on the rule so the next reader doesn't re-introduce the
+  `aws_` prefix.
 - Mail Tiers dashboard's "TLS days to expiry - IMAP 993" panel and
   the `BlackboxTLSCertExpiringSoon` alert blank because
   `imap.<control_domain>` resolved inside the VPC to a stale

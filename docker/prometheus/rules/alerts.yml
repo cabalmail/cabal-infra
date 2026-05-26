@@ -130,15 +130,21 @@ groups:
         # service over an hour signals a crash loop. Exact thresholds
         # will need tuning once we see what normal task-replacement
         # noise looks like.
+        #
+        # The Prometheus name is `ecs_containerinsights_*` WITHOUT the
+        # usual `aws_` prefix: cloudwatch_exporter v0.16.0 only
+        # prepends `aws_` when the namespace literally starts with
+        # `AWS/`, so custom namespaces like `ECS/ContainerInsights`
+        # come through as-is (slashes converted to underscores).
         expr: |
           (
-            avg_over_time(aws_ecs_containerinsights_running_task_count_average[1h])
+            avg_over_time(ecs_containerinsights_running_task_count_average[1h])
             <
-            avg_over_time(aws_ecs_containerinsights_desired_task_count_average[1h])
+            avg_over_time(ecs_containerinsights_desired_task_count_average[1h])
           )
           and
           (
-            avg_over_time(aws_ecs_containerinsights_desired_task_count_average[1h]) > 0
+            avg_over_time(ecs_containerinsights_desired_task_count_average[1h]) > 0
           )
         for: 30m
         labels:
@@ -154,7 +160,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "ACM cert {{ $labels.tag_Name }} expires in <21 days"
+          summary: "ACM cert {{ $labels.certificate_arn }} expires in <21 days"
           description: "ACM auto-renewal usually happens around 30 days out. <21 days suggests the renewal is stuck."
           runbook_url: "https://github.com/cabalmail/cabal-infra/blob/main/docs/operations/runbooks/cert-expiring.md"
 
@@ -164,7 +170,7 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "ACM cert {{ $labels.tag_Name }} expires in <7 days"
+          summary: "ACM cert {{ $labels.certificate_arn }} expires in <7 days"
           description: "Manual intervention required — the certbot Lambda or ACM auto-renew has not refreshed this cert."
           runbook_url: "https://github.com/cabalmail/cabal-infra/blob/main/docs/operations/runbooks/cert-expiring.md"
 
