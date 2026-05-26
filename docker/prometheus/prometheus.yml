@@ -107,7 +107,7 @@ scrape_configs:
     # Implicit-TLS ports - blackbox does the full TLS handshake, which
     # is what populates probe_ssl_earliest_cert_expiry for the Mail
     # Tiers dashboard's "TLS days to expiry" panels and the
-    # BlackboxTLSCertExpiringSoon alert.
+    # BlackboxTLSCertExpiringSoon{Warning,Critical} alerts.
     metrics_path: /probe
     params:
       module: [tcp_tls]

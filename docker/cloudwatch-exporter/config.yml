@@ -199,29 +199,25 @@ metrics:
     aws_extended_statistics: [p95]
 
   # ── ACM ───────────────────────────────────────────────────────
-  # ACM publishes DaysToExpiry once per day (timestamp tied to each
-  # cert's issuance time of day). The global range_seconds: 600 catches
-  # that emission ~0.7% of the time, so the Prometheus series is sparse
-  # to non-existent. Override to a 48h window scraped daily so the
-  # exporter always picks up yesterday's value.
+  # No AWS/CertificateManager rule here. We tried with and without
+  # aws_tag_select, with the global range_seconds and with per-rule
+  # range_seconds: 172800 + period_seconds: 86400 to defeat the
+  # exporter's recently_active=PT3H discovery filter, and the rule
+  # silently produced zero metrics regardless (confirmed via Grafana
+  # Explore: count({__name__=~".*certificatemanager.*"}) returned no
+  # data). The underlying CloudWatch GetMetricStatistics call works
+  # fine when made directly via the AWS CLI with the same parameters,
+  # so the bug is in v0.16.0's per-rule override handling for
+  # infrequently-emitted metrics; worth filing upstream.
   #
-  # Note on the missing friendly label: an earlier revision added
-  # aws_tag_select here to pick up each cert's Name tag and expose it as
-  # `tag_Name`, replacing the unwieldy `certificate_arn` ARN. With
-  # cloudwatch_exporter v0.16.0 that combination silently produced zero
-  # metrics (the tag:GetResources call returned the cert correctly,
-  # CloudTrail confirmed the call, but the metric never reached
-  # Prometheus - the tag-select filter chain rejected it without an
-  # error). Reverted to plain dimension labels; the dashboard panel and
-  # CertExpiringSoon* alert summaries interpolate {{certificate_arn}}.
-  # Upstream issue worth opening for the tag-select + per-metric-override
-  # interaction; until then, ugly-but-working beats friendly-but-blank.
-  - aws_namespace: AWS/CertificateManager
-    aws_metric_name: DaysToExpiry
-    aws_dimensions: [CertificateArn]
-    aws_statistics: [Minimum]
-    period_seconds: 86400
-    range_seconds: 172800
+  # Operational workaround: the same cert-expiry signal is captured
+  # by the blackbox-tls job (probe_ssl_earliest_cert_expiry) on the
+  # live TLS endpoints serving each cert - the ACM cert at
+  # imap.<control_domain>:993, the Let's Encrypt cert at
+  # smtp-out.<control_domain>:465. Mail Tiers dashboard hosts both
+  # stat tiles; the BlackboxTLSCertExpiringSoon{Warning,Critical}
+  # alerts cover both endpoints. No CloudWatch-side cert metric is
+  # needed.
 
   # ── CloudFront (us-east-1 only) ───────────────────────────────
   # CloudFront metrics live exclusively in us-east-1. cloudwatch_exporter

@@ -128,28 +128,6 @@
         "x": 0,
         "y": 16
       }
-    },
-    {
-      "id": 6,
-      "type": "stat",
-      "title": "ACM days to expiry (min)",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "min by (certificate_arn) (aws_certificatemanager_days_to_expiry_minimum)",
-          "refId": "A",
-          "legendFormat": "{{certificate_arn}}"
-        }
-      ],
-      "gridPos": {
-        "h": 4,
-        "w": 24,
-        "x": 0,
-        "y": 24
-      }
     }
   ]
 }
