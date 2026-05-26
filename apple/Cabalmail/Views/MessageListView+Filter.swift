@@ -62,6 +62,12 @@ extension MessageListView {
                 .accessibilityLabel("\(filter.label), \(count(filter, in: model.envelopes))")
             }
             Spacer()
+            // Right-side controls live with the filter tabs so list-
+            // shaping actions sit one row above the list rather than at
+            // the far edge of the window toolbar.
+            filterButton
+            sortMenu
+            selectButton
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
