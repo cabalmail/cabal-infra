@@ -51,15 +51,13 @@ struct MessageListView: View {
         }
         .navigationTitle(folder.name)
         .toolbar {
-            ToolbarItem {
-                filterButton
-            }
-            ToolbarItem {
-                sortMenu
-            }
-            ToolbarItem {
-                selectButton
-            }
+            // Compose stays as a toolbar item — it's a primary action
+            // pinned to the top edge in every Mac mail client. The list-
+            // shaping controls (filter / sort / select) moved into an
+            // inline action bar above the list (see `topInset` below);
+            // on wide screens the right-edge toolbar placement put them
+            // visually farther from the list they affect than the
+            // filter tabs that sat one row higher.
             ToolbarItem {
                 Button {
                     presentCompose(seed: ReplyBuilder.newDraft())

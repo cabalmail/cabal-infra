@@ -28,26 +28,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exposes Copy and Share .eml actions and is selectable for direct
   copy/paste of individual headers. A separate "View headers" item
   opens the same sheet pre-set to the Headers tab.
-- Sort selection on the Apple message list. A new toolbar menu
-  picks the sort field (Date Received, Date Sent, From, Subject)
-  and toggles direction; the chosen sort is sent to the Lambda's
-  IMAP SORT call so the top page actually contains the items that
-  belong at the top. Default stays REVERSE ARRIVAL (newest first).
-  Pagination beyond the top page works best on the default sort;
-  other sorts retain the visible top page and integrate older
-  messages into the sort as they load.
+- Sort selection on the Apple message list. A menu in the inline
+  action bar above the list picks the sort field (Date Received,
+  Date Sent, From, Subject) and toggles direction; the chosen
+  sort is sent to the Lambda's IMAP SORT call so the top page
+  actually contains the items that belong at the top. Default
+  stays REVERSE ARRIVAL (newest first). Pagination beyond the top
+  page works best on the default sort; other sorts retain the
+  visible top page and integrate older messages into the sort as
+  they load.
 - Filter tabs (All / Unread / Flagged) above the Apple message
   list. Pure client-side narrowing of the loaded envelopes with
   per-tab counts, mirroring the React webmail's pill row. Resets
   to "All" on folder switch.
 - Multi-select and bulk actions on the Apple message list. A
-  Select toolbar button enters edit mode; rows render a leading
-  checkbox and a bottom action bar appears with Archive, Move…,
-  Mark Read/Unread, and Flag/Unflag. Selection survives sort and
-  filter changes within the same folder. Cross-folder search
-  results group selected UIDs by source mailbox before the wire
-  call so each operation lands in the right folder. Optimistic
-  prune + revert-on-failure matches the per-row flows.
+  Select button in the inline action bar above the list enters
+  edit mode; rows render a leading checkbox and a bottom action
+  bar appears with Archive, Move…, Mark Read/Unread, and Flag /
+  Unflag. Selection survives sort and filter changes within the
+  same folder. Cross-folder search results group selected UIDs
+  by source mailbox before the wire call so each operation lands
+  in the right folder. Optimistic prune + revert-on-failure
+  matches the per-row flows.
 - Sender avatar in the Apple reader header. Shows the sender
   domain's BIMI logo when one is published (fetched through our
   Lambda's `/fetch_bimi`, which resolves the BIMI DNS record and
