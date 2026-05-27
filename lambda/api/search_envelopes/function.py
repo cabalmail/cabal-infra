@@ -95,7 +95,7 @@ def handler(event, _context):
         envelopes = fetch_envelopes_grouped(client, page)
         next_cursor = build_next_cursor(remaining, page)
     finally:
-        client.logout()
+        _safe_logout(client)
 
     return {
         "statusCode": 200,
@@ -456,3 +456,23 @@ def _error(status, message):
         "statusCode": status,
         "body": json.dumps({"Error": message})
     }
+
+
+def _safe_logout(client):
+    '''Closes the IMAP session, tolerating a connection that has already died.
+
+    The IMAP server can drop the TCP session out from under us (idle reap on
+    the NLB after a long search, a Dovecot-side restart, a server-side
+    connection limit). When that happens, `client.logout()` tries to send
+    LOGOUT down a dead socket and `imaplib` raises `IMAP4.abort: socket
+    error: EOF`. Letting that escape from `finally` either turns a successful
+    search into a 502 (when the try body completed) or masks the original
+    exception from the try body (when something else failed first). Neither
+    is helpful, so the cleanup failure is logged and swallowed -- the work
+    the caller asked for has either succeeded or failed independently of
+    whether we say goodbye politely.
+    '''
+    try:
+        client.logout()
+    except Exception as exc: # pylint: disable=broad-except
+        print(f"[search_envelopes] logout failed (connection likely already closed): {exc}")
