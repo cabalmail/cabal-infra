@@ -200,6 +200,14 @@ public final class RichTextEditorController: NSObject {
         await call("focus")
     }
 
+    /// Focuses the editor with the caret positioned at the start of the
+    /// document. Used on reply / reply-all so the cursor lands above the
+    /// seeded separator + attribution + quoted original.
+    public func focusAtStart() async {
+        await waitUntilReady()
+        await call("focusAtStart")
+    }
+
     // MARK: - Conversions (parity with React)
 
     public func markdownToHtml(_ markdown: String) async -> String {

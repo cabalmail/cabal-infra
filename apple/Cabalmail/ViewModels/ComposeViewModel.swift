@@ -179,6 +179,14 @@ final class ComposeViewModel {
         fromAddress = address
     }
 
+    /// On reply / reply-all the user wants the cursor in the body above the
+    /// seeded separator so they can start typing immediately. Forward and
+    /// new-message seeds focus the To field instead. `inReplyTo` is set by
+    /// `ReplyBuilder` only on reply paths, so it's a sufficient signal.
+    var shouldFocusBodyOnAppear: Bool {
+        inReplyTo != nil
+    }
+
     /// Is the form complete enough to enable the Send button?
     var canSend: Bool {
         guard fromAddress != nil, !subject.isEmpty else { return false }

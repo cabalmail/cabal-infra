@@ -302,6 +302,20 @@
     editor.focus();
   }
 
+  // Places the caret at the very beginning of the editor before focusing,
+  // so reply/reply-all opens with the cursor above the seeded separator +
+  // attribution + quoted original block.
+  function focusAtStart() {
+    editor.focus();
+    const selection = window.getSelection();
+    if (!selection) return;
+    const range = document.createRange();
+    range.setStart(editor, 0);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+
   function setPlaceholder(text) {
     if (text) editor.setAttribute('data-placeholder', text);
     else editor.removeAttribute('data-placeholder');
@@ -319,6 +333,7 @@
     activeStates: activeStates,
     exec: exec,
     focus: focus,
+    focusAtStart: focusAtStart,
     setPlaceholder: setPlaceholder
   };
 

@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.44] - Unreleased
 
 ### Changed
+- The Apple compose window's reply / reply-all body seed switches
+  from `> `-prefixed quoting to a Markdown horizontal rule (`---`)
+  above the `On <date>, <sender> wrote:` attribution, with the
+  original content rendered as ordinary paragraphs underneath.
+  Reply / reply-all also opens with the caret positioned at the
+  start of the body (above the separator) so the user can begin
+  typing immediately, while forward and new-message compose focus
+  the To field instead. New `RichTextEditorController.focusAtStart()`
+  + `editor-bridge.js` `focusAtStart` cover the body-focus side.
 - The macOS app gains a manual refresh affordance on the message
   list. An arrow.clockwise toolbar button sits next to Compose and
   routes through the same `requestRefresh()` tick the Mailbox >
@@ -27,6 +36,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   button and pull-to-refresh cover the discovery surface.
 
 ### Fixed
+- The Apple compose window's rich-text body is no longer rendered
+  in a dark, invisible Times serif on dark-mode systems. The
+  WebKit-backed editor's CSS was using `color: -apple-system-label,
+  CanvasText` and `font: -apple-system-body, ...` — both invalid
+  declarations (CSS `color` doesn't take comma fallbacks, and the
+  `font` shorthand requires an explicit size + family), so WebKit
+  silently discarded them and fell back to default Times serif in
+  an inherited dark color. The editor now declares
+  `color: CanvasText` against `color-scheme: light dark` and uses
+  a proper `font-family` + `font-size` pair, so the caret and
+  typed text inherit the system label color in both light and dark
+  appearances. The message HTML still embeds no color information,
+  so the recipient's mail client picks the palette.
 - Clearing a search in the iOS/macOS apps no longer leaves phantom
   rows from other folders behind. Search is cross-folder by default,
   so `runSearch` populated the in-memory envelope list with UIDs from

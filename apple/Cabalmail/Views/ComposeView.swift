@@ -17,10 +17,16 @@ import UniformTypeIdentifiers
 /// address per contact is Cabalmail's core idiom, so the picker never
 /// silently preselects one and Send stays disabled until the user chooses.
 struct ComposeView: View {
+    /// SwiftUI focus targets. The body editor is a WKWebView and isn't part
+    /// of the SwiftUI focus system; we route body focus through
+    /// `RichTextEditorController.focusAtStart()` instead.
+    enum Field: Hashable { case to }
+
     @State var model: ComposeViewModel
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
 
+    @FocusState private var focusedField: Field?
     @State private var showNewAddressSheet = false
     @State private var showDiscardConfirm = false
     #if os(iOS) || os(visionOS)
@@ -41,6 +47,7 @@ struct ComposeView: View {
                 }
                 Section("Recipients") {
                     recipientField("To", text: $model.toText)
+                        .focused($focusedField, equals: .to)
                     recipientField("Cc", text: $model.ccText)
                     recipientField("Bcc", text: $model.bccText)
                 }
@@ -82,6 +89,11 @@ struct ComposeView: View {
             .toolbar { toolbarContent }
             .task {
                 await model.start()
+                if model.shouldFocusBodyOnAppear {
+                    await model.editorController.focusAtStart()
+                } else {
+                    focusedField = .to
+                }
             }
             .onDisappear {
                 model.stop()
