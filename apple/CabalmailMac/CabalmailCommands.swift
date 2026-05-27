@@ -31,6 +31,10 @@ struct CabalmailCommands: Commands {
             // item plus the message-list toolbar's arrow.clockwise
             // button covers the discovery surface without overloading
             // a chord the user expects to mean Reply.
+            //
+            // Both surfaces hit `requestRefresh()` -> `hardReload()`,
+            // not the cheap merge-refresh — the manual paths exist
+            // precisely so the user can escape stale in-memory state.
             Button("Refresh") {
                 appState.requestRefresh()
             }
