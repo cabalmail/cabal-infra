@@ -19,6 +19,7 @@ window so the Apple client keeps working until Phase 5 cuts it over.
 import base64
 import datetime
 import json
+from imapclient.exceptions import IMAPClientError # pylint: disable=import-error
 from helper import ( # pylint: disable=import-error
     ENVELOPE_FETCH_KEYS,
     envelope_dict,
@@ -207,6 +208,12 @@ def search_folders(client, folders, criteria, want_attachment):
     Per-folder cap and merged cap both observe MAX_RESULTS. A single overflowing
     folder marks the query truncated and consumes the remaining budget; the
     walk stops once the budget is exhausted.
+
+    Per-folder SELECT and SEARCH failures are caught and the folder is skipped:
+    a stale LSUB entry (subscription that points at a deleted or renamed folder)
+    or an FTS-enforced SEARCH failure on a single folder should not blow up the
+    whole cross-folder query. The failure is logged so the operator can see
+    which folder fell out and clean up if needed.
     '''
     all_triples = []
     truncated = False
@@ -215,8 +222,12 @@ def search_folders(client, folders, criteria, want_attachment):
         if remaining_cap <= 0:
             truncated = True
             break
-        client.select_folder(folder.replace('/', '.'), readonly=True)
-        uids = list(client.search(criteria, charset='UTF-8'))
+        try:
+            client.select_folder(folder.replace('/', '.'), readonly=True)
+            uids = list(client.search(criteria, charset='UTF-8'))
+        except IMAPClientError as exc:
+            print(f"[search_envelopes] skipping folder {folder!r}: {exc}")
+            continue
         if len(uids) > remaining_cap:
             uids = uids[:remaining_cap]
             truncated = True
