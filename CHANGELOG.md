@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- Apple clients no longer surface a raw `NSURLErrorDomain` dump
+  when an API request races against the user backgrounding the
+  app. `URLSessionHTTPTransport.perform` now holds a
+  `UIApplication.beginBackgroundTask` assertion across each
+  request (iOS/visionOS only), so iOS gives the in-flight call
+  ~30s after backgrounding instead of tearing the connection down
+  immediately. Any `URLError.networkConnectionLost` or
+  `URLError.timedOut` that still escapes is retried once after a
+  short backoff (Apple's documented guidance for `-1005`), and a
+  failure that survives both attempts is normalized into
+  `CabalmailError.network(localizedDescription)` so toasts read
+  cleanly ("The network connection was lost.") instead of dumping
+  the full Foundation error description into the UI. Most
+  commonly observed when tapping Archive in the iOS Mail view and
+  immediately backgrounding the app — the `/move_messages` POST
+  now completes in the background or surfaces a readable error if
+  it doesn't.
+
 ## [0.9.43] - 2026-05-26
 
 ### Changed
