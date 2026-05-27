@@ -22,16 +22,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Compose and routes through the same `requestRefresh()` tick the
   Mailbox > Refresh menu item uses; both land on a new
   `hardReload()` path that wipes the in-memory envelope list before
-  refetching from the server, so the user has a reliable way out of
-  any stale-state bug the cheap merge-refresh doesn't catch. The
-  button shows a ProgressView while the reload is in flight. iOS /
-  iPadOS / visionOS keep pull-to-refresh as the only reload
-  gesture, still bound to the cheap merge-refresh — the platform
-  expectation there is the swipe, not a toolbar button, and a hard
-  wipe on every accidental pull would burn the cache repeatedly.
-  The IDLE watcher and the 60-second wall-clock fallback also
-  remain on the merge path; they fire too often to discard cached
-  envelopes on every tick.
+  refetching from the server AND invalidating the folder's on-disk
+  envelope snapshot, so the user has a reliable way out of any
+  stale-state bug the cheap merge-refresh doesn't catch
+  (`replace(... keepingRange:)` only prunes UIDs inside the refresh
+  window — UIDs outside it are kept as "older pages," which means
+  any UID that ever leaked into the cache from another folder
+  would otherwise stick around forever). The button shows a
+  ProgressView while the reload is in flight. iOS / iPadOS /
+  visionOS keep pull-to-refresh as the only reload gesture, still
+  bound to the cheap merge-refresh — the platform expectation
+  there is the swipe, not a toolbar button, and a hard wipe on
+  every accidental pull would burn the cache repeatedly. The IDLE
+  watcher and the 60-second wall-clock fallback also remain on the
+  merge path; they fire too often to discard cached envelopes on
+  every tick.
 - Cmd+R in the macOS app is now Reply, and Cmd+Shift+R is Reply
   All. Cmd+R previously routed both to the detail view's Reply
   button and to Mailbox > Refresh, which made dispatch dependent on
@@ -97,6 +102,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   immediately backgrounding the app — the `/move_messages` POST
   now completes in the background or surfaces a readable error if
   it doesn't.
+- Scroll-pagination is now a no-op while a search is active.
+  `loadMoreIfNeeded` previously fired whenever the user scrolled the
+  search result list to its bottom edge, which had two bad effects:
+  it fetched older UIDs from the sidebar-selected folder (so a chunk
+  of unrelated inbox messages would tack onto the bottom of the
+  search results), and the post-fetch `persistCache` call wrote ALL
+  of the in-memory `envelopes` into that folder's on-disk snapshot
+  via `EnvelopeCache.merge`, which has no UID-range filter. Foreign
+  UIDs from the search would land in the inbox cache and re-hydrate
+  as phantom rows on the next launch — surviving every subsequent
+  refresh because the regular pruning only catches UIDs inside the
+  current refresh window. The guard plus the new `hardReload()`
+  cache invalidate close the persistence path and recover users
+  whose cache is already poisoned.
 
 ## [0.9.43] - 2026-05-26
 
