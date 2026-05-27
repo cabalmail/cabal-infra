@@ -22,26 +22,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   window's first responder on macOS before bouncing into the JS
   bridge — without that, AppKit's first-responder slot stayed with
   the SwiftUI Form's first text field and keystrokes went there.
-- The macOS app gains a manual force-reload affordance on the
-  message list. An arrow.clockwise toolbar button sits next to
-  Compose and routes through the same `requestRefresh()` tick the
-  Mailbox > Refresh menu item uses; both land on a new
-  `hardReload()` path that wipes the in-memory envelope list before
-  refetching from the server AND invalidating the folder's on-disk
-  envelope snapshot, so the user has a reliable way out of any
-  stale-state bug the cheap merge-refresh doesn't catch
-  (`replace(... keepingRange:)` only prunes UIDs inside the refresh
-  window — UIDs outside it are kept as "older pages," which means
-  any UID that ever leaked into the cache from another folder
-  would otherwise stick around forever). The button shows a
-  ProgressView while the reload is in flight. iOS / iPadOS /
-  visionOS keep pull-to-refresh as the only reload gesture, still
-  bound to the cheap merge-refresh — the platform expectation
-  there is the swipe, not a toolbar button, and a hard wipe on
-  every accidental pull would burn the cache repeatedly. The IDLE
-  watcher and the 60-second wall-clock fallback also remain on the
-  merge path; they fire too often to discard cached envelopes on
-  every tick.
+  Routing key is a new `ComposeIntent` field on `Draft` set
+  explicitly by `ReplyBuilder`: the previous `inReplyTo != nil`
+  heuristic looked sound but was always false on the Apple client's
+  API-backed IMAP path (`ApiBackedImapClient.makeEnvelope` hardcodes
+  `messageId: nil` because the Lambda doesn't surface it), so every
+  reply was silently treated like a forward / new compose.
+- The macOS app gains a manual refresh affordance on the message
+  list. An arrow.clockwise toolbar button sits next to Compose and
+  routes through the same `requestRefresh()` tick the Mailbox >
+  Refresh menu item uses, so the IDLE watcher, the 60-second timer,
+  the menu item, and the new button all converge on one code path.
+  The button shows a ProgressView while a refresh is in flight.
+  iOS / iPadOS / visionOS keep pull-to-refresh as the only reload
+  gesture; the platform expectation there is the swipe, not a
+  toolbar button.
 - Cmd+R in the macOS app is now Reply, and Cmd+Shift+R is Reply
   All. Cmd+R previously routed both to the detail view's Reply
   button and to Mailbox > Refresh, which made dispatch dependent on
