@@ -58,6 +58,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   no longer occasionally opens behind the main mail window.
 
 ### Fixed
+- "Save Draft" in the Apple compose window now writes the message
+  to the user's IMAP `Drafts` folder, not just a hidden on-disk
+  JSON cache. The Cancel button's "Save Draft" confirmation
+  previously only flushed the local `DraftStore` autosave (Phase 5
+  scope), so the draft was never visible on another device or in
+  the Drafts pane in the same session. The `/send` Lambda now
+  honors the `draft` flag that the React and Apple clients have
+  been passing for some time: when true, it APPENDs the composed
+  message to `Drafts` (creating the folder if missing) with the
+  `\Draft` flag and skips SMTP / Outbox / Sent entirely. The
+  compose view model calls this through a new
+  `CabalmailClient.saveDraft(_:)` whenever the user confirms Save
+  Draft, removing the local draft entry on success and keeping the
+  window open with an error banner on failure so the user can
+  retry instead of losing the buffer silently.
+- The macOS compose window's red close button (and Cmd+W) no
+  longer bypass the "Discard draft?" confirmation. The toolbar
+  Cancel button has always routed through the dialog, but clicking
+  the standard close button dismissed the window directly — taking
+  the buffer with it on the way out. A small `NSWindowDelegate`
+  installed via an `NSViewRepresentable` background now intercepts
+  `windowShouldClose`, presents the same dialog as Cancel, and only
+  allows the close once the user has picked Save Draft or Discard
+  (or the Send button has succeeded). iOS / iPadOS / visionOS keep
+  their existing sheet-dismiss behavior; only the macOS window
+  scene needs the hook.
 - The macOS app's Compose and Reload toolbar buttons no longer
   drift to the trailing edge (above the empty reading pane) when
   no message is selected. `NavigationSplitView`'s unified toolbar

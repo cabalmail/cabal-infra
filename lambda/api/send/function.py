@@ -57,6 +57,16 @@ def handler(event, _context):
 
     client = get_imap_client(body['host'], user, 'INBOX')
 
+    if body.get('draft'):
+        append_drafts(msg, client)
+        client.logout()
+        return {
+            "statusCode": 200,
+            "body": json.dumps({
+                "status": "saved"
+            })
+        }
+
     msg_id = append_outbox(msg, client)
 
     return_from_send = send(msg, body['smtp_host'])
@@ -176,6 +186,17 @@ def append_outbox(msg, client):
     client.select_folder('Outbox')
     client.add_flags([msg_id], [rb"\Seen"], True)
     return msg_id
+
+def append_drafts(msg, client):
+    """Appends an email message to the user's Drafts folder with the
+    \\Draft flag set. Creates the folder if it does not exist. Mirrors
+    append_outbox's create-then-append shape so a missing Drafts folder
+    on a fresh mailbox does not fail the call."""
+    try:
+        client.create_folder('Drafts')
+    except: # pylint: disable=bare-except
+        pass
+    client.append('Drafts', msg.as_string().encode(), flags=[rb"\Draft", rb"\Seen"])
 
 def send(msg, smtp_host):
     """Send the message"""

@@ -254,28 +254,14 @@ final class ComposeViewModel {
     }
 
     func send() async -> Bool {
-        guard canSend, let fromAddress else { return false }
+        guard canSend, let fromEmail = currentFromEmail() else {
+            if fromAddress != nil { errorMessage = "Invalid From address." }
+            return false
+        }
         isSending = true
         defer { isSending = false }
         do {
-            guard let fromEmail = EmailAddress(parsing: fromAddress) else {
-                errorMessage = "Invalid From address."
-                return false
-            }
-
-            let bodies = await computeMessageBodies()
-            let message = OutgoingMessage(
-                from: fromEmail,
-                to: parseRecipients(toText),
-                cc: parseRecipients(ccText),
-                bcc: parseRecipients(bccText),
-                subject: subject,
-                textBody: bodies.text,
-                htmlBody: bodies.html,
-                inReplyTo: inReplyTo,
-                references: references,
-                attachments: attachments.map(\.asKitAttachment)
-            )
+            let message = await buildOutgoingMessage(from: fromEmail)
             let outcome = try await client.send(message)
             lastSendOutcome = outcome
             // Whether the message left the device or got queued, the draft
@@ -292,12 +278,54 @@ final class ComposeViewModel {
         return false
     }
 
-    /// Cancel button — flushes one last autosave (so the draft survives
-    /// re-open) and dismisses. Empty drafts are removed by `DraftStore.save`.
-    func cancel() async {
+    /// Cancel button (or the macOS close-button intercept) — flushes one
+    /// last autosave, pushes the draft to IMAP `Drafts` so it shows up on
+    /// every device, and dismisses. Returns true when the window can close;
+    /// false when the IMAP push surfaced a hard error and the user should
+    /// see the banner before the window goes away.
+    ///
+    /// Empty drafts and drafts without a valid `From` address fall back to
+    /// the local-only autosave: empty composes leave nothing behind, and a
+    /// half-finished compose without a sender selected can't APPEND to a
+    /// remote mailbox (no envelope to authorize against). `DraftStore.save`
+    /// silently removes empty drafts so a user who opens Compose and closes
+    /// immediately leaves no breadcrumb.
+    @discardableResult
+    func cancel() async -> Bool {
         await persistCurrentDraft()
-        stop()
-        onClose()
+        guard let fromEmail = currentFromEmail() else {
+            stop()
+            onClose()
+            return true
+        }
+        let message = await buildOutgoingMessage(from: fromEmail)
+        // Empty body + empty subject + empty recipients means there's
+        // nothing worth APPENDing — leave Drafts alone and dismiss.
+        let hasAnything = !subject.isEmpty
+            || !(message.textBody?.isEmpty ?? true)
+            || !(message.htmlBody?.isEmpty ?? true)
+            || !message.to.isEmpty
+            || !message.cc.isEmpty
+            || !message.bcc.isEmpty
+            || !message.attachments.isEmpty
+        guard hasAnything else {
+            try? await draftStore.remove(id: draftId)
+            stop()
+            onClose()
+            return true
+        }
+        do {
+            try await client.saveDraft(message)
+            try? await draftStore.remove(id: draftId)
+            stop()
+            onClose()
+            return true
+        } catch let error as CabalmailError {
+            errorMessage = "Couldn't save draft: \(describe(error))"
+        } catch {
+            errorMessage = "Couldn't save draft: \(error.localizedDescription)"
+        }
+        return false
     }
 
     /// Delete the draft entirely (user confirmed "Discard draft") and
@@ -329,6 +357,33 @@ final class ComposeViewModel {
     }
 
     // MARK: - Internals
+
+    /// Resolves the current `fromAddress` string into a parsed
+    /// `EmailAddress`, or nil when nothing is selected / the value isn't
+    /// parseable. Used by both the send and save-draft paths.
+    private func currentFromEmail() -> EmailAddress? {
+        guard let fromAddress else { return nil }
+        return EmailAddress(parsing: fromAddress)
+    }
+
+    /// Assembles the `OutgoingMessage` from the current compose state.
+    /// Shared by `send()` and `cancel()` (Save Draft) so both flows ship
+    /// an identical message to `/send`.
+    private func buildOutgoingMessage(from: EmailAddress) async -> OutgoingMessage {
+        let bodies = await computeMessageBodies()
+        return OutgoingMessage(
+            from: from,
+            to: parseRecipients(toText),
+            cc: parseRecipients(ccText),
+            bcc: parseRecipients(bccText),
+            subject: subject,
+            textBody: bodies.text,
+            htmlBody: bodies.html,
+            inReplyTo: inReplyTo,
+            references: references,
+            attachments: attachments.map(\.asKitAttachment)
+        )
+    }
 
     /// Resolves the (text, html) MIME-part bodies using the same four-way
     /// table the React composer applies. The mirror flag treats a rich

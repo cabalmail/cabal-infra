@@ -294,6 +294,42 @@ public actor CabalmailClient {
         return .sent
     }
 
+    /// Pushes the current compose buffer to the user's IMAP `Drafts` folder
+    /// via the `/send` Lambda's `draft=true` branch. The Lambda APPENDs the
+    /// composed message with the `\Draft` flag and skips SMTP / Outbox /
+    /// Sent entirely, so a saved draft surfaces on every device that lists
+    /// `Drafts`.
+    ///
+    /// Errors propagate to the caller — the compose UI surfaces them as a
+    /// banner rather than silently retrying, because losing draft text to a
+    /// transient blip without telling the user is worse than asking them to
+    /// retry. Local `DraftStore` autosave continues to feed the on-disk
+    /// JSON copy so the draft survives a crash between Save Draft presses.
+    public func saveDraft(_ message: OutgoingMessage) async throws {
+        let messageID = message.messageId ?? "<\(UUID().uuidString)@\(message.from.host)>"
+        let stamped = OutgoingMessage(
+            from: message.from,
+            to: message.to,
+            cc: message.cc,
+            bcc: message.bcc,
+            subject: message.subject,
+            textBody: message.textBody,
+            htmlBody: message.htmlBody,
+            inReplyTo: message.inReplyTo,
+            references: message.references,
+            attachments: message.attachments,
+            extraHeaders: message.extraHeaders,
+            messageId: messageID
+        )
+        try await Self.submit(
+            stamped,
+            api: apiClient,
+            imapHost: configuration.imapHost,
+            smtpHost: configuration.smtpHost,
+            draft: true
+        )
+    }
+
     /// Activate or deactivate MetricKit diagnostic collection. The Settings
     /// toggle bridges its `Preferences.crashReportingEnabled` value into
     /// this method so a user opt-in immediately starts receiving crash and
@@ -320,7 +356,8 @@ extension CabalmailClient {
         _ message: OutgoingMessage,
         api: ApiClient,
         imapHost: String,
-        smtpHost: String
+        smtpHost: String,
+        draft: Bool = false
     ) async throws {
         let headers = ApiSendOtherHeaders(
             messageId: message.messageId.map { [$0] } ?? [],
@@ -357,7 +394,7 @@ extension CabalmailClient {
             otherHeaders: headers,
             htmlBody: message.htmlBody ?? "",
             textBody: message.textBody ?? "",
-            draft: false,
+            draft: draft,
             attachments: wireAttachments
         ))
     }

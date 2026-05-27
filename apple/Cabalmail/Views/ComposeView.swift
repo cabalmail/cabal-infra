@@ -34,6 +34,13 @@ struct ComposeView: View {
     @State private var photoSelection: [PhotosPickerItem] = []
     #endif
     @State private var showFileImporter = false
+    #if os(macOS)
+    /// Intercepts the macOS window's red close button (and Cmd+W) so it
+    /// routes through the same "Discard draft?" dialog as the toolbar
+    /// Cancel button. iOS / visionOS / iPadOS dismiss via the modal sheet
+    /// or scene close gesture and don't need this hook.
+    @State private var closeCoordinator = ComposeWindowCloseCoordinator()
+    #endif
 
     var body: some View {
         @Bindable var model = model
@@ -89,6 +96,16 @@ struct ComposeView: View {
             .toolbar { toolbarContent }
             .task {
                 await model.start()
+                #if os(macOS)
+                // Capture the projected Binding so the closure can flip
+                // dialog state from outside the view body. @State storage
+                // outlives the View struct, so the binding stays valid
+                // even when SwiftUI re-renders.
+                let dialogBinding = $showDiscardConfirm
+                closeCoordinator.onCloseAttempt = {
+                    dialogBinding.wrappedValue = true
+                }
+                #endif
                 if model.shouldFocusBodyOnAppear {
                     // Clear the SwiftUI focus binding so the Form can't
                     // keep the To field as its first responder behind the
@@ -101,6 +118,13 @@ struct ComposeView: View {
                     focusedField = .to
                 }
             }
+            #if os(macOS)
+            .background {
+                ComposeWindowCloseInterceptor(coordinator: closeCoordinator)
+                    .frame(width: 0, height: 0)
+                    .accessibilityHidden(true)
+            }
+            #endif
             .onDisappear {
                 model.stop()
             }
@@ -136,10 +160,30 @@ struct ComposeView: View {
                 isPresented: $showDiscardConfirm
             ) {
                 Button("Discard Draft", role: .destructive) {
-                    Task { await model.discard() }
+                    Task {
+                        #if os(macOS)
+                        // Pre-approve the close so the dismissWindow call
+                        // inside discard() doesn't get re-intercepted by
+                        // the NSWindowDelegate.
+                        closeCoordinator.allowsClose = true
+                        #endif
+                        await model.discard()
+                    }
                 }
                 Button("Save Draft", role: .cancel) {
-                    Task { await model.cancel() }
+                    Task {
+                        #if os(macOS)
+                        closeCoordinator.allowsClose = true
+                        #endif
+                        let didClose = await model.cancel()
+                        #if os(macOS)
+                        // IMAP save failed: keep the user in the window so
+                        // they can see the error banner and retry.
+                        if !didClose {
+                            closeCoordinator.allowsClose = false
+                        }
+                        #endif
+                    }
                 }
             } message: {
                 Text("Keep a copy of the draft for later, or discard it now.")
@@ -198,7 +242,16 @@ struct ComposeView: View {
         ToolbarItem(placement: .confirmationAction) {
             Button {
                 Task {
+                    #if os(macOS)
+                    // Send dismisses the window on success; pre-approve so
+                    // the close-button intercept doesn't pop the dialog
+                    // in front of a message the user already committed.
+                    closeCoordinator.allowsClose = true
+                    #endif
                     let sent = await model.send()
+                    #if os(macOS)
+                    if !sent { closeCoordinator.allowsClose = false }
+                    #endif
                     guard sent else { return }
                     // Surface the outcome as a toast on the shared AppState
                     // so the user sees confirmation after the sheet dismisses.
