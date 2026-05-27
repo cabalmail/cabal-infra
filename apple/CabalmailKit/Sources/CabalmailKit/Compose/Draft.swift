@@ -1,5 +1,19 @@
 import Foundation
 
+/// Why a compose session was opened. Carried explicitly on the seed
+/// `Draft` so the compose view can route initial focus + reply-style
+/// HTML scaffolding without depending on envelope-derived signals like
+/// `inReplyTo` — the Apple client's API-backed IMAP path doesn't
+/// surface Message-ID, so `inReplyTo` is always nil even for genuine
+/// reply seeds, and the previous heuristic silently treated every
+/// reply as if it were a new compose.
+public enum ComposeIntent: String, Sendable, Codable, Hashable {
+    case new
+    case reply
+    case replyAll
+    case forward
+}
+
 /// Locally-persisted compose state.
 ///
 /// Phase 5 keeps drafts local only — `DraftStore` autosaves them under the app
@@ -20,6 +34,9 @@ public struct Draft: Sendable, Codable, Hashable, Identifiable {
     public var body: String
     public var inReplyTo: String?
     public var references: [String]
+    /// Optional so drafts persisted before this field existed still
+    /// decode cleanly; `nil` is treated as `.new` at use sites.
+    public var composeIntent: ComposeIntent?
 
     public init(
         id: UUID = UUID(),
@@ -31,7 +48,8 @@ public struct Draft: Sendable, Codable, Hashable, Identifiable {
         subject: String = "",
         body: String = "",
         inReplyTo: String? = nil,
-        references: [String] = []
+        references: [String] = [],
+        composeIntent: ComposeIntent? = nil
     ) {
         self.id = id
         self.updatedAt = updatedAt
@@ -43,6 +61,7 @@ public struct Draft: Sendable, Codable, Hashable, Identifiable {
         self.body = body
         self.inReplyTo = inReplyTo
         self.references = references
+        self.composeIntent = composeIntent
     }
 
     /// A draft with no recipients, subject, or body is considered empty and

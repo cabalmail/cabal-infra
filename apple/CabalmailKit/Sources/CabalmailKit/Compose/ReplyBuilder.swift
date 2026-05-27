@@ -85,7 +85,8 @@ public enum ReplyBuilder {
             subject: subject,
             body: quoted,
             inReplyTo: threading.inReplyTo,
-            references: threading.references
+            references: threading.references,
+            composeIntent: composeIntent(for: mode)
         )
     }
 
@@ -93,7 +94,15 @@ public enum ReplyBuilder {
     /// no recipients, no subject, no body) so the compose sheet renders its
     /// "Create new address…" flow as the primary affordance.
     public static func newDraft() -> Draft {
-        Draft()
+        Draft(composeIntent: .new)
+    }
+
+    private static func composeIntent(for mode: ReplyMode) -> ComposeIntent {
+        switch mode {
+        case .reply:    return .reply
+        case .replyAll: return .replyAll
+        case .forward:  return .forward
+        }
     }
 
     // MARK: - Subject

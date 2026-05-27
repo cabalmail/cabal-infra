@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   window's first responder on macOS before bouncing into the JS
   bridge — without that, AppKit's first-responder slot stayed with
   the SwiftUI Form's first text field and keystrokes went there.
+  Routing key is a new `ComposeIntent` field on `Draft` set
+  explicitly by `ReplyBuilder`: the previous `inReplyTo != nil`
+  heuristic looked sound but was always false on the Apple client's
+  API-backed IMAP path (`ApiBackedImapClient.makeEnvelope` hardcodes
+  `messageId: nil` because the Lambda doesn't surface it), so every
+  reply was silently treated like a forward / new compose.
 - The macOS app gains a manual refresh affordance on the message
   list. An arrow.clockwise toolbar button sits next to Compose and
   routes through the same `requestRefresh()` tick the Mailbox >

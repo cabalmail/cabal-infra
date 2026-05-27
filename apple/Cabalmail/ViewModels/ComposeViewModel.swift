@@ -74,6 +74,7 @@ final class ComposeViewModel {
     /// forward / new-message seed, never mutated after.
     private let inReplyTo: String?
     private let references: [String]
+    private let composeIntent: ComposeIntent
 
     private var autosaveTask: Task<Void, Never>?
     /// When true, the rich editor and the markdown source are in sync — the
@@ -118,6 +119,7 @@ final class ComposeViewModel {
         self.subject = seed.subject
         self.inReplyTo = seed.inReplyTo
         self.references = seed.references
+        self.composeIntent = seed.composeIntent ?? .new
         // Append the preference signature to the seeded body, but only once.
         // Replies / forwards seed with an attribution + quoted body; the
         // signature goes *above* that block so the user's reply text lands
@@ -179,12 +181,11 @@ final class ComposeViewModel {
         fromAddress = address
     }
 
-    /// On reply / reply-all the user wants the cursor in the body above the
-    /// seeded separator so they can start typing immediately. Forward and
-    /// new-message seeds focus the To field instead. `inReplyTo` is set by
-    /// `ReplyBuilder` only on reply paths, so it's a sufficient signal.
+    /// Reply / reply-all focus the body; forward / new focus the To field.
+    /// Driven by the explicit `composeIntent` because `inReplyTo` is always
+    /// nil on the Apple API-backed IMAP path (no Message-ID surfaced).
     var shouldFocusBodyOnAppear: Bool {
-        inReplyTo != nil
+        composeIntent == .reply || composeIntent == .replyAll
     }
 
     /// Is the form complete enough to enable the Send button?
@@ -241,12 +242,10 @@ final class ComposeViewModel {
         } else {
             html = await editorController.markdownToHtml(markdownBody)
         }
-        // Reply / reply-all seeds start with two blank lines above the
-        // horizontal rule in the Markdown source, but marked collapses
-        // leading whitespace so the rendered HTML sits the `<hr>` flush
-        // against the top of the editor. Prepend two single-`<br>`
-        // paragraphs to recover the visual spacing the user expects
-        // when the rich pane opens for editing.
+        // Reply / reply-all seeds want two blank lines above the `<hr>`
+        // marker; marked collapses leading whitespace, so prepend two
+        // single-`<br>` paragraphs to the rendered HTML to recover the
+        // visual spacing when the rich pane opens for editing.
         let seeded = shouldFocusBodyOnAppear
             ? "<p><br></p><p><br></p>" + html
             : html
