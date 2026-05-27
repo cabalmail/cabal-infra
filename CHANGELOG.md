@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- Raised the Dovecot imap worker's per-process virtual-memory cap
+  from 256MB to 1GB, and the imap container's ECS memory cap from
+  512MB / 384MB reservation to 1024MB / 768MB to match. The 256MB
+  default tripped during routine `/search_envelopes` FETCH workloads
+  on multi-folder mailboxes (the backtrace pointed at
+  `maildir_uidlist_refresh` → `buffer_append` during ENVELOPE +
+  BODYSTRUCTURE fetches); Dovecot's master then killed the child
+  with "error 83 (Out of memory)", the TCP session went away, the
+  Lambda surfaced the abort as a 502. FTS index reads added on top
+  of that workload made the headroom too tight to stay at the
+  default. Headroom on the m6g.medium host is unaffected -- imap
+  goes from 512MB to 1GB in a 4GB box, well within slack.
+
 ## [0.9.42] - 2026-05-26
 
 ### Fixed
