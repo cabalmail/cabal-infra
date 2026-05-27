@@ -73,6 +73,28 @@ struct MessageListView: View {
                 }
                 .keyboardShortcut("n", modifiers: .command)
             }
+            #if os(macOS)
+            // Refresh button mirrors the folder list's arrow.clockwise.
+            // macOS only — iOS / iPadOS / visionOS users reach the same
+            // path via pull-to-refresh, which already covers the gesture
+            // those platforms expect. Routed through `requestRefresh()`
+            // so the toolbar button and the Mailbox > Refresh menu item
+            // share the same code path the IDLE watcher and 60s timer
+            // already exercise.
+            ToolbarItem {
+                Button {
+                    appState.requestRefresh()
+                } label: {
+                    if model?.isLoading == true {
+                        ProgressView()
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .accessibilityLabel("Refresh")
+                    }
+                }
+                .disabled(model == nil || model?.isLoading == true)
+            }
+            #endif
         }
         .sheet(isPresented: $filtersPresented) {
             filtersSheet

@@ -21,7 +21,7 @@ extension MessageDetailView {
             } label: {
                 Label("Reply All", systemImage: "arrowshape.turn.up.left.2")
             }
-            .keyboardShortcut("d", modifiers: [.command, .shift])
+            .keyboardShortcut("r", modifiers: [.command, .shift])
             Button {
                 beginCompose(.forward)
             } label: {

@@ -24,10 +24,16 @@ struct CabalmailCommands: Commands {
             .keyboardShortcut("n", modifiers: .command)
         }
         CommandMenu("Mailbox") {
+            // No keyboard shortcut. Cmd+R is the Reply chord in the
+            // detail view's toolbar (Cmd+Shift+R reaches Reply All);
+            // routing it to the message list as well left the binding
+            // ambiguous and depended on focus to dispatch. The menu
+            // item plus the message-list toolbar's arrow.clockwise
+            // button covers the discovery surface without overloading
+            // a chord the user expects to mean Reply.
             Button("Refresh") {
                 appState.requestRefresh()
             }
-            .keyboardShortcut("r", modifiers: .command)
         }
     }
 }
