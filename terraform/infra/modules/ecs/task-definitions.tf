@@ -29,8 +29,15 @@ resource "aws_ecs_task_definition" "imap" {
     image     = local.tier_image["imap"]
     essential = true
 
-    memoryReservation = 384
-    memory            = 512
+    # Aligned with the Dovecot service-level vsz_limit in
+    # docker/imap/configs/dovecot/20-imap.conf. The hard cap accommodates
+    # one full-size imap worker (1G vsz) plus the supporting processes
+    # (sendmail, procmail, supervisord, fail2ban) and a second concurrent
+    # imap worker peaking. Soft reservation leaves the scheduler room to
+    # pack other containers on the same m6g.medium when the imap tier is
+    # idle.
+    memoryReservation = 768
+    memory            = 1024
 
     portMappings = [
       { containerPort = 143, protocol = "tcp" },
