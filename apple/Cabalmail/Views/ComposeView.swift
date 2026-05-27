@@ -90,6 +90,12 @@ struct ComposeView: View {
             .task {
                 await model.start()
                 if model.shouldFocusBodyOnAppear {
+                    // Clear the SwiftUI focus binding so the Form can't
+                    // keep the To field as its first responder behind the
+                    // WKWebView. focusAtStart then promotes the editor to
+                    // window first responder on macOS and places the caret
+                    // at the start of the body via the JS bridge.
+                    focusedField = nil
                     await model.editorController.focusAtStart()
                 } else {
                     focusedField = .to

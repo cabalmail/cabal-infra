@@ -241,7 +241,16 @@ final class ComposeViewModel {
         } else {
             html = await editorController.markdownToHtml(markdownBody)
         }
-        await editorController.setHTML(html)
+        // Reply / reply-all seeds start with two blank lines above the
+        // horizontal rule in the Markdown source, but marked collapses
+        // leading whitespace so the rendered HTML sits the `<hr>` flush
+        // against the top of the editor. Prepend two single-`<br>`
+        // paragraphs to recover the visual spacing the user expects
+        // when the rich pane opens for editing.
+        let seeded = shouldFocusBodyOnAppear
+            ? "<p><br></p><p><br></p>" + html
+            : html
+        await editorController.setHTML(seeded)
         richMirrorsMarkdown = true
     }
 
