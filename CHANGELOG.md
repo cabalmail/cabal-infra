@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.44] - Unreleased
+
+### Fixed
+- Clearing a search in the iOS/macOS apps no longer leaves phantom
+  rows from other folders behind. Search is cross-folder by default,
+  so `runSearch` populated the in-memory envelope list with UIDs from
+  folders other than the one being viewed (Archive, Sent, etc.).
+  `clearSearch` only reset the search-banner metadata and called
+  `refresh()`; the folder refresh's UID-range based pruning only
+  catches UIDs inside the current folder's `keepingRange`, so foreign
+  UIDs survived the merge and rendered as ghost messages in the
+  Inbox. Tapping one then asked the Lambda to fetch (for example)
+  Inbox UID 957, which returned an empty IMAP result and the
+  `fetch_message` handler 502'd on a `KeyError`. `clearSearch` now
+  wipes `envelopes` / `lowestUID` / `hasMore` before refreshing, the
+  same way `setSort(_:)` does for the same reason.
+
 ## [0.9.43] - 2026-05-26
 
 ### Changed

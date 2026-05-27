@@ -48,6 +48,15 @@ extension MessageListViewModel {
     /// re-runs `refresh()` so the user lands back on the folder view.
     /// Called by the search banner's clear button and by `runSearch()`
     /// when the user submits an empty query with no filters set.
+    ///
+    /// The in-memory envelope list is wiped before refreshing. Search
+    /// is cross-folder by default, so `envelopes` can hold UIDs from
+    /// other folders (e.g. Archive UID 957). `applyRefreshPage`'s
+    /// disappear-detection only prunes UIDs that fall inside the
+    /// current folder's `keepingRange`, so foreign UIDs would otherwise
+    /// survive as phantom rows that 502 on tap (IMAP fetch can't find
+    /// them in this folder, helper.py raises `KeyError`). Same pattern
+    /// as `setSort(_:)`.
     func clearSearch() async {
         searchQuery = ""
         searchFilters = MessageSearchFilters()
@@ -56,6 +65,9 @@ extension MessageListViewModel {
         searchTotalEstimate = 0
         searchTruncated = false
         searchFoldersSearched = []
+        envelopes.removeAll()
+        lowestUID = nil
+        hasMore = true
         await refresh()
     }
 
