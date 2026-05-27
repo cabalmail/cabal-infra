@@ -19,7 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that logs the skip and continues. Stale subscriptions become a
   one-line CloudWatch entry instead of a 502, and a single
   FTS-enforced SEARCH failure on one folder no longer poisons the
-  walk either.
+  walk either. When the SELECT failure clearly signals "the
+  mailbox doesn't exist" — either via the RFC 3501 `TRYCREATE`
+  response code or Dovecot's "Mailbox doesn't exist" prose — the
+  dangling LSUB entry is also unsubscribed in-line so the same
+  orphan stops producing log noise on every future query. Other
+  failure modes are skip-only: a transient EFS hiccup or lock
+  conflict must not silently destroy a legitimate subscription.
 
 ## [0.9.40] - 2026-05-26
 
