@@ -8,6 +8,34 @@ import CabalmailKit
 // (`hydrateFromCache`, `persistCache`) stays in the main file because
 // the cache scope is intentionally narrow.
 extension MessageListViewModel {
+    /// User-initiated "force reload." Wipes the in-memory envelope list
+    /// (plus the cursor state `refresh()` uses to merge older pages),
+    /// then runs `refresh()` to rebuild from scratch. Both the macOS
+    /// `Mailbox > Refresh` menu item and the message-list toolbar's
+    /// arrow.clockwise button route through this path so the user has a
+    /// way to escape stale in-memory state (e.g., a search that
+    /// populated the list with foreign-folder UIDs the regular refresh's
+    /// UID-range pruning can't catch). The IDLE watcher and the 60-
+    /// second wall-clock fallback intentionally keep calling `refresh()`
+    /// directly — they fire often, and the merge path is the cheap
+    /// "fold new mail in" loop the cache is designed around. Hard reload
+    /// stays on the manual paths the user explicitly invokes.
+    ///
+    /// The on-disk envelope + body caches are deliberately preserved.
+    /// UIDVALIDITY drives the cache key, and `refresh()` already
+    /// invalidates everything when the server reports a new UIDVALIDITY
+    /// — so wiping the disk cache here would just slow the next folder
+    /// switch back down for no benefit on the steady-state path. If a
+    /// user genuinely wants a cache wipe the sign-out flow exists for
+    /// that escape hatch.
+    func hardReload() async {
+        envelopes.removeAll()
+        lowestUID = nil
+        hasMore = true
+        sourceFolderByUID = [:]
+        await refresh()
+    }
+
     /// Merges a fresh fetch into the in-memory envelope dictionary and
     /// re-sorts using the active `sortCriterion`. Used by both the top-
     /// page refresh and the older-page paginator — neither needs to know

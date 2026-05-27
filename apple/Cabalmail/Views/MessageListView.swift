@@ -74,13 +74,15 @@ struct MessageListView: View {
                 .keyboardShortcut("n", modifiers: .command)
             }
             #if os(macOS)
-            // Refresh button mirrors the folder list's arrow.clockwise.
-            // macOS only — iOS / iPadOS / visionOS users reach the same
-            // path via pull-to-refresh, which already covers the gesture
-            // those platforms expect. Routed through `requestRefresh()`
-            // so the toolbar button and the Mailbox > Refresh menu item
-            // share the same code path the IDLE watcher and 60s timer
-            // already exercise.
+            // Force-reload button. macOS only — iOS / iPadOS / visionOS
+            // users reach the cheap merge-refresh via pull-to-refresh,
+            // which is the gesture those platforms expect. Routed
+            // through `requestRefresh()` so the toolbar button and the
+            // Mailbox > Refresh menu item share one code path — both
+            // land on `MessageListViewModel.hardReload()`, which wipes
+            // in-memory state before the server fetch so the user has a
+            // reliable escape from any stale-state bug the merge path
+            // doesn't catch.
             ToolbarItem {
                 Button {
                     appState.requestRefresh()
@@ -154,7 +156,14 @@ struct MessageListView: View {
             presentCompose(seed: ReplyBuilder.newDraft())
         }
         .onChange(of: appState.refreshRequestTick) { _, _ in
-            Task { await model?.refresh() }
+            // Manual refresh paths (Mailbox > Refresh menu item, the
+            // arrow.clockwise toolbar button) get hard-reload semantics
+            // — wipe in-memory state before refresh — so the user has a
+            // reliable escape from any stale-state bug the merge path
+            // doesn't catch. The IDLE watcher and the 60s timer keep
+            // hitting `refresh()` directly; they fire too often to be
+            // discarding cached envelopes on every tick.
+            Task { await model?.hardReload() }
         }
         .onChange(of: appState.lastDisposedEnvelope) { _, signal in
             // Detail view archived / trashed the current message. Advance
