@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.9.44] - Unreleased
 
+### Changed
+- The macOS app gains a manual refresh affordance on the message
+  list. An arrow.clockwise toolbar button sits next to Compose and
+  routes through the same `requestRefresh()` tick the Mailbox >
+  Refresh menu item uses, so the IDLE watcher, the 60-second timer,
+  the menu item, and the new button all converge on one code path.
+  The button shows a ProgressView while a refresh is in flight.
+  iOS / iPadOS / visionOS keep pull-to-refresh as the only reload
+  gesture; the platform expectation there is the swipe, not a
+  toolbar button.
+- Cmd+R in the macOS app is now Reply, and Cmd+Shift+R is Reply
+  All. Cmd+R previously routed both to the detail view's Reply
+  button and to Mailbox > Refresh, which made dispatch dependent on
+  the focused scene and gave the user no clean way to type the
+  chord they expected to mean Reply. Reply All moved off the
+  ad-hoc Cmd+Shift+D it was sitting on. Mailbox > Refresh keeps
+  the menu item but loses its keyboard shortcut; the toolbar
+  button and pull-to-refresh cover the discovery surface.
+
 ### Fixed
 - Clearing a search in the iOS/macOS apps no longer leaves phantom
   rows from other folders behind. Search is cross-folder by default,
