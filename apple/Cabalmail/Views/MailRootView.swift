@@ -80,6 +80,16 @@ struct MailRootView: View {
                     systemImage: "envelope",
                     description: Text("Pick a message from the list to read it.")
                 )
+                #if os(macOS)
+                // Reserve the detail column's toolbar slots with disabled
+                // stand-ins so the message-list toolbar (compose, reload)
+                // stays anchored above the list pane. Without these,
+                // NavigationSplitView's unified toolbar packs the list
+                // items at the trailing edge — visually above the empty
+                // detail pane — until a message is picked and the real
+                // detail toolbar shoves them back into place.
+                .toolbar { emptyDetailToolbar }
+                #endif
             }
         }
         // Clearing the envelope selection AND any active address filter when
@@ -92,6 +102,33 @@ struct MailRootView: View {
             crossFolderDetail = nil
         }
     }
+
+    #if os(macOS)
+    // Disabled stand-ins for `MessageDetailView`'s seven top-toolbar
+    // buttons. Icons mirror the default state of each real button so the
+    // empty pane looks like a quiescent reading pane rather than a row
+    // of mystery placeholders. We don't bother reading Preferences for
+    // the dispose icon — `.archive` is the default and a one-frame icon
+    // flip when the real toolbar takes over is cheap.
+    @ToolbarContentBuilder
+    private var emptyDetailToolbar: some ToolbarContent {
+        ToolbarItem { disabledToolbarButton(systemImage: "arrowshape.turn.up.left", label: "Reply") }
+        ToolbarItem { disabledToolbarButton(systemImage: "envelope.badge", label: "Mark as read") }
+        ToolbarItem { disabledToolbarButton(systemImage: "flag", label: "Flag") }
+        ToolbarItem { disabledToolbarButton(systemImage: "eye.slash", label: "Show remote content") }
+        ToolbarItem { disabledToolbarButton(systemImage: "doc.richtext", label: "Show reader view") }
+        ToolbarItem { disabledToolbarButton(systemImage: "archivebox", label: "Archive") }
+        ToolbarItem { disabledToolbarButton(systemImage: "ellipsis.circle", label: "More actions") }
+    }
+
+    private func disabledToolbarButton(systemImage: String, label: String) -> some View {
+        Button {} label: {
+            Image(systemName: systemImage)
+                .accessibilityLabel(label)
+        }
+        .disabled(true)
+    }
+    #endif
 
     @ViewBuilder
     private var sidebar: some View {

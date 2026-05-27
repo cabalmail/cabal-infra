@@ -39,7 +39,7 @@ final class ComposeViewModel {
 
     let client: CabalmailClient
     private(set) var draftId: UUID
-    private let draftStore: DraftStore
+    let draftStore: DraftStore
     private let preferences: Preferences
     private let onClose: @MainActor () -> Void
 
@@ -71,16 +71,18 @@ final class ComposeViewModel {
     var richSelection: RichTextEditorController.Selection = .init()
 
     /// Immutable compose-context bits; only set during init from a reply /
-    /// forward / new-message seed, never mutated after.
-    private let inReplyTo: String?
-    private let references: [String]
+    /// forward / new-message seed, never mutated after. Access defaults to
+    /// `internal` so `ComposeViewModel+Internals.swift` can read them.
+    let inReplyTo: String?
+    let references: [String]
+    private let composeIntent: ComposeIntent
 
     private var autosaveTask: Task<Void, Never>?
     /// When true, the rich editor and the markdown source are in sync — the
     /// user hasn't typed in the rich pane since the last seed/import. The
     /// send logic treats them as "rich is empty" so single-mode markdown
     /// composes don't double-up the text part.
-    private var richMirrorsMarkdown: Bool = true
+    var richMirrorsMarkdown: Bool = true
 
     struct ComposeAttachment: Identifiable, Hashable {
         let id: UUID
@@ -118,6 +120,7 @@ final class ComposeViewModel {
         self.subject = seed.subject
         self.inReplyTo = seed.inReplyTo
         self.references = seed.references
+        self.composeIntent = seed.composeIntent ?? .new
         // Append the preference signature to the seeded body, but only once.
         // Replies / forwards seed with an attribution + quoted body; the
         // signature goes *above* that block so the user's reply text lands
@@ -179,6 +182,13 @@ final class ComposeViewModel {
         fromAddress = address
     }
 
+    /// Reply / reply-all focus the body; forward / new focus the To field.
+    /// Driven by the explicit `composeIntent` because `inReplyTo` is always
+    /// nil on the Apple API-backed IMAP path (no Message-ID surfaced).
+    var shouldFocusBodyOnAppear: Bool {
+        composeIntent == .reply || composeIntent == .replyAll
+    }
+
     /// Is the form complete enough to enable the Send button?
     var canSend: Bool {
         guard fromAddress != nil, !subject.isEmpty else { return false }
@@ -233,33 +243,26 @@ final class ComposeViewModel {
         } else {
             html = await editorController.markdownToHtml(markdownBody)
         }
-        await editorController.setHTML(html)
+        // Reply / reply-all seeds want two blank lines above the `<hr>`
+        // marker; marked collapses leading whitespace, so prepend two
+        // single-`<br>` paragraphs to the rendered HTML to recover the
+        // visual spacing when the rich pane opens for editing.
+        let seeded = shouldFocusBodyOnAppear
+            ? "<p><br></p><p><br></p>" + html
+            : html
+        await editorController.setHTML(seeded)
         richMirrorsMarkdown = true
     }
 
     func send() async -> Bool {
-        guard canSend, let fromAddress else { return false }
+        guard canSend, let fromEmail = currentFromEmail() else {
+            if fromAddress != nil { errorMessage = "Invalid From address." }
+            return false
+        }
         isSending = true
         defer { isSending = false }
         do {
-            guard let fromEmail = EmailAddress(parsing: fromAddress) else {
-                errorMessage = "Invalid From address."
-                return false
-            }
-
-            let bodies = await computeMessageBodies()
-            let message = OutgoingMessage(
-                from: fromEmail,
-                to: parseRecipients(toText),
-                cc: parseRecipients(ccText),
-                bcc: parseRecipients(bccText),
-                subject: subject,
-                textBody: bodies.text,
-                htmlBody: bodies.html,
-                inReplyTo: inReplyTo,
-                references: references,
-                attachments: attachments.map(\.asKitAttachment)
-            )
+            let message = await buildOutgoingMessage(from: fromEmail)
             let outcome = try await client.send(message)
             lastSendOutcome = outcome
             // Whether the message left the device or got queued, the draft
@@ -276,12 +279,54 @@ final class ComposeViewModel {
         return false
     }
 
-    /// Cancel button — flushes one last autosave (so the draft survives
-    /// re-open) and dismisses. Empty drafts are removed by `DraftStore.save`.
-    func cancel() async {
+    /// Cancel button (or the macOS close-button intercept) — flushes one
+    /// last autosave, pushes the draft to IMAP `Drafts` so it shows up on
+    /// every device, and dismisses. Returns true when the window can close;
+    /// false when the IMAP push surfaced a hard error and the user should
+    /// see the banner before the window goes away.
+    ///
+    /// Empty drafts and drafts without a valid `From` address fall back to
+    /// the local-only autosave: empty composes leave nothing behind, and a
+    /// half-finished compose without a sender selected can't APPEND to a
+    /// remote mailbox (no envelope to authorize against). `DraftStore.save`
+    /// silently removes empty drafts so a user who opens Compose and closes
+    /// immediately leaves no breadcrumb.
+    @discardableResult
+    func cancel() async -> Bool {
         await persistCurrentDraft()
-        stop()
-        onClose()
+        guard let fromEmail = currentFromEmail() else {
+            stop()
+            onClose()
+            return true
+        }
+        let message = await buildOutgoingMessage(from: fromEmail)
+        // Empty body + empty subject + empty recipients means there's
+        // nothing worth APPENDing — leave Drafts alone and dismiss.
+        let hasAnything = !subject.isEmpty
+            || !(message.textBody?.isEmpty ?? true)
+            || !(message.htmlBody?.isEmpty ?? true)
+            || !message.to.isEmpty
+            || !message.cc.isEmpty
+            || !message.bcc.isEmpty
+            || !message.attachments.isEmpty
+        guard hasAnything else {
+            try? await draftStore.remove(id: draftId)
+            stop()
+            onClose()
+            return true
+        }
+        do {
+            try await client.saveDraft(message)
+            try? await draftStore.remove(id: draftId)
+            stop()
+            onClose()
+            return true
+        } catch let error as CabalmailError {
+            errorMessage = "Couldn't save draft: \(describe(error))"
+        } catch {
+            errorMessage = "Couldn't save draft: \(error.localizedDescription)"
+        }
+        return false
     }
 
     /// Delete the draft entirely (user confirmed "Discard draft") and
@@ -292,108 +337,7 @@ final class ComposeViewModel {
         onClose()
     }
 
-    // MARK: - Attachments
-
-    /// Add an already-loaded file (raw bytes + mime type) as an attachment.
-    /// Returns the id of the newly-added attachment.
-    @discardableResult
-    func addAttachment(filename: String, mimeType: String, data: Data) -> UUID {
-        let attachment = ComposeAttachment(
-            id: UUID(),
-            filename: filename,
-            mimeType: mimeType,
-            data: data
-        )
-        attachments.append(attachment)
-        return attachment.id
-    }
-
-    func removeAttachment(id: UUID) {
-        attachments.removeAll { $0.id == id }
-    }
-
-    // MARK: - Internals
-
-    /// Resolves the (text, html) MIME-part bodies using the same four-way
-    /// table the React composer applies. The mirror flag treats a rich
-    /// pane that's only ever been seeded from markdown as "empty," so a
-    /// pure-markdown compose doesn't ship the seed HTML as if the user
-    /// had hand-edited it.
-    private func computeMessageBodies() async -> (text: String, html: String) {
-        let richHtml = await editorController.getHTML()
-        let richEmpty = richHtml.isEmpty || richMirrorsMarkdown
-        let mdEmpty = markdownBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-
-        switch (richEmpty, mdEmpty) {
-        case (true, true):
-            return ("", "")
-        case (false, true):
-            let text = await editorController.htmlToMarkdown(richHtml)
-            return (text, richHtml)
-        case (true, false):
-            let raw = await editorController.markdownToHtml(markdownBody)
-            let styled = await editorController.styleParagraphs(raw)
-            return (markdownBody, styled)
-        case (false, false):
-            return (markdownBody, richHtml)
-        }
-    }
-
-    private func persistCurrentDraft() async {
-        let snapshot = Draft(
-            id: draftId,
-            fromAddress: fromAddress,
-            to: parseRecipients(toText).map(formatAddress),
-            cc: parseRecipients(ccText).map(formatAddress),
-            bcc: parseRecipients(bccText).map(formatAddress),
-            subject: subject,
-            body: markdownBody,
-            inReplyTo: inReplyTo,
-            references: references
-        )
-        try? await draftStore.save(snapshot)
-    }
-
-    /// Parses a comma/semicolon-separated list of addresses into
-    /// `EmailAddress` values. Matches the React compose's permissive
-    /// tokenization (comma, semicolon, or space). Invalid tokens are
-    /// dropped silently — the UI flags them separately via `canSend`.
-    private func parseRecipients(_ raw: String) -> [EmailAddress] {
-        let separators: Set<Character> = [",", ";", "\n"]
-        let tokens = raw
-            .split(whereSeparator: { separators.contains($0) })
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
-        return tokens.compactMap(EmailAddress.init(parsing:))
-    }
-
-    private func formatAddress(_ address: EmailAddress) -> String {
-        "\(address.mailbox)@\(address.host)"
-    }
-
-    private func describe(_ error: CabalmailError) -> String {
-        switch error {
-        case .invalidCredentials: return "Send failed: your credentials were rejected."
-        case .network(let detail): return "Network error: \(detail)"
-        case .smtpCommandFailed(_, let detail): return "SMTP error: \(detail)"
-        case .authExpired: return "Your session expired; please sign in again."
-        default: return "Send failed: \(error)"
-        }
-    }
-}
-
-// MARK: - EmailAddress parsing
-
-extension EmailAddress {
-    /// Lenient `user@host` parser. No display-name support; the Phase 5
-    /// compose view only needs the raw address form — display names are a
-    /// Phase 5.1 enhancement alongside contact autocomplete.
-    init?(parsing raw: String) {
-        let trimmed = raw.trimmingCharacters(in: .whitespaces)
-        guard let atIndex = trimmed.firstIndex(of: "@") else { return nil }
-        let mailbox = String(trimmed[..<atIndex])
-        let host = String(trimmed[trimmed.index(after: atIndex)...])
-        guard !mailbox.isEmpty, !host.isEmpty, host.contains(".") else { return nil }
-        self.init(name: nil, mailbox: mailbox, host: host)
-    }
+    // Attachment helpers, recipient parsing, message-body assembly, and
+    // error rendering live in `ComposeViewModel+Internals.swift` to keep
+    // this type body under the SwiftLint length ceiling.
 }

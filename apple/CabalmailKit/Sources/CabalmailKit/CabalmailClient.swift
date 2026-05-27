@@ -294,6 +294,42 @@ public actor CabalmailClient {
         return .sent
     }
 
+    /// Pushes the current compose buffer to the user's IMAP `Drafts` folder
+    /// via the `/send` Lambda's `draft=true` branch. The Lambda APPENDs the
+    /// composed message with the `\Draft` flag and skips SMTP / Outbox /
+    /// Sent entirely, so a saved draft surfaces on every device that lists
+    /// `Drafts`.
+    ///
+    /// Errors propagate to the caller — the compose UI surfaces them as a
+    /// banner rather than silently retrying, because losing draft text to a
+    /// transient blip without telling the user is worse than asking them to
+    /// retry. Local `DraftStore` autosave continues to feed the on-disk
+    /// JSON copy so the draft survives a crash between Save Draft presses.
+    public func saveDraft(_ message: OutgoingMessage) async throws {
+        let messageID = message.messageId ?? "<\(UUID().uuidString)@\(message.from.host)>"
+        let stamped = OutgoingMessage(
+            from: message.from,
+            to: message.to,
+            cc: message.cc,
+            bcc: message.bcc,
+            subject: message.subject,
+            textBody: message.textBody,
+            htmlBody: message.htmlBody,
+            inReplyTo: message.inReplyTo,
+            references: message.references,
+            attachments: message.attachments,
+            extraHeaders: message.extraHeaders,
+            messageId: messageID
+        )
+        try await Self.submit(
+            stamped,
+            api: apiClient,
+            imapHost: configuration.imapHost,
+            smtpHost: configuration.smtpHost,
+            draft: true
+        )
+    }
+
     /// Activate or deactivate MetricKit diagnostic collection. The Settings
     /// toggle bridges its `Preferences.crashReportingEnabled` value into
     /// this method so a user opt-in immediately starts receiving crash and
@@ -308,80 +344,6 @@ public actor CabalmailClient {
     }
 }
 
-extension CabalmailClient {
-    /// Shared `/send` invocation used by both the foreground send path
-    /// and `SendQueue`'s retry closure. Lives on the type so the queue
-    /// closure doesn't capture `self`.
-    ///
-    /// Attachments are staged to S3 via `/upload_url` first so the
-    /// /send request itself stays well under API Gateway's 10 MB
-    /// proxy-request ceiling.
-    static func submit(
-        _ message: OutgoingMessage,
-        api: ApiClient,
-        imapHost: String,
-        smtpHost: String
-    ) async throws {
-        let headers = ApiSendOtherHeaders(
-            messageId: message.messageId.map { [$0] } ?? [],
-            inReplyTo: message.inReplyTo.map { [$0] } ?? [],
-            references: message.references
-        )
-        var wireAttachments: [ApiSendAttachment] = []
-        if !message.attachments.isEmpty {
-            let slots = message.attachments.map {
-                AttachmentUploadSlot(filename: $0.filename, mimeType: $0.mimeType)
-            }
-            let uploads = try await api.requestAttachmentUploads(host: imapHost, files: slots)
-            for (attachment, upload) in zip(message.attachments, uploads) {
-                try await api.uploadAttachment(
-                    url: upload.url,
-                    mimeType: attachment.mimeType,
-                    data: attachment.data
-                )
-                wireAttachments.append(ApiSendAttachment(
-                    filename: attachment.filename,
-                    mimeType: attachment.mimeType,
-                    s3Key: upload.key
-                ))
-            }
-        }
-        try await api.sendMessage(SendMessageRequest(
-            host: imapHost,
-            smtpHost: smtpHost,
-            sender: "\(message.from.mailbox)@\(message.from.host)",
-            toList: message.to.map { "\($0.mailbox)@\($0.host)" },
-            ccList: message.cc.map { "\($0.mailbox)@\($0.host)" },
-            bccList: message.bcc.map { "\($0.mailbox)@\($0.host)" },
-            subject: message.subject,
-            otherHeaders: headers,
-            htmlBody: message.htmlBody ?? "",
-            textBody: message.textBody ?? "",
-            draft: false,
-            attachments: wireAttachments
-        ))
-    }
-
-    /// Classifies which SMTP failures should fall through to the outbox.
-    ///
-    /// `network` / `transport` / `timeout` / `cancelled` are transient —
-    /// retrying when the connection returns has a real chance of
-    /// succeeding. `invalidCredentials`, `smtpCommandFailed`, and the rest
-    /// are application-level and surface to the user immediately.
-    fileprivate static func shouldQueue(_ error: CabalmailError) -> Bool {
-        switch error {
-        case .network, .transport, .timeout, .cancelled:
-            return true
-        default:
-            return false
-        }
-    }
-}
-
-/// Outcome of a `CabalmailClient.send(_:)` call. The compose UI branches
-/// on this so an offline send shows "queued — will send when back
-/// online" instead of a generic success toast.
-public enum SendOutcome: Sendable, Equatable {
-    case sent
-    case queued(UUID)
-}
+// `submit(...)` + `shouldQueue(...)` + `SendOutcome` live in
+// `CabalmailClient+Send.swift` to keep this file under the lint
+// `file_length` ceiling.

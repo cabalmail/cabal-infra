@@ -85,7 +85,8 @@ public enum ReplyBuilder {
             subject: subject,
             body: quoted,
             inReplyTo: threading.inReplyTo,
-            references: threading.references
+            references: threading.references,
+            composeIntent: composeIntent(for: mode)
         )
     }
 
@@ -93,7 +94,15 @@ public enum ReplyBuilder {
     /// no recipients, no subject, no body) so the compose sheet renders its
     /// "Create new address…" flow as the primary affordance.
     public static func newDraft() -> Draft {
-        Draft()
+        Draft(composeIntent: .new)
+    }
+
+    private static func composeIntent(for mode: ReplyMode) -> ComposeIntent {
+        switch mode {
+        case .reply:    return .reply
+        case .replyAll: return .replyAll
+        case .forward:  return .forward
+        }
     }
 
     // MARK: - Subject
@@ -161,18 +170,17 @@ public enum ReplyBuilder {
 
     // MARK: - Quoting
 
-    /// Reply-style attribution + prefixed-with-`> ` original body. Matches
-    /// the `On <date>, <sender> wrote:` convention every UNIX mail client
-    /// since at least Elm uses, because downstream mail clients unindent
-    /// quoted blocks by the same marker.
+    /// Reply-style separator + attribution + unquoted original body. The
+    /// seed leads with two blank lines so the cursor lands above the
+    /// horizontal rule, with the original content rendered as ordinary
+    /// paragraphs underneath. Dropping the `> ` prefix matches the way the
+    /// rich editor inherits its surrounding light/dark palette: a separator
+    /// + attribution is enough visual distinction without baking quote
+    /// colors into the HTML the recipient sees.
     private static func replyQuote(body: String?, envelope: Envelope, now: Date) -> String {
         guard let body, !body.isEmpty else { return "" }
         let attribution = attributionLine(envelope: envelope)
-        let quoted = body
-            .split(separator: "\n", omittingEmptySubsequences: false)
-            .map { "> \($0)" }
-            .joined(separator: "\n")
-        return "\n\n\(attribution)\n\(quoted)"
+        return "\n\n---\n\(attribution)\n\n\(body)"
     }
 
     /// Forward wraps the original in a banner block rather than prefix-

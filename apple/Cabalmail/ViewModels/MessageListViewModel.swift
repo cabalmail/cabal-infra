@@ -196,7 +196,20 @@ final class MessageListViewModel {
     }
 
     func loadMoreIfNeeded(currentItem: Envelope) async {
+        // No pagination while a search is active. The displayed envelopes
+        // are cross-folder search results, but this method fetches older
+        // UIDs from `folder.path` (the sidebar selection) — those would
+        // appear as a chunk of unrelated inbox messages tacked onto the
+        // bottom of the search results. Worse, the post-fetch
+        // `persistCache` writes ALL of in-memory `envelopes` into the
+        // current folder's snapshot via `EnvelopeCache.merge`, which has
+        // no UID-range filter; the foreign UIDs from search would land
+        // in the cache and re-hydrate as phantom rows on next launch.
+        // Server-side search pagination is bounded by `searchTruncated`
+        // / `searchTotalEstimate`; refining the query is the right
+        // affordance for "show me more results," not infinite scroll.
         guard hasMore, !isLoadingMore, !isLoading,
+              !isSearchActive,
               pendingDisposeUIDs.isEmpty,
               envelopes.last?.uid == currentItem.uid,
               let lowestUID,

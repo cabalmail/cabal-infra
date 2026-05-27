@@ -13,6 +13,17 @@ final class RichTextEditorControllerTests: XCTestCase {
 
     override func setUp() async throws {
         try await super.setUp()
+        // WKWebView needs an app host to bootstrap editor.html and post the
+        // JS bridge `ready` message. Standalone `xctest` (which `swift test`
+        // uses) has no host, so the load never completes and the suite
+        // hangs. CI runs these via `xcodebuild test` from apple.yml, which
+        // provides a host; detect the standalone runner by its bundle ID
+        // and skip cleanly there.
+        if Bundle.main.bundleIdentifier == "com.apple.dt.xctest.tool" {
+            throw XCTSkip(
+                "RichTextEditorController requires a WKWebView app host (run via `xcodebuild test`, not `swift test`)."
+            )
+        }
         controller = RichTextEditorController()
         await controller.waitUntilReady()
     }

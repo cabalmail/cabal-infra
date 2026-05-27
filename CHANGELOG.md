@@ -5,6 +5,155 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.44] - 2026-05-27
+
+### Changed
+- The Apple compose window's reply / reply-all body seed switches
+  from `> `-prefixed quoting to a Markdown horizontal rule (`---`)
+  above the `On <date>, <sender> wrote:` attribution, with the
+  original content rendered as ordinary paragraphs underneath and
+  two blank lines above the separator (injected as
+  `<p><br></p><p><br></p>` in the rich pane, since marked collapses
+  leading whitespace). Reply / reply-all also opens with the caret
+  positioned at the start of the body (above the separator) so the
+  user can begin typing immediately, while forward and new-message
+  compose focus the To field instead. New
+  `RichTextEditorController.focusAtStart()` makes the WKWebView its
+  window's first responder on macOS before bouncing into the JS
+  bridge — without that, AppKit's first-responder slot stayed with
+  the SwiftUI Form's first text field and keystrokes went there.
+  Routing key is a new `ComposeIntent` field on `Draft` set
+  explicitly by `ReplyBuilder`: the previous `inReplyTo != nil`
+  heuristic looked sound but was always false on the Apple client's
+  API-backed IMAP path (`ApiBackedImapClient.makeEnvelope` hardcodes
+  `messageId: nil` because the Lambda doesn't surface it), so every
+  reply was silently treated like a forward / new compose.
+- The macOS app gains a manual refresh affordance on the message
+  list. An arrow.clockwise toolbar button sits next to Compose and
+  routes through the same `requestRefresh()` tick the Mailbox >
+  Refresh menu item uses, so the IDLE watcher, the 60-second timer,
+  the menu item, and the new button all converge on one code path.
+  The button shows a ProgressView while a refresh is in flight.
+  iOS / iPadOS / visionOS keep pull-to-refresh as the only reload
+  gesture; the platform expectation there is the swipe, not a
+  toolbar button.
+- Cmd+R in the macOS app is now Reply, and Cmd+Shift+R is Reply
+  All. Cmd+R previously routed both to the detail view's Reply
+  button and to Mailbox > Refresh, which made dispatch dependent on
+  the focused scene and gave the user no clean way to type the
+  chord they expected to mean Reply. Reply All moved off the
+  ad-hoc Cmd+Shift+D it was sitting on. Mailbox > Refresh keeps
+  the menu item but loses its keyboard shortcut; the toolbar
+  button and pull-to-refresh cover the discovery surface.
+- Reply / Reply All / Forward now have a proper Message menu in
+  the macOS menu bar that hosts the keyboard shortcuts. The
+  previous binding lived on Buttons inside the detail view's
+  Reply Menu, which AppKit only invokes while the detail scene
+  holds first-responder focus — so the second Cmd+R after a
+  reply was silently swallowed until the user clicked back into
+  the detail pane. `AppState.requestReply/ReplyAll/Forward`
+  bumps a tick the detail view observes; the bindings now fire
+  reliably regardless of which scene was last focused, and the
+  compose window comes to the front via `NSApp.activate` so it
+  no longer occasionally opens behind the main mail window.
+
+### Fixed
+- "Save Draft" in the Apple compose window now writes the message
+  to the user's IMAP `Drafts` folder, not just a hidden on-disk
+  JSON cache. The Cancel button's "Save Draft" confirmation
+  previously only flushed the local `DraftStore` autosave (Phase 5
+  scope), so the draft was never visible on another device or in
+  the Drafts pane in the same session. The `/send` Lambda now
+  honors the `draft` flag that the React and Apple clients have
+  been passing for some time: when true, it APPENDs the composed
+  message to `Drafts` (creating the folder if missing) with the
+  `\Draft` flag and skips SMTP / Outbox / Sent entirely. The
+  compose view model calls this through a new
+  `CabalmailClient.saveDraft(_:)` whenever the user confirms Save
+  Draft, removing the local draft entry on success and keeping the
+  window open with an error banner on failure so the user can
+  retry instead of losing the buffer silently.
+- The macOS compose window's red close button (and Cmd+W) no
+  longer bypass the "Discard draft?" confirmation. The toolbar
+  Cancel button has always routed through the dialog, but clicking
+  the standard close button dismissed the window directly — taking
+  the buffer with it on the way out. A small `NSWindowDelegate`
+  installed via an `NSViewRepresentable` background now intercepts
+  `windowShouldClose`, presents the same dialog as Cancel, and only
+  allows the close once the user has picked Save Draft or Discard
+  (or the Send button has succeeded). iOS / iPadOS / visionOS keep
+  their existing sheet-dismiss behavior; only the macOS window
+  scene needs the hook.
+- The macOS app's Compose and Reload toolbar buttons no longer
+  drift to the trailing edge (above the empty reading pane) when
+  no message is selected. `NavigationSplitView`'s unified toolbar
+  was packing the message-list items against the trailing edge
+  whenever the detail column had no toolbar of its own; once a
+  message was picked, the detail view's seven buttons pushed them
+  back over the list pane where they belonged. The empty detail
+  pane now declares its own placeholder toolbar — seven disabled
+  stand-ins matching the real detail buttons' icons — so the
+  layout is stable across selection state. macOS only; iOS /
+  iPadOS / visionOS route the detail actions to a bottom bar and
+  don't have the same drift.
+- The Apple compose window's rich-text body is no longer rendered
+  in a dark, invisible Times serif on dark-mode systems. The
+  WebKit-backed editor's CSS was using `color: -apple-system-label,
+  CanvasText` and `font: -apple-system-body, ...` — both invalid
+  declarations (CSS `color` doesn't take comma fallbacks, and the
+  `font` shorthand requires an explicit size + family), so WebKit
+  silently discarded them and fell back to default Times serif in
+  an inherited dark color. The editor now declares
+  `color: CanvasText` against `color-scheme: light dark` and uses
+  a proper `font-family` + `font-size` pair, so the caret and
+  typed text inherit the system label color in both light and dark
+  appearances. The message HTML still embeds no color information,
+  so the recipient's mail client picks the palette.
+- Clearing a search in the iOS/macOS apps no longer leaves phantom
+  rows from other folders behind. Search is cross-folder by default,
+  so `runSearch` populated the in-memory envelope list with UIDs from
+  folders other than the one being viewed (Archive, Sent, etc.).
+  `clearSearch` only reset the search-banner metadata and called
+  `refresh()`; the folder refresh's UID-range based pruning only
+  catches UIDs inside the current folder's `keepingRange`, so foreign
+  UIDs survived the merge and rendered as ghost messages in the
+  Inbox. Tapping one then asked the Lambda to fetch (for example)
+  Inbox UID 957, which returned an empty IMAP result and the
+  `fetch_message` handler 502'd on a `KeyError`. `clearSearch` now
+  wipes `envelopes` / `lowestUID` / `hasMore` before refreshing, the
+  same way `setSort(_:)` does for the same reason.
+- Apple clients no longer surface a raw `NSURLErrorDomain` dump
+  when an API request races against the user backgrounding the
+  app. `URLSessionHTTPTransport.perform` now holds a
+  `UIApplication.beginBackgroundTask` assertion across each
+  request (iOS/visionOS only), so iOS gives the in-flight call
+  ~30s after backgrounding instead of tearing the connection down
+  immediately. Any `URLError.networkConnectionLost` or
+  `URLError.timedOut` that still escapes is retried once after a
+  short backoff (Apple's documented guidance for `-1005`), and a
+  failure that survives both attempts is normalized into
+  `CabalmailError.network(localizedDescription)` so toasts read
+  cleanly ("The network connection was lost.") instead of dumping
+  the full Foundation error description into the UI. Most
+  commonly observed when tapping Archive in the iOS Mail view and
+  immediately backgrounding the app — the `/move_messages` POST
+  now completes in the background or surfaces a readable error if
+  it doesn't.
+- Scroll-pagination is now a no-op while a search is active.
+  `loadMoreIfNeeded` previously fired whenever the user scrolled the
+  search result list to its bottom edge, which had two bad effects:
+  it fetched older UIDs from the sidebar-selected folder (so a chunk
+  of unrelated inbox messages would tack onto the bottom of the
+  search results), and the post-fetch `persistCache` call wrote ALL
+  of the in-memory `envelopes` into that folder's on-disk snapshot
+  via `EnvelopeCache.merge`, which has no UID-range filter. Foreign
+  UIDs from the search would land in the inbox cache and re-hydrate
+  as phantom rows on the next launch — surviving every subsequent
+  refresh because the regular pruning only catches UIDs inside the
+  current refresh window. The guard plus the new `hardReload()`
+  cache invalidate close the persistence path and recover users
+  whose cache is already poisoned.
+
 ## [0.9.43] - 2026-05-26
 
 ### Changed

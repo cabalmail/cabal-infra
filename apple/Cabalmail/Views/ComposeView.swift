@@ -17,10 +17,16 @@ import UniformTypeIdentifiers
 /// address per contact is Cabalmail's core idiom, so the picker never
 /// silently preselects one and Send stays disabled until the user chooses.
 struct ComposeView: View {
+    /// SwiftUI focus targets. The body editor is a WKWebView and isn't part
+    /// of the SwiftUI focus system; we route body focus through
+    /// `RichTextEditorController.focusAtStart()` instead.
+    enum Field: Hashable { case to }
+
     @State var model: ComposeViewModel
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
 
+    @FocusState private var focusedField: Field?
     @State private var showNewAddressSheet = false
     @State private var showDiscardConfirm = false
     #if os(iOS) || os(visionOS)
@@ -28,6 +34,13 @@ struct ComposeView: View {
     @State private var photoSelection: [PhotosPickerItem] = []
     #endif
     @State private var showFileImporter = false
+    #if os(macOS)
+    /// Intercepts the macOS window's red close button (and Cmd+W) so it
+    /// routes through the same "Discard draft?" dialog as the toolbar
+    /// Cancel button. iOS / visionOS / iPadOS dismiss via the modal sheet
+    /// or scene close gesture and don't need this hook.
+    @State private var closeCoordinator = ComposeWindowCloseCoordinator()
+    #endif
 
     var body: some View {
         @Bindable var model = model
@@ -41,6 +54,7 @@ struct ComposeView: View {
                 }
                 Section("Recipients") {
                     recipientField("To", text: $model.toText)
+                        .focused($focusedField, equals: .to)
                     recipientField("Cc", text: $model.ccText)
                     recipientField("Bcc", text: $model.bccText)
                 }
@@ -82,7 +96,35 @@ struct ComposeView: View {
             .toolbar { toolbarContent }
             .task {
                 await model.start()
+                #if os(macOS)
+                // Capture the projected Binding so the closure can flip
+                // dialog state from outside the view body. @State storage
+                // outlives the View struct, so the binding stays valid
+                // even when SwiftUI re-renders.
+                let dialogBinding = $showDiscardConfirm
+                closeCoordinator.onCloseAttempt = {
+                    dialogBinding.wrappedValue = true
+                }
+                #endif
+                if model.shouldFocusBodyOnAppear {
+                    // Clear the SwiftUI focus binding so the Form can't
+                    // keep the To field as its first responder behind the
+                    // WKWebView. focusAtStart then promotes the editor to
+                    // window first responder on macOS and places the caret
+                    // at the start of the body via the JS bridge.
+                    focusedField = nil
+                    await model.editorController.focusAtStart()
+                } else {
+                    focusedField = .to
+                }
             }
+            #if os(macOS)
+            .background {
+                ComposeWindowCloseInterceptor(coordinator: closeCoordinator)
+                    .frame(width: 0, height: 0)
+                    .accessibilityHidden(true)
+            }
+            #endif
             .onDisappear {
                 model.stop()
             }
@@ -118,10 +160,30 @@ struct ComposeView: View {
                 isPresented: $showDiscardConfirm
             ) {
                 Button("Discard Draft", role: .destructive) {
-                    Task { await model.discard() }
+                    Task {
+                        #if os(macOS)
+                        // Pre-approve the close so the dismissWindow call
+                        // inside discard() doesn't get re-intercepted by
+                        // the NSWindowDelegate.
+                        closeCoordinator.allowsClose = true
+                        #endif
+                        await model.discard()
+                    }
                 }
                 Button("Save Draft", role: .cancel) {
-                    Task { await model.cancel() }
+                    Task {
+                        #if os(macOS)
+                        closeCoordinator.allowsClose = true
+                        #endif
+                        let didClose = await model.cancel()
+                        #if os(macOS)
+                        // IMAP save failed: keep the user in the window so
+                        // they can see the error banner and retry.
+                        if !didClose {
+                            closeCoordinator.allowsClose = false
+                        }
+                        #endif
+                    }
                 }
             } message: {
                 Text("Keep a copy of the draft for later, or discard it now.")
@@ -131,41 +193,11 @@ struct ComposeView: View {
 
     // MARK: - Subviews
 
-    @ViewBuilder
-    private func recipientField(_ label: String, text: Binding<String>) -> some View {
-        TextField(label, text: text, axis: .vertical)
-            .autocorrectionDisabled()
-            #if os(iOS) || os(visionOS)
-            .textInputAutocapitalization(.never)
-            .keyboardType(.emailAddress)
-            #endif
-    }
-
-    @ViewBuilder
-    private func attachmentRow(_ attachment: ComposeViewModel.ComposeAttachment) -> some View {
-        HStack {
-            Image(systemName: "paperclip")
-                .foregroundStyle(.secondary)
-            VStack(alignment: .leading) {
-                Text(attachment.filename)
-                    .font(.subheadline)
-                Text(ByteCountFormatter.string(
-                    fromByteCount: Int64(attachment.data.count),
-                    countStyle: .file
-                ))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            Button {
-                model.removeAttachment(id: attachment.id)
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
-        }
-    }
+    // `recipientField`, `attachmentRow`, `ingestFileImport`, and
+    // `mimeType(for:)` live in `ComposeView+Subviews.swift` to keep the
+    // struct body under the SwiftLint length ceiling. Anything that
+    // touches `@State private` storage stays here because `private`
+    // doesn't reach an extension in another file.
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
@@ -180,7 +212,16 @@ struct ComposeView: View {
         ToolbarItem(placement: .confirmationAction) {
             Button {
                 Task {
+                    #if os(macOS)
+                    // Send dismisses the window on success; pre-approve so
+                    // the close-button intercept doesn't pop the dialog
+                    // in front of a message the user already committed.
+                    closeCoordinator.allowsClose = true
+                    #endif
                     let sent = await model.send()
+                    #if os(macOS)
+                    if !sent { closeCoordinator.allowsClose = false }
+                    #endif
                     guard sent else { return }
                     // Surface the outcome as a toast on the shared AppState
                     // so the user sees confirmation after the sheet dismisses.
@@ -250,30 +291,4 @@ struct ComposeView: View {
         photoSelection = []
     }
     #endif
-
-    private func ingestFileImport(_ result: Result<[URL], Error>) async {
-        switch result {
-        case .success(let urls):
-            for url in urls {
-                let didAccess = url.startAccessingSecurityScopedResource()
-                defer { if didAccess { url.stopAccessingSecurityScopedResource() } }
-                guard let data = try? Data(contentsOf: url) else { continue }
-                model.addAttachment(
-                    filename: url.lastPathComponent,
-                    mimeType: mimeType(for: url),
-                    data: data
-                )
-            }
-        case .failure(let error):
-            model.errorMessage = "Couldn't attach file: \(error.localizedDescription)"
-        }
-    }
-
-    private func mimeType(for url: URL) -> String {
-        if let type = UTType(filenameExtension: url.pathExtension),
-           let mime = type.preferredMIMEType {
-            return mime
-        }
-        return "application/octet-stream"
-    }
 }

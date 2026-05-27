@@ -9,25 +9,29 @@ import CabalmailKit
 extension MessageDetailView {
     @ViewBuilder
     var replyButton: some View {
+        // Keyboard shortcuts for Reply / Reply All / Forward live on the
+        // macOS menu bar (CabalmailCommands.Message) rather than on these
+        // Menu Buttons. A `.keyboardShortcut` on a Button inside a Menu
+        // only fires while the detail scene holds AppKit first-responder
+        // focus, which it loses the moment a compose window opens — so
+        // the second Cmd+R after replying was silently swallowed until
+        // the user clicked back into the detail pane.
         Menu {
             Button {
                 beginCompose(.reply)
             } label: {
                 Label("Reply", systemImage: "arrowshape.turn.up.left")
             }
-            .keyboardShortcut("r", modifiers: .command)
             Button {
                 beginCompose(.replyAll)
             } label: {
                 Label("Reply All", systemImage: "arrowshape.turn.up.left.2")
             }
-            .keyboardShortcut("d", modifiers: [.command, .shift])
             Button {
                 beginCompose(.forward)
             } label: {
                 Label("Forward", systemImage: "arrowshape.turn.up.forward")
             }
-            .keyboardShortcut("j", modifiers: [.command, .shift])
         } label: {
             Image(systemName: "arrowshape.turn.up.left")
                 .accessibilityLabel("Reply")

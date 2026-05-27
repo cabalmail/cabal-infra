@@ -8,8 +8,8 @@
   :root {
     color-scheme: light dark;
     --editor-bg: transparent;
-    --editor-fg: -apple-system-label, CanvasText;
-    --editor-link: -apple-system-blue, LinkText;
+    --editor-fg: CanvasText;
+    --editor-link: LinkText;
   }
   html, body {
     margin: 0;
@@ -17,7 +17,9 @@
     height: 100%;
     background: var(--editor-bg);
     color: var(--editor-fg);
-    font: -apple-system-body, system-ui, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.4;
     -webkit-text-size-adjust: 100%;
   }
   #editor {

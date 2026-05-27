@@ -127,6 +127,7 @@ targets:
       # view code.
       - path: Cabalmail/ContentView.swift
       - path: Cabalmail/AppState.swift
+      - path: Cabalmail/AppStateSignals.swift
       - path: Cabalmail/Views
       - path: Cabalmail/ViewModels
     dependencies:

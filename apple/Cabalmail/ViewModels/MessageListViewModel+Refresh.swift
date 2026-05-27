@@ -8,6 +8,40 @@ import CabalmailKit
 // (`hydrateFromCache`, `persistCache`) stays in the main file because
 // the cache scope is intentionally narrow.
 extension MessageListViewModel {
+    /// User-initiated "force reload." Wipes the in-memory envelope list
+    /// (plus the cursor state `refresh()` uses to merge older pages) AND
+    /// the on-disk envelope snapshot for this folder, then runs
+    /// `refresh()` to rebuild from scratch. Both the macOS
+    /// `Mailbox > Refresh` menu item and the message-list toolbar's
+    /// arrow.clockwise button route through this path so the user has a
+    /// way to escape stale state (e.g., a search that populated the
+    /// list with foreign-folder UIDs the regular refresh's UID-range
+    /// pruning can't catch). The IDLE watcher and the 60-second wall-
+    /// clock fallback intentionally keep calling `refresh()` directly —
+    /// they fire often, and the merge path is the cheap "fold new mail
+    /// in" loop the cache is designed around. Hard reload stays on the
+    /// manual paths the user explicitly invokes.
+    ///
+    /// Invalidating the on-disk snapshot here matters because
+    /// `applyRefreshPage`'s `replace(... keepingRange:)` only prunes
+    /// UIDs *inside* the refresh window — UIDs outside it are treated
+    /// as "older pages" and retained. Foreign-folder UIDs that leaked
+    /// into the cache (historically through pagination during search)
+    /// sit below the inbox's current UID band, so without an explicit
+    /// invalidate they'd survive every subsequent refresh and re-
+    /// hydrate as phantoms on relaunch. The body cache is left alone:
+    /// it's keyed per-UID, never blindly batch-written, and an
+    /// unrelated phantom never reached the fetch path far enough to
+    /// land a body in it.
+    func hardReload() async {
+        try? await client.envelopeCache.invalidate(folder: folder.path)
+        envelopes.removeAll()
+        lowestUID = nil
+        hasMore = true
+        sourceFolderByUID = [:]
+        await refresh()
+    }
+
     /// Merges a fresh fetch into the in-memory envelope dictionary and
     /// re-sorts using the active `sortCriterion`. Used by both the top-
     /// page refresh and the older-page paginator — neither needs to know

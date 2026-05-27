@@ -156,9 +156,11 @@ final class ReplyBuilderTests: XCTestCase {
         let draft = ReplyBuilder.build(
             from: envelope, body: "Line 1\nLine 2", mode: .reply, userAddresses: [], now: clock
         )
-        XCTAssertTrue(draft.body.contains("> Line 1"))
-        XCTAssertTrue(draft.body.contains("> Line 2"))
-        XCTAssertTrue(draft.body.contains(" wrote:"))
+        // New format: two leading blank lines, a horizontal rule, the
+        // attribution, a blank line, then the unquoted original body.
+        XCTAssertTrue(draft.body.hasPrefix("\n\n---\n"))
+        XCTAssertTrue(draft.body.contains(" wrote:\n\nLine 1\nLine 2"))
+        XCTAssertFalse(draft.body.contains("> Line"))
     }
 
     func testForwardBodyUsesBannerNotPrefixQuote() {

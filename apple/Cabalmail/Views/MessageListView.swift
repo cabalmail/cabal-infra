@@ -1,5 +1,8 @@
 import SwiftUI
 import CabalmailKit
+#if canImport(AppKit)
+import AppKit
+#endif
 
 /// Envelope list for a single folder. Selection is lifted to the parent so
 /// the split view can bind the detail pane to it.
@@ -73,6 +76,30 @@ struct MessageListView: View {
                 }
                 .keyboardShortcut("n", modifiers: .command)
             }
+            #if os(macOS)
+            // Force-reload button. macOS only — iOS / iPadOS / visionOS
+            // users reach the cheap merge-refresh via pull-to-refresh,
+            // which is the gesture those platforms expect. Routed
+            // through `requestRefresh()` so the toolbar button and the
+            // Mailbox > Refresh menu item share one code path — both
+            // land on `MessageListViewModel.hardReload()`, which wipes
+            // in-memory state before the server fetch so the user has a
+            // reliable escape from any stale-state bug the merge path
+            // doesn't catch.
+            ToolbarItem {
+                Button {
+                    appState.requestRefresh()
+                } label: {
+                    if model?.isLoading == true {
+                        ProgressView()
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .accessibilityLabel("Refresh")
+                    }
+                }
+                .disabled(model == nil || model?.isLoading == true)
+            }
+            #endif
         }
         .sheet(isPresented: $filtersPresented) {
             filtersSheet
@@ -132,7 +159,14 @@ struct MessageListView: View {
             presentCompose(seed: ReplyBuilder.newDraft())
         }
         .onChange(of: appState.refreshRequestTick) { _, _ in
-            Task { await model?.refresh() }
+            // Manual refresh paths (Mailbox > Refresh menu item, the
+            // arrow.clockwise toolbar button) get hard-reload semantics
+            // — wipe in-memory state before refresh — so the user has a
+            // reliable escape from any stale-state bug the merge path
+            // doesn't catch. The IDLE watcher and the 60s timer keep
+            // hitting `refresh()` directly; they fire too often to be
+            // discarding cached envelopes on every tick.
+            Task { await model?.hardReload() }
         }
         .onChange(of: appState.lastDisposedEnvelope) { _, signal in
             // Detail view archived / trashed the current message. Advance
@@ -214,6 +248,13 @@ struct MessageListView: View {
     private func presentCompose(seed: Draft) {
         if composeOpensInWindow {
             openWindow(id: composeWindowID, value: seed)
+            #if canImport(AppKit)
+            // Match MessageDetailView's presentCompose: pull the new
+            // compose window forward when openWindow is dispatched
+            // from a menu-bar shortcut, which otherwise can land it
+            // behind the main window.
+            NSApp.activate(ignoringOtherApps: true)
+            #endif
         } else {
             composeSeed = seed
         }

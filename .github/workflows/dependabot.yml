@@ -1,5 +1,5 @@
 ---
-name: Dependabot Critical Alert Monitor
+name: Dependabot High and Critical Alert Monitor
 
 on:
   schedule:
@@ -16,7 +16,7 @@ jobs:
   check-alerts:
     runs-on: ubuntu-latest
     steps:
-      - name: Fetch critical Dependabot alerts
+      - name: Fetch high and critical Dependabot alerts
         id: alerts
         env:
           GH_TOKEN: ${{ secrets.DEPENDABOT_PAT }}
@@ -24,7 +24,9 @@ jobs:
           alerts=$(gh api repos/${{ github.repository }}/dependabot/alerts \
             --jq '[.[] | select(.state == "open") | select(
               .security_vulnerability.severity == "critical" or
-              .security_advisory.severity == "critical"
+              .security_vulnerability.severity == "high" or
+              .security_advisory.severity == "critical" or
+              .security_advisory.severity == "high"
             )]')
 
           count=$(echo "$alerts" | jq 'length')
@@ -48,9 +50,9 @@ jobs:
             echo "has_alerts=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: No critical alerts found
+      - name: No high or critical alerts found
         if: steps.alerts.outputs.has_alerts == 'false'
-        run: echo "✅ No critical Dependabot alerts. All clear."
+        run: echo "✅ No high or critical Dependabot alerts. All clear."
 
       - name: Checkout repository
         if: steps.alerts.outputs.has_alerts == 'true'
@@ -64,8 +66,8 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
-            You are a security remediation assistant. The following critical
-            Dependabot alerts were found in this repository:
+            You are a security remediation assistant. The following high
+            and critical Dependabot alerts were found in this repository:
 
             $(cat /tmp/alert_summary.txt)
 
@@ -86,7 +88,7 @@ jobs:
                explaining what you found and why it needs manual attention.
 
             After making all changes, open a single pull request with:
-            - Title: "fix: resolve critical Dependabot vulnerabilities"
+            - Title: "fix: resolve high and critical Dependabot vulnerabilities"
             - Body: a summary of each alert, what was fixed, and what needs
               manual review (if anything).
 
