@@ -1,5 +1,8 @@
 import SwiftUI
 import CabalmailKit
+#if canImport(AppKit)
+import AppKit
+#endif
 
 /// Envelope list for a single folder. Selection is lifted to the parent so
 /// the split view can bind the detail pane to it.
@@ -245,6 +248,13 @@ struct MessageListView: View {
     private func presentCompose(seed: Draft) {
         if composeOpensInWindow {
             openWindow(id: composeWindowID, value: seed)
+            #if canImport(AppKit)
+            // Match MessageDetailView's presentCompose: pull the new
+            // compose window forward when openWindow is dispatched
+            // from a menu-bar shortcut, which otherwise can land it
+            // behind the main window.
+            NSApp.activate(ignoringOtherApps: true)
+            #endif
         } else {
             composeSeed = seed
         }

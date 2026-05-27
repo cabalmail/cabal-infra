@@ -11,12 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The Apple compose window's reply / reply-all body seed switches
   from `> `-prefixed quoting to a Markdown horizontal rule (`---`)
   above the `On <date>, <sender> wrote:` attribution, with the
-  original content rendered as ordinary paragraphs underneath.
-  Reply / reply-all also opens with the caret positioned at the
-  start of the body (above the separator) so the user can begin
-  typing immediately, while forward and new-message compose focus
-  the To field instead. New `RichTextEditorController.focusAtStart()`
-  + `editor-bridge.js` `focusAtStart` cover the body-focus side.
+  original content rendered as ordinary paragraphs underneath and
+  two blank lines above the separator (injected as
+  `<p><br></p><p><br></p>` in the rich pane, since marked collapses
+  leading whitespace). Reply / reply-all also opens with the caret
+  positioned at the start of the body (above the separator) so the
+  user can begin typing immediately, while forward and new-message
+  compose focus the To field instead. New
+  `RichTextEditorController.focusAtStart()` makes the WKWebView its
+  window's first responder on macOS before bouncing into the JS
+  bridge — without that, AppKit's first-responder slot stayed with
+  the SwiftUI Form's first text field and keystrokes went there.
 - The macOS app gains a manual force-reload affordance on the
   message list. An arrow.clockwise toolbar button sits next to
   Compose and routes through the same `requestRefresh()` tick the
@@ -45,6 +50,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ad-hoc Cmd+Shift+D it was sitting on. Mailbox > Refresh keeps
   the menu item but loses its keyboard shortcut; the toolbar
   button and pull-to-refresh cover the discovery surface.
+- Reply / Reply All / Forward now have a proper Message menu in
+  the macOS menu bar that hosts the keyboard shortcuts. The
+  previous binding lived on Buttons inside the detail view's
+  Reply Menu, which AppKit only invokes while the detail scene
+  holds first-responder focus — so the second Cmd+R after a
+  reply was silently swallowed until the user clicked back into
+  the detail pane. `AppState.requestReply/ReplyAll/Forward`
+  bumps a tick the detail view observes; the bindings now fire
+  reliably regardless of which scene was last focused, and the
+  compose window comes to the front via `NSApp.activate` so it
+  no longer occasionally opens behind the main mail window.
 
 ### Fixed
 - The macOS app's Compose and Reload toolbar buttons no longer

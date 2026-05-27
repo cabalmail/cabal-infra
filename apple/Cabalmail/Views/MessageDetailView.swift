@@ -17,15 +17,16 @@ struct MessageDetailView: View {
     let folder: Folder
     let envelope: Envelope
 
-    // `appState` and `model` are reached by the toolbar extension in
-    // `MessageDetailView+Toolbar.swift`; SwiftUI's `private` in this struct
-    // would block access from that file. Kept `internal` (default) and not
-    // exposed beyond the module.
+    // Properties reached by sibling extensions in `+Toolbar` and `+Compose`
+    // are kept at internal (default) access. `private` in this struct
+    // would block access from those files even though they're in the same
+    // module; the same-module / different-file extension pattern is the
+    // accepted way to keep this struct under SwiftLint's body-length cap.
     @Environment(AppState.self) var appState
-    @Environment(Preferences.self) private var preferences
-    @Environment(\.openWindow) private var openWindow
+    @Environment(Preferences.self) var preferences
+    @Environment(\.openWindow) var openWindow
     @State var model: MessageDetailViewModel?
-    @State private var composeSeed: Draft?
+    @State var composeSeed: Draft?
     @State var moveSheetPresented = false
     @State var sourceSheetTab: MessageSourceSheet.Tab?
 
@@ -67,6 +68,9 @@ struct MessageDetailView: View {
         .sheet(item: $sourceSheetTab) { tab in
             sourceSheet(initialTab: tab)
         }
+        .onChange(of: appState.replyRequestTick) { _, _ in beginCompose(.reply) }
+        .onChange(of: appState.replyAllRequestTick) { _, _ in beginCompose(.replyAll) }
+        .onChange(of: appState.forwardRequestTick) { _, _ in beginCompose(.forward) }
         .onAppear {
             BodyFetchLog.appear(uid: envelope.uid, modelExists: model != nil)
             // Drive the body fetch from `.onAppear` rather than SwiftUI's
@@ -110,21 +114,6 @@ struct MessageDetailView: View {
             activeModel.startLoadIfNeeded()
         }
         .onDisappear { model?.onDisappear() }
-    }
-
-    @ViewBuilder
-    private func composeSheet(for seed: Draft) -> some View {
-        if let client = appState.client {
-            ComposeView(model: ComposeViewModel(
-                seed: seed,
-                client: client,
-                draftStore: client.draftStore,
-                preferences: preferences,
-                onClose: { composeSeed = nil }
-            ))
-            .environment(appState)
-            .environment(preferences)
-        }
     }
 
     @ViewBuilder
@@ -176,34 +165,6 @@ struct MessageDetailView: View {
                 ))
             }
         )
-    }
-
-    /// Opens compose pre-populated for a `reply` / `replyAll` / `forward`.
-    /// Pulls the user's address list so `ReplyBuilder` can pick a default
-    /// From by matching the original message's recipients against owned
-    /// addresses (per the React app's 0.3.0 behavior).
-    func beginCompose(_ mode: ReplyBuilder.ReplyMode) {
-        guard let client = appState.client else { return }
-        Task { @MainActor in
-            let addresses = (try? await client.addresses()) ?? []
-            let seed = ReplyBuilder.build(
-                from: envelope,
-                body: model?.plainText,
-                mode: mode,
-                userAddresses: addresses
-            )
-            presentCompose(seed: seed)
-        }
-    }
-
-    /// macOS / iPadOS / visionOS open compose in its own scene; iPhone
-    /// keeps the sheet so the message stays on-screen behind it.
-    private func presentCompose(seed: Draft) {
-        if composeOpensInWindow {
-            openWindow(id: composeWindowID, value: seed)
-        } else {
-            composeSeed = seed
-        }
     }
 
     @ViewBuilder

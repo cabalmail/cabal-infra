@@ -1,5 +1,8 @@
 import Foundation
 @preconcurrency import WebKit
+#if canImport(AppKit)
+import AppKit
+#endif
 
 /// Owns the WKWebView that backs the rich-text composer surface, exposing an
 /// async Swift API around the JS bridge defined in `editor-bridge.js`.
@@ -203,8 +206,20 @@ public final class RichTextEditorController: NSObject {
     /// Focuses the editor with the caret positioned at the start of the
     /// document. Used on reply / reply-all so the cursor lands above the
     /// seeded separator + attribution + quoted original.
+    ///
+    /// On macOS the WKWebView must be its window's first responder for
+    /// the inner contenteditable to receive keyboard input — a bare JS
+    /// `editor.focus()` only moves DOM focus, which is why earlier
+    /// versions left the SwiftUI Form's first text field (To) holding
+    /// the AppKit first-responder slot. Make the webview first responder
+    /// before bouncing into JS.
     public func focusAtStart() async {
         await waitUntilReady()
+        #if canImport(AppKit)
+        if let window = webView.window {
+            window.makeFirstResponder(webView)
+        }
+        #endif
         await call("focusAtStart")
     }
 
