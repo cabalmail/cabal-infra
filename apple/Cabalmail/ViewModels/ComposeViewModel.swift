@@ -39,7 +39,7 @@ final class ComposeViewModel {
 
     let client: CabalmailClient
     private(set) var draftId: UUID
-    private let draftStore: DraftStore
+    let draftStore: DraftStore
     private let preferences: Preferences
     private let onClose: @MainActor () -> Void
 
@@ -71,9 +71,10 @@ final class ComposeViewModel {
     var richSelection: RichTextEditorController.Selection = .init()
 
     /// Immutable compose-context bits; only set during init from a reply /
-    /// forward / new-message seed, never mutated after.
-    private let inReplyTo: String?
-    private let references: [String]
+    /// forward / new-message seed, never mutated after. Access defaults to
+    /// `internal` so `ComposeViewModel+Internals.swift` can read them.
+    let inReplyTo: String?
+    let references: [String]
     private let composeIntent: ComposeIntent
 
     private var autosaveTask: Task<Void, Never>?
@@ -81,7 +82,7 @@ final class ComposeViewModel {
     /// user hasn't typed in the rich pane since the last seed/import. The
     /// send logic treats them as "rich is empty" so single-mode markdown
     /// composes don't double-up the text part.
-    private var richMirrorsMarkdown: Bool = true
+    var richMirrorsMarkdown: Bool = true
 
     struct ComposeAttachment: Identifiable, Hashable {
         let id: UUID
@@ -336,119 +337,7 @@ final class ComposeViewModel {
         onClose()
     }
 
-    // MARK: - Attachments
-
-    /// Add an already-loaded file (raw bytes + mime type) as an attachment.
-    /// Returns the id of the newly-added attachment.
-    @discardableResult
-    func addAttachment(filename: String, mimeType: String, data: Data) -> UUID {
-        let attachment = ComposeAttachment(
-            id: UUID(),
-            filename: filename,
-            mimeType: mimeType,
-            data: data
-        )
-        attachments.append(attachment)
-        return attachment.id
-    }
-
-    func removeAttachment(id: UUID) {
-        attachments.removeAll { $0.id == id }
-    }
-
-    // MARK: - Internals
-
-    /// Resolves the current `fromAddress` string into a parsed
-    /// `EmailAddress`, or nil when nothing is selected / the value isn't
-    /// parseable. Used by both the send and save-draft paths.
-    private func currentFromEmail() -> EmailAddress? {
-        guard let fromAddress else { return nil }
-        return EmailAddress(parsing: fromAddress)
-    }
-
-    /// Assembles the `OutgoingMessage` from the current compose state.
-    /// Shared by `send()` and `cancel()` (Save Draft) so both flows ship
-    /// an identical message to `/send`.
-    private func buildOutgoingMessage(from: EmailAddress) async -> OutgoingMessage {
-        let bodies = await computeMessageBodies()
-        return OutgoingMessage(
-            from: from,
-            to: parseRecipients(toText),
-            cc: parseRecipients(ccText),
-            bcc: parseRecipients(bccText),
-            subject: subject,
-            textBody: bodies.text,
-            htmlBody: bodies.html,
-            inReplyTo: inReplyTo,
-            references: references,
-            attachments: attachments.map(\.asKitAttachment)
-        )
-    }
-
-    /// Resolves the (text, html) MIME-part bodies using the same four-way
-    /// table the React composer applies. The mirror flag treats a rich
-    /// pane that's only ever been seeded from markdown as "empty," so a
-    /// pure-markdown compose doesn't ship the seed HTML as if the user
-    /// had hand-edited it.
-    private func computeMessageBodies() async -> (text: String, html: String) {
-        let richHtml = await editorController.getHTML()
-        let richEmpty = richHtml.isEmpty || richMirrorsMarkdown
-        let mdEmpty = markdownBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-
-        switch (richEmpty, mdEmpty) {
-        case (true, true):
-            return ("", "")
-        case (false, true):
-            let text = await editorController.htmlToMarkdown(richHtml)
-            return (text, richHtml)
-        case (true, false):
-            let raw = await editorController.markdownToHtml(markdownBody)
-            let styled = await editorController.styleParagraphs(raw)
-            return (markdownBody, styled)
-        case (false, false):
-            return (markdownBody, richHtml)
-        }
-    }
-
-    private func persistCurrentDraft() async {
-        let snapshot = Draft(
-            id: draftId,
-            fromAddress: fromAddress,
-            to: parseRecipients(toText).map(formatAddress),
-            cc: parseRecipients(ccText).map(formatAddress),
-            bcc: parseRecipients(bccText).map(formatAddress),
-            subject: subject,
-            body: markdownBody,
-            inReplyTo: inReplyTo,
-            references: references
-        )
-        try? await draftStore.save(snapshot)
-    }
-
-    /// Parses a comma/semicolon-separated list of addresses into
-    /// `EmailAddress` values. Matches the React compose's permissive
-    /// tokenization (comma, semicolon, or space). Invalid tokens are
-    /// dropped silently — the UI flags them separately via `canSend`.
-    private func parseRecipients(_ raw: String) -> [EmailAddress] {
-        let separators: Set<Character> = [",", ";", "\n"]
-        let tokens = raw
-            .split(whereSeparator: { separators.contains($0) })
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
-        return tokens.compactMap(EmailAddress.init(parsing:))
-    }
-
-    private func formatAddress(_ address: EmailAddress) -> String {
-        "\(address.mailbox)@\(address.host)"
-    }
-
-    private func describe(_ error: CabalmailError) -> String {
-        switch error {
-        case .invalidCredentials: return "Send failed: your credentials were rejected."
-        case .network(let detail): return "Network error: \(detail)"
-        case .smtpCommandFailed(_, let detail): return "SMTP error: \(detail)"
-        case .authExpired: return "Your session expired; please sign in again."
-        default: return "Send failed: \(error)"
-        }
-    }
+    // Attachment helpers, recipient parsing, message-body assembly, and
+    // error rendering live in `ComposeViewModel+Internals.swift` to keep
+    // this type body under the SwiftLint length ceiling.
 }
