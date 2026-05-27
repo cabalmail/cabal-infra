@@ -42,6 +42,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   button and pull-to-refresh cover the discovery surface.
 
 ### Fixed
+- The macOS app's Compose and Reload toolbar buttons no longer
+  drift to the trailing edge (above the empty reading pane) when
+  no message is selected. `NavigationSplitView`'s unified toolbar
+  was packing the message-list items against the trailing edge
+  whenever the detail column had no toolbar of its own; once a
+  message was picked, the detail view's seven buttons pushed them
+  back over the list pane where they belonged. The empty detail
+  pane now declares its own placeholder toolbar — seven disabled
+  stand-ins matching the real detail buttons' icons — so the
+  layout is stable across selection state. macOS only; iOS /
+  iPadOS / visionOS route the detail actions to a bottom bar and
+  don't have the same drift.
 - The Apple compose window's rich-text body is no longer rendered
   in a dark, invisible Times serif on dark-mode systems. The
   WebKit-backed editor's CSS was using `color: -apple-system-label,
