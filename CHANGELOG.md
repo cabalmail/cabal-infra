@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.41] - 2026-05-26
+
+### Fixed
+- `/search_envelopes` no longer 502s the whole cross-folder query
+  when one of the user's subscribed folders is missing on disk.
+  `enumerate_cross_folder` pulls folders via `LSUB`, which returns
+  subscription state independently of whether the underlying
+  mailbox still exists; a stale subscription (folder renamed or
+  deleted without unsubscribing) used to surface as an uncaught
+  `IMAPClientError` from `SELECT` and take the whole query down.
+  The per-folder SELECT/SEARCH pair is now wrapped in a try/except
+  that logs the skip and continues. Stale subscriptions become a
+  one-line CloudWatch entry instead of a 502, and a single
+  FTS-enforced SEARCH failure on one folder no longer poisons the
+  walk either. When the SELECT failure clearly signals "the
+  mailbox doesn't exist" — either via the RFC 3501 `TRYCREATE`
+  response code or Dovecot's "Mailbox doesn't exist" prose — the
+  dangling LSUB entry is also unsubscribed in-line so the same
+  orphan stops producing log noise on every future query. Other
+  failure modes are skip-only: a transient EFS hiccup or lock
+  conflict must not silently destroy a legitimate subscription.
+
 ## [0.9.40] - 2026-05-26
 
 ### Fixed

@@ -19,6 +19,7 @@ window so the Apple client keeps working until Phase 5 cuts it over.
 import base64
 import datetime
 import json
+from imapclient.exceptions import IMAPClientError # pylint: disable=import-error
 from helper import ( # pylint: disable=import-error
     ENVELOPE_FETCH_KEYS,
     envelope_dict,
@@ -207,6 +208,20 @@ def search_folders(client, folders, criteria, want_attachment):
     Per-folder cap and merged cap both observe MAX_RESULTS. A single overflowing
     folder marks the query truncated and consumes the remaining budget; the
     walk stops once the budget is exhausted.
+
+    Per-folder SELECT and SEARCH failures are caught and the folder is skipped:
+    a stale LSUB entry (subscription that points at a deleted or renamed folder)
+    or an FTS-enforced SEARCH failure on a single folder should not blow up the
+    whole cross-folder query. The failure is logged so the operator can see
+    which folder fell out and clean up if needed.
+
+    When the failure is specifically "the mailbox doesn't exist" -- detected
+    via either the RFC 3501 `TRYCREATE` response code or Dovecot's prose; see
+    `_is_missing_mailbox` -- the dangling LSUB entry is unsubscribed in-line
+    so the same orphan does not keep producing log noise on every future
+    cross-folder query. Other `IMAPClientError`s are left as a skip-only:
+    a transient EFS hiccup, a lock conflict, or any other non-"doesn't exist"
+    SELECT failure must not silently destroy a legitimate subscription.
     '''
     all_triples = []
     truncated = False
@@ -215,14 +230,62 @@ def search_folders(client, folders, criteria, want_attachment):
         if remaining_cap <= 0:
             truncated = True
             break
-        client.select_folder(folder.replace('/', '.'), readonly=True)
-        uids = list(client.search(criteria, charset='UTF-8'))
+        try:
+            client.select_folder(folder.replace('/', '.'), readonly=True)
+            uids = list(client.search(criteria, charset='UTF-8'))
+        except IMAPClientError as exc:
+            print(f"[search_envelopes] skipping folder {folder!r}: {exc}")
+            if _is_missing_mailbox(exc):
+                _unsubscribe_stale(client, folder)
+            continue
         if len(uids) > remaining_cap:
             uids = uids[:remaining_cap]
             truncated = True
         all_triples.extend(_triples_for(client, folder, uids, want_attachment))
     all_triples.sort(key=lambda t: (t[0], t[1], t[2]), reverse=True)
     return all_triples, truncated
+
+
+def _is_missing_mailbox(exc):
+    '''Returns True when the exception clearly indicates the mailbox does not
+    exist, as opposed to a transient or unrelated SELECT failure.
+
+    Two signals, either one sufficient:
+      * `TRYCREATE` -- the RFC 3501 7.1 response code that an IMAP server sends
+        to mean "this mailbox doesn't exist." The most reliable marker when the
+        response code survives imapclient's wrapping.
+      * Dovecot's prose ("Mailbox doesn't exist" / "does not exist") -- catches
+        the case where imaplib drops the bracketed response code and we are
+        left with just the human-readable reason. Stable across the Dovecot
+        versions we run; the only thing that would invalidate it is upstream
+        rephrasing the error, which would show up as an immediate regression
+        in CloudWatch and is easy to update if it ever happens.
+
+    Both are matched case-insensitively. Other `IMAPClientError`s -- transient
+    EFS issues, lock contention, auth failures -- fall through and the folder
+    is only skipped, never unsubscribed.
+    '''
+    text = str(exc).lower()
+    return (
+        'trycreate' in text
+        or "doesn't exist" in text
+        or 'does not exist' in text
+    )
+
+
+def _unsubscribe_stale(client, folder):
+    '''Removes the dangling LSUB entry for a folder that no longer exists.
+
+    Failures from the UNSUBSCRIBE itself are swallowed and logged so the
+    self-heal can never escalate into a search failure. Same-session call,
+    so no extra login round-trip; UNSUBSCRIBE is a session-level command
+    and does not require a selected mailbox.
+    '''
+    try:
+        client.unsubscribe_folder(folder.replace('/', '.'))
+        print(f"[search_envelopes] removed stale subscription for {folder!r}")
+    except IMAPClientError as exc:
+        print(f"[search_envelopes] failed to unsubscribe {folder!r}: {exc}")
 
 
 def _triples_for(client, folder, uids, want_attachment):
