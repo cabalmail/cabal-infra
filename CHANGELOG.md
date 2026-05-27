@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.42] - 2026-05-26
+
+### Fixed
+- `/search_envelopes` cleanup no longer masks search results or
+  real errors. The handler's `finally` called `client.logout()`
+  directly; when the IMAP socket had been closed server-side
+  (idle reap on the NLB after a long search, a Dovecot-side
+  restart, a server-side connection limit), the LOGOUT command
+  raised `imaplib.IMAP4.abort: socket error: EOF`. That escaping
+  exception either turned an otherwise-successful search into a
+  502 (when the try body completed) or masked whatever real error
+  the try body actually raised. The cleanup is now wrapped in
+  `_safe_logout`, which swallows the failure with a log line so
+  the work the caller asked for shows up to the client.
+
 ## [0.9.41] - 2026-05-26
 
 ### Fixed
