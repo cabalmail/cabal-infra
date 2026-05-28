@@ -131,6 +131,14 @@ struct MessageListView: View {
                 await model?.loadInitial()
                 await model?.startWatching()
             }
+            // Cold-launch mailto: arrives via `.onOpenURL` in the app
+            // entry, which parks the seed on AppState before this
+            // view's `.onChange(of: composeRequestTick)` is in the
+            // hierarchy. Drain it here so the compose surface opens
+            // on first appear.
+            if let seed = appState.consumePendingComposeSeed() {
+                presentCompose(seed: seed)
+            }
         }
         // Wall-clock fallback refresh. IDLE usually pushes new mail within
         // seconds, but long-lived IDLE sockets can stall silently (iOS
@@ -161,7 +169,11 @@ struct MessageListView: View {
         // refresh. Using the currently-displayed list as the refresh target
         // matches every desktop mail client's convention.
         .onChange(of: appState.composeRequestTick) { _, _ in
-            presentCompose(seed: ReplyBuilder.newDraft())
+            // Menu shortcuts pass nil; the mailto: URL handler parks
+            // a pre-filled draft. Fall back to a fresh draft when no
+            // seed accompanies the request.
+            let seed = appState.consumePendingComposeSeed() ?? ReplyBuilder.newDraft()
+            presentCompose(seed: seed)
         }
         .onChange(of: appState.refreshRequestTick) { _, _ in
             // Manual refresh paths (Mailbox > Refresh menu item, the

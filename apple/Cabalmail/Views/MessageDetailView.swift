@@ -29,6 +29,7 @@ struct MessageDetailView: View {
     @State var composeSeed: Draft?
     @State var moveSheetPresented = false
     @State var sourceSheetTab: MessageSourceSheet.Tab?
+    @State var senderContactName: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -175,8 +176,11 @@ struct MessageDetailView: View {
             }
             VStack(alignment: .leading, spacing: 4) {
                 if let from = envelope.from.first {
-                    Text(from.formatted)
+                    Text(headerFromLabel(for: from))
                         .font(.headline)
+                        .task(id: "\(from.mailbox.lowercased())@\(from.host.lowercased())") {
+                            await hydrateSenderContactName(for: from)
+                        }
                 }
                 if !envelope.to.isEmpty {
                     Text("To: \(envelope.to.map(\.formatted).joined(separator: ", "))")
@@ -196,6 +200,27 @@ struct MessageDetailView: View {
             }
             Spacer(minLength: 0)
         }
+    }
+
+    /// "Name <addr@host>" formatter that prefers the envelope's RFC 5322
+    /// phrase first, then the user's own name from Contacts. Mirrors
+    /// `EmailAddress.formatted` but with the contacts fallback wedged
+    /// in between.
+    private func headerFromLabel(for address: EmailAddress) -> String {
+        let addrPart = "\(address.mailbox)@\(address.host)"
+        if let name = address.displayName, !name.isEmpty {
+            return "\"\(name)\" <\(addrPart)>"
+        }
+        if let name = senderContactName, !name.isEmpty {
+            return "\"\(name)\" <\(addrPart)>"
+        }
+        return addrPart
+    }
+
+    private func hydrateSenderContactName(for address: EmailAddress) async {
+        senderContactName = nil
+        if let name = address.displayName, !name.isEmpty { return }
+        senderContactName = await appState.contactsStore.displayName(for: address)
     }
 
     @ViewBuilder

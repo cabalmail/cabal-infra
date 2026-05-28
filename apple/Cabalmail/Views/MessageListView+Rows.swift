@@ -156,6 +156,9 @@ private struct MessageRow: View {
     let isChecked: Bool
     let bulkMode: Bool
 
+    @Environment(AppState.self) private var appState
+    @State private var contactName: String?
+
     var body: some View {
         HStack(alignment: .top) {
             if bulkMode {
@@ -201,6 +204,7 @@ private struct MessageRow: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .task(id: senderKey) { await hydrateContactName() }
     }
 
     // Read/unread indicator. We deliberately avoid `Color.accentColor` here:
@@ -214,8 +218,34 @@ private struct MessageRow: View {
         return isSelected ? .white : .blue
     }
 
+    /// Display priority: the envelope's own RFC 5322 phrase first
+    /// (sender's choice), then the user's own name from Contacts, then
+    /// the bare mailbox. Contacts hydration is `nil` until the async
+    /// lookup in `.task(id:)` resolves, so a fresh row paints with the
+    /// envelope or mailbox and updates in place when the contact match
+    /// arrives.
     private var senderLabel: String {
-        envelope.from.first?.displayName ?? envelope.from.first?.mailbox ?? "unknown"
+        if let envelopeName = envelope.from.first?.displayName, !envelopeName.isEmpty {
+            return envelopeName
+        }
+        if let contactName, !contactName.isEmpty {
+            return contactName
+        }
+        return envelope.from.first?.mailbox ?? "unknown"
+    }
+
+    /// Cache-friendly identifier for `.task(id:)`. Empty when the
+    /// envelope has no `From`, which short-circuits the hydration call.
+    private var senderKey: String {
+        guard let sender = envelope.from.first else { return "" }
+        return "\(sender.mailbox.lowercased())@\(sender.host.lowercased())"
+    }
+
+    private func hydrateContactName() async {
+        contactName = nil
+        guard let sender = envelope.from.first else { return }
+        if let envelopeName = sender.displayName, !envelopeName.isEmpty { return }
+        contactName = await appState.contactsStore.displayName(for: sender)
     }
 
     private var dateLabel: String {

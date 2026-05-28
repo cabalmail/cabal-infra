@@ -45,6 +45,14 @@ final class AppState {
     /// friendly without pulling in Combine.
     var composeRequestTick = 0
     var refreshRequestTick = 0
+    /// Seed paired with the next compose-request tick. The mailto:
+    /// URL handler stashes a pre-filled draft here before bumping
+    /// `composeRequestTick`; the receiver in `MessageListView` reads
+    /// and clears it when it opens the compose surface. Falls back to
+    /// `ReplyBuilder.newDraft()` when nil. Cold launches that arrive
+    /// via mailto leave the seed parked here until `MessageListView`
+    /// first appears.
+    var pendingComposeSeed: Draft?
     /// Reply / reply-all / forward intent counters bumped from the macOS
     /// menu bar so the shortcut fires regardless of which scene holds
     /// AppKit first-responder focus. The currently-presented
@@ -89,6 +97,26 @@ final class AppState {
     private let inboxBadgePollInterval: UInt64 = 60 * 1_000_000_000
 
     func requestCompose() { composeRequestTick += 1 }
+
+    /// Variant that pairs an explicit seed with the request. Used by
+    /// the mailto: URL handler; menu shortcuts and toolbar buttons
+    /// continue to call the zero-arg form, which leaves
+    /// `pendingComposeSeed` nil and lets the receiver fall back to a
+    /// fresh draft.
+    func requestCompose(seed: Draft) {
+        pendingComposeSeed = seed
+        composeRequestTick += 1
+    }
+
+    /// Reads and clears the pending compose seed. Called by the
+    /// compose-request receiver in `MessageListView` both on
+    /// `.onChange(of: composeRequestTick)` (warm path) and on the
+    /// view's initial `.task` (cold-launch mailto: arrived before the
+    /// view was in the hierarchy).
+    func consumePendingComposeSeed() -> Draft? {
+        defer { pendingComposeSeed = nil }
+        return pendingComposeSeed
+    }
     func requestRefresh() { refreshRequestTick += 1 }
     func requestReply() { replyRequestTick += 1 }
     func requestReplyAll() { replyAllRequestTick += 1 }
@@ -154,6 +182,13 @@ final class AppState {
 
     private(set) var client: CabalmailClient?
 
+    /// Local-only contacts lookup, used by message list / detail / avatar
+    /// to enrich incoming mail with the user's own name and photo for the
+    /// sender. One instance per app launch — the actor caches results for
+    /// the session. No persisted state, no network round-trip; see
+    /// `docs/0.9.x/apple-contacts-integration-plan.md`.
+    let contactsStore: ContactsStore = LiveContactsStore()
+
     func signIn(controlDomain: String, username: String, password: String) async {
         status = .signingIn
         do {
@@ -170,6 +205,7 @@ final class AppState {
             self.client = newClient
             self.status = .signedIn
             startInboxBadgePolling()
+            requestContactsAccessIfNeeded()
         } catch let error as CabalmailError {
             status = .error(message(for: error))
         } catch {
@@ -245,6 +281,7 @@ final class AppState {
             self.client = newClient
             self.status = .signedIn
             startInboxBadgePolling()
+            requestContactsAccessIfNeeded()
         } catch let error as CabalmailError {
             switch error {
             case .authExpired, .invalidCredentials, .notSignedIn:
@@ -286,6 +323,20 @@ final class AppState {
                 await self?.refreshInboxUnread()
                 try? await Task.sleep(nanoseconds: interval)
             }
+        }
+    }
+
+    /// Kick off a one-shot contacts authorization request, fire-and-forget.
+    /// `CNContactStore.requestAccess` no-ops after the user has already
+    /// responded, so calling this on every sign-in / restore is harmless.
+    /// We prompt at sign-in (rather than lazily on first compose / message
+    /// open) so the request lands while the user is already in
+    /// onboarding mode and the message list that immediately follows shows
+    /// hydrated names from the first paint.
+    private func requestContactsAccessIfNeeded() {
+        let store = contactsStore
+        Task {
+            _ = await store.requestAccess()
         }
     }
 

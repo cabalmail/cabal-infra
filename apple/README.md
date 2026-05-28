@@ -471,6 +471,23 @@ the build appears in your app's **Builds** list. First-time attach:
 macOS follows the same flow using the macOS TestFlight app (install
 from the Mac App Store).
 
+## Setting Cabalmail as the default mail handler
+
+Cabalmail registers as a `mailto:` handler on both iOS and macOS, but
+selecting it as the system default is a one-time user action — the OS
+does not let an app elect itself.
+
+- **iOS / iPadOS:** Settings → Apps → Mail → Default Mail App → pick
+  Cabalmail. (Pre-iOS 18.4 the same setting is at Settings → Mail →
+  Default Mail App.)
+- **macOS:** System Settings → Desktop & Dock → Default mail reader →
+  pick Cabalmail.
+
+Once selected, `mailto:` clicks in Safari and other apps open Cabalmail
+with a compose window pre-filled from the URL's recipients, subject,
+and body. Only the standard RFC 6068 hfields (`to`, `cc`, `bcc`,
+`subject`, `body`) are honored; other headers are dropped.
+
 ## App icons
 
 Real Cabalmail artwork is installed in both asset catalogs, rendered from
