@@ -67,6 +67,15 @@ targets:
         # compose-launch helper falls back to the sheet path there.
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
+        # Register Cabalmail as a candidate handler for `mailto:` links.
+        # iOS surfaces this in Settings -> Apps -> Mail -> Default Mail
+        # App on iOS 14+; users must opt in there for `mailto:` clicks
+        # in Safari / other apps to route here. Role Editor matches what
+        # mail clients use — we both compose and send.
+        CFBundleURLTypes:
+          - CFBundleURLName: com.cabalmail.mailto
+            CFBundleURLSchemes: [mailto]
+            CFBundleTypeRole: Editor
         # Cabalmail reads the system address book locally to suggest
         # recipient names while composing and to show contact photos
         # next to incoming mail. Contact data is never sent to a
@@ -158,6 +167,16 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         LSApplicationCategoryType: public.app-category.productivity
         NSHumanReadableCopyright: ""
+        # Register Cabalmail as a candidate handler for `mailto:` links.
+        # macOS surfaces this in System Settings -> Desktop & Dock ->
+        # Default web browser / Default mail reader; users must opt in
+        # there for `mailto:` clicks across the system to route here.
+        # Role Editor matches what mail clients use — we both compose
+        # and send.
+        CFBundleURLTypes:
+          - CFBundleURLName: com.cabalmail.mailto
+            CFBundleURLSchemes: [mailto]
+            CFBundleTypeRole: Editor
         # Mirror of the iOS string. macOS additionally requires the
         # `com.apple.security.personal-information.addressbook`
         # entitlement (see CabalmailMac.entitlements) because the app

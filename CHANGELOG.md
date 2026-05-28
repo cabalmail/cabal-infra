@@ -29,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   keeps firing.
 
 ### Added
-- Apple Contacts integration, phases 1-4 of the plan in
+- Apple Contacts integration, all five phases of the plan in
   `docs/0.9.x/apple-contacts-integration-plan.md`. CabalmailKit gains
   a `ContactsStore` protocol with a `CNContactStore`-backed actor and
   an in-memory cache keyed by lowercased `mailbox@host`;
@@ -51,8 +51,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   selection order. No contact data leaves the device; Gravatar is
   intentionally not a source, since hashing the sender's email
   against gravatar.com would opt the recipient into a third-party
-  lookup on the sender's say-so. A later phase registers Cabalmail
-  as a `mailto:` handler.
+  lookup on the sender's say-so.
+- Both Apple targets register as `mailto:` handlers. Once the user
+  selects Cabalmail as the system default mail app (iOS Settings →
+  Apps → Mail → Default Mail App; macOS System Settings → Desktop &
+  Dock → Default mail reader), clicking a `mailto:` link in any app
+  opens a Cabalmail compose window pre-filled with the URL's `to`,
+  `cc`, `bcc`, `subject`, and `body` fields per RFC 6068; cold
+  launches park the seed on `AppState` so the compose surface opens
+  on first appear. Other RFC 6068 hfields are dropped.
 - New "Folder counts" preference in the Apple Settings >
   Reading section: Unread (current default and historical
   behavior), Total, or Unread / total. The setting syncs through

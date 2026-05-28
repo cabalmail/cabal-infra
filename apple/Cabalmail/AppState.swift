@@ -45,6 +45,14 @@ final class AppState {
     /// friendly without pulling in Combine.
     var composeRequestTick = 0
     var refreshRequestTick = 0
+    /// Seed paired with the next compose-request tick. The mailto:
+    /// URL handler stashes a pre-filled draft here before bumping
+    /// `composeRequestTick`; the receiver in `MessageListView` reads
+    /// and clears it when it opens the compose surface. Falls back to
+    /// `ReplyBuilder.newDraft()` when nil. Cold launches that arrive
+    /// via mailto leave the seed parked here until `MessageListView`
+    /// first appears.
+    var pendingComposeSeed: Draft?
     /// Reply / reply-all / forward intent counters bumped from the macOS
     /// menu bar so the shortcut fires regardless of which scene holds
     /// AppKit first-responder focus. The currently-presented
@@ -89,6 +97,26 @@ final class AppState {
     private let inboxBadgePollInterval: UInt64 = 60 * 1_000_000_000
 
     func requestCompose() { composeRequestTick += 1 }
+
+    /// Variant that pairs an explicit seed with the request. Used by
+    /// the mailto: URL handler; menu shortcuts and toolbar buttons
+    /// continue to call the zero-arg form, which leaves
+    /// `pendingComposeSeed` nil and lets the receiver fall back to a
+    /// fresh draft.
+    func requestCompose(seed: Draft) {
+        pendingComposeSeed = seed
+        composeRequestTick += 1
+    }
+
+    /// Reads and clears the pending compose seed. Called by the
+    /// compose-request receiver in `MessageListView` both on
+    /// `.onChange(of: composeRequestTick)` (warm path) and on the
+    /// view's initial `.task` (cold-launch mailto: arrived before the
+    /// view was in the hierarchy).
+    func consumePendingComposeSeed() -> Draft? {
+        defer { pendingComposeSeed = nil }
+        return pendingComposeSeed
+    }
     func requestRefresh() { refreshRequestTick += 1 }
     func requestReply() { replyRequestTick += 1 }
     func requestReplyAll() { replyAllRequestTick += 1 }

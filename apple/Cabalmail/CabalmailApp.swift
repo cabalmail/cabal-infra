@@ -39,6 +39,15 @@ struct CabalmailApp: App {
                         appState.client?.setCrashReportingEnabled(true)
                     }
                 }
+                .onOpenURL { url in
+                    // Cold-launch mailto: arrives here before any view
+                    // is wired to observe `composeRequestTick`. The seed
+                    // is parked on `AppState.pendingComposeSeed` and
+                    // drained by `MessageListView`'s initial `.task`.
+                    if let mailto = MailtoURL(url) {
+                        appState.requestCompose(seed: mailto.draft())
+                    }
+                }
         }
         // iPadOS and visionOS open compose as a real scene; iPhone
         // ignores the group because `composeOpensInWindow` keeps it on
