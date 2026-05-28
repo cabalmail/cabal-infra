@@ -507,26 +507,25 @@ appear in Settings → Apps → Mail → Default Mail App, even though
    profile in App Store Connect (the profile must list the new
    entitlement). Pull the regenerated profile into CI's
    `IOS_APP_STORE_PROFILE_UUID` secret.
-3. Add `apple/Cabalmail/Cabalmail.entitlements` with the key:
+3. Edit `apple/Cabalmail/Cabalmail.entitlements` (already wired into
+   the iOS target's `CODE_SIGN_ENTITLEMENTS` via `project.yml`) to
+   add the key:
 
    ```xml
    <key>com.apple.developer.mail-client</key>
    <true/>
    ```
 
-4. Wire it into the iOS target's `settings.base` block in
-   `apple/project.yml` (matching the macOS target's pattern):
+   The file ships empty so the path is set up from day one; only the
+   key needs to be added when approval lands.
 
-   ```yaml
-   CODE_SIGN_ENTITLEMENTS: Cabalmail/Cabalmail.entitlements
-   ```
-
-5. Regenerate the Xcode project (`xcodegen generate`) and ship a new
+4. Regenerate the Xcode project (`xcodegen generate`) and ship a new
    TestFlight build against the updated profile.
 
-Doing step 3 / 4 *before* Apple approves the entitlement will break
-CI signing, so the entitlement file isn't checked in. Apple's rules
-also forbid combining `com.apple.developer.mail-client` with
+Adding the `<true/>` value *before* Apple approves the entitlement
+will break CI signing — the profile won't carry it, and codesign will
+refuse. Apple's rules also forbid combining
+`com.apple.developer.mail-client` with
 `com.apple.developer.web-browser` in the same app — pick one.
 
 Once the entitlement lands and the user picks Cabalmail in Settings,
