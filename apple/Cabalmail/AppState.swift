@@ -45,6 +45,14 @@ final class AppState {
     /// friendly without pulling in Combine.
     var composeRequestTick = 0
     var refreshRequestTick = 0
+    /// Seed paired with the next compose-request tick. The mailto:
+    /// URL handler stashes a pre-filled draft here before bumping
+    /// `composeRequestTick`; the receiver in `MessageListView` reads
+    /// and clears it when it opens the compose surface. Falls back to
+    /// `ReplyBuilder.newDraft()` when nil. Cold launches that arrive
+    /// via mailto leave the seed parked here until `MessageListView`
+    /// first appears.
+    var pendingComposeSeed: Draft?
     /// Reply / reply-all / forward intent counters bumped from the macOS
     /// menu bar so the shortcut fires regardless of which scene holds
     /// AppKit first-responder focus. The currently-presented
@@ -79,34 +87,18 @@ final class AppState {
     /// can mirror what shows on the dock/home-screen badge.
     private(set) var inboxUnreadCount: Int = 0
 
-    /// Per-folder unread counts. Authoritative writes land from
-    /// `FolderListViewModel.refreshUnreadCounts` (via STATUS walk);
-    /// optimistic deltas come from flag-change and dispose paths so the
-    /// sidebar badges shift the moment the user acts, without waiting for
-    /// the next STATUS round trip.
-    private(set) var folderUnreadCounts: [String: Int] = [:]
-
-    /// Replace the count for one folder. Called after an authoritative
-    /// `STATUS (UNSEEN)`.
-    func setUnreadCount(folderPath: String, count: Int) {
-        folderUnreadCounts[folderPath] = max(0, count)
-    }
-
-    /// Replace the whole map. Used by the folder list view model after a
-    /// full STATUS walk so any folders that have disappeared drop out.
-    func setUnreadCounts(_ counts: [String: Int]) {
-        folderUnreadCounts = counts.mapValues { max(0, $0) }
-    }
-
-    /// Bump (or reduce) the count for one folder. Clamped at zero so a
-    /// stale +1 from a doubled signal can't make the badge negative.
-    func applyUnreadDelta(folderPath: String, delta: Int) {
-        let current = folderUnreadCounts[folderPath] ?? 0
-        folderUnreadCounts[folderPath] = max(0, current + delta)
-    }
+    // Per-folder unread + total counts live in an extension on
+    // `AppStateCounts.swift` so this file stays under the swiftlint
+    // file-length cap. The storage is still owned by this type — the
+    // extension just hosts the helpers.
+    var folderUnreadCounts: [String: Int] = [:]
+    var folderTotalCounts: [String: Int] = [:]
     private var inboxBadgeTask: Task<Void, Never>?
     private let inboxBadgePollInterval: UInt64 = 60 * 1_000_000_000
 
+    // `requestCompose(seed:)` and `consumePendingComposeSeed()` live in
+    // `AppStateCompose.swift` alongside the contacts-access helper so
+    // this file stays under the SwiftLint length cap.
     func requestCompose() { composeRequestTick += 1 }
     func requestRefresh() { refreshRequestTick += 1 }
     func requestReply() { replyRequestTick += 1 }
@@ -173,6 +165,13 @@ final class AppState {
 
     private(set) var client: CabalmailClient?
 
+    /// Local-only contacts lookup, used by message list / detail / avatar
+    /// to enrich incoming mail with the user's own name and photo for the
+    /// sender. One instance per app launch — the actor caches results for
+    /// the session. No persisted state, no network round-trip; see
+    /// `docs/0.9.x/apple-contacts-integration-plan.md`.
+    let contactsStore: ContactsStore = LiveContactsStore()
+
     func signIn(controlDomain: String, username: String, password: String) async {
         status = .signingIn
         do {
@@ -189,6 +188,7 @@ final class AppState {
             self.client = newClient
             self.status = .signedIn
             startInboxBadgePolling()
+            requestContactsAccessIfNeeded()
         } catch let error as CabalmailError {
             status = .error(message(for: error))
         } catch {
@@ -264,6 +264,7 @@ final class AppState {
             self.client = newClient
             self.status = .signedIn
             startInboxBadgePolling()
+            requestContactsAccessIfNeeded()
         } catch let error as CabalmailError {
             switch error {
             case .authExpired, .invalidCredentials, .notSignedIn:

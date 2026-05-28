@@ -33,6 +33,15 @@ struct CabalmailMacApp: App {
                         appState.client?.setCrashReportingEnabled(true)
                     }
                 }
+                .onOpenURL { url in
+                    // mailto: clicks from Safari / Mail.app / other
+                    // apps route here once the user has set Cabalmail
+                    // as macOS's default mail handler (System Settings
+                    // -> Desktop & Dock -> Default mail reader).
+                    if let mailto = MailtoURL(url) {
+                        appState.requestCompose(seed: mailto.draft())
+                    }
+                }
         }
         .commands {
             CabalmailCommands(appState: appState)

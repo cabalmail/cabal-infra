@@ -5,6 +5,87 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.45] - 2026-05-28
+
+### Added
+- Apple Contacts integration, all five phases of the plan in
+  `docs/0.9.x/apple-contacts-integration-plan.md`. CabalmailKit gains
+  a `ContactsStore` protocol with a `CNContactStore`-backed actor and
+  an in-memory cache keyed by lowercased `mailbox@host`;
+  `NSContactsUsageDescription` ships in both targets' Info.plists and
+  the `com.apple.security.personal-information.addressbook`
+  entitlement ships in `CabalmailMac.entitlements`. Permission is
+  requested at sign-in / restore so the prompt surfaces in
+  onboarding context. The message list and message-detail header now
+  fall back to the user's own name from Contacts when the envelope's
+  RFC 5322 phrase is empty, and `AvatarView` now tries the
+  contact's photo before the BIMI logo, with the initials circle as
+  the always-present base layer. The compose To / Cc / Bcc fields
+  show an inline suggestion list filtered by name word-prefix, email
+  local-part prefix, or substring; tapping a suggestion replaces the
+  trailing token with `"Name" <addr@host>, ` so the next recipient
+  can be typed immediately. Each recipient field also gains a
+  contacts-picker button that opens a searchable, multi-select
+  sheet of the user's address book — picked entries are appended in
+  selection order. No contact data leaves the device; Gravatar is
+  intentionally not a source, since hashing the sender's email
+  against gravatar.com would opt the recipient into a third-party
+  lookup on the sender's say-so.
+- Both Apple targets register as `mailto:` handlers via
+  `CFBundleURLTypes`. On macOS this is enough — Cabalmail appears in
+  System Settings → Desktop & Dock → Default mail reader, and clicks
+  on `mailto:` links anywhere on the system route here once the user
+  selects it. On iOS, Apple gates default-mail-app candidacy behind
+  the `com.apple.developer.mail-client` entitlement, which has to be
+  requested case-by-case via Apple's default-app web form on
+  developer.apple.com; the iOS app will not appear in Settings →
+  Apps → Mail → Default Mail App until that entitlement is granted
+  and the provisioning profile is regenerated. `apple/README.md` documents the request flow. When
+  Cabalmail is the active default, clicking a `mailto:` link opens a
+  compose window pre-filled with the URL's `to`, `cc`, `bcc`,
+  `subject`, and `body` fields per RFC 6068; cold launches park the
+  seed on `AppState` so the compose surface opens on first appear.
+  Other RFC 6068 hfields are dropped.
+- New "Folder counts" preference in the Apple Settings >
+  Reading section: Unread (current default and historical
+  behavior), Total, or Unread / total. The setting syncs through
+  iCloud's key-value store alongside the other reading
+  preferences, so picking it on one device applies to all.
+
+### Changed
+- The Apple sidebar's folder-count loading now follows subscription
+  as the user's explicit signal about which folders deserve
+  background work. At launch the inbox STATUS races the LIST so the
+  inbox unread badge is correct by the time the user's eyes reach
+  it; the rest of the subscribed folders fan out concurrently in
+  the background. Unsubscribed folders are no longer walked on
+  launch or on manual refresh — their counts are fetched on demand
+  only when the user selects one. The "All folders" disclosure
+  group now defaults to collapsed for fresh installs, matching the
+  new contract that unsubscribed folders are an explicit-pull
+  surface rather than something the app keeps current.
+- Selecting an unsubscribed folder now pins a banner to the bottom
+  of the message list: "This unsubscribed folder is not kept up-to-
+  date automatically." The banner includes a counter-clockwise
+  refresh button that re-fetches the envelope list and the folder's
+  STATUS counts in one gesture. The banner uses
+  `safeAreaInset(edge: .bottom)` so the last message row scrolls
+  above it and the row-level "load more on appear" pagination hook
+  keeps firing.
+
+
+### Fixed
+- Creating a new address (`/new`) and the admin "create address on
+  behalf of user" endpoint (`/new_address_admin`) no longer fail at
+  Lambda init with an unhandled exception. Both functions import
+  `helper.user_authorized_for_domain`, but their `requirements.txt`
+  was empty after the per-function dep bundling switch in 0.9.x, so
+  `helper.py`'s module-level `from imapclient import IMAPClient`
+  and `import dns.resolver` raised `ModuleNotFoundError` before the
+  handler's try/except could run. Both functions now bundle
+  `imapclient==2.3.1` and `dnspython==2.3.0` like every other
+  helper-consuming Lambda.
+
 ## [0.9.44] - 2026-05-27
 
 ### Changed

@@ -43,6 +43,11 @@ struct MessageListView: View {
     @State var envelopeToMove: Envelope?
     /// `true` while the bulk-move destination picker is presented.
     @State var bulkMoveSheetPresented = false
+    /// `true` while the unsubscribed-folder banner's Refresh button is
+    /// in flight. The banner lives in `+UnsubscribedBanner.swift`;
+    /// hoisting the flag here lets the `safeAreaInset` builder see it
+    /// without a separate `@State` per inset.
+    @State var unsubscribedRefreshInFlight = false
     /// macOS focus state for the inline search field. Drives the
     /// "show the search-refinement filter button only while the user
     /// is engaged with search" rule. The iOS / iPadOS / visionOS path
@@ -126,6 +131,14 @@ struct MessageListView: View {
                 await model?.loadInitial()
                 await model?.startWatching()
             }
+            // Cold-launch mailto: arrives via `.onOpenURL` in the app
+            // entry, which parks the seed on AppState before this
+            // view's `.onChange(of: composeRequestTick)` is in the
+            // hierarchy. Drain it here so the compose surface opens
+            // on first appear.
+            if let seed = appState.consumePendingComposeSeed() {
+                presentCompose(seed: seed)
+            }
         }
         // Wall-clock fallback refresh. IDLE usually pushes new mail within
         // seconds, but long-lived IDLE sockets can stall silently (iOS
@@ -156,7 +169,11 @@ struct MessageListView: View {
         // refresh. Using the currently-displayed list as the refresh target
         // matches every desktop mail client's convention.
         .onChange(of: appState.composeRequestTick) { _, _ in
-            presentCompose(seed: ReplyBuilder.newDraft())
+            // Menu shortcuts pass nil; the mailto: URL handler parks
+            // a pre-filled draft. Fall back to a fresh draft when no
+            // seed accompanies the request.
+            let seed = appState.consumePendingComposeSeed() ?? ReplyBuilder.newDraft()
+            presentCompose(seed: seed)
         }
         .onChange(of: appState.refreshRequestTick) { _, _ in
             // Manual refresh paths (Mailbox > Refresh menu item, the
@@ -309,7 +326,12 @@ struct MessageListView: View {
         }
         .safeAreaInset(edge: .top, spacing: 0) { topInset(model: model) }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if model.bulkMode { bulkActionBar(model: model) }
+            VStack(spacing: 0) {
+                if !folder.isSubscribed {
+                    unsubscribedFolderBanner(model: model)
+                }
+                if model.bulkMode { bulkActionBar(model: model) }
+            }
         }
     }
 

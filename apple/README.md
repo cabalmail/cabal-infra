@@ -471,6 +471,134 @@ the build appears in your app's **Builds** list. First-time attach:
 macOS follows the same flow using the macOS TestFlight app (install
 from the Mac App Store).
 
+## Setting Cabalmail as the default mail handler
+
+Cabalmail registers as a `mailto:` handler on both iOS and macOS, but
+selecting it as the system default is a one-time user action — the OS
+does not let an app elect itself.
+
+**macOS** works out of the box. Register the scheme (already done by
+`CFBundleURLTypes` in `project.yml`) and the app shows up in System
+Settings → Desktop & Dock → Default mail reader; pick Cabalmail and
+`mailto:` clicks across the system route here.
+
+**iOS / iPadOS** gates default-mail-app candidacy behind the
+`com.apple.developer.mail-client` entitlement, which Apple approves
+case-by-case. Until the entitlement is granted, the app will *not*
+appear in Settings → Apps → Mail → Default Mail App, even though
+`CFBundleURLTypes` is registered. To enable it:
+
+1. Submit the default-app entitlement request via Apple's web form
+   at <https://developer.apple.com/contact/request/default-mail-client>
+   (the form replaced the older `default-app-requests@apple.com`
+   address). The form asks the submitter to confirm, among other
+   things, that:
+   - the app specifies the `mailto:` scheme in its `Info.plist`,
+   - the app can send a message to any valid email recipient,
+   - invoking the `mailto:` handler opens a new compose view with
+     the To: address set to the target of the URL,
+   - the app can receive a message from any email sender.
+
+   All four are true of Cabalmail today; the wiring is in place and
+   the unit tests in `CabalmailKit/Tests/CabalmailKitTests/MailtoURLTests.swift`
+   cover the parser. Apple reviews and grants the entitlement
+   against your team.
+2. After approval, regenerate the iOS distribution provisioning
+   profile in App Store Connect (the profile must list the new
+   entitlement). Pull the regenerated profile into CI's
+   `IOS_APP_STORE_PROFILE_UUID` secret.
+3. Edit `apple/Cabalmail/Cabalmail.entitlements` (already wired into
+   the iOS target's `CODE_SIGN_ENTITLEMENTS` via `project.yml`) to
+   add the key:
+
+   ```xml
+   <key>com.apple.developer.mail-client</key>
+   <true/>
+   ```
+
+   The file ships empty so the path is set up from day one; only the
+   key needs to be added when approval lands.
+
+4. Regenerate the Xcode project (`xcodegen generate`) and ship a new
+   TestFlight build against the updated profile.
+
+Adding the `<true/>` value *before* Apple approves the entitlement
+will break CI signing — the profile won't carry it, and codesign will
+refuse. Apple's rules also forbid combining
+`com.apple.developer.mail-client` with
+`com.apple.developer.web-browser` in the same app — pick one.
+
+Once the entitlement lands and the user picks Cabalmail in Settings,
+`mailto:` clicks in Safari and other apps open Cabalmail with a
+compose window pre-filled from the URL's recipients, subject, and
+body. Only the standard RFC 6068 hfields (`to`, `cc`, `bcc`,
+`subject`, `body`) are honored; other headers are dropped.
+
+### Default-app request: cover-letter template
+
+The web form's free-text box asks for "additional information and test
+credentials to confirm that your app meets the mail client criteria."
+Before submitting, provision a fresh Cabalmail account on the
+deployment the TestFlight build points at, then paste the text below
+into the form with the bracketed placeholders filled in. Rotate the
+password (or delete the account) after Apple completes review.
+
+```
+Cabalmail is a self-hosted native email system for iOS, iPadOS,
+visionOS, and macOS. The app is a real mail client: composes traverse
+open-Internet SMTP via the operator's own SMTP-OUT relay with DKIM
+signing, and inbound mail is delivered through standard SMTP-IN +
+IMAP. There is no proprietary transport. Source code, including the
+mailto: handler and parser, is public at
+https://github.com/cabalmail/cabal-infra (see apple/Cabalmail/
+CabalmailApp.swift and apple/CabalmailKit/Sources/CabalmailKit/
+Compose/MailtoURL.swift).
+
+Test credentials for the deployment this TestFlight build is built
+against:
+
+  Control domain:  [example.cabalmail.com]
+  Username:        [apple-review]
+  Password:        [<one-time-password>]
+  Test address:    [apple-review@mail.example.cabalmail.com]
+
+The build prompts for the control domain on first launch. Sign in
+with the credentials above; the message list opens to the test
+account's Inbox.
+
+Verifying each criterion:
+
+1. mailto: in Info.plist. The shipped IPA's Info.plist contains
+   CFBundleURLTypes with scheme "mailto" and role "Editor". This is
+   generated from apple/project.yml.
+
+2. Sends to any valid recipient. From the message list, tap the
+   compose button. Pick a From address from the picker (an initial
+   address is auto-provisioned at signup; "Create new address..."
+   makes more). Enter any external email address in To, then send.
+   Delivery to Gmail, iCloud, and Outlook has been verified in
+   production.
+
+3. mailto: handler opens compose with To: pre-filled. The
+   .onOpenURL handler parses incoming URLs with the RFC 6068 parser
+   covered by MailtoURLTests.swift and routes the result to compose.
+   The macOS sibling target shares the same wiring and has been
+   verified end-to-end — clicking mailto:test@example.com?subject=Hi
+   &body=Hello in Safari opens compose with all three fields
+   pre-filled. iOS uses the same SwiftUI .onOpenURL modifier on the
+   same handler.
+
+4. Receives mail from any sender. Send a test message from any
+   external account to the test address above; it lands in the
+   account's Inbox within seconds. The SMTP-IN tier applies spam
+   filtering and fail2ban but no sender allowlist.
+```
+
+References:
+- [Default Mail Client entitlement request form](https://developer.apple.com/contact/request/default-mail-client)
+- [`com.apple.developer.mail-client`](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.mail-client)
+- [Apple Developer forum thread on the approval flow](https://developer.apple.com/forums/thread/650300)
+
 ## App icons
 
 Real Cabalmail artwork is installed in both asset catalogs, rendered from

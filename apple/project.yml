@@ -67,6 +67,25 @@ targets:
         # compose-launch helper falls back to the sheet path there.
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
+        # Register Cabalmail as a candidate handler for `mailto:` links.
+        # iOS surfaces this in Settings -> Apps -> Mail -> Default Mail
+        # App on iOS 14+; users must opt in there for `mailto:` clicks
+        # in Safari / other apps to route here. Role Editor matches what
+        # mail clients use — we both compose and send.
+        CFBundleURLTypes:
+          - CFBundleURLName: com.cabalmail.mailto
+            CFBundleURLSchemes: [mailto]
+            CFBundleTypeRole: Editor
+        # Cabalmail reads the system address book locally to suggest
+        # recipient names while composing and to show contact photos
+        # next to incoming mail. Contact data is never sent to a
+        # server; the only addresses that leave the device are the
+        # ones the user explicitly types into To/Cc/Bcc.
+        NSContactsUsageDescription: >-
+          Cabalmail uses your contacts on this device to suggest
+          recipients while you compose and to show your saved photo
+          and name next to mail you receive. Your contacts stay on
+          this device.
         # Route the plist's version fields through build settings so CI's
         # `CURRENT_PROJECT_VERSION=<timestamp>` actually reaches the shipped
         # Info.plist. Without this, XcodeGen hardcodes "1" / "1.0" and
@@ -93,6 +112,16 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        # The entitlements file ships empty by default — the only iOS
+        # entitlement Cabalmail has ever needed is the Apple-managed
+        # `com.apple.developer.mail-client`, which a fork enables by
+        # adding the key once Apple has approved the request. See the
+        # file's own comment, and the "Setting Cabalmail as the
+        # default mail handler" section of `apple/README.md`, for the
+        # rollout. Wiring this empty file from day one means a fork
+        # only edits the entitlements file, not `project.yml`, when
+        # approval lands.
+        CODE_SIGN_ENTITLEMENTS: Cabalmail/Cabalmail.entitlements
       configs:
         # Manual-signing settings live ON THE APP TARGET ONLY, not in the
         # xcodebuild command line. CabalmailKit ships resources, which
@@ -127,6 +156,8 @@ targets:
       # view code.
       - path: Cabalmail/ContentView.swift
       - path: Cabalmail/AppState.swift
+      - path: Cabalmail/AppStateCompose.swift
+      - path: Cabalmail/AppStateCounts.swift
       - path: Cabalmail/AppStateSignals.swift
       - path: Cabalmail/Views
       - path: Cabalmail/ViewModels
@@ -147,6 +178,25 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         LSApplicationCategoryType: public.app-category.productivity
         NSHumanReadableCopyright: ""
+        # Register Cabalmail as a candidate handler for `mailto:` links.
+        # macOS surfaces this in System Settings -> Desktop & Dock ->
+        # Default web browser / Default mail reader; users must opt in
+        # there for `mailto:` clicks across the system to route here.
+        # Role Editor matches what mail clients use — we both compose
+        # and send.
+        CFBundleURLTypes:
+          - CFBundleURLName: com.cabalmail.mailto
+            CFBundleURLSchemes: [mailto]
+            CFBundleTypeRole: Editor
+        # Mirror of the iOS string. macOS additionally requires the
+        # `com.apple.security.personal-information.addressbook`
+        # entitlement (see CabalmailMac.entitlements) because the app
+        # runs sandboxed; the usage description alone is not enough.
+        NSContactsUsageDescription: >-
+          Cabalmail uses your contacts on this device to suggest
+          recipients while you compose and to show your saved photo
+          and name next to mail you receive. Your contacts stay on
+          this device.
         # See the Cabalmail target's equivalent comment — XcodeGen defaults
         # these to "1" / "1.0" unless explicitly plumbed through to the
         # build settings.

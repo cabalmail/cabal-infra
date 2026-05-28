@@ -7,26 +7,48 @@ import CabalmailKit
 ///
 /// Folder ordering follows the plan's sidebar layout: Inbox pinned first,
 /// then user folders, then system folders grouped (Sent/Drafts/Trash/Junk).
-/// Unread counts come from per-folder `STATUS (UNSEEN)` — walked sequentially
-/// because all commands share one IMAP connection.
+///
+/// Subscription is the user's signal about *attention*: subscribed folders
+/// get their counts refreshed proactively (INBOX first so the user lands
+/// in the inbox ASAP, then the rest concurrently), while unsubscribed
+/// folders are strictly on-demand — `refreshFolderCount(path:)` is the
+/// only path that ever touches them, and only when the user selects one.
 @Observable
 @MainActor
 final class FolderListViewModel {
     var folders: [Folder] = []
     var isLoading = false
     var errorMessage: String?
+    /// Paths whose counts are currently being fetched on-demand (lazy
+    /// unsubscribed selection or the in-pane refresh button). The view
+    /// reads this to render a spinner on the unsubscribed-folder banner's
+    /// Refresh button.
+    var refreshingPaths: Set<String> = []
 
     private let client: CabalmailClient
     private let appState: AppState
+    /// Cap concurrent STATUS walks during the subscribed back-fill. The
+    /// Lambda is happy to be hit in parallel, but the shared IMAP
+    /// connection underneath serializes anyway — keeping this small
+    /// avoids stacking dozens of pending tasks on first launch without
+    /// changing real throughput.
+    private let subscribedRefreshConcurrency = 4
 
     init(client: CabalmailClient, appState: AppState) {
         self.client = client
         self.appState = appState
     }
 
+    /// Manual refresh path (toolbar / pull-to-refresh on the sidebar).
+    /// Re-fetches the folder list, then re-fetches subscribed-folder
+    /// counts only. Previously-cached unsubscribed counts (from a user
+    /// selection earlier in the session) survive the refresh per the
+    /// subscription contract: we only spend resources proactively on
+    /// folders the user has explicitly subscribed to.
     func refresh() async {
         await loadFolderList()
-        await refreshUnreadCounts()
+        await refreshInboxCount()
+        await refreshSubscribedCounts()
     }
 
     /// Fetch + publish the folder list without walking per-folder STATUS.
@@ -90,23 +112,63 @@ final class FolderListViewModel {
         )
     }
 
-    /// Walk each folder's `STATUS (UNSEEN)` and publish the counts in one
-    /// shot. Runs after `loadFolderList()` (and after the parent has had a
-    /// chance to seed a default selection), so the sidebar's unread badges
-    /// fill in without blocking initial navigation.
-    func refreshUnreadCounts() async {
-        var counts: [String: Int] = [:]
-        for folder in folders {
-            if let status = try? await client.imapClient.status(path: folder.path) {
-                let count = status.unseen ?? 0
-                counts[folder.path] = count
-                // Publish each count as it arrives so badges fill in
-                // progressively rather than appearing in one shot at the
-                // end of the walk.
-                appState.setUnreadCount(folderPath: folder.path, count: count)
+    /// Fetch the INBOX STATUS and publish it. Called as early as
+    /// possible at launch so the inbox badge is correct by the time the
+    /// user's eyes reach it. Safe to fire in parallel with
+    /// `loadFolderList()` — they share the IMAP connection but the API-
+    /// backed client serializes its own commands, so the two requests
+    /// just queue.
+    func refreshInboxCount() async {
+        await fetchAndPublishCount(path: "INBOX")
+    }
+
+    /// Walk subscribed folders (minus INBOX, which `refreshInboxCount()`
+    /// handles separately) and publish counts as they land. Runs with
+    /// bounded concurrency via a task group so a mailbox with 20+
+    /// subscribed folders fills in noticeably faster than the previous
+    /// sequential walk.
+    func refreshSubscribedCounts() async {
+        let targets = subscribedFolders
+            .map(\.path)
+            .filter { $0.caseInsensitiveCompare("INBOX") != .orderedSame }
+        guard !targets.isEmpty else { return }
+        await withTaskGroup(of: Void.self) { group in
+            var inFlight = 0
+            var index = 0
+            while index < targets.count || inFlight > 0 {
+                while inFlight < subscribedRefreshConcurrency, index < targets.count {
+                    let path = targets[index]
+                    index += 1
+                    inFlight += 1
+                    group.addTask { [weak self] in
+                        await self?.fetchAndPublishCount(path: path)
+                    }
+                }
+                await group.next()
+                inFlight -= 1
             }
         }
-        appState.setUnreadCounts(counts)
+    }
+
+    /// On-demand fetch for a single folder, intended for unsubscribed
+    /// folders the user has selected (or asked to refresh via the
+    /// in-pane banner). Tracks the path in `refreshingPaths` so the UI
+    /// can show a spinner while the round trip is in flight.
+    func refreshFolderCount(path: String) async {
+        await fetchAndPublishCount(path: path)
+    }
+
+    @discardableResult
+    private func fetchAndPublishCount(path: String) async -> FolderStatus? {
+        refreshingPaths.insert(path)
+        defer { refreshingPaths.remove(path) }
+        guard let status = try? await client.imapClient.status(path: path) else {
+            return nil
+        }
+        let unread = status.unseen ?? 0
+        let total = status.messages ?? 0
+        appState.setFolderCounts(folderPath: path, unread: unread, total: total)
+        return status
     }
 
     /// Inbox first, then user folders arranged as a `/`-delimited tree

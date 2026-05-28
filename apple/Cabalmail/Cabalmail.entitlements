@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+        This file is wired into the iOS target's signing via
+        `apple/project.yml` (CODE_SIGN_ENTITLEMENTS). It ships empty
+        on purpose: the only iOS entitlement Cabalmail has ever needed
+        is `com.apple.developer.mail-client`, which Apple grants
+        case-by-case via:
+
+          https://developer.apple.com/contact/request/default-mail-client
+
+        Once Apple approves the request and the matching provisioning
+        profile has been regenerated to carry the entitlement, add:
+
+          <key>com.apple.developer.mail-client</key>
+          <true/>
+
+        See the "Setting Cabalmail as the default mail handler" section
+        in apple/README.md for the full rollout.
+    -->
+</dict>
+</plist>
