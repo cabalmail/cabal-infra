@@ -9,16 +9,6 @@ import UniformTypeIdentifiers
 /// other files can't see it.
 extension ComposeView {
     @ViewBuilder
-    func recipientField(_ label: String, text: Binding<String>) -> some View {
-        TextField(label, text: text, axis: .vertical)
-            .autocorrectionDisabled()
-            #if os(iOS) || os(visionOS)
-            .textInputAutocapitalization(.never)
-            .keyboardType(.emailAddress)
-            #endif
-    }
-
-    @ViewBuilder
     func attachmentRow(_ attachment: ComposeViewModel.ComposeAttachment) -> some View {
         HStack {
             Image(systemName: "paperclip")

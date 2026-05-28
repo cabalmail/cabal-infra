@@ -19,8 +19,10 @@ import UniformTypeIdentifiers
 struct ComposeView: View {
     /// SwiftUI focus targets. The body editor is a WKWebView and isn't part
     /// of the SwiftUI focus system; we route body focus through
-    /// `RichTextEditorController.focusAtStart()` instead.
-    enum Field: Hashable { case to }
+    /// `RichTextEditorController.focusAtStart()` instead. The three
+    /// recipient cases drive the autocomplete-suggestion list, which
+    /// renders below whichever recipient field currently holds focus.
+    enum Field: Hashable { case to, cc, bcc }
 
     @State var model: ComposeViewModel
     @Environment(AppState.self) private var appState
@@ -29,6 +31,10 @@ struct ComposeView: View {
     @FocusState private var focusedField: Field?
     @State private var showNewAddressSheet = false
     @State private var showDiscardConfirm = false
+    /// All-contacts snapshot for the suggestion list. Loaded once when
+    /// the compose surface appears; the inner filter runs locally on
+    /// each keystroke. Stays empty when contacts access isn't granted.
+    @State private var recipientCandidates: [RecipientSuggestion] = []
     #if os(iOS) || os(visionOS)
     @State private var showPhotoPicker = false
     @State private var photoSelection: [PhotosPickerItem] = []
@@ -53,10 +59,27 @@ struct ComposeView: View {
                     )
                 }
                 Section("Recipients") {
-                    recipientField("To", text: $model.toText)
-                        .focused($focusedField, equals: .to)
-                    recipientField("Cc", text: $model.ccText)
-                    recipientField("Bcc", text: $model.bccText)
+                    RecipientFieldWithSuggestions(
+                        label: "To",
+                        text: $model.toText,
+                        candidates: recipientCandidates,
+                        focusBinding: $focusedField,
+                        focusValue: Field.to
+                    )
+                    RecipientFieldWithSuggestions(
+                        label: "Cc",
+                        text: $model.ccText,
+                        candidates: recipientCandidates,
+                        focusBinding: $focusedField,
+                        focusValue: Field.cc
+                    )
+                    RecipientFieldWithSuggestions(
+                        label: "Bcc",
+                        text: $model.bccText,
+                        candidates: recipientCandidates,
+                        focusBinding: $focusedField,
+                        focusValue: Field.bcc
+                    )
                 }
                 Section("Subject") {
                     TextField("Subject", text: $model.subject)
@@ -96,6 +119,11 @@ struct ComposeView: View {
             .toolbar { toolbarContent }
             .task {
                 await model.start()
+                // Snapshot contacts once per compose surface. The list is
+                // bounded by the user's address book; the per-keystroke
+                // filter runs locally against this in-memory array so
+                // typing doesn't take a CNContactStore hit per character.
+                recipientCandidates = await appState.contactsStore.allEntries()
                 #if os(macOS)
                 // Capture the projected Binding so the closure can flip
                 // dialog state from outside the view body. @State storage
@@ -193,11 +221,11 @@ struct ComposeView: View {
 
     // MARK: - Subviews
 
-    // `recipientField`, `attachmentRow`, `ingestFileImport`, and
-    // `mimeType(for:)` live in `ComposeView+Subviews.swift` to keep the
-    // struct body under the SwiftLint length ceiling. Anything that
-    // touches `@State private` storage stays here because `private`
-    // doesn't reach an extension in another file.
+    // `attachmentRow`, `ingestFileImport`, and `mimeType(for:)` live in
+    // `ComposeView+Subviews.swift` to keep the struct body under the
+    // SwiftLint length ceiling. Anything that touches `@State private`
+    // storage stays here because `private` doesn't reach an extension
+    // in another file.
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {

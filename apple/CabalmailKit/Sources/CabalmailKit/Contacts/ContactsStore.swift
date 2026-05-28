@@ -29,6 +29,14 @@ public protocol ContactsStore: Sendable {
     /// has one. `CNContact.thumbnailImageData` — typically a few KB,
     /// suitable for a 40pt avatar without further downscaling.
     func photoData(for address: EmailAddress) async -> Data?
+
+    /// One `RecipientSuggestion` per (contact, email) pair across the
+    /// authorized address book. A contact with three emails contributes
+    /// three rows; duplicates by email are removed. Returns an empty
+    /// array when access isn't granted. Callers should expect this to
+    /// be cached for the session — invoking it from compose-view
+    /// `.task` is fine.
+    func allEntries() async -> [RecipientSuggestion]
 }
 
 /// Mirror of `CNAuthorizationStatus` exposed without dragging the
@@ -76,6 +84,12 @@ public enum ContactsAuthorizationStatus: Sendable, Equatable {
 public actor LiveContactsStore: ContactsStore {
     private let store = CNContactStore()
     private var cache: [String: ContactLookup] = [:]
+    /// Session cache for `allEntries`. Populated lazily on first call.
+    /// We don't subscribe to `CNContactStoreDidChange` — the cost of a
+    /// rebuild-per-launch is small and saves the complexity of an
+    /// invalidation path. Compose autocomplete sees newly-added
+    /// contacts on the next launch.
+    private var allEntriesCache: [RecipientSuggestion]?
 
     public init() {}
 
@@ -97,6 +111,41 @@ public actor LiveContactsStore: ContactsStore {
 
     public func photoData(for address: EmailAddress) async -> Data? {
         lookup(for: address).photoData
+    }
+
+    public func allEntries() async -> [RecipientSuggestion] {
+        guard authorizationStatusIsAccessible else { return [] }
+        if let cached = allEntriesCache { return cached }
+        let entries = fetchAllEntries()
+        allEntriesCache = entries
+        return entries
+    }
+
+    private func fetchAllEntries() -> [RecipientSuggestion] {
+        let keysToFetch: [CNKeyDescriptor] = [
+            CNContactFormatter.descriptorForRequiredKeys(for: .fullName),
+            CNContactNicknameKey as CNKeyDescriptor,
+            CNContactOrganizationNameKey as CNKeyDescriptor,
+            CNContactEmailAddressesKey as CNKeyDescriptor,
+        ]
+        let request = CNContactFetchRequest(keysToFetch: keysToFetch)
+        var seenEmails = Set<String>()
+        var collected: [RecipientSuggestion] = []
+        do {
+            try store.enumerateContacts(with: request) { contact, _ in
+                let name = Self.bestDisplayName(for: contact)
+                for emailEntry in contact.emailAddresses {
+                    let email = (emailEntry.value as String).trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !email.isEmpty else { continue }
+                    let key = email.lowercased()
+                    guard seenEmails.insert(key).inserted else { continue }
+                    collected.append(RecipientSuggestion(name: name, email: email))
+                }
+            }
+        } catch {
+            return []
+        }
+        return collected
     }
 
     private func lookup(for address: EmailAddress) -> ContactLookup {
@@ -160,6 +209,7 @@ public struct NoopContactsStore: ContactsStore {
     public func requestAccess() async -> Bool { false }
     public func displayName(for address: EmailAddress) async -> String? { nil }
     public func photoData(for address: EmailAddress) async -> Data? { nil }
+    public func allEntries() async -> [RecipientSuggestion] { [] }
 }
 
 struct ContactLookup: Sendable, Equatable {
