@@ -67,6 +67,16 @@ targets:
         # compose-launch helper falls back to the sheet path there.
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
+        # Cabalmail reads the system address book locally to suggest
+        # recipient names while composing and to show contact photos
+        # next to incoming mail. Contact data is never sent to a
+        # server; the only addresses that leave the device are the
+        # ones the user explicitly types into To/Cc/Bcc.
+        NSContactsUsageDescription: >-
+          Cabalmail uses your contacts on this device to suggest
+          recipients while you compose and to show your saved photo
+          and name next to mail you receive. Your contacts stay on
+          this device.
         # Route the plist's version fields through build settings so CI's
         # `CURRENT_PROJECT_VERSION=<timestamp>` actually reaches the shipped
         # Info.plist. Without this, XcodeGen hardcodes "1" / "1.0" and
@@ -148,6 +158,15 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         LSApplicationCategoryType: public.app-category.productivity
         NSHumanReadableCopyright: ""
+        # Mirror of the iOS string. macOS additionally requires the
+        # `com.apple.security.personal-information.addressbook`
+        # entitlement (see CabalmailMac.entitlements) because the app
+        # runs sandboxed; the usage description alone is not enough.
+        NSContactsUsageDescription: >-
+          Cabalmail uses your contacts on this device to suggest
+          recipients while you compose and to show your saved photo
+          and name next to mail you receive. Your contacts stay on
+          this device.
         # See the Cabalmail target's equivalent comment — XcodeGen defaults
         # these to "1" / "1.0" unless explicitly plumbed through to the
         # build settings.

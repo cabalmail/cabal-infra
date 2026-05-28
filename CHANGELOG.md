@@ -29,6 +29,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   keeps firing.
 
 ### Added
+- Foundation for Apple Contacts integration in the iOS and macOS
+  clients. CabalmailKit gains a `ContactsStore` protocol with a
+  `CNContactStore`-backed actor and an in-memory cache keyed by
+  lowercased `mailbox@host`. `NSContactsUsageDescription` ships in
+  both targets' Info.plists and the
+  `com.apple.security.personal-information.addressbook` entitlement
+  ships in `CabalmailMac.entitlements`. No user-visible behavior
+  yet — this is Phase 1 of the plan in
+  `docs/0.9.x/apple-contacts-integration-plan.md`; later phases wire
+  the store into the message list, message detail avatar, compose
+  autocomplete, a contact-picker affordance, and a `mailto:` handler.
 - New "Folder counts" preference in the Apple Settings >
   Reading section: Unread (current default and historical
   behavior), Total, or Unread / total. The setting syncs through
