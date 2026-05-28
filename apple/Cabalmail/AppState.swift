@@ -154,6 +154,13 @@ final class AppState {
 
     private(set) var client: CabalmailClient?
 
+    /// Local-only contacts lookup, used by message list / detail / avatar
+    /// to enrich incoming mail with the user's own name and photo for the
+    /// sender. One instance per app launch — the actor caches results for
+    /// the session. No persisted state, no network round-trip; see
+    /// `docs/0.9.x/apple-contacts-integration-plan.md`.
+    let contactsStore: ContactsStore = LiveContactsStore()
+
     func signIn(controlDomain: String, username: String, password: String) async {
         status = .signingIn
         do {
@@ -170,6 +177,7 @@ final class AppState {
             self.client = newClient
             self.status = .signedIn
             startInboxBadgePolling()
+            requestContactsAccessIfNeeded()
         } catch let error as CabalmailError {
             status = .error(message(for: error))
         } catch {
@@ -245,6 +253,7 @@ final class AppState {
             self.client = newClient
             self.status = .signedIn
             startInboxBadgePolling()
+            requestContactsAccessIfNeeded()
         } catch let error as CabalmailError {
             switch error {
             case .authExpired, .invalidCredentials, .notSignedIn:
@@ -286,6 +295,20 @@ final class AppState {
                 await self?.refreshInboxUnread()
                 try? await Task.sleep(nanoseconds: interval)
             }
+        }
+    }
+
+    /// Kick off a one-shot contacts authorization request, fire-and-forget.
+    /// `CNContactStore.requestAccess` no-ops after the user has already
+    /// responded, so calling this on every sign-in / restore is harmless.
+    /// We prompt at sign-in (rather than lazily on first compose / message
+    /// open) so the request lands while the user is already in
+    /// onboarding mode and the message list that immediately follows shows
+    /// hydrated names from the first paint.
+    private func requestContactsAccessIfNeeded() {
+        let store = contactsStore
+        Task {
+            _ = await store.requestAccess()
         }
     }
 
