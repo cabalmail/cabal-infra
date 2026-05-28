@@ -96,27 +96,10 @@ final class AppState {
     private var inboxBadgeTask: Task<Void, Never>?
     private let inboxBadgePollInterval: UInt64 = 60 * 1_000_000_000
 
+    // `requestCompose(seed:)` and `consumePendingComposeSeed()` live in
+    // `AppStateCompose.swift` alongside the contacts-access helper so
+    // this file stays under the SwiftLint length cap.
     func requestCompose() { composeRequestTick += 1 }
-
-    /// Variant that pairs an explicit seed with the request. Used by
-    /// the mailto: URL handler; menu shortcuts and toolbar buttons
-    /// continue to call the zero-arg form, which leaves
-    /// `pendingComposeSeed` nil and lets the receiver fall back to a
-    /// fresh draft.
-    func requestCompose(seed: Draft) {
-        pendingComposeSeed = seed
-        composeRequestTick += 1
-    }
-
-    /// Reads and clears the pending compose seed. Called by the
-    /// compose-request receiver in `MessageListView` both on
-    /// `.onChange(of: composeRequestTick)` (warm path) and on the
-    /// view's initial `.task` (cold-launch mailto: arrived before the
-    /// view was in the hierarchy).
-    func consumePendingComposeSeed() -> Draft? {
-        defer { pendingComposeSeed = nil }
-        return pendingComposeSeed
-    }
     func requestRefresh() { refreshRequestTick += 1 }
     func requestReply() { replyRequestTick += 1 }
     func requestReplyAll() { replyAllRequestTick += 1 }
@@ -323,20 +306,6 @@ final class AppState {
                 await self?.refreshInboxUnread()
                 try? await Task.sleep(nanoseconds: interval)
             }
-        }
-    }
-
-    /// Kick off a one-shot contacts authorization request, fire-and-forget.
-    /// `CNContactStore.requestAccess` no-ops after the user has already
-    /// responded, so calling this on every sign-in / restore is harmless.
-    /// We prompt at sign-in (rather than lazily on first compose / message
-    /// open) so the request lands while the user is already in
-    /// onboarding mode and the message list that immediately follows shows
-    /// hydrated names from the first paint.
-    private func requestContactsAccessIfNeeded() {
-        let store = contactsStore
-        Task {
-            _ = await store.requestAccess()
         }
     }
 
