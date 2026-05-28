@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.9.45] - Unreleased
+## [0.9.45] - 2026-05-28
 
 ### Added
 - Apple Contacts integration, all five phases of the plan in
@@ -72,6 +72,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `safeAreaInset(edge: .bottom)` so the last message row scrolls
   above it and the row-level "load more on appear" pagination hook
   keeps firing.
+
+
+### Fixed
+- Creating a new address (`/new`) and the admin "create address on
+  behalf of user" endpoint (`/new_address_admin`) no longer fail at
+  Lambda init with an unhandled exception. Both functions import
+  `helper.user_authorized_for_domain`, but their `requirements.txt`
+  was empty after the per-function dep bundling switch in 0.9.x, so
+  `helper.py`'s module-level `from imapclient import IMAPClient`
+  and `import dns.resolver` raised `ModuleNotFoundError` before the
+  handler's try/except could run. Both functions now bundle
+  `imapclient==2.3.1` and `dnspython==2.3.0` like every other
+  helper-consuming Lambda.
+
+## [0.9.44] - 2026-05-27
+
+### Changed
 - The Apple compose window's reply / reply-all body seed switches
   from `> `-prefixed quoting to a Markdown horizontal rule (`---`)
   above the `On <date>, <sender> wrote:` attribution, with the
@@ -120,18 +137,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reliably regardless of which scene was last focused, and the
   compose window comes to the front via `NSApp.activate` so it
   no longer occasionally opens behind the main mail window.
-
+  
 ### Fixed
-- Creating a new address (`/new`) and the admin "create address on
-  behalf of user" endpoint (`/new_address_admin`) no longer fail at
-  Lambda init with an unhandled exception. Both functions import
-  `helper.user_authorized_for_domain`, but their `requirements.txt`
-  was empty after the per-function dep bundling switch in 0.9.x, so
-  `helper.py`'s module-level `from imapclient import IMAPClient`
-  and `import dns.resolver` raised `ModuleNotFoundError` before the
-  handler's try/except could run. Both functions now bundle
-  `imapclient==2.3.1` and `dnspython==2.3.0` like every other
-  helper-consuming Lambda.
 - "Save Draft" in the Apple compose window now writes the message
   to the user's IMAP `Drafts` folder, not just a hidden on-disk
   JSON cache. The Cancel button's "Save Draft" confirmation
