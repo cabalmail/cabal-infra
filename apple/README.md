@@ -534,6 +534,66 @@ compose window pre-filled from the URL's recipients, subject, and
 body. Only the standard RFC 6068 hfields (`to`, `cc`, `bcc`,
 `subject`, `body`) are honored; other headers are dropped.
 
+### Default-app request: cover-letter template
+
+The web form's free-text box asks for "additional information and test
+credentials to confirm that your app meets the mail client criteria."
+Before submitting, provision a fresh Cabalmail account on the
+deployment the TestFlight build points at, then paste the text below
+into the form with the bracketed placeholders filled in. Rotate the
+password (or delete the account) after Apple completes review.
+
+```
+Cabalmail is a self-hosted native email system for iOS, iPadOS,
+visionOS, and macOS. The app is a real mail client: composes traverse
+open-Internet SMTP via the operator's own SMTP-OUT relay with DKIM
+signing, and inbound mail is delivered through standard SMTP-IN +
+IMAP. There is no proprietary transport. Source code, including the
+mailto: handler and parser, is public at
+https://github.com/cabalmail/cabal-infra (see apple/Cabalmail/
+CabalmailApp.swift and apple/CabalmailKit/Sources/CabalmailKit/
+Compose/MailtoURL.swift).
+
+Test credentials for the deployment this TestFlight build is built
+against:
+
+  Control domain:  [example.cabalmail.com]
+  Username:        [apple-review]
+  Password:        [<one-time-password>]
+  Test address:    [apple-review@mail.example.cabalmail.com]
+
+The build prompts for the control domain on first launch. Sign in
+with the credentials above; the message list opens to the test
+account's Inbox.
+
+Verifying each criterion:
+
+1. mailto: in Info.plist. The shipped IPA's Info.plist contains
+   CFBundleURLTypes with scheme "mailto" and role "Editor". This is
+   generated from apple/project.yml.
+
+2. Sends to any valid recipient. From the message list, tap the
+   compose button. Pick a From address from the picker (an initial
+   address is auto-provisioned at signup; "Create new address..."
+   makes more). Enter any external email address in To, then send.
+   Delivery to Gmail, iCloud, and Outlook has been verified in
+   production.
+
+3. mailto: handler opens compose with To: pre-filled. The
+   .onOpenURL handler parses incoming URLs with the RFC 6068 parser
+   covered by MailtoURLTests.swift and routes the result to compose.
+   The macOS sibling target shares the same wiring and has been
+   verified end-to-end — clicking mailto:test@example.com?subject=Hi
+   &body=Hello in Safari opens compose with all three fields
+   pre-filled. iOS uses the same SwiftUI .onOpenURL modifier on the
+   same handler.
+
+4. Receives mail from any sender. Send a test message from any
+   external account to the test address above; it lands in the
+   account's Inbox within seconds. The SMTP-IN tier applies spam
+   filtering and fail2ban but no sender allowlist.
+```
+
 References:
 - [`com.apple.developer.mail-client`](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.mail-client)
 - [Apple Developer forum thread on the approval flow](https://developer.apple.com/forums/thread/650300)
