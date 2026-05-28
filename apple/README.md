@@ -489,9 +489,10 @@ appear in Settings → Apps → Mail → Default Mail App, even though
 `CFBundleURLTypes` is registered. To enable it:
 
 1. Submit the default-app entitlement request via Apple's web form
-   on developer.apple.com (the form replaced the older
-   `default-app-requests@apple.com` address). The form asks the
-   submitter to confirm, among other things, that:
+   at <https://developer.apple.com/contact/request/default-mail-client>
+   (the form replaced the older `default-app-requests@apple.com`
+   address). The form asks the submitter to confirm, among other
+   things, that:
    - the app specifies the `mailto:` scheme in its `Info.plist`,
    - the app can send a message to any valid email recipient,
    - invoking the `mailto:` handler opens a new compose view with
@@ -595,6 +596,7 @@ Verifying each criterion:
 ```
 
 References:
+- [Default Mail Client entitlement request form](https://developer.apple.com/contact/request/default-mail-client)
 - [`com.apple.developer.mail-client`](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.mail-client)
 - [Apple Developer forum thread on the approval flow](https://developer.apple.com/forums/thread/650300)
 
