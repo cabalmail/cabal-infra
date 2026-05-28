@@ -1,11 +1,13 @@
 import SwiftUI
 import CabalmailKit
 
-/// One labeled recipient field (To / Cc / Bcc) with an inline contacts
-/// autocomplete list below it. The list renders only while the field
-/// is focused and the user is in the middle of typing a token; tapping
-/// a row replaces the trailing token with the formatted recipient and
-/// keeps focus in the field so the next address can be typed inline.
+/// One labeled recipient field (To / Cc / Bcc) with two affordances on
+/// top of the underlying `TextField`:
+///
+/// 1. Inline autocomplete: while the field is focused and the user is
+///    typing a token, a tappable suggestion list renders below.
+/// 2. A trailing `person.crop.circle.badge.plus` button that opens a
+///    full contact-picker sheet for multi-select adds.
 ///
 /// Focus state lives in the parent (`ComposeView`) — this view binds
 /// into it via `FocusState.Binding` and an opaque `Hashable` value
@@ -19,15 +21,29 @@ struct RecipientFieldWithSuggestions<FocusValue: Hashable>: View {
     let focusBinding: FocusState<FocusValue?>.Binding
     let focusValue: FocusValue
 
+    @State private var showPicker = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            TextField(label, text: $text, axis: .vertical)
-                .autocorrectionDisabled()
-                #if os(iOS) || os(visionOS)
-                .textInputAutocapitalization(.never)
-                .keyboardType(.emailAddress)
-                #endif
-                .focused(focusBinding, equals: focusValue)
+            HStack(alignment: .top, spacing: 8) {
+                TextField(label, text: $text, axis: .vertical)
+                    .autocorrectionDisabled()
+                    #if os(iOS) || os(visionOS)
+                    .textInputAutocapitalization(.never)
+                    .keyboardType(.emailAddress)
+                    #endif
+                    .focused(focusBinding, equals: focusValue)
+                Button {
+                    showPicker = true
+                } label: {
+                    Image(systemName: "person.crop.circle.badge.plus")
+                        .imageScale(.large)
+                        .accessibilityLabel("Pick \(label) recipients from Contacts")
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.accentColor)
+                .disabled(candidates.isEmpty)
+            }
 
             if focusBinding.wrappedValue == focusValue {
                 let token = RecipientAutocomplete.trailingToken(in: text)
@@ -38,6 +54,11 @@ struct RecipientFieldWithSuggestions<FocusValue: Hashable>: View {
                 if !suggestions.isEmpty {
                     suggestionList(suggestions)
                 }
+            }
+        }
+        .sheet(isPresented: $showPicker) {
+            ContactPickerSheet(candidates: candidates) { picked in
+                applyPicked(picked)
             }
         }
     }
@@ -87,5 +108,24 @@ struct RecipientFieldWithSuggestions<FocusValue: Hashable>: View {
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())
+    }
+
+    /// Chains the multi-pick result through `applying` so the first
+    /// commit replaces whatever partial token the user might have
+    /// typed before opening the sheet, and subsequent picks append.
+    /// The picker hands us its selection in display order, so the
+    /// recipients land in the field in the same order the user saw
+    /// them.
+    private func applyPicked(_ picked: [RecipientSuggestion]) {
+        guard !picked.isEmpty else { return }
+        var working = text
+        for suggestion in picked {
+            working = RecipientAutocomplete.applying(
+                suggestion: suggestion,
+                toFieldText: working
+            )
+        }
+        text = working
+        focusBinding.wrappedValue = focusValue
     }
 }

@@ -65,10 +65,10 @@ Acceptance: typing `joh` in To with John Doe in Contacts shows a suggestion row;
 ### Phase 4: contact picker sheet
 
 - A small Contacts-glyph button next to each recipient field (To / Cc / Bcc) opens a sheet.
-- iOS / visionOS: wrap `CNContactPickerViewController` in `UIViewControllerRepresentable`. Configure `displayedPropertyKeys = [CNContactEmailAddressesKey]` so the picker shows emails as the selectable rows.
-- macOS: wrap `CNContactPicker` (`NSViewControllerRepresentable`).
-- The sheet returns one or more `(name, email)` pairs; the compose view appends each as `\"Name\" <addr@host>` to the field the button belongs to.
-- Permission denied: the sheet shows the standard "Open Settings" affordance the OS provides; we don't reimplement it.
+- Sheet is a SwiftUI `List` backed by `ContactsStore.allEntries()` (the same snapshot the autocomplete already reads), with `.searchable` for filtering and multi-select via tap toggles. One source for iOS, macOS, and visionOS.
+- Originally scoped as `CNContactPickerViewController` (iOS) / `CNContactPicker` (macOS) wrappers; replaced with the in-house SwiftUI list because `CNContactPicker` on macOS is a popover bound to a view (not a controller) and doesn't slot cleanly into a SwiftUI sheet, and the in-house list lets all three platforms share one code path with the existing suggestion-list aesthetic.
+- The sheet returns one or more `(name, email)` pairs; the recipient view chains them through `RecipientAutocomplete.applying(...)` so the first commit replaces any partial token, and subsequent picks append.
+- Permission denied / empty book: the sheet shows an empty-state pointing the user at Settings.
 
 Acceptance: tapping the picker glyph next to To and selecting two contacts appends both as formatted recipients.
 
