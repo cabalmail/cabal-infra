@@ -488,10 +488,20 @@ case-by-case. Until the entitlement is granted, the app will *not*
 appear in Settings → Apps → Mail → Default Mail App, even though
 `CFBundleURLTypes` is registered. To enable it:
 
-1. Email `default-app-requests@apple.com` from the team's Apple ID
-   describing Cabalmail and confirming it's a real email client (can
-   compose, send, and receive). Apple reviews and grants the
-   entitlement against your team.
+1. Submit the default-app entitlement request via Apple's web form
+   on developer.apple.com (the form replaced the older
+   `default-app-requests@apple.com` address). The form asks the
+   submitter to confirm, among other things, that:
+   - the app specifies the `mailto:` scheme in its `Info.plist`,
+   - the app can send a message to any valid email recipient,
+   - invoking the `mailto:` handler opens a new compose view with
+     the To: address set to the target of the URL,
+   - the app can receive a message from any email sender.
+
+   All four are true of Cabalmail today; the wiring is in place and
+   the unit tests in `CabalmailKit/Tests/CabalmailKitTests/MailtoURLTests.swift`
+   cover the parser. Apple reviews and grants the entitlement
+   against your team.
 2. After approval, regenerate the iOS distribution provisioning
    profile in App Store Connect (the profile must list the new
    entitlement). Pull the regenerated profile into CI's

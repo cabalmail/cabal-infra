@@ -58,10 +58,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on `mailto:` links anywhere on the system route here once the user
   selects it. On iOS, Apple gates default-mail-app candidacy behind
   the `com.apple.developer.mail-client` entitlement, which has to be
-  requested case-by-case from `default-app-requests@apple.com`; the
-  iOS app will not appear in Settings → Apps → Mail → Default Mail
-  App until that entitlement is granted and the provisioning profile
-  is regenerated. `apple/README.md` documents the request flow. When
+  requested case-by-case via Apple's default-app web form on
+  developer.apple.com; the iOS app will not appear in Settings →
+  Apps → Mail → Default Mail App until that entitlement is granted
+  and the provisioning profile is regenerated. `apple/README.md` documents the request flow. When
   Cabalmail is the active default, clicking a `mailto:` link opens a
   compose window pre-filled with the URL's `to`, `cc`, `bcc`,
   `subject`, and `body` fields per RFC 6068; cold launches park the
