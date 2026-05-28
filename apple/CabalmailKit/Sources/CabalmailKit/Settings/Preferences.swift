@@ -90,6 +90,20 @@ public enum BodyRenderMode: String, Codable, Sendable, CaseIterable, Identifiabl
     public var id: String { rawValue }
 }
 
+/// Which number(s) to show next to each folder in the sidebar.
+///
+/// `.unread` is the historical behavior — a single count of UNSEEN messages.
+/// `.total` matches mailbox managers (and what an IMAP `STATUS (MESSAGES)`
+/// returns) for users who care about volume rather than attention. `.both`
+/// renders as `unread/total` so both numbers are visible at a glance.
+public enum FolderCountDisplay: String, Codable, Sendable, CaseIterable, Identifiable {
+    case unread
+    case total
+    case both
+
+    public var id: String { rawValue }
+}
+
 // MARK: - Storage protocol
 
 /// Minimal key/value surface `Preferences` needs from its backing store.
@@ -140,6 +154,7 @@ public final class Preferences {
         case theme = "cabalmail.prefs.theme"
         case crashReportingEnabled = "cabalmail.prefs.crash_reporting_enabled"
         case defaultBodyRenderMode = "cabalmail.prefs.default_body_render_mode"
+        case folderCountDisplay = "cabalmail.prefs.folder_count_display"
     }
 
     public var markAsRead: MarkAsReadBehavior {
@@ -175,6 +190,11 @@ public final class Preferences {
     public var defaultBodyRenderMode: BodyRenderMode {
         didSet { persist(.defaultBodyRenderMode, defaultBodyRenderMode.rawValue) }
     }
+    /// Sidebar folder-count rendering. Defaults to `.unread` to match the
+    /// pre-existing behavior so users who never visit Settings see no change.
+    public var folderCountDisplay: FolderCountDisplay {
+        didSet { persist(.folderCountDisplay, folderCountDisplay.rawValue) }
+    }
 
     private let store: PreferenceStore
     private var isReloading = false
@@ -198,6 +218,9 @@ public final class Preferences {
         ) == "1"
         self.defaultBodyRenderMode = Self.readEnum(
             .defaultBodyRenderMode, store: store, default: .original
+        )
+        self.folderCountDisplay = Self.readEnum(
+            .folderCountDisplay, store: store, default: .unread
         )
         store.startObserving { [weak self] in
             self?.reload()
@@ -223,6 +246,9 @@ public final class Preferences {
         defaultBodyRenderMode = Self.readEnum(
             .defaultBodyRenderMode, store: store, default: .original
         )
+        folderCountDisplay = Self.readEnum(
+            .folderCountDisplay, store: store, default: .unread
+        )
     }
 
     private func persist(_ key: Key, _ value: String?) {
@@ -238,153 +264,6 @@ public final class Preferences {
     }
 }
 
-// MARK: - In-memory store (tests + previews)
-
-/// Storage adapter that keeps values in a dictionary. Useful for SwiftUI
-/// previews and unit tests — `simulateExternalChange(_:)` mimics the iCloud
-/// push notification path that real deployments exercise.
-@MainActor
-public final class InMemoryPreferenceStore: PreferenceStore {
-    private var values: [String: String] = [:]
-    private var handler: (@MainActor () -> Void)?
-
-    public init(initialValues: [String: String] = [:]) {
-        self.values = initialValues
-    }
-
-    public func stringValue(forKey key: String) -> String? {
-        values[key]
-    }
-
-    public func setString(_ value: String?, forKey key: String) {
-        if let value {
-            values[key] = value
-        } else {
-            values.removeValue(forKey: key)
-        }
-    }
-
-    public func startObserving(_ handler: @escaping @MainActor () -> Void) {
-        self.handler = handler
-    }
-
-    public func stopObserving() {
-        handler = nil
-    }
-
-    /// Applies a mutation to the backing dictionary and then fires the
-    /// external-change handler, as if another device pushed the change
-    /// through iCloud's key-value store.
-    public func simulateExternalChange(_ mutation: (InMemoryPreferenceStore) -> Void) {
-        mutation(self)
-        handler?()
-    }
-
-    /// Mutates the dictionary without firing the observer, mirroring a
-    /// `UbiquitousPreferenceStore` write that originated locally.
-    public func setSilently(_ value: String?, forKey key: String) {
-        setString(value, forKey: key)
-    }
-}
-
-// MARK: - Ubiquitous (iCloud + UserDefaults) store
-
-#if canImport(Foundation) && !os(Linux)
-/// Production `PreferenceStore` — writes go to both `UserDefaults` (fast
-/// local reads) and `NSUbiquitousKeyValueStore` (cross-device sync).
-///
-/// iCloud pushes arrive on the main queue via
-/// `NSUbiquitousKeyValueStore.didChangeExternallyNotification`; the store
-/// forwards them to the `startObserving` handler, which drives
-/// `Preferences.reload()` above.
-///
-/// The store still functions without an iCloud account — `NSUbiquitousKey
-/// ValueStore` simply becomes a no-op, and `UserDefaults` carries the
-/// whole load. On-device-only installs (privacy-conscious users who have
-/// disabled iCloud) therefore degrade gracefully.
-@MainActor
-public final class UbiquitousPreferenceStore: PreferenceStore {
-    private let defaults: UserDefaults
-    private let cloud: NSUbiquitousKeyValueStore
-    private var observer: NSObjectProtocol?
-    private var handler: (@MainActor () -> Void)?
-
-    public init(
-        defaults: UserDefaults = .standard,
-        cloud: NSUbiquitousKeyValueStore = .default
-    ) {
-        self.defaults = defaults
-        self.cloud = cloud
-        // Trigger an initial pull from the cloud store so first-launch-on-
-        // a-second-device doesn't show defaults until a change arrives.
-        cloud.synchronize()
-    }
-
-    public func stringValue(forKey key: String) -> String? {
-        // Prefer the local value — it's either the most recent write from
-        // this device or a cloud value we already mirrored here. Fall back
-        // to the cloud store when a device is brand new and iCloud hasn't
-        // yet fired the external-change notification.
-        if let local = defaults.string(forKey: key) { return local }
-        return cloud.string(forKey: key)
-    }
-
-    public func setString(_ value: String?, forKey key: String) {
-        if let value {
-            defaults.set(value, forKey: key)
-            cloud.set(value, forKey: key)
-        } else {
-            defaults.removeObject(forKey: key)
-            cloud.removeObject(forKey: key)
-        }
-        cloud.synchronize()
-    }
-
-    public func startObserving(_ handler: @escaping @MainActor () -> Void) {
-        stopObserving()
-        self.handler = handler
-        observer = NotificationCenter.default.addObserver(
-            forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
-            object: cloud,
-            queue: .main
-        ) { [weak self] notification in
-            // Extract the Sendable payload on whichever queue Foundation
-            // chose (main, per the registration), then hop explicitly to
-            // the main actor for the stored-property writes. The `@MainActor`
-            // annotation on this class makes `self` Sendable, which is what
-            // lets the weak capture survive the `@Sendable` closure
-            // signature the strict-concurrency `addObserver` requires.
-            let changedKeys = (notification.userInfo?[
-                NSUbiquitousKeyValueStoreChangedKeysKey
-            ] as? [String]) ?? []
-            MainActor.assumeIsolated {
-                self?.applyExternalChanges(keys: changedKeys)
-            }
-        }
-    }
-
-    private func applyExternalChanges(keys: [String]) {
-        for key in keys {
-            if let value = cloud.string(forKey: key) {
-                defaults.set(value, forKey: key)
-            } else {
-                defaults.removeObject(forKey: key)
-            }
-        }
-        handler?()
-    }
-
-    public func stopObserving() {
-        if let observer {
-            NotificationCenter.default.removeObserver(observer)
-            self.observer = nil
-        }
-    }
-
-    deinit {
-        if let observer {
-            NotificationCenter.default.removeObserver(observer)
-        }
-    }
-}
-#endif
+// Concrete `PreferenceStore` implementations live in sibling files:
+// `InMemoryPreferenceStore.swift` (tests + previews) and
+// `UbiquitousPreferenceStore.swift` (production, UserDefaults + iCloud).

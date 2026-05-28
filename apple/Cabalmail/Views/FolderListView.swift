@@ -7,11 +7,17 @@ import CabalmailKit
 /// and replaces the middle column in the iPad/macOS/visionOS split view. The
 /// selection state is owned here so the parent split view can bind to it.
 struct FolderListView: View {
-    @Environment(AppState.self) private var appState
-    @State private var model: FolderListViewModel?
+    // Properties without `private` are reachable from the same-type
+    // extensions in `FolderListView+Helpers.swift`; the others stay
+    // file-local. Matches the access discipline used by
+    // `MessageListView` and its `+Bulk` / `+Search` / `+macOS`
+    // extensions in this directory.
+    @Environment(AppState.self) var appState
+    @Environment(Preferences.self) var preferences
+    @State var model: FolderListViewModel?
     @State private var didNotifyLoad = false
-    @State private var filterQuery: String = ""
-    @State private var isRefreshing = false
+    @State var filterQuery: String = ""
+    @State var isRefreshing = false
     @Binding var selection: Folder?
     /// Called exactly once, the first time the folder list successfully
     /// loads. `MailRootView` uses it to seed a default `selection` so the
@@ -20,16 +26,19 @@ struct FolderListView: View {
     var onFoldersLoaded: ([Folder]) -> Void = { _ in }
 
     // Section expand/collapse state - persisted so the sidebar comes up the
-    // way the user left it. Default expanded.
+    // way the user left it. Subscribed defaults open (that's where the
+    // user's attention lives); "All folders" defaults collapsed because
+    // it's a long list of folders the user has explicitly opted out of
+    // proactive tracking on.
     @AppStorage("cabalmail.folder.section.subscribed.expanded")
     private var subscribedExpanded: Bool = true
     @AppStorage("cabalmail.folder.section.all.expanded")
-    private var allExpanded: Bool = true
+    private var allExpanded: Bool = false
     // Per-folder collapse state. Stored as a newline-joined string because
     // @AppStorage doesn't natively support Set; folder paths cannot contain
     // newlines so this is unambiguous.
     @AppStorage("cabalmail.folder.collapsedPaths")
-    private var collapsedPathsRaw: String = ""
+    var collapsedPathsRaw: String = ""
 
     var body: some View {
         let collapsedSet = decodeCollapsed()
@@ -109,62 +118,28 @@ struct FolderListView: View {
             if model == nil, let client = appState.client {
                 let newModel = FolderListViewModel(client: client, appState: appState)
                 model = newModel
-                // Fetch + publish the folder list, then notify the parent so
-                // it can seed Inbox selection immediately. The unread-count
-                // walk runs afterwards in the background, so badges fill in
-                // without blocking the message list from loading.
+                // Race the inbox STATUS against the folder list so the
+                // inbox badge is correct by the time the user's eyes
+                // reach it — the message list itself starts loading the
+                // moment `onFoldersLoaded` fires below, so anything we
+                // can finish before then is free.
+                async let inbox: () = newModel.refreshInboxCount()
                 await newModel.loadFolderList()
+                _ = await inbox
                 if !didNotifyLoad, !newModel.folders.isEmpty {
                     didNotifyLoad = true
                     onFoldersLoaded(newModel.folders)
                 }
-                await newModel.refreshUnreadCounts()
+                // Back-fill the rest of the subscribed folders'
+                // counts. Unsubscribed folders are fetched lazily by
+                // `lazyFetchCountIfNeeded` when the user selects one.
+                await newModel.refreshSubscribedCounts()
             }
         }
         .onChange(of: selection?.path) { _, newPath in
             autoExpandAncestors(of: newPath)
+            lazyFetchCountIfNeeded(path: newPath)
         }
-    }
-
-    private func manualRefresh() async {
-        guard let model, !isRefreshing else { return }
-        isRefreshing = true
-        defer { isRefreshing = false }
-        await model.refresh()
-    }
-
-    private func filteredFolders(_ folders: [Folder]) -> [Folder] {
-        let needle = filterQuery.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !needle.isEmpty else { return folders }
-        return folders.filter { folder in
-            folder.path.lowercased().contains(needle)
-                || folder.name.lowercased().contains(needle)
-        }
-    }
-
-    private func decodeCollapsed() -> Set<String> {
-        guard !collapsedPathsRaw.isEmpty else { return [] }
-        return Set(collapsedPathsRaw.split(separator: "\n").map(String.init))
-    }
-
-    private func encodeCollapsed(_ set: Set<String>) -> String {
-        set.sorted().joined(separator: "\n")
-    }
-
-    private func toggleCollapse(_ path: String) {
-        var set = decodeCollapsed()
-        if set.contains(path) { set.remove(path) } else { set.insert(path) }
-        collapsedPathsRaw = encodeCollapsed(set)
-    }
-
-    private func autoExpandAncestors(of path: String?) {
-        guard let path else { return }
-        var set = decodeCollapsed()
-        var changed = false
-        for ancestor in FolderTree.ancestors(of: path) where set.remove(ancestor) != nil {
-            changed = true
-        }
-        if changed { collapsedPathsRaw = encodeCollapsed(set) }
     }
 
     @ViewBuilder
@@ -176,7 +151,10 @@ struct FolderListView: View {
     ) -> some View {
         row(
             for: folder,
-            unread: appState.folderUnreadCounts[folder.path] ?? 0,
+            badge: countBadgeText(
+                unread: appState.folderUnreadCounts[folder.path],
+                total: appState.folderTotalCounts[folder.path]
+            ),
             depth: depth,
             hasChildren: model.hasChildren(folder),
             isCollapsed: collapsed.contains(folder.path)
@@ -208,7 +186,7 @@ struct FolderListView: View {
     @ViewBuilder
     private func row(
         for folder: Folder,
-        unread: Int,
+        badge: String?,
         depth: Int,
         hasChildren: Bool,
         isCollapsed: Bool
@@ -250,8 +228,8 @@ struct FolderListView: View {
                 .foregroundStyle(iconForeground(isSelected: isSelected))
             Text(folder.name)
             Spacer()
-            if unread > 0 {
-                Text("\(unread)")
+            if let badge {
+                Text(badge)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 8)
@@ -269,23 +247,4 @@ struct FolderListView: View {
         #endif
     }
 
-    private func iconForeground(isSelected: Bool) -> AnyShapeStyle {
-        #if os(macOS)
-        return AnyShapeStyle(.tint)
-        #else
-        return isSelected ? AnyShapeStyle(Color.white) : AnyShapeStyle(.tint)
-        #endif
-    }
-
-    private func iconName(for folder: Folder) -> String {
-        switch folder.path {
-        case "INBOX":   return "tray"
-        case "Sent":    return "paperplane"
-        case "Drafts":  return "doc"
-        case "Trash":   return "trash"
-        case "Junk":    return "xmark.bin"
-        case "Archive": return "archivebox"
-        default:        return "folder"
-        }
-    }
 }

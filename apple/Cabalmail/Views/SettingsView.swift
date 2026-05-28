@@ -109,6 +109,11 @@ struct SettingsView: View {
                 Text("Original").tag(BodyRenderMode.original)
                 Text("Reader").tag(BodyRenderMode.reader)
             }
+            Picker("Folder counts", selection: $preferences.folderCountDisplay) {
+                Text("Unread").tag(FolderCountDisplay.unread)
+                Text("Total").tag(FolderCountDisplay.total)
+                Text("Unread / total").tag(FolderCountDisplay.both)
+            }
         }
     }
 

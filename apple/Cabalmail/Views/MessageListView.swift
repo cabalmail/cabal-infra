@@ -43,6 +43,11 @@ struct MessageListView: View {
     @State var envelopeToMove: Envelope?
     /// `true` while the bulk-move destination picker is presented.
     @State var bulkMoveSheetPresented = false
+    /// `true` while the unsubscribed-folder banner's Refresh button is
+    /// in flight. The banner lives in `+UnsubscribedBanner.swift`;
+    /// hoisting the flag here lets the `safeAreaInset` builder see it
+    /// without a separate `@State` per inset.
+    @State var unsubscribedRefreshInFlight = false
     /// macOS focus state for the inline search field. Drives the
     /// "show the search-refinement filter button only while the user
     /// is engaged with search" rule. The iOS / iPadOS / visionOS path
@@ -309,7 +314,12 @@ struct MessageListView: View {
         }
         .safeAreaInset(edge: .top, spacing: 0) { topInset(model: model) }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if model.bulkMode { bulkActionBar(model: model) }
+            VStack(spacing: 0) {
+                if !folder.isSubscribed {
+                    unsubscribedFolderBanner(model: model)
+                }
+                if model.bulkMode { bulkActionBar(model: model) }
+            }
         }
     }
 

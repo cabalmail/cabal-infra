@@ -5,7 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.9.44] - 2026-05-27
+## [0.9.45] - Unreleased
+
+### Changed
+- The Apple sidebar's folder-count loading now follows subscription
+  as the user's explicit signal about which folders deserve
+  background work. At launch the inbox STATUS races the LIST so the
+  inbox unread badge is correct by the time the user's eyes reach
+  it; the rest of the subscribed folders fan out concurrently in
+  the background. Unsubscribed folders are no longer walked on
+  launch or on manual refresh — their counts are fetched on demand
+  only when the user selects one. The "All folders" disclosure
+  group now defaults to collapsed for fresh installs, matching the
+  new contract that unsubscribed folders are an explicit-pull
+  surface rather than something the app keeps current.
+- Selecting an unsubscribed folder now pins a banner to the bottom
+  of the message list: "This unsubscribed folder is not kept up-to-
+  date automatically." The banner includes a counter-clockwise
+  refresh button that re-fetches the envelope list and the folder's
+  STATUS counts in one gesture. The banner uses
+  `safeAreaInset(edge: .bottom)` so the last message row scrolls
+  above it and the row-level "load more on appear" pagination hook
+  keeps firing.
+
+### Added
+- New "Folder counts" preference in the Apple Settings >
+  Reading section: Unread (current default and historical
+  behavior), Total, or Unread / total. The setting syncs through
+  iCloud's key-value store alongside the other reading
+  preferences, so picking it on one device applies to all.
 
 ### Changed
 - The Apple compose window's reply / reply-all body seed switches
