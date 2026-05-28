@@ -52,14 +52,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   intentionally not a source, since hashing the sender's email
   against gravatar.com would opt the recipient into a third-party
   lookup on the sender's say-so.
-- Both Apple targets register as `mailto:` handlers. Once the user
-  selects Cabalmail as the system default mail app (iOS Settings →
-  Apps → Mail → Default Mail App; macOS System Settings → Desktop &
-  Dock → Default mail reader), clicking a `mailto:` link in any app
-  opens a Cabalmail compose window pre-filled with the URL's `to`,
-  `cc`, `bcc`, `subject`, and `body` fields per RFC 6068; cold
-  launches park the seed on `AppState` so the compose surface opens
-  on first appear. Other RFC 6068 hfields are dropped.
+- Both Apple targets register as `mailto:` handlers via
+  `CFBundleURLTypes`. On macOS this is enough — Cabalmail appears in
+  System Settings → Desktop & Dock → Default mail reader, and clicks
+  on `mailto:` links anywhere on the system route here once the user
+  selects it. On iOS, Apple gates default-mail-app candidacy behind
+  the `com.apple.developer.mail-client` entitlement, which has to be
+  requested case-by-case from `default-app-requests@apple.com`; the
+  iOS app will not appear in Settings → Apps → Mail → Default Mail
+  App until that entitlement is granted and the provisioning profile
+  is regenerated. `apple/README.md` documents the request flow. When
+  Cabalmail is the active default, clicking a `mailto:` link opens a
+  compose window pre-filled with the URL's `to`, `cc`, `bcc`,
+  `subject`, and `body` fields per RFC 6068; cold launches park the
+  seed on `AppState` so the compose surface opens on first appear.
+  Other RFC 6068 hfields are dropped.
 - New "Folder counts" preference in the Apple Settings >
   Reading section: Unread (current default and historical
   behavior), Total, or Unread / total. The setting syncs through

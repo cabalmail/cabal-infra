@@ -477,16 +477,56 @@ Cabalmail registers as a `mailto:` handler on both iOS and macOS, but
 selecting it as the system default is a one-time user action — the OS
 does not let an app elect itself.
 
-- **iOS / iPadOS:** Settings → Apps → Mail → Default Mail App → pick
-  Cabalmail. (Pre-iOS 18.4 the same setting is at Settings → Mail →
-  Default Mail App.)
-- **macOS:** System Settings → Desktop & Dock → Default mail reader →
-  pick Cabalmail.
+**macOS** works out of the box. Register the scheme (already done by
+`CFBundleURLTypes` in `project.yml`) and the app shows up in System
+Settings → Desktop & Dock → Default mail reader; pick Cabalmail and
+`mailto:` clicks across the system route here.
 
-Once selected, `mailto:` clicks in Safari and other apps open Cabalmail
-with a compose window pre-filled from the URL's recipients, subject,
-and body. Only the standard RFC 6068 hfields (`to`, `cc`, `bcc`,
+**iOS / iPadOS** gates default-mail-app candidacy behind the
+`com.apple.developer.mail-client` entitlement, which Apple approves
+case-by-case. Until the entitlement is granted, the app will *not*
+appear in Settings → Apps → Mail → Default Mail App, even though
+`CFBundleURLTypes` is registered. To enable it:
+
+1. Email `default-app-requests@apple.com` from the team's Apple ID
+   describing Cabalmail and confirming it's a real email client (can
+   compose, send, and receive). Apple reviews and grants the
+   entitlement against your team.
+2. After approval, regenerate the iOS distribution provisioning
+   profile in App Store Connect (the profile must list the new
+   entitlement). Pull the regenerated profile into CI's
+   `IOS_APP_STORE_PROFILE_UUID` secret.
+3. Add `apple/Cabalmail/Cabalmail.entitlements` with the key:
+
+   ```xml
+   <key>com.apple.developer.mail-client</key>
+   <true/>
+   ```
+
+4. Wire it into the iOS target's `settings.base` block in
+   `apple/project.yml` (matching the macOS target's pattern):
+
+   ```yaml
+   CODE_SIGN_ENTITLEMENTS: Cabalmail/Cabalmail.entitlements
+   ```
+
+5. Regenerate the Xcode project (`xcodegen generate`) and ship a new
+   TestFlight build against the updated profile.
+
+Doing step 3 / 4 *before* Apple approves the entitlement will break
+CI signing, so the entitlement file isn't checked in. Apple's rules
+also forbid combining `com.apple.developer.mail-client` with
+`com.apple.developer.web-browser` in the same app — pick one.
+
+Once the entitlement lands and the user picks Cabalmail in Settings,
+`mailto:` clicks in Safari and other apps open Cabalmail with a
+compose window pre-filled from the URL's recipients, subject, and
+body. Only the standard RFC 6068 hfields (`to`, `cc`, `bcc`,
 `subject`, `body`) are honored; other headers are dropped.
+
+References:
+- [`com.apple.developer.mail-client`](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.mail-client)
+- [Apple Developer forum thread on the approval flow](https://developer.apple.com/forums/thread/650300)
 
 ## App icons
 
