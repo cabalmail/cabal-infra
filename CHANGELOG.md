@@ -137,7 +137,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reliably regardless of which scene was last focused, and the
   compose window comes to the front via `NSApp.activate` so it
   no longer occasionally opens behind the main mail window.
-  
+
 ### Fixed
 - "Save Draft" in the Apple compose window now writes the message
   to the user's IMAP `Drafts` folder, not just a hidden on-disk
