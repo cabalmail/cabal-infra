@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.46] - Unreleased
+
+### Fixed
+- macOS contact picker came up blank. The "Choose Contacts" sheet
+  (`ContactPickerSheet`) had no explicit frame, so macOS sized it to
+  its `List`'s near-zero ideal height and the content band collapsed:
+  neither the contact rows nor the empty state rendered, making the
+  picker look like search returned nothing no matter what was typed.
+  Added the same `minWidth`/`minHeight` frame `MoveToFolderSheet`
+  already uses, and a distinct "No matching contacts" state so a
+  failed search reads differently from an address book that never
+  loaded.
+
 ## [0.9.45] - 2026-05-28
 
 ### Added

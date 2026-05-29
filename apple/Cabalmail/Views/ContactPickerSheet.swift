@@ -35,12 +35,23 @@ struct ContactPickerSheet: View {
                 )
                 .toolbar { toolbarContent }
         }
+        // macOS sizes a sheet to its content's ideal height, and a
+        // `List` reports a near-zero ideal — so without an explicit
+        // frame the content band collapses and neither the rows nor
+        // the empty states render, making the picker look like it
+        // returns nothing no matter what's typed. Mirrors the frame
+        // `MoveToFolderSheet` already carries for the same reason.
+        #if os(macOS)
+        .frame(minWidth: 360, minHeight: 460)
+        #endif
     }
 
     @ViewBuilder
     private var content: some View {
         if candidates.isEmpty {
             emptyState
+        } else if filteredCandidates.isEmpty {
+            noMatchesState
         } else {
             List {
                 ForEach(filteredCandidates) { suggestion in
@@ -118,6 +129,21 @@ struct ContactPickerSheet: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding()
+    }
+
+    /// Shown when the address book has entries but none match the
+    /// active query. Distinct from `emptyState` so the user can tell a
+    /// failed search ("no Carr in my contacts") apart from a contacts
+    /// book that never loaded ("grant access").
+    @ViewBuilder
+    private var noMatchesState: some View {
+        ContentUnavailableView(
+            "No matching contacts",
+            systemImage: "magnifyingglass",
+            description: Text(
+                "No contact matches \"\(query.trimmingCharacters(in: .whitespacesAndNewlines))\"."
+            )
+        )
     }
 
     @ToolbarContentBuilder
