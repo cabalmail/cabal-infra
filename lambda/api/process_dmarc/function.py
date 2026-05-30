@@ -368,9 +368,9 @@ def _response(counters):
     }
 
 
-def handler(_event, _context):
-    '''Fetches DMARC report emails and ingests them into DynamoDB'''
-    counters = {
+def _new_counters():
+    '''Zeroed per-run counter dict.'''
+    return {
         'queued': 0,
         'processed': 0,
         'records': 0,
@@ -381,85 +381,99 @@ def handler(_event, _context):
         'xml_parse_errors': 0,
         'errors': 0,
     }
+
+
+def _partition_candidates(client, candidates, counters):
+    '''Cheap metadata pass over candidate UIDs.
+
+    Returns (to_fetch, skipped_ids): messages from unknown senders or over the
+    size cap are skipped (and tallied) before their full bodies are downloaded.
+    '''
+    meta = client.fetch(candidates, ['ENVELOPE', 'RFC822.SIZE'])
+    to_fetch = []
+    skipped_ids = []
+    for msg_id in candidates:
+        info = meta.get(msg_id, {})
+        domain = sender_domain(info.get(b'ENVELOPE'))
+        size = info.get(b'RFC822.SIZE', 0) or 0
+        if not sender_allowed(domain):
+            counters['unknown_sender'] += 1
+            skipped_ids.append(msg_id)
+            print(f'[process_dmarc] skip message {msg_id}: '
+                  f'sender domain {domain!r} not in allowlist')
+        elif size > MAX_MESSAGE_BYTES:
+            counters['oversize_message'] += 1
+            skipped_ids.append(msg_id)
+            print(f'[process_dmarc] skip message {msg_id}: '
+                  f'size {size} exceeds {MAX_MESSAGE_BYTES} bytes')
+        else:
+            to_fetch.append(msg_id)
+    return to_fetch, skipped_ids
+
+
+def _ingest_messages(client, to_fetch, counters):
+    '''Fetches the RFC822 bodies for to_fetch and ingests each, returning the
+    list of successfully-handled UIDs.'''
+    if not to_fetch:
+        return []
+    fetched = client.fetch(to_fetch, ['RFC822'])
+    processed_ids = []
+    for msg_id in to_fetch:
+        data = fetched.get(msg_id)
+        if not data or b'RFC822' not in data:
+            counters['errors'] += 1
+            print(f'[process_dmarc] message {msg_id}: empty RFC822 fetch')
+            continue
+        try:
+            count = process_message(data[b'RFC822'], counters)
+            counters['processed'] += 1
+            processed_ids.append(msg_id)
+            print(f'[process_dmarc] message {msg_id}: {count} records')
+        except Exception as err:  # pylint: disable=broad-exception-caught
+            counters['errors'] += 1
+            print(f'[process_dmarc] error processing message {msg_id}: {err}')
+    return processed_ids
+
+
+def _move_handled(client, processed_ids, skipped_ids):
+    '''Moves handled messages out of INBOX so each run sees only new mail and
+    skipped junk cannot accumulate to starve legitimate reports of the per-run
+    budget. Processed and skipped go to distinct folders so the Skipped folder
+    stays reviewable for allowlist tuning.'''
+    if processed_ids:
+        client.move(processed_ids, PROCESSED_FOLDER)
+        print(f'[process_dmarc] moved {len(processed_ids)} processed '
+              f'messages to {PROCESSED_FOLDER}')
+    if skipped_ids:
+        client.move(skipped_ids, SKIPPED_FOLDER)
+        print(f'[process_dmarc] moved {len(skipped_ids)} skipped '
+              f'messages to {SKIPPED_FOLDER}')
+
+
+def handler(_event, _context):
+    '''Fetches DMARC report emails and ingests them into DynamoDB'''
+    counters = _new_counters()
     client = get_imap_client()
     try:
         ensure_folders(client)
         client.select_folder('INBOX')
         messages = client.search()
         counters['queued'] = len(messages)
-
-        if not messages:
+        if messages:
+            # Cap messages per run. The handler is scheduled and idempotent, so
+            # a backlog drains over successive runs rather than one giant fetch.
+            candidates = messages[:MAX_MESSAGES_PER_RUN]
+            if len(messages) > len(candidates):
+                print(f'[process_dmarc] {len(messages)} messages queued; '
+                      f'processing first {len(candidates)} this run')
+            to_fetch, skipped_ids = _partition_candidates(client, candidates, counters)
+            processed_ids = _ingest_messages(client, to_fetch, counters)
+            _move_handled(client, processed_ids, skipped_ids)
+        else:
             print('[process_dmarc] no messages to process')
-            _ping_healthcheck()
-            print(f'[process_dmarc] run summary: {json.dumps(counters)}')
-            return _response(counters)
-
-        # Cap messages per run. The handler is scheduled and idempotent, so a
-        # backlog drains over successive runs rather than one giant fetch.
-        candidates = messages[:MAX_MESSAGES_PER_RUN]
-        if len(messages) > len(candidates):
-            print(f'[process_dmarc] {len(messages)} messages queued; '
-                  f'processing first {len(candidates)} this run')
-
-        # Cheap metadata pass: sender domain and size, so unwanted or oversize
-        # messages are skipped before their full bodies are ever downloaded.
-        meta = client.fetch(candidates, ['ENVELOPE', 'RFC822.SIZE'])
-
-        to_fetch = []
-        skipped_ids = []
-        for msg_id in candidates:
-            info = meta.get(msg_id, {})
-            domain = sender_domain(info.get(b'ENVELOPE'))
-            size = info.get(b'RFC822.SIZE', 0) or 0
-            if not sender_allowed(domain):
-                counters['unknown_sender'] += 1
-                skipped_ids.append(msg_id)
-                print(f'[process_dmarc] skip message {msg_id}: '
-                      f'sender domain {domain!r} not in allowlist')
-                continue
-            if size > MAX_MESSAGE_BYTES:
-                counters['oversize_message'] += 1
-                skipped_ids.append(msg_id)
-                print(f'[process_dmarc] skip message {msg_id}: '
-                      f'size {size} exceeds {MAX_MESSAGE_BYTES} bytes')
-                continue
-            to_fetch.append(msg_id)
-
-        processed_ids = []
-        if to_fetch:
-            fetched = client.fetch(to_fetch, ['RFC822'])
-            for msg_id in to_fetch:
-                data = fetched.get(msg_id)
-                if not data or b'RFC822' not in data:
-                    counters['errors'] += 1
-                    print(f'[process_dmarc] message {msg_id}: empty RFC822 fetch')
-                    continue
-                try:
-                    count = process_message(data[b'RFC822'], counters)
-                    counters['processed'] += 1
-                    processed_ids.append(msg_id)
-                    print(f'[process_dmarc] message {msg_id}: {count} records')
-                except Exception as err:  # pylint: disable=broad-exception-caught
-                    counters['errors'] += 1
-                    print(f'[process_dmarc] error processing message {msg_id}: {err}')
-
-        # Move handled messages out of INBOX so each run sees only new mail and
-        # skipped junk cannot accumulate to starve legitimate reports of the
-        # per-run budget. Processed and skipped go to distinct folders so the
-        # Skipped folder stays reviewable for allowlist tuning.
-        if processed_ids:
-            client.move(processed_ids, PROCESSED_FOLDER)
-            print(f'[process_dmarc] moved {len(processed_ids)} processed '
-                  f'messages to {PROCESSED_FOLDER}')
-        if skipped_ids:
-            client.move(skipped_ids, SKIPPED_FOLDER)
-            print(f'[process_dmarc] moved {len(skipped_ids)} skipped '
-                  f'messages to {SKIPPED_FOLDER}')
-
     finally:
         client.logout()
 
     _ping_healthcheck()
-
     print(f'[process_dmarc] run summary: {json.dumps(counters)}')
     return _response(counters)
