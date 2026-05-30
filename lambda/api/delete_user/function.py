@@ -3,6 +3,7 @@ import json
 import os
 import boto3  # pylint: disable=import-error
 from boto3.dynamodb.conditions import Key  # pylint: disable=import-error
+from admin_limits import audit_log, rate_limit_response_or_none  # pylint: disable=import-error
 
 cognito = boto3.client('cognito-idp')
 user_pool_id = os.environ['USER_POOL_ID']
@@ -19,6 +20,10 @@ def handler(event, _context):
             'body': json.dumps({'Error': 'Admin access required'})
         }
     caller = event['requestContext']['authorizer']['claims']['cognito:username']
+    limited = rate_limit_response_or_none(caller, 'delete_user')
+    if limited:
+        return limited
+    username = ''
     try:
         body = json.loads(event['body'])
         username = body['username']
@@ -33,10 +38,12 @@ def handler(event, _context):
         )
         purge_domain_access(username)
     except Exception as err:  # pylint: disable=broad-exception-caught
+        audit_log(caller, 'delete_user', username, 'failure')
         return {
             'statusCode': 500,
             'body': json.dumps({'Error': str(err)})
         }
+    audit_log(caller, 'delete_user', username, 'success')
     return {
         'statusCode': 200,
         'body': json.dumps({'status': 'deleted', 'username': username})
