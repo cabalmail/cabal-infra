@@ -127,6 +127,20 @@ resource "aws_lambda_function" "process_dmarc" {
       DMARC_TABLE_NAME       = aws_dynamodb_table.dmarc_reports.name
       DMARC_USER             = "dmarc"
       HEALTHCHECK_PING_PARAM = var.dmarc_healthcheck_ping_param
+
+      # Phase 1 hardening (docs/0.10.x/application-surface-hardening-plan.md).
+      # Allowlist of From: domains permitted to deliver reports; subdomains of
+      # any entry are also accepted. Extend as legitimate senders are observed
+      # in CloudWatch over the first week. Empty disables sender filtering.
+      DMARC_REPORT_SENDERS = var.dmarc_report_senders
+
+      # Decompressed-attachment ceiling (bytes). 50 MiB is generous for a real
+      # aggregate report and stops zip/gzip bombs.
+      MAX_DMARC_PAYLOAD_BYTES = tostring(var.dmarc_max_payload_bytes)
+
+      # Messages examined per scheduled run. The handler is idempotent so a
+      # backlog drains over successive runs.
+      MAX_DMARC_MESSAGES_PER_RUN = tostring(var.dmarc_max_messages_per_run)
     }
   }
 

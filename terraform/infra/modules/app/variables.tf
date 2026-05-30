@@ -94,6 +94,24 @@ variable "dmarc_healthcheck_ping_param" {
   default     = ""
 }
 
+variable "dmarc_report_senders" {
+  type        = string
+  description = "Comma-separated allowlist of From: domains the process_dmarc Lambda will parse reports from. Subdomains of an entry are also accepted. Empty disables sender filtering."
+  default     = "google.com,microsoft.com,yahoo-inc.com,fastmail.com,protonmail.com,mailchimp.com,emarsys.net"
+}
+
+variable "dmarc_max_payload_bytes" {
+  type        = number
+  description = "Ceiling on the decompressed size of a single DMARC attachment, in bytes. Defeats zip/gzip bombs in the process_dmarc Lambda."
+  default     = 52428800 # 50 MiB
+}
+
+variable "dmarc_max_messages_per_run" {
+  type        = number
+  description = "Maximum INBOX messages the process_dmarc Lambda examines per scheduled run. The handler is idempotent, so a backlog drains over successive runs."
+  default     = 50
+}
+
 variable "invitation_required" {
   type        = bool
   description = "When true, the React signup form renders the invitation-code field and requires a non-empty value. Plumbed into /config.js so the client can mirror the server-side check_invite gate."

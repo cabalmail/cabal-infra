@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - Unreleased
+
+### Security
+- Hardened DMARC aggregate-report ingestion (`/process_dmarc`), Phase 1 of
+  `docs/0.10.x/application-surface-hardening-plan.md`. The handler parses
+  attacker-controlled XML/zip/gzip emailed from arbitrary senders, so:
+  - XML is now parsed with `defusedxml` instead of stdlib
+    `xml.etree.ElementTree`, blocking XXE, external-DTD, and
+    entity-expansion ("billion laughs") attacks.
+  - Decompressed attachment size is capped (50 MiB default,
+    `MAX_DMARC_PAYLOAD_BYTES`). Zip and gzip entries are read incrementally
+    and aborted one byte past the cap, so a bomb never fully materialises.
+  - Raw inbound message size is capped (25 MiB, `MAX_DMARC_MESSAGE_BYTES`),
+    checked against `RFC822.SIZE` so oversize bodies are never downloaded.
+  - Messages examined per scheduled run are capped (50 default,
+    `MAX_DMARC_MESSAGES_PER_RUN`); the run is idempotent so a backlog drains
+    over successive runs instead of one unbounded fetch.
+  - A `From:`-domain allowlist (`DMARC_REPORT_SENDERS`, subdomains accepted)
+    gates which senders are parsed. Unknown senders are silently skipped (not
+    bounced) and moved to `INBOX.Skipped` for allowlist tuning; this also
+    stops junk from accumulating in `INBOX` and starving real reports of the
+    per-run budget.
+  - The silent "no XML found" fast path is replaced with categorised run
+    counters (`unknown_sender`, `oversize_message`, `no_attachment`,
+    `decompress_errors`, `xml_parse_errors`, `errors`) emitted as a
+    structured run-summary log line so each failure mode can be alarmed
+    independently.
+  New dependency `defusedxml==0.7.1`; new env vars `DMARC_REPORT_SENDERS`,
+  `MAX_DMARC_PAYLOAD_BYTES`, and `MAX_DMARC_MESSAGES_PER_RUN` wired through
+  `terraform/infra/modules/app/dmarc.tf`.
+
 ## [0.9.46] - Unreleased
 
 ### Fixed
