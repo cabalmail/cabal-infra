@@ -1,21 +1,22 @@
-import json
-import boto3
-import botocore
-from botocore.exceptions import ClientError
-from boto3.dynamodb.conditions import Key
-import io
+'''Shared helpers for the Cabalmail Lambda API: IMAP client/auth, DynamoDB
+address lookups, S3 message caching and presigned URLs, envelope decoding, and
+the request-input validators used across the handlers.'''
 import email
-from imapclient import IMAPClient
-from email.header import decode_header
-from email.policy import default as default_policy
+import io
+import json
+import logging
 import os
 import re
-import dns.resolver
+from email.header import decode_header
+from email.policy import default as default_policy
+import boto3  # pylint: disable=import-error
+from botocore.exceptions import ClientError  # pylint: disable=import-error
+from imapclient import IMAPClient  # pylint: disable=import-error
 
-table = 'cabal-addresses'
+TABLE = 'cabal-addresses'
 region = os.environ['AWS_REGION']
 ddb = boto3.resource('dynamodb')
-ddb_table = ddb.Table(table)
+ddb_table = ddb.Table(TABLE)
 user_domain_access_table = ddb.Table('cabal-user-domain-access')
 s3r = boto3.resource("s3")
 s3c = boto3.client("s3",
@@ -273,7 +274,7 @@ MAX_DNS_NAME_LEN = 253
 _DNS_LABEL_RE = re.compile(r'^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$', re.IGNORECASE)
 
 _zone_cache = {}
-_r53_client = None
+_R53_CLIENT = None
 
 
 def validate_dns_label(label):
@@ -329,10 +330,10 @@ class ZoneMismatchError(Exception):
 def _route53():
     '''Lazily builds the shared Route 53 client (only the DNS handlers need it,
     so non-DNS lambdas importing helper never pay for it).'''
-    global _r53_client  # pylint: disable=global-statement
-    if _r53_client is None:
-        _r53_client = boto3.client('route53')
-    return _r53_client
+    global _R53_CLIENT  # pylint: disable=global-statement
+    if _R53_CLIENT is None:
+        _R53_CLIENT = boto3.client('route53')
+    return _R53_CLIENT
 
 
 def assert_zone_owns_apex(zone_id, apex):
@@ -384,33 +385,36 @@ def decode_folder_list(data):
     return sorted(folders, key=folder_sort)
 
 def folder_sort(k):
+    '''Sort key that pins INBOX first and case-folds the rest.'''
     if k == 'INBOX':
         return k
     return k.lower()
 
 def subscribe_folder(folder, host, user):
+    '''Subscribes the user to an IMAP folder.'''
     client = get_imap_client(host, user, folder)
     return_value = client.subscribe_folder(folder)
     client.logout()
     return return_value
 
 def unsubscribe_folder(folder, host, user):
+    '''Unsubscribes the user from an IMAP folder.'''
     client = get_imap_client(host, user, folder)
     return_value = client.unsubscribe_folder(folder)
     client.logout()
     return return_value
 
-def get_message(host, user, folder, id):
+def get_message(host, user, folder, msg_id):
     '''Gets a message from cache on s3 or from imap server'''
     bucket = host.replace("imap", "cache")
     email_body_raw = b''
-    key = f"{user}/{folder}/{id}/raw"
+    key = f"{user}/{folder}/{msg_id}/raw"
     if key_exists(bucket, key):
         email_body_raw = get_object(bucket, key)
     else:
         client = get_imap_client(host, user, folder, True)
-        message = client.fetch([id],['RFC822'])
-        email_body_raw = message[id][b'RFC822']
+        message = client.fetch([msg_id],['RFC822'])
+        email_body_raw = message[msg_id][b'RFC822']
         client.logout()
         upload_object(bucket, key, "text/plain", email_body_raw)
     message = email.message_from_bytes(email_body_raw, policy=default_policy)
@@ -443,7 +447,7 @@ def sign_url(bucket, key, expiration=86400):
         url = s3c.generate_presigned_url('get_object',
                                         Params=params,
                                         ExpiresIn=expiration)
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         logging.error(e)
         return "Error"
     return url
@@ -467,7 +471,7 @@ def sign_put_url(bucket, key, expiration=600):
         url = s3c.generate_presigned_url('put_object',
                                         Params=params,
                                         ExpiresIn=expiration)
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         logging.error(e)
         return "Error"
     return url
@@ -477,11 +481,9 @@ def key_exists(bucket, key):
     try:
         s3r.Object(bucket, key).load()
     except ClientError as e:
-        if e.response['Error']['Code'] == "404":
-            return False
-        else:
+        if e.response['Error']['Code'] != "404":
             logging.error(e)
-            return False
+        return False
     return True
 
 

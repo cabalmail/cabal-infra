@@ -96,6 +96,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   index needs a separate membership table, out of scope here (see the note in
   `lambda/api/list/function.py`).
 
+### Fixed
+- The Lambda API helper (`lambda/api/_shared/helper.py`) called
+  `logging.error()` without importing `logging`, so its S3 error paths
+  (presigned-URL signing, object upload, key-existence checks) raised
+  `NameError` instead of logging and degrading gracefully. Now imports
+  `logging`. Surfaced while extending `pylint` coverage to the shared
+  `_shared/*.py` modules (previously only `*/function.py` was linted).
+
 ## [0.9.46] - Unreleased
 
 ### Fixed
