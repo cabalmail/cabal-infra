@@ -1,9 +1,10 @@
 '''Sends an email message'''
+import copy
 import json
 import re
 import smtplib
 from email.message import EmailMessage
-from email.utils import formatdate
+from email.utils import formatdate, getaddresses
 from helper import get_imap_client # pylint: disable=import-error
 from helper import get_mpw # pylint: disable=import-error
 from helper import get_object # pylint: disable=import-error
@@ -15,6 +16,11 @@ from helper import user_authorized_for_sender # pylint: disable=import-error
 # at 20 MB so clients can present a friendly warning while a malformed
 # or hostile request still hits a server-side ceiling.
 MAX_TOTAL_ATTACHMENT_BYTES = 25 * 1024 * 1024
+# Hard ceiling on attachment count per message (Phase 2 of
+# docs/0.10.x/application-surface-hardening-plan.md). The React/Apple UIs
+# never attach more than a handful; this bounds a hostile request whose
+# individual parts each stay under the byte cap.
+MAX_ATTACHMENTS = 10
 ALLOWED_KEY_PREFIX = 'outbound'
 # Matches `outbound/<user>/<uuid>/<filename>` keys minted by upload_url.
 # The user segment must equal the authenticated caller; we still pin the
@@ -26,7 +32,11 @@ def handler(event, _context):
 
     body = json.loads(event['body'])
     user = event['requestContext']['authorizer']['claims']['cognito:username']
-    if not user_authorized_for_sender(user, body['sender']):
+    # Pin the sender to the exact validated address and reuse that same string
+    # as the SMTP MAIL FROM below, so a display-name game in the From header
+    # cannot leave the envelope sender and the visible From disagreeing.
+    sender = body['sender']
+    if not user_authorized_for_sender(user, sender):
         return {
             "statusCode": 500,
             "body": json.dumps({
@@ -36,6 +46,7 @@ def handler(event, _context):
 
     bucket = body['host'].replace('imap', 'cache')
     try:
+        validate_outbound_headers(body)
         attachments = load_attachments(body.get('attachments', []), bucket, user)
     except ValueError as err:
         return {
@@ -45,7 +56,7 @@ def handler(event, _context):
             })
         }
 
-    msg = compose_message(body['subject'], body['sender'], {
+    msg = compose_message(body['subject'], sender, {
                             "to": ','.join(body['to_list']),
                             "cc": ','.join(body['cc_list']),
                             "bcc": ','.join(body['bcc_list']),
@@ -58,6 +69,8 @@ def handler(event, _context):
     client = get_imap_client(body['host'], user, 'INBOX')
 
     if body.get('draft'):
+        # Drafts keep Bcc: the user is still composing and needs the blind
+        # recipients to persist across edits.
         append_drafts(msg, client)
         client.logout()
         return {
@@ -67,9 +80,19 @@ def handler(event, _context):
             })
         }
 
-    msg_id = append_outbox(msg, client)
+    # The Sent copy must not retain Bcc - it would expose blind recipients to
+    # anyone who can read Sent (the user, future delegates, backup/admin paths).
+    # Append a Bcc-free copy to Outbox; SMTP still delivers to the BCC addresses
+    # because the recipient list is passed to send() explicitly.
+    msg_id = append_outbox(strip_bcc(msg), client)
 
-    return_from_send = send(msg, body['smtp_host'])
+    recipients = [
+        addr for _, addr in
+        getaddresses(body['to_list'] + body['cc_list'] + body['bcc_list'])
+        if addr
+    ]
+
+    return_from_send = send(msg, body['smtp_host'], sender, recipients)
     if return_from_send['statusCode'] != 200:
         return return_from_send
 
@@ -101,6 +124,8 @@ def load_attachments(raw, bucket, user):
         return []
     if not isinstance(raw, list):
         raise ValueError("attachments must be a list")
+    if len(raw) > MAX_ATTACHMENTS:
+        raise ValueError(f"at most {MAX_ATTACHMENTS} attachments per message")
     decoded = []
     total = 0
     for index, entry in enumerate(raw):
@@ -172,6 +197,49 @@ def compose_message(subject, sender, headers, text, html, attachments=None):
         )
     return msg
 
+def strip_bcc(msg):
+    """Returns a copy of msg with every Bcc header removed.
+
+    Mirrors what smtplib.send_message does to its wire copy, applied here to
+    the copy that lands in Outbox (and then Sent). EmailMessage.__delitem__
+    rebinds the header list, so the original msg keeps its Bcc for the
+    explicit recipient computation in the handler.
+    """
+    copied = copy.copy(msg)
+    del copied['Bcc']
+    return copied
+
+def _reject_crlf(value, field):
+    """Raises ValueError if a header value carries a CR or LF.
+
+    Embedded line breaks are how header injection smuggles extra headers; we
+    reject them outright rather than trust EmailMessage's uneven per-field
+    validation to fold or drop them.
+    """
+    if not isinstance(value, str):
+        return
+    if '\r' in value or '\n' in value:
+        raise ValueError(f"{field} contains illegal line breaks")
+
+def validate_outbound_headers(body):
+    """Validates caller-supplied header values for header injection.
+
+    Checks subject, every recipient entry, message-id, in-reply-to, and each
+    references token for embedded CR/LF. Raises ValueError (-> 400) on the
+    first offending value.
+    """
+    _reject_crlf(body.get('subject'), 'subject')
+    for field, label in (('to_list', 'to'), ('cc_list', 'cc'), ('bcc_list', 'bcc')):
+        for entry in body.get(field, []) or []:
+            _reject_crlf(entry, label)
+    others = body.get('other_headers', {}) or {}
+    for mid in others.get('message_id', []) or []:
+        _reject_crlf(mid, 'message_id')
+    for irt in others.get('in_reply_to', []) or []:
+        _reject_crlf(irt, 'in_reply_to')
+    for ref in others.get('references', []) or []:
+        _reject_crlf(ref, 'references')
+
 def append_outbox(msg, client):
     """Appends an email message to Outbox"""
     try:
@@ -198,8 +266,15 @@ def append_drafts(msg, client):
         pass
     client.append('Drafts', msg.as_string().encode(), flags=[rb"\Draft", rb"\Seen"])
 
-def send(msg, smtp_host):
-    """Send the message"""
+def send(msg, smtp_host, from_addr, to_addrs):
+    """Send the message.
+
+    from_addr pins the SMTP MAIL FROM to the validated sender address and
+    to_addrs is the explicit RCPT TO list (including BCC), so display-name
+    games in the From/To/Cc headers cannot change who actually receives the
+    mail or what envelope sender the relay sees. smtplib still strips Bcc from
+    the transmitted DATA, so blind recipients stay blind on the wire.
+    """
     smtp_client = smtplib.SMTP_SSL(smtp_host)
     status_code = 200
     body = {
@@ -235,7 +310,7 @@ def send(msg, smtp_host):
             "body": json.dumps(body)
         }
     try:
-        smtp_client.send_message(msg)
+        smtp_client.send_message(msg, from_addr=from_addr, to_addrs=to_addrs)
     except smtplib.SMTPRecipientsRefused:
         status_code = 401
         body = {

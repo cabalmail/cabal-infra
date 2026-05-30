@@ -35,6 +35,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   New dependency `defusedxml==0.7.1`; new env vars `DMARC_REPORT_SENDERS`,
   `MAX_DMARC_PAYLOAD_BYTES`, and `MAX_DMARC_MESSAGES_PER_RUN` wired through
   `terraform/infra/modules/app/dmarc.tf`.
+- Hardened outbound message integrity on `/send`, Phase 2 of the same plan:
+  - The Sent-folder copy no longer retains a `Bcc:` header. A Bcc-free copy
+    is appended to Outbox (and moved to Sent); SMTP still delivers to the
+    blind recipients because the full recipient list is passed to the relay
+    explicitly. Drafts intentionally keep `Bcc:` so in-progress composes do
+    not lose blind recipients.
+  - The SMTP envelope sender (`MAIL FROM`) and recipient list (`RCPT TO`) are
+    now pinned to the validated sender address and the parsed To/Cc/Bcc
+    addresses, rather than re-derived from message headers, closing
+    display-name games that make the envelope and visible `From:` disagree.
+  - `subject`, recipient entries, `message_id`, `in_reply_to`, and every
+    `references` token are rejected (400) if they contain CR/LF, blocking
+    header injection.
+  - Attachments are capped at 10 per message (`MAX_ATTACHMENTS`), in addition
+    to the existing 25 MiB total-bytes ceiling.
+  - The `/upload_url` presigned PUT lifetime is shortened from 600 s to 120 s,
+    tightening the window if a URL leaks.
 
 ## [0.9.46] - Unreleased
 

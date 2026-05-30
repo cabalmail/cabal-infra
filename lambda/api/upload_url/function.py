@@ -20,7 +20,10 @@ from helper import sign_put_url # pylint: disable=import-error
 
 KEY_PREFIX = 'outbound'
 MAX_FILES_PER_REQUEST = 32
-URL_EXPIRY_SECONDS = 600
+# Presigned PUT lifetime. Clients upload within a few seconds of minting, so a
+# short window is plenty and bounds the blast radius if a URL ever leaks
+# (Phase 2 of docs/0.10.x/application-surface-hardening-plan.md).
+URL_EXPIRY_SECONDS = 120
 
 # Allowed characters in a sanitized filename. S3 keys themselves are
 # binary-safe, but we still strip path separators and control characters
