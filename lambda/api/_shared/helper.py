@@ -258,6 +258,112 @@ def validate_search_text(value):
     return value
 
 
+# ---------------------------------------------------------------------------
+# DNS validators and runtime zone verification (Phase 4 of the same plan).
+#
+# The DNS-touching handlers compose Route 53 record names and dns.resolver
+# queries from request-body subdomains and apexes. Validate the shape so a
+# hostile value cannot deform a change batch, and -- before any write --
+# re-verify at runtime that the zone id the DOMAINS env var maps an apex to
+# actually owns that apex, so a drifted env var (operator typo, half-applied
+# Terraform, region mismatch) cannot push changes into the wrong zone.
+# ---------------------------------------------------------------------------
+
+MAX_DNS_NAME_LEN = 253
+_DNS_LABEL_RE = re.compile(r'^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$', re.IGNORECASE)
+
+_zone_cache = {}
+_r53_client = None
+
+
+def validate_dns_label(label):
+    '''Validates a single DNS label (RFC 1035 preferred form, case-insensitive).
+    Returns it unchanged. Raises ValueError otherwise.'''
+    if not isinstance(label, str) or not label:
+        raise ValueError('dns label is required')
+    if not _DNS_LABEL_RE.match(label):
+        raise ValueError(f'invalid dns label: {label!r}')
+    return label
+
+
+def _validate_dns_name(name, min_labels, what):
+    '''Validates a dotted DNS name of at least min_labels labels, each a valid
+    DNS label, total <= 253 bytes. Returns `name` unchanged so the caller's
+    stored / record values and DOMAINS-dict lookups are never mutated.'''
+    if not isinstance(name, str) or not name:
+        raise ValueError(f'{what} is required')
+    cleaned = name.rstrip('.')
+    if not cleaned or len(cleaned) > MAX_DNS_NAME_LEN:
+        raise ValueError(f'invalid {what}: {name!r}')
+    labels = cleaned.split('.')
+    if len(labels) < min_labels:
+        raise ValueError(f'{what} must have at least {min_labels} label(s): {name!r}')
+    for label in labels:
+        if not _DNS_LABEL_RE.match(label):
+            raise ValueError(f'invalid {what}: {name!r}')
+    return name
+
+
+def validate_dns_apex(domain):
+    '''Validates an apex or managed subdomain: >= 2 dot-separated DNS labels.
+    Returns the value unchanged. Raises ValueError otherwise.'''
+    return _validate_dns_name(domain, 2, 'domain')
+
+
+def validate_dns_subdomain(subdomain):
+    '''Validates a per-address subdomain: >= 1 dot-separated DNS label.
+
+    The UI's subdomain field is conceptually single-label, but it is free text
+    and has historically accepted dotted multi-label values, so this stays at
+    >= 1 label (rather than the plan's single-label validate_dns_label) to keep
+    revoke working for any pre-existing address. Returns the value unchanged.
+    '''
+    return _validate_dns_name(subdomain, 1, 'subdomain')
+
+
+class ZoneMismatchError(Exception):
+    '''Raised when a hosted-zone id does not actually own the apex the DOMAINS
+    env var maps it to. Signals operator/Terraform drift, not user error.'''
+
+
+def _route53():
+    '''Lazily builds the shared Route 53 client (only the DNS handlers need it,
+    so non-DNS lambdas importing helper never pay for it).'''
+    global _r53_client  # pylint: disable=global-statement
+    if _r53_client is None:
+        _r53_client = boto3.client('route53')
+    return _r53_client
+
+
+def assert_zone_owns_apex(zone_id, apex):
+    '''Best-effort runtime guard that hosted zone `zone_id` actually owns `apex`
+    before a change_resource_record_sets call. The zone Name is cached per cold
+    start so warm invocations skip the get_hosted_zone round-trip.
+
+    Fails CLOSED on a positive mismatch: raises ZoneMismatchError so the caller
+    returns 500, after emitting a WARN log line for alerting. Fails OPEN when
+    the zone simply cannot be looked up (e.g. the route53:GetHostedZone grant
+    has not propagated yet, or a transient API error): it logs and returns so
+    the request proceeds exactly as it did before this guard existed, and the
+    failure mode is never "address management is wedged."
+    '''
+    expected = apex.rstrip('.').lower() + '.'
+    name = _zone_cache.get(zone_id)
+    if name is None:
+        try:
+            resp = _route53().get_hosted_zone(Id=zone_id)
+        except Exception as err:  # pylint: disable=broad-exception-caught
+            print(f'[zone-verify] WARN could not verify zone {zone_id!r} owns '
+                  f'{apex!r}, proceeding: {err}')
+            return
+        name = resp['HostedZone']['Name'].lower()
+        _zone_cache[zone_id] = name
+    if name != expected:
+        print(f'[zone-verify] WARN zone-mismatch: zone {zone_id!r} resolves to '
+              f'{name!r}, expected {expected!r} (apex {apex!r})')
+        raise ZoneMismatchError(f'zone-mismatch: zone {zone_id} does not own {apex}')
+
+
 def get_folder_list(client):
     '''
     Retrieves IMAP folders returning separate lists for all folders

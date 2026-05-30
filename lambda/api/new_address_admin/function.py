@@ -4,7 +4,10 @@ import json
 import os
 from datetime import datetime, timezone
 import boto3  # pylint: disable=import-error
+from helper import assert_zone_owns_apex  # pylint: disable=import-error
 from helper import user_authorized_for_domain  # pylint: disable=import-error
+from helper import validate_dns_apex  # pylint: disable=import-error
+from helper import validate_dns_subdomain  # pylint: disable=import-error
 
 domains = json.loads(os.environ['DOMAINS'])
 control_domain = os.environ['CONTROL_DOMAIN']
@@ -37,6 +40,14 @@ def handler(event, _context):
         return {
             'statusCode': 400,
             'body': json.dumps({'Error': f"Unknown domain \"{body['tld']}\""})
+        }
+    try:
+        validate_dns_apex(body['tld'])
+        validate_dns_subdomain(body['subdomain'])
+    except ValueError as err:
+        return {
+            'statusCode': 400,
+            'body': json.dumps({'Error': f'Invalid input: {err}'})
         }
     try:
         for username in usernames:
@@ -100,6 +111,7 @@ def change_item(name, value, record_type):
 
 def create_dns_records(zone_id, subdomain, tld):
     '''Creates the DNS records for a new email address'''
+    assert_zone_owns_apex(zone_id, tld)
     params = {
         'HostedZoneId': zone_id,
         'ChangeBatch': {

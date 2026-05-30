@@ -4,7 +4,10 @@ import json
 import os
 from datetime import datetime, timezone
 import boto3  # pylint: disable=import-error
+from helper import assert_zone_owns_apex  # pylint: disable=import-error
 from helper import user_authorized_for_sender  # pylint: disable=import-error
+from helper import validate_dns_apex  # pylint: disable=import-error
+from helper import validate_dns_subdomain  # pylint: disable=import-error
 
 domains = json.loads(os.environ['DOMAINS'])
 control_domain = os.environ['CONTROL_DOMAIN']
@@ -22,8 +25,21 @@ def handler(event, _context):
     address = body['address']
     subdomain = body['subdomain']
     tld = body['tld']
-    zone_id = domains[tld]
     user = event['requestContext']['authorizer']['claims']['cognito:username']
+    if tld not in domains:
+        return {
+            'statusCode': 400,
+            'body': json.dumps({'Error': f'Unknown domain "{tld}"'})
+        }
+    try:
+        validate_dns_apex(tld)
+        validate_dns_subdomain(subdomain)
+    except ValueError as err:
+        return {
+            'statusCode': 400,
+            'body': json.dumps({'Error': f'Invalid input: {err}'})
+        }
+    zone_id = domains[tld]
     if not user_authorized_for_sender(user, address):
         return {
             'statusCode': 403,
@@ -89,6 +105,7 @@ def change_item(name, value, record_type):
 
 def delete_dns_records(zone_id, subdomain, tld):
     '''Deletes the DNS records for an email address'''
+    assert_zone_owns_apex(zone_id, tld)
     params = {
         'HostedZoneId': zone_id,
         'ChangeBatch': {

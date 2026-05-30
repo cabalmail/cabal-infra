@@ -3,10 +3,22 @@ import json
 import os
 import dns.exception  # pylint: disable=import-error
 import dns.resolver  # pylint: disable=import-error
-from helper import admin_response_or_none, find_managed_apex  # pylint: disable=import-error
+from helper import ( # pylint: disable=import-error
+    admin_response_or_none,
+    find_managed_apex,
+    validate_dns_apex,
+)
 
 DOMAINS = json.loads(os.environ['DOMAINS'])
 CONTROL_DOMAIN = os.environ['CONTROL_DOMAIN']
+
+# Bound DNS lookups so a slow or hostile authoritative NS for the queried
+# domain cannot pin the Lambda for its whole timeout (Phase 4 of
+# docs/0.10.x/application-surface-hardening-plan.md). lifetime caps total time
+# across retries; timeout caps a single query.
+_RESOLVER = dns.resolver.Resolver()
+_RESOLVER.lifetime = 5
+_RESOLVER.timeout = 2
 
 
 def expected_record(record_type, domain):
@@ -22,7 +34,7 @@ def expected_record(record_type, domain):
 def lookup(name, rdtype):
     '''Looks up a DNS record. Returns a list of values (strings) or None on NXDOMAIN.'''
     try:
-        answers = dns.resolver.resolve(name, rdtype, raise_on_no_answer=False)
+        answers = _RESOLVER.resolve(name, rdtype, raise_on_no_answer=False)
     except dns.resolver.NXDOMAIN:
         return None
     except (dns.resolver.NoAnswer, dns.exception.DNSException):
@@ -70,6 +82,13 @@ def parse_request(event):
         return (None, {
             'statusCode': 400,
             'body': json.dumps({'Error': 'domain and record_type (dkim|spf) are required'})
+        })
+    try:
+        validate_dns_apex(domain)
+    except ValueError as err:
+        return (None, {
+            'statusCode': 400,
+            'body': json.dumps({'Error': f'Invalid domain: {err}'})
         })
     return ((domain, record_type), None)
 

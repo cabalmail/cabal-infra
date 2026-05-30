@@ -64,6 +64,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/search_envelopes`. `/set_flag` and `/move_messages` also return 400 (not a
   500) on a non-JSON body, and a `/move_messages` whose `destination` carries
   CR/LF or a `..` path segment is rejected before any IMAP session is opened.
+- Hardened the DNS-touching endpoints, Phase 4 of the same plan. New shared
+  validators in `lambda/api/_shared/helper.py` (`validate_dns_label`,
+  `validate_dns_apex`, `validate_dns_subdomain`) reject malformed subdomains
+  and apexes (HTTP 400) before they can deform a Route 53 change batch or a
+  `dns.resolver` query, wired into `/new`, `/revoke`, `/new_address_admin`,
+  `/repair_dns_record`, `/check_dns_record`, and `/fetch_bimi`. Before any
+  `change_resource_record_sets` write, `assert_zone_owns_apex` re-verifies at
+  runtime (via `get_hosted_zone`, cached per cold start) that the zone id the
+  `DOMAINS` env var maps an apex to actually owns that apex; a positive
+  mismatch refuses the write with a 500 and a `zone-mismatch` WARN log line,
+  while an unverifiable zone fails open so address management is never wedged.
+  `/fetch_bimi` and `/check_dns_record` now run their DNS lookups under a
+  5-second budget so a slow or hostile authoritative nameserver cannot pin the
+  Lambda. `/revoke` with an unknown `tld` now returns 400 instead of a 500.
+  Adds `route53:GetHostedZone` to the API Lambda role so the zone check can run.
 
 ## [0.9.46] - Unreleased
 
