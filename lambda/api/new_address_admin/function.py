@@ -4,6 +4,7 @@ import json
 import os
 from datetime import datetime, timezone
 import boto3  # pylint: disable=import-error
+from admin_limits import audit_log, rate_limit_response_or_none  # pylint: disable=import-error
 from helper import assert_zone_owns_apex  # pylint: disable=import-error
 from helper import user_authorized_for_domain  # pylint: disable=import-error
 from helper import validate_dns_apex  # pylint: disable=import-error
@@ -29,6 +30,10 @@ def handler(event, _context):
             'statusCode': 403,
             'body': json.dumps({'Error': 'Admin access required'})
         }
+    caller = event['requestContext']['authorizer']['claims']['cognito:username']
+    limited = rate_limit_response_or_none(caller, 'new_address_admin')
+    if limited:
+        return limited
     body = json.loads(event['body'])
     usernames = body.get('usernames') or []
     if not usernames:
@@ -71,6 +76,7 @@ def handler(event, _context):
         notify_containers()
     except Exception as err:  # pylint: disable=broad-exception-caught
         print(f"Error creating address {body['address']}: {err}")
+        audit_log(caller, 'new_address_admin', body.get('address', ''), 'failure')
         return {
             'statusCode': 500,
             'body': json.dumps({
@@ -78,6 +84,7 @@ def handler(event, _context):
                 'error': str(err)
             })
         }
+    audit_log(caller, 'new_address_admin', body.get('address', ''), 'success')
     return {
         'statusCode': 201,
         'body': json.dumps({
