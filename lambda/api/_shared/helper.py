@@ -9,6 +9,7 @@ from imapclient import IMAPClient
 from email.header import decode_header
 from email.policy import default as default_policy
 import os
+import re
 import dns.resolver
 
 table = 'cabal-addresses'
@@ -86,6 +87,176 @@ def user_authorized_for_domain(user, domain):
         print(err.response['Error']['Message'])
         return False
     return 'Item' in response
+
+
+# ---------------------------------------------------------------------------
+# Input validators (Phase 3 of docs/0.10.x/application-surface-hardening-plan).
+#
+# The IMAP-shaped handlers take folder names, UID lists, flags, sort keys, and
+# S3-key fragments from query strings and JSON bodies. The master-user model
+# already scopes every operation to the caller's own mailbox, so these are
+# defence-in-depth against a future shape change rather than live exploits --
+# but rejecting malformed input at the boundary (ValueError -> 400) beats
+# relaying it into Dovecot and surfacing a 500 traceback or an opaque IMAP
+# protocol error. Each validator raises ValueError with a sanitized message;
+# handlers translate that into a 400.
+# ---------------------------------------------------------------------------
+
+# Shared with the large-mailbox chunking work; one ceiling for both surfaces.
+MAX_IDS_PER_REQUEST = 5000
+MAX_FOLDER_NAME_BYTES = 255
+MAX_KEYWORD_LEN = 64
+MAX_CONTENT_ID_LEN = 128
+MAX_SEARCH_TEXT_LEN = 1024
+MAX_UID = 0xFFFFFFFF
+
+_FOLDER_NAME_RE = re.compile(r'^[A-Za-z0-9 _\-./]+$')
+_KEYWORD_RE = re.compile(r'^[A-Za-z0-9_\-]+$')
+_CONTROL_CHARS_RE = re.compile(r'[\x00-\x1f\x7f]')
+_CONTENT_ID_FORBIDDEN_RE = re.compile(r'[\x00-\x1f\x7f\s/\\]')
+
+# Lowercased wire form -> canonical form. Only these five system flags are
+# client-settable; \Recent and friends are server-managed and never accepted.
+_SYSTEM_FLAGS = {
+    r'\seen': r'\Seen',
+    r'\answered': r'\Answered',
+    r'\flagged': r'\Flagged',
+    r'\deleted': r'\Deleted',
+    r'\draft': r'\Draft',
+}
+
+# RFC 5256 SORT keys we expose. ASC maps to no prefix, DESC to REVERSE.
+_SORT_FIELDS = {'ARRIVAL', 'CC', 'DATE', 'FROM', 'SIZE', 'SUBJECT', 'TO'}
+
+
+def validate_folder_name(name):
+    '''Validates a `/`-separated display folder name and returns it unchanged.
+
+    Case-preserving; allows letters, digits, space, and `_ - . /`. Rejects
+    empty and anything over 255 bytes. ASCII-only by design: the system's
+    folders (INBOX, Archive, Sent Messages, ...) are ASCII, so a non-ASCII
+    name is rejected rather than round-tripped through modified UTF-7.
+    '''
+    if not isinstance(name, str) or not name:
+        raise ValueError('folder name is required')
+    if len(name.encode('utf-8')) > MAX_FOLDER_NAME_BYTES:
+        raise ValueError('folder name is too long')
+    if not _FOLDER_NAME_RE.match(name):
+        raise ValueError(f'invalid folder name: {name!r}')
+    # The regex permits `.` and `/`, so reject the segments that would turn a
+    # folder name into a traversal-shaped S3 key fragment (fetch_inline_image
+    # embeds the folder in a key) or an empty IMAP hierarchy component. No real
+    # folder is named `.`/`..` or has an empty (`//`, leading/trailing `/`)
+    # segment.
+    if any(seg in ('', '.', '..') for seg in name.split('/')):
+        raise ValueError(f'invalid folder name: {name!r}')
+    return name
+
+
+def validate_uid_list(ids):
+    '''Validates a list of IMAP UIDs, returning a list[int] in [1, 2**32-1].
+
+    Accepts ints or numeric strings (JSON bodies and query strings both occur).
+    Caps length at MAX_IDS_PER_REQUEST. Booleans are rejected (Python treats
+    them as ints, which would silently coerce True -> UID 1).
+    '''
+    if not isinstance(ids, (list, tuple)):
+        raise ValueError('ids must be a list')
+    if len(ids) > MAX_IDS_PER_REQUEST:
+        raise ValueError(f'too many ids (max {MAX_IDS_PER_REQUEST})')
+    out = []
+    for raw in ids:
+        if isinstance(raw, bool):
+            raise ValueError(f'invalid message id: {raw!r}')
+        try:
+            num = int(raw)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f'invalid message id: {raw!r}') from exc
+        if num < 1 or num > MAX_UID:
+            raise ValueError(f'message id out of range: {num}')
+        out.append(num)
+    return out
+
+
+def validate_uid(value):
+    '''Validates a single IMAP UID, returning an int in [1, 2**32-1].'''
+    return validate_uid_list([value])[0]
+
+
+def validate_flag(flag):
+    '''Validates an IMAP flag, returning a canonical system flag or a safe
+    custom keyword (`^[A-Za-z0-9_-]+$`, <= 64 chars). Raises ValueError else.'''
+    if not isinstance(flag, str) or not flag:
+        raise ValueError('flag is required')
+    canonical = _SYSTEM_FLAGS.get(flag.lower())
+    if canonical:
+        return canonical
+    if flag.startswith('\\'):
+        raise ValueError(f'unknown system flag: {flag!r}')
+    if len(flag) > MAX_KEYWORD_LEN or not _KEYWORD_RE.match(flag):
+        raise ValueError(f'invalid flag: {flag!r}')
+    return flag
+
+
+def validate_sort_criterion(sort_order, sort_field):
+    '''Validates the sort wire pair, returning a safe IMAP SORT criterion.
+
+    Clients send `sort_order` as the IMAP-native `"REVERSE "` (descending) or
+    `""` (ascending) and `sort_field` as a bare RFC 5256 key. Returns the
+    assembled criterion (e.g. `"REVERSE ARRIVAL"`) ready for IMAPClient.sort().
+    '''
+    if not isinstance(sort_field, str):
+        raise ValueError('sort_field is required')
+    field = sort_field.strip().upper()
+    if field not in _SORT_FIELDS:
+        raise ValueError(f'invalid sort field: {sort_field!r}')
+    order = (sort_order or '').strip().upper()
+    if order not in ('', 'REVERSE'):
+        raise ValueError(f'invalid sort order: {sort_order!r}')
+    return f'{order} {field}'.strip()
+
+
+def validate_content_id(value):
+    '''Validates an inline-image Content-ID as the clients send it: a bracketed
+    `<id-left@id-right>` token (see ApiClient.js `fetchImage`). Permits the
+    message-id character set plus the angle brackets and rejects path
+    separators, whitespace, and control bytes, so it is safe to embed in an
+    S3 key. Returns the value unchanged.
+
+    This realizes the plan's `validate_safe_path_component` for `index`: the
+    plan's literal `^[A-Za-z0-9_.@-]+$` would reject the angle brackets every
+    real Content-ID carries, so the check is widened to the bracket form and
+    tightened to a deny-list of the genuinely dangerous bytes.
+    '''
+    if not isinstance(value, str) or not value:
+        raise ValueError('content-id is required')
+    if len(value) > MAX_CONTENT_ID_LEN:
+        raise ValueError('content-id is too long')
+    if not (value.startswith('<') and value.endswith('>') and len(value) >= 3):
+        raise ValueError('content-id must be a bracketed token')
+    if _CONTENT_ID_FORBIDDEN_RE.search(value):
+        raise ValueError('content-id contains illegal characters')
+    return value
+
+
+def validate_search_text(value):
+    '''Bounds one structured-search free-text field (text/from/to/subject).
+
+    These reach IMAP SEARCH as discrete quoted arguments, so imapclient handles
+    escaping; this only caps length and rejects control bytes (NUL and friends
+    have no place in a search term and can confuse the protocol). `None` passes
+    through so callers can validate optional fields uniformly.
+    '''
+    if value is None:
+        return value
+    if not isinstance(value, str):
+        raise ValueError('search term must be a string')
+    if len(value) > MAX_SEARCH_TEXT_LEN:
+        raise ValueError('search term is too long')
+    if _CONTROL_CHARS_RE.search(value):
+        raise ValueError('search term contains control characters')
+    return value
+
 
 def get_folder_list(client):
     '''

@@ -52,6 +52,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     to the existing 25 MiB total-bytes ceiling.
   - The `/upload_url` presigned PUT lifetime is shortened from 600 s to 120 s,
     tightening the window if a URL leaks.
+- Hardened input validation on the IMAP-shaped endpoints, Phase 3 of the same
+  plan. A shared validator set in `lambda/api/_shared/helper.py`
+  (`validate_folder_name`, `validate_uid_list` / `validate_uid`,
+  `validate_flag`, `validate_sort_criterion`, `validate_content_id`,
+  `validate_search_text`) rejects malformed folder names, UID lists, flag
+  tokens, sort keys, inline-image Content-IDs, and search terms at the API
+  boundary (HTTP 400) instead of relaying them into Dovecot and surfacing a
+  500 traceback or an opaque IMAP protocol error. Wired into `/list_messages`,
+  `/list_envelopes`, `/set_flag`, `/move_messages`, `/fetch_inline_image`, and
+  `/search_envelopes`. `/set_flag` and `/move_messages` also return 400 (not a
+  500) on a non-JSON body, and a `/move_messages` whose `destination` carries
+  CR/LF or a `..` path segment is rejected before any IMAP session is opened.
 
 ## [0.9.46] - Unreleased
 
