@@ -24,6 +24,8 @@ from helper import ( # pylint: disable=import-error
     ENVELOPE_FETCH_KEYS,
     envelope_dict,
     get_imap_client,
+    validate_folder_name,
+    validate_search_text,
 )
 
 MAX_RESULTS = 5000
@@ -121,6 +123,8 @@ def parse_request(qs):
     folder = qs.get('folder')
     if folder == '':
         folder = None
+    if folder is not None:
+        validate_folder_name(folder)
     cursor = decode_cursor(qs.get('cursor'))
     return {
         'host': host,
@@ -136,7 +140,7 @@ def build_criteria(qs, cursor):
     '''Translates structured query params into an IMAP SEARCH criteria list.'''
     criteria = []
 
-    text = (qs.get('text') or '').strip()
+    text = (validate_search_text(qs.get('text')) or '').strip()
     if text:
         # Tokenize on whitespace; AND-of-terms via repeated TEXT keys. TEXT
         # matches both headers and body. Phrase quoting and boolean operators
@@ -145,7 +149,7 @@ def build_criteria(qs, cursor):
             criteria.extend(['TEXT', token])
 
     for field, key in (('from', 'FROM'), ('to', 'TO'), ('subject', 'SUBJECT')):
-        value = (qs.get(field) or '').strip()
+        value = (validate_search_text(qs.get(field)) or '').strip()
         if value:
             criteria.extend([key, value])
 
