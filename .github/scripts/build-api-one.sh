@@ -49,6 +49,9 @@ fi
 if grep -qE '^[[:space:]]*(from|import)[[:space:]]+helper' function.py 2>/dev/null; then
   cp ../_shared/helper.py ./build/helper.py
 fi
+if grep -qE '^[[:space:]]*(from|import)[[:space:]]+admin_limits' function.py 2>/dev/null; then
+  cp ../_shared/admin_limits.py ./build/admin_limits.py
+fi
 
 pushd ./build >/dev/null
 find . -depth -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true

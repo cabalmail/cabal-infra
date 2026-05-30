@@ -45,6 +45,39 @@ resource "aws_dynamodb_table" "user_preferences" {
 }
 
 /**
+* Per-caller rate-limit counters for admin mutations (Phase 5 of
+* docs/0.10.x/application-surface-hardening-plan.md). One row per
+* (caller, 60-second window): the partition key is "<caller>#<window-id>" and a
+* TTL on expires_at reaps spent windows. Written and read by the admin mutation
+* Lambdas via _shared/admin_limits.py. On-demand billing; the access pattern is
+* a single hot key per active admin per minute.
+*/
+
+#tfsec:ignore:aws-dynamodb-table-customer-key
+resource "aws_dynamodb_table" "rate_limits" {
+  name         = "cabal-rate-limits"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "pk"
+
+  attribute {
+    name = "pk"
+    type = "S"
+  }
+
+  ttl {
+    attribute_name = "expires_at"
+    enabled        = true
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+  point_in_time_recovery {
+    enabled = true
+  }
+}
+
+/**
 * Per-user, per-domain allow list for address creation. The presence of a
 * (user, domain) row means the user IS permitted to create addresses on that
 * apex domain; the absence of a row defaults to deny. This matches the

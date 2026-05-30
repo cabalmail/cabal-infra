@@ -79,6 +79,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   5-second budget so a slow or hostile authoritative nameserver cannot pin the
   Lambda. `/revoke` with an unknown `tld` now returns 400 instead of a 500.
   Adds `route53:GetHostedZone` to the API Lambda role so the zone check can run.
+- Added per-caller abuse limits and audit logging for admin mutations, Phase 5
+  of the same plan. A new lightweight shared module
+  `lambda/api/_shared/admin_limits.py` (boto3 + stdlib only, so the admin
+  handlers need not pull in helper.py's IMAP/DNS imports or master-password
+  fetch) provides a fixed-window per-caller rate limiter (30 mutations/minute,
+  backed by a new on-demand `cabal-rate-limits` DynamoDB table with a TTL) and
+  a structured `AUDIT` JSON log emitter (caller, action, target, outcome).
+  Wired into `/delete_user`, `/disable_user`, `/enable_user`,
+  `/set_user_domain_access`, and `/new_address_admin`: each emits one audit
+  line per attempt and returns 429 once a caller exceeds the ceiling. The
+  limiter fails open, so a missing or erroring table never locks admins out of
+  account management. The plan's `/list` scan-to-GSI migration was deliberately
+  not done: multi-user addresses store assignees slash-joined in the `user`
+  attribute, so a GSI partitioned on `user` would silently miss them; a correct
+  index needs a separate membership table, out of scope here (see the note in
+  `lambda/api/list/function.py`).
 
 ## [0.9.46] - Unreleased
 

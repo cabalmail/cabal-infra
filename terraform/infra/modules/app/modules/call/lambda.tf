@@ -118,7 +118,8 @@ resource "aws_iam_role_policy" "lambda" {
                 "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-addresses",
                 "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-dmarc-reports",
                 "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-user-preferences",
-                "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-user-domain-access"
+                "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-user-domain-access",
+                "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-rate-limits"
             ]
         },
         {
