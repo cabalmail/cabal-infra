@@ -11,6 +11,7 @@ permissions:
   contents: write
   pull-requests: write
   security-events: read
+  id-token: write
 
 jobs:
   check-alerts:
