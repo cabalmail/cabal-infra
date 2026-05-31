@@ -21,7 +21,7 @@ The themes ship as five phases. Phase 4 (Dovecot rate limiting) is the highest-t
 
 ## Goals
 
-- Every mail-tier container runs with `readOnlyRootFilesystem = true`, `linuxParameters.initProcessEnabled = true`, the `no-new-privileges` flag set, and only the capabilities it actually needs (default: drop all; opt back in per tier if and when required).
+- Every mail-tier container runs with `linuxParameters.initProcessEnabled = true`, the `no-new-privileges` flag set, and only the capabilities it actually needs (default: drop all; opt back in per tier if and when required). `readOnlyRootFilesystem = true` is the target wherever a tier can support it, but the mail tiers regenerate their entire `/etc/mail` + `/etc/opendkim` config surface at runtime (see Phase 2), so ROFS for those is conditional on the seeding/relocation work landing — not a given. The monitoring tier, which does no runtime config regeneration, gets ROFS unconditionally.
 - No tier requests `NET_ADMIN` once fail2ban is gone. The capability was added solely to support fail2ban's iptables manipulation, and fail2ban has been commented out of supervisord since before this audit.
 - Every container image — first-party and third-party — referenced by ECS is pinned to a SHA256 digest, not a floating tag. Renovate/Dependabot opens upgrade PRs.
 - OpenDKIM signs mail only from local sendmail (loopback). A misconfigured network rule that exposes port 25 publicly does not turn the container into a free DKIM-signing oracle for arbitrary external senders.
@@ -106,41 +106,16 @@ This is a no-op for behaviour (nothing using the cap) and a real reduction in at
 
 ### Phase 2 — Container runtime posture
 
-Add to each mail-tier container definition:
+The capability-and-privilege posture applies cleanly to every tier:
 
 ```hcl
 linuxParameters = {
   initProcessEnabled = true
   capabilities       = { drop = ["ALL"], add = [] }  # opt back in below
 }
-readonlyRootFilesystem = true
-mountPoints = concat(<existing>, [
-  { sourceVolume = "tmp",     containerPath = "/tmp",      readOnly = false },
-  { sourceVolume = "var-run", containerPath = "/var/run",  readOnly = false },
-])
 ```
 
-The volumes are tmpfs (small) via:
-
-```hcl
-volume {
-  name = "tmp"
-  host_path = null  # tmpfs via docker `--tmpfs` equivalent on ECS EC2
-}
-```
-
-ECS on EC2 supports tmpfs via `linuxParameters.tmpfs`. Use that rather than the `volume` shape:
-
-```hcl
-linuxParameters = {
-  initProcessEnabled = true
-  tmpfs = [
-    { containerPath = "/tmp",     size = 64,  mountOptions = ["rw","nosuid","nodev","noexec"] },
-    { containerPath = "/var/run", size = 32,  mountOptions = ["rw","nosuid","nodev"] },
-  ]
-  capabilities = { drop = ["ALL"], add = [] }
-}
-```
+`dockerSecurityOptions = ["no-new-privileges:true"]` on each container.
 
 Per-tier capability adds:
 
@@ -148,15 +123,64 @@ Per-tier capability adds:
 - **smtp-in**: none.
 - **smtp-out**: none (DKIM key access is via filesystem permissions, not capabilities).
 
-`dockerSecurityOptions = ["no-new-privileges:true"]` on each container.
+#### readOnlyRootFilesystem is not a flag flip for the mail tiers
 
-This phase is the highest-risk single change. The migration order is dev → stage → prod with at least one mail-roundtrip end-to-end test per environment between flips. Specific things that may break:
+The mail tiers are heavy *runtime* config-mutators, not just at startup. `reconfigure.sh` runs as a sidecar loop and re-runs the full config generation on every address change (SQS-triggered) and on the periodic fallback ([reconfigure.sh:30-84](../../docker/shared/reconfigure.sh)). Each pass writes across the root filesystem; with a read-only root and `set -euo pipefail`, the first `EROFS` aborts the regeneration, and new addresses/subdomains silently stop propagating — the periodic fallback fails too, so there is no self-heal.
 
-- Sendmail's per-startup config compile writes to `/etc/mail/*.db` — that path needs to be writable. Mitigate by writing the compiled `.db` files to a tmpfs path and pointing sendmail at it via `confSERVICE_SWITCH_FILE`, or by relaxing read-only-root to just the parts that don't need to mutate at runtime.
+The full writable-path inventory — everything that needs a writable mount before ROFS can be set on a mail tier:
+
+| Path | Written by | When |
+|---|---|---|
+| `/etc/mail/{access,virtusertable,mailertable,relay-domains,local-host-names,masq-domains}` | `generate-config.sh` | startup + every reconfigure |
+| `/etc/mail/*.db` | `makemap` (reconfigure), `make -C /etc/mail` (entrypoint) | startup + every reconfigure |
+| `/etc/mail/sendmail.mc`, `/etc/mail/sendmail.cf` | entrypoint render + `make` | startup |
+| `/etc/opendkim/{KeyTable,SigningTable,TrustedHosts}` | `generate-config.sh` | startup + every reconfigure (smtp-out) |
+| `/etc/opendkim/keys/cabal` | entrypoint | startup (smtp-out) |
+| `/etc/aliases`, `/etc/aliases.dynamic`, `/etc/aliases.db` | entrypoint + reconfigure (`newaliases`) | startup + every reconfigure (imap) |
+| `/etc/dovecot/conf.d/{10-ssl,05-login}.conf` | entrypoint | startup (imap, smtp-out) |
+| `/etc/dovecot/master-users` | entrypoint (`htpasswd`) | startup (imap) |
+| `/etc/pki/tls/{certs,private}/*` | entrypoint | startup |
+| `/usr/bin/cognito.bash` | entrypoint | startup |
+| `/etc/fail2ban/jail.local` | entrypoint | startup (removed in Phase 1) |
+| `/var/lib/rsyslog` | entrypoint (`mkdir`) | startup |
+| `/etc/hosts` | `hosts-pin.sh` | startup + on IMAP IP change (smtp-in) |
+| `/tmp` (scratch via `mktemp`) | `generate-config.sh` | startup + every reconfigure |
+
+Two tmpfs mounts (`/tmp`, `/var/run`) — the original scope of this phase — cover almost none of this. The real mutation surface is the mail config itself.
+
+**The tmpfs-shadowing trap.** `/etc/mail` and `/etc/opendkim` cannot simply be tmpfs-mounted: both ship image-baked content. `/etc/mail` holds the `sendmail-cf` m4 sources and `Makefile` that `make -C /etc/mail` needs, the COPYed `sendmail.mc.template`, and (smtp-out) the static `access` map; `/etc/opendkim` is laid out by the package. An empty tmpfs over either shadows that content, so the entrypoint would have to *seed* the tmpfs (copy baked files in) before generating — a change to entrypoint ordering, not just a task-def edit.
+
+Three ways to reconcile ROFS with this, in increasing order of effort and payoff:
+
+1. **Posture-without-ROFS for the mail tiers (default for 0.10.x).** Apply `drop=ALL`, `no-new-privileges`, and `initProcessEnabled` to imap/smtp-in/smtp-out but leave `readOnlyRootFilesystem` unset. Keeps the bulk of the hardening value and avoids the seeding problem entirely. This is the pragmatic landing spot, given that "rewrite `/etc/mail` from DynamoDB" is these images' normal operation.
+2. **Full tmpfs + entrypoint seeding.** tmpfs-mount every writable path above and seed `/etc/mail`/`/etc/opendkim` from baked copies at entrypoint. Achieves ROFS, but the entire mail-config surface is writable tmpfs anyway, so the marginal benefit over option 1 is modest and the entrypoint complexity is real. The tmpfs shape (ECS on EC2 supports it via `linuxParameters.tmpfs`):
+
+   ```hcl
+   linuxParameters = {
+     initProcessEnabled = true
+     tmpfs = [
+       { containerPath = "/tmp",     size = 64,  mountOptions = ["rw","nosuid","nodev","noexec"] },
+       { containerPath = "/var/run", size = 32,  mountOptions = ["rw","nosuid","nodev"] },
+       # ...plus /etc/mail, /etc/opendkim, /etc/dovecot/conf.d, /etc/pki/tls, /var/lib/rsyslog, /etc/aliases*
+     ]
+     capabilities = { drop = ["ALL"], add = [] }
+   }
+   ```
+
+3. **Relocate generated config to a single writable prefix.** Refactor `generate-config.sh`, `reconfigure.sh`, and the daemon configs so all generated maps/tables/aliases live under one writable path (e.g. `/run/cabal/...`) and point sendmail/dovecot/opendkim at it. Cleanest end state — the actual root stays read-only — but a meaningful refactor that touches the daemon config wiring.
+
+The monitoring tier does no runtime config regeneration and is a clean ROFS candidate; it can go read-only independently of the mail tiers and should not be gated on this decision.
+
+#### Recommendation
+
+Ship option 1 for the three mail tiers in 0.10.x (posture hardening without ROFS), set `readOnlyRootFilesystem = true` on the monitoring tier, and capture option 3 as a follow-up if ROFS on the mail tiers later becomes a requirement. The entrypoint and reconfigure write paths are the gating constraint here, not the capability drop.
+
+The posture changes are still the highest-touch part of this plan. Migration order is dev → stage → prod with at least one mail-roundtrip end-to-end test per environment between flips. Other things to verify:
+
 - `/var/log` paths used by sendmail/dovecot. Stdout/stderr-route them (already mostly done) so no on-disk log file is needed.
-- `/etc/aliases.db` regeneration on entrypoint.
+- Port binding under `cap_drop: ALL` (see Open questions — `CAP_NET_BIND_SERVICE` may be required and need re-adding per tier).
 
-Pre-flight: a development-environment soak under load is essential before stage rollout. If any tier proves too tightly coupled to a writable root, downgrade that single tier to `readonlyRootFilesystem = false` and capture the reason in a follow-up.
+Pre-flight: a development-environment soak under load is essential before stage rollout.
 
 ### Phase 3 — Image digest pinning + ECR scan on push
 
@@ -283,7 +307,7 @@ Each phase is one PR (or a small PR set) and is independently revertable.
 | Phase                                        | Scope                                                   | Risk                                                                                                                                                                                                                  |
 | -------------------------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1 — fail2ban + NET_ADMIN                     | Docker + Terraform ECS task defs                        | Low. No-op on behaviour; reduces capabilities.                                                                                                                                                                        |
-| 2 — Runtime posture (ROFS, no-new-privs, …)  | Terraform ECS task defs                                 | High. Requires soak testing in dev. Per-tier flip; if one tier rejects ROFS, drop it for that tier and capture rationale.                                                                                             |
+| 2 — Runtime posture (caps, no-new-privs, init) | Terraform ECS task defs                                 | Medium for the caps/no-new-privs/init posture (all tiers). ROFS is deferred for the mail tiers — they regenerate `/etc/mail` + `/etc/opendkim` at runtime; only the monitoring tier gets ROFS in 0.10.x. See Phase 2 for the option 1/2/3 tradeoff.                                                                          |
 | 3 — Image digest pinning + ECR scan-on-push  | Dockerfiles, ECR module, deploy script, Renovate config | Medium. Build cadence changes; expect some early scan-on-push noise from the AL2023 base.                                                                                                                             |
 | 4 — Dovecot plaintext-off + throttling       | Docker dovecot configs + entrypoint                     | Medium. Auth path change; test with React webmail and Apple clients before promotion.                                                                                                                                 |
 | 5 — Sendmail/OpenDKIM hardening              | Docker .mc templates + generate-config.sh               | Low to medium. `confMAX_MESSAGE_SIZE` change is the user-visible one (50 MB cap); document in release notes. OpenDKIM scope change is invisible to clients.                                                            |
@@ -309,8 +333,8 @@ Each phase runs the full dev → stage → prod sequence per the standard branch
 
 ## Acceptance
 
-- `aws ecs describe-task-definition` shows `readonlyRootFilesystem = true` and `linuxParameters.capabilities.drop = ["ALL"]` for all three mail tiers in stage and prod.
-- A trial `docker run` of the imap image with `--cap-add NET_ADMIN` removed and `--read-only` set boots end-to-end with no errors; supervisord, sendmail, dovecot, and opendkim are all in the "running" state at startup.
+- `aws ecs describe-task-definition` shows `linuxParameters.capabilities.drop = ["ALL"]` and `no-new-privileges:true` for all three mail tiers in stage and prod. `readOnlyRootFilesystem = true` shows on the monitoring tier; the mail tiers carry it only if option 2 or 3 from Phase 2 lands.
+- A trial `docker run` of the imap image with `--cap-add NET_ADMIN` removed boots end-to-end with no errors; supervisord, sendmail, dovecot, and opendkim are all in the "running" state at startup. (A `--read-only` variant of this trial is the feasibility gate for the Phase 2 option 2/3 ROFS work, not a 0.10.x acceptance criterion for the mail tiers.)
 - ECR scan-on-push has zero HIGH/CRITICAL findings against the latest build for each tier, or a baseline file with one-line justifications mirroring the IaC-baseline pattern.
 - An attacker connecting to the IMAP service over a plaintext (non-TLS) path inside the VPC (simulating an NLB bypass) is refused at auth: `BAD [PRIVACYREQUIRED] Plaintext authentication disallowed on non-secure (SSL/TLS) connections.`
 - An OpenDKIM debug log entry (toggled via env var for the verification window) shows `external host 10.x.x.x is not internal` when a message is fed via a non-loopback path.
