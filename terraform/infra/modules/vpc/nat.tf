@@ -46,19 +46,13 @@ resource "aws_nat_gateway" "nat" {
 # NAT Instance (when use_nat_instance = true)
 # =============================================================================
 
-data "aws_ami" "al2023" {
+data "aws_ami" "amazon_linux_2" {
   count       = var.use_nat_instance ? 1 : 0
   most_recent = true
   owners      = ["amazon"]
   filter {
-    name = "name"
-    # Standard AL2023 x86_64 AMI. The "-2023." infix excludes the "-minimal-"
-    # variant, which does not ship the nftables stack the bootstrap relies on.
-    values = ["al2023-ami-2023.*-x86_64"]
-  }
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
+    name   = "name"
+    values = ["amzn2-ami-hvm-2.0.*-x86_64-gp2"]
   }
 }
 
@@ -119,68 +113,49 @@ resource "aws_iam_instance_profile" "nat" {
 
 resource "aws_instance" "nat" {
   count                  = var.use_nat_instance && !var.quiesced ? length(var.az_list) : 0
-  ami                    = data.aws_ami.al2023[0].id
+  ami                    = data.aws_ami.amazon_linux_2[0].id
   instance_type          = var.nat_instance_type
   subnet_id              = aws_subnet.public[count.index].id
   vpc_security_group_ids = [aws_security_group.nat[0].id]
   source_dest_check      = false
   iam_instance_profile   = aws_iam_instance_profile.nat[0].name
 
-  # AL2023's base AMI ships no firewall tool, so the bootstrap below must
-  # dnf-install nftables, which needs egress before the EIP is associated. A
-  # public IP at launch provides it. The security group still only accepts
-  # ingress from the VPC CIDR, so this adds no inbound exposure, and the EIP
-  # replaces this address once associated.
-  #checkov:skip=CKV_AWS_88:NAT instance is intentionally public-facing; a launch-time public IP is required to dnf-install nftables before the EIP is associated.
-  associate_public_ip_address = true
-
   user_data = <<-EOF
     #!/bin/bash
-    set -euo pipefail
-
-    # Enable IPv4 forwarding (persists across reboots via sysctl.d).
+    # Enable IP forwarding (persists across reboots via sysctl.d)
     echo "net.ipv4.ip_forward = 1" > /etc/sysctl.d/nat.conf
     sysctl -p /etc/sysctl.d/nat.conf
 
-    # AL2023's base AMI does NOT ship a firewall tool - no nftables and no
-    # iptables, unlike AL2, which preinstalled iptables. So install nftables
-    # before configuring it. associate_public_ip_address gives this instance a
-    # public IP at first boot (before the EIP is associated), so dnf can reach
-    # the regional AL2023 repos; the short retry covers the network coming up.
-    for attempt in 1 2 3 4 5; do
-      if dnf install -y nftables; then
-        break
-      fi
-      sleep 5
-    done
+    # Set up iptables NAT rules
+    iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+    iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+    iptables -A FORWARD -j ACCEPT
 
-    # The masquerade rule is not pinned to a named interface (the primary NIC is
-    # eth0 on some AMIs, ens5 on others), so it works regardless of how the
-    # kernel names it. "flush ruleset" keeps a re-run idempotent (no duplicate
-    # rules) on this single-purpose NAT box.
-    #
-    # Generated with printf, not a nested heredoc: a nested heredoc inside
-    # Terraform's <<-EOF mis-strips indentation and yields an empty file (it
-    # silently broke the old iptables bootstrap - see CHANGELOG 0.4.1).
-    mkdir -p /etc/nftables
+    # Persist rules to disk (iptables-save is in the base AMI, no package needed)
+    mkdir -p /etc/sysconfig
+    iptables-save > /etc/sysconfig/iptables
+
+    # Create a systemd service to restore rules on boot (replaces iptables-services
+    # which requires yum and can't be installed during first boot - the instance has
+    # no public IP until the EIP is associated after creation).
+    # Uses printf instead of a nested heredoc to avoid delimiter issues
+    # inside Terraform's <<-EOF.
     printf '%s\n' \
-      'flush ruleset' \
+      '[Unit]' \
+      'Description=Restore iptables NAT rules' \
+      'After=network.target' \
       '' \
-      'table ip nat {' \
-      '  chain postrouting {' \
-      '    type nat hook postrouting priority 100; policy accept;' \
-      '    masquerade' \
-      '  }' \
-      '}' \
-      > /etc/nftables/cabal-nat.nft
+      '[Service]' \
+      'Type=oneshot' \
+      'ExecStart=/sbin/iptables-restore /etc/sysconfig/iptables' \
+      'RemainAfterExit=yes' \
+      '' \
+      '[Install]' \
+      'WantedBy=multi-user.target' \
+      > /etc/systemd/system/restore-iptables.service
 
-    # The stock nftables.service runs "nft -f /etc/sysconfig/nftables.conf" on
-    # every boot. Add our ruleset as an include once, then enable + start it so
-    # the rules apply now and survive reboots.
-    if ! grep -q 'cabal-nat.nft' /etc/sysconfig/nftables.conf 2>/dev/null; then
-      printf '\ninclude "/etc/nftables/cabal-nat.nft"\n' >> /etc/sysconfig/nftables.conf
-    fi
-    systemctl enable --now nftables
+    systemctl daemon-reload
+    systemctl enable restore-iptables.service
   EOF
 
   metadata_options {
