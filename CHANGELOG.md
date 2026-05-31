@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.2] - 2026-05-31
+
+### Changed
+- Rolled the NAT instances back to Amazon Linux 2, reverting the 0.10.1 AL2023
+  migration (`terraform/infra/modules/vpc/nat.tf`). The AL2023 switch broke all
+  private-subnet egress: the standard AL2023 AMI ships no firewall tool (neither
+  nftables nor iptables), so the nftables bootstrap never loaded a masquerade
+  rule and the NAT instances dropped every forwarded packet. With no VPC
+  endpoints, that also halted outbound mail delivery and CloudWatch log shipping
+  from the mail tiers and hung the `/send` Lambda. AL2 preinstalls iptables, so
+  its bootstrap needs no boot-time package install and is known-good. Returning
+  to AL2023 via a custom AMI with nftables baked in is the planned permanent
+  path.
+
 ## [0.10.1] - 2026-05-31
 
 ### Changed
