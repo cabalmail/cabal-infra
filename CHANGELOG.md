@@ -7,21 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.10.2] - Unreleased
 
-### Fixed
-- NAT-instance egress, broken by the 0.10.1 AL2023 migration
-  (`terraform/infra/modules/vpc/nat.tf`). The bootstrap assumed the standard
-  AL2023 AMI preinstalls nftables; it does not (AL2023 ships neither nftables
-  nor iptables, unlike AL2). `systemctl enable --now nftables` failed with "Unit
-  file nftables.service does not exist", so no masquerade rule was ever loaded
-  and the replacement NAT instances forwarded private-subnet packets with their
-  original source IP, which the internet gateway dropped - killing all
-  private-subnet egress. Because the VPC has no gateway/interface VPC endpoints,
-  this also stopped outbound mail delivery and CloudWatch log shipping from the
-  mail tiers, and caused the `/send` Lambda to hang: its SMTP submission to
-  smtp-out blocked on smtp-out's now-blackholed outbound delivery. The bootstrap
-  now `dnf install`s nftables at boot, and the instance is given a launch-time
-  public IP (`associate_public_ip_address = true`) so it has egress to reach the
-  AL2023 repos before its Elastic IP is associated.
+### Changed
+- Rolled the NAT instances back to Amazon Linux 2, reverting the 0.10.1 AL2023
+  migration (`terraform/infra/modules/vpc/nat.tf`). The AL2023 switch broke all
+  private-subnet egress: the standard AL2023 AMI ships no firewall tool (neither
+  nftables nor iptables), so the nftables bootstrap never loaded a masquerade
+  rule and the NAT instances dropped every forwarded packet. With no VPC
+  endpoints, that also halted outbound mail delivery and CloudWatch log shipping
+  from the mail tiers and hung the `/send` Lambda. AL2 preinstalls iptables, so
+  its bootstrap needs no boot-time package install and is known-good. Returning
+  to AL2023 via a custom AMI with nftables baked in is the planned permanent
+  path.
 
 ## [0.10.1] - 2026-05-31
 
