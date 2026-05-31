@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.2] - Unreleased
+
+### Fixed
+- NAT-instance egress, broken by the 0.10.1 AL2023 migration
+  (`terraform/infra/modules/vpc/nat.tf`). The bootstrap assumed the standard
+  AL2023 AMI preinstalls nftables; it does not (AL2023 ships neither nftables
+  nor iptables, unlike AL2). `systemctl enable --now nftables` failed with "Unit
+  file nftables.service does not exist", so no masquerade rule was ever loaded
+  and the replacement NAT instances forwarded private-subnet packets with their
+  original source IP, which the internet gateway dropped - killing all
+  private-subnet egress. Because the VPC has no gateway/interface VPC endpoints,
+  this also stopped outbound mail delivery and CloudWatch log shipping from the
+  mail tiers, and caused the `/send` Lambda to hang: its SMTP submission to
+  smtp-out blocked on smtp-out's now-blackholed outbound delivery. The bootstrap
+  now `dnf install`s nftables at boot, and the instance is given a launch-time
+  public IP (`associate_public_ip_address = true`) so it has egress to reach the
+  AL2023 repos before its Elastic IP is associated.
+
 ## [0.10.1] - 2026-05-31
 
 ### Changed

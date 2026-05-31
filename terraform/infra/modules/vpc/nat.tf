@@ -126,6 +126,14 @@ resource "aws_instance" "nat" {
   source_dest_check      = false
   iam_instance_profile   = aws_iam_instance_profile.nat[0].name
 
+  # AL2023's base AMI ships no firewall tool, so the bootstrap below must
+  # dnf-install nftables, which needs egress before the EIP is associated. A
+  # public IP at launch provides it. The security group still only accepts
+  # ingress from the VPC CIDR, so this adds no inbound exposure, and the EIP
+  # replaces this address once associated.
+  #checkov:skip=CKV_AWS_88:NAT instance is intentionally public-facing; a launch-time public IP is required to dnf-install nftables before the EIP is associated.
+  associate_public_ip_address = true
+
   user_data = <<-EOF
     #!/bin/bash
     set -euo pipefail
@@ -134,14 +142,22 @@ resource "aws_instance" "nat" {
     echo "net.ipv4.ip_forward = 1" > /etc/sysctl.d/nat.conf
     sysctl -p /etc/sysctl.d/nat.conf
 
-    # AL2023 ships nftables (not iptables) in the base AMI, and this instance
-    # has NO egress at first boot - the EIP is associated only after launch, the
-    # public subnet does not auto-assign a public IP, and there is no other NAT
-    # path or S3 VPC endpoint - so we cannot dnf-install anything here. Use the
-    # preinstalled nftables stack instead. The masquerade rule is not pinned to a
-    # named interface (the primary NIC is eth0 on some AMIs, ens5 on others), so
-    # it works regardless of how the kernel names it. "flush ruleset" keeps a
-    # re-run idempotent (no duplicate rules) on this single-purpose NAT box.
+    # AL2023's base AMI does NOT ship a firewall tool - no nftables and no
+    # iptables, unlike AL2, which preinstalled iptables. So install nftables
+    # before configuring it. associate_public_ip_address gives this instance a
+    # public IP at first boot (before the EIP is associated), so dnf can reach
+    # the regional AL2023 repos; the short retry covers the network coming up.
+    for attempt in 1 2 3 4 5; do
+      if dnf install -y nftables; then
+        break
+      fi
+      sleep 5
+    done
+
+    # The masquerade rule is not pinned to a named interface (the primary NIC is
+    # eth0 on some AMIs, ens5 on others), so it works regardless of how the
+    # kernel names it. "flush ruleset" keeps a re-run idempotent (no duplicate
+    # rules) on this single-purpose NAT box.
     #
     # Generated with printf, not a nested heredoc: a nested heredoc inside
     # Terraform's <<-EOF mis-strips indentation and yields an empty file (it
