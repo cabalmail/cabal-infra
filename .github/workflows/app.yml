@@ -320,7 +320,7 @@ jobs:
       uses: actions/checkout@v5
 
     - name: pylint
-      run: pip install pylint && cd ./lambda/api && pylint --rcfile .pylintrc */function.py
+      run: pip install pylint && cd ./lambda/api && pylint --rcfile .pylintrc _shared/*.py */function.py
 
     - name: configure-aws
       run: |

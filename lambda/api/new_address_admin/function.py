@@ -4,7 +4,11 @@ import json
 import os
 from datetime import datetime, timezone
 import boto3  # pylint: disable=import-error
+from admin_limits import audit_log, rate_limit_response_or_none  # pylint: disable=import-error
+from helper import assert_zone_owns_apex  # pylint: disable=import-error
 from helper import user_authorized_for_domain  # pylint: disable=import-error
+from helper import validate_dns_apex  # pylint: disable=import-error
+from helper import validate_dns_subdomain  # pylint: disable=import-error
 
 domains = json.loads(os.environ['DOMAINS'])
 control_domain = os.environ['CONTROL_DOMAIN']
@@ -26,6 +30,10 @@ def handler(event, _context):
             'statusCode': 403,
             'body': json.dumps({'Error': 'Admin access required'})
         }
+    caller = event['requestContext']['authorizer']['claims']['cognito:username']
+    limited = rate_limit_response_or_none(caller, 'new_address_admin')
+    if limited:
+        return limited
     body = json.loads(event['body'])
     usernames = body.get('usernames') or []
     if not usernames:
@@ -37,6 +45,14 @@ def handler(event, _context):
         return {
             'statusCode': 400,
             'body': json.dumps({'Error': f"Unknown domain \"{body['tld']}\""})
+        }
+    try:
+        validate_dns_apex(body['tld'])
+        validate_dns_subdomain(body['subdomain'])
+    except ValueError as err:
+        return {
+            'statusCode': 400,
+            'body': json.dumps({'Error': f'Invalid input: {err}'})
         }
     try:
         for username in usernames:
@@ -60,6 +76,7 @@ def handler(event, _context):
         notify_containers()
     except Exception as err:  # pylint: disable=broad-exception-caught
         print(f"Error creating address {body['address']}: {err}")
+        audit_log(caller, 'new_address_admin', body.get('address', ''), 'failure')
         return {
             'statusCode': 500,
             'body': json.dumps({
@@ -67,6 +84,7 @@ def handler(event, _context):
                 'error': str(err)
             })
         }
+    audit_log(caller, 'new_address_admin', body.get('address', ''), 'success')
     return {
         'statusCode': 201,
         'body': json.dumps({
@@ -100,6 +118,7 @@ def change_item(name, value, record_type):
 
 def create_dns_records(zone_id, subdomain, tld):
     '''Creates the DNS records for a new email address'''
+    assert_zone_owns_apex(zone_id, tld)
     params = {
         'HostedZoneId': zone_id,
         'ChangeBatch': {

@@ -5,6 +5,118 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-05-30
+
+### Security
+- Hardened DMARC aggregate-report ingestion (`/process_dmarc`), Phase 1 of
+  `docs/0.10.x/application-surface-hardening-plan.md`. The handler parses
+  attacker-controlled XML/zip/gzip emailed from arbitrary senders, so:
+  - XML is now parsed with `defusedxml` instead of stdlib
+    `xml.etree.ElementTree`, blocking XXE, external-DTD, and
+    entity-expansion ("billion laughs") attacks.
+  - Decompressed attachment size is capped (50 MiB default,
+    `MAX_DMARC_PAYLOAD_BYTES`). Zip and gzip entries are read incrementally
+    and aborted one byte past the cap, so a bomb never fully materialises.
+  - Raw inbound message size is capped (25 MiB, `MAX_DMARC_MESSAGE_BYTES`),
+    checked against `RFC822.SIZE` so oversize bodies are never downloaded.
+  - Messages examined per scheduled run are capped (50 default,
+    `MAX_DMARC_MESSAGES_PER_RUN`); the run is idempotent so a backlog drains
+    over successive runs instead of one unbounded fetch.
+  - A `From:`-domain allowlist (`DMARC_REPORT_SENDERS`, subdomains accepted)
+    gates which senders are parsed. Unknown senders are silently skipped (not
+    bounced) and moved to `INBOX.Skipped` for allowlist tuning; this also
+    stops junk from accumulating in `INBOX` and starving real reports of the
+    per-run budget.
+  - The silent "no XML found" fast path is replaced with categorised run
+    counters (`unknown_sender`, `oversize_message`, `no_attachment`,
+    `decompress_errors`, `xml_parse_errors`, `errors`) emitted as a
+    structured run-summary log line so each failure mode can be alarmed
+    independently.
+  New dependency `defusedxml==0.7.1`; new env vars `DMARC_REPORT_SENDERS`,
+  `MAX_DMARC_PAYLOAD_BYTES`, and `MAX_DMARC_MESSAGES_PER_RUN` wired through
+  `terraform/infra/modules/app/dmarc.tf`.
+- Hardened outbound message integrity on `/send`, Phase 2 of the same plan:
+  - The Sent-folder copy no longer retains a `Bcc:` header. A Bcc-free copy
+    is appended to Outbox (and moved to Sent); SMTP still delivers to the
+    blind recipients because the full recipient list is passed to the relay
+    explicitly. Drafts intentionally keep `Bcc:` so in-progress composes do
+    not lose blind recipients.
+  - The SMTP envelope sender (`MAIL FROM`) and recipient list (`RCPT TO`) are
+    now pinned to the validated sender address and the parsed To/Cc/Bcc
+    addresses, rather than re-derived from message headers, closing
+    display-name games that make the envelope and visible `From:` disagree.
+  - `subject`, recipient entries, `message_id`, `in_reply_to`, and every
+    `references` token are rejected (400) if they contain CR/LF, blocking
+    header injection.
+  - Attachments are capped at 10 per message (`MAX_ATTACHMENTS`), in addition
+    to the existing 25 MiB total-bytes ceiling.
+  - The `/upload_url` presigned PUT lifetime is shortened from 600 s to 120 s,
+    tightening the window if a URL leaks.
+- Hardened input validation on the IMAP-shaped endpoints, Phase 3 of the same
+  plan. A shared validator set in `lambda/api/_shared/helper.py`
+  (`validate_folder_name`, `validate_uid_list` / `validate_uid`,
+  `validate_flag`, `validate_sort_criterion`, `validate_content_id`,
+  `validate_search_text`) rejects malformed folder names, UID lists, flag
+  tokens, sort keys, inline-image Content-IDs, and search terms at the API
+  boundary (HTTP 400) instead of relaying them into Dovecot and surfacing a
+  500 traceback or an opaque IMAP protocol error. Wired into `/list_messages`,
+  `/list_envelopes`, `/set_flag`, `/move_messages`, `/fetch_inline_image`, and
+  `/search_envelopes`. `/set_flag` and `/move_messages` also return 400 (not a
+  500) on a non-JSON body, and a `/move_messages` whose `destination` carries
+  CR/LF or a `..` path segment is rejected before any IMAP session is opened.
+- Hardened the DNS-touching endpoints, Phase 4 of the same plan. New shared
+  validators in `lambda/api/_shared/helper.py` (`validate_dns_label`,
+  `validate_dns_apex`, `validate_dns_subdomain`) reject malformed subdomains
+  and apexes (HTTP 400) before they can deform a Route 53 change batch or a
+  `dns.resolver` query, wired into `/new`, `/revoke`, `/new_address_admin`,
+  `/repair_dns_record`, `/check_dns_record`, and `/fetch_bimi`. Before any
+  `change_resource_record_sets` write, `assert_zone_owns_apex` re-verifies at
+  runtime (via `get_hosted_zone`, cached per cold start) that the zone id the
+  `DOMAINS` env var maps an apex to actually owns that apex; a positive
+  mismatch refuses the write with a 500 and a `zone-mismatch` WARN log line,
+  while an unverifiable zone fails open so address management is never wedged.
+  `/fetch_bimi` and `/check_dns_record` now run their DNS lookups under a
+  5-second budget so a slow or hostile authoritative nameserver cannot pin the
+  Lambda. `/revoke` with an unknown `tld` now returns 400 instead of a 500.
+  Adds `route53:GetHostedZone` to the API Lambda role so the zone check can run.
+- Added per-caller abuse limits and audit logging for admin mutations, Phase 5
+  of the same plan. A new lightweight shared module
+  `lambda/api/_shared/admin_limits.py` (boto3 + stdlib only, so the admin
+  handlers need not pull in helper.py's IMAP/DNS imports or master-password
+  fetch) provides a fixed-window per-caller rate limiter (30 mutations/minute,
+  backed by a new on-demand `cabal-rate-limits` DynamoDB table with a TTL) and
+  a structured `AUDIT` JSON log emitter (caller, action, target, outcome).
+  Wired into `/delete_user`, `/disable_user`, `/enable_user`,
+  `/set_user_domain_access`, and `/new_address_admin`: each emits one audit
+  line per attempt and returns 429 once a caller exceeds the ceiling. The
+  limiter fails open, so a missing or erroring table never locks admins out of
+  account management. The plan's `/list` scan-to-GSI migration was deliberately
+  not done: multi-user addresses store assignees slash-joined in the `user`
+  attribute, so a GSI partitioned on `user` would silently miss them; a correct
+  index needs a separate membership table, out of scope here (see the note in
+  `lambda/api/list/function.py`).
+
+### Fixed
+- The Lambda API helper (`lambda/api/_shared/helper.py`) called
+  `logging.error()` without importing `logging`, so its S3 error paths
+  (presigned-URL signing, object upload, key-existence checks) raised
+  `NameError` instead of logging and degrading gracefully. Now imports
+  `logging`. Surfaced while extending `pylint` coverage to the shared
+  `_shared/*.py` modules (previously only `*/function.py` was linted).
+
+## [0.9.46] - Unreleased
+
+### Fixed
+- macOS contact picker came up blank. The "Choose Contacts" sheet
+  (`ContactPickerSheet`) had no explicit frame, so macOS sized it to
+  its `List`'s near-zero ideal height and the content band collapsed:
+  neither the contact rows nor the empty state rendered, making the
+  picker look like search returned nothing no matter what was typed.
+  Added the same `minWidth`/`minHeight` frame `MoveToFolderSheet`
+  already uses, and a distinct "No matching contacts" state so a
+  failed search reads differently from an address book that never
+  loaded.
+
 ## [0.9.45] - 2026-05-28
 
 ### Added

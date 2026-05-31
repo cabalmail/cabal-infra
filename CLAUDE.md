@@ -76,7 +76,7 @@ Versioned subdirectories of `docs/` (e.g. `docs/0.4.0/`, `docs/0.7.0/`, `docs/0.
 - Watch mode: `cd react/admin && npm run test:watch`
 
 ### Lambda Functions (`lambda/api`)
-- Lint all: `cd lambda/api && pylint --rcfile .pylintrc */function.py`
+- Lint all: `cd lambda/api && pylint --rcfile .pylintrc _shared/*.py */function.py` (covers the shared modules and every handler)
 - Local test: `cd lambda/api/[function_dir] && python -m function`
 
 ### Apple Clients (`apple/`)

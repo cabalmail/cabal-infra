@@ -12,6 +12,7 @@ domain (as declared via the DOMAINS env var).
 import json
 import os
 import boto3  # pylint: disable=import-error
+from admin_limits import audit_log, rate_limit_response_or_none  # pylint: disable=import-error
 
 domains = json.loads(os.environ['DOMAINS'])
 user_pool_id = os.environ['USER_POOL_ID']
@@ -29,6 +30,10 @@ def handler(event, _context):
             'statusCode': 403,
             'body': json.dumps({'Error': 'Admin access required'})
         }
+    caller = event['requestContext']['authorizer']['claims']['cognito:username']
+    limited = rate_limit_response_or_none(caller, 'set_user_domain_access')
+    if limited:
+        return limited
     try:
         body = json.loads(event.get('body') or '{}')
     except (TypeError, ValueError):
@@ -62,10 +67,13 @@ def handler(event, _context):
         else:
             table.delete_item(Key={'user': username, 'domain': domain})
     except Exception as err:  # pylint: disable=broad-exception-caught
+        audit_log(caller, 'set_user_domain_access', f'{username}:{domain}', 'failure')
         return {
             'statusCode': 500,
             'body': json.dumps({'Error': str(err)})
         }
+    audit_log(caller, 'set_user_domain_access', f'{username}:{domain}',
+              'allowed' if allowed else 'denied')
     return {
         'statusCode': 200,
         'body': json.dumps({

@@ -8,10 +8,11 @@ import os
 import re
 import urllib.error
 import urllib.request
-import xml.etree.ElementTree as ET
 import zipfile
 import boto3  # pylint: disable=import-error
 import imapclient  # pylint: disable=import-error
+import defusedxml.ElementTree as ET  # pylint: disable=import-error
+from defusedxml.common import DefusedXmlException  # pylint: disable=import-error
 
 control_domain = os.environ['CONTROL_DOMAIN']
 table_name = os.environ['DMARC_TABLE_NAME']
@@ -25,8 +26,34 @@ table = ddb.Table(table_name)
 s3 = boto3.client('s3')
 
 PROCESSED_FOLDER = 'INBOX.Processed'
+SKIPPED_FOLDER = 'INBOX.Skipped'
+
+# Phase 1 hardening caps (docs/0.10.x/application-surface-hardening-plan.md).
+# Decompressed-attachment ceiling. A DMARC aggregate report is well under
+# 10 MB uncompressed; 50 MB is generous for real reports and defeats zip and
+# gzip bombs, which we read incrementally and abort once they cross the cap.
+MAX_PAYLOAD_BYTES = int(os.environ.get('MAX_DMARC_PAYLOAD_BYTES', str(50 * 1024 * 1024)))
+# Raw inbound message ceiling. Checked against RFC822.SIZE so we never download
+# the body of an oversize message.
+MAX_MESSAGE_BYTES = int(os.environ.get('MAX_DMARC_MESSAGE_BYTES', str(25 * 1024 * 1024)))
+# Messages examined per scheduled run. The handler is idempotent and runs every
+# few hours, so a backlog drains over successive runs rather than one unbounded
+# fetch that could exhaust the Lambda.
+MAX_MESSAGES_PER_RUN = int(os.environ.get('MAX_DMARC_MESSAGES_PER_RUN', '50'))
+# Comma-separated allowlist of From: domains permitted to deliver reports.
+# Subdomains of an allowlisted domain are also accepted. An empty value
+# disables sender filtering (every sender is parsed).
+DMARC_REPORT_SENDERS = frozenset(
+    d.strip().lower()
+    for d in os.environ.get('DMARC_REPORT_SENDERS', '').split(',')
+    if d.strip()
+)
 
 _PING_URL = None
+
+
+class PayloadTooLarge(Exception):
+    '''Raised when a decompressed attachment exceeds MAX_PAYLOAD_BYTES.'''
 
 
 def _ping_healthcheck():
@@ -69,35 +96,75 @@ def get_imap_client():
     return client
 
 
-def ensure_processed_folder(client):
-    '''Creates the Processed folder if it does not exist'''
-    folders = [f[2] for f in client.list_folders()]
-    if PROCESSED_FOLDER not in folders:
-        client.create_folder(PROCESSED_FOLDER)
+def ensure_folders(client):
+    '''Creates the Processed and Skipped folders if they do not exist'''
+    existing = [f[2] for f in client.list_folders()]
+    for folder in (PROCESSED_FOLDER, SKIPPED_FOLDER):
+        if folder not in existing:
+            client.create_folder(folder)
+
+
+def _read_capped(reader, cap):
+    '''Reads at most cap+1 bytes from reader; raises PayloadTooLarge past cap.
+
+    Decompressing incrementally and stopping one byte past the ceiling means a
+    bomb never materialises in full - we abort as soon as it crosses the cap.
+    '''
+    data = reader.read(cap + 1)
+    if len(data) > cap:
+        raise PayloadTooLarge(f'decompressed size exceeds {cap} bytes')
+    return data
 
 
 def extract_xml_from_attachment(payload):
-    '''Extracts DMARC XML from a zip or gzip attachment'''
+    '''Extracts DMARC XML from a zip or gzip attachment, capping decompressed size.
+
+    Raises PayloadTooLarge if any container decompresses past MAX_PAYLOAD_BYTES.
+    Returns None if no XML could be recovered from the attachment.
+    '''
     # Try zip first
     try:
         with zipfile.ZipFile(io.BytesIO(payload)) as zf:
             for name in zf.namelist():
                 if name.endswith('.xml'):
-                    return zf.read(name)
+                    with zf.open(name) as entry:
+                        return _read_capped(entry, MAX_PAYLOAD_BYTES)
     except zipfile.BadZipFile:
         pass
 
     # Try gzip
     try:
-        return gzip.decompress(payload)
-    except (gzip.BadGzipFile, OSError):
+        with gzip.GzipFile(fileobj=io.BytesIO(payload)) as gz:
+            return _read_capped(gz, MAX_PAYLOAD_BYTES)
+    except (gzip.BadGzipFile, OSError, EOFError):
         pass
 
     # Try raw XML
     if payload.strip().startswith(b'<?xml') or payload.strip().startswith(b'<feedback'):
+        if len(payload) > MAX_PAYLOAD_BYTES:
+            raise PayloadTooLarge(f'raw XML exceeds {MAX_PAYLOAD_BYTES} bytes')
         return payload
 
     return None
+
+
+def sender_domain(envelope):
+    '''Lowercased domain of the envelope From: address, or '' when absent'''
+    if envelope is None or not envelope.from_:
+        return ''
+    host = envelope.from_[0].host
+    if isinstance(host, bytes):
+        host = host.decode('ascii', errors='replace')
+    return (host or '').strip().lower()
+
+
+def sender_allowed(domain):
+    '''True if filtering is disabled, or domain (or a parent) is allowlisted'''
+    if not DMARC_REPORT_SENDERS:
+        return True
+    if domain in DMARC_REPORT_SENDERS:
+        return True
+    return any(domain.endswith('.' + allowed) for allowed in DMARC_REPORT_SENDERS)
 
 
 def _el_text(parent, tag, default=''):
@@ -236,10 +303,16 @@ def is_dmarc_attachment(content_type, filename):
     return False
 
 
-def process_message(msg_data):
-    '''Processes a single email message, returns count of records written'''
+def process_message(msg_data, counters):
+    '''Processes a single email message, recording outcomes in counters.
+
+    Decompression and XML-parse failures are categorised into counters rather
+    than swallowed, so each can be alarmed on independently. Returns the count
+    of records written from this message.
+    '''
     msg = email.message_from_bytes(msg_data)
     total = 0
+    found_attachment = False
 
     for part in msg.walk():
         content_type = part.get_content_type()
@@ -252,65 +325,155 @@ def process_message(msg_data):
         if not payload:
             continue
 
-        xml_data = extract_xml_from_attachment(payload)
-        if xml_data is None:
-            print(f'Could not extract XML from attachment: {filename}')
+        found_attachment = True
+
+        try:
+            xml_data = extract_xml_from_attachment(payload)
+        except PayloadTooLarge as err:
+            counters['decompress_errors'] += 1
+            print(f'[process_dmarc] oversize payload in {filename!r}: {err}')
             continue
 
-        records = parse_dmarc_xml(xml_data)
+        if xml_data is None:
+            counters['decompress_errors'] += 1
+            print(f'[process_dmarc] could not extract XML from {filename!r}')
+            continue
+
+        try:
+            records = parse_dmarc_xml(xml_data)
+        except (ET.ParseError, DefusedXmlException) as err:
+            counters['xml_parse_errors'] += 1
+            print(f'[process_dmarc] XML parse error in {filename!r}: {err}')
+            continue
+
         if records:
             key = xml_key_for(records[0])
             stored = upload_xml(xml_data, key)
-            total += write_records(records, key if stored else '')
-            print(f'Wrote {len(records)} records from {filename}')
+            wrote = write_records(records, key if stored else '')
+            total += wrote
+            counters['records'] += wrote
+            print(f'[process_dmarc] wrote {wrote} records from {filename!r}')
+
+    if not found_attachment:
+        counters['no_attachment'] += 1
 
     return total
 
 
+def _response(counters):
+    '''Builds the Lambda response from the per-run counters'''
+    return {
+        'statusCode': 200,
+        'body': json.dumps(counters)
+    }
+
+
+def _new_counters():
+    '''Zeroed per-run counter dict.'''
+    return {
+        'queued': 0,
+        'processed': 0,
+        'records': 0,
+        'unknown_sender': 0,
+        'oversize_message': 0,
+        'no_attachment': 0,
+        'decompress_errors': 0,
+        'xml_parse_errors': 0,
+        'errors': 0,
+    }
+
+
+def _partition_candidates(client, candidates, counters):
+    '''Cheap metadata pass over candidate UIDs.
+
+    Returns (to_fetch, skipped_ids): messages from unknown senders or over the
+    size cap are skipped (and tallied) before their full bodies are downloaded.
+    '''
+    meta = client.fetch(candidates, ['ENVELOPE', 'RFC822.SIZE'])
+    to_fetch = []
+    skipped_ids = []
+    for msg_id in candidates:
+        info = meta.get(msg_id, {})
+        domain = sender_domain(info.get(b'ENVELOPE'))
+        size = info.get(b'RFC822.SIZE', 0) or 0
+        if not sender_allowed(domain):
+            counters['unknown_sender'] += 1
+            skipped_ids.append(msg_id)
+            print(f'[process_dmarc] skip message {msg_id}: '
+                  f'sender domain {domain!r} not in allowlist')
+        elif size > MAX_MESSAGE_BYTES:
+            counters['oversize_message'] += 1
+            skipped_ids.append(msg_id)
+            print(f'[process_dmarc] skip message {msg_id}: '
+                  f'size {size} exceeds {MAX_MESSAGE_BYTES} bytes')
+        else:
+            to_fetch.append(msg_id)
+    return to_fetch, skipped_ids
+
+
+def _ingest_messages(client, to_fetch, counters):
+    '''Fetches the RFC822 bodies for to_fetch and ingests each, returning the
+    list of successfully-handled UIDs.'''
+    if not to_fetch:
+        return []
+    fetched = client.fetch(to_fetch, ['RFC822'])
+    processed_ids = []
+    for msg_id in to_fetch:
+        data = fetched.get(msg_id)
+        if not data or b'RFC822' not in data:
+            counters['errors'] += 1
+            print(f'[process_dmarc] message {msg_id}: empty RFC822 fetch')
+            continue
+        try:
+            count = process_message(data[b'RFC822'], counters)
+            counters['processed'] += 1
+            processed_ids.append(msg_id)
+            print(f'[process_dmarc] message {msg_id}: {count} records')
+        except Exception as err:  # pylint: disable=broad-exception-caught
+            counters['errors'] += 1
+            print(f'[process_dmarc] error processing message {msg_id}: {err}')
+    return processed_ids
+
+
+def _move_handled(client, processed_ids, skipped_ids):
+    '''Moves handled messages out of INBOX so each run sees only new mail and
+    skipped junk cannot accumulate to starve legitimate reports of the per-run
+    budget. Processed and skipped go to distinct folders so the Skipped folder
+    stays reviewable for allowlist tuning.'''
+    if processed_ids:
+        client.move(processed_ids, PROCESSED_FOLDER)
+        print(f'[process_dmarc] moved {len(processed_ids)} processed '
+              f'messages to {PROCESSED_FOLDER}')
+    if skipped_ids:
+        client.move(skipped_ids, SKIPPED_FOLDER)
+        print(f'[process_dmarc] moved {len(skipped_ids)} skipped '
+              f'messages to {SKIPPED_FOLDER}')
+
+
 def handler(_event, _context):
     '''Fetches DMARC report emails and ingests them into DynamoDB'''
+    counters = _new_counters()
     client = get_imap_client()
     try:
-        ensure_processed_folder(client)
+        ensure_folders(client)
         client.select_folder('INBOX')
         messages = client.search()
-
-        if not messages:
-            print('No messages to process')
-            _ping_healthcheck()
-            return {
-                'statusCode': 200,
-                'body': json.dumps({'processed': 0, 'records': 0})
-            }
-
-        print(f'Found {len(messages)} messages to process')
-        fetched = client.fetch(messages, ['RFC822'])
-        total_records = 0
-        processed_ids = []
-
-        for msg_id, data in fetched.items():
-            try:
-                count = process_message(data[b'RFC822'])
-                total_records += count
-                processed_ids.append(msg_id)
-                print(f'Message {msg_id}: {count} records')
-            except Exception as err:  # pylint: disable=broad-exception-caught
-                print(f'Error processing message {msg_id}: {err}')
-
-        # Move processed messages to the Processed folder
-        if processed_ids:
-            client.move(processed_ids, PROCESSED_FOLDER)
-            print(f'Moved {len(processed_ids)} messages to {PROCESSED_FOLDER}')
-
+        counters['queued'] = len(messages)
+        if messages:
+            # Cap messages per run. The handler is scheduled and idempotent, so
+            # a backlog drains over successive runs rather than one giant fetch.
+            candidates = messages[:MAX_MESSAGES_PER_RUN]
+            if len(messages) > len(candidates):
+                print(f'[process_dmarc] {len(messages)} messages queued; '
+                      f'processing first {len(candidates)} this run')
+            to_fetch, skipped_ids = _partition_candidates(client, candidates, counters)
+            processed_ids = _ingest_messages(client, to_fetch, counters)
+            _move_handled(client, processed_ids, skipped_ids)
+        else:
+            print('[process_dmarc] no messages to process')
     finally:
         client.logout()
 
     _ping_healthcheck()
-
-    return {
-        'statusCode': 200,
-        'body': json.dumps({
-            'processed': len(processed_ids),
-            'records': total_records
-        })
-    }
+    print(f'[process_dmarc] run summary: {json.dumps(counters)}')
+    return _response(counters)
