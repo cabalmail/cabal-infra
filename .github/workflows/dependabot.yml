@@ -44,8 +44,15 @@ jobs:
               "  Patched version: \(.security_vulnerability.first_patched_version.identifier // "unknown")\n" +
               "  URL: \(.html_url)\n"')
 
-            # Write to file to avoid shell quoting issues
-            echo "$summary" > /tmp/alert_summary.txt
+            # Emit as a multi-line step output so the Claude Code action
+            # can interpolate it directly via ${{ steps.alerts.outputs.summary }}.
+            # YAML doesn't run shell substitution on the action's `prompt:`
+            # input, so $(cat ...) would otherwise be passed through literally.
+            {
+              echo "summary<<EOF_ALERT_SUMMARY"
+              echo "$summary"
+              echo "EOF_ALERT_SUMMARY"
+            } >> "$GITHUB_OUTPUT"
             echo "has_alerts=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_alerts=false" >> "$GITHUB_OUTPUT"
@@ -70,7 +77,7 @@ jobs:
             You are a security remediation assistant. The following high
             and critical Dependabot alerts were found in this repository:
 
-            $(cat /tmp/alert_summary.txt)
+            ${{ steps.alerts.outputs.summary }}
 
             For each alert:
 
