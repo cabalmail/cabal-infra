@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.1] - 2026-05-31
+
+### Changed
+- NAT instances now run on Amazon Linux 2023 instead of Amazon Linux 2
+  (`terraform/infra/modules/vpc/nat.tf`), aligning them with the AL2023 ECS
+  fleet. The AMI data source filter moves from `amzn2-ami-hvm-2.0.*-x86_64-gp2`
+  to `al2023-ami-2023.*-x86_64` (standard AMI; the `-2023.` infix excludes the
+  `-minimal-` variant). Because AL2023 does not ship `iptables` in the base AMI
+  and the NAT instance has no egress at first boot (the EIP is associated only
+  after launch, the public subnet does not auto-assign a public IP, and there is
+  no S3 VPC endpoint), the bootstrap was rewritten to use the preinstalled
+  `nftables` stack: a `masquerade` rule in an `ip nat` table is generated with
+  `printf` and loaded by the stock `nftables.service` (which also restores it on
+  reboot), replacing the previous `iptables` rules plus hand-rolled
+  `restore-iptables.service`. The masquerade rule is no longer pinned to `eth0`,
+  so it works whether the primary NIC is named `eth0` or `ens5`. Applying this
+  replaces the running NAT instances, briefly dropping private-subnet egress
+  while they are recreated.
+
 ## [0.10.0] - 2026-05-30
 
 ### Security
