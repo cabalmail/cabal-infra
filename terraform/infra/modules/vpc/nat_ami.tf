@@ -93,8 +93,10 @@ resource "aws_imagebuilder_image_recipe" "nat" {
   version = "1.0.0"
   # "x.x.x" resolves to the latest AL2023 x86_64 managed image. Using the
   # managed-image ARN (not a static AMI id) is what lets the pipeline's
-  # DEPENDENCY_UPDATES_AVAILABLE condition detect new AL2023 releases.
-  parent_image = "arn:aws:imagebuilder:${var.region}:aws:image/amazon-linux-2023-x86-64/x.x.x"
+  # DEPENDENCY_UPDATES_AVAILABLE condition detect new AL2023 releases. The
+  # managed image is named "amazon-linux-2023-x86" (the x86_64 base); there is
+  # no "-x86-64" variant - that name 404s at CreateImageRecipe.
+  parent_image = "arn:aws:imagebuilder:${var.region}:aws:image/amazon-linux-2023-x86/x.x.x"
 
   component {
     component_arn = aws_imagebuilder_component.nat_nftables[0].arn
