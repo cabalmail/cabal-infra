@@ -122,6 +122,12 @@ variable "quiesced" {
   default     = false
 }
 
+variable "use_custom_nat_ami" {
+  type        = bool
+  description = "When true, NAT instances launch from the EC2 Image Builder-baked AL2023 AMI (nftables pre-installed) instead of the stock Amazon Linux 2 AMI. Leave false until the Image Builder pipeline has produced at least one AMI (the data.aws_ami lookup hard-errors on an empty result). Also doubles as a rollback lever: set back to false to return to the stock AL2 NAT bootstrap."
+  default     = false
+}
+
 # Populated by .github/scripts/record-lambda-hashes.sh at CI time and
 # fed into terraform plan/apply as -var-file=.terraform/lambda-pinned.tfvars.
 # See phase 2 of docs/0.9.x/build-deploy-simplification-plan.md. Reserved
