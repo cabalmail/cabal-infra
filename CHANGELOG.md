@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Bootstrap: apply once with the toggle `false` (creates the pipeline), let it
   produce one AMI, then set `use_custom_nat_ami = true`. The toggle also doubles
   as a rollback lever back to the stock AL2 NAT.
+- Operator documentation for NAT (`docs/nat.md`, linked from `docs/setup.md` and
+  `docs/operations.md`): how NAT is wired, the no-VPC-endpoints dependency, the
+  stock-AL2 vs. custom-AL2023-AMI choice, the two-phase bootstrap for a new
+  environment, egress verification, and egress-outage troubleshooting.
 
 ## [0.10.2] - Unreleased
 

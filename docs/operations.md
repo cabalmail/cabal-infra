@@ -18,6 +18,10 @@ You also _could_ create a single address on a Cabalmail system and just give tha
 
 Setting `TF_VAR_MONITORING` to `true` in a GitHub environment adds [monitoring](./monitoring.md) infrastructure. Setting up monitoring is not turn-key. There are many manual steps involved in establishing alert thresholds, communication, configuration, etc. Once established, there are some run books in [the operations/runbooks directory](./operations/runbooks) that you can use as the basis for incident response. These are provided as templates. You should modify them as appropriate for your use cases and requirements.
 
+# NAT and private-subnet egress
+
+Every private-subnet container reaches the internet and all AWS service APIs through the VPC's NAT instances, and the VPC has no VPC endpoints, so NAT health is load-bearing: if egress breaks, outbound mail stalls, the `/send` Lambda hangs, and the mail tiers stop shipping logs to CloudWatch even though the containers keep running. See [NAT and private-subnet egress](./nat.md) for how NAT is configured, how to stand it up in a new environment, the stock-AL2 vs. custom-AL2023-AMI choice and bootstrap, and how to diagnose an egress outage.
+
 # Quiescing a non-prod environment
 
 The `quiesce` GitHub workflow scales a development or stage environment's running compute (ECS services, the ECS-instance ASG, NAT instances) to zero so it stops accruing hourly charges. Data is preserved. The workflow refuses to run against prod. See [Quiesce: scale a non-prod environment to zero](./quiesce.md) for the full list of what gets scaled, what is preserved, and how to make the quiesce durable across other Terraform runs.

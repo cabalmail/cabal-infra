@@ -129,4 +129,8 @@ Cabalmail ships with an optional monitoring stack (Uptime Kuma + self-hosted ntf
 
 ## Port 25 Block (What to do with the `relay_ips` output)
 
-The output contains the IP address of each of your outgoing mail relays. (More specifically, it's the elastic IP addresses used for egress on the NAT gateway.) In order to send mail reliably, you must get AWS to allow outbound traffic on port 25. There is no API for this, so the process cannot be automated. Instead, you must fill out [this form](https://console.aws.amazon.com/support/contacts?#/rdns-limits).
+The output contains the IP address of each of your outgoing mail relays. (More specifically, it's the elastic IP addresses used for egress on the NAT instances.) In order to send mail reliably, you must get AWS to allow outbound traffic on port 25. There is no API for this, so the process cannot be automated. Instead, you must fill out [this form](https://console.aws.amazon.com/support/contacts?#/rdns-limits).
+
+## NAT
+
+All private-subnet egress (outbound mail and every AWS service call) flows through the VPC's NAT instances, and there are no VPC endpoints, so NAT health is load-bearing for the whole data plane. For how NAT is configured, how to bring it up in a new environment, how to move to the custom AL2023 NAT AMI, and how to diagnose an egress outage, see [NAT and private-subnet egress](./nat.md).
