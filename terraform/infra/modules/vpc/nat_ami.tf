@@ -80,17 +80,25 @@ resource "aws_imagebuilder_component" "nat_nftables" {
   count       = var.use_nat_instance ? 1 : 0
   name        = "cabal-nat-nftables"
   platform    = "Linux"
-  version     = "1.0.0"
+  version     = "1.0.1"
   description = "Install + enable nftables masquerade for Cabalmail NAT instances"
-  # Bump the version above whenever the component data changes; Image Builder
-  # component versions are immutable.
+  # Image Builder component versions are immutable: whenever the component data
+  # (nat-nftables-component.yaml) changes, bump this version AND the recipe
+  # version below (the recipe pins this component by versioned ARN). 1.0.1 fixes
+  # a SIGPIPE false-failure in the test phase's masquerade check.
   data = file("${path.module}/nat-nftables-component.yaml")
+
+  # Create the new component version before destroying the old one so the recipe
+  # can repoint without a dependency deadlock during replacement.
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_imagebuilder_image_recipe" "nat" {
   count   = var.use_nat_instance ? 1 : 0
   name    = "cabal-nat-al2023"
-  version = "1.0.0"
+  version = "1.0.1"
   # "x.x.x" resolves to the latest AL2023 x86_64 managed image. Using the
   # managed-image ARN (not a static AMI id) is what lets the pipeline's
   # DEPENDENCY_UPDATES_AVAILABLE condition detect new AL2023 releases. The
@@ -108,6 +116,13 @@ resource "aws_imagebuilder_image_recipe" "nat" {
       encrypted   = true
       volume_type = "gp3"
     }
+  }
+
+  # Recipes are immutable and pin the component by versioned ARN, so this version
+  # must move in lockstep with the component version above. create_before_destroy
+  # lets the pipeline repoint to the new recipe before the old one is removed.
+  lifecycle {
+    create_before_destroy = true
   }
 }
 
@@ -166,6 +181,13 @@ resource "aws_imagebuilder_image_pipeline" "nat" {
 # Latest baked AMI, consumed by aws_instance.nat when use_custom_nat_ami = true.
 # Gated on the toggle so the stack does not hard-fail before the first build
 # exists: a data.aws_ami with no match is an error, not an empty result.
+#
+# The tag:Role filter is load-bearing: Image Builder creates the output AMI
+# during the build stage (so it already has the cabal-nat-al2023-* name) but
+# only applies the distribution config's ami_tags after the test stage passes.
+# A build whose test FAILED therefore leaves an available, name-matching AMI
+# WITHOUT the Role tag - filtering on tag:Role = cabal-nat ensures most_recent
+# can only ever resolve to a test-passed, fully distributed image.
 data "aws_ami" "custom_nat" {
   count       = var.use_custom_nat_ami ? 1 : 0
   owners      = ["self"]
@@ -173,5 +195,9 @@ data "aws_ami" "custom_nat" {
   filter {
     name   = "name"
     values = ["cabal-nat-al2023-*"]
+  }
+  filter {
+    name   = "tag:Role"
+    values = ["cabal-nat"]
   }
 }
