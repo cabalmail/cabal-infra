@@ -181,6 +181,13 @@ resource "aws_imagebuilder_image_pipeline" "nat" {
 # Latest baked AMI, consumed by aws_instance.nat when use_custom_nat_ami = true.
 # Gated on the toggle so the stack does not hard-fail before the first build
 # exists: a data.aws_ami with no match is an error, not an empty result.
+#
+# The tag:Role filter is load-bearing: Image Builder creates the output AMI
+# during the build stage (so it already has the cabal-nat-al2023-* name) but
+# only applies the distribution config's ami_tags after the test stage passes.
+# A build whose test FAILED therefore leaves an available, name-matching AMI
+# WITHOUT the Role tag - filtering on tag:Role = cabal-nat ensures most_recent
+# can only ever resolve to a test-passed, fully distributed image.
 data "aws_ami" "custom_nat" {
   count       = var.use_custom_nat_ami ? 1 : 0
   owners      = ["self"]
@@ -188,5 +195,9 @@ data "aws_ami" "custom_nat" {
   filter {
     name   = "name"
     values = ["cabal-nat-al2023-*"]
+  }
+  filter {
+    name   = "tag:Role"
+    values = ["cabal-nat"]
   }
 }
