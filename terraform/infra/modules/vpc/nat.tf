@@ -111,16 +111,11 @@ resource "aws_iam_instance_profile" "nat" {
   role  = aws_iam_role.nat[0].name
 }
 
-resource "aws_instance" "nat" {
-  count                  = var.use_nat_instance && !var.quiesced ? length(var.az_list) : 0
-  ami                    = data.aws_ami.amazon_linux_2[0].id
-  instance_type          = var.nat_instance_type
-  subnet_id              = aws_subnet.public[count.index].id
-  vpc_security_group_ids = [aws_security_group.nat[0].id]
-  source_dest_check      = false
-  iam_instance_profile   = aws_iam_instance_profile.nat[0].name
-
-  user_data = <<-EOF
+locals {
+  # Stock AL2 NAT bootstrap (iptables), used only when use_custom_nat_ami =
+  # false. The custom AL2023 AMI (see nat_ami.tf) bakes nftables in, so it needs
+  # no boot-time config and user_data is null on that path.
+  nat_al2_user_data = <<-EOF
     #!/bin/bash
     # Enable IP forwarding (persists across reboots via sysctl.d)
     echo "net.ipv4.ip_forward = 1" > /etc/sysctl.d/nat.conf
@@ -157,6 +152,20 @@ resource "aws_instance" "nat" {
     systemctl daemon-reload
     systemctl enable restore-iptables.service
   EOF
+
+  nat_user_data = var.use_custom_nat_ami ? null : local.nat_al2_user_data
+}
+
+resource "aws_instance" "nat" {
+  count                  = var.use_nat_instance && !var.quiesced ? length(var.az_list) : 0
+  ami                    = var.use_custom_nat_ami ? one(data.aws_ami.custom_nat[*].id) : data.aws_ami.amazon_linux_2[0].id
+  instance_type          = var.nat_instance_type
+  subnet_id              = aws_subnet.public[count.index].id
+  vpc_security_group_ids = [aws_security_group.nat[0].id]
+  source_dest_check      = false
+  iam_instance_profile   = aws_iam_instance_profile.nat[0].name
+
+  user_data = local.nat_user_data
 
   metadata_options {
     http_tokens   = "required"

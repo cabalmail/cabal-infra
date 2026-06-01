@@ -1,0 +1,51 @@
+name: cabal-nat-nftables
+description: Install and enable nftables masquerade for the Cabalmail NAT instances.
+schemaVersion: 1.0
+
+# Baked into the custom AL2023 NAT AMI by EC2 Image Builder (see nat_ami.tf).
+# The build instance has egress, so installing nftables here is reliable;
+# instances launched from the resulting AMI need no boot-time package install,
+# which is what broke prod in 0.10.1.
+phases:
+  - name: build
+    steps:
+      - name: InstallAndConfigureNftables
+        action: ExecuteBash
+        inputs:
+          commands:
+            - |
+              set -euo pipefail
+
+              # AL2023's base AMI ships no firewall tool; install nftables now.
+              dnf install -y nftables
+
+              # Enable IPv4 forwarding on boot (systemd-sysctl applies this).
+              printf 'net.ipv4.ip_forward = 1\n' > /etc/sysctl.d/nat.conf
+
+              # Masquerade rule, written with a single printf (no heredoc) to
+              # stay robust inside this YAML literal block. Not pinned to a
+              # named interface (primary NIC is eth0 on some instances, ens5 on
+              # others). "flush ruleset" keeps a reload idempotent.
+              mkdir -p /etc/nftables
+              printf 'flush ruleset\n\ntable ip nat {\n  chain postrouting {\n    type nat hook postrouting priority 100; policy accept;\n    masquerade\n  }\n}\n' > /etc/nftables/cabal-nat.nft
+
+              # The stock nftables.service runs "nft -f /etc/sysconfig/nftables.conf"
+              # on boot; add our ruleset as an include once and enable the
+              # service so launched instances apply it automatically.
+              grep -q 'cabal-nat.nft' /etc/sysconfig/nftables.conf 2>/dev/null || printf '\ninclude "/etc/nftables/cabal-nat.nft"\n' >> /etc/sysconfig/nftables.conf
+              systemctl enable nftables
+  - name: test
+    steps:
+      - name: VerifyNatConfig
+        action: ExecuteBash
+        inputs:
+          commands:
+            - |
+              set -euo pipefail
+
+              # Runs on a fresh instance booted from the new AMI: confirm the
+              # service is enabled, forwarding is on, and the masquerade rule
+              # actually loaded at boot.
+              systemctl is-enabled nftables
+              test "$(cat /proc/sys/net/ipv4/ip_forward)" = "1"
+              nft list ruleset | grep -q masquerade

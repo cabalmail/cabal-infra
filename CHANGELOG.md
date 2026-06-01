@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.3] - Unreleased
+
+### Added
+- EC2 Image Builder pipeline that bakes a custom AL2023 NAT AMI with nftables
+  pre-installed (`terraform/infra/modules/vpc/nat_ami.tf` +
+  `nat-nftables-component.yaml`). This is the permanent path back to AL2023
+  after 0.10.2 rolled the NAT instances to AL2: the masquerade ruleset,
+  `ip_forward`, and an enabled `nftables.service` are baked into the image, so
+  launched NAT instances need no boot-time package install (the failure mode
+  that broke 0.10.1). The pipeline rebuilds only when the AL2023 base image has
+  updates (`EXPRESSION_MATCH_AND_DEPENDENCY_UPDATES_AVAILABLE`, daily check), and
+  its build/test instances run in a private subnet behind the existing NAT.
+  A new `use_custom_nat_ami` variable (default `false`) switches the NAT
+  instances from the stock AL2 AMI to the latest baked AMI, resolved via
+  `data.aws_ami` (`owners = ["self"]`, `most_recent = true`); a rebuild surfaces
+  as a NAT replacement in the plan and is adopted only on a deliberate apply.
+  Bootstrap: apply once with the toggle `false` (creates the pipeline), let it
+  produce one AMI, then set `use_custom_nat_ami = true`. The toggle also doubles
+  as a rollback lever back to the stock AL2 NAT.
+- Operator documentation for NAT (`docs/nat.md`, linked from `docs/setup.md` and
+  `docs/operations.md`): how NAT is wired, the no-VPC-endpoints dependency, the
+  stock-AL2 vs. custom-AL2023-AMI choice, the two-phase bootstrap for a new
+  environment, egress verification, and egress-outage troubleshooting.
+
 ## [0.10.2] - 2026-05-31
 
 ### Changed
