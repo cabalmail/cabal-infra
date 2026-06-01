@@ -48,4 +48,8 @@ phases:
               # actually loaded at boot.
               systemctl is-enabled nftables
               test "$(cat /proc/sys/net/ipv4/ip_forward)" = "1"
-              nft list ruleset | grep -q masquerade
+              # Use a here-string, not "nft list ruleset | grep -q masquerade":
+              # grep -q closes the pipe on the first match, nft then dies with
+              # SIGPIPE (exit 141), and set -o pipefail turns that into a false
+              # failure even though the rule is present.
+              grep -q masquerade <<< "$(nft list ruleset)"

@@ -80,17 +80,25 @@ resource "aws_imagebuilder_component" "nat_nftables" {
   count       = var.use_nat_instance ? 1 : 0
   name        = "cabal-nat-nftables"
   platform    = "Linux"
-  version     = "1.0.0"
+  version     = "1.0.1"
   description = "Install + enable nftables masquerade for Cabalmail NAT instances"
-  # Bump the version above whenever the component data changes; Image Builder
-  # component versions are immutable.
+  # Image Builder component versions are immutable: whenever the component data
+  # (nat-nftables-component.yaml) changes, bump this version AND the recipe
+  # version below (the recipe pins this component by versioned ARN). 1.0.1 fixes
+  # a SIGPIPE false-failure in the test phase's masquerade check.
   data = file("${path.module}/nat-nftables-component.yaml")
+
+  # Create the new component version before destroying the old one so the recipe
+  # can repoint without a dependency deadlock during replacement.
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_imagebuilder_image_recipe" "nat" {
   count   = var.use_nat_instance ? 1 : 0
   name    = "cabal-nat-al2023"
-  version = "1.0.0"
+  version = "1.0.1"
   # "x.x.x" resolves to the latest AL2023 x86_64 managed image. Using the
   # managed-image ARN (not a static AMI id) is what lets the pipeline's
   # DEPENDENCY_UPDATES_AVAILABLE condition detect new AL2023 releases. The
@@ -108,6 +116,13 @@ resource "aws_imagebuilder_image_recipe" "nat" {
       encrypted   = true
       volume_type = "gp3"
     }
+  }
+
+  # Recipes are immutable and pin the component by versioned ARN, so this version
+  # must move in lockstep with the component version above. create_before_destroy
+  # lets the pipeline repoint to the new recipe before the old one is removed.
+  lifecycle {
+    create_before_destroy = true
   }
 }
 
