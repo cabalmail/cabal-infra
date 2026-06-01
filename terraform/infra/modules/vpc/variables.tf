@@ -40,3 +40,14 @@ variable "quiesced" {
   description = "When true, do not provision NAT instances. Private-subnet egress goes away while the environment is quiesced; ECS tasks needing egress are also at zero, so this is safe. NAT EIPs and the public Route 53 record for them are kept so SMTP relay IP allow-lists do not need to be re-issued on resume."
   default     = false
 }
+
+variable "region" {
+  type        = string
+  description = "AWS region. Used to build the EC2 Image Builder managed-image ARN for the custom NAT AMI."
+}
+
+variable "use_custom_nat_ami" {
+  type        = bool
+  description = "When true, NAT instances launch from the Image Builder-baked AL2023 AMI (nftables pre-installed) instead of the stock Amazon Linux 2 AMI. Leave false until the pipeline has produced at least one AMI (data.aws_ami.custom_nat hard-errors on an empty result)."
+  default     = false
+}

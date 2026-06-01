@@ -111,13 +111,15 @@ module "table" {
 
 # Creates the VPC and network infrastructure
 module "vpc" {
-  source           = "./modules/vpc"
-  use_nat_instance = true
-  cidr_block       = var.cidr_block
-  control_domain   = var.control_domain
-  az_list          = var.availability_zones
-  zone_id          = data.terraform_remote_state.zone.outputs.control_domain_zone_id
-  quiesced         = var.quiesced
+  source             = "./modules/vpc"
+  use_nat_instance   = true
+  cidr_block         = var.cidr_block
+  control_domain     = var.control_domain
+  az_list            = var.availability_zones
+  zone_id            = data.terraform_remote_state.zone.outputs.control_domain_zone_id
+  quiesced           = var.quiesced
+  region             = var.aws_region
+  use_custom_nat_ami = var.use_custom_nat_ami
 }
 
 # Creates a network load balancer shared by machines in the stack
