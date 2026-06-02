@@ -192,8 +192,16 @@ jobs:
           done
         fi
 
-  docker:
+  approval:
     needs: setup
+    environment: gate-${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
+    runs-on: ubuntu-latest
+    steps:
+    - name: approve
+      run: echo "Approved"
+
+  docker:
+    needs: approval
     if: needs.setup.outputs.docker == 'true'
     runs-on: ubuntu-24.04-arm
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
@@ -259,7 +267,7 @@ jobs:
           cabal-cloudwatch-exporter-us-east-1
 
   lambda-certbot:
-    needs: setup
+    needs: approval
     if: needs.setup.outputs.lambda_certbot == 'true'
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
@@ -306,7 +314,7 @@ jobs:
           "${{ steps.image.outputs.uri }}"
 
   lambda-api:
-    needs: setup
+    needs: approval
     if: needs.setup.outputs.lambda_api == 'true'
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
@@ -391,7 +399,7 @@ jobs:
         printf '%s\n' "${TARGETS[@]}" | xargs -P "${DEPLOY_JOBS}" -I {} ./.github/scripts/deploy-lambda-zip.sh {} "${BUCKET}"
 
   lambda-counter:
-    needs: setup
+    needs: approval
     if: needs.setup.outputs.lambda_counter == 'true'
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
@@ -430,7 +438,7 @@ jobs:
         ./.github/scripts/deploy-lambda-zip.sh check_invite "${BUCKET}"
 
   react:
-    needs: setup
+    needs: approval
     if: needs.setup.outputs.react == 'true'
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
@@ -463,7 +471,7 @@ jobs:
           --paths '/*' >/dev/null
 
   front-door:
-    needs: setup
+    needs: approval
     if: needs.setup.outputs.front_door == 'true'
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
