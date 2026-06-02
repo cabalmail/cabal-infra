@@ -362,6 +362,15 @@ jobs:
       id: plan-terraform
       run: ../../.github/scripts/plan-terraform.sh
 
+  approve:
+    needs:
+    - plan
+    - chekov
+    - tflint
+    # - tfsec
+    environment: gate
+    steps:
+
   apply:
     needs:
     - plan
