@@ -29,6 +29,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stock-AL2 vs. custom-AL2023-AMI choice, the two-phase bootstrap for a new
   environment, egress verification, and egress-outage troubleshooting.
 
+### Fixed
+- `destroy_terraform.yml` now passes `TF_MODULE=infra` to `make-terraform.sh` in
+  its `generate-versions` step. The script became module-aware and started
+  requiring `TF_MODULE` when the dns S3 backend was added, but the destroy
+  workflow was never updated, so every run failed at backend generation with
+  "TF_MODULE is not set".
+
 ## [0.10.2] - 2026-05-31
 
 ### Changed
