@@ -5,7 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.10.3] - Unreleased
+## [0.10.3] - 2026-06-01
+
+### Changed
+- Approval for potentially destructive workflow steps are now gated behind
+  three new "gate" environments. These environments hold the protection rules
+  instead of the three original environments, thus affording more targetted
+  and less redundant approval steps.
 
 ### Added
 - EC2 Image Builder pipeline that bakes a custom AL2023 NAT AMI with nftables
@@ -28,6 +34,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `docs/operations.md`): how NAT is wired, the no-VPC-endpoints dependency, the
   stock-AL2 vs. custom-AL2023-AMI choice, the two-phase bootstrap for a new
   environment, egress verification, and egress-outage troubleshooting.
+
+### Fixed
+- Disabling monitoring (`TF_VAR_MONITORING=false`) no longer hangs the apply on
+  the `cabal-healthchecks-iac` Lambda. The `aws_lambda_invocation` resource used
+  `lifecycle_scope = "CRUD"`, whose destroy-time invoke fired a final Lambda call
+  as the monitoring module was torn down (`count = 0`); with the Healthchecks
+  task gone - and, in a quiesced env, NAT scaled to zero so SSM was unreachable -
+  that call blackholed to the 60s Lambda timeout and failed the apply with
+  `Sandbox.Timedout`. Dropped the scope to the default `CREATE_ONLY`, which still
+  re-invokes when `config.py` changes (via `triggers.source_code_hash`) but never
+  invokes on destroy. The handler also now no-ops defensively on a Terraform
+  `delete` action in case the scope is ever changed back.
+- `destroy_terraform.yml` now passes `TF_MODULE=infra` to `make-terraform.sh` in
+  its `generate-versions` step. The script became module-aware and started
+  requiring `TF_MODULE` when the dns S3 backend was added, but the destroy
+  workflow was never updated, so every run failed at backend generation with
+  "TF_MODULE is not set".
 
 ## [0.10.2] - 2026-05-31
 

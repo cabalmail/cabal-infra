@@ -21,7 +21,7 @@ Navigate to **Settings -> Secrets and variables -> Actions -> Secrets** and add 
 
 ## Environment variables and secrets
 
-The remaining configuration is set per-environment under **Settings -> Environments -> [environment name]**. Create one environment per named branch: `prod` (maps to `main`), `stage`, and `development`.
+The remaining configuration is set per-environment under **Settings -> Environments -> [environment name]**. Create two environments per named branch: `prod` (maps to `main`), `gate-prod`, `stage`, `gate-stage`, `development`, and `gate-development`. Optionally add protection rules to the three `gate-*` environments. Potentially destructive jobs in Github workflows are placed behind other jobs that depend on the `gate-*` environments, making them the best place for protection rules.
 
 ### Core infrastructure
 
