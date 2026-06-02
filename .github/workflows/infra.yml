@@ -362,7 +362,7 @@ jobs:
       id: plan-terraform
       run: ../../.github/scripts/plan-terraform.sh
 
-  approve:
+  approval:
     needs:
     - plan
     - chekov
@@ -371,7 +371,7 @@ jobs:
     environment: gate
     runs-on: ubuntu-latest
     steps:
-    - name: approval
+    - name: approve
       run: echo "Approved"
 
   apply:
