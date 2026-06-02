@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.10.3] - Unreleased
 
+### Changed
+- Approval for potentially destructive workflow steps are now gated behind
+  three new "gate" environments. These environments hold the protection rules
+  instead of the three original environments, thus affording more targetted
+  and less redundant approval steps.
+
 ### Added
 - EC2 Image Builder pipeline that bakes a custom AL2023 NAT AMI with nftables
   pre-installed (`terraform/infra/modules/vpc/nat_ami.tf` +
