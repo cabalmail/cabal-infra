@@ -36,6 +36,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   environment, egress verification, and egress-outage troubleshooting.
 
 ### Fixed
+- Disabling monitoring (`TF_VAR_MONITORING=false`) no longer hangs the apply on
+  the `cabal-healthchecks-iac` Lambda. The `aws_lambda_invocation` resource used
+  `lifecycle_scope = "CRUD"`, whose destroy-time invoke fired a final Lambda call
+  as the monitoring module was torn down (`count = 0`); with the Healthchecks
+  task gone - and, in a quiesced env, NAT scaled to zero so SSM was unreachable -
+  that call blackholed to the 60s Lambda timeout and failed the apply with
+  `Sandbox.Timedout`. Dropped the scope to the default `CREATE_ONLY`, which still
+  re-invokes when `config.py` changes (via `triggers.source_code_hash`) but never
+  invokes on destroy. The handler also now no-ops defensively on a Terraform
+  `delete` action in case the scope is ever changed back.
 - `destroy_terraform.yml` now passes `TF_MODULE=infra` to `make-terraform.sh` in
   its `generate-versions` step. The script became module-aware and started
   requiring `TF_MODULE` when the dns S3 backend was added, but the destroy
