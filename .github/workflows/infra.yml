@@ -369,7 +369,10 @@ jobs:
     - tflint
     # - tfsec
     environment: gate
+    runs-on: ubuntu-latest
     steps:
+    - name: approval
+      run: echo "Approved"
 
   apply:
     needs:
