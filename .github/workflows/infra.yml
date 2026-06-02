@@ -368,6 +368,15 @@ jobs:
     - chekov
     - tflint
     # - tfsec
+    # No `if:` defaults to success(), which inherits the bootstrap_apply
+    # skip transitively (see the chekov/tflint/plan comment block above):
+    # on the common push path bootstrap_apply is skipped, that skip flows
+    # down the whole chain, and an unguarded job auto-skips even though its
+    # immediate predecessors succeeded. Guard like the other post-build
+    # jobs. Gate on exit_code == 2 as well so the manual approval only
+    # fires when plan actually has changes to apply - otherwise every
+    # no-op push would block on a human approving an empty apply.
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.chekov.result == 'success' && needs.tflint.result == 'success' && needs.plan.outputs.exit_code == '2' }}
     environment: gate
     runs-on: ubuntu-latest
     steps:
@@ -377,7 +386,12 @@ jobs:
   apply:
     needs:
     - approval
-    if: ${{ !cancelled() && needs.plan.outputs.exit_code == '2' }}
+    - plan
+    # `plan` stays in needs so this job can still read
+    # needs.plan.outputs.exit_code - the needs context only exposes jobs
+    # listed here, so depending on `approval` alone would make that
+    # expression resolve to empty and skip apply on every real change.
+    if: ${{ !cancelled() && needs.approval.result == 'success' && needs.plan.outputs.exit_code == '2' }}
     runs-on: ubuntu-latest
     outputs:
       applied: ${{ steps.apply-terraform.outcome }}
