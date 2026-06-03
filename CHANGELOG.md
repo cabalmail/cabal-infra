@@ -26,6 +26,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `MKNOD`, `AUDIT_WRITE`, `SETFCAP`, `SETPCAP`. `readOnlyRootFilesystem` on the
   mail tiers is deliberately deferred (they regenerate `/etc/mail` +
   `/etc/opendkim` at runtime); the monitoring tier gets it separately.
+- Tightened OpenDKIM's signing scope (phase 5 of the same plan): the generated
+  `TrustedHosts` is now loopback only (`127.0.0.1`, `::1`, `localhost`) instead
+  of `0.0.0.0/0`. opendkim signs only mail handed over by the local sendmail
+  through the loopback milter socket, so a signature now requires both the
+  network position (loopback) and a From-domain match in the SigningTable - not
+  either one alone.
+- Removed SMTP AUTH from the smtp-in inbound relay (the whole
+  `confAUTH_OPTIONS` / `TRUST_AUTH_MECH` / `confAUTH_MECHANISMS` stanza,
+  including the legacy DIGEST-MD5 and CRAM-MD5 mechanisms that RFC 6331
+  obsoleted). The inbound relay accepts mail for hosted domains and never
+  authenticates senders - submission auth is on smtp-out via Dovecot - so AUTH
+  was dead, weak surface. STARTTLS is unaffected.
+- Added sendmail resource and rate limits to all three mail tiers: a 50 MB
+  message-size cap (`confMAX_MESSAGE_SIZE`, the user-visible outbound limit,
+  kept in step across tiers so a relayed message is not accepted upstream then
+  bounced downstream for size), a daemon-children cap
+  (`confMAX_DAEMON_CHILDREN = 40`), a single-source connection throttle
+  (`confCONNECTION_RATE_THROTTLE = 5`), and `restrictmailq` in
+  `confPRIVACY_FLAGS` so non-trusted users can no longer inspect the mail queue.
 
 ### Removed
 - fail2ban is gone from the mail-tier images entirely: the `dnf install`
@@ -44,6 +63,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reached a running task. Forcing the imap replacement also reconciles its
   container to the in-config `memory = 1024` cap, which had been committed with
   the Dovecot vsz_limit bump but never deployed under the prior ignore.
+
+### Fixed
+- `generate-config.sh` now writes every generated sendmail/OpenDKIM map
+  atomically (stage to a temp file in the same directory, `fsync`,
+  `os.replace`). A SIGHUP, restart, or a sendmail `makemap` that lands mid-write
+  no longer reads a partially written map. Phase 5 of
+  `docs/0.10.x/container-runtime-hardening-plan.md`.
 
 ## [0.10.3] - 2026-06-01
 
