@@ -5,6 +5,72 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+- Dropped the unused `NET_ADMIN` Linux capability from all three mail-tier ECS
+  task definitions (imap, smtp-in, smtp-out). The capability existed only so
+  fail2ban could manipulate iptables; fail2ban has been disabled since 0.7.0
+  and nothing else used it, so this shrinks the container escape surface with
+  no behaviour change. Phase 1 of
+  `docs/0.10.x/container-runtime-hardening-plan.md`.
+- Hardened the runtime posture of all three mail-tier containers (phase 2 of
+  the same plan): `cap_drop: ALL` with a minimal analyzed add-back set
+  (`NET_BIND_SERVICE`, `SETUID`, `SETGID`, `CHOWN`, `DAC_OVERRIDE`, `FOWNER`,
+  `KILL`, plus `SYS_CHROOT` on the dovecot tiers imap and smtp-out),
+  `no-new-privileges`, and a real PID-1 init (`initProcessEnabled`). The
+  add-back set is the analyzed working estimate for these root-running
+  sendmail/dovecot/opendkim containers, which fork privilege-dropped children
+  and provision OS users at startup; the development soak tightens it before
+  stage/prod. Net reduction vs. the Docker default capability set: `NET_RAW`,
+  `MKNOD`, `AUDIT_WRITE`, `SETFCAP`, `SETPCAP`. `readOnlyRootFilesystem` on the
+  mail tiers is deliberately deferred (they regenerate `/etc/mail` +
+  `/etc/opendkim` at runtime); the monitoring tier gets it separately.
+- Tightened OpenDKIM's signing scope (phase 5 of the same plan): the generated
+  `TrustedHosts` is now loopback only (`127.0.0.1`, `::1`, `localhost`) instead
+  of `0.0.0.0/0`. opendkim signs only mail handed over by the local sendmail
+  through the loopback milter socket, so a signature now requires both the
+  network position (loopback) and a From-domain match in the SigningTable - not
+  either one alone.
+- Removed SMTP AUTH from the smtp-in inbound relay (the whole
+  `confAUTH_OPTIONS` / `TRUST_AUTH_MECH` / `confAUTH_MECHANISMS` stanza,
+  including the legacy DIGEST-MD5 and CRAM-MD5 mechanisms that RFC 6331
+  obsoleted). The inbound relay accepts mail for hosted domains and never
+  authenticates senders - submission auth is on smtp-out via Dovecot - so AUTH
+  was dead, weak surface. STARTTLS is unaffected.
+- Added sendmail resource and rate limits to all three mail tiers: a 50 MB
+  message-size cap (`confMAX_MESSAGE_SIZE`, the user-visible outbound limit,
+  kept in step across tiers so a relayed message is not accepted upstream then
+  bounced downstream for size), a daemon-children cap
+  (`confMAX_DAEMON_CHILDREN = 40`), a single-source connection throttle
+  (`confCONNECTION_RATE_THROTTLE = 5`), and `restrictmailq` in
+  `confPRIVACY_FLAGS` so non-trusted users can no longer inspect the mail queue.
+
+### Removed
+- fail2ban is gone from the mail-tier images entirely: the `dnf install`
+  package on all three tiers, the commented-out `[program:fail2ban]`
+  supervisord blocks, and the entrypoint `/etc/fail2ban/jail.local` stanza. It
+  had been commented out of supervisord (and thus never actually running) since
+  0.7.0. Host-level login-rate limiting moves to Dovecot's own knobs (a later
+  phase of the hardening plan) and, prospectively, the NLB/WAF. Operator
+  runbooks and `docs/monitoring.md` are updated to match.
+
+### Changed
+- The imap and smtp-in ECS task definitions now carry `replace_triggered_by`
+  revision markers (mirroring the existing smtp-out marker). Without them,
+  `lifecycle.ignore_changes = [container_definitions]` silently held back
+  deliberate task-def edits, so the NET_ADMIN drop above would never have
+  reached a running task. Forcing the imap replacement also reconciles its
+  container to the in-config `memory = 1024` cap, which had been committed with
+  the Dovecot vsz_limit bump but never deployed under the prior ignore.
+
+### Fixed
+- `generate-config.sh` now writes every generated sendmail/OpenDKIM map
+  atomically (stage to a temp file in the same directory, `fsync`,
+  `os.replace`). A SIGHUP, restart, or a sendmail `makemap` that lands mid-write
+  no longer reads a partially written map. Phase 5 of
+  `docs/0.10.x/container-runtime-hardening-plan.md`.
+
 ## [0.10.3] - 2026-06-01
 
 ### Changed

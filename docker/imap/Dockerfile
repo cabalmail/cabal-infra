@@ -91,7 +91,6 @@ FROM amazonlinux:2023
 RUN dnf install -y \
       sendmail sendmail-cf \
       dovecot \
-      fail2ban \
       procmail \
       rsyslog \
       httpd-tools \

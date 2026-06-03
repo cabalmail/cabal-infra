@@ -591,7 +591,7 @@ Verifying each criterion:
 4. Receives mail from any sender. Send a test message from any
    external account to the test address above; it lands in the
    account's Inbox within seconds. The SMTP-IN tier applies spam
-   filtering and fail2ban but no sender allowlist.
+   filtering but no sender allowlist.
 ```
 
 References:

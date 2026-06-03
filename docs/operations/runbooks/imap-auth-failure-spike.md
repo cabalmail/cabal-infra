@@ -11,7 +11,7 @@ Dovecot's IMAP login process logged failed authentication attempts at a sustaine
 Failed auth attempts don't directly affect anyone — Dovecot rejects them and the attacker moves on. The risks are:
 - Real users may experience login latency under heavy attack load (Dovecot's bcrypt verification is intentionally slow).
 - A determined attacker with a valid password gets in once they hit the right user. Cabalmail uses Cognito-issued passwords; check whether any account has a weak password set out-of-band.
-- **fail2ban is currently disabled** in [supervisord.conf](../../../docker/imap/supervisord.conf) on every mail tier (commented out as of 0.7.x). So attempts aren't being banned at the host level. Until fail2ban is re-enabled, this alert is the only signal.
+- **No host-level auto-banning.** fail2ban was removed from the mail-tier images in 0.10.x (it had been commented out of [supervisord.conf](../../../docker/imap/supervisord.conf) since 0.7.x and never actually ran). Attempts are not banned at the host level. The replacement is Dovecot's own login throttling (`auth_failure_delay` plus per-service `process_limit`/`client_limit`), which lands in phase 4 of [docs/0.10.x/container-runtime-hardening-plan.md](../../0.10.x/container-runtime-hardening-plan.md); until it ships, this alert is the only signal.
 
 ## First three things to check
 
@@ -41,7 +41,7 @@ Failed auth attempts don't directly affect anyone — Dovecot rejects them and t
   # SGs don't allow deny rules; use NACLs instead, on the public subnet:
   aws ec2 create-network-acl-entry --network-acl-id <nacl> --rule-number 90 --protocol tcp --port-range From=993,To=993 --cidr-block <bad-ip>/32 --rule-action deny
   ```
-- **Re-enable fail2ban**: this is the right long-term answer. The supervisord program is commented out in all three mail-tier `supervisord.conf` files. Re-enable, build, and redeploy. Once active, fail2ban will start banning at the iptables layer.
+- **Tighten login throttling (long-term answer)**: fail2ban is gone for good (removed in 0.10.x); the host-network model makes per-container packet inspection the wrong layer. The replacement is two-fold: Dovecot's own login-throttling knobs (`auth_failure_delay`, per-service `process_limit`/`client_limit`), landing in phase 4 of [docs/0.10.x/container-runtime-hardening-plan.md](../../0.10.x/container-runtime-hardening-plan.md); and, if attack volume warrants it, an NLB-side rate limit or WAF (tracked in the identity/IAM hardening plan). Neither bans at the iptables layer.
 - **Credential stuffing across many IPs**: blocking IPs is futile. The right response is to rate-limit at the listener (Dovecot's `auth_cache_negative_ttl` and `imap_login_processes_count_throttle` settings) and to check user passwords for re-use against known-leaked lists.
 - **An account is compromised**: rotate that user's password immediately via Cognito, invalidate active sessions, and ECS-Exec into the IMAP container to drop any existing IMAP connection from the attacker IP.
 - This alert is `warning` because most spikes are background noise. Promote to critical (manually, in your head) if any of the third-check signals come back positive.
