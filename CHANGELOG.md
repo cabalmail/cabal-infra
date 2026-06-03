@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+- Dropped the unused `NET_ADMIN` Linux capability from all three mail-tier ECS
+  task definitions (imap, smtp-in, smtp-out). The capability existed only so
+  fail2ban could manipulate iptables; fail2ban has been disabled since 0.7.0
+  and nothing else used it, so this shrinks the container escape surface with
+  no behaviour change. Phase 1 of
+  `docs/0.10.x/container-runtime-hardening-plan.md`.
+
+### Removed
+- fail2ban is gone from the mail-tier images entirely: the `dnf install`
+  package on all three tiers, the commented-out `[program:fail2ban]`
+  supervisord blocks, and the entrypoint `/etc/fail2ban/jail.local` stanza. It
+  had been commented out of supervisord (and thus never actually running) since
+  0.7.0. Host-level login-rate limiting moves to Dovecot's own knobs (a later
+  phase of the hardening plan) and, prospectively, the NLB/WAF. Operator
+  runbooks and `docs/monitoring.md` are updated to match.
+
+### Changed
+- The imap and smtp-in ECS task definitions now carry `replace_triggered_by`
+  revision markers (mirroring the existing smtp-out marker). Without them,
+  `lifecycle.ignore_changes = [container_definitions]` silently held back
+  deliberate task-def edits, so the NET_ADMIN drop above would never have
+  reached a running task. Forcing the imap replacement also reconciles its
+  container to the in-config `memory = 1024` cap, which had been committed with
+  the Dovecot vsz_limit bump but never deployed under the prior ignore.
+
 ## [0.10.3] - 2026-06-01
 
 ### Changed

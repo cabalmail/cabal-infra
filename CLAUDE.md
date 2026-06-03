@@ -193,9 +193,9 @@ Trade-offs of the API-backed path (full notes in `apple/CabalmailKit/Sources/Cab
 ### Docker Services (`docker/`)
 
 Three container images based on `amazonlinux:2023`, managed by supervisord:
-- **`imap`**: Dovecot (IMAP) + Sendmail (local delivery) + Procmail + fail2ban
-- **`smtp-in`**: Sendmail (inbound relay) + fail2ban
-- **`smtp-out`**: Sendmail (outbound) + Dovecot (submission auth) + OpenDKIM + fail2ban
+- **`imap`**: Dovecot (IMAP) + Sendmail (local delivery) + Procmail
+- **`smtp-in`**: Sendmail (inbound relay)
+- **`smtp-out`**: Sendmail (outbound) + Dovecot (submission auth) + OpenDKIM
 
 Shared infrastructure:
 - `docker/shared/entrypoint.sh` — writes TLS certs, renders sendmail.mc, generates Cognito auth script, syncs OS users, generates sendmail maps from DynamoDB

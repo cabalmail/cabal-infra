@@ -471,7 +471,7 @@ All metrics emit value=1 per matching log line, default 0. CloudWatch aggregates
 
 These thresholds are starting points. Expect them to move once we see what real traffic looks like; record the rationale in the alert's GitHub issue per the [tuning discipline](./0.7.x/monitoring-plan.md#tuning-discipline) in the design doc.
 
-**fail2ban metrics are intentionally not part of this set.** `[program:fail2ban]` is currently commented out in every mail-tier `supervisord.conf`. A metric filter today would publish flat-zero forever and mask the disabled state. Add the filter when fail2ban is re-enabled.
+**fail2ban metrics are intentionally not part of this set.** fail2ban was removed from the mail-tier images entirely in 0.10.x (it had been commented out of every `supervisord.conf` since 0.7.0 and never actually ran, so there was never a log stream to derive a metric from). Login-rate limiting now lives in Dovecot's own knobs and, prospectively, at the NLB/WAF — see [docs/0.10.x/container-runtime-hardening-plan.md](./0.10.x/container-runtime-hardening-plan.md).
 
 **Cognito post-confirmation Lambda errors** are caught by the existing `LambdaErrors` rule (its `function_name` matcher is `!~"aws-.+"`, i.e. any Lambda whose name isn't an AWS-managed `aws-*` function, so the post-confirmation Lambda's invocation errors fire it without a separate log filter).
 

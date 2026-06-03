@@ -3,7 +3,6 @@ FROM amazonlinux:2023
 # System packages
 RUN dnf install -y \
       sendmail sendmail-cf \
-      fail2ban \
       procmail \
       rsyslog \
       make \

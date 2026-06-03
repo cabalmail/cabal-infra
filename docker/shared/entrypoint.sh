@@ -7,7 +7,7 @@
 #
 # Required env vars: TIER, CERT_DOMAIN, AWS_REGION, COGNITO_CLIENT_ID,
 #                    COGNITO_POOL_ID, TLS_CA_BUNDLE, TLS_CERT, TLS_KEY
-# Optional:          NETWORK_CIDR (VPC CIDR for fail2ban whitelist)
+# Optional:          NETWORK_CIDR (VPC CIDR for Dovecot login_trusted_networks)
 # IMAP-only:         MASTER_PASSWORD
 # SMTP-OUT-only:     DKIM_PRIVATE_KEY
 set -euo pipefail
@@ -156,25 +156,11 @@ if [ "$TIER" = "imap" ]; then
   htpasswd -b -c -s /etc/dovecot/master-users admin "${MASTER_PASSWORD}"
 fi
 
-# ── Step 10: fail2ban — whitelist VPC CIDR ─────────────────────
-# NLB health checks arrive from NLB node IPs within the VPC. These
-# TCP probes connect and immediately close without TLS or auth,
-# generating "Disconnected" entries in Dovecot logs. Without a
-# whitelist, fail2ban eventually bans the NLB IPs, causing health
-# checks to fail and the NLB to stop forwarding ALL traffic.
-echo "[entrypoint] Configuring fail2ban to ignore VPC CIDR (${NETWORK_CIDR:-not set})..."
-if [ -n "${NETWORK_CIDR:-}" ]; then
-  cat > /etc/fail2ban/jail.local <<F2B
-[DEFAULT]
-ignoreip = 127.0.0.0/8 ::1 ${NETWORK_CIDR}
-F2B
-fi
-
-# ── Step 11: Prepare rsyslog working directory ─────────────────
+# ── Step 10: Prepare rsyslog working directory ─────────────────
 echo "[entrypoint] Preparing rsyslog..."
 mkdir -p /var/lib/rsyslog
 
-# ── Step 12: Pin IMAP_INTERNAL_HOST in /etc/hosts (smtp-in only) ──
+# ── Step 11: Pin IMAP_INTERNAL_HOST in /etc/hosts (smtp-in only) ──
 # Converts a transient Cloud Map outage from a permanent 5xx bounce
 # ("Host unknown") into a queueable 4xx (TCP connection refused or
 # timeout), which sendmail retries for ~4 days. The companion
@@ -188,6 +174,6 @@ if [ "$TIER" = "smtp-in" ]; then
     || echo "[entrypoint] WARN initial hosts-pin failed; deliveries may NXDOMAIN until the daemon refreshes"
 fi
 
-# ── Step 13: Start services via supervisord ───────────────────
+# ── Step 12: Start services via supervisord ───────────────────
 echo "[entrypoint] Starting services via supervisord..."
 exec /usr/local/bin/supervisord -c /etc/supervisord.conf

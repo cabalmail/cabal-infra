@@ -36,5 +36,5 @@ Tasks running on that EC2 are getting throttled at the kernel level. For Cabalma
     --container-instances <ci-id> --status DRAINING
   # wait for tasks to drain, then terminate the EC2; ASG replaces it
   ```
-- **Cluster-wide saturation**: scale the ASG up or move to a larger instance class. The monitoring services are memory-heavy, not CPU-heavy — if CPU is the bottleneck, expect mail-tier load (a brute-force attempt is the most common cause; check fail2ban activity).
+- **Cluster-wide saturation**: scale the ASG up or move to a larger instance class. The monitoring services are memory-heavy, not CPU-heavy — if CPU is the bottleneck, expect mail-tier load (a brute-force attempt is the most common cause; check the [IMAPAuthFailureSpike](./imap-auth-failure-spike.md) signal and the Dovecot auth-failure logs).
 - This is `warning` severity. Sustained CPU saturation will eventually cause container restart loops or probe failures, both of which escalate to critical.

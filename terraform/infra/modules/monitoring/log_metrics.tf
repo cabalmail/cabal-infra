@@ -17,10 +17,12 @@
 # aggregate. The runbook tells the operator how to identify the
 # offending tier when an alert fires.
 #
-# The fail2ban filter is intentionally NOT here: as of 0.7.0,
-# `[program:fail2ban]` is commented out in every mail-tier
-# supervisord.conf. A filter today would publish flat-zero forever
-# and mask the disabled state. Re-add when fail2ban is re-enabled.
+# There is intentionally no fail2ban filter here: fail2ban was removed
+# from the mail-tier images entirely in 0.10.x (it had been commented
+# out of supervisord since 0.7.0, so there was never a log stream to
+# derive a metric from). Login-rate limiting now lives in Dovecot's own
+# knobs and, prospectively, at the NLB/WAF. See
+# docs/0.10.x/container-runtime-hardening-plan.md.
 
 locals {
   # Match "stat=Deferred" anywhere in the line. Sendmail emits this on

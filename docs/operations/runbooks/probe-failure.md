@@ -45,6 +45,6 @@ The label `instance` (Prometheus) or the monitor name (Kuma) tells you which pro
 
 If all three checks pass but the probe stays red:
 - For `/list` specifically, the most common cause is the seeded JWT having expired — re-seed it (see [docs/monitoring.md §9](../../monitoring.md#9-create-the-phase-1-monitor-set)) before assuming the API is broken.
-- For mail ports, examine fail2ban activity: `aws logs tail /ecs/cabal-imap --filter-pattern fail2ban | head -100`. A blanket ban can drop the probe source if Kuma's outbound IP shifted.
+- For mail ports, check whether the probe source is being refused at the network layer (a NACL deny rule added during an auth-failure-spike response, or a security-group change). fail2ban no longer runs on the mail tiers (removed in 0.10.x), so a host-level ban is no longer a possible cause.
 - If a single ECS service is stuck restarting, scale it to 0 then back to 1 to break the loop (`aws ecs update-service --cluster <cluster> --service <name> --desired-count 0`, wait, then back to 1).
 - If multiple services are unhealthy at once, look at the cluster instances (`aws ecs list-container-instances`) — likely an EC2 host is wedged. NAT instance failures also break outbound for any service that calls AWS APIs at start.

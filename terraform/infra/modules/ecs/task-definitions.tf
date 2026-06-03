@@ -17,6 +17,25 @@ locals {
 
 # -- IMAP task definition --------------------------------------
 
+# Forces a one-time imap task-def replacement whenever this string
+# changes. The imap container_definitions are otherwise frozen by
+# lifecycle.ignore_changes (so out-of-band image deploys via
+# deploy-ecs-service.sh are not rolled back); the side effect is that
+# topology edits to the container block never reach a new revision on
+# their own. Bumping the version token here forces a destroy+recreate,
+# whose fresh create is not governed by ignore_changes and so picks up
+# the full container_definitions from config (image included, re-pinned
+# to reality by refresh-ssm-from-running.sh at plan time). See the
+# smtp_out marker for the original use of this pattern.
+#   v1: NET_ADMIN capability drop. The replacement also reconciles the
+#       container to its current full config - notably the memory = 1024
+#       cap that has been in config since the vsz_limit bump but never
+#       deployed under ignore_changes.
+#       (docs/0.10.x/container-runtime-hardening-plan.md phase 1)
+resource "terraform_data" "imap_taskdef_revision_marker" {
+  input = "imap-taskdef-v1"
+}
+
 resource "aws_ecs_task_definition" "imap" {
   family                   = "cabal-imap"
   requires_compatibilities = ["EC2"]
@@ -32,7 +51,7 @@ resource "aws_ecs_task_definition" "imap" {
     # Aligned with the Dovecot service-level vsz_limit in
     # docker/imap/configs/dovecot/20-imap.conf. The hard cap accommodates
     # one full-size imap worker (1G vsz) plus the supporting processes
-    # (sendmail, procmail, supervisord, fail2ban) and a second concurrent
+    # (sendmail, procmail, supervisord) and a second concurrent
     # imap worker peaking. Soft reservation leaves the scheduler room to
     # pack other containers on the same m6g.medium when the imap tier is
     # idle.
@@ -67,12 +86,6 @@ resource "aws_ecs_task_definition" "imap" {
       containerPath = "/home"
     }]
 
-    linuxParameters = {
-      capabilities = {
-        add = ["NET_ADMIN"]
-      }
-    }
-
     logConfiguration = {
       logDriver = "awslogs"
       options = {
@@ -94,13 +107,25 @@ resource "aws_ecs_task_definition" "imap" {
 
   # See docs/0.9.x/build-deploy-simplification-plan.md. App deploys mutate
   # the image tag out-of-band via aws ecs register-task-definition; Terraform
-  # must not roll those forward updates back on a topology-only apply.
+  # must not roll those forward updates back on a topology-only apply. The
+  # replace_triggered_by marker is how deliberate container_definitions
+  # changes (which ignore_changes would otherwise swallow) get deployed.
   lifecycle {
-    ignore_changes = [container_definitions]
+    ignore_changes       = [container_definitions]
+    replace_triggered_by = [terraform_data.imap_taskdef_revision_marker]
   }
 }
 
 # -- SMTP-IN task definition -----------------------------------
+
+# See imap_taskdef_revision_marker for the full rationale. Bump the
+# version token to force a one-time smtp-in task-def replacement when
+# its container block changes and must be deployed.
+#   v1: NET_ADMIN capability drop
+#       (docs/0.10.x/container-runtime-hardening-plan.md phase 1)
+resource "terraform_data" "smtp_in_taskdef_revision_marker" {
+  input = "smtp-in-taskdef-v1"
+}
 
 resource "aws_ecs_task_definition" "smtp_in" {
   family                   = "cabal-smtp-in"
@@ -138,12 +163,6 @@ resource "aws_ecs_task_definition" "smtp_in" {
       { name = "TLS_KEY", valueFrom = "/cabal/control_domain_ssl_key" },
     ], local.healthcheck_secrets)
 
-    linuxParameters = {
-      capabilities = {
-        add = ["NET_ADMIN"]
-      }
-    }
-
     logConfiguration = {
       logDriver = "awslogs"
       options = {
@@ -156,7 +175,8 @@ resource "aws_ecs_task_definition" "smtp_in" {
   }])
 
   lifecycle {
-    ignore_changes = [container_definitions]
+    ignore_changes       = [container_definitions]
+    replace_triggered_by = [terraform_data.smtp_in_taskdef_revision_marker]
   }
 }
 
@@ -181,12 +201,14 @@ resource "aws_ecs_task_definition" "smtp_in" {
 # See also docs/0.9.x/smtp-out-queue-persistence-plan.md for the
 # original use of this marker.
 resource "terraform_data" "smtp_out_taskdef_revision_marker" {
-  # Default state retains the pre-sinkhole marker so environments
-  # where var.sinkhole stays false (prod, and stage/dev pre-rollout)
-  # do not see a one-time replacement when phase 5 lands. Only the
-  # sinkhole=true state has a distinct marker, so flipping the flag
-  # in either direction forces the smtp-out task-def to replace.
-  input = var.sinkhole ? "smtp-queue-mount-v1+sinkhole" : "smtp-queue-mount-v1"
+  # Bump the version token for any change that must deploy (see the
+  # mechanism described above):
+  #   v1: EFS queue mount + stop-grace
+  #       (docs/0.9.x/smtp-out-queue-persistence-plan.md)
+  #   v2: NET_ADMIN capability drop
+  #       (docs/0.10.x/container-runtime-hardening-plan.md phase 1)
+  # The +sinkhole suffix is the var.sinkhole hook described above.
+  input = var.sinkhole ? "smtp-queue-mount-v2+sinkhole" : "smtp-queue-mount-v2"
 }
 
 resource "aws_ecs_task_definition" "smtp_out" {
@@ -245,12 +267,6 @@ resource "aws_ecs_task_definition" "smtp_out" {
       sourceVolume  = "smtp-queue"
       containerPath = "/var/spool/mqueue"
     }]
-
-    linuxParameters = {
-      capabilities = {
-        add = ["NET_ADMIN"]
-      }
-    }
 
     logConfiguration = {
       logDriver = "awslogs"
