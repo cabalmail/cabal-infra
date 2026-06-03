@@ -201,7 +201,16 @@ jobs:
       run: echo "Approved"
 
   docker:
-    needs: approval
+    # The matrix below reads `fromJson(needs.setup.outputs.tiers)`, and a
+    # job's matrix can only resolve `needs.<job>.outputs` for jobs named
+    # directly in its own `needs` - `approval` (which needs setup) does not
+    # re-export setup's outputs. With only `approval` here the matrix got
+    # empty input and errored at strategy evaluation. `approval` provides
+    # the deployment gate; `setup` provides image_tag, tiers, and the
+    # per-area path-filter flags. (The other area jobs read needs.setup
+    # only from `if`, which resolved fine via the transitive dependency and
+    # was unaffected, but they list setup too for correctness/consistency.)
+    needs: [setup, approval]
     if: needs.setup.outputs.docker == 'true'
     runs-on: ubuntu-24.04-arm
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
@@ -267,7 +276,7 @@ jobs:
           cabal-cloudwatch-exporter-us-east-1
 
   lambda-certbot:
-    needs: approval
+    needs: [setup, approval]
     if: needs.setup.outputs.lambda_certbot == 'true'
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
@@ -314,7 +323,7 @@ jobs:
           "${{ steps.image.outputs.uri }}"
 
   lambda-api:
-    needs: approval
+    needs: [setup, approval]
     if: needs.setup.outputs.lambda_api == 'true'
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
@@ -399,7 +408,7 @@ jobs:
         printf '%s\n' "${TARGETS[@]}" | xargs -P "${DEPLOY_JOBS}" -I {} ./.github/scripts/deploy-lambda-zip.sh {} "${BUCKET}"
 
   lambda-counter:
-    needs: approval
+    needs: [setup, approval]
     if: needs.setup.outputs.lambda_counter == 'true'
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
@@ -438,7 +447,7 @@ jobs:
         ./.github/scripts/deploy-lambda-zip.sh check_invite "${BUCKET}"
 
   react:
-    needs: approval
+    needs: [setup, approval]
     if: needs.setup.outputs.react == 'true'
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
@@ -471,7 +480,7 @@ jobs:
           --paths '/*' >/dev/null
 
   front-door:
-    needs: approval
+    needs: [setup, approval]
     if: needs.setup.outputs.front_door == 'true'
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}

@@ -70,6 +70,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `os.replace`). A SIGHUP, restart, or a sendmail `makemap` that lands mid-write
   no longer reads a partially written map. Phase 5 of
   `docs/0.10.x/container-runtime-hardening-plan.md`.
+- `app.yml`'s `docker` job again lists `setup` in `needs`, not just the
+  `approval` gate introduced in 0.10.3. The job's matrix reads
+  `fromJson(needs.setup.outputs.tiers)`, and a job's `strategy.matrix` can only
+  resolve `needs.<job>.outputs` for jobs named directly in its own `needs` -
+  `approval` (which needs setup) does not re-export setup's outputs - so the
+  matrix got empty input and errored at strategy evaluation. The first push to
+  touch `docker/**` after the gate landed surfaced it. The other five area jobs
+  read `needs.setup.outputs.*` only from `if`, which resolved fine via the
+  transitive dependency and kept deploying normally; they now list `setup`
+  directly too for correctness and to guard against the same matrix foot-gun.
 
 ## [0.10.3] - 2026-06-01
 
