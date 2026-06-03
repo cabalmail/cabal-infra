@@ -14,6 +14,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and nothing else used it, so this shrinks the container escape surface with
   no behaviour change. Phase 1 of
   `docs/0.10.x/container-runtime-hardening-plan.md`.
+- Hardened the runtime posture of all three mail-tier containers (phase 2 of
+  the same plan): `cap_drop: ALL` with a minimal analyzed add-back set
+  (`NET_BIND_SERVICE`, `SETUID`, `SETGID`, `CHOWN`, `DAC_OVERRIDE`, `FOWNER`,
+  `KILL`, plus `SYS_CHROOT` on the dovecot tiers imap and smtp-out),
+  `no-new-privileges`, and a real PID-1 init (`initProcessEnabled`). The
+  add-back set is the analyzed working estimate for these root-running
+  sendmail/dovecot/opendkim containers, which fork privilege-dropped children
+  and provision OS users at startup; the development soak tightens it before
+  stage/prod. Net reduction vs. the Docker default capability set: `NET_RAW`,
+  `MKNOD`, `AUDIT_WRITE`, `SETFCAP`, `SETPCAP`. `readOnlyRootFilesystem` on the
+  mail tiers is deliberately deferred (they regenerate `/etc/mail` +
+  `/etc/opendkim` at runtime); the monitoring tier gets it separately.
 
 ### Removed
 - fail2ban is gone from the mail-tier images entirely: the `dnf install`
