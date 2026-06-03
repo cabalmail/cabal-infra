@@ -33,7 +33,7 @@
     "jsdom": "^25.0.0",
     "rollup-plugin-license": "^3.7.1",
     "vite": "^6.4.2",
-    "vitest": "^3.0.0"
+    "vitest": "^4.1.8"
   },
   "overrides": {
     "js-cookie": "3.0.7"
