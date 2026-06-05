@@ -1,5 +1,4 @@
 import SwiftUI
-import UniformTypeIdentifiers
 import CabalmailKit
 
 /// Root of the signed-in navigation.
@@ -135,8 +134,8 @@ struct MailRootView: View {
         // back. Folder rows are nested, more-specific drop targets, so a real
         // drop onto a folder is handled there and never reaches this. Returns
         // false - nothing is moved on a cancelled drag.
-        .onDrop(of: [.cabalmailMessageMove], isTargeted: nil) { _ in
-            Task { @MainActor in appState.endMessageDrag() }
+        .dropDestination(for: MessageDragPayload.self) { _, _ in
+            appState.endMessageDrag()
             return false
         }
     }
