@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.5] - 2026-06-05
+
+### Fixed
+- Mail-tier ECS tasks could fail to start after monitoring was turned off in an
+  environment. Turning monitoring off deletes the
+  `/cabal/healthcheck_ping_*` SSM parameters, but the `imap` and `smtp-in` task
+  definitions still referenced `/cabal/healthcheck_ping_ecs_reconfigure` as the
+  `HEALTHCHECK_PING_URL` secret. Because the mail task definitions carry
+  `lifecycle { ignore_changes = [container_definitions] }`, dropping the secret
+  from config never reached a new revision on its own, and the first image roll
+  after the monitoring removal (which clones the live task definition) produced a
+  revision the ECS agent could not start - it errored fetching the missing
+  parameter. Bumped the `imap` and `smtp-in` task-def revision markers to force a
+  clean re-registration, and keyed all three mail-tier markers on
+  `var.healthcheck_ping_param` (the `+hc` hook, mirroring the existing
+  `smtp-out` `+sinkhole` hook) so flipping monitoring in either direction now
+  forces the `HEALTHCHECK_PING_URL` secret to be added or dropped in step with
+  the SSM parameter that backs it. `smtp-out` was already clean (its v3 marker
+  re-registered it after the monitoring removal); the `+hc` hook is a no-op for
+  it today and only future-proofs it against a re-enable.
+
 ## [0.10.4] - 2026-06-05
 
 ### Added
