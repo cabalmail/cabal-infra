@@ -93,12 +93,19 @@ extension MessageListView {
         return [MessageDragItem(uid: envelope.uid, sourceFolder: model.sourceFolder(for: envelope))]
     }
 
-    /// Wraps a row in `.onDrag` on wide layouts so it can be dragged onto a
+    /// Wraps a row in `.draggable` on wide layouts so it can be dragged onto a
     /// sidebar folder. On compact iPhone the modifier is skipped entirely
     /// (see `isWideLayout`): there's nowhere to drop, and the long-press drag
-    /// would fight the row's context menu. The payload is built on the main
-    /// actor in `row`; the `.onDrag` closure only flips the global drag flag
-    /// (which the sidebar watches to reveal folders) and returns the provider.
+    /// would fight the row's context menu.
+    ///
+    /// `.draggable` (not `.onDrag`) so a plain click still selects the row -
+    /// `.onDrag` on a `List(selection:)` row swallows clicks on the rendered
+    /// content on macOS. `.onDrag`'s drag-start closure was where the sidebar
+    /// got flipped to reveal folders; `.draggable` has no such hook, so the
+    /// flip rides two drag-start signals for robustness: the payload
+    /// autoclosure (evaluated when the drag lifts) and the preview's
+    /// `.onAppear` (fired when the drag image is built). `beginMessageDrag()`
+    /// is idempotent, so firing both is harmless.
     @ViewBuilder
     private func withMessageDrag(
         items: [MessageDragItem],
@@ -107,15 +114,21 @@ extension MessageListView {
     ) -> some View {
         if isWideLayout, !items.isEmpty {
             content()
-                .onDrag {
-                    Task { @MainActor in appState.beginMessageDrag() }
-                    return MessageDragPayload(items: items).makeItemProvider()
-                } preview: {
+                .draggable(dragPayload(items)) {
                     MessageDragPreview(count: items.count, subject: subject)
+                        .onAppear { appState.beginMessageDrag() }
                 }
         } else {
             content()
         }
+    }
+
+    /// Builds the drag payload and flips the sidebar's drag flag. Called from
+    /// `.draggable`'s `@autoclosure` payload, so the side effect lands exactly
+    /// when the drag begins.
+    private func dragPayload(_ items: [MessageDragItem]) -> MessageDragPayload {
+        appState.beginMessageDrag()
+        return MessageDragPayload(items: items)
     }
 
     @ViewBuilder

@@ -20,9 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unread-count / cache-cleanup path as the existing bulk and "Move to folder..."
   actions, and cross-folder search selections route each message back to its own
   source mailbox. Compact iPhone is unaffected (the sidebar and message list
-  never share the screen there). The drag payload is an app-private UTType with
-  own-process visibility, so a message can never be dragged out into another
-  app.
+  never share the screen there). The drag carries an app-private UTType that no
+  other app recognizes (a small {uid, sourceFolder} payload, never any message
+  body).
 
 ### Security
 - Dropped the unused `NET_ADMIN` Linux capability from all three mail-tier ECS

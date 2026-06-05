@@ -1,60 +1,49 @@
 import SwiftUI
+import CoreTransferable
 import UniformTypeIdentifiers
 import CabalmailKit
 
 // Drag-and-drop plumbing for moving messages onto sidebar folders on the
 // wide-screen layouts (iPad regular width, macOS, visionOS). The message
-// rows in `MessageListView` are the drag source; the folder rows in
-// `FolderListView` are the drop target. The payload is encoded as JSON
-// under an app-private UTType and carried by an `NSItemProvider`, so a
-// drag can never leak out of the app into Mail / Finder.
+// rows in `MessageListView` are the drag source (`.draggable`); the folder
+// rows in `FolderListView` are the drop target (`.dropDestination`).
 //
-// The value types the payload decodes into (`MessageDragItem`) and the
-// AppState signal a drop posts (`MessageMoveRequest`) live in
-// `AppStateSignals.swift` because `AppState` references them and that file
-// is Foundation-only; everything that needs SwiftUI / UniformTypeIdentifiers
-// lives here.
+// `.draggable` / `.dropDestination` (rather than the lower-level
+// `.onDrag` / `.onDrop`) is deliberate: `.onDrag` on a `List(selection:)`
+// row swallows clicks on the row's rendered content on macOS, so a plain
+// click on the subject / sender text no longer selects the row (only clicks
+// on empty cell area do). `.draggable` is built to coexist with list-row
+// selection, which keeps single-click-to-open working. The cost is that the
+// Transferable API offers no `.ownProcess` visibility knob, so the item is
+// technically draggable out of the app - but it advertises only the custom
+// `com.cabalmail.message-move` type (a tiny {uid, sourceFolder} JSON blob),
+// which no other app claims, so in practice it goes nowhere else.
+//
+// The value types the payload carries (`MessageDragItem`) and the AppState
+// signal a drop posts (`MessageMoveRequest`) live in `AppStateSignals.swift`
+// because `AppState` references them and that file is Foundation-only;
+// everything that needs SwiftUI / CoreTransferable lives here.
 
 extension UTType {
-    /// App-internal drag type for moving messages onto sidebar folders.
+    /// App-private drag type for moving messages onto sidebar folders.
     /// Declared as an exported type in both app targets' Info.plist
     /// (`UTExportedTypeDeclarations`, via `project.yml`) so Launch Services
     /// recognizes it and the runtime doesn't warn about an undeclared
-    /// identifier. `.ownProcess` visibility on the item provider keeps the
-    /// payload from ever leaving the app, so this never needs a filename
-    /// tag or cross-app conformance beyond `public.data`.
+    /// identifier. Conforms only to `public.data`; no filename tag because
+    /// it's never written to disk or shared.
     static let cabalmailMessageMove = UTType(exportedAs: "com.cabalmail.message-move")
 }
 
 /// The wire form of a message drag: the set of messages being moved, each
 /// tagged with its owning mailbox so a cross-folder search selection routes
-/// every UID back to the right source folder on drop.
-struct MessageDragPayload: Codable {
+/// every UID back to the right source folder on drop. `Transferable` so it
+/// rides `.draggable` on the source side and is decoded automatically by
+/// `.dropDestination(for: MessageDragPayload.self)` on the folder side.
+struct MessageDragPayload: Codable, Transferable {
     let items: [MessageDragItem]
 
-    /// JSON-encode + register under the app-private UTType. `.ownProcess`
-    /// confines the drag to this app. Returning the data through the load
-    /// handler (rather than `registerObject`) keeps the representation a
-    /// plain `Data` blob the drop side decodes with `JSONDecoder`.
-    func makeItemProvider() -> NSItemProvider {
-        let provider = NSItemProvider()
-        let data = (try? JSONEncoder().encode(self)) ?? Data()
-        provider.registerDataRepresentation(
-            forTypeIdentifier: UTType.cabalmailMessageMove.identifier,
-            visibility: .ownProcess
-        ) { completion in
-            completion(data, nil)
-            return nil
-        }
-        return provider
-    }
-
-    /// Decode a payload from a provider's data representation. Returns nil
-    /// if the blob is missing or malformed so the drop handler can treat it
-    /// as a no-op rather than crash.
-    static func decode(_ data: Data?) -> MessageDragPayload? {
-        guard let data else { return nil }
-        return try? JSONDecoder().decode(MessageDragPayload.self, from: data)
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: .cabalmailMessageMove)
     }
 }
 
