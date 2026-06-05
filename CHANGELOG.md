@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Drag-and-drop of messages onto sidebar folders in the wide-screen Apple
+  clients (iPad regular width, macOS, visionOS). A message row can be dragged
+  straight onto any selectable folder in the sidebar to move it there; the
+  targeted folder shows an accent border while the drag hovers it. Multi-select
+  is supported - dragging any selected row carries the whole selection, while
+  dragging an unselected row (or any row in normal mode) carries just that
+  message. If the sidebar is showing Addresses when the drag starts, it
+  temporarily flips to Folders so there is somewhere to drop, then flips back to
+  Addresses on release. The move runs through the same optimistic-prune /
+  unread-count / cache-cleanup path as the existing bulk and "Move to folder..."
+  actions, and cross-folder search selections route each message back to its own
+  source mailbox. Compact iPhone is unaffected (the sidebar and message list
+  never share the screen there). The drag payload is an app-private UTType with
+  own-process visibility, so a message can never be dragged out into another
+  app.
+
 ### Security
 - Dropped the unused `NET_ADMIN` Linux capability from all three mail-tier ECS
   task definitions (imap, smtp-in, smtp-out). The capability existed only so

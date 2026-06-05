@@ -104,48 +104,10 @@ extension MessageListViewModel {
     }
 
     private func performBulkMove(to destination: String, markSeenFirst: Bool) async {
-        let grouping = selectedByFolder
-        let snapshot = envelopes.filter { selectedUIDs.contains($0.uid) }
-        let unreadCount = Dictionary(grouping: snapshot.filter { !$0.flags.contains(.seen) },
-                                     by: { sourceFolder(for: $0) })
-            .mapValues { $0.count }
-        // Optimistic prune. Failure on any one source folder reinserts
-        // its snapshot below.
-        envelopes.removeAll { selectedUIDs.contains($0.uid) }
-        for (source, count) in unreadCount {
-            appState.applyUnreadDelta(folderPath: source, delta: -count)
-            if !markSeenFirst {
-                // Plain move: unread state travels with the message.
-                appState.applyUnreadDelta(folderPath: destination, delta: count)
-            }
-        }
-
-        for (source, uids) in grouping where source != destination {
-            do {
-                if markSeenFirst {
-                    try await client.imapClient.setFlags(
-                        folder: source, uids: uids,
-                        flags: [.seen], operation: .add
-                    )
-                }
-                try await client.imapClient.move(
-                    folder: source, uids: uids, destination: destination
-                )
-                await pruneCachesAfter(move: source, uids: uids)
-            } catch {
-                // Best-effort revert: re-insert this folder's snapshot
-                // and back out the unread deltas we anticipated.
-                let restored = snapshot.filter { sourceFolder(for: $0) == source }
-                envelopes.append(contentsOf: restored)
-                envelopes.sort(by: envelopeOrder)
-                let unread = unreadCount[source] ?? 0
-                appState.applyUnreadDelta(folderPath: source, delta: unread)
-                if !markSeenFirst {
-                    appState.applyUnreadDelta(folderPath: destination, delta: -unread)
-                }
-                errorMessage = "\(error)"
-            }
-        }
+        // The optimistic prune / unread bookkeeping / per-source revert all
+        // live in the shared `performMove` (also used by drag-and-drop); the
+        // bulk path just supplies the grouped selection and exits edit mode.
+        await performMove(uidsBySource: selectedByFolder, to: destination, markSeenFirst: markSeenFirst)
         exitBulkMode()
     }
 }

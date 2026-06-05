@@ -29,6 +29,15 @@ struct MessageListView: View {
     @Environment(AppState.self) var appState
     @Environment(Preferences.self) private var preferences
     @Environment(\.openWindow) private var openWindow
+    #if !os(macOS)
+    // Wide vs. compact gates whether message rows are draggable. On a
+    // compact iPhone the sidebar and the message list never share the
+    // screen, so there's nowhere to drop a message, and a long-press drag
+    // would only fight each row's context menu. Non-private so the `+Rows`
+    // extension that builds the rows can read it. macOS has no size class
+    // and is always treated as wide (see `isWideLayout`).
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    #endif
     // `model` and `filtersPresented` are module-internal (no access
     // modifier) so the same-module extensions in `+Search` and `+macOS`
     // can read them without round-tripping through accessors.
@@ -218,6 +227,16 @@ struct MessageListView: View {
             let resolved = newSelection.map(model.sourceFolder(for:))
             let projected = resolved.flatMap { $0 == folder.path ? nil : $0 }
             onSearchResultSelected(projected)
+        }
+        // A folder row in the sidebar received a dropped message (or
+        // selection). The drop handler posts the destination + payload on
+        // AppState; route it through the view model so the move shares the
+        // optimistic-prune / unread-count / cache-cleanup path with the
+        // bulk and menu-driven moves. Only the list the drag came from has a
+        // model holding those UIDs, so other folders' lists no-op.
+        .onChange(of: appState.pendingMoveRequest) { _, request in
+            guard let request, let model else { return }
+            Task { await model.applyMoveRequest(request) }
         }
     }
 
