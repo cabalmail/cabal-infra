@@ -103,6 +103,17 @@ targets:
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
+        # App-private drag type for dragging messages onto sidebar folders
+        # (see Cabalmail/Views/MessageDrag.swift). Declaring it as an
+        # exported type lets Launch Services recognize the identifier so the
+        # runtime doesn't warn; `.ownProcess` visibility on the item provider
+        # keeps the drag from ever leaving the app, so it only needs to
+        # conform to public.data.
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: com.cabalmail.message-move
+            UTTypeDescription: Cabalmail message reference
+            UTTypeConformsTo:
+              - public.data
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.cabalmail.Cabalmail
@@ -158,6 +169,7 @@ targets:
       - path: Cabalmail/AppState.swift
       - path: Cabalmail/AppStateCompose.swift
       - path: Cabalmail/AppStateCounts.swift
+      - path: Cabalmail/AppStateDrag.swift
       - path: Cabalmail/AppStateSignals.swift
       - path: Cabalmail/Views
       - path: Cabalmail/ViewModels
@@ -202,6 +214,13 @@ targets:
         # build settings.
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        # Mirror of the iOS target's app-private message-move drag type. See
+        # the Cabalmail target's matching block.
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: com.cabalmail.message-move
+            UTTypeDescription: Cabalmail message reference
+            UTTypeConformsTo:
+              - public.data
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.cabalmail.CabalmailMac

@@ -12,6 +12,19 @@ import CabalmailKit
 //   - `filteredEnvelopes` — case-insensitive `To`/`Cc` substring filter
 //     applied above the list when an address filter is active.
 extension MessageListView {
+    /// True on layouts where the sidebar and the message list are visible at
+    /// once (iPad regular width, macOS, visionOS) - the only place a message-
+    /// to-folder drag makes sense. macOS has no size class and is always
+    /// wide; everywhere else reads the environment size class set on the
+    /// main struct.
+    var isWideLayout: Bool {
+        #if os(macOS)
+        return true
+        #else
+        return horizontalSizeClass == .regular
+        #endif
+    }
+
     @ViewBuilder
     func row(
         for envelope: Envelope,
@@ -20,44 +33,88 @@ extension MessageListView {
     ) -> some View {
         let bulkMode = model.bulkMode
         let isChecked = model.selectedUIDs.contains(envelope.uid)
-        Group {
-            if bulkMode {
-                // No .tag() while in bulk mode — the list's selection
-                // binding drives the detail pane, and we don't want a
-                // checkbox tap to also pop the reader.
-                Button {
-                    model.toggleSelection(envelope)
-                } label: {
-                    MessageRow(envelope: envelope, isSelected: isChecked, isChecked: isChecked, bulkMode: true)
+        let items = dragItems(for: envelope, model: model)
+        withMessageDrag(items: items, subject: envelope.subject) {
+            Group {
+                if bulkMode {
+                    // No .tag() while in bulk mode — the list's selection
+                    // binding drives the detail pane, and we don't want a
+                    // checkbox tap to also pop the reader.
+                    Button {
+                        model.toggleSelection(envelope)
+                    } label: {
+                        MessageRow(envelope: envelope, isSelected: isChecked, isChecked: isChecked, bulkMode: true)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    MessageRow(envelope: envelope, isSelected: isSelected, isChecked: false, bulkMode: false)
+                        .tag(envelope)
                 }
-                .buttonStyle(.plain)
-            } else {
-                MessageRow(envelope: envelope, isSelected: isSelected, isChecked: false, bulkMode: false)
-                    .tag(envelope)
+            }
+            #if os(visionOS)
+            .contentShape(Rectangle())
+            .hoverEffect(.highlight)
+            #endif
+            .swipeActions(edge: .trailing) {
+                Button(role: .destructive) {
+                    Task { await model.dispose(envelope) }
+                } label: {
+                    disposeActionLabel(for: model.disposeAction)
+                }
+            }
+            .swipeActions(edge: .leading) {
+                Button {
+                    Task { await model.toggleSeen(envelope) }
+                } label: {
+                    markReadLabel(for: envelope)
+                }
+                .tint(.blue)
+            }
+            .contextMenu { rowContextMenu(for: envelope, model: model) }
+            .task {
+                await model.loadMoreIfNeeded(currentItem: envelope)
             }
         }
-        #if os(visionOS)
-        .contentShape(Rectangle())
-        .hoverEffect(.highlight)
-        #endif
-        .swipeActions(edge: .trailing) {
-            Button(role: .destructive) {
-                Task { await model.dispose(envelope) }
-            } label: {
-                disposeActionLabel(for: model.disposeAction)
-            }
+    }
+
+    /// The drag payload for a row. During multi-select, dragging any selected
+    /// row carries the whole selection; dragging a row that isn't part of the
+    /// selection (or any row in normal mode) carries just that message -
+    /// matching Finder / Mail, where grabbing an unselected item drags only
+    /// it. Each item is tagged with its owning mailbox via
+    /// `sourceFolder(for:)` so a cross-folder search selection still routes
+    /// every UID back to the right source folder on drop.
+    private func dragItems(for envelope: Envelope, model: MessageListViewModel) -> [MessageDragItem] {
+        if model.bulkMode, model.selectedUIDs.contains(envelope.uid) {
+            return model.envelopes
+                .filter { model.selectedUIDs.contains($0.uid) }
+                .map { MessageDragItem(uid: $0.uid, sourceFolder: model.sourceFolder(for: $0)) }
         }
-        .swipeActions(edge: .leading) {
-            Button {
-                Task { await model.toggleSeen(envelope) }
-            } label: {
-                markReadLabel(for: envelope)
-            }
-            .tint(.blue)
-        }
-        .contextMenu { rowContextMenu(for: envelope, model: model) }
-        .task {
-            await model.loadMoreIfNeeded(currentItem: envelope)
+        return [MessageDragItem(uid: envelope.uid, sourceFolder: model.sourceFolder(for: envelope))]
+    }
+
+    /// Wraps a row in `.onDrag` on wide layouts so it can be dragged onto a
+    /// sidebar folder. On compact iPhone the modifier is skipped entirely
+    /// (see `isWideLayout`): there's nowhere to drop, and the long-press drag
+    /// would fight the row's context menu. The payload is built on the main
+    /// actor in `row`; the `.onDrag` closure only flips the global drag flag
+    /// (which the sidebar watches to reveal folders) and returns the provider.
+    @ViewBuilder
+    private func withMessageDrag(
+        items: [MessageDragItem],
+        subject: String?,
+        @ViewBuilder content: () -> some View
+    ) -> some View {
+        if isWideLayout, !items.isEmpty {
+            content()
+                .onDrag {
+                    Task { @MainActor in appState.beginMessageDrag() }
+                    return MessageDragPayload(items: items).makeItemProvider()
+                } preview: {
+                    MessageDragPreview(count: items.count, subject: subject)
+                }
+        } else {
+            content()
         }
     }
 

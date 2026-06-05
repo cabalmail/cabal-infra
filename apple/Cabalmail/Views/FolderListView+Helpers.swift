@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import CabalmailKit
 
 /// Pure helpers split off from `FolderListView` so the main struct body
@@ -90,6 +91,61 @@ extension FolderListView {
               !folder.isSubscribed
         else { return }
         Task { await model.refreshFolderCount(path: path) }
+    }
+
+    /// Wrap a folder row in `.onDrop` so messages can be dragged onto it.
+    /// `\Noselect` containers pass `droppable: false` and get no drop target.
+    /// The `isTargeted` binding drives `dropTargetPath`, which `folderRow`
+    /// reads to draw the accent border on the folder under the drag.
+    @ViewBuilder
+    func withFolderDrop(
+        _ folder: Folder,
+        droppable: Bool,
+        @ViewBuilder content: () -> some View
+    ) -> some View {
+        if droppable {
+            content().onDrop(
+                of: [.cabalmailMessageMove],
+                isTargeted: Binding(
+                    get: { dropTargetPath == folder.path },
+                    set: { isIn in
+                        if isIn {
+                            dropTargetPath = folder.path
+                        } else if dropTargetPath == folder.path {
+                            dropTargetPath = nil
+                        }
+                    }
+                )
+            ) { providers in
+                handleMessageDrop(providers, into: folder)
+            }
+        } else {
+            content()
+        }
+    }
+
+    /// Decode the dropped payload and post a move request for the active
+    /// message list to perform. The provider's data loads on a background
+    /// queue, so the decode + AppState writes hop back to the main actor.
+    /// `endMessageDrag()` always runs (success or malformed payload) so the
+    /// sidebar flips back from folders to addresses once the drop lands.
+    func handleMessageDrop(_ providers: [NSItemProvider], into folder: Folder) -> Bool {
+        let identifier = UTType.cabalmailMessageMove.identifier
+        guard let provider = providers.first(where: {
+            $0.hasItemConformingToTypeIdentifier(identifier)
+        }) else {
+            Task { @MainActor in appState.endMessageDrag() }
+            return false
+        }
+        provider.loadDataRepresentation(forTypeIdentifier: identifier) { data, _ in
+            Task { @MainActor in
+                defer { appState.endMessageDrag() }
+                guard let payload = MessageDragPayload.decode(data),
+                      !payload.items.isEmpty else { return }
+                appState.requestMove(items: payload.items, to: folder.path)
+            }
+        }
+        return true
     }
 
     func iconName(for folder: Folder) -> String {
