@@ -5,6 +5,99 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.4] - 2026-06-05
+
+### Added
+- Drag-and-drop of messages onto sidebar folders in the wide-screen Apple
+  clients (iPad regular width, macOS, visionOS). A message row can be dragged
+  straight onto any selectable folder in the sidebar to move it there; the
+  targeted folder shows an accent border while the drag hovers it. Multi-select
+  is supported - dragging any selected row carries the whole selection, while
+  dragging an unselected row (or any row in normal mode) carries just that
+  message. If the sidebar is showing Addresses when the drag starts, it
+  temporarily flips to Folders so there is somewhere to drop, then flips back to
+  Addresses on release. The move runs through the same optimistic-prune /
+  unread-count / cache-cleanup path as the existing bulk and "Move to folder..."
+  actions, and cross-folder search selections route each message back to its own
+  source mailbox. Compact iPhone is unaffected (the sidebar and message list
+  never share the screen there). The drag carries an app-private UTType that no
+  other app recognizes (a small {uid, sourceFolder} payload, never any message
+  body).
+
+### Security
+- Dropped the unused `NET_ADMIN` Linux capability from all three mail-tier ECS
+  task definitions (imap, smtp-in, smtp-out). The capability existed only so
+  fail2ban could manipulate iptables; fail2ban has been disabled since 0.7.0
+  and nothing else used it, so this shrinks the container escape surface with
+  no behaviour change. Phase 1 of
+  `docs/0.10.x/container-runtime-hardening-plan.md`.
+- Hardened the runtime posture of all three mail-tier containers (phase 2 of
+  the same plan): `cap_drop: ALL` with a minimal analyzed add-back set
+  (`NET_BIND_SERVICE`, `SETUID`, `SETGID`, `CHOWN`, `DAC_OVERRIDE`, `FOWNER`,
+  `KILL`, plus `SYS_CHROOT` on the dovecot tiers imap and smtp-out),
+  `no-new-privileges`, and a real PID-1 init (`initProcessEnabled`). The
+  add-back set is the analyzed working estimate for these root-running
+  sendmail/dovecot/opendkim containers, which fork privilege-dropped children
+  and provision OS users at startup; the development soak tightens it before
+  stage/prod. Net reduction vs. the Docker default capability set: `NET_RAW`,
+  `MKNOD`, `AUDIT_WRITE`, `SETFCAP`, `SETPCAP`. `readOnlyRootFilesystem` on the
+  mail tiers is deliberately deferred (they regenerate `/etc/mail` +
+  `/etc/opendkim` at runtime); the monitoring tier gets it separately.
+- Tightened OpenDKIM's signing scope (phase 5 of the same plan): the generated
+  `TrustedHosts` is now loopback only (`127.0.0.1`, `::1`, `localhost`) instead
+  of `0.0.0.0/0`. opendkim signs only mail handed over by the local sendmail
+  through the loopback milter socket, so a signature now requires both the
+  network position (loopback) and a From-domain match in the SigningTable - not
+  either one alone.
+- Removed SMTP AUTH from the smtp-in inbound relay (the whole
+  `confAUTH_OPTIONS` / `TRUST_AUTH_MECH` / `confAUTH_MECHANISMS` stanza,
+  including the legacy DIGEST-MD5 and CRAM-MD5 mechanisms that RFC 6331
+  obsoleted). The inbound relay accepts mail for hosted domains and never
+  authenticates senders - submission auth is on smtp-out via Dovecot - so AUTH
+  was dead, weak surface. STARTTLS is unaffected.
+- Added sendmail resource and rate limits to all three mail tiers: a 50 MB
+  message-size cap (`confMAX_MESSAGE_SIZE`, the user-visible outbound limit,
+  kept in step across tiers so a relayed message is not accepted upstream then
+  bounced downstream for size), a daemon-children cap
+  (`confMAX_DAEMON_CHILDREN = 40`), a single-source connection throttle
+  (`confCONNECTION_RATE_THROTTLE = 5`), and `restrictmailq` in
+  `confPRIVACY_FLAGS` so non-trusted users can no longer inspect the mail queue.
+
+### Removed
+- fail2ban is gone from the mail-tier images entirely: the `dnf install`
+  package on all three tiers, the commented-out `[program:fail2ban]`
+  supervisord blocks, and the entrypoint `/etc/fail2ban/jail.local` stanza. It
+  had been commented out of supervisord (and thus never actually running) since
+  0.7.0. Host-level login-rate limiting moves to Dovecot's own knobs (a later
+  phase of the hardening plan) and, prospectively, the NLB/WAF. Operator
+  runbooks and `docs/monitoring.md` are updated to match.
+
+### Changed
+- The imap and smtp-in ECS task definitions now carry `replace_triggered_by`
+  revision markers (mirroring the existing smtp-out marker). Without them,
+  `lifecycle.ignore_changes = [container_definitions]` silently held back
+  deliberate task-def edits, so the NET_ADMIN drop above would never have
+  reached a running task. Forcing the imap replacement also reconciles its
+  container to the in-config `memory = 1024` cap, which had been committed with
+  the Dovecot vsz_limit bump but never deployed under the prior ignore.
+
+### Fixed
+- `generate-config.sh` now writes every generated sendmail/OpenDKIM map
+  atomically (stage to a temp file in the same directory, `fsync`,
+  `os.replace`). A SIGHUP, restart, or a sendmail `makemap` that lands mid-write
+  no longer reads a partially written map. Phase 5 of
+  `docs/0.10.x/container-runtime-hardening-plan.md`.
+- `app.yml`'s `docker` job again lists `setup` in `needs`, not just the
+  `approval` gate introduced in 0.10.3. The job's matrix reads
+  `fromJson(needs.setup.outputs.tiers)`, and a job's `strategy.matrix` can only
+  resolve `needs.<job>.outputs` for jobs named directly in its own `needs` -
+  `approval` (which needs setup) does not re-export setup's outputs - so the
+  matrix got empty input and errored at strategy evaluation. The first push to
+  touch `docker/**` after the gate landed surfaced it. The other five area jobs
+  read `needs.setup.outputs.*` only from `if`, which resolved fine via the
+  transitive dependency and kept deploying normally; they now list `setup`
+  directly too for correctness and to guard against the same matrix foot-gun.
+
 ## [0.10.3] - 2026-06-01
 
 ### Changed

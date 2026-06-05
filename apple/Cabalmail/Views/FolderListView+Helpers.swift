@@ -92,6 +92,44 @@ extension FolderListView {
         Task { await model.refreshFolderCount(path: path) }
     }
 
+    /// Wrap a folder row in `.dropDestination` so messages can be dragged onto
+    /// it. `\Noselect` containers pass `droppable: false` and get no drop
+    /// target. The `isTargeted` callback drives `dropTargetPath`, which
+    /// `folderRow` reads to draw the accent border on the folder under the
+    /// drag.
+    @ViewBuilder
+    func withFolderDrop(
+        _ folder: Folder,
+        droppable: Bool,
+        @ViewBuilder content: () -> some View
+    ) -> some View {
+        if droppable {
+            content().dropDestination(for: MessageDragPayload.self) { payloads, _ in
+                handleMessageDrop(payloads, into: folder)
+            } isTargeted: { isIn in
+                if isIn {
+                    dropTargetPath = folder.path
+                } else if dropTargetPath == folder.path {
+                    dropTargetPath = nil
+                }
+            }
+        } else {
+            content()
+        }
+    }
+
+    /// Post a move request for the active message list to perform. SwiftUI
+    /// decodes the `Transferable` payload before calling this, so we just
+    /// flatten the items and route them. `endMessageDrag()` always runs so
+    /// the sidebar flips back from folders to addresses once the drop lands.
+    func handleMessageDrop(_ payloads: [MessageDragPayload], into folder: Folder) -> Bool {
+        defer { appState.endMessageDrag() }
+        let items = payloads.flatMap { $0.items }
+        guard !items.isEmpty else { return false }
+        appState.requestMove(items: items, to: folder.path)
+        return true
+    }
+
     func iconName(for folder: Folder) -> String {
         switch folder.path {
         case "INBOX":   return "tray"

@@ -82,6 +82,23 @@ final class AppState {
     var lastEnvelopeFlagChange: EnvelopeFlagChange?
     private var flagChangeTick = 0
 
+    /// True while a message-row drag is in flight on a wide-screen layout.
+    /// `MailRootView`'s sidebar watches this to temporarily reveal the
+    /// folder list as a drop target when the user is on the Addresses tab,
+    /// flipping back when the drag ends. Driven through `beginMessageDrag()`
+    /// / `endMessageDrag()` in `AppStateDrag.swift`; internal (not
+    /// `private(set)`) so those same-type extension methods can write it.
+    var messageDragInProgress = false
+
+    /// Latest drag-and-drop move. A folder row's drop handler posts this with
+    /// the destination path; the active `MessageListView` observes it via
+    /// `.onChange` and routes the payload through its view model so the move
+    /// shares the optimistic-prune / unread-count / cache-cleanup path with
+    /// the menu-driven and bulk moves.
+    var pendingMoveRequest: MessageMoveRequest?
+    // Internal so `requestMove` in `AppStateDrag.swift` can bump it.
+    var moveRequestTick = 0
+
     /// Authoritative Inbox unread count, refreshed by the badge poller.
     /// Exposed as an observable so future views (e.g. a sidebar indicator)
     /// can mirror what shows on the dock/home-screen badge.

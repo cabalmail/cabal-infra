@@ -39,6 +39,11 @@ struct FolderListView: View {
     // newlines so this is unambiguous.
     @AppStorage("cabalmail.folder.collapsedPaths")
     var collapsedPathsRaw: String = ""
+    // Folder path currently under a message drag, or nil. Drives the drop-
+    // target border in `folderRow` and is toggled by each selectable folder's
+    // `.onDrop(isTargeted:)` binding. Non-private so the `+Helpers` extension
+    // that builds the drop modifier and handler can reach it.
+    @State var dropTargetPath: String?
 
     var body: some View {
         let collapsedSet = decodeCollapsed()
@@ -149,6 +154,11 @@ struct FolderListView: View {
         depth: Int,
         collapsed: Set<String>
     ) -> some View {
+        // `\Noselect` containers can't hold messages, so they're not drop
+        // targets (mirrors MoveToFolderSheet's filter). Selectable folders
+        // get an `.onDrop` + an accent border while a drag hovers them.
+        let isDroppable = !folder.attributes.contains("\\Noselect")
+        withFolderDrop(folder, droppable: isDroppable) {
         row(
             for: folder,
             badge: countBadgeText(
@@ -160,6 +170,12 @@ struct FolderListView: View {
             isCollapsed: collapsed.contains(folder.path)
         )
             .tag(folder)
+            .overlay {
+                if dropTargetPath == folder.path {
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.accentColor, lineWidth: 2)
+                }
+            }
             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                 Button {
                     Task { await model.toggleSubscription(folder) }
@@ -181,6 +197,7 @@ struct FolderListView: View {
                     )
                 }
             }
+        }
     }
 
     @ViewBuilder

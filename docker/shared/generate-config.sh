@@ -203,9 +203,17 @@ def gen_dkim_signingtable():
 
 # ── Write files based on tier ─────────────────────────────────
 def write(path, content):
+    # Atomic write: stage to a temp file in the same directory, fsync,
+    # then os.replace (atomic on POSIX). A SIGHUP, restart, or a sendmail
+    # makemap that lands mid-write never sees a partially written map.
+    # Phase 5 of docs/0.10.x/container-runtime-hardening-plan.md.
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w") as f:
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
         f.write(content)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, path)
     print(f"  Generated {path}")
 
 if tier == "imap":
@@ -227,7 +235,14 @@ elif tier == "smtp-out":
     write("/etc/mail/mailertable",      gen_mailertable())
     write("/etc/opendkim/KeyTable",     gen_dkim_keytable())
     write("/etc/opendkim/SigningTable",  gen_dkim_signingtable())
-    write("/etc/opendkim/TrustedHosts", "0.0.0.0/0\n")
+    # Sign only mail handed over by the local sendmail via the loopback
+    # milter socket (inet:8891@localhost). The previous 0.0.0.0/0 made
+    # opendkim treat every source as internal, so any host that reached
+    # the milter would get a signature for any From it could match in the
+    # SigningTable. Loopback-only closes that: now both the network
+    # position (here) and the From-domain match (SigningTable) must hold.
+    # Phase 5 of docs/0.10.x/container-runtime-hardening-plan.md.
+    write("/etc/opendkim/TrustedHosts", "127.0.0.1\n::1\nlocalhost\n")
 
 PYEOF
 

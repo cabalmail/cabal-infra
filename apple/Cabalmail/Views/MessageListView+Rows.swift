@@ -12,6 +12,19 @@ import CabalmailKit
 //   - `filteredEnvelopes` — case-insensitive `To`/`Cc` substring filter
 //     applied above the list when an address filter is active.
 extension MessageListView {
+    /// True on layouts where the sidebar and the message list are visible at
+    /// once (iPad regular width, macOS, visionOS) - the only place a message-
+    /// to-folder drag makes sense. macOS has no size class and is always
+    /// wide; everywhere else reads the environment size class set on the
+    /// main struct.
+    var isWideLayout: Bool {
+        #if os(macOS)
+        return true
+        #else
+        return horizontalSizeClass == .regular
+        #endif
+    }
+
     @ViewBuilder
     func row(
         for envelope: Envelope,
@@ -20,45 +33,102 @@ extension MessageListView {
     ) -> some View {
         let bulkMode = model.bulkMode
         let isChecked = model.selectedUIDs.contains(envelope.uid)
-        Group {
-            if bulkMode {
-                // No .tag() while in bulk mode — the list's selection
-                // binding drives the detail pane, and we don't want a
-                // checkbox tap to also pop the reader.
-                Button {
-                    model.toggleSelection(envelope)
-                } label: {
-                    MessageRow(envelope: envelope, isSelected: isChecked, isChecked: isChecked, bulkMode: true)
+        let items = dragItems(for: envelope, model: model)
+        withMessageDrag(items: items, subject: envelope.subject) {
+            Group {
+                if bulkMode {
+                    // No .tag() while in bulk mode — the list's selection
+                    // binding drives the detail pane, and we don't want a
+                    // checkbox tap to also pop the reader.
+                    Button {
+                        model.toggleSelection(envelope)
+                    } label: {
+                        MessageRow(envelope: envelope, isSelected: isChecked, isChecked: isChecked, bulkMode: true)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    MessageRow(envelope: envelope, isSelected: isSelected, isChecked: false, bulkMode: false)
+                        .tag(envelope)
                 }
-                .buttonStyle(.plain)
-            } else {
-                MessageRow(envelope: envelope, isSelected: isSelected, isChecked: false, bulkMode: false)
-                    .tag(envelope)
+            }
+            #if os(visionOS)
+            .contentShape(Rectangle())
+            .hoverEffect(.highlight)
+            #endif
+            .swipeActions(edge: .trailing) {
+                Button(role: .destructive) {
+                    Task { await model.dispose(envelope) }
+                } label: {
+                    disposeActionLabel(for: model.disposeAction)
+                }
+            }
+            .swipeActions(edge: .leading) {
+                Button {
+                    Task { await model.toggleSeen(envelope) }
+                } label: {
+                    markReadLabel(for: envelope)
+                }
+                .tint(.blue)
+            }
+            .contextMenu { rowContextMenu(for: envelope, model: model) }
+            .task {
+                await model.loadMoreIfNeeded(currentItem: envelope)
             }
         }
-        #if os(visionOS)
-        .contentShape(Rectangle())
-        .hoverEffect(.highlight)
-        #endif
-        .swipeActions(edge: .trailing) {
-            Button(role: .destructive) {
-                Task { await model.dispose(envelope) }
-            } label: {
-                disposeActionLabel(for: model.disposeAction)
-            }
+    }
+
+    /// The drag payload for a row. During multi-select, dragging any selected
+    /// row carries the whole selection; dragging a row that isn't part of the
+    /// selection (or any row in normal mode) carries just that message -
+    /// matching Finder / Mail, where grabbing an unselected item drags only
+    /// it. Each item is tagged with its owning mailbox via
+    /// `sourceFolder(for:)` so a cross-folder search selection still routes
+    /// every UID back to the right source folder on drop.
+    private func dragItems(for envelope: Envelope, model: MessageListViewModel) -> [MessageDragItem] {
+        if model.bulkMode, model.selectedUIDs.contains(envelope.uid) {
+            return model.envelopes
+                .filter { model.selectedUIDs.contains($0.uid) }
+                .map { MessageDragItem(uid: $0.uid, sourceFolder: model.sourceFolder(for: $0)) }
         }
-        .swipeActions(edge: .leading) {
-            Button {
-                Task { await model.toggleSeen(envelope) }
-            } label: {
-                markReadLabel(for: envelope)
-            }
-            .tint(.blue)
+        return [MessageDragItem(uid: envelope.uid, sourceFolder: model.sourceFolder(for: envelope))]
+    }
+
+    /// Wraps a row in `.draggable` on wide layouts so it can be dragged onto a
+    /// sidebar folder. On compact iPhone the modifier is skipped entirely
+    /// (see `isWideLayout`): there's nowhere to drop, and the long-press drag
+    /// would fight the row's context menu.
+    ///
+    /// `.draggable` (not `.onDrag`) so a plain click still selects the row -
+    /// `.onDrag` on a `List(selection:)` row swallows clicks on the rendered
+    /// content on macOS. `.onDrag`'s drag-start closure was where the sidebar
+    /// got flipped to reveal folders; `.draggable` has no such hook, so the
+    /// flip rides two drag-start signals for robustness: the payload
+    /// autoclosure (evaluated when the drag lifts) and the preview's
+    /// `.onAppear` (fired when the drag image is built). `beginMessageDrag()`
+    /// is idempotent, so firing both is harmless.
+    @ViewBuilder
+    private func withMessageDrag(
+        items: [MessageDragItem],
+        subject: String?,
+        @ViewBuilder content: () -> some View
+    ) -> some View {
+        if isWideLayout, !items.isEmpty {
+            content()
+                .draggable(dragPayload(items)) {
+                    MessageDragPreview(count: items.count, subject: subject)
+                        .onAppear { appState.beginMessageDrag() }
+                }
+        } else {
+            content()
         }
-        .contextMenu { rowContextMenu(for: envelope, model: model) }
-        .task {
-            await model.loadMoreIfNeeded(currentItem: envelope)
-        }
+    }
+
+    /// Builds the drag payload and flips the sidebar's drag flag. Called from
+    /// `.draggable`'s `@autoclosure` payload, so the side effect lands exactly
+    /// when the drag begins.
+    private func dragPayload(_ items: [MessageDragItem]) -> MessageDragPayload {
+        appState.beginMessageDrag()
+        return MessageDragPayload(items: items)
     }
 
     @ViewBuilder

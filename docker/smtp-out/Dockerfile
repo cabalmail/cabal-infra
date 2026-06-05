@@ -6,7 +6,6 @@ RUN dnf install -y \
       sendmail-milter \
       dovecot \
       opendkim \
-      fail2ban \
       procmail \
       rsyslog \
       make \
