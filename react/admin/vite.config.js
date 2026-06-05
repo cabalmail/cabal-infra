@@ -55,9 +55,7 @@ export default defineConfig({
     // and the default parallel worker pool was driving RSS into multi-GB
     // territory on this suite. Trades wall-clock for memory ceiling.
     pool: 'forks',
-    poolOptions: {
-      forks: { singleFork: true }
-    },
+    forks: { singleFork: true },
     server: {
       deps: {
         inline: [/@tiptap\/.*/]
