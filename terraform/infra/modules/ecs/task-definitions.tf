@@ -34,8 +34,23 @@ locals {
 #       (docs/0.10.x/container-runtime-hardening-plan.md phase 1)
 #   v2: runtime posture - cap drop=ALL + analyzed add set, no-new-privileges,
 #       initProcessEnabled (same plan, phase 2)
+#   v3: re-register from current config to drop a dangling HEALTHCHECK_PING_URL
+#       secret left baked in from when monitoring was enabled. Turning monitoring
+#       off deleted the SSM param /cabal/healthcheck_ping_ecs_reconfigure, but
+#       ignore_changes kept the now-broken secret reference on the running
+#       task def, so the first image roll after that (which clones the live
+#       task def) produced a revision the ECS agent could not start - it failed
+#       fetching the missing parameter.
+#
+# The +hc suffix keys this marker on whether the healthcheck secret is present
+# (var.healthcheck_ping_param != "", i.e. var.monitoring in the parent stack),
+# the same condition that gates local.healthcheck_secrets below. This mirrors
+# the smtp_out +sinkhole hook: flipping monitoring in either direction now
+# forces a task-def replacement that adds or drops the HEALTHCHECK_PING_URL
+# secret in step with the SSM param that backs it, so the secret set can never
+# again drift from the parameters that exist.
 resource "terraform_data" "imap_taskdef_revision_marker" {
-  input = "imap-taskdef-v2"
+  input = var.healthcheck_ping_param != "" ? "imap-taskdef-v3+hc" : "imap-taskdef-v3"
 }
 
 resource "aws_ecs_task_definition" "imap" {
@@ -166,8 +181,12 @@ resource "aws_ecs_task_definition" "imap" {
 #   v1: NET_ADMIN capability drop
 #       (docs/0.10.x/container-runtime-hardening-plan.md phase 1)
 #   v2: runtime posture (cap drop=ALL + adds, no-new-privileges, init) - phase 2
+#   v3: re-register from current config to drop the dangling HEALTHCHECK_PING_URL
+#       secret stranded by the monitoring removal (see the imap marker for the
+#       full story). The +hc suffix keys the marker on the healthcheck secret's
+#       presence so a future monitoring flip can't strand it again.
 resource "terraform_data" "smtp_in_taskdef_revision_marker" {
-  input = "smtp-in-taskdef-v2"
+  input = var.healthcheck_ping_param != "" ? "smtp-in-taskdef-v3+hc" : "smtp-in-taskdef-v3"
 }
 
 resource "aws_ecs_task_definition" "smtp_in" {
@@ -276,8 +295,14 @@ resource "terraform_data" "smtp_out_taskdef_revision_marker" {
   #   v2: NET_ADMIN capability drop
   #       (docs/0.10.x/container-runtime-hardening-plan.md phase 1)
   #   v3: runtime posture (cap drop=ALL + adds, no-new-privileges, init) - phase 2
-  # The +sinkhole suffix is the var.sinkhole hook described above.
-  input = var.sinkhole ? "smtp-queue-mount-v3+sinkhole" : "smtp-queue-mount-v3"
+  # The +sinkhole suffix is the var.sinkhole hook described above; the +hc
+  # suffix is the analogous var.healthcheck_ping_param hook (see the imap
+  # marker) that keeps the HEALTHCHECK_PING_URL secret in step with whether
+  # monitoring is enabled. smtp-out was already re-registered clean at v3 by
+  # the queue/sinkhole work after monitoring was removed, so appending +hc is a
+  # no-op for the current (monitoring-off) state and only future-proofs this
+  # tier against a re-enable.
+  input = "${var.sinkhole ? "smtp-queue-mount-v3+sinkhole" : "smtp-queue-mount-v3"}${var.healthcheck_ping_param != "" ? "+hc" : ""}"
 }
 
 resource "aws_ecs_task_definition" "smtp_out" {
