@@ -72,6 +72,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `MessageDetailViewModel`. `type_body_length` / `function_body_length` are
   left at their defaults, so the splits that exist to satisfy those rules are
   unchanged.
+- The `app.yml` deploy-gate `approval` job now lists which app components
+  (docker, lambda_api, lambda_counter, lambda_certbot, react, front_door) are
+  flagged for build/deploy, instead of just echoing "Approved". The list is
+  printed to the job log and written to the run's step summary so a gate
+  reviewer can see the blast radius before approving. It reads the same
+  per-area flags the `setup` job already resolves (dorny/paths-filter on push,
+  the `areas` input on workflow_dispatch).
 
 ## [0.10.5] - 2026-06-05
 

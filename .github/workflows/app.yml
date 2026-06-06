@@ -198,8 +198,40 @@ jobs:
     environment: gate-${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     runs-on: ubuntu-latest
     steps:
+    # Surface which area jobs are flagged for build/deploy so the gate
+    # reviewer can see the blast radius before approving. Reads the same
+    # per-area flags setup resolved (push: dorny/paths-filter;
+    # workflow_dispatch: the `areas` input). Written to both the log and
+    # the run's step summary.
     - name: approve
-      run: echo "Approved"
+      env:
+        DOCKER: ${{ needs.setup.outputs.docker }}
+        LAMBDA_API: ${{ needs.setup.outputs.lambda_api }}
+        LAMBDA_COUNTER: ${{ needs.setup.outputs.lambda_counter }}
+        LAMBDA_CERTBOT: ${{ needs.setup.outputs.lambda_certbot }}
+        REACT: ${{ needs.setup.outputs.react }}
+        FRONT_DOOR: ${{ needs.setup.outputs.front_door }}
+      run: |
+        set -euo pipefail
+        FLAGGED=()
+        for pair in "docker:${DOCKER}" "lambda_api:${LAMBDA_API}" "lambda_counter:${LAMBDA_COUNTER}" "lambda_certbot:${LAMBDA_CERTBOT}" "react:${REACT}" "front_door:${FRONT_DOOR}"; do
+          name="${pair%%:*}"
+          val="${pair#*:}"
+          if [ "${val}" = "true" ]; then
+            FLAGGED+=("${name}")
+          fi
+        done
+        echo "### Components flagged for build/deploy" >> "$GITHUB_STEP_SUMMARY"
+        if [ "${#FLAGGED[@]}" -eq 0 ]; then
+          echo "No components flagged for build/deploy."
+          echo "_None._" >> "$GITHUB_STEP_SUMMARY"
+        else
+          echo "Components flagged for build/deploy: ${FLAGGED[*]}"
+          for c in "${FLAGGED[@]}"; do
+            echo "- ${c}" >> "$GITHUB_STEP_SUMMARY"
+          done
+        fi
+        echo "Approved"
 
   docker:
     # The matrix below reads `fromJson(needs.setup.outputs.tiers)`, and a
