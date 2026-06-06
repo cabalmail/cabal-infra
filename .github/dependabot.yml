@@ -1,0 +1,49 @@
+# Dependabot version updates.
+#
+# Scope: the Docker base images only. Every Dockerfile FROM line is pinned
+# to a tag + SHA256 digest (Phase 3 of
+# docs/0.10.x/container-runtime-hardening-plan.md); this config keeps those
+# digests current by opening PRs when an upstream tag advances or its digest
+# is republished (e.g. a base-image security rebuild).
+#
+# PRs target `stage`, not `main`, because that is the repo's integration
+# branch: changes land on stage, get validated, then a human promotes to
+# main (see CLAUDE.md "Branches and environments"). app.yml only rebuilds a
+# tier when its docker/** path changes, so a digest bump deploys the same
+# way a hand edit would.
+#
+# Security *alerts* (the dependency-graph CVE feed consumed by
+# .github/workflows/dependabot.yml) are independent of this file and need no
+# config. This file adds the version-update PRs.
+version: 2
+updates:
+  - package-ecosystem: "docker"
+    directories:
+      - "/docker/*"
+      - "/lambda/certbot-renewal"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    target-branch: "stage"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "deps(docker)"
+    # Two PRs at most per run: the bases of the tiers that actually run
+    # (amazonlinux backs imap/smtp-in/smtp-out/sinkhole; the Lambda Python
+    # base backs certbot-renewal), kept separate from the dormant
+    # monitoring images (TF_VAR_MONITORING is false in every environment)
+    # so a base-image security bump is never buried under cosmetic
+    # monitoring churn.
+    groups:
+      mail-tier-base:
+        patterns:
+          - "amazonlinux"
+          - "public.ecr.aws/lambda/python"
+      monitoring-images:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "amazonlinux"
+          - "public.ecr.aws/lambda/python"

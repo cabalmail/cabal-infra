@@ -192,6 +192,14 @@ Three pieces:
 
 Nightly Trivy scan against the current digest-pinned images, results to GitHub Code Scanning (same surface as the Trivy IaC scan from [`iac-quality-gates-plan.md`](./iac-quality-gates-plan.md)).
 
+#### Phase 3 as implemented (0.10.6)
+
+Reconciled against the codebase as it actually stood, Phase 3 shipped three of the four pieces above; piece 2 was dropped.
+
+- **Piece 1 (digest pinning) — shipped.** Every Dockerfile `FROM` is pinned to `tag@sha256:<digest>`: the three mail tiers and the sinkhole fixture on `amazonlinux:2023`, certbot-renewal on the Lambda Python base, and the monitoring images on their upstreams (the three ARG-driven monitoring FROMs — uptime-kuma, ntfy, healthchecks — were flattened to literal `tag@digest`). Automated bumps come from a new [`.github/dependabot.yml`](../../.github/dependabot.yml) scoped to the Docker ecosystem — Dependabot, not Renovate, since the repo already runs Dependabot's alert feed — with PRs targeting `stage`.
+- **Piece 3 (scan-on-push + immutable tags) — already shipped.** [`terraform/infra/modules/ecr/main.tf`](../../terraform/infra/modules/ecr/main.tf) already sets `scan_on_push = true` and `image_tag_mutability = "IMMUTABLE"` on every repo (it landed with the 0.9.x build-deploy simplification). What was missing was *surfacing* the findings: `app.yml`'s docker job now reads the scan result and warns on HIGH/CRITICAL ([`.github/scripts/ecr-scan-report.sh`](../../.github/scripts/ecr-scan-report.sh)), and a nightly [`.github/workflows/image-scan.yml`](../../.github/workflows/image-scan.yml) runs Trivy against the running prod images and uploads SARIF to Code scanning.
+- **Piece 2 (digest references in the ECS task definitions) — dropped.** Its premise ("re-tagging a published image to a different SHA is permitted") is false now that `image_tag_mutability = IMMUTABLE` is in force: each `cabal-<tier>:sha-<8>` tag is already permanently bound to one digest, so a digest reference in the task def buys no additional integrity. Against that ~zero benefit, the cost is real — the deploy path stores one shared git-sha tag in `/cabal/deployed_image_tag` for all tiers ([`locals.tf`](../../terraform/infra/modules/ecs/locals.tf) `tier_image`), and digests are per-image, so the change would force a per-tier SSM refactor of `refresh-ssm-from-running.sh`, `deploy-ecs-service.sh`, and the task-def wiring, a path that has already caused production incidents. If task-def digest references ever become a hard requirement, do it as part of moving to per-tier image parameters, not as a bolt-on.
+
 ### Phase 4 — Dovecot plaintext-off + login throttling
 
 Flip [`docker/imap/configs/dovecot/10-auth.conf:1`](../../docker/imap/configs/dovecot/10-auth.conf) and [`docker/smtp-out/configs/dovecot/10-auth.conf:1`](../../docker/smtp-out/configs/dovecot/10-auth.conf) to `disable_plaintext_auth = yes`. Add to both configs:
