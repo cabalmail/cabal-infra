@@ -38,6 +38,10 @@ extension MessageListView {
         // One-way, so the existing `.onChange(of: selection)` cross-folder
         // routing keeps working unchanged.
         .onChange(of: model.selectedUIDs) { _, uids in
+            // A fresh single selection (plain click) becomes the anchor for a
+            // following shift-click range; range/toggle clicks set the anchor
+            // themselves. Harmless on macOS, which uses its own native anchor.
+            if uids.count == 1 { model.selectionAnchor = uids.first }
             selection = uids.count == 1
                 ? model.envelopes.first { $0.uid == uids.first }
                 : nil
@@ -67,7 +71,12 @@ extension MessageListView {
             ProgressView("Fetching messages…")
         }
         ForEach(visible) { envelope in
-            row(for: envelope, model: model, isSelected: rowIsSelected(envelope, model: model))
+            row(
+                for: envelope,
+                model: model,
+                isSelected: rowIsSelected(envelope, model: model),
+                orderedVisible: visible
+            )
         }
         if model.isLoadingMore {
             ProgressView()

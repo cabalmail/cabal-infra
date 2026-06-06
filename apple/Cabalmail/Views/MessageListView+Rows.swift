@@ -29,7 +29,8 @@ extension MessageListView {
     func row(
         for envelope: Envelope,
         model: MessageListViewModel,
-        isSelected: Bool
+        isSelected: Bool,
+        orderedVisible: [Envelope]
     ) -> some View {
         let bulkMode = model.bulkMode
         let isChecked = model.selectedUIDs.contains(envelope.uid)
@@ -37,14 +38,12 @@ extension MessageListView {
         withMessageDrag(items: items, subject: envelope.subject) {
             Group {
                 if isWideLayout {
-                    // Native multi-select list: tag by UID so the list's
-                    // `Set<UInt32>` selection binding owns selection and the
-                    // system draws the highlight (and selection circles in iPad
-                    // edit mode). No checkbox Button - that's the compact path.
-                    // `isSelected` here is set membership, used only to keep the
-                    // unread dot legible against the selection highlight.
-                    MessageRow(envelope: envelope, isSelected: isSelected, isChecked: false, bulkMode: false)
-                        .tag(envelope.uid)
+                    wideRow(
+                        for: envelope,
+                        isSelected: isSelected,
+                        model: model,
+                        orderedVisible: orderedVisible
+                    )
                 } else if bulkMode {
                     // No .tag() while in bulk mode — the list's selection
                     // binding drives the detail pane, and we don't want a
@@ -84,6 +83,35 @@ extension MessageListView {
                 await model.loadMoreIfNeeded(currentItem: envelope)
             }
         }
+    }
+
+    /// The wide-layout (native multi-select) row: a UID-tagged `MessageRow` so
+    /// the list's `Set<UInt32>` binding owns selection and the system draws the
+    /// highlight (and selection circles in iPad edit mode). `isSelected` is set
+    /// membership, used only to keep the unread dot legible. On iOS it also
+    /// carries the hardware-keyboard shift / command-click handling SwiftUI
+    /// doesn't wire into the native list there; plain taps fall through to the
+    /// list. Kept beside `MessageRow` (which is file-private) and out of
+    /// `row(for:)` so that function stays under SwiftLint's body-length cap.
+    @ViewBuilder
+    func wideRow(
+        for envelope: Envelope,
+        isSelected: Bool,
+        model: MessageListViewModel,
+        orderedVisible: [Envelope]
+    ) -> some View {
+        MessageRow(envelope: envelope, isSelected: isSelected, isChecked: false, bulkMode: false)
+            .tag(envelope.uid)
+            #if os(iOS)
+            .gesture(ModifierClickGesture { kind in
+                switch kind {
+                case .toggle:
+                    applyToggleSelection(envelope, model: model)
+                case .range:
+                    applyRangeSelection(to: envelope, model: model, ordered: orderedVisible)
+                }
+            })
+            #endif
     }
 
     /// The drag payload for a row. When a multi-selection exists and this row
