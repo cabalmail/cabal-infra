@@ -59,6 +59,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   are always available. Compact iPhone is unchanged - single tap to open, plus
   the existing Select/checkbox flow.
 
+### Changed
+- Retuned the Apple client's SwiftLint `file_length` rule from its inherited
+  default (warning at 400) to warning 500 / error 800 with
+  `ignore_comment_only_lines` (`apple/.swiftlint.yml`). Under CI's
+  `swiftlint --strict` the 400-line default was a hard build failure, which had
+  bred a layer of extension-splits whose only purpose was to stay under the
+  cap. Folded the three such `AppState` splits (`AppStateCounts`,
+  `AppStateCompose`, `AppStateDrag` - tiny method-buckets whose backing storage
+  already lived on `AppState`) back into `AppState.swift` as same-file
+  extensions, and dropped the `// swiftlint:disable file_length` banner from
+  `MessageDetailViewModel`. `type_body_length` / `function_body_length` are
+  left at their defaults, so the splits that exist to satisfy those rules are
+  unchanged.
+
 ## [0.10.5] - 2026-06-05
 
 ### Fixed
