@@ -1,0 +1,12 @@
+# sendmail service switch (smtp-in).
+#
+# Force sendmail to consult /etc/hosts ("files") before DNS when
+# canonicalizing relay hosts, so the IMAP pin written by hosts-pin.sh is
+# honored. Without this, sendmail can go straight to the VPC resolver; a
+# Cloud Map NXDOMAIN during an IMAP deploy then becomes a permanent 5xx
+# "Host unknown" bounce instead of a queueable 4xx TCP failure.
+#
+# Only "hosts" is listed; sendmail uses its compiled defaults for any
+# service not named here (aliases, passwd, etc.), so alias and local
+# user resolution are unchanged.
+hosts files dns

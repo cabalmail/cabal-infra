@@ -6,6 +6,13 @@ define(`confPID_FILE', `/var/run/sendmail.pid')dnl
 define(`confDEF_USER_ID',``8:12'')
 define(`ALIAS_FILE',`/etc/aliases')dnl
 define(`confPRIVACY_FLAGS', `authwarnings,needmailhelo,noexpn,novrfy,restrictmailq')dnl
+dnl Consult /etc/hosts (files) before DNS when canonicalizing relay
+dnl hosts, so the IMAP pin maintained by hosts-pin.sh is honored. Without
+dnl it sendmail can go straight to the VPC resolver and a Cloud Map
+dnl NXDOMAIN during an IMAP deploy becomes a permanent 5xx "Host unknown"
+dnl bounce instead of a queueable 4xx. Switch file shipped at
+dnl /etc/mail/service.switch by docker/smtp-in/Dockerfile.
+define(`confSERVICE_SWITCH_FILE', `/etc/mail/service.switch')dnl
 dnl Resource and rate limits (phase 5 of
 dnl docs/0.10.x/container-runtime-hardening-plan.md): cap message size at
 dnl 50 MB, bound concurrent daemon children, and throttle connection

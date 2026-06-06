@@ -80,6 +80,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   per-area flags the `setup` job already resolves (dorny/paths-filter on push,
   the `areas` input on workflow_dispatch).
 
+### Fixed
+- Inbound mail no longer 550-bounces with `Host unknown (Name server:
+  [imap.cabal.internal]: host not found)` when smtp-in cold-starts
+  during an IMAP outage. The 0.9.24 `/etc/hosts` pin
+  (`docker/shared/hosts-pin.sh`) only protected an already-running
+  smtp-in across an IMAP-only redeploy: if smtp-in itself was replaced
+  while the IMAP task was unregistered (e.g. a `docker/shared/*` change
+  rebuilds and rolls all three tiers at once), the `init` resolve
+  returned nothing, no pin was written, and every inbound message fell
+  through to DNS, hit a Cloud Map NXDOMAIN, and took a permanent 5xx.
+  `hosts-pin.sh` now writes an RFC 5737 TEST-NET sentinel
+  (`192.0.2.1`, overridable via `HOSTS_PIN_SENTINEL`) whenever it
+  cannot resolve and no prior pin exists, so the name always resolves
+  to something that TCP-fails into a queueable 4xx. The 30s daemon's
+  existing diff-and-overwrite replaces the sentinel (or a stale IP)
+  with the real address within one poll interval of IMAP becoming
+  resolvable again.
+- smtp-in's sendmail is now explicitly pointed at a
+  `/etc/mail/service.switch` (`hosts files dns`) via
+  `confSERVICE_SWITCH_FILE`, guaranteeing it consults `/etc/hosts`
+  before DNS. Previously the pin's effectiveness silently depended on
+  the stock resolver order; an out-of-the-box build that went straight
+  to the VPC resolver would have ignored the pin entirely. Shipped as a
+  static file (`docker/shared/service.switch`) copied in by
+  `docker/smtp-in/Dockerfile`.
+- `hosts-pin.sh` writes `/etc/hosts` atomically (stage-beside-then-`mv`)
+  instead of `cat`-ing over the file in place, so a concurrent sendmail
+  read can no longer observe a truncated `/etc/hosts` mid-update. The
+  daemon also logs the `cabal.internal` SOA record TTL and minimum at
+  startup, making the worst-case NXDOMAIN negative-cache window (the
+  bound on how long a stale pin can persist after IMAP returns)
+  observable in the container logs.
+
 ## [0.10.5] - 2026-06-05
 
 ### Fixed
