@@ -8,20 +8,66 @@ import CabalmailKit
 extension MessageListView {
     /// Toolbar item that flips edit mode. Reads "Select" when off and
     /// "Done" while on, matching every other iOS list-edit affordance.
+    ///
+    /// macOS multi-selects via pointer modifier-clicks (shift / command)
+    /// directly in the list, so it shows no button. iPad / visionOS toggle the
+    /// native list EditMode so touch users can multi-select without a keyboard;
+    /// compact iPhone keeps the legacy `bulkMode` checkbox flow.
     @ViewBuilder
     var selectButton: some View {
+        #if os(macOS)
+        EmptyView()
+        #else
         if let model {
-            Button {
-                model.toggleBulkMode()
-            } label: {
-                if model.bulkMode {
-                    Text("Done")
-                } else {
-                    Image(systemName: "checkmark.circle")
-                        .accessibilityLabel("Select")
+            if isWideLayout {
+                Button {
+                    toggleSelectionEditMode(model: model)
+                } label: {
+                    if editMode == .active {
+                        Text("Done")
+                    } else {
+                        Image(systemName: "checkmark.circle")
+                            .accessibilityLabel("Select")
+                    }
+                }
+            } else {
+                Button {
+                    model.toggleBulkMode()
+                } label: {
+                    if model.bulkMode {
+                        Text("Done")
+                    } else {
+                        Image(systemName: "checkmark.circle")
+                            .accessibilityLabel("Select")
+                    }
                 }
             }
         }
+        #endif
+    }
+
+    #if !os(macOS)
+    /// Enter / leave the native multi-select EditMode on wide touch layouts.
+    /// Leaving clears the selection so re-entering starts fresh, mirroring
+    /// `toggleBulkMode()`'s contract on compact.
+    private func toggleSelectionEditMode(model: MessageListViewModel) {
+        if editMode == .active {
+            editMode = .inactive
+            model.selectedUIDs.removeAll()
+        } else {
+            editMode = .active
+        }
+    }
+    #endif
+
+    /// Called when a bulk action commits. The action itself clears
+    /// `selectedUIDs` (via `exitBulkMode()`); this additionally drops any
+    /// touch EditMode so the action bar dismisses on iPad / visionOS. No-op on
+    /// macOS, which has no EditMode.
+    private func endSelectionMode() {
+        #if !os(macOS)
+        editMode = .inactive
+        #endif
     }
 
     /// Bottom action bar rendered in `safeAreaInset` while bulkMode is
@@ -41,6 +87,7 @@ extension MessageListView {
                 Spacer()
                 bulkActionButton(systemImage: "archivebox", label: "Archive") {
                     Task { await model.bulkDispose() }
+                    endSelectionMode()
                 }
                 bulkActionButton(systemImage: "folder", label: "Move…") {
                     bulkMoveSheetPresented = true
@@ -50,12 +97,14 @@ extension MessageListView {
                     label: hasUnread ? "Read" : "Unread"
                 ) {
                     Task { await model.bulkSetSeen(hasUnread) }
+                    endSelectionMode()
                 }
                 bulkActionButton(
                     systemImage: hasUnflagged ? "flag" : "flag.slash",
                     label: hasUnflagged ? "Flag" : "Unflag"
                 ) {
                     Task { await model.bulkSetFlagged(hasUnflagged) }
+                    endSelectionMode()
                 }
             }
             .padding(.horizontal, 14)
@@ -92,6 +141,7 @@ extension MessageListView {
                 onSelect: { destination in
                     bulkMoveSheetPresented = false
                     Task { await model.bulkMove(to: destination.path) }
+                    endSelectionMode()
                 },
                 onCancel: { bulkMoveSheetPresented = false }
             )

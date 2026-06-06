@@ -82,6 +82,40 @@ extension MessageListView {
     private func count(_ filter: MessageFilter, in envelopes: [Envelope]) -> Int {
         envelopes.filter { filter.includes($0) }.count
     }
+
+    /// The list's top inset: the macOS inline search field, the search-result
+    /// metadata banner, the address-filter chip, and the filter tabs bar.
+    /// Lives here alongside the filter UI it mostly renders.
+    @ViewBuilder
+    func topInset(model: MessageListViewModel) -> some View {
+        VStack(spacing: 0) {
+            #if os(macOS)
+            inlineSearchField(model: model, focused: $inlineSearchFocused)
+            #endif
+            if model.isSearchActive {
+                searchMetadataBanner(model: model)
+            }
+            if let addressFilter, !addressFilter.isEmpty {
+                addressFilterChip(addressFilter)
+            }
+            // The filter button is search refinement, not list filtering,
+            // so it only surfaces once the user is engaged with the
+            // search field — preventing the conceptual collision with
+            // the All / Unread / Flagged pills next to it. macOS uses
+            // our own @FocusState on the inline TextField; everywhere
+            // else reads `\.isSearching` from the `.searchable` scope.
+            #if os(macOS)
+            filterTabsBar(
+                model: model,
+                searchActive: inlineSearchFocused || model.isSearchActive
+            )
+            #else
+            SearchActiveScope { isSearching in
+                filterTabsBar(model: model, searchActive: isSearching)
+            }
+            #endif
+        }
+    }
 }
 
 /// Thin wrapper that reads `\.isSearching` from inside the `.searchable`

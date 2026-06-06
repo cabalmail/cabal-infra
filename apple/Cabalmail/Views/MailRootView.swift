@@ -33,6 +33,11 @@ struct MailRootView: View {
     /// sidebar's current selection. Nil for same-folder rows and folder-
     /// mode lists, so `detailFolder` falls back to `selectedFolder`.
     @State private var crossFolderDetail: Folder?
+    /// How many messages the list currently has selected, reported by
+    /// `MessageListView` on wide/keyboard layouts. Drives the "N messages
+    /// selected" reading-pane placeholder when a multi-selection is active;
+    /// stays 0 on compact iPhone (single-selection there).
+    @State private var listSelectionCount = 0
     @AppStorage("cabalmail.sidebar.tab") private var sidebarTabRaw: String = SidebarTab.folders.rawValue
     @Environment(AppState.self) private var appState
     /// Non-nil while a message drag temporarily overrides the visible sidebar
@@ -71,7 +76,8 @@ struct MailRootView: View {
                     onClearAddressFilter: { selectedAddress = nil },
                     onSearchResultSelected: { sourceFolderPath in
                         crossFolderDetail = sourceFolderPath.map { Folder(path: $0) }
-                    }
+                    },
+                    onSelectionCountChanged: { listSelectionCount = $0 }
                 )
                 .id(selectedFolder.path)
             } else {
@@ -82,7 +88,19 @@ struct MailRootView: View {
                 )
             }
         } detail: {
-            if let folder = detailFolder, let selectedEnvelope {
+            if listSelectionCount >= 2 {
+                // Multi-selection: no single message to read, so mirror Mail's
+                // "N Messages Selected" pane. Bulk actions live in the action
+                // bar beneath the message list.
+                ContentUnavailableView(
+                    "\(listSelectionCount) Messages Selected",
+                    systemImage: "envelope.badge",
+                    description: Text("Use the action bar below the list to act on them together.")
+                )
+                #if os(macOS)
+                .toolbar { emptyDetailToolbar }
+                #endif
+            } else if let folder = detailFolder, let selectedEnvelope {
                 MessageDetailView(
                     folder: folder,
                     envelope: selectedEnvelope
@@ -114,6 +132,7 @@ struct MailRootView: View {
             selectedEnvelope = nil
             selectedAddress = nil
             crossFolderDetail = nil
+            listSelectionCount = 0
         }
         // Reveal Folders as drop targets the moment a message drag starts on
         // the Addresses tab, and fall back to the persisted tab when it ends.

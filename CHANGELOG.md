@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.5] - Unreleased
+
+### Added
+- Conventional message-selection idioms in the keyboard-optimized Apple clients
+  (iPad regular width and macOS). The message list now uses native multiple
+  selection: a plain click selects and opens one message, shift-click extends a
+  contiguous range, command-click toggles an individual message, Cmd-A selects
+  everything currently visible (respecting the active All/Unread/Flagged tab),
+  shift+up/down extends the selection from the keyboard, and Esc clears it. When
+  more than one message is selected the reading pane shows an "N Messages
+  Selected" placeholder and the existing bottom action bar (Archive / Move /
+  Read / Flag) operates on the whole selection; dragging any selected row onto a
+  sidebar folder still carries the entire selection. Cmd-A and Esc are scoped to
+  the list's keyboard focus so they don't disturb the search field. On iPad the
+  Select button now toggles the system edit mode so touch users can still multi-
+  select without a keyboard; on macOS that button is gone since modifier-clicks
+  are always available. Compact iPhone is unchanged - single tap to open, plus
+  the existing Select/checkbox flow.
+
 ## [0.10.4] - 2026-06-05
 
 ### Added

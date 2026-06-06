@@ -36,7 +36,16 @@ extension MessageListView {
         let items = dragItems(for: envelope, model: model)
         withMessageDrag(items: items, subject: envelope.subject) {
             Group {
-                if bulkMode {
+                if isWideLayout {
+                    // Native multi-select list: tag by UID so the list's
+                    // `Set<UInt32>` selection binding owns selection and the
+                    // system draws the highlight (and selection circles in iPad
+                    // edit mode). No checkbox Button - that's the compact path.
+                    // `isSelected` here is set membership, used only to keep the
+                    // unread dot legible against the selection highlight.
+                    MessageRow(envelope: envelope, isSelected: isSelected, isChecked: false, bulkMode: false)
+                        .tag(envelope.uid)
+                } else if bulkMode {
                     // No .tag() while in bulk mode — the list's selection
                     // binding drives the detail pane, and we don't want a
                     // checkbox tap to also pop the reader.
@@ -77,15 +86,17 @@ extension MessageListView {
         }
     }
 
-    /// The drag payload for a row. During multi-select, dragging any selected
-    /// row carries the whole selection; dragging a row that isn't part of the
-    /// selection (or any row in normal mode) carries just that message -
-    /// matching Finder / Mail, where grabbing an unselected item drags only
-    /// it. Each item is tagged with its owning mailbox via
-    /// `sourceFolder(for:)` so a cross-folder search selection still routes
-    /// every UID back to the right source folder on drop.
+    /// The drag payload for a row. When a multi-selection exists and this row
+    /// is part of it, dragging carries the whole selection; dragging a row that
+    /// isn't part of the selection (or when nothing/just one is selected)
+    /// carries just that message - matching Finder / Mail, where grabbing an
+    /// unselected item drags only it. This now covers both the native multi-
+    /// select highlight (shift / command-click) and the touch checkbox flow,
+    /// since both populate `selectedUIDs`. Each item is tagged with its owning
+    /// mailbox via `sourceFolder(for:)` so a cross-folder search selection
+    /// still routes every UID back to the right source folder on drop.
     private func dragItems(for envelope: Envelope, model: MessageListViewModel) -> [MessageDragItem] {
-        if model.bulkMode, model.selectedUIDs.contains(envelope.uid) {
+        if model.selectedUIDs.count > 1, model.selectedUIDs.contains(envelope.uid) {
             return model.envelopes
                 .filter { model.selectedUIDs.contains($0.uid) }
                 .map { MessageDragItem(uid: $0.uid, sourceFolder: model.sourceFolder(for: $0)) }
