@@ -133,6 +133,7 @@ jobs:
           docker:
             - 'docker/**'
             - '.github/scripts/deploy-ecs-service.sh'
+            - '.github/scripts/ecr-scan-report.sh'
           lambda_api:
             - 'lambda/api/**'
             - '.github/scripts/build-api.sh'
@@ -274,6 +275,17 @@ jobs:
           "${{ needs.setup.outputs.image_tag }}" \
           cabal-mail \
           cabal-cloudwatch-exporter-us-east-1
+
+    # Advisory: read the ECR scan-on-push result for the image we just
+    # pushed and report severity counts into the job summary, warning on
+    # HIGH/CRITICAL. Soft-fail by design (the script always exits 0) so a
+    # CVE in the base image never blocks a mail deploy while we establish
+    # a baseline. See .github/scripts/ecr-scan-report.sh.
+    - name: report-ecr-scan
+      run: |
+        ./.github/scripts/ecr-scan-report.sh \
+          "${{ matrix.tier }}" \
+          "${{ needs.setup.outputs.image_tag }}"
 
   lambda-certbot:
     needs: [setup, approval]

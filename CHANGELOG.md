@@ -7,7 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.10.6] - Unreleased
 
+### Security
+- Digest-pinned every container image `FROM` line to its tag + SHA256
+  digest (Phase 3 of `docs/0.10.x/container-runtime-hardening-plan.md`):
+  the three mail tiers and the sinkhole fixture on `amazonlinux:2023`, the
+  certbot-renewal Lambda base on `public.ecr.aws/lambda/python`, and the
+  (dormant) monitoring images on their upstreams. A pinned digest means a
+  rebuild pulls the exact base bytes that were reviewed rather than
+  whatever a floating tag resolves to that day. The three ARG-driven
+  monitoring FROMs (uptime-kuma, ntfy, healthchecks) were flattened to
+  literal `tag@digest` so the pin is uniform and Dependabot-updatable. The
+  ECS task definitions deliberately keep referencing the immutable
+  `cabal-<tier>:sha-<8>` tags - since ECR `image_tag_mutability` is
+  `IMMUTABLE`, each tag already binds one digest apiece, so a digest
+  reference there was dropped as zero-gain (rationale in the plan doc).
+- Added a nightly image vulnerability scan
+  (`.github/workflows/image-scan.yml`): Trivy scans the image each prod
+  mail-tier ECS service is actually running - resolved from the live task
+  definition, so it follows out-of-band deploys - uploads SARIF to the
+  Security -> Code scanning tab, and attaches the raw report as a build
+  artifact. This catches CVEs disclosed after an image was built and left
+  running, which scan-on-push cannot.
+- `app.yml`'s docker build job now reads the ECR scan-on-push result for
+  the image it just pushed and reports the severity counts into the run
+  summary, warning (soft-fail) on HIGH/CRITICAL
+  (`.github/scripts/ecr-scan-report.sh`). The repos have scanned on push
+  since they were created in 0.9.x; nothing had been surfacing the
+  findings.
+
 ### Added
+- `.github/dependabot.yml`. The repo previously had no Dependabot
+  version-update config (only the high/critical alert-monitor workflow).
+  Scoped to the Docker ecosystem across every Dockerfile directory and
+  targeting `stage`, it opens weekly PRs to advance the pinned base-image
+  digests, grouped so the mail-tier bases (amazonlinux + the Lambda Python
+  base) land separately from the dormant monitoring images.
+
 - Conventional message-selection idioms in the keyboard-optimized Apple clients
   (iPad regular width and macOS). The message list now uses native multiple
   selection: a plain click selects and opens one message, shift-click extends a
