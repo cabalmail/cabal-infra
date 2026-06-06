@@ -66,13 +66,21 @@ current_pin() {
 
 write_pin() {
   ip="$1"
-  # Atomic replace: stage beside $HOSTS (same filesystem, so mv is a
-  # rename, not a copy) then mv over it. A concurrent sendmail read
-  # never sees a partially written /etc/hosts.
+  # Write IN PLACE. /etc/hosts is a bind mount inside the container, so
+  # it cannot be replaced by rename(2): the staged temp lives on the
+  # overlay fs while /etc/hosts is mounted from the host fs, making the
+  # rename cross-device, and mv's copy fallback misses the live mounted
+  # file - the pin silently never lands and sendmail keeps falling
+  # through to DNS (a 5xx bounce). So we stage the new content beside it,
+  # then truncate-and-rewrite the mounted file with a single cat. The
+  # truncate-to-write window is a few microseconds for a file this small;
+  # a sendmail read racing exactly into it is far less harmful than never
+  # updating the pin at all.
   tmp="${HOSTS}.tmp"
   grep -v "$MARKER" "$HOSTS" > "$tmp" 2>/dev/null || true
   echo "$ip $TARGET $MARKER" >> "$tmp"
-  mv "$tmp" "$HOSTS"
+  cat "$tmp" > "$HOSTS"
+  rm -f "$tmp"
   echo "[hosts-pin] $TARGET -> $ip"
 }
 

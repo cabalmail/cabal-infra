@@ -105,13 +105,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to the VPC resolver would have ignored the pin entirely. Shipped as a
   static file (`docker/shared/service.switch`) copied in by
   `docker/smtp-in/Dockerfile`.
-- `hosts-pin.sh` writes `/etc/hosts` atomically (stage-beside-then-`mv`)
-  instead of `cat`-ing over the file in place, so a concurrent sendmail
-  read can no longer observe a truncated `/etc/hosts` mid-update. The
-  daemon also logs the `cabal.internal` SOA record TTL and minimum at
-  startup, making the worst-case NXDOMAIN negative-cache window (the
-  bound on how long a stale pin can persist after IMAP returns)
-  observable in the container logs.
+- The smtp-in `hosts-pin` daemon logs the `cabal.internal` SOA record
+  TTL and minimum at startup, making the worst-case NXDOMAIN
+  negative-cache window - the bound on how long a stale pin can persist
+  after IMAP returns - observable in the container logs.
 
 ## [0.10.5] - 2026-06-05
 
