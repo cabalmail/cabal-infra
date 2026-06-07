@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.8] - Unreleased
+
+### Security
+- Tightened the smtp-in (inbound relay) Linux capability set: dropped
+  `CHOWN`, `FOWNER`, and `DAC_OVERRIDE`, leaving `KILL`, `NET_BIND_SERVICE`,
+  `SETUID`, `SETGID` (phase 2a of
+  `docs/0.10.x/container-runtime-hardening-plan.md`). smtp-in is a pure
+  relay - its mailertable routes every hosted-domain message to the imap
+  container over SMTP and it runs no dovecot - so it resolves no local OS
+  users. The entrypoint now skips `sync-users.sh` on smtp-in, which was the
+  only thing exercising those three caps, so the most internet-exposed tier
+  no longer carries the ability to bypass file-permission checks
+  (`DAC_OVERRIDE`) or change file ownership (`CHOWN`). imap and smtp-out are
+  unchanged - both genuinely provision local users (smtp-out's submission
+  auth resolves against the system passwd db), and review confirmed their
+  sets are already minimal. The smtp-in task-def revision marker is bumped
+  v3 -> v4 so the cap change deploys; it is ordered to roll only after the
+  entrypoint change is live.
+
 ## [0.10.7] - 2026-06-07
 
 ### Security

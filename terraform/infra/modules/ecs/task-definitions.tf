@@ -199,8 +199,12 @@ resource "aws_ecs_task_definition" "imap" {
 #       secret stranded by the monitoring removal (see the imap marker for the
 #       full story). The +hc suffix keys the marker on the healthcheck secret's
 #       presence so a future monitoring flip can't strand it again.
+#   v4: drop CHOWN/FOWNER/DAC_OVERRIDE now that the entrypoint skips
+#       sync-users.sh on this relay tier - phase 2a. The entrypoint change
+#       must already be deployed (smtp-in no longer running sync-users)
+#       before this replacement rolls, or startup would fail without the caps.
 resource "terraform_data" "smtp_in_taskdef_revision_marker" {
-  input = var.healthcheck_ping_param != "" ? "smtp-in-taskdef-v3+hc" : "smtp-in-taskdef-v3"
+  input = var.healthcheck_ping_param != "" ? "smtp-in-taskdef-v4+hc" : "smtp-in-taskdef-v4"
 }
 
 resource "aws_ecs_task_definition" "smtp_in" {
@@ -239,21 +243,20 @@ resource "aws_ecs_task_definition" "smtp_in" {
       { name = "TLS_KEY", valueFrom = "/cabal/control_domain_ssl_key" },
     ], local.healthcheck_secrets)
 
-    # Runtime posture, phase 2 (see the imap task def for the full
-    # rationale). smtp-in runs only sendmail - no dovecot - so it needs
-    # the same set minus SYS_CHROOT. Dev soak should TIGHTEN this.
-    #   NET_BIND_SERVICE           sendmail binds 25
-    #   SETUID, SETGID             delivery/queue agents run as mail/smmsp
-    #   CHOWN, DAC_OVERRIDE, FOWNER  sync-users.sh user provisioning
-    #   KILL                       root sendmail master signals non-root children
+    # Runtime posture, phase 2 + 2a (see the imap task def for the full
+    # rationale). smtp-in is a pure relay: no dovecot (so no SYS_CHROOT) and
+    # no local delivery - its mailertable routes every hosted-domain message
+    # to imap over SMTP, so it resolves no local OS users. The entrypoint
+    # skips sync-users.sh on this tier (phase 2a), which removed the only
+    # consumers of CHOWN/DAC_OVERRIDE/FOWNER, so they are dropped here.
+    #   NET_BIND_SERVICE  sendmail binds 25
+    #   SETUID, SETGID    delivery/queue agents run as mail/smmsp
+    #   KILL              root sendmail master signals non-root children
     linuxParameters = {
       initProcessEnabled = true
       capabilities = {
         drop = ["ALL"]
         add = [
-          "CHOWN",
-          "DAC_OVERRIDE",
-          "FOWNER",
           "KILL",
           "NET_BIND_SERVICE",
           "SETGID",

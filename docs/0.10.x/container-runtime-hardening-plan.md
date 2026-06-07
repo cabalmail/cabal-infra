@@ -182,6 +182,15 @@ The posture changes are still the highest-touch part of this plan. Migration ord
 
 Pre-flight: a development-environment soak under load is essential before stage rollout.
 
+#### Phase 2a as implemented (0.10.8) — capability tightening
+
+The 0.10.4 add-back sets were flagged to tighten during the soak. Reviewed per tier against what each actually runs:
+
+- **imap and smtp-out — already minimal.** Both run `sync-users.sh` (`useradd`/`install -o` → CHOWN/FOWNER/DAC_OVERRIDE), fork privilege-dropped daemon children (SETUID/SETGID/KILL), bind <1024 (NET_BIND_SERVICE), and chroot dovecot login (SYS_CHROOT); smtp-out additionally resolves submission auth against the system passwd db (`userdb { driver = passwd }`), so it genuinely needs the synced users. Nothing to drop.
+- **smtp-in — dropped CHOWN, FOWNER, DAC_OVERRIDE.** A pure relay (sendmail only, no dovecot; its mailertable routes every hosted-domain message to imap over SMTP, no local delivery), so it resolves no local OS users — `sync-users.sh` was running on it only as a uniform-entrypoint artifact. The entrypoint now skips the sync there, removing the only consumers of those three caps; the remaining set is KILL, NET_BIND_SERVICE, SETUID, SETGID (sendmail's own mail/smmsp privilege drops, kept absent an empirical signal to remove them).
+
+Shipped as two ordered deploys: (1) the entrypoint `sync-users` gate via app.yml, with smtp-in verified healthy and relaying; then (2) the task-def cap drop via Terraform (smtp-in marker v3 → v4). The cap drop must not roll before the gate is live, or smtp-in startup would fail without caps it is still using.
+
 ### Phase 3 — Image digest pinning + ECR scan on push
 
 Three pieces:
