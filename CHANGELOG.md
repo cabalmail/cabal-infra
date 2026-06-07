@@ -14,10 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `docs/0.10.x/container-runtime-hardening-plan.md`). smtp-in is a pure
   relay - its mailertable routes every hosted-domain message to the imap
   container over SMTP and it runs no dovecot - so it resolves no local OS
-  users. The entrypoint now skips `sync-users.sh` on smtp-in, which was the
-  only thing exercising those three caps, so the most internet-exposed tier
-  no longer carries the ability to bypass file-permission checks
-  (`DAC_OVERRIDE`) or change file ownership (`CHOWN`). imap and smtp-out are
+  users. The entrypoint now skips, on smtp-in, both `sync-users.sh` and the
+  `cognito.bash` PAM-auth script generation (smtp-in has no SMTP AUTH, so the
+  script is unused there) - these were the consumers of those three caps - so
+  the most internet-exposed tier no longer carries the ability to bypass
+  file-permission checks (`DAC_OVERRIDE`) or change file ownership (`CHOWN`).
+  imap and smtp-out are
   unchanged - both genuinely provision local users (smtp-out's submission
   auth resolves against the system passwd db), and review confirmed their
   sets are already minimal. The smtp-in task-def revision marker is bumped

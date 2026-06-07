@@ -64,11 +64,17 @@ echo "[entrypoint] Rendering sendmail.mc..."
 sed "s/__CERT_DOMAIN__/${CERT_DOMAIN}/g" \
   /etc/mail/sendmail.mc.template > /etc/mail/sendmail.mc
 
-# ── Step 3: Cognito auth script ───────────────────────────────
+# ── Step 3: Cognito auth script (imap + smtp-out only) ────────
 # Replaces: chef/cabal/templates/default/cognito.bash.erb
-# Used by PAM to authenticate IMAP/SMTP users against Cognito.
-echo "[entrypoint] Generating cognito.bash..."
-cat > /usr/bin/cognito.bash <<COGNITO
+# Used by PAM to authenticate IMAP/SMTP users against Cognito. smtp-in is a
+# pure relay with no SMTP AUTH and no dovecot, so it never invokes this
+# script - generating it there is dead work. It also breaks under the phase
+# 2a cap drop: the file is chmod 100 (no owner write), so overwriting it on
+# any entrypoint re-run needs DAC_OVERRIDE, which smtp-in no longer carries.
+# Gate it to the tiers that actually authenticate.
+if [ "$TIER" = "imap" ] || [ "$TIER" = "smtp-out" ]; then
+  echo "[entrypoint] Generating cognito.bash..."
+  cat > /usr/bin/cognito.bash <<COGNITO
 #!/bin/bash
 
 COGNITO_PASSWORD=\$(cat -)
@@ -81,7 +87,8 @@ aws cognito-idp initiate-auth \\
   --client-id ${COGNITO_CLIENT_ID} \\
   --auth-parameters "USERNAME=\${COGNITO_USER},PASSWORD=\"\${COGNITO_PASSWORD}\""
 COGNITO
-chmod 100 /usr/bin/cognito.bash
+  chmod 100 /usr/bin/cognito.bash
+fi
 
 # ── Step 4: Dovecot SSL config (IMAP + SMTP-OUT) ─────────────
 # Replaces: chef/cabal/templates/default/dovecot-10-ssl.conf.erb
