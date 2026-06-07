@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.9] - 2026-06-07
+
+### Changed
+- Reverted the smtp-in capability drop from 0.10.8 (restored `CHOWN`,
+  `FOWNER`, `DAC_OVERRIDE`; smtp-in is back on the full phase-2 set). The
+  drop reached prod without the runtime mail-flow validation the hardening
+  plan mandated, and the rollout failed: a stale `/cabal/deployed_image_tag`
+  caused the cap-drop task definition to be registered against the *pre-2a*
+  smtp-in image, which still generates `/usr/bin/cognito.bash` (chmod 100)
+  and therefore needs `DAC_OVERRIDE` to rewrite it - so the new task died at
+  startup with `cognito.bash: Permission denied` while ECS kept the prior
+  healthy task in service (no mail interruption). The harmless entrypoint
+  cleanups from 0.10.8 stay (smtp-in still skips the unused `sync-users.sh`
+  and `cognito.bash` generation). The capability drop will be re-attempted
+  only after a real inbound-mail soak through smtp-in in stage confirms
+  sendmail needs none of those caps at runtime. smtp-in task-def revision
+  marker bumped v4 -> v5.
+
+### Note
+- The stale-SSM-tag failure mode above is a deploy-pipeline issue
+  independent of this change: when `app.yml` and `infra.yml` run for the
+  same push, `refresh-ssm-from-running.sh` can read imap's pre-roll tag (the
+  ECS deploy does not wait for stabilization), so a marker-triggered
+  task-def re-registration in the same run can pin a stale image. Worth a
+  follow-up (e.g. have the app deploy wait for service stability, or gate the
+  infra plan on it).
+
 ## [0.10.8] - 2026-06-07
 
 ### Security
