@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.7] - Unreleased
+
+### Added
+- The smtp-in `hosts-pin` daemon emits a throttled heartbeat log
+  (`heartbeat: imap.cabal.internal pinned to <ip>`) on a steady cadence
+  (default every 600s, `HOSTS_PIN_HEARTBEAT`-overridable, `0` to
+  disable) so a healthy but idle daemon is distinguishable from a hung
+  one in CloudWatch. It previously logged only on a pin change or a
+  resolve failure, so steady state produced no output at all and
+  liveness could only be inferred from `supervisorctl` or the container
+  health check. The cadence is derived from the poll interval, so it
+  holds even if `HOSTS_PIN_INTERVAL` is retuned.
+
 ## [0.10.6] - 2026-06-06
 
 ### Security
