@@ -5,20 +5,6 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.10.8] - Unreleased
-
-### Fixed
-- Moved `app.yml`'s "components flagged for build/deploy" blast-radius
-  summary out of the `approval` job and into the `setup` job
-  (`flagged-summary` step). The summary was meant to let the gate
-  reviewer see which areas would deploy before approving, but it lived
-  in the gate job itself, which is bound to the `gate-${env}`
-  environment and does not run until after approval - so the list could
-  never be seen in time to inform the decision. setup runs before the
-  gate, so the summary is now visible (in both the log and the run's
-  step summary) while the run waits at the gate. The `approval` job
-  keeps a no-op `approve` step as the gate.
-
 ## [0.10.7] - 2026-06-07
 
 ### Security
@@ -46,6 +32,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   liveness could only be inferred from `supervisorctl` or the container
   health check. The cadence is derived from the poll interval, so it
   holds even if `HOSTS_PIN_INTERVAL` is retuned.
+
+### Fixed
+- Moved `app.yml`'s "components flagged for build/deploy" blast-radius
+  summary out of the `approval` job and into the `setup` job
+  (`flagged-summary` step). The summary was meant to let the gate
+  reviewer see which areas would deploy before approving, but it lived
+  in the gate job itself, which is bound to the `gate-${env}`
+  environment and does not run until after approval - so the list could
+  never be seen in time to inform the decision. setup runs before the
+  gate, so the summary is now visible (in both the log and the run's
+  step summary) while the run waits at the gate. The `approval` job
+  keeps a no-op `approve` step as the gate.
 
 ## [0.10.6] - 2026-06-06
 
