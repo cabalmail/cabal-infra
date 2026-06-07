@@ -19,6 +19,12 @@ variable "cidr_block" {
   description = "VPC CIDR block for private ingress rules."
 }
 
+variable "login_trusted_cidrs" {
+  type        = list(string)
+  description = "Source CIDRs Dovecot treats as already-secured for auth (the NLB public-subnet CIDRs). Joined into the LOGIN_TRUSTED_NETWORKS env on the imap/smtp-out task defs; with disable_plaintext_auth = yes the entrypoint uses these and falls back to cidr_block if empty (fail open, no lockout). Phase 4 of docs/0.10.x/container-runtime-hardening-plan.md."
+  default     = []
+}
+
 variable "region" {
   type        = string
   description = "AWS region."

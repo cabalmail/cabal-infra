@@ -54,8 +54,11 @@ locals {
 # replacement so the transit_encryption = "ENABLED" added to the mailstore
 # volume below actually deploys. A volume edit, like a container_definitions
 # edit, only reaches a running task through a marker bump.
+# v5 (phase 4 of the same plan): add the LOGIN_TRUSTED_NETWORKS env var (NLB
+# public-subnet CIDRs) the entrypoint needs to keep NLB-forwarded logins
+# working once disable_plaintext_auth = yes lands in the image.
 resource "terraform_data" "imap_taskdef_revision_marker" {
-  input = var.healthcheck_ping_param != "" ? "imap-taskdef-v4+hc" : "imap-taskdef-v4"
+  input = var.healthcheck_ping_param != "" ? "imap-taskdef-v5+hc" : "imap-taskdef-v5"
 }
 
 resource "aws_ecs_task_definition" "imap" {
@@ -93,6 +96,7 @@ resource "aws_ecs_task_definition" "imap" {
       { name = "COGNITO_CLIENT_ID", value = var.client_id },
       { name = "COGNITO_POOL_ID", value = var.user_pool_id },
       { name = "NETWORK_CIDR", value = var.cidr_block },
+      { name = "LOGIN_TRUSTED_NETWORKS", value = join(" ", var.login_trusted_cidrs) },
       { name = "SQS_QUEUE_URL", value = aws_sqs_queue.tier["imap"].url },
     ]
 
@@ -328,6 +332,8 @@ resource "terraform_data" "smtp_out_taskdef_revision_marker" {
   #   v2: NET_ADMIN capability drop
   #       (docs/0.10.x/container-runtime-hardening-plan.md phase 1)
   #   v3: runtime posture (cap drop=ALL + adds, no-new-privileges, init) - phase 2
+  #   v4: add the LOGIN_TRUSTED_NETWORKS env var (NLB public-subnet CIDRs) for
+  #       disable_plaintext_auth = yes - phase 4
   # The +sinkhole suffix is the var.sinkhole hook described above; the +hc
   # suffix is the analogous var.healthcheck_ping_param hook (see the imap
   # marker) that keeps the HEALTHCHECK_PING_URL secret in step with whether
@@ -335,7 +341,7 @@ resource "terraform_data" "smtp_out_taskdef_revision_marker" {
   # the queue/sinkhole work after monitoring was removed, so appending +hc is a
   # no-op for the current (monitoring-off) state and only future-proofs this
   # tier against a re-enable.
-  input = "${var.sinkhole ? "smtp-queue-mount-v3+sinkhole" : "smtp-queue-mount-v3"}${var.healthcheck_ping_param != "" ? "+hc" : ""}"
+  input = "${var.sinkhole ? "smtp-queue-mount-v4+sinkhole" : "smtp-queue-mount-v4"}${var.healthcheck_ping_param != "" ? "+hc" : ""}"
 }
 
 resource "aws_ecs_task_definition" "smtp_out" {
@@ -377,6 +383,7 @@ resource "aws_ecs_task_definition" "smtp_out" {
       { name = "COGNITO_CLIENT_ID", value = var.client_id },
       { name = "COGNITO_POOL_ID", value = var.user_pool_id },
       { name = "NETWORK_CIDR", value = var.cidr_block },
+      { name = "LOGIN_TRUSTED_NETWORKS", value = join(" ", var.login_trusted_cidrs) },
       { name = "SQS_QUEUE_URL", value = aws_sqs_queue.tier["smtp-out"].url },
       { name = "IMAP_INTERNAL_HOST", value = "${aws_service_discovery_service.imap.name}.${aws_service_discovery_private_dns_namespace.mail.name}" },
       ], var.sinkhole ? [
