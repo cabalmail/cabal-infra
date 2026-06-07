@@ -179,8 +179,12 @@ module "ecs" {
   private_subnets = module.vpc.private_subnets
   vpc_id          = module.vpc.vpc.id
   cidr_block      = var.cidr_block
-  region          = var.aws_region
-  control_domain  = var.control_domain
+  # The NLB lives in the public subnets and SNATs to its own ENIs
+  # (preserve_client_ip is off for the ip/TCP target groups), so Dovecot sees
+  # these CIDRs as the source of NLB-forwarded imap traffic. Phase 4.
+  login_trusted_cidrs = module.vpc.public_subnets[*].cidr_block
+  region              = var.aws_region
+  control_domain      = var.control_domain
 
   table_arn = module.table.table_arn
   efs_id    = module.efs.efs_id

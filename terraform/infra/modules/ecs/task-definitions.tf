@@ -54,8 +54,11 @@ locals {
 # replacement so the transit_encryption = "ENABLED" added to the mailstore
 # volume below actually deploys. A volume edit, like a container_definitions
 # edit, only reaches a running task through a marker bump.
+# v5 (phase 4 of the same plan): add the LOGIN_TRUSTED_NETWORKS env var (NLB
+# public-subnet CIDRs) the entrypoint needs to keep NLB-forwarded logins
+# working once disable_plaintext_auth = yes lands in the image.
 resource "terraform_data" "imap_taskdef_revision_marker" {
-  input = var.healthcheck_ping_param != "" ? "imap-taskdef-v4+hc" : "imap-taskdef-v4"
+  input = var.healthcheck_ping_param != "" ? "imap-taskdef-v5+hc" : "imap-taskdef-v5"
 }
 
 resource "aws_ecs_task_definition" "imap" {
@@ -93,6 +96,7 @@ resource "aws_ecs_task_definition" "imap" {
       { name = "COGNITO_CLIENT_ID", value = var.client_id },
       { name = "COGNITO_POOL_ID", value = var.user_pool_id },
       { name = "NETWORK_CIDR", value = var.cidr_block },
+      { name = "LOGIN_TRUSTED_NETWORKS", value = join(" ", var.login_trusted_cidrs) },
       { name = "SQS_QUEUE_URL", value = aws_sqs_queue.tier["imap"].url },
     ]
 
@@ -199,8 +203,24 @@ resource "aws_ecs_task_definition" "imap" {
 #       secret stranded by the monitoring removal (see the imap marker for the
 #       full story). The +hc suffix keys the marker on the healthcheck secret's
 #       presence so a future monitoring flip can't strand it again.
+#   v4: drop CHOWN/FOWNER/DAC_OVERRIDE now that the entrypoint skips
+#       sync-users.sh on this relay tier - phase 2a.
+#   v5: REVERT v4 - restore the full cap set. The v4 drop reached prod
+#       without the mandated runtime (mail-flow) validation and the rollout
+#       broke: a stale /cabal/deployed_image_tag paired the dropped caps with
+#       the PRE-2a image, which still writes /usr/bin/cognito.bash and so
+#       needs DAC_OVERRIDE. Backed out to the known-good full set; the drop
+#       will be re-attempted only after a real inbound-mail soak through
+#       smtp-in in stage. See CHANGELOG 0.10.9.
+#   v6: re-drop CHOWN/FOWNER/DAC_OVERRIDE - phase 2a, second attempt. Now a
+#       pure Terraform change: the entrypoint cleanups that v4 needed (skip
+#       sync-users + cognito.bash on smtp-in) already shipped, so the running
+#       image needs none of these at startup, and with no docker rebuild there
+#       is no app.yml/infra.yml image-tag race. MUST be soaked in stage with
+#       real inbound mail (confirm sendmail relays, no CHOWN errors in the
+#       logs) before promoting to prod. See CHANGELOG 0.10.10.
 resource "terraform_data" "smtp_in_taskdef_revision_marker" {
-  input = var.healthcheck_ping_param != "" ? "smtp-in-taskdef-v3+hc" : "smtp-in-taskdef-v3"
+  input = var.healthcheck_ping_param != "" ? "smtp-in-taskdef-v6+hc" : "smtp-in-taskdef-v6"
 }
 
 resource "aws_ecs_task_definition" "smtp_in" {
@@ -239,21 +259,24 @@ resource "aws_ecs_task_definition" "smtp_in" {
       { name = "TLS_KEY", valueFrom = "/cabal/control_domain_ssl_key" },
     ], local.healthcheck_secrets)
 
-    # Runtime posture, phase 2 (see the imap task def for the full
-    # rationale). smtp-in runs only sendmail - no dovecot - so it needs
-    # the same set minus SYS_CHROOT. Dev soak should TIGHTEN this.
-    #   NET_BIND_SERVICE           sendmail binds 25
-    #   SETUID, SETGID             delivery/queue agents run as mail/smmsp
-    #   CHOWN, DAC_OVERRIDE, FOWNER  sync-users.sh user provisioning
-    #   KILL                       root sendmail master signals non-root children
+    # Runtime posture, phase 2 + 2a (see the imap task def for the full
+    # rationale). smtp-in is a pure relay: no dovecot (no SYS_CHROOT) and no
+    # local delivery (mailertable routes every hosted-domain message to imap
+    # over SMTP), and the entrypoint skips sync-users.sh + cognito.bash on it,
+    # so it resolves no local OS users and writes no owner-unwritable files at
+    # startup. That removed every startup consumer of CHOWN/DAC_OVERRIDE/
+    # FOWNER, so they are dropped (2a, second attempt: the first reached prod
+    # on a stale image and broke; this is now a Terraform-only change, so no
+    # image-tag race). Soak in stage with real inbound mail before prod - if
+    # sendmail turns out to need CHOWN at queue/relay time, add just CHOWN back.
+    #   NET_BIND_SERVICE  sendmail binds 25
+    #   SETUID, SETGID    delivery/queue agents run as mail/smmsp
+    #   KILL              root sendmail master signals non-root children
     linuxParameters = {
       initProcessEnabled = true
       capabilities = {
         drop = ["ALL"]
         add = [
-          "CHOWN",
-          "DAC_OVERRIDE",
-          "FOWNER",
           "KILL",
           "NET_BIND_SERVICE",
           "SETGID",
@@ -309,6 +332,8 @@ resource "terraform_data" "smtp_out_taskdef_revision_marker" {
   #   v2: NET_ADMIN capability drop
   #       (docs/0.10.x/container-runtime-hardening-plan.md phase 1)
   #   v3: runtime posture (cap drop=ALL + adds, no-new-privileges, init) - phase 2
+  #   v4: add the LOGIN_TRUSTED_NETWORKS env var (NLB public-subnet CIDRs) for
+  #       disable_plaintext_auth = yes - phase 4
   # The +sinkhole suffix is the var.sinkhole hook described above; the +hc
   # suffix is the analogous var.healthcheck_ping_param hook (see the imap
   # marker) that keeps the HEALTHCHECK_PING_URL secret in step with whether
@@ -316,7 +341,7 @@ resource "terraform_data" "smtp_out_taskdef_revision_marker" {
   # the queue/sinkhole work after monitoring was removed, so appending +hc is a
   # no-op for the current (monitoring-off) state and only future-proofs this
   # tier against a re-enable.
-  input = "${var.sinkhole ? "smtp-queue-mount-v3+sinkhole" : "smtp-queue-mount-v3"}${var.healthcheck_ping_param != "" ? "+hc" : ""}"
+  input = "${var.sinkhole ? "smtp-queue-mount-v4+sinkhole" : "smtp-queue-mount-v4"}${var.healthcheck_ping_param != "" ? "+hc" : ""}"
 }
 
 resource "aws_ecs_task_definition" "smtp_out" {
@@ -358,6 +383,7 @@ resource "aws_ecs_task_definition" "smtp_out" {
       { name = "COGNITO_CLIENT_ID", value = var.client_id },
       { name = "COGNITO_POOL_ID", value = var.user_pool_id },
       { name = "NETWORK_CIDR", value = var.cidr_block },
+      { name = "LOGIN_TRUSTED_NETWORKS", value = join(" ", var.login_trusted_cidrs) },
       { name = "SQS_QUEUE_URL", value = aws_sqs_queue.tier["smtp-out"].url },
       { name = "IMAP_INTERNAL_HOST", value = "${aws_service_discovery_service.imap.name}.${aws_service_discovery_private_dns_namespace.mail.name}" },
       ], var.sinkhole ? [

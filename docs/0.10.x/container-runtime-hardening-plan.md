@@ -182,6 +182,15 @@ The posture changes are still the highest-touch part of this plan. Migration ord
 
 Pre-flight: a development-environment soak under load is essential before stage rollout.
 
+#### Phase 2a as implemented (0.10.8) — capability tightening
+
+The 0.10.4 add-back sets were flagged to tighten during the soak. Reviewed per tier against what each actually runs:
+
+- **imap and smtp-out — already minimal.** Both run `sync-users.sh` (`useradd`/`install -o` → CHOWN/FOWNER/DAC_OVERRIDE), fork privilege-dropped daemon children (SETUID/SETGID/KILL), bind <1024 (NET_BIND_SERVICE), and chroot dovecot login (SYS_CHROOT); smtp-out additionally resolves submission auth against the system passwd db (`userdb { driver = passwd }`), so it genuinely needs the synced users. Nothing to drop.
+- **smtp-in — dropped CHOWN, FOWNER, DAC_OVERRIDE.** A pure relay (sendmail only, no dovecot; its mailertable routes every hosted-domain message to imap over SMTP, no local delivery), so it resolves no local OS users — `sync-users.sh` was running on it only as a uniform-entrypoint artifact. The entrypoint now skips the sync there, removing the only consumers of those three caps; the remaining set is KILL, NET_BIND_SERVICE, SETUID, SETGID (sendmail's own mail/smmsp privilege drops, kept absent an empirical signal to remove them).
+
+Shipped as two ordered deploys: (1) the entrypoint `sync-users` gate via app.yml, with smtp-in verified healthy and relaying; then (2) the task-def cap drop via Terraform (smtp-in marker v3 → v4). The cap drop must not roll before the gate is live, or smtp-in startup would fail without caps it is still using.
+
 ### Phase 3 — Image digest pinning + ECR scan on push
 
 Three pieces:
@@ -250,6 +259,16 @@ The option-(1) assumption was checked against the running infrastructure before 
 - **Guard the coupling.** If `preserve_client_ip.enabled` is ever flipped to `true` (e.g. to log or rate-limit on real client IPs), the trusted-networks assumption breaks silently and *every* IMAP login starts failing. Tie the two together — at minimum a comment where the attribute is (un)set, ideally a check — so the dependency is not invisible.
 
 For submission, NLB does TCP passthrough; Dovecot already terminates TLS; `disable_plaintext_auth = yes` works out of the box without trusted-networks games.
+
+#### Phase 4 as implemented (0.10.11)
+
+Shipped as designed, with these specifics:
+
+- **`disable_plaintext_auth = yes` on both tiers** ([imap 10-auth.conf](../../docker/imap/configs/dovecot/10-auth.conf), [smtp-out 10-auth.conf](../../docker/smtp-out/configs/dovecot/10-auth.conf)), plus `auth_failure_delay = 2 secs`. `auth_mechanisms` stays `plain` (the existing value); LOGIN was not added.
+- **`login_trusted_networks` is now the NLB public-subnet CIDRs, not the VPC CIDR.** The entrypoint already wrote `login_trusted_networks = $NETWORK_CIDR` (the whole VPC) to suppress health-probe log noise — but trusting the whole VPC makes `disable_plaintext_auth = yes` a no-op, since everything that can reach Dovecot is in the VPC. It now writes a new `LOGIN_TRUSTED_NETWORKS` env derived per-environment in Terraform from `module.vpc.public_subnets[*].cidr_block` (the subnets the NLB actually lives in), and **falls back to `NETWORK_CIDR` if that env is empty**, so any deploy-ordering or stale-image permutation fails *open* (no lockout) rather than closed. The imap (v5) and smtp-out (v4) revision markers carry the new env to the running tasks.
+- **Login throttling** via Dovecot's own service knobs — `client_limit = 1` (high-security, one connection per login process), `process_limit` caps, and `service auth client_limit` — in [20-imap.conf](../../docker/imap/configs/dovecot/20-imap.conf) and [20-submission.conf](../../docker/smtp-out/configs/dovecot/20-submission.conf).
+
+Unlike the 2a capability work, there is no startup-crash or lockout failure mode: `disable_plaintext_auth = yes` only takes effect with the new image, and that image always writes *some* `login_trusted_networks` (the NLB CIDRs, or the VPC fallback), so it never rejects legitimate NLB-forwarded auth. The stage gate is therefore about confirming the *intended* effect — real clients (React, Apple, raw IMAP) still authenticate, and a non-TLS bypass path is now refused — not about avoiding a self-inflicted outage.
 
 ### Phase 5 — Sendmail and OpenDKIM hardening
 

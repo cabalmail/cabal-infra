@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.10.8] - Unreleased
+## [0.10.13] - Unreleased
 
 ### Added
 - Planned-maintenance signal for IMAP redeploys. The IMAP ECS service is
@@ -45,6 +45,137 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (conditional write, TTL-expiring) before SMTP and releases it if SMTP fails,
   so a retry of a delivered message reports success without re-sending while a
   retry of a failed send still goes through.
+
+## [0.10.12] - 2026-06-07
+
+### Fixed
+- Closed the `app.yml`/`infra.yml` stale-image deploy race flagged in the
+  0.10.9 note - the failure mode that wedged the smtp-in cap-drop rollout.
+  When a single push touches both `docker/**` and `terraform/infra/**`, the
+  two workflows run concurrently; `infra.yml`'s plan could reach
+  `refresh-ssm-from-running.sh` before `app.yml` had rolled imap to the
+  freshly-built image, read imap's pre-roll (stale) tag into
+  `/cabal/deployed_image_tag`, and then a marker-triggered task-def
+  re-registration (`*_taskdef_revision_marker` bump) would pin the new task
+  def to the old image. Fixed in three layers:
+  - `deploy-ecs-service.sh` now waits for the rolled service to reach a
+    stable rollout (`aws ecs wait services-stable`) after `update-service`,
+    so an `app.yml` docker job only reports success once the image is
+    actually running. These mail services have no deployment circuit
+    breaker, so a broken image never auto-rolls back; the wait times out and
+    the job fails loudly instead of reporting a phantom success.
+  - New `.github/scripts/wait-for-app-deploy.sh`, run at the start of
+    `infra.yml`'s plan job, blocks the plan until the sibling `app.yml` run
+    for the same commit finishes (no-op when no such run exists, i.e. the
+    common terraform-only push). This establishes the happens-before that a
+    stability wait alone cannot, since the two workflows have independent
+    concurrency groups. Requires the new read-only `actions: read`
+    permission on `infra.yml`.
+  - `refresh-ssm-from-running.sh` now waits for the canonical imap service
+    to settle before reading its tag and refuses to pin a mid-roll tag, as
+    a belt-and-suspenders backstop to the ordering step.
+  Steady state is unchanged: a terraform-only push triggers no `app.yml`
+  run, the ordering step is a no-op, imap is already stable, and SSM stays
+  in lockstep exactly as before.
+
+## [0.10.11] - 2026-06-07
+
+### Security
+- Dovecot now rejects plaintext auth on connections it does not consider
+  secured (`disable_plaintext_auth = yes` on both imap and smtp-out; phase 4
+  of `docs/0.10.x/container-runtime-hardening-plan.md`). For imap the NLB
+  terminates TLS (993 -> 143) and forwards plain TCP, so the entrypoint marks
+  the NLB public-subnet CIDRs as `login_trusted_networks` - a new
+  `LOGIN_TRUSTED_NETWORKS` env derived per-environment from the NLB's actual
+  public subnets (`module.vpc.public_subnets[*].cidr_block`). A session
+  reaching Dovecot's 143 from anywhere else in the VPC (an ECS Exec shell, a
+  sidecar, a private-subnet container) is untrusted and must use real TLS.
+  Previously `login_trusted_networks` was the whole VPC CIDR, which would have
+  made the flag a no-op. The value falls back to the VPC CIDR if the env is
+  empty, so the change fails open (no lockout of legitimate logins) rather
+  than closed. For smtp-out submission (587/465) the NLB passes TCP straight
+  through and Dovecot terminates TLS itself, so the flag just enforces
+  STARTTLS-before-AUTH on 587 and TLS on 465.
+- Added Dovecot login throttling: `auth_failure_delay = 2 secs` on both tiers
+  to slow credential stuffing, plus high-security login services
+  (`client_limit = 1`, one connection per login process) with `process_limit`
+  caps (1024 for imap-login, 512 for submission-login) and `service auth`
+  `client_limit = 4096`.
+- The imap and smtp-out task-def revision markers are bumped (imap v4 -> v5,
+  smtp-out v3 -> v4) so the new `LOGIN_TRUSTED_NETWORKS` env reaches the
+  running tasks. `auth_mechanisms` stays `plain` (LOGIN is not added).
+
+### Note
+- This is an auth-path change and must be validated in stage against every
+  client (React webmail, the Apple clients, a raw IMAP login) before
+  promotion to prod. Confirm both that legitimate NLB-forwarded logins still
+  succeed and that a plaintext login over a non-TLS path inside the VPC
+  (simulating an NLB bypass) is now refused with `[PRIVACYREQUIRED] Plaintext
+  authentication disallowed`.
+
+## [0.10.10] - 2026-06-07
+
+### Security
+- Re-dropped the smtp-in `CHOWN`/`FOWNER`/`DAC_OVERRIDE` capabilities (phase
+  2a, second attempt; leaving `KILL`, `NET_BIND_SERVICE`, `SETUID`,
+  `SETGID`). This time it is a Terraform-only change: the entrypoint cleanups
+  that gate `sync-users.sh` and `cognito.bash` off smtp-in already shipped
+  (0.10.8) and are running in both environments, so the image smtp-in runs
+  already needs none of these caps at startup, and with no docker rebuild
+  there is no app.yml/infra.yml image-tag race (the failure mode that broke
+  the first attempt - see 0.10.9). smtp-in task-def revision marker bumped
+  v5 -> v6. Gated on a stage soak: it must be validated against real inbound
+  mail through stage smtp-in (sendmail relays to imap with no `CHOWN` errors)
+  before promotion to prod; if sendmail needs `CHOWN` at queue/relay time,
+  only that one cap is added back.
+
+## [0.10.9] - 2026-06-07
+
+### Changed
+- Reverted the smtp-in capability drop from 0.10.8 (restored `CHOWN`,
+  `FOWNER`, `DAC_OVERRIDE`; smtp-in is back on the full phase-2 set). The
+  drop reached prod without the runtime mail-flow validation the hardening
+  plan mandated, and the rollout failed: a stale `/cabal/deployed_image_tag`
+  caused the cap-drop task definition to be registered against the *pre-2a*
+  smtp-in image, which still generates `/usr/bin/cognito.bash` (chmod 100)
+  and therefore needs `DAC_OVERRIDE` to rewrite it - so the new task died at
+  startup with `cognito.bash: Permission denied` while ECS kept the prior
+  healthy task in service (no mail interruption). The harmless entrypoint
+  cleanups from 0.10.8 stay (smtp-in still skips the unused `sync-users.sh`
+  and `cognito.bash` generation). The capability drop will be re-attempted
+  only after a real inbound-mail soak through smtp-in in stage confirms
+  sendmail needs none of those caps at runtime. smtp-in task-def revision
+  marker bumped v4 -> v5.
+
+### Note
+- The stale-SSM-tag failure mode above is a deploy-pipeline issue
+  independent of this change: when `app.yml` and `infra.yml` run for the
+  same push, `refresh-ssm-from-running.sh` can read imap's pre-roll tag (the
+  ECS deploy does not wait for stabilization), so a marker-triggered
+  task-def re-registration in the same run can pin a stale image. Worth a
+  follow-up (e.g. have the app deploy wait for service stability, or gate the
+  infra plan on it).
+
+## [0.10.8] - 2026-06-07
+
+### Security
+- Tightened the smtp-in (inbound relay) Linux capability set: dropped
+  `CHOWN`, `FOWNER`, and `DAC_OVERRIDE`, leaving `KILL`, `NET_BIND_SERVICE`,
+  `SETUID`, `SETGID` (phase 2a of
+  `docs/0.10.x/container-runtime-hardening-plan.md`). smtp-in is a pure
+  relay - its mailertable routes every hosted-domain message to the imap
+  container over SMTP and it runs no dovecot - so it resolves no local OS
+  users. The entrypoint now skips, on smtp-in, both `sync-users.sh` and the
+  `cognito.bash` PAM-auth script generation (smtp-in has no SMTP AUTH, so the
+  script is unused there) - these were the consumers of those three caps - so
+  the most internet-exposed tier no longer carries the ability to bypass
+  file-permission checks (`DAC_OVERRIDE`) or change file ownership (`CHOWN`).
+  imap and smtp-out are
+  unchanged - both genuinely provision local users (smtp-out's submission
+  auth resolves against the system passwd db), and review confirmed their
+  sets are already minimal. The smtp-in task-def revision marker is bumped
+  v3 -> v4 so the cap change deploys; it is ordered to roll only after the
+  entrypoint change is live.
 
 ## [0.10.7] - 2026-06-07
 
