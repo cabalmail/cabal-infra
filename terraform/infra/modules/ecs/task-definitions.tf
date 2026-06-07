@@ -49,8 +49,13 @@ locals {
 # forces a task-def replacement that adds or drops the HEALTHCHECK_PING_URL
 # secret in step with the SSM param that backs it, so the secret set can never
 # again drift from the parameters that exist.
+#
+# v4 (phase 6 of docs/0.10.x/container-runtime-hardening-plan.md): forces a
+# replacement so the transit_encryption = "ENABLED" added to the mailstore
+# volume below actually deploys. A volume edit, like a container_definitions
+# edit, only reaches a running task through a marker bump.
 resource "terraform_data" "imap_taskdef_revision_marker" {
-  input = var.healthcheck_ping_param != "" ? "imap-taskdef-v3+hc" : "imap-taskdef-v3"
+  input = var.healthcheck_ping_param != "" ? "imap-taskdef-v4+hc" : "imap-taskdef-v4"
 }
 
 resource "aws_ecs_task_definition" "imap" {
@@ -154,11 +159,20 @@ resource "aws_ecs_task_definition" "imap" {
     }
   }])
 
+  # Phase 6 of docs/0.10.x/container-runtime-hardening-plan.md: encrypt the
+  # NFS traffic between the imap task and EFS in transit (it is already
+  # encrypted at rest, see modules/efs). No access point: the mailstore is a
+  # multi-user tree rooted at "/" with per-user file ownership, so an access
+  # point could only be a transparent root-"/" pass-through (iam disabled, no
+  # posix_user) - zero gain over transit encryption and a data-path risk if
+  # the root were ever set wrong. transit_encryption needs no access point.
+  # The smtp-out queue already runs ENABLED on these same hosts.
   volume {
     name = "mailstore"
     efs_volume_configuration {
-      file_system_id = var.efs_id
-      root_directory = "/"
+      file_system_id     = var.efs_id
+      root_directory     = "/"
+      transit_encryption = "ENABLED"
     }
   }
 

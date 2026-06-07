@@ -36,7 +36,11 @@
 #   daemon  refresh every $HOSTS_PIN_INTERVAL (default 30s). Started by
 #           supervisord. On resolve failure it keeps the existing pin
 #           (or writes the sentinel if none exists yet) and retries on
-#           the next tick.
+#           the next tick. Steady state is otherwise silent (the pin
+#           does not change), so it also emits a throttled heartbeat
+#           (every $HOSTS_PIN_HEARTBEAT seconds, default 600) logging
+#           the current pin, to tell a healthy daemon apart from a hung
+#           one.
 set -eu
 
 TARGET="${IMAP_INTERNAL_HOST:-imap.cabal.internal}"
@@ -47,6 +51,11 @@ INTERVAL="${HOSTS_PIN_INTERVAL:-30}"
 # TCP-times-out and sendmail defers (4xx) instead of bouncing. Override
 # with HOSTS_PIN_SENTINEL if a faster-failing in-VPC black hole exists.
 SENTINEL="${HOSTS_PIN_SENTINEL:-192.0.2.1}"
+# Steady-state heartbeat: in daemon mode, log the current pin every
+# HOSTS_PIN_HEARTBEAT seconds even when nothing changed, so a healthy
+# (silent) daemon is distinguishable from a hung one. Set to 0 to
+# disable.
+HEARTBEAT="${HOSTS_PIN_HEARTBEAT:-600}"
 
 NS="$(awk '/^nameserver /{print $2; exit}' /etc/resolv.conf 2>/dev/null || true)"
 if [ -z "${NS:-}" ]; then
@@ -127,12 +136,30 @@ case "${1:-daemon}" in
     fi
     ;;
   daemon)
-    echo "[hosts-pin] daemon: target=$TARGET resolver=$NS interval=${INTERVAL}s sentinel=$SENTINEL"
+    echo "[hosts-pin] daemon: target=$TARGET resolver=$NS interval=${INTERVAL}s sentinel=$SENTINEL heartbeat=${HEARTBEAT}s"
     log_soa_negttl
+    # Heartbeat cadence in ticks: >=1 when enabled, 0 disables it.
+    hb_ticks=0
+    if [ "$HEARTBEAT" -gt 0 ]; then
+      hb_ticks=$(( HEARTBEAT / INTERVAL ))
+      if [ "$hb_ticks" -lt 1 ]; then hb_ticks=1; fi
+    fi
+    ticks=0
     while :; do
       sleep "$INTERVAL"
-      if ! refresh_once; then
+      if refresh_once; then
+        # Steady-state success: silent unless a heartbeat is due. A pin
+        # change already logged its own "-> <ip>" line inside write_pin.
+        if [ "$hb_ticks" -gt 0 ]; then
+          ticks=$(( ticks + 1 ))
+          if [ "$ticks" -ge "$hb_ticks" ]; then
+            echo "[hosts-pin] heartbeat: $TARGET pinned to $(current_pin || echo none)"
+            ticks=0
+          fi
+        fi
+      else
         echo "[hosts-pin] resolve empty; keeping pin ($(current_pin || echo none))"
+        ticks=0
       fi
     done
     ;;

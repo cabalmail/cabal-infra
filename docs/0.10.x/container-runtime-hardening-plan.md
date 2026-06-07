@@ -237,6 +237,18 @@ The TLS terminator question: IMAP traffic arrives at the container in clear (NLB
 
 Recommendation: option (1), with the NLB-subnet CIDR plumbed as an env var (`LOGIN_TRUSTED_NETWORKS`) injected by the ECS task definition. The entrypoint writes it to the dovecot config.
 
+#### Phase 4 reconnaissance (verified live 2026-06-06)
+
+The option-(1) assumption was checked against the running infrastructure before committing to it; it holds, with one refinement.
+
+- **Source IP is the NLB, not the client — confirmed.** `preserve_client_ip.enabled = false` on the `cabal-ecs-imap-tg` target group (`target_type = "ip"`, `protocol = "TCP"`, port 143) in **both prod and stage** (`aws elbv2 describe-target-group-attributes`). It is not set in Terraform, so the AWS default governs, and for an IP-type target group with a TCP/TLS protocol that default is *disabled*. So the NLB SNATs and Dovecot sees the NLB node's private IP — exactly what `login_trusted_networks` needs. (The IMAP NLB listener is TLS-terminating, 993 -> 143, which is *why* plaintext reaches the container; submission is the opposite, see below.)
+- **The trusted range is the NLB's public-subnet CIDRs, and it is per-environment** (verified 2026-06-06):
+  - **prod** (VPC `10.0.0.0/16`): two public subnets, `10.0.64.0/19` (us-east-1a) + `10.0.96.0/19` (us-east-1b). They tile the `10.0.64.0/18` "public tier" exactly; the private subnets live in the separate `10.0.0.0/18`.
+  - **stage**: a single public subnet `10.64.64.0/18` (us-east-1a).
+- **Derive the list; do not hardcode and do not collapse.** `LOGIN_TRUSTED_NETWORKS` should be emitted per-env from the NLB's actual subnet CIDRs (Terraform) and passed as a space-separated list — Dovecot's `login_trusted_networks` accepts a list natively. Resist collapsing prod's two /19s into `10.0.64.0/18`: it is exact *today*, but it loses the auto-tracking property — it would miss a future us-east-1c public subnet (outside the /18) and would silently trust anything later carved into `10.0.64.0/18` that is not an NLB subnet. Deriving from the subnet data tracks the source of truth; a literal does not.
+- **Submission (587/465) needs none of this.** Those listeners are TCP passthrough and Dovecot terminates TLS itself, so `disable_plaintext_auth = yes` works there directly, with no trusted-networks marking.
+- **Guard the coupling.** If `preserve_client_ip.enabled` is ever flipped to `true` (e.g. to log or rate-limit on real client IPs), the trusted-networks assumption breaks silently and *every* IMAP login starts failing. Tie the two together — at minimum a comment where the attribute is (un)set, ideally a check — so the dependency is not invisible.
+
 For submission, NLB does TCP passthrough; Dovecot already terminates TLS; `disable_plaintext_auth = yes` works out of the box without trusted-networks games.
 
 ### Phase 5 — Sendmail and OpenDKIM hardening
@@ -307,6 +319,12 @@ volume {
 A new EFS access point on the mailstore (mirroring the existing `smtp_queue_access_point_id` pattern) constrains the IMAP task to `/maildir` (or wherever the existing mount root effectively points). Created in [`terraform/infra/modules/efs/main.tf`](../../terraform/infra/modules/efs/main.tf).
 
 The access-point creation has to land *before* the task-definition change references it; that is one Terraform apply, since both files are in the same stack.
+
+#### Phase 6 as implemented (0.10.7)
+
+Shipped as **transit encryption only — no access point.** The sketch above mirrors the smtp-queue access point, but the mailstore is not analogous to the queue: it is a multi-user tree rooted at the EFS root `/` (mounted to `/home`, one maildir per user, each owned by that user's UID via `sync-users.sh`), whereas the queue is a single `/smtp-queue` subtree. An access point would therefore have to be `root_directory = "/"` with no `posix_user` — any posix override squashes the per-user ownership and every mailbox reads empty — and `iam = "DISABLED"` (the queue AP already disables IAM "for parity with the IMAP mount"). That is a transparent pass-through: zero gain over plain transit encryption, plus a data-path footgun if the root were ever mis-set. And `transit_encryption = "ENABLED"` does not require an access point — the queue pairs them only because it needed the AP to pin `/smtp-queue` and set the creation owner.
+
+So the change is just `transit_encryption = "ENABLED"` on the existing `root_directory = "/"` mailstore volume, with the imap revision marker bumped v3 -> v4 so the volume edit actually deploys (a volume edit, like a `container_definitions` edit, is otherwise held back by `ignore_changes`). The smtp-out tier already runs `ENABLED` on these same ECS EC2 hosts, so the transit path is proven; the roll is one task replacement (brief IMAP blip). If per-tier IAM auth on EFS is ever wanted (the identity-IAM-hardening plan), add the access point then with `iam = "ENABLED"` — that is when an AP earns its keep.
 
 ## Migration sequence
 
