@@ -308,6 +308,12 @@ A new EFS access point on the mailstore (mirroring the existing `smtp_queue_acce
 
 The access-point creation has to land *before* the task-definition change references it; that is one Terraform apply, since both files are in the same stack.
 
+#### Phase 6 as implemented (0.10.7)
+
+Shipped as **transit encryption only — no access point.** The sketch above mirrors the smtp-queue access point, but the mailstore is not analogous to the queue: it is a multi-user tree rooted at the EFS root `/` (mounted to `/home`, one maildir per user, each owned by that user's UID via `sync-users.sh`), whereas the queue is a single `/smtp-queue` subtree. An access point would therefore have to be `root_directory = "/"` with no `posix_user` — any posix override squashes the per-user ownership and every mailbox reads empty — and `iam = "DISABLED"` (the queue AP already disables IAM "for parity with the IMAP mount"). That is a transparent pass-through: zero gain over plain transit encryption, plus a data-path footgun if the root were ever mis-set. And `transit_encryption = "ENABLED"` does not require an access point — the queue pairs them only because it needed the AP to pin `/smtp-queue` and set the creation owner.
+
+So the change is just `transit_encryption = "ENABLED"` on the existing `root_directory = "/"` mailstore volume, with the imap revision marker bumped v3 -> v4 so the volume edit actually deploys (a volume edit, like a `container_definitions` edit, is otherwise held back by `ignore_changes`). The smtp-out tier already runs `ENABLED` on these same ECS EC2 hosts, so the transit path is proven; the roll is one task replacement (brief IMAP blip). If per-tier IAM auth on EFS is ever wanted (the identity-IAM-hardening plan), add the access point then with `iam = "ENABLED"` — that is when an AP earns its keep.
+
 ## Migration sequence
 
 Each phase is one PR (or a small PR set) and is independently revertable.

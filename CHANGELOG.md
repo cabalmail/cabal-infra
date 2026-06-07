@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.7] - Unreleased
+
+### Security
+- Enabled EFS transit encryption on the IMAP mailstore mount
+  (`transit_encryption = "ENABLED"` on the imap task definition's mailstore
+  volume; Phase 6 of `docs/0.10.x/container-runtime-hardening-plan.md`). The
+  NFS traffic between the imap task and EFS is now TLS-wrapped in transit; it
+  was already encrypted at rest. No access point was added - the mailstore is
+  a multi-user tree at the EFS root, so an access point could only be a
+  transparent pass-through with no security gain, and transit encryption
+  needs none (rationale in the plan doc). The smtp-out queue already ran with
+  transit encryption on these same ECS EC2 hosts, so the path was proven. The
+  imap task-def revision marker was bumped v3 -> v4 so the volume change
+  actually deploys (volume edits, like container_definitions edits, are
+  otherwise held back by the task def's `ignore_changes`); the roll is one
+  imap task replacement, a brief IMAP blip.
+
 ## [0.10.6] - 2026-06-06
 
 ### Security
