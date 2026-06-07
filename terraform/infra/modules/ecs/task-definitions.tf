@@ -208,8 +208,15 @@ resource "aws_ecs_task_definition" "imap" {
 #       needs DAC_OVERRIDE. Backed out to the known-good full set; the drop
 #       will be re-attempted only after a real inbound-mail soak through
 #       smtp-in in stage. See CHANGELOG 0.10.9.
+#   v6: re-drop CHOWN/FOWNER/DAC_OVERRIDE - phase 2a, second attempt. Now a
+#       pure Terraform change: the entrypoint cleanups that v4 needed (skip
+#       sync-users + cognito.bash on smtp-in) already shipped, so the running
+#       image needs none of these at startup, and with no docker rebuild there
+#       is no app.yml/infra.yml image-tag race. MUST be soaked in stage with
+#       real inbound mail (confirm sendmail relays, no CHOWN errors in the
+#       logs) before promoting to prod. See CHANGELOG 0.10.10.
 resource "terraform_data" "smtp_in_taskdef_revision_marker" {
-  input = var.healthcheck_ping_param != "" ? "smtp-in-taskdef-v5+hc" : "smtp-in-taskdef-v5"
+  input = var.healthcheck_ping_param != "" ? "smtp-in-taskdef-v6+hc" : "smtp-in-taskdef-v6"
 }
 
 resource "aws_ecs_task_definition" "smtp_in" {
@@ -248,28 +255,24 @@ resource "aws_ecs_task_definition" "smtp_in" {
       { name = "TLS_KEY", valueFrom = "/cabal/control_domain_ssl_key" },
     ], local.healthcheck_secrets)
 
-    # Runtime posture, phase 2 (see the imap task def for the full rationale).
-    # smtp-in runs only sendmail - no dovecot - so the same set minus
-    # SYS_CHROOT.
-    #   NET_BIND_SERVICE             sendmail binds 25
-    #   SETUID, SETGID               delivery/queue agents run as mail/smmsp
-    #   CHOWN, DAC_OVERRIDE, FOWNER  user/file provisioning at startup
-    #   KILL                         root sendmail master signals children
-    #
-    # phase 2a tried to drop CHOWN/FOWNER/DAC_OVERRIDE here (smtp-in needs no
-    # local users once the entrypoint skips sync-users + cognito.bash on it),
-    # but it reached prod without the mandated runtime mail-flow validation
-    # and is reverted (marker v5). The entrypoint cleanups stay; re-drop the
-    # caps only after an inbound-mail soak through smtp-in in stage confirms
-    # sendmail needs none of them at runtime.
+    # Runtime posture, phase 2 + 2a (see the imap task def for the full
+    # rationale). smtp-in is a pure relay: no dovecot (no SYS_CHROOT) and no
+    # local delivery (mailertable routes every hosted-domain message to imap
+    # over SMTP), and the entrypoint skips sync-users.sh + cognito.bash on it,
+    # so it resolves no local OS users and writes no owner-unwritable files at
+    # startup. That removed every startup consumer of CHOWN/DAC_OVERRIDE/
+    # FOWNER, so they are dropped (2a, second attempt: the first reached prod
+    # on a stale image and broke; this is now a Terraform-only change, so no
+    # image-tag race). Soak in stage with real inbound mail before prod - if
+    # sendmail turns out to need CHOWN at queue/relay time, add just CHOWN back.
+    #   NET_BIND_SERVICE  sendmail binds 25
+    #   SETUID, SETGID    delivery/queue agents run as mail/smmsp
+    #   KILL              root sendmail master signals non-root children
     linuxParameters = {
       initProcessEnabled = true
       capabilities = {
         drop = ["ALL"]
         add = [
-          "CHOWN",
-          "DAC_OVERRIDE",
-          "FOWNER",
           "KILL",
           "NET_BIND_SERVICE",
           "SETGID",
