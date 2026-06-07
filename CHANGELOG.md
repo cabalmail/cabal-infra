@@ -66,6 +66,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   findings are surfaced, not gated; the gate flips in a later phase once
   baselines are established. Phase 0's finding inventory is recorded in
   `docs/0.10.x/iac-baseline-snapshot.md`.
+- IaC quality gates, Phase 2 (baselines). Per-stack suppression and baseline
+  files are now checked in (`terraform/{infra,dns}/.checkov.yaml`,
+  `.checkov.baseline`, `.trivyignore`) with a reviewed `BASELINE.md` per stack
+  recording a rationale for every accepted finding and a target version for the
+  decay candidates. The biggest cluster - the customer-managed-KMS-key (CMK)
+  class (73 Checkov findings across 11 checks, 25 Trivy across 4) - is globally
+  suppressed as a deliberate posture: every flagged resource is already
+  encrypted at rest with an AWS-managed/default key, and a CMK's control
+  benefits are not exploitable by a single operator at the per-key cost. The
+  remaining 127 Checkov and 25 Trivy findings are baselined per resource and
+  classified (must-fix in 2.5 / design-driven / decay). `terraform/dns` is
+  clean, so its files are empty placeholders for parity. The gate is still
+  soft-fail; `make scan` now wires the baselines so a local run shows only the
+  residual (Checkov and Trivy clean; tflint's 6 warnings remain, to be fixed
+  outright in 2.5).
 
 ## [0.10.12] - 2026-06-07
 
