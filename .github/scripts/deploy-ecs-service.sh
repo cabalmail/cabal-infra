@@ -15,6 +15,19 @@
 # deployed so a Terraform-driven topology change re-pins to reality
 # rather than to a stale SSM value.
 #
+# After update-service this script waits for the service to reach a
+# stable rollout (aws ecs wait services-stable). That is what makes
+# app.yml's completion a meaningful "this tier is actually deployed and
+# healthy" barrier: infra.yml's plan job orders itself behind the
+# sibling app.yml run for the same push (.github/scripts/wait-for-app-
+# deploy.sh) so that refresh-ssm-from-running.sh reads the post-roll tag
+# rather than the pre-roll (stale) one. Without the wait, this script
+# returned as soon as update-service was accepted - before the new task
+# was running - so "app.yml finished" did not imply "the image is
+# deployed", and a marker-triggered Terraform task-def re-registration
+# could still be paired with a not-yet-rolled image. See CHANGELOG
+# 0.10.9 (the incident) and 0.10.12 (this fix).
+#
 # Usage:
 #   deploy-ecs-service.sh <tier> <image_tag> [cluster] [service_override]
 #
@@ -31,9 +44,12 @@
 #                     cabal-cloudwatch-exporter-us-east-1).
 #
 # Exit codes:
-#   0  rolled the service successfully (or service already up to date)
-#   1  required arg missing, service not found, or no container in the
-#      task def references cabal-<tier>:<anything>
+#   0  rolled the service and it reached a stable rollout
+#   1  required arg missing, service not found, no container in the task
+#      def references cabal-<tier>:<anything>, or the rolled service did
+#      not stabilize within the wait window (these mail services have no
+#      deployment circuit breaker, so a broken image never auto-rolls
+#      back - the deployment stays IN_PROGRESS and the wait times out)
 #   non-0 from aws CLI on any other failure
 
 set -euo pipefail
@@ -119,4 +135,18 @@ aws ecs update-service \
   --cluster "${CLUSTER}" \
   --service "${SERVICE}" \
   --task-definition "${new_td_arn}" >/dev/null
-log "service ${SERVICE} rolling to ${new_td_arn}"
+log "service ${SERVICE} rolling to ${new_td_arn}; waiting for stability"
+
+# Block until the new revision is fully rolled (rolloutState COMPLETED,
+# runningCount == desiredCount, no in-flight deployment). This is the
+# barrier infra.yml's wait-for-app-deploy.sh orders behind. On these
+# services (no deployment circuit breaker) a broken image never
+# stabilizes, so the wait times out and we exit non-zero rather than
+# report a deploy that never actually came up. `if` keeps set -e from
+# aborting before we can log the timeout.
+if aws ecs wait services-stable --cluster "${CLUSTER}" --services "${SERVICE}"; then
+  log "service ${SERVICE} stable on ${new_td_arn}"
+else
+  log "ERROR: ${SERVICE} did not stabilize on ${new_td_arn} within the wait window"
+  exit 1
+fi

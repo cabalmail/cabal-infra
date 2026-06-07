@@ -20,6 +20,13 @@ name: Build and Deploy Infrastructure
 # Phase 6 (shipped in 0.9.5) deleted the dual-pipeline escape hatch
 # (terraform-legacy.yml) and the legacy app workflows that chained
 # into it; infra.yml is now the only Terraform pipeline.
+#
+# 0.10.12 closed the app.yml/infra.yml stale-image race (CHANGELOG
+# 0.10.9): the plan job's wait-for-app-deploy step orders this workflow
+# behind any sibling app.yml run for the same push, so
+# refresh-ssm-from-running reads the post-roll image tag instead of a
+# pre-roll (stale) one before a marker-triggered task-def re-registration
+# pins it.
 
 on:
   workflow_dispatch:
@@ -48,11 +55,16 @@ on:
       - '.github/scripts/make-terraform.sh'
       - '.github/scripts/plan-terraform.sh'
       - '.github/scripts/refresh-ssm-from-running.sh'
+      - '.github/scripts/wait-for-app-deploy.sh'
       - '.github/scripts/record-lambda-hashes.sh'
       - '.github/scripts/post-apply-update-services.sh'
 
 permissions:
   contents: read
+  # wait-for-app-deploy.sh (plan job) queries the GitHub Actions API for
+  # the sibling app.yml run on this commit so the Terraform plan orders
+  # itself behind any concurrent image roll. Read-only.
+  actions: read
 
 # Serialize Terraform applies per ref so back-to-back pushes do not
 # race for the state lock. cancel-in-progress: false because we never
@@ -84,6 +96,7 @@ jobs:
             - '.github/scripts/make-terraform.sh'
             - '.github/scripts/plan-terraform.sh'
             - '.github/scripts/refresh-ssm-from-running.sh'
+            - '.github/scripts/wait-for-app-deploy.sh'
             - '.github/scripts/record-lambda-hashes.sh'
             - '.github/scripts/post-apply-update-services.sh'
 
@@ -316,11 +329,26 @@ jobs:
       with:
         cli_config_credentials_token: ${{ secrets.TF_TOKEN }}
         terraform_wrapper: false
+    - name: wait-for-app-deploy
+      # Cross-workflow ordering. If this same push also triggered app.yml
+      # (a docker/lambda/react change landed alongside the terraform
+      # change), block here until that app deploy run finishes before
+      # reading the deployed image tag below. Without it, refresh-ssm-
+      # from-running could read imap's pre-roll (stale) tag and a
+      # marker-triggered task-def re-registration would pin the new task
+      # def to the old image (the wedged smtp-in rollout in CHANGELOG
+      # 0.10.9). No-op when app.yml was not triggered by this push (the
+      # common terraform-only case). See the script header.
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: ../../.github/scripts/wait-for-app-deploy.sh
     - name: refresh-ssm-from-running
       # Phase 1: reconcile /cabal/deployed_image_tag with the image
       # tag actually running on cabal-imap before plan, so a
       # topology-only apply that regenerates container_definitions
-      # does not roll back an out-of-band app deploy.
+      # does not roll back an out-of-band app deploy. Waits for the
+      # imap rollout to settle first (see script header) so it never
+      # pins a mid-roll tag.
       run: ../../.github/scripts/refresh-ssm-from-running.sh
     - name: update-image-tag-in-ssm
       if: inputs.image_tag != ''
