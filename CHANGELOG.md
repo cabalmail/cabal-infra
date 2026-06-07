@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.11] - Unreleased
+
+### Security
+- Dovecot now rejects plaintext auth on connections it does not consider
+  secured (`disable_plaintext_auth = yes` on both imap and smtp-out; phase 4
+  of `docs/0.10.x/container-runtime-hardening-plan.md`). For imap the NLB
+  terminates TLS (993 -> 143) and forwards plain TCP, so the entrypoint marks
+  the NLB public-subnet CIDRs as `login_trusted_networks` - a new
+  `LOGIN_TRUSTED_NETWORKS` env derived per-environment from the NLB's actual
+  public subnets (`module.vpc.public_subnets[*].cidr_block`). A session
+  reaching Dovecot's 143 from anywhere else in the VPC (an ECS Exec shell, a
+  sidecar, a private-subnet container) is untrusted and must use real TLS.
+  Previously `login_trusted_networks` was the whole VPC CIDR, which would have
+  made the flag a no-op. The value falls back to the VPC CIDR if the env is
+  empty, so the change fails open (no lockout of legitimate logins) rather
+  than closed. For smtp-out submission (587/465) the NLB passes TCP straight
+  through and Dovecot terminates TLS itself, so the flag just enforces
+  STARTTLS-before-AUTH on 587 and TLS on 465.
+- Added Dovecot login throttling: `auth_failure_delay = 2 secs` on both tiers
+  to slow credential stuffing, plus high-security login services
+  (`client_limit = 1`, one connection per login process) with `process_limit`
+  caps (1024 for imap-login, 512 for submission-login) and `service auth`
+  `client_limit = 4096`.
+- The imap and smtp-out task-def revision markers are bumped (imap v4 -> v5,
+  smtp-out v3 -> v4) so the new `LOGIN_TRUSTED_NETWORKS` env reaches the
+  running tasks. `auth_mechanisms` stays `plain` (LOGIN is not added).
+
+### Note
+- This is an auth-path change and must be validated in stage against every
+  client (React webmail, the Apple clients, a raw IMAP login) before
+  promotion to prod. Confirm both that legitimate NLB-forwarded logins still
+  succeed and that a plaintext login over a non-TLS path inside the VPC
+  (simulating an NLB bypass) is now refused with `[PRIVACYREQUIRED] Plaintext
+  authentication disallowed`.
+
 ## [0.10.10] - 2026-06-07
 
 ### Security

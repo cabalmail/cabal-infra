@@ -117,13 +117,21 @@ ssl_key = </etc/pki/tls/private/${CERT_DOMAIN}.key
 ssl_min_protocol = TLSv1.2
 SSLCONF
 
-  # Tell Dovecot that NLB health-check IPs are trusted. This suppresses
-  # the noisy "Disconnected (no auth attempts)" info logs from NLB TCP
-  # probes that connect and immediately close.
-  if [ -n "${NETWORK_CIDR:-}" ]; then
-    echo "[entrypoint] Setting Dovecot login_trusted_networks = ${NETWORK_CIDR}"
+  # Set Dovecot login_trusted_networks: the source networks whose sessions
+  # count as "secured" for auth. With disable_plaintext_auth = yes (Phase 4,
+  # 10-auth.conf) only these may auth over the plain connection the imap NLB
+  # forwards (993 -> TLS-terminated -> 143); anything reaching Dovecot from
+  # elsewhere in the VPC must use real TLS. LOGIN_TRUSTED_NETWORKS is the NLB
+  # public-subnet CIDRs (injected per-env by the task definition). It falls
+  # back to NETWORK_CIDR (the whole VPC CIDR) so a missing/empty value fails
+  # OPEN - no lockout of legitimate NLB-forwarded logins - rather than closed.
+  # This also suppresses the noisy "Disconnected (no auth attempts)" logs from
+  # the NLB's TCP health probes.
+  _login_trusted="${LOGIN_TRUSTED_NETWORKS:-${NETWORK_CIDR:-}}"
+  if [ -n "${_login_trusted}" ]; then
+    echo "[entrypoint] Setting Dovecot login_trusted_networks = ${_login_trusted}"
     cat > /etc/dovecot/conf.d/05-login.conf <<LOGINCONF
-login_trusted_networks = ${NETWORK_CIDR}
+login_trusted_networks = ${_login_trusted}
 LOGINCONF
   fi
 fi
