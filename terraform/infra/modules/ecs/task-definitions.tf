@@ -200,11 +200,16 @@ resource "aws_ecs_task_definition" "imap" {
 #       full story). The +hc suffix keys the marker on the healthcheck secret's
 #       presence so a future monitoring flip can't strand it again.
 #   v4: drop CHOWN/FOWNER/DAC_OVERRIDE now that the entrypoint skips
-#       sync-users.sh on this relay tier - phase 2a. The entrypoint change
-#       must already be deployed (smtp-in no longer running sync-users)
-#       before this replacement rolls, or startup would fail without the caps.
+#       sync-users.sh on this relay tier - phase 2a.
+#   v5: REVERT v4 - restore the full cap set. The v4 drop reached prod
+#       without the mandated runtime (mail-flow) validation and the rollout
+#       broke: a stale /cabal/deployed_image_tag paired the dropped caps with
+#       the PRE-2a image, which still writes /usr/bin/cognito.bash and so
+#       needs DAC_OVERRIDE. Backed out to the known-good full set; the drop
+#       will be re-attempted only after a real inbound-mail soak through
+#       smtp-in in stage. See CHANGELOG 0.10.9.
 resource "terraform_data" "smtp_in_taskdef_revision_marker" {
-  input = var.healthcheck_ping_param != "" ? "smtp-in-taskdef-v4+hc" : "smtp-in-taskdef-v4"
+  input = var.healthcheck_ping_param != "" ? "smtp-in-taskdef-v5+hc" : "smtp-in-taskdef-v5"
 }
 
 resource "aws_ecs_task_definition" "smtp_in" {
@@ -243,20 +248,28 @@ resource "aws_ecs_task_definition" "smtp_in" {
       { name = "TLS_KEY", valueFrom = "/cabal/control_domain_ssl_key" },
     ], local.healthcheck_secrets)
 
-    # Runtime posture, phase 2 + 2a (see the imap task def for the full
-    # rationale). smtp-in is a pure relay: no dovecot (so no SYS_CHROOT) and
-    # no local delivery - its mailertable routes every hosted-domain message
-    # to imap over SMTP, so it resolves no local OS users. The entrypoint
-    # skips sync-users.sh on this tier (phase 2a), which removed the only
-    # consumers of CHOWN/DAC_OVERRIDE/FOWNER, so they are dropped here.
-    #   NET_BIND_SERVICE  sendmail binds 25
-    #   SETUID, SETGID    delivery/queue agents run as mail/smmsp
-    #   KILL              root sendmail master signals non-root children
+    # Runtime posture, phase 2 (see the imap task def for the full rationale).
+    # smtp-in runs only sendmail - no dovecot - so the same set minus
+    # SYS_CHROOT.
+    #   NET_BIND_SERVICE             sendmail binds 25
+    #   SETUID, SETGID               delivery/queue agents run as mail/smmsp
+    #   CHOWN, DAC_OVERRIDE, FOWNER  user/file provisioning at startup
+    #   KILL                         root sendmail master signals children
+    #
+    # phase 2a tried to drop CHOWN/FOWNER/DAC_OVERRIDE here (smtp-in needs no
+    # local users once the entrypoint skips sync-users + cognito.bash on it),
+    # but it reached prod without the mandated runtime mail-flow validation
+    # and is reverted (marker v5). The entrypoint cleanups stay; re-drop the
+    # caps only after an inbound-mail soak through smtp-in in stage confirms
+    # sendmail needs none of them at runtime.
     linuxParameters = {
       initProcessEnabled = true
       capabilities = {
         drop = ["ALL"]
         add = [
+          "CHOWN",
+          "DAC_OVERRIDE",
+          "FOWNER",
           "KILL",
           "NET_BIND_SERVICE",
           "SETGID",
