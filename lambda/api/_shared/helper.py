@@ -567,6 +567,15 @@ def get_object(bucket, key):
     obj = s3r.Object(bucket, key)
     return obj.get()['Body'].read()
 
+def delete_object(bucket, key):
+    '''Deletes an object from s3. Returns True on success, False on error.'''
+    try:
+        s3r.Object(bucket, key).delete()
+    except ClientError as e:
+        logging.error(e)
+        return False
+    return True
+
 def sign_url(bucket, key, expiration=86400):
     '''Signs a URL for an object hosted in s3'''
     params = {

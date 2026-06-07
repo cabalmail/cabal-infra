@@ -3,12 +3,38 @@ import copy
 import json
 import re
 import smtplib
+import time
+import uuid
 from email.message import EmailMessage
 from email.utils import formatdate, getaddresses
+import boto3 # pylint: disable=import-error
+from botocore.exceptions import ClientError # pylint: disable=import-error
 from helper import get_imap_client # pylint: disable=import-error
 from helper import get_mpw # pylint: disable=import-error
 from helper import get_object # pylint: disable=import-error
+from helper import upload_object # pylint: disable=import-error
 from helper import user_authorized_for_sender # pylint: disable=import-error
+from helper import MaintenanceError, maintenance_response # pylint: disable=import-error
+
+# Sending is SMTP-first: outbound delivery never blocks on IMAP. The Bcc-free
+# Sent copy is staged to S3 and queued, and the append_sent consumer Lambda
+# writes it to the Sent folder when IMAP is available (immediately in steady
+# state, after the roll completes during an IMAP deploy). See
+# docs (lambda/api/append_sent/function.py).
+APPEND_SENT_QUEUE = 'cabal-append-sent'
+SENT_PENDING_PREFIX = 'sent-pending'
+
+# Dedupe window for /send. SMTP-first means a lost response that a client (or
+# the Apple SendQueue) retries could otherwise deliver twice; we claim the
+# Message-Id in cabal-rate-limits (TTL attribute `expires_at`) before SMTP and
+# release it if SMTP fails. The window only needs to outlast a client retry.
+DEDUPE_TABLE = 'cabal-rate-limits'
+SEND_DEDUPE_TTL = 600
+
+sqs = boto3.client('sqs')
+ddb = boto3.resource('dynamodb')
+_dedupe_table = ddb.Table(DEDUPE_TABLE)
+_queue_url_cache = {}
 
 # Attachments are uploaded to S3 via the /upload_url Lambda's presigned
 # PUT URLs (the cache bucket's 2-day lifecycle handles cleanup). Total
@@ -66,25 +92,31 @@ def handler(event, _context):
                           },
                           body['text'], body['html'], attachments)
 
-    client = get_imap_client(body['host'], user, 'INBOX')
-
     if body.get('draft'):
-        # Drafts keep Bcc: the user is still composing and needs the blind
-        # recipients to persist across edits.
-        append_drafts(msg, client)
-        client.logout()
+        return _save_draft(body['host'], user, msg)
+
+    # Non-draft: SMTP-first. Delivery must not block on IMAP (the IMAP tier is
+    # single-task and has a zero-task window on every redeploy), so we send over
+    # SMTP first and queue the Sent copy for the append_sent consumer to write
+    # when IMAP is available.
+    #
+    # The Sent copy must not retain Bcc - it would expose blind recipients to
+    # anyone who can read Sent. SMTP still delivers to the BCC addresses because
+    # the recipient list is passed to send() explicitly.
+    sent_copy = strip_bcc(msg)
+    message_id = msg['Message-Id']
+
+    # Idempotency: claim the Message-Id before SMTP so a retried /send (e.g. the
+    # client never saw our response) cannot deliver twice. A duplicate claim
+    # means we already delivered this exact message; report success so the
+    # client stops retrying.
+    if message_id and not _claim_send(message_id):
         return {
             "statusCode": 200,
             "body": json.dumps({
-                "status": "saved"
+                "status": "submitted"
             })
         }
-
-    # The Sent copy must not retain Bcc - it would expose blind recipients to
-    # anyone who can read Sent (the user, future delegates, backup/admin paths).
-    # Append a Bcc-free copy to Outbox; SMTP still delivers to the BCC addresses
-    # because the recipient list is passed to send() explicitly.
-    msg_id = append_outbox(strip_bcc(msg), client)
 
     recipients = [
         addr for _, addr in
@@ -94,22 +126,103 @@ def handler(event, _context):
 
     return_from_send = send(msg, body['smtp_host'], sender, recipients)
     if return_from_send['statusCode'] != 200:
+        # Delivery failed, so release the claim - the user's retry must be
+        # allowed to actually send.
+        if message_id:
+            _release_send(message_id)
         return return_from_send
 
-    if not move(msg_id, client):
-        return {
-            "statusCode": 500,
-            "body": json.dumps({
-                "status": "Send succeeded, but failed to move message from Outbox to Sent"
-            })
-        }
-    client.logout()
+    # Delivered. Queue the Bcc-free Sent copy (best effort; a queue failure here
+    # loses only the Sent record, not the delivery).
+    _queue_sent_copy(sent_copy, body['host'], user, message_id)
+
     return {
         "statusCode": 200,
         "body": json.dumps({
             "status": "submitted"
         })
     }
+
+
+def _save_draft(host, user, msg):
+    '''Saves a draft to the user's Drafts folder. Drafts keep Bcc (the user is
+    still composing). Interactive and IMAP-only, so during a planned IMAP roll
+    there is nothing to queue - return the maintenance signal and let the client
+    retry rather than failing.'''
+    try:
+        client = get_imap_client(host, user, 'INBOX')
+    except MaintenanceError as err:
+        return maintenance_response(err.state)
+    append_drafts(msg, client)
+    client.logout()
+    return {
+        "statusCode": 200,
+        "body": json.dumps({
+            "status": "saved"
+        })
+    }
+
+
+def _append_sent_queue_url():
+    '''Resolves (and caches) the append_sent SQS queue URL by name, so the
+    shared call-module env does not have to carry a per-function variable.'''
+    url = _queue_url_cache.get('url')
+    if url is None:
+        url = sqs.get_queue_url(QueueName=APPEND_SENT_QUEUE)['QueueUrl']
+        _queue_url_cache['url'] = url
+    return url
+
+
+def _queue_sent_copy(msg, host, user, message_id):
+    '''Stages the Bcc-free Sent copy to S3 and enqueues an append job. Best
+    effort: a failure means the message was delivered but its Sent copy is not
+    recorded, which we log rather than surface as a send failure.'''
+    bucket = host.replace('imap', 'cache')
+    key = f'{SENT_PENDING_PREFIX}/{user}/{uuid.uuid4()}'
+    try:
+        upload_object(bucket, key, 'message/rfc822', msg.as_string().encode())
+        sqs.send_message(
+            QueueUrl=_append_sent_queue_url(),
+            MessageBody=json.dumps({
+                'bucket': bucket,
+                'key': key,
+                'user': user,
+                'host': host,
+                'message_id': message_id or '',
+            })
+        )
+        return True
+    except Exception as err:  # pylint: disable=broad-except
+        print(f'[send] WARN failed to queue Sent copy ({key}): {err}')
+        return False
+
+
+def _claim_send(message_id):
+    '''Conditionally claims a Message-Id in the dedupe table. Returns True if it
+    was newly claimed, False if a claim already exists. Fails OPEN (returns True)
+    on any non-conditional error so a dedupe-store hiccup never blocks a send.'''
+    try:
+        _dedupe_table.put_item(
+            Item={
+                'pk': f'senddedupe#{message_id}',
+                'expires_at': int(time.time()) + SEND_DEDUPE_TTL,
+            },
+            ConditionExpression='attribute_not_exists(pk)'
+        )
+        return True
+    except ClientError as err:
+        if err.response['Error']['Code'] == 'ConditionalCheckFailedException':
+            return False
+        print(f'[send-dedupe] WARN claim failed, proceeding: {err}')
+        return True
+
+
+def _release_send(message_id):
+    '''Drops a Message-Id claim so a retry after a failed SMTP send can proceed.'''
+    try:
+        _dedupe_table.delete_item(Key={'pk': f'senddedupe#{message_id}'})
+    except ClientError as err:
+        print(f'[send-dedupe] WARN release failed: {err}')
 
 def load_attachments(raw, bucket, user):
     """Resolve attachment references against S3 and validate the bundle.
@@ -240,26 +353,11 @@ def validate_outbound_headers(body):
     for ref in others.get('references', []) or []:
         _reject_crlf(ref, 'references')
 
-def append_outbox(msg, client):
-    """Appends an email message to Outbox"""
-    try:
-        client.create_folder('Outbox')
-    except: # pylint: disable=bare-except
-        pass
-    msg_id = int(
-                  str(
-                      client.append('Outbox',msg.as_string().encode())
-                  ).split(']', maxsplit=1)[0].rsplit(' ', maxsplit=1)[-1]
-              )
-    client.select_folder('Outbox')
-    client.add_flags([msg_id], [rb"\Seen"], True)
-    return msg_id
-
 def append_drafts(msg, client):
     """Appends an email message to the user's Drafts folder with the
-    \\Draft flag set. Creates the folder if it does not exist. Mirrors
-    append_outbox's create-then-append shape so a missing Drafts folder
-    on a fresh mailbox does not fail the call."""
+    \\Draft flag set. Creates the folder if it does not exist (create-then-
+    append) so a missing Drafts folder on a fresh mailbox does not fail the
+    call."""
     try:
         client.create_folder('Drafts')
     except: # pylint: disable=bare-except
@@ -342,16 +440,3 @@ def send(msg, smtp_host, from_addr, to_addrs):
         "statusCode": status_code,
         "body": json.dumps(body)
     }
-
-def move(msg_id, client):
-    """Moves message identified by msg_id from Outbox to Sent"""
-    try:
-        client.create_folder('Sent')
-    except: # pylint: disable=bare-except
-        pass
-    client.select_folder('Outbox')
-    try:
-        client.move([msg_id], 'Sent')
-    except: # pylint: disable=bare-except
-        return False
-    return True

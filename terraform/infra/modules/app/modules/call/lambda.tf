@@ -133,6 +133,14 @@ resource "aws_iam_role_policy" "lambda" {
         {
             "Effect": "Allow",
             "Action": [
+                "sqs:SendMessage",
+                "sqs:GetQueueUrl"
+            ],
+            "Resource": "arn:aws:sqs:${var.region}:${var.account}:cabal-append-sent"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
                 "cognito-idp:ListUsers",
                 "cognito-idp:AdminGetUser",
                 "cognito-idp:AdminConfirmSignUp",

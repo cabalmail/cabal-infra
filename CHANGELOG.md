@@ -28,6 +28,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`docker/shared/clear-maintenance.sh`, a supervisord daemon) since the
   fire-and-forget deploy does not wait for the roll; an `until` epoch written
   with the flag is a backstop so a failed deploy cannot wedge it on.
+- Outbound sending no longer blocks on IMAP. `/send` now delivers over SMTP
+  first, then stages the Bcc-free Sent copy to S3 (`sent-pending/<user>/<uuid>`
+  in the cache bucket) and enqueues it on a new `cabal-append-sent` SQS queue; a
+  new `append_sent` consumer Lambda writes the copy to the user's Sent folder
+  when IMAP is available - immediately in steady state, or after the roll during
+  an IMAP redeploy (the job retries until the new container serves, then DLQs
+  after `maxReceiveCount`). The append is idempotent (skips if the Message-Id is
+  already in Sent) so a duplicate delivery cannot double-file. The server-side
+  Outbox staging folder and the Outbox->Sent move are retired. Saving a draft is
+  interactive and IMAP-only, so it returns the maintenance `503` during a roll
+  instead of queueing.
+- `/send` is now idempotent against client retries. SMTP-first means a lost
+  `/send` response that the React client or the Apple `SendQueue` retries could
+  otherwise deliver twice; `/send` claims the Message-Id in `cabal-rate-limits`
+  (conditional write, TTL-expiring) before SMTP and releases it if SMTP fails,
+  so a retry of a delivered message reports success without re-sending while a
+  retry of a failed send still goes through.
 
 ## [0.10.7] - 2026-06-07
 
