@@ -61,7 +61,10 @@ resource "aws_iam_role_policy" "lambda" {
             "Action": [
                 "ssm:GetParameter"
             ],
-            "Resource": "arn:aws:ssm:${var.region}:${var.account}:parameter/cabal/master_password"
+            "Resource": [
+                "arn:aws:ssm:${var.region}:${var.account}:parameter/cabal/master_password",
+                "arn:aws:ssm:${var.region}:${var.account}:parameter/cabal/maintenance/imap"
+            ]
         },
         {
             "Effect": "Allow",

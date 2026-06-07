@@ -247,11 +247,21 @@ public actor ApiBackedImapClient: ImapClient {
                         }
                         lastUidNext = status.uidNext
                         lastMessages = status.messages
+                    } catch let error as CabalmailError {
+                        if case .maintenance = error {
+                            // Planned IMAP roll: keep polling quietly until it
+                            // returns rather than tearing down the stream and
+                            // churning MailboxWatcher reconnects for a window
+                            // that clears itself in a minute or two.
+                        } else {
+                            // Surface a transient error and let MailboxWatcher
+                            // apply its reconnect backoff. A persistent failure
+                            // (e.g. 401 → authExpired) finishes the stream and
+                            // the watcher tears itself down.
+                            continuation.finish(throwing: error)
+                            return
+                        }
                     } catch {
-                        // Surface a transient error and let MailboxWatcher
-                        // apply its reconnect backoff. A persistent failure
-                        // (e.g. 401 → authExpired) finishes the stream and
-                        // the watcher tears itself down.
                         continuation.finish(throwing: error)
                         return
                     }

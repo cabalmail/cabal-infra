@@ -138,6 +138,9 @@ COPY shared/sync-users.sh                  /usr/local/bin/sync-users.sh
 COPY shared/reconfigure.sh                 /usr/local/bin/reconfigure.sh
 COPY shared/sendmail-wrapper.sh            /usr/local/bin/sendmail-wrapper.sh
 
+# Clears the planned-maintenance SSM flag once Dovecot is serving (imap only).
+COPY shared/clear-maintenance.sh           /usr/local/bin/clear-maintenance.sh
+
 # Rsyslog config (ships sendmail logs to /var/log/maillog for CloudWatch)
 COPY shared/rsyslog-mail.conf              /etc/rsyslog.conf
 

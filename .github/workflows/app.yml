@@ -296,6 +296,17 @@ jobs:
           --push \
           docker/
 
+    # IMAP rolls with a true zero-task window (single-task service: the old
+    # container stops before the new one starts), so raise the planned-
+    # maintenance flag immediately before triggering the roll. The IMAP-backed
+    # Lambdas then return a friendly 503 instead of relaying a raw connection
+    # error. The new container clears the flag once Dovecot is serving
+    # (docker/shared/clear-maintenance.sh); the deploy itself is fire-and-forget,
+    # so CI never clears it. imap tier only. See .github/scripts/maintenance-flag.sh.
+    - name: set-maintenance-flag
+      if: matrix.tier == 'imap'
+      run: ./.github/scripts/maintenance-flag.sh set
+
     # Out-of-band ECS deploy: clones running task def, rewrites the
     # image tag for cabal-${tier}, registers a new revision, and rolls
     # the service. See .github/scripts/deploy-ecs-service.sh.

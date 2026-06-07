@@ -1,9 +1,12 @@
 '''Returns IMAP STATUS data (MESSAGES, UNSEEN, UIDVALIDITY, UIDNEXT) for a folder.'''
 import json
 from helper import get_imap_client # pylint: disable=import-error
+from helper import maintenance_guard # pylint: disable=import-error
 
 ATTRS = ['MESSAGES', 'UNSEEN', 'UIDVALIDITY', 'UIDNEXT']
 
+
+@maintenance_guard
 def handler(event, _context):
     '''Returns STATUS attributes for a folder.
 

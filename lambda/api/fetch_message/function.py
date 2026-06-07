@@ -4,6 +4,10 @@ import re
 from helper import get_message # pylint: disable=import-error
 from helper import sign_url # pylint: disable=import-error
 
+from helper import maintenance_guard # pylint: disable=import-error
+
+
+@maintenance_guard
 def handler(event, _context):
     '''Retrieves IMAP message given a folder and ID'''
     query_string = event['queryStringParameters']

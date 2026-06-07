@@ -390,6 +390,9 @@ final class AppState {
         case .timeout:            return "Request timed out."
         case .cancelled:          return "Cancelled."
         case .notSignedIn:        return "Not signed in."
+        // Planned IMAP redeploy: show the API's friendly copy verbatim, no
+        // "Server error:" prefix.
+        case .maintenance(let message): return message
         default:                  return nil
         }
     }

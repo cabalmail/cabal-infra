@@ -24,6 +24,7 @@ from helper import ( # pylint: disable=import-error
     ENVELOPE_FETCH_KEYS,
     envelope_dict,
     get_imap_client,
+    maintenance_guard,
     validate_folder_name,
     validate_search_text,
 )
@@ -42,6 +43,7 @@ TRUTHY = {'1', 'true', 'True', 'yes', 'YES'}
 CROSS_FOLDER_EXCLUDES = {'trash'}
 
 
+@maintenance_guard
 def handler(event, _context):
     '''Searches one folder (or every subscribed folder) and returns envelopes.
 

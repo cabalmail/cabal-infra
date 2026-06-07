@@ -2,6 +2,10 @@
 import json
 from helper import unsubscribe_folder # pylint: disable=import-error
 
+from helper import maintenance_guard # pylint: disable=import-error
+
+
+@maintenance_guard
 def handler(event, _context):
     '''Marks the specified folder as unsubscribedr'''
     body = json.loads(event['body'])

@@ -117,6 +117,41 @@ final class ApiClientTests: XCTestCase {
         }
     }
 
+    func testMaintenance503SurfacesAsMaintenance() async throws {
+        let body = #"{"status":"maintenance","message":"Down for maintenance","retry_after":30}"#
+        let http = RecordingHTTPTransport(responses: [(Data(body.utf8), 503)])
+        let auth = StubAuthService()
+        let client = URLSessionApiClient(
+            configuration: makeConfiguration(),
+            authService: auth,
+            transport: http
+        )
+        do {
+            _ = try await client.listAddresses()
+            XCTFail("Expected maintenance error")
+        } catch let error as CabalmailError {
+            XCTAssertEqual(error, .maintenance(message: "Down for maintenance"))
+        }
+    }
+
+    func testNonMaintenance503SurfacesAsServer() async throws {
+        // A 503 that isn't the maintenance shape must still surface as .server,
+        // so unrelated upstream failures aren't mislabeled as planned maintenance.
+        let http = RecordingHTTPTransport(responses: [(Data("upstream down".utf8), 503)])
+        let auth = StubAuthService()
+        let client = URLSessionApiClient(
+            configuration: makeConfiguration(),
+            authService: auth,
+            transport: http
+        )
+        do {
+            _ = try await client.listAddresses()
+            XCTFail("Expected server error")
+        } catch let error as CabalmailError {
+            XCTAssertEqual(error, .server(code: "503", message: "upstream down"))
+        }
+    }
+
     func testListAddressesDecodesFavoriteFlag() async throws {
         // The `/list` Lambda flattens a per-caller `favorite` boolean onto
         // each row (derived from the `favorites` string set). Older rows and

@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.8] - Unreleased
+
+### Added
+- Planned-maintenance signal for IMAP redeploys. The IMAP ECS service is
+  hard-capped at one task (Dovecot has Maildir-over-EFS concurrency issues), so
+  every IMAP image roll stops the old container before starting the new one - a
+  true zero-task window during which the IMAP-backed Lambdas previously relayed a
+  raw connection error that clients rendered as a scary message. The deploy
+  pipeline now raises a flag in SSM (`/cabal/maintenance/imap`) immediately
+  before triggering the roll (`app.yml`, imap tier only, via
+  `.github/scripts/maintenance-flag.sh`); `get_imap_client` consults it and the
+  new `maintenance_guard` decorator turns it into a friendly `503`
+  (`Retry-After`, `{"status":"maintenance", ...}`) across the IMAP-backed
+  handlers (reads, folder ops, flags, moves, cache-miss fetches). The React
+  webmail (global axios interceptor) and the Apple clients
+  (`CabalmailError.maintenance`) show "Email access is temporarily unavailable
+  due to planned maintenance." instead of an error; the Apple folder-status
+  poller treats it as transient and keeps polling. The flag read fails open
+  (a missing parameter or SSM hiccup never blocks mail), and the new IMAP
+  container clears the flag once Dovecot is serving
+  (`docker/shared/clear-maintenance.sh`, a supervisord daemon) since the
+  fire-and-forget deploy does not wait for the roll; an `until` epoch written
+  with the flag is a backstop so a failed deploy cannot wedge it on.
+
 ## [0.10.7] - 2026-06-07
 
 ### Security
