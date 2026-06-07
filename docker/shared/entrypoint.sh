@@ -121,10 +121,23 @@ LOGINCONF
   fi
 fi
 
-# ── Step 5: Create OS users from Cognito ──────────────────────
+# ── Step 5: Create OS users from Cognito (imap + smtp-out only) ─
 # Replaces: chef/cabal/recipes/_common_users.rb
-echo "[entrypoint] Syncing users from Cognito..."
-/usr/local/bin/sync-users.sh
+#
+# smtp-in is a pure relay: its mailertable routes every hosted-domain
+# message to the imap container over SMTP (.tld -> smtp:[imap_host]) and it
+# runs no dovecot, so it never resolves a local OS user. Skipping the sync
+# there means smtp-in does no useradd/groupadd/install -o at startup, which
+# lets its task definition drop CHOWN/FOWNER/DAC_OVERRIDE (phase 2a of
+# docs/0.10.x/container-runtime-hardening-plan.md). imap delivers locally
+# via procmail and smtp-out resolves submission auth against the system
+# passwd db (dovecot userdb { driver = passwd }), so both still need them.
+if [ "$TIER" = "imap" ] || [ "$TIER" = "smtp-out" ]; then
+  echo "[entrypoint] Syncing users from Cognito..."
+  /usr/local/bin/sync-users.sh
+else
+  echo "[entrypoint] Skipping user sync for $TIER (relay tier; no local users needed)."
+fi
 
 # ── Step 6: Generate sendmail maps from DynamoDB ──────────────
 # Replaces: chef/cabal/libraries/scan.rb + all ERB templates
