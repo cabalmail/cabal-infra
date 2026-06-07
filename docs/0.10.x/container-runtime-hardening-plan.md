@@ -237,6 +237,18 @@ The TLS terminator question: IMAP traffic arrives at the container in clear (NLB
 
 Recommendation: option (1), with the NLB-subnet CIDR plumbed as an env var (`LOGIN_TRUSTED_NETWORKS`) injected by the ECS task definition. The entrypoint writes it to the dovecot config.
 
+#### Phase 4 reconnaissance (verified live 2026-06-06)
+
+The option-(1) assumption was checked against the running infrastructure before committing to it; it holds, with one refinement.
+
+- **Source IP is the NLB, not the client — confirmed.** `preserve_client_ip.enabled = false` on the `cabal-ecs-imap-tg` target group (`target_type = "ip"`, `protocol = "TCP"`, port 143) in **both prod and stage** (`aws elbv2 describe-target-group-attributes`). It is not set in Terraform, so the AWS default governs, and for an IP-type target group with a TCP/TLS protocol that default is *disabled*. So the NLB SNATs and Dovecot sees the NLB node's private IP — exactly what `login_trusted_networks` needs. (The IMAP NLB listener is TLS-terminating, 993 -> 143, which is *why* plaintext reaches the container; submission is the opposite, see below.)
+- **The trusted range is the NLB's public-subnet CIDRs, and it is per-environment** (verified 2026-06-06):
+  - **prod** (VPC `10.0.0.0/16`): two public subnets, `10.0.64.0/19` (us-east-1a) + `10.0.96.0/19` (us-east-1b). They tile the `10.0.64.0/18` "public tier" exactly; the private subnets live in the separate `10.0.0.0/18`.
+  - **stage**: a single public subnet `10.64.64.0/18` (us-east-1a).
+- **Derive the list; do not hardcode and do not collapse.** `LOGIN_TRUSTED_NETWORKS` should be emitted per-env from the NLB's actual subnet CIDRs (Terraform) and passed as a space-separated list — Dovecot's `login_trusted_networks` accepts a list natively. Resist collapsing prod's two /19s into `10.0.64.0/18`: it is exact *today*, but it loses the auto-tracking property — it would miss a future us-east-1c public subnet (outside the /18) and would silently trust anything later carved into `10.0.64.0/18` that is not an NLB subnet. Deriving from the subnet data tracks the source of truth; a literal does not.
+- **Submission (587/465) needs none of this.** Those listeners are TCP passthrough and Dovecot terminates TLS itself, so `disable_plaintext_auth = yes` works there directly, with no trusted-networks marking.
+- **Guard the coupling.** If `preserve_client_ip.enabled` is ever flipped to `true` (e.g. to log or rate-limit on real client IPs), the trusted-networks assumption breaks silently and *every* IMAP login starts failing. Tie the two together — at minimum a comment where the attribute is (un)set, ideally a check — so the dependency is not invisible.
+
 For submission, NLB does TCP passthrough; Dovecot already terminates TLS; `disable_plaintext_auth = yes` works out of the box without trusted-networks games.
 
 ### Phase 5 — Sendmail and OpenDKIM hardening
