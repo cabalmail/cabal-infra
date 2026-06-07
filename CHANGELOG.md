@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.10] - Unreleased
+
+### Security
+- Re-dropped the smtp-in `CHOWN`/`FOWNER`/`DAC_OVERRIDE` capabilities (phase
+  2a, second attempt; leaving `KILL`, `NET_BIND_SERVICE`, `SETUID`,
+  `SETGID`). This time it is a Terraform-only change: the entrypoint cleanups
+  that gate `sync-users.sh` and `cognito.bash` off smtp-in already shipped
+  (0.10.8) and are running in both environments, so the image smtp-in runs
+  already needs none of these caps at startup, and with no docker rebuild
+  there is no app.yml/infra.yml image-tag race (the failure mode that broke
+  the first attempt - see 0.10.9). smtp-in task-def revision marker bumped
+  v5 -> v6. Gated on a stage soak: it must be validated against real inbound
+  mail through stage smtp-in (sendmail relays to imap with no `CHOWN` errors)
+  before promotion to prod; if sendmail needs `CHOWN` at queue/relay time,
+  only that one cap is added back.
+
 ## [0.10.9] - 2026-06-07
 
 ### Changed
