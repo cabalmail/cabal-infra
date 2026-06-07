@@ -193,24 +193,23 @@ jobs:
           done
         fi
 
-  approval:
-    needs: setup
-    environment: gate-${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
-    runs-on: ubuntu-latest
-    steps:
     # Surface which area jobs are flagged for build/deploy so the gate
-    # reviewer can see the blast radius before approving. Reads the same
-    # per-area flags setup resolved (push: dorny/paths-filter;
-    # workflow_dispatch: the `areas` input). Written to both the log and
-    # the run's step summary.
-    - name: approve
+    # reviewer can see the blast radius BEFORE approving. This must live
+    # in setup, not in the approval job: approval is gated on the
+    # gate-${env} environment and does not run until after approval, so
+    # a summary there could never be seen before the approve decision.
+    # setup runs first (no gate), so this output is visible while the run
+    # waits at the gate. Reads the per-area flags resolve-areas just
+    # computed (push: dorny/paths-filter; workflow_dispatch: the `areas`
+    # input). Written to both the log and the run's step summary.
+    - name: flagged-summary
       env:
-        DOCKER: ${{ needs.setup.outputs.docker }}
-        LAMBDA_API: ${{ needs.setup.outputs.lambda_api }}
-        LAMBDA_COUNTER: ${{ needs.setup.outputs.lambda_counter }}
-        LAMBDA_CERTBOT: ${{ needs.setup.outputs.lambda_certbot }}
-        REACT: ${{ needs.setup.outputs.react }}
-        FRONT_DOOR: ${{ needs.setup.outputs.front_door }}
+        DOCKER: ${{ steps.areas.outputs.docker }}
+        LAMBDA_API: ${{ steps.areas.outputs.lambda_api }}
+        LAMBDA_COUNTER: ${{ steps.areas.outputs.lambda_counter }}
+        LAMBDA_CERTBOT: ${{ steps.areas.outputs.lambda_certbot }}
+        REACT: ${{ steps.areas.outputs.react }}
+        FRONT_DOOR: ${{ steps.areas.outputs.front_door }}
       run: |
         set -euo pipefail
         FLAGGED=()
@@ -231,7 +230,19 @@ jobs:
             echo "- ${c}" >> "$GITHUB_STEP_SUMMARY"
           done
         fi
-        echo "Approved"
+
+  approval:
+    needs: setup
+    environment: gate-${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
+    runs-on: ubuntu-latest
+    steps:
+    # Deployment gate only. The blast-radius summary that used to live
+    # here moved to setup's flagged-summary step: this job is gated on
+    # the gate-${env} environment and does not run until after approval,
+    # so the summary could never be seen before the approve decision.
+    # This step just records the approval in the log.
+    - name: approve
+      run: echo "Approved"
 
   docker:
     # The matrix below reads `fromJson(needs.setup.outputs.tiers)`, and a
