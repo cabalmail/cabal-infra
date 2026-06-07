@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.12] - Unreleased
+
+### Fixed
+- Closed the `app.yml`/`infra.yml` stale-image deploy race flagged in the
+  0.10.9 note - the failure mode that wedged the smtp-in cap-drop rollout.
+  When a single push touches both `docker/**` and `terraform/infra/**`, the
+  two workflows run concurrently; `infra.yml`'s plan could reach
+  `refresh-ssm-from-running.sh` before `app.yml` had rolled imap to the
+  freshly-built image, read imap's pre-roll (stale) tag into
+  `/cabal/deployed_image_tag`, and then a marker-triggered task-def
+  re-registration (`*_taskdef_revision_marker` bump) would pin the new task
+  def to the old image. Fixed in three layers:
+  - `deploy-ecs-service.sh` now waits for the rolled service to reach a
+    stable rollout (`aws ecs wait services-stable`) after `update-service`,
+    so an `app.yml` docker job only reports success once the image is
+    actually running. These mail services have no deployment circuit
+    breaker, so a broken image never auto-rolls back; the wait times out and
+    the job fails loudly instead of reporting a phantom success.
+  - New `.github/scripts/wait-for-app-deploy.sh`, run at the start of
+    `infra.yml`'s plan job, blocks the plan until the sibling `app.yml` run
+    for the same commit finishes (no-op when no such run exists, i.e. the
+    common terraform-only push). This establishes the happens-before that a
+    stability wait alone cannot, since the two workflows have independent
+    concurrency groups. Requires the new read-only `actions: read`
+    permission on `infra.yml`.
+  - `refresh-ssm-from-running.sh` now waits for the canonical imap service
+    to settle before reading its tag and refuses to pin a mid-roll tag, as
+    a belt-and-suspenders backstop to the ordering step.
+  Steady state is unchanged: a terraform-only push triggers no `app.yml`
+  run, the ordering step is a no-op, imap is already stable, and SSM stays
+  in lockstep exactly as before.
+
 ## [0.10.10] - 2026-06-07
 
 ### Security
