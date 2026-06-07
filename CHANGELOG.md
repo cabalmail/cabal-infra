@@ -46,6 +46,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so a retry of a delivered message reports success without re-sending while a
   retry of a failed send still goes through.
 
+### Changed
+- IaC quality gates, Phase 1 (`docs/0.10.x/iac-quality-gates-plan.md`). The
+  three Terraform scanners in `infra.yml` were drifting into noise; this
+  rebuilds them on maintained, pinned tooling without yet changing what blocks
+  a deploy. tfsec (merged into Trivy and in maintenance mode, and already
+  disabled in the workflow) is replaced by Trivy IaC (`trivy config`, same Aqua
+  engine and `AVD-AWS-*` finding IDs). The `terraform/dns` bootstrap stack,
+  which had no scanners at all, now runs Checkov, tflint, and Trivy as
+  `checkov_dns` / `tflint_dns` / `trivy_dns` jobs wired into `bootstrap_apply`'s
+  `needs`. The silently-broken tflint loop (`for i in ...; do tflint; done`
+  never `cd`'d, so it scanned the stack root N times and never saw the modules)
+  is replaced with `tflint --recursive`, and `terraform/.tflint.hcl` gains the
+  bundled terraform `recommended` preset and moves the AWS ruleset from the
+  stale 0.20.0 to 0.40.0. All scanner actions are pinned to commit SHA (were
+  `@master`, a `curl | bash` installer, and a deprecated tfsec wrapper). Every
+  scanner uploads SARIF to the GitHub code-scanning tab (the repo is public, so
+  this needs no GitHub Advanced Security). All scanners still soft-fail -
+  findings are surfaced, not gated; the gate flips in a later phase once
+  baselines are established. Phase 0's finding inventory is recorded in
+  `docs/0.10.x/iac-baseline-snapshot.md`.
+
 ## [0.10.12] - 2026-06-07
 
 ### Fixed
