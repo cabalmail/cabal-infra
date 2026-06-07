@@ -23,6 +23,20 @@ line_length:
   ignores_comments: true
   ignores_urls: true
 
+# A loose backstop against genuinely sprawling files, not a nudge to split
+# cohesive ones. SwiftLint's default (warning: 400) is tuned for neither
+# SwiftUI views nor view models, where a declarative `body` or a
+# feature-complete view model legitimately runs long; under `--strict` that
+# default turned every 400-line file into a hard build failure and bred
+# artificial extension-splits. 500/800 keeps the hard ceiling where a file is
+# actually doing too much. `type_body_length` / `function_body_length` stay at
+# their defaults - they target the "doing too much" smell more precisely than
+# raw line count, which also charges for imports, blank lines, and extensions.
+file_length:
+  warning: 500
+  error: 800
+  ignore_comment_only_lines: true
+
 identifier_name:
   excluded:
     - id

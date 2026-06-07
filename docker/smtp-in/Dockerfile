@@ -1,4 +1,4 @@
-FROM amazonlinux:2023
+FROM amazonlinux:2023@sha256:ad882807c6c88f478186fa2632637380e06071a303e2b3bd96ab71846a77c6a3
 
 # System packages
 RUN dnf install -y \
@@ -17,6 +17,10 @@ RUN dnf install -y \
 
 # Sendmail .mc template (placeholder for cert domain)
 COPY templates/in-sendmail.mc               /etc/mail/sendmail.mc.template
+
+# Sendmail service switch: consult /etc/hosts before DNS so the
+# hosts-pin.sh IMAP pin is honored (see docker/shared/hosts-pin.sh).
+COPY shared/service.switch                  /etc/mail/service.switch
 
 # Shared scripts
 COPY shared/entrypoint.sh                  /entrypoint.sh

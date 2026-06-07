@@ -5,6 +5,111 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.6] - 2026-06-06
+
+### Security
+- Digest-pinned every container image `FROM` line to its tag + SHA256
+  digest (Phase 3 of `docs/0.10.x/container-runtime-hardening-plan.md`):
+  the three mail tiers and the sinkhole fixture on `amazonlinux:2023`, the
+  certbot-renewal Lambda base on `public.ecr.aws/lambda/python`, and the
+  (dormant) monitoring images on their upstreams. A pinned digest means a
+  rebuild pulls the exact base bytes that were reviewed rather than
+  whatever a floating tag resolves to that day. The three ARG-driven
+  monitoring FROMs (uptime-kuma, ntfy, healthchecks) were flattened to
+  literal `tag@digest` so the pin is uniform and Dependabot-updatable. The
+  ECS task definitions deliberately keep referencing the immutable
+  `cabal-<tier>:sha-<8>` tags - since ECR `image_tag_mutability` is
+  `IMMUTABLE`, each tag already binds one digest apiece, so a digest
+  reference there was dropped as zero-gain (rationale in the plan doc).
+- Added a nightly image vulnerability scan
+  (`.github/workflows/image-scan.yml`): Trivy scans the image each prod
+  mail-tier ECS service is actually running - resolved from the live task
+  definition, so it follows out-of-band deploys - uploads SARIF to the
+  Security -> Code scanning tab, and attaches the raw report as a build
+  artifact. This catches CVEs disclosed after an image was built and left
+  running, which scan-on-push cannot.
+- `app.yml`'s docker build job now reads the ECR scan-on-push result for
+  the image it just pushed and reports the severity counts into the run
+  summary, warning (soft-fail) on HIGH/CRITICAL
+  (`.github/scripts/ecr-scan-report.sh`). The repos have scanned on push
+  since they were created in 0.9.x; nothing had been surfacing the
+  findings.
+
+### Added
+- `.github/dependabot.yml`. The repo previously had no Dependabot
+  version-update config (only the high/critical alert-monitor workflow).
+  Scoped to the Docker ecosystem across every Dockerfile directory and
+  targeting `stage`, it opens weekly PRs to advance the pinned base-image
+  digests, grouped so the mail-tier bases (amazonlinux + the Lambda Python
+  base) land separately from the dormant monitoring images.
+
+- Conventional message-selection idioms in the keyboard-optimized Apple clients
+  (iPad regular width and macOS). The message list now uses native multiple
+  selection: a plain click selects and opens one message, shift-click extends a
+  contiguous range, command-click toggles an individual message, Cmd-A selects
+  everything currently visible (respecting the active All/Unread/Flagged tab),
+  shift+up/down extends the selection from the keyboard, and Esc clears it. When
+  more than one message is selected the reading pane shows an "N Messages
+  Selected" placeholder and the existing bottom action bar (Archive / Move /
+  Read / Flag) operates on the whole selection; dragging any selected row onto a
+  sidebar folder still carries the entire selection. Cmd-A and Esc are scoped to
+  the list's keyboard focus so they don't disturb the search field. On iPad the
+  Select button now toggles the system edit mode so touch users can still multi-
+  select without a keyboard; on macOS that button is gone since modifier-clicks
+  are always available. Compact iPhone is unchanged - single tap to open, plus
+  the existing Select/checkbox flow.
+
+### Changed
+- Retuned the Apple client's SwiftLint `file_length` rule from its inherited
+  default (warning at 400) to warning 500 / error 800 with
+  `ignore_comment_only_lines` (`apple/.swiftlint.yml`). Under CI's
+  `swiftlint --strict` the 400-line default was a hard build failure, which had
+  bred a layer of extension-splits whose only purpose was to stay under the
+  cap. Folded the three such `AppState` splits (`AppStateCounts`,
+  `AppStateCompose`, `AppStateDrag` - tiny method-buckets whose backing storage
+  already lived on `AppState`) back into `AppState.swift` as same-file
+  extensions, and dropped the `// swiftlint:disable file_length` banner from
+  `MessageDetailViewModel`. `type_body_length` / `function_body_length` are
+  left at their defaults, so the splits that exist to satisfy those rules are
+  unchanged.
+- The `app.yml` deploy-gate `approval` job now lists which app components
+  (docker, lambda_api, lambda_counter, lambda_certbot, react, front_door) are
+  flagged for build/deploy, instead of just echoing "Approved". The list is
+  printed to the job log and written to the run's step summary so a gate
+  reviewer can see the blast radius before approving. It reads the same
+  per-area flags the `setup` job already resolves (dorny/paths-filter on push,
+  the `areas` input on workflow_dispatch).
+
+### Fixed
+- Inbound mail no longer 550-bounces with `Host unknown (Name server:
+  [imap.cabal.internal]: host not found)` when smtp-in cold-starts
+  during an IMAP outage. The 0.9.24 `/etc/hosts` pin
+  (`docker/shared/hosts-pin.sh`) only protected an already-running
+  smtp-in across an IMAP-only redeploy: if smtp-in itself was replaced
+  while the IMAP task was unregistered (e.g. a `docker/shared/*` change
+  rebuilds and rolls all three tiers at once), the `init` resolve
+  returned nothing, no pin was written, and every inbound message fell
+  through to DNS, hit a Cloud Map NXDOMAIN, and took a permanent 5xx.
+  `hosts-pin.sh` now writes an RFC 5737 TEST-NET sentinel
+  (`192.0.2.1`, overridable via `HOSTS_PIN_SENTINEL`) whenever it
+  cannot resolve and no prior pin exists, so the name always resolves
+  to something that TCP-fails into a queueable 4xx. The 30s daemon's
+  existing diff-and-overwrite replaces the sentinel (or a stale IP)
+  with the real address within one poll interval of IMAP becoming
+  resolvable again.
+- smtp-in's sendmail is now explicitly pointed at a
+  `/etc/mail/service.switch` (`hosts files dns`) via
+  `confSERVICE_SWITCH_FILE`, guaranteeing it consults `/etc/hosts`
+  before DNS. Previously the pin's effectiveness silently depended on
+  the stock resolver order; an out-of-the-box build that went straight
+  to the VPC resolver would have ignored the pin entirely. Shipped as a
+  static file (`docker/shared/service.switch`) copied in by
+  `docker/smtp-in/Dockerfile`.
+- The smtp-in `hosts-pin` daemon logs the `cabal.internal` SOA record
+  TTL and minimum at startup, making the worst-case NXDOMAIN
+  negative-cache window - the bound on how long a stale pin can persist
+  after IMAP returns - observable in the container logs.
+
 ## [0.10.5] - 2026-06-05
 
 ### Fixed

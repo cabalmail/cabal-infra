@@ -1,7 +1,3 @@
-// swiftlint:disable file_length
-// `file_length` is suppressed while issue #403 diagnostic logging lives
-// here. Re-enable (remove this line) when `BodyFetchLog` calls are
-// stripped and the file falls back under the 400-line cap.
 import Foundation
 import Observation
 import CabalmailKit

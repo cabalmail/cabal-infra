@@ -22,6 +22,12 @@ struct MessageListView: View {
     /// true mailbox rather than the sidebar's current selection. `nil`
     /// fires when the selection clears or returns to a same-folder row.
     let onSearchResultSelected: (String?) -> Void
+    /// Reports how many messages are currently selected so the parent can show
+    /// a "N messages selected" placeholder in the reading pane during a multi-
+    /// selection. Fires only on wide/keyboard layouts, where the native multi-
+    /// select list drives `selectedUIDs`; compact iPhone keeps the single-
+    /// selection + touch edit-mode flow and never calls this.
+    let onSelectionCountChanged: (Int) -> Void
 
     // `appState` is not private so the +Bulk sibling can reach it for
     // the move-destination sheet's `client` lookup; matches the pattern
@@ -63,6 +69,15 @@ struct MessageListView: View {
     /// reads `\.isSearching` from the `.searchable` scope instead — see
     /// `SearchActiveScope` in `MessageListView+Filter.swift`.
     @FocusState var inlineSearchFocused: Bool
+    #if !os(macOS)
+    /// Drives the native multi-select edit mode on wide touch layouts (iPad,
+    /// visionOS): the Select button toggles it, and while active the system
+    /// draws selection circles and taps toggle membership in `selectedUIDs`.
+    /// Non-private so the `+Bulk` extension's `selectButton` can flip it.
+    /// macOS has no `EditMode` (pointer shift/command-clicks cover multi-
+    /// select), so this is compiled out there.
+    @State var editMode: EditMode = .inactive
+    #endif
 
     var body: some View {
         Group {
@@ -202,8 +217,18 @@ struct MessageListView: View {
             // Other folders ignore the signal.
             guard let signal, signal.folderPath == folder.path else { return }
             let current = model?.envelopes.first { $0.uid == signal.uid }
-            selection = current.flatMap { model?.nextUnreadEnvelope(after: $0) }
+            // Compute the advance target before pruning - `nextUnreadEnvelope`
+            // walks from `current`'s index, which disappears once it's pruned.
+            let next = current.flatMap { model?.nextUnreadEnvelope(after: $0) }
             model?.pruneEnvelope(uid: signal.uid)
+            if isWideLayout {
+                // Wide layouts drive the reading pane off `selectedUIDs`;
+                // advancing the set re-derives `selection` via the list's
+                // `.onChange(of: selectedUIDs)` below.
+                model?.selectedUIDs = next.map { [$0.uid] } ?? []
+            } else {
+                selection = next
+            }
         }
         .onChange(of: appState.lastEnvelopeFlagChange) { _, signal in
             // Detail view toggled \Seen (or another flag in the future).
@@ -300,20 +325,15 @@ struct MessageListView: View {
     private func content(for model: MessageListViewModel) -> some View {
         @Bindable var model = model
         let visible = filteredEnvelopes(model.envelopes)
-        List(selection: $selection) {
-            if let errorMessage = model.errorMessage {
-                Label(errorMessage, systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.red)
-            }
-            if model.isLoading && model.envelopes.isEmpty {
-                ProgressView("Fetching messages…")
-            }
-            ForEach(visible) { envelope in
-                row(for: envelope, model: model, isSelected: envelope == selection)
-            }
-            if model.isLoadingMore {
-                ProgressView()
-                    .frame(maxWidth: .infinity)
+        Group {
+            // Wide/keyboard layouts get native multiple selection (shift /
+            // command-click, Cmd-A, Esc); compact iPhone keeps single
+            // selection. The two list variants and their selection helpers
+            // live in `MessageListView+Selection.swift`.
+            if isWideLayout {
+                wideList(model: model, visible: visible)
+            } else {
+                compactList(model: model, visible: visible)
             }
         }
         // iPadOS/iOS/visionOS — `.searchable` lands the search bar above
@@ -349,44 +369,14 @@ struct MessageListView: View {
                 if !folder.isSubscribed {
                     unsubscribedFolderBanner(model: model)
                 }
-                if model.bulkMode { bulkActionBar(model: model) }
+                if showsBulkActionBar(model: model) { bulkActionBar(model: model) }
             }
         }
     }
 
-    @ViewBuilder
-    private func topInset(model: MessageListViewModel) -> some View {
-        VStack(spacing: 0) {
-            #if os(macOS)
-            inlineSearchField(model: model, focused: $inlineSearchFocused)
-            #endif
-            if model.isSearchActive {
-                searchMetadataBanner(model: model)
-            }
-            if let addressFilter, !addressFilter.isEmpty {
-                addressFilterChip(addressFilter)
-            }
-            // The filter button is search refinement, not list filtering,
-            // so it only surfaces once the user is engaged with the
-            // search field — preventing the conceptual collision with
-            // the All / Unread / Flagged pills next to it. macOS uses
-            // our own @FocusState on the inline TextField; everywhere
-            // else reads `\.isSearching` from the `.searchable` scope.
-            #if os(macOS)
-            filterTabsBar(
-                model: model,
-                searchActive: inlineSearchFocused || model.isSearchActive
-            )
-            #else
-            SearchActiveScope { isSearching in
-                filterTabsBar(model: model, searchActive: isSearching)
-            }
-            #endif
-        }
-    }
-
-    // Row rendering, address-filter chip, swipe / context-menu actions,
-    // and the macOS inline search field all live in same-module extension
-    // files (`+Rows.swift`, `+Search.swift`, `+macOS.swift`) so the
-    // primary struct body stays under SwiftLint's 250-line cap.
+    // Row rendering, the top inset (search field + filter tabs), swipe /
+    // context-menu actions, the multi-select list variants, and the macOS
+    // inline search field all live in same-module extension files
+    // (`+Rows.swift`, `+Filter.swift`, `+Selection.swift`, `+Search.swift`,
+    // `+macOS.swift`) so the primary struct body stays under SwiftLint's caps.
 }
