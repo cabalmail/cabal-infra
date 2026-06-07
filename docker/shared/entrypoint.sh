@@ -64,11 +64,17 @@ echo "[entrypoint] Rendering sendmail.mc..."
 sed "s/__CERT_DOMAIN__/${CERT_DOMAIN}/g" \
   /etc/mail/sendmail.mc.template > /etc/mail/sendmail.mc
 
-# ── Step 3: Cognito auth script ───────────────────────────────
+# ── Step 3: Cognito auth script (imap + smtp-out only) ────────
 # Replaces: chef/cabal/templates/default/cognito.bash.erb
-# Used by PAM to authenticate IMAP/SMTP users against Cognito.
-echo "[entrypoint] Generating cognito.bash..."
-cat > /usr/bin/cognito.bash <<COGNITO
+# Used by PAM to authenticate IMAP/SMTP users against Cognito. smtp-in is a
+# pure relay with no SMTP AUTH and no dovecot, so it never invokes this
+# script - generating it there is dead work. It also breaks under the phase
+# 2a cap drop: the file is chmod 100 (no owner write), so overwriting it on
+# any entrypoint re-run needs DAC_OVERRIDE, which smtp-in no longer carries.
+# Gate it to the tiers that actually authenticate.
+if [ "$TIER" = "imap" ] || [ "$TIER" = "smtp-out" ]; then
+  echo "[entrypoint] Generating cognito.bash..."
+  cat > /usr/bin/cognito.bash <<COGNITO
 #!/bin/bash
 
 COGNITO_PASSWORD=\$(cat -)
@@ -81,7 +87,8 @@ aws cognito-idp initiate-auth \\
   --client-id ${COGNITO_CLIENT_ID} \\
   --auth-parameters "USERNAME=\${COGNITO_USER},PASSWORD=\"\${COGNITO_PASSWORD}\""
 COGNITO
-chmod 100 /usr/bin/cognito.bash
+  chmod 100 /usr/bin/cognito.bash
+fi
 
 # ── Step 4: Dovecot SSL config (IMAP + SMTP-OUT) ─────────────
 # Replaces: chef/cabal/templates/default/dovecot-10-ssl.conf.erb
@@ -121,10 +128,23 @@ LOGINCONF
   fi
 fi
 
-# ── Step 5: Create OS users from Cognito ──────────────────────
+# ── Step 5: Create OS users from Cognito (imap + smtp-out only) ─
 # Replaces: chef/cabal/recipes/_common_users.rb
-echo "[entrypoint] Syncing users from Cognito..."
-/usr/local/bin/sync-users.sh
+#
+# smtp-in is a pure relay: its mailertable routes every hosted-domain
+# message to the imap container over SMTP (.tld -> smtp:[imap_host]) and it
+# runs no dovecot, so it never resolves a local OS user. Skipping the sync
+# there means smtp-in does no useradd/groupadd/install -o at startup, which
+# lets its task definition drop CHOWN/FOWNER/DAC_OVERRIDE (phase 2a of
+# docs/0.10.x/container-runtime-hardening-plan.md). imap delivers locally
+# via procmail and smtp-out resolves submission auth against the system
+# passwd db (dovecot userdb { driver = passwd }), so both still need them.
+if [ "$TIER" = "imap" ] || [ "$TIER" = "smtp-out" ]; then
+  echo "[entrypoint] Syncing users from Cognito..."
+  /usr/local/bin/sync-users.sh
+else
+  echo "[entrypoint] Skipping user sync for $TIER (relay tier; no local users needed)."
+fi
 
 # ── Step 6: Generate sendmail maps from DynamoDB ──────────────
 # Replaces: chef/cabal/libraries/scan.rb + all ERB templates
