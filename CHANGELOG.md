@@ -686,7 +686,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `logging`. Surfaced while extending `pylint` coverage to the shared
   `_shared/*.py` modules (previously only `*/function.py` was linted).
 
-## [0.9.46] - Unreleased
+## [0.9.46] - 2026-05-29
 
 ### Fixed
 - macOS contact picker came up blank. The "Choose Contacts" sheet
