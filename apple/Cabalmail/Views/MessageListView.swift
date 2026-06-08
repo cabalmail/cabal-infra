@@ -119,12 +119,8 @@ struct MessageListView: View {
                 Button {
                     appState.requestRefresh()
                 } label: {
-                    if model?.isLoading == true {
-                        ProgressView()
-                    } else {
-                        Image(systemName: "arrow.clockwise")
-                            .accessibilityLabel("Refresh")
-                    }
+                    RefreshActivityIcon(isLoading: model?.isLoading == true)
+                        .accessibilityLabel("Refresh")
                 }
                 .disabled(model == nil || model?.isLoading == true)
             }
