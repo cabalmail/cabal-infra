@@ -44,3 +44,20 @@ scan-infra: tflint-init
 	-checkov -d terraform/infra --config-file terraform/infra/.checkov.yaml --baseline terraform/infra/.checkov.baseline --quiet --compact
 	-tflint --chdir=terraform/infra --recursive
 	-trivy config terraform/infra --ignorefile terraform/infra/.trivyignore
+
+# --- Release / changelog ---------------------------------------------------
+# changelog: collate changelog.d/ fragments into a dated CHANGELOG.md section.
+# promote:   do that, then commit on stage, push, and open the stage->main PR.
+# Pass the version (or a bump keyword) via VERSION=:
+#   make changelog VERSION=0.10.14
+#   make promote   VERSION=0.10.14      # also: patch / minor / major
+# See docs/releasing.md.
+.PHONY: changelog promote
+
+changelog:
+	@test -n "$(VERSION)" || { echo "usage: make changelog VERSION=<x.y.z>"; exit 1; }
+	./.github/scripts/collate-changelog.sh "$(VERSION)"
+
+promote:
+	@test -n "$(VERSION)" || { echo "usage: make promote VERSION=<x.y.z|patch|minor|major>"; exit 1; }
+	./.github/scripts/promote.sh "$(VERSION)"
