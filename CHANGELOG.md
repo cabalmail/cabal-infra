@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.14] - 2026-06-08
+
+### Added
+- Changelog fragments and a release-promotion script. Unreleased entries are
+  now added as individual files under `changelog.d/` (named
+  `<slug>.<category>.md`) instead of editing `CHANGELOG.md` directly, so
+  concurrent branches and Claude Code sessions no longer collide on a shared
+  `## [Unreleased]` block or need to renumber when a release lands in between.
+  `.github/scripts/collate-changelog.sh` folds all pending fragments into a
+  dated section at release time, and `.github/scripts/promote.sh` (also
+  `make promote VERSION=<x.y.z>`) collates, commits on `stage`, pushes, and
+  opens the `stage -> main` PR, leaving the merge to prod as a manual step. See
+  `changelog.d/README.md` and `docs/releasing.md`.
+- GitHub releases are now created automatically on merge to `main`. The new
+  `release.yml` workflow reads the freshly promoted top section of
+  `CHANGELOG.md`, tags the merge commit, and publishes a release whose notes are
+  that version's changelog section (via `.github/scripts/changelog-section.sh`),
+  replacing the manual copy-the-changelog-into-a-new-release step. It is
+  idempotent and runs only when `CHANGELOG.md` changes.
+
+### Fixed
+- Reload buttons in the Apple clients no longer grow when they start
+  refreshing. The message-list, folder-list, and address-list reload controls
+  swap their `arrow.clockwise` glyph for a `ProgressView` spinner while the list
+  updates, but the default spinner is larger than the glyph, so the button
+  enlarged and shoved its neighbors aside - most visibly the message-list reload
+  button displacing the adjacent New Message button. A new shared
+  `RefreshActivityIcon` view (`apple/Cabalmail/Views/RefreshActivityIcon.swift`)
+  keeps the glyph in the layout slot (hidden via opacity) and rides a
+  `controlSize(.small)` spinner in an `overlay`, so the spinner can never feed
+  back into the button's measured size; the footprint is now identical in both
+  states. All seven reload sites across the iOS and macOS targets route through
+  it, and the macOS in-list refresh rows keep their "Refresh" text visible
+  instead of collapsing to a bare spinner.
+
 ## [0.10.13] - 2026-06-08
 
 ### Added
