@@ -138,16 +138,18 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@v5
-    - name: checkov
-      uses: bridgecrewio/checkov-action@99bb2caf247dfd9f03cf984373bc6043d4e32ebf  # v12.1347.0
+    - name: setup-python
+      uses: actions/setup-python@v5
       with:
-        directory: terraform/dns/
-        quiet: true
-        soft_fail: true
-        framework: terraform
-        download_external_modules: false
-        output_format: cli,sarif
-        output_file_path: console,results.sarif
+        python-version: '3.12'
+    - name: install-checkov
+      run: pip install checkov==3.2.530
+    - name: checkov
+      run: >
+        checkov -d terraform/dns
+        --config-file terraform/dns/.checkov.yaml
+        --compact --soft-fail
+        -o cli -o sarif --output-file-path console,results.sarif
     - name: upload-sarif
       # Best-effort: a transient code-scanning upload hiccup must not fail
       # the scanner job (which approval / bootstrap_apply now gate on). The
@@ -344,11 +346,13 @@ jobs:
   # each job to its immediate upstream's result and ignores the
   # transitive chain.
   # Phase 1 of docs/0.10.x/iac-quality-gates-plan.md rewrote these three
-  # scanners: actions pinned to commit SHA (were @master / a curl|bash
-  # installer / a deprecated tfsec wrapper); the broken tflint loop (which
-  # never cd'd, so it scanned the root N times and never saw the modules)
-  # replaced with --recursive; tfsec replaced by Trivy IaC (same Aqua
-  # engine, maintained); and each scanner uploads SARIF to GitHub code
+  # scanners: checkov pinned via pip (checkov==X.Y.Z; the checkov-action is
+  # a Docker image with positional args and no output_file_path that mangled
+  # output_format), tflint and trivy actions pinned to commit SHA (were a
+  # curl|bash installer and a deprecated tfsec wrapper); the broken tflint
+  # loop (which never cd'd, so it scanned the root N times and never saw the
+  # modules) replaced with --recursive; tfsec replaced by Trivy IaC (same
+  # Aqua engine, maintained); and each scanner uploads SARIF to GitHub code
   # scanning. All soft-fail in Phase 1 - findings are surfaced, not gated.
   # The scanners read the committed source directly (no generated
   # backend.tf), so the local `make scan` runner sees the same input.
@@ -359,16 +363,28 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@v5
-    - name: chekov
-      uses: bridgecrewio/checkov-action@99bb2caf247dfd9f03cf984373bc6043d4e32ebf  # v12.1347.0
+    - name: setup-python
+      uses: actions/setup-python@v5
       with:
-        directory: terraform/infra/
-        quiet: true
-        soft_fail: true
-        framework: terraform
-        download_external_modules: false
-        output_format: cli,sarif
-        output_file_path: console,results.sarif
+        python-version: '3.12'
+    - name: install-checkov
+      # Pinned tool version via pip rather than the checkov-action: that
+      # action is a Docker image with positional args, no output_file_path
+      # input, and no comma-split on output_format (it passed `-o cli,sarif`
+      # as one value, which checkov rejects). pip gives the exact CLI the
+      # Makefile uses (true local/CI parity) and an explicit version pin.
+      run: pip install checkov==3.2.530
+    - name: chekov
+      # --soft-fail (not continue-on-error) in Phase 1: findings exit 0,
+      # but a real checkov error (e.g. a bad flag) still fails the job so
+      # the scanner cannot silently break. The gate flips by dropping
+      # --soft-fail and adding --baseline in Phase 3. --config-file applies
+      # the CMK skip-check so the surfaced findings are the residual set.
+      run: >
+        checkov -d terraform/infra
+        --config-file terraform/infra/.checkov.yaml
+        --compact --soft-fail
+        -o cli -o sarif --output-file-path console,results.sarif
     - name: upload-sarif
       # Best-effort: a transient code-scanning upload hiccup must not fail
       # the scanner job (which approval / bootstrap_apply now gate on). The
