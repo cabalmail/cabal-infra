@@ -182,8 +182,15 @@ jobs:
     - name: init-tflint
       run: tflint --init
     - name: run-linter
+      # Soft-fail (see the infra tflint job): swallow tflint's exit 2
+      # (findings) so it raises no ##[error] annotation; exit 1 still
+      # propagates. dns is clean today, but this keeps the two jobs identical.
       continue-on-error: true
-      run: tflint --recursive --format sarif > tflint.sarif
+      run: |
+        ec=0
+        tflint --recursive --format sarif > tflint.sarif || ec=$?
+        if [ "$ec" = "2" ]; then exit 0; fi
+        exit "$ec"
     - name: upload-sarif
       # Best-effort: a transient code-scanning upload hiccup must not fail
       # the scanner job (which approval / bootstrap_apply now gate on). The
@@ -439,10 +446,18 @@ jobs:
     - name: init-tflint
       run: tflint --init
     - name: run-linter
-      # soft-fail in Phase 1: tflint exits 2 on findings. The gate flips by
-      # removing continue-on-error in Phase 3.
+      # Soft-fail in Phases 1-2. tflint exits 2 when it finds issues; swallow
+      # that exit so the step does not raise a scary ##[error] annotation for
+      # the expected findings (continue-on-error keeps the job green but does
+      # not suppress the annotation). A real tflint error (exit 1) still
+      # propagates. The gate flips in Phase 3 by dropping the exit-2 swallow
+      # (and continue-on-error) once the findings are fixed or baselined.
       continue-on-error: true
-      run: tflint --recursive --format sarif > tflint.sarif
+      run: |
+        ec=0
+        tflint --recursive --format sarif > tflint.sarif || ec=$?
+        if [ "$ec" = "2" ]; then exit 0; fi
+        exit "$ec"
     - name: upload-sarif
       # Best-effort: a transient code-scanning upload hiccup must not fail
       # the scanner job (which approval / bootstrap_apply now gate on). The
