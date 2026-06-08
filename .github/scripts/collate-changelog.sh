@@ -76,6 +76,8 @@ for f in "${all_fragments[@]}"; do
   base="$(basename "${f}")"; stem="${base%.md}"; cat="${stem##*.}"
   heading_for "${cat}" >/dev/null \
     || die "fragment '${base}' has unknown category '${cat}' (expected one of: ${CATEGORIES[*]})"
+  grep -q '[^[:space:]]' "${f}" \
+    || die "fragment '${base}' is empty (no content)"
 done
 
 section="$(mktemp)"; rebuilt="$(mktemp)"
@@ -92,9 +94,11 @@ trap 'rm -f "${section}" "${rebuilt}"' EXIT
     [ "${#matches[@]}" -gt 0 ] || continue
     printf '\n### %s\n' "$(heading_for "${cat}")"
     for f in "${matches[@]}"; do
-      # Command substitution trims trailing newlines; printf restores exactly
-      # one, so fragments abut cleanly whether or not they end in a newline.
-      printf '%s\n' "$(cat "${f}")"
+      # Emit the fragment with leading and trailing blank lines stripped and
+      # exactly one trailing newline, so stray whitespace around the bullet
+      # never leaks into the changelog. Internal blank lines are preserved, and
+      # a missing final newline is tolerated.
+      awk 'NF{if(s)while(p-->0)print"";s=1;p=0;print;next} s{p++}' "${f}"
     done
   done
 } > "${section}"
