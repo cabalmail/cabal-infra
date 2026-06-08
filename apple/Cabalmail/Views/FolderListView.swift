@@ -102,12 +102,8 @@ struct FolderListView: View {
                 Button {
                     Task { await manualRefresh() }
                 } label: {
-                    if isRefreshing {
-                        ProgressView()
-                    } else {
-                        Image(systemName: "arrow.clockwise")
-                            .accessibilityLabel("Refresh folders")
-                    }
+                    RefreshActivityIcon(isLoading: isRefreshing)
+                        .accessibilityLabel("Refresh folders")
                 }
                 .disabled(isRefreshing || model == nil)
             }

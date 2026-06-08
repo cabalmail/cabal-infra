@@ -106,10 +106,10 @@ struct FoldersAdminView: View {
             Button {
                 Task { await manualRefresh() }
             } label: {
-                if isRefreshing {
-                    ProgressView()
-                } else {
-                    Label("Refresh", systemImage: "arrow.clockwise")
+                Label {
+                    Text("Refresh")
+                } icon: {
+                    RefreshActivityIcon(isLoading: isRefreshing)
                 }
             }
             .disabled(isRefreshing || model == nil)
@@ -215,12 +215,8 @@ struct FoldersAdminView: View {
             Button {
                 Task { await manualRefresh() }
             } label: {
-                if isRefreshing {
-                    ProgressView()
-                } else {
-                    Image(systemName: "arrow.clockwise")
-                        .accessibilityLabel("Refresh folders")
-                }
+                RefreshActivityIcon(isLoading: isRefreshing)
+                    .accessibilityLabel("Refresh folders")
             }
             .disabled(isRefreshing || model == nil)
         }

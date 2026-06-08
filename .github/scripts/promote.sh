@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+#
+# Cut a release from the stage branch: collate the pending changelog.d/
+# fragments into a dated CHANGELOG.md section, commit on stage, push, and open
+# the stage -> main PR. Stops before merge - merging to the protected main
+# branch (prod) stays a deliberate manual step.
+#
+# This is the operator's release trigger; it is run by a human in their shell,
+# not by CI. CI never calls it.
+#
+# Usage:
+#   promote.sh <version|patch|minor|major> [--yes] [--no-push] [--date YYYY-MM-DD]
+#
+#   <version>   explicit semver (e.g. 0.10.14), or a bump keyword
+#               (patch/minor/major) computed from the latest git tag
+#   --yes       skip the confirmation prompt before committing/pushing
+#   --no-push   collate + commit locally only; do not push or open a PR
+#   --date      release date override (default: today, UTC)
+
+set -euo pipefail
+
+usage() { sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; }
+
+[ $# -ge 1 ] || { usage; exit 1; }
+
+SPEC=""; ASSUME_YES=0; NO_PUSH=0; DATE=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --yes)     ASSUME_YES=1 ;;
+    --no-push) NO_PUSH=1 ;;
+    --date)    DATE="${2:?--date needs a value}"; shift ;;
+    -h|--help) usage; exit 0 ;;
+    -*)        echo "[promote] ERROR: unknown flag $1" >&2; usage; exit 1 ;;
+    *)         [ -z "${SPEC}" ] || { echo "[promote] ERROR: unexpected argument '$1'" >&2; exit 1; }
+               SPEC="$1" ;;
+  esac
+  shift
+done
+[ -n "${SPEC}" ] || { usage; exit 1; }
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "${ROOT}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+log() { echo "[promote] $*"; }
+die() { echo "[promote] ERROR: $*" >&2; exit 1; }
+
+BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+[ "${BRANCH}" = "stage" ] || die "must be on 'stage' (on '${BRANCH}'); releases are cut from stage"
+git diff --quiet && git diff --cached --quiet \
+  || die "working tree not clean; commit or stash before releasing"
+
+# Resolve the version: explicit semver, or a bump from the latest semver tag.
+latest_tag() { git tag --sort=-v:refname | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | head -1; }
+case "${SPEC}" in
+  patch|minor|major)
+    base="$(latest_tag)"; [ -n "${base}" ] || die "no semver tag to bump from; pass an explicit version"
+    IFS=. read -r MA MI PA <<<"${base}"
+    case "${SPEC}" in
+      patch) PA=$((PA + 1)) ;;
+      minor) MI=$((MI + 1)); PA=0 ;;
+      major) MA=$((MA + 1)); MI=0; PA=0 ;;
+    esac
+    VERSION="${MA}.${MI}.${PA}"
+    log "bump ${SPEC}: ${base} -> ${VERSION}"
+    ;;
+  *)
+    [[ "${SPEC}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+].+)?$ ]] \
+      || die "'${SPEC}' is not a semver version or a bump keyword (patch/minor/major)"
+    VERSION="${SPEC}"
+    ;;
+esac
+git rev-parse "refs/tags/${VERSION}" >/dev/null 2>&1 && die "tag ${VERSION} already exists"
+
+# Fold fragments into a dated section (stages CHANGELOG.md + fragment deletions).
+"${SCRIPT_DIR}/collate-changelog.sh" "${VERSION}" ${DATE:+"${DATE}"}
+
+echo
+log "staged for release ${VERSION}:"
+git --no-pager diff --cached --stat
+echo
+git --no-pager diff --cached -- CHANGELOG.md | sed -n '1,40p'
+echo
+
+if [ "${ASSUME_YES}" -ne 1 ]; then
+  if [ "${NO_PUSH}" -eq 1 ]; then
+    printf '[promote] commit release %s on stage (local only)? [y/N] ' "${VERSION}"
+  else
+    printf '[promote] commit release %s on stage, push, and open a PR to main? [y/N] ' "${VERSION}"
+  fi
+  read -r reply
+  case "${reply}" in y|Y|yes|YES) ;; *) die "aborted; changes left staged for inspection" ;; esac
+fi
+
+git commit -m "Set release date for version ${VERSION}"
+
+if [ "${NO_PUSH}" -eq 1 ]; then
+  log "committed locally (no push). Push stage and open the stage->main PR when ready."
+  exit 0
+fi
+
+git push origin stage
+
+command -v gh >/dev/null 2>&1 \
+  || { log "pushed stage. gh CLI not found - open the stage->main PR manually."; exit 0; }
+
+existing="$(gh pr list --base main --head stage --state open --json url --jq '.[0].url // empty' 2>/dev/null || true)"
+if [ -n "${existing}" ]; then
+  pr_url="${existing}"
+  log "stage->main PR already open: ${pr_url}"
+else
+  pr_url="$(gh pr create --base main --head stage \
+    --title "Release ${VERSION}" \
+    --body "Promote stage to prod for ${VERSION}. See CHANGELOG.md.")" \
+    || die "gh pr create failed"
+  log "opened PR: ${pr_url}"
+fi
+
+log "watching checks (Ctrl-C stops watching; the PR stays open)..."
+gh pr checks "${pr_url}" --watch || log "some checks did not pass - review before merging"
+
+log "done. Review and merge to promote to prod: ${pr_url}"

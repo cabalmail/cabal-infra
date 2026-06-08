@@ -53,12 +53,8 @@ struct AddressListView: View {
                 Button {
                     Task { await manualRefresh() }
                 } label: {
-                    if isRefreshing {
-                        ProgressView()
-                    } else {
-                        Image(systemName: "arrow.clockwise")
-                            .accessibilityLabel("Refresh addresses")
-                    }
+                    RefreshActivityIcon(isLoading: isRefreshing)
+                        .accessibilityLabel("Refresh addresses")
                 }
                 .disabled(isRefreshing || model == nil)
             }
