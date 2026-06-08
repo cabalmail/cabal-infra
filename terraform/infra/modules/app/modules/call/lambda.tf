@@ -132,6 +132,19 @@ resource "aws_iam_role_policy" "lambda" {
         {
             "Effect": "Allow",
             "Action": [
+                "kms:GenerateDataKey",
+                "kms:Decrypt"
+            ],
+            "Resource": "arn:aws:kms:${var.region}:${var.account}:key/*",
+            "Condition": {
+                "StringEquals": {
+                    "kms:ViaService": "sns.${var.region}.amazonaws.com"
+                }
+            }
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
                 "sqs:SendMessage",
                 "sqs:GetQueueUrl"
             ],

@@ -172,6 +172,14 @@ resource "aws_instance" "nat" {
     http_endpoint = "enabled"
   }
 
+  # Encrypt the root volume. With the stock AL2023 AMI (use_custom_nat_ami =
+  # false) this forces the NAT instance to be replaced on first apply - a
+  # brief outbound blip for the private subnets while the new instance comes
+  # up. The custom NAT AMI already builds an encrypted root (nat_ami.tf).
+  root_block_device {
+    encrypted = true
+  }
+
   tags = {
     Name = "cabal-nat-${count.index}"
   }
