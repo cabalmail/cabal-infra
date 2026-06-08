@@ -92,7 +92,6 @@ module "admin" {
   bucket_domain_name  = module.bucket.domain_name
   relay_ips           = module.vpc.relay_ips
   origin              = module.bucket.origin
-  repo                = var.repo
   dev_mode            = var.prod ? false : true
 
   address_changed_topic_arn = module.ecs.sns_topic_arn
@@ -126,7 +125,6 @@ module "vpc" {
 module "load_balancer" {
   source            = "./modules/elb"
   public_subnet_ids = module.vpc.public_subnets[*].id
-  vpc_id            = module.vpc.vpc.id
   zone_id           = data.terraform_remote_state.zone.outputs.control_domain_zone_id
   private_zone_id   = module.vpc.private_zone.zone_id
   control_domain    = var.control_domain
@@ -197,8 +195,6 @@ module "ecs" {
 
   ecr_repository_urls = module.ecr.repository_urls
   image_tag           = data.aws_ssm_parameter.deployed_image_tag.value
-
-  master_password = module.admin.master_password
 
   # Health-check tuning - raise these to keep containers alive for debugging.
   health_check_grace_period = 600

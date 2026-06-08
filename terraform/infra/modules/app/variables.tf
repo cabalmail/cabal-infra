@@ -47,11 +47,6 @@ variable "domains" {
   description = "List of email domains."
 }
 
-variable "repo" {
-  type        = string
-  description = "Repo tag value for SSM run command target."
-}
-
 variable "dev_mode" {
   type        = bool
   description = "If true, forces Cloudfront to non-caching configuration."

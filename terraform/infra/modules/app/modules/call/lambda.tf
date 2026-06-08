@@ -1,7 +1,6 @@
 locals {
   hosted_zone_arns = join(",", [for domain in var.domains : "\"${domain.arn}\""])
   wildcard         = "*"
-  zip_file         = "s3://${var.bucket}/lambda/${var.name}_lambda.zip"
 }
 
 resource "aws_lambda_permission" "api_exec" {

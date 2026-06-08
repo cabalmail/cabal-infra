@@ -20,7 +20,7 @@ Updated after the Phase 2.5 safe batch (see [the safe-batch note](#phase-25-safe
 | ---- | --------------- | ------------------- | --------- | ------------------------------- | -------- |
 | Checkov | 200 | 73 (11 ids) | 123 (31 ids) | 4 (CKV_AWS_276, _51 fixed; _111, _356 inline) | 0 |
 | Trivy   | 50  | 25 (4 ids)  | 24 (13 ids) | 1 (AWS-0031 fixed) | 0 |
-| tflint  | 6   | 0           | 0 (never baselined) | 1 fixed (`tls` version); 5 pending (unused decls) | 5 (next batch) |
+| tflint  | 6   | 0           | 0 (never baselined) | 6 fixed (`tls` version + 5 unused decls) | 0 |
 
 Verified: `checkov -d terraform/infra --config-file .checkov.yaml --baseline .checkov.baseline` exits 0; `trivy config terraform/infra --ignorefile .trivyignore` reports 0 misconfigurations.
 
@@ -45,6 +45,7 @@ The low-risk, in-place subset shipped together:
 - **CKV_AWS_51 / AWS-0031** - certbot ECR repo set `IMMUTABLE` ([`modules/certbot_renewal/ecr.tf`](modules/certbot_renewal/ecr.tf)), matching every other cabal repo.
 - **tflint `terraform_required_providers`** - `tls` provider version pinned (`~> 4.0`) in [`modules/app/versions.tf`](modules/app/versions.tf).
 - **CKV_AWS_111 / CKV_AWS_356** - reclassified to **inline design suppression** (`#checkov:skip` in [`modules/user_pool/variables.tf`](modules/user_pool/variables.tf)): the `sns_users` policy is Cognito SMS publish (`sns:Publish` to a phone number), which has no resource ARN to scope to, so `"*"` is required, not fixable. These leave the baseline.
+- **tflint `terraform_unused_declarations` (the remaining 5)** - removed the dead declarations and their pass-throughs: `local.zip_file` and vars `relay_ips`/`repo` in the API-call submodule, `repo` in the app module, `master_password` in the ecs module (the password reaches containers via SSM `valueFrom`, never the variable), and `vpc_id` in the elb module (target groups live in the ecs module). Root `var.repo` stays (provider tags). Pure cleanup, no plan diff; `terraform validate` passes. **tflint is now at zero**, so its Phase 3 gate (drop the exit-2 swallow + `continue-on-error`) needs no further fix.
 
 ### Still pending
 
@@ -53,7 +54,8 @@ The low-risk, in-place subset shipped together:
 | CKV_AWS_26 | AWS-0095 | `aws_sns_topic.address_changed` | Encrypt with a KMS key (`alias/aws/sns`) | SNS has no managed-SSE option; the publisher + SNS->SQS path need `kms` perms. **Highest risk; stage-validate.** |
 | CKV_AWS_27 (x3) | AWS-0096 | `aws_sqs_queue.tier[*]` | `sqs_managed_sse_enabled = true` | Message-flow sensitive (reconfiguration pipeline); SSE-SQS is transparent but stage-validate. |
 | CKV_AWS_8 | AWS-0131 | NAT instance block device | `encrypted = true` | The custom AMI already encrypts; confirm `plan` does not force a NAT instance replacement (outbound blip). |
-| - (tflint) | - | 5 `terraform_unused_declarations` | Remove dead vars/local | Check each call site first - a parent may pass `relay_ips`/`repo`/`master_password`/`vpc_id`. |
+
+All three remaining are message-flow / availability sensitive and need a stage-validation pass.
 
 ### Reclassified out of must-fix
 

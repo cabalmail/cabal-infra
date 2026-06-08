@@ -109,6 +109,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CKV_AWS_341 was reclassified to stage-validate after it turned out to be the
   ECS mail-tier launch template (where IMDS `hop_limit=2` may be required for
   containers), not the NAT.
+- Removed dead Terraform declarations flagged by tflint: `local.zip_file` and
+  the unused `relay_ips`/`repo` variables in the API-call submodule, `repo` in
+  the app module, `master_password` in the ecs module (the IMAP master password
+  reaches containers via the SSM `valueFrom`, never the variable), and `vpc_id`
+  in the elb module, along with their now-orphaned pass-throughs (root `var.repo`
+  stays - provider tags use it). Pure cleanup, no plan diff; it clears tflint to
+  zero, the last finding class before the Phase 3 gate flip.
 
 ## [0.10.12] - 2026-06-07
 
