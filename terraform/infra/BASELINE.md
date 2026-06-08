@@ -9,16 +9,18 @@ Measured against commit `371dc6a1` (see [`docs/0.10.x/iac-baseline-snapshot.md`]
 | File | Purpose |
 | ---- | ------- |
 | [`.checkov.yaml`](.checkov.yaml) | Global, design-driven `skip-check` of the CMK class (11 ids). Policy only. |
-| [`.checkov.baseline`](.checkov.baseline) | Per-resource grandfather of the 127 residual Checkov findings (35 ids). New findings fail. |
-| [`.trivyignore`](.trivyignore) | Rule-id ignore list: the CMK class + design-driven + must-fix + decay (18 ids). |
+| [`.checkov.baseline`](.checkov.baseline) | Per-resource grandfather of the 123 residual Checkov findings (31 ids). New findings fail. |
+| [`.trivyignore`](.trivyignore) | Rule-id ignore list: the CMK class + design-driven + must-fix + decay (17 ids). |
 
 ## Counts
 
-| Tool | Total (Phase 0) | Globally suppressed (CMK) | Baselined / ignored | Residual after both |
-| ---- | --------------- | ------------------------- | ------------------- | ------------------- |
-| Checkov | 200 | 73 (11 ids, via `skip-check`) | 127 (35 ids, via baseline) | 0 |
-| Trivy   | 50  | 25 (4 ids)  | 25 (14 ids) | 0 |
-| tflint  | 6   | 0           | 0 (fixed in Phase 2.5, not baselined) | 0 after 2.5 |
+Updated after the Phase 2.5 safe batch (see [the safe-batch note](#phase-25-safe-batch-landed) below).
+
+| Tool | Total (Phase 0) | CMK global-suppress | Baselined | Fixed / inline-suppressed (2.5) | Residual |
+| ---- | --------------- | ------------------- | --------- | ------------------------------- | -------- |
+| Checkov | 200 | 73 (11 ids) | 123 (31 ids) | 4 (CKV_AWS_276, _51 fixed; _111, _356 inline) | 0 |
+| Trivy   | 50  | 25 (4 ids)  | 24 (13 ids) | 1 (AWS-0031 fixed) | 0 |
+| tflint  | 6   | 0           | 0 (never baselined) | 1 fixed (`tls` version); 5 pending (unused decls) | 5 (next batch) |
 
 Verified: `checkov -d terraform/infra --config-file .checkov.yaml --baseline .checkov.baseline` exits 0; `trivy config terraform/infra --ignorefile .trivyignore` reports 0 misconfigurations.
 
@@ -35,18 +37,27 @@ If Cabalmail later adopts CMKs for the few data-plane secrets that would actuall
 
 Genuine gaps that satisfy with a free AWS-managed/default key or a one-line attribute. Baselined now so the gate can flip cleanly; each Phase 2.5 PR removes the corresponding baseline/ignore entry so the gate then enforces the fix. **Target: clear before the Phase 3 gate flip.**
 
-| Checkov | Trivy | Resource(s) | Fix |
-| ------- | ----- | ----------- | --- |
-| CKV_AWS_26 | AWS-0095 | `module.ecs.aws_sns_topic.address_changed` | Enable SSE with the `aws/sns` managed key |
-| CKV_AWS_27 (x3) | AWS-0096 | `module.ecs.aws_sqs_queue.tier[*]` | Enable SSE-SQS. **Message-flow sensitive** (reconfiguration pipeline) - validate on stage |
-| CKV_AWS_8 | AWS-0131 | NAT instance block device | Enable EBS encryption (free, default key) |
-| CKV_AWS_51 | AWS-0031 | `module.certbot_renewal.aws_ecr_repository.certbot` | Set `image_tag_mutability = "IMMUTABLE"` (deploys use unique `sha-*` tags) |
-| CKV_AWS_111 | - | `module.pool.aws_iam_policy_document.sns_users` | Constrain the write action |
-| CKV_AWS_356 | - | `module.pool.aws_iam_policy_document.sns_users` | Replace `"*"` resource with the topic ARN |
-| CKV_AWS_341 | - | NAT launch template | Set IMDS `http_put_response_hop_limit = 1` (SSRF hardening) |
-| CKV_AWS_276 | - | API Gateway method settings | Confirm data-trace is intentionally off; flip if it is logging request/response data |
+### Phase 2.5 safe batch (landed)
 
-tflint's 6 warnings (5 unused declarations + 1 missing `tls` provider version) are also Phase 2.5 - fixed outright in code, never baselined.
+The low-risk, in-place subset shipped together:
+
+- **CKV_AWS_276** - API Gateway `data_trace_enabled` set to `false` ([`modules/app/main.tf`](modules/app/main.tf)). It was logging full request/response bodies (addresses, message content, tokens) to CloudWatch.
+- **CKV_AWS_51 / AWS-0031** - certbot ECR repo set `IMMUTABLE` ([`modules/certbot_renewal/ecr.tf`](modules/certbot_renewal/ecr.tf)), matching every other cabal repo.
+- **tflint `terraform_required_providers`** - `tls` provider version pinned (`~> 4.0`) in [`modules/app/versions.tf`](modules/app/versions.tf).
+- **CKV_AWS_111 / CKV_AWS_356** - reclassified to **inline design suppression** (`#checkov:skip` in [`modules/user_pool/variables.tf`](modules/user_pool/variables.tf)): the `sns_users` policy is Cognito SMS publish (`sns:Publish` to a phone number), which has no resource ARN to scope to, so `"*"` is required, not fixable. These leave the baseline.
+
+### Still pending
+
+| Checkov | Trivy | Resource(s) | Fix | Notes |
+| ------- | ----- | ----------- | --- | ----- |
+| CKV_AWS_26 | AWS-0095 | `aws_sns_topic.address_changed` | Encrypt with a KMS key (`alias/aws/sns`) | SNS has no managed-SSE option; the publisher + SNS->SQS path need `kms` perms. **Highest risk; stage-validate.** |
+| CKV_AWS_27 (x3) | AWS-0096 | `aws_sqs_queue.tier[*]` | `sqs_managed_sse_enabled = true` | Message-flow sensitive (reconfiguration pipeline); SSE-SQS is transparent but stage-validate. |
+| CKV_AWS_8 | AWS-0131 | NAT instance block device | `encrypted = true` | The custom AMI already encrypts; confirm `plan` does not force a NAT instance replacement (outbound blip). |
+| - (tflint) | - | 5 `terraform_unused_declarations` | Remove dead vars/local | Check each call site first - a parent may pass `relay_ips`/`repo`/`master_password`/`vpc_id`. |
+
+### Reclassified out of must-fix
+
+- **CKV_AWS_341** - on `module.ecs.aws_launch_template.ecs` (the **ECS mail-tier** instances, *not* the NAT as first scoped), `http_put_response_hop_limit = 2`. Reducing to 1 risks breaking any mail container that reaches the host IMDS (vs. the task-role endpoint), on the cluster that runs the mail tiers. Left in the baseline pending stage validation that nothing relies on host IMDS at hop 2; if confirmed safe, reduce to 1, otherwise convert to an inline design suppression.
 
 ## 3. Design-driven - baselined, won't-fix
 

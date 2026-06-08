@@ -94,6 +94,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   changes to apply (exit code 2); an unchanged-dns or no-op push skips it. The
   dns scanners (`checkov_dns`/`tflint_dns`/`trivy_dns`) now gate through this
   approval job rather than directly blocking `bootstrap_apply`.
+- IaC quality gates, Phase 2.5 safe batch (the low-risk, in-place fixes from the
+  baseline's must-fix set). API Gateway `data_trace_enabled` is now `false` - it
+  had been logging full request/response bodies (addresses, message content,
+  tokens) to CloudWatch. The certbot-renewal ECR repo is now `IMMUTABLE`,
+  matching every other cabal repo (deploys push unique `sha-*` tags). The `tls`
+  provider gets an explicit version pin (`~> 4.0`) in the app module. The
+  Cognito SMS-publish IAM policy's wildcard resource (CKV_AWS_111 / CKV_AWS_356)
+  is reclassified from the baseline to an inline design suppression: direct-to-
+  phone `sns:Publish` has no resource ARN to scope to, so `"*"` is required. The
+  corresponding baseline and `.trivyignore` entries are removed so the gate will
+  enforce these once it flips. Deferred within 2.5: SQS/SNS encryption (message-
+  flow sensitive - the reconfiguration pipeline) and NAT EBS encryption;
+  CKV_AWS_341 was reclassified to stage-validate after it turned out to be the
+  ECS mail-tier launch template (where IMDS `hop_limit=2` may be required for
+  containers), not the NAT.
 
 ## [0.10.12] - 2026-06-07
 

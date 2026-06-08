@@ -28,7 +28,7 @@ AWS-0190  # API Gateway response caching disabled: caching is undesirable for th
 # These are genuine gaps that satisfy with a free AWS-managed/default key
 # or a one-line attribute. Tracked in BASELINE.md; the Phase 2.5 PRs drop
 # the corresponding line here so the gate enforces the fix.
-AWS-0031  # ECR image tags mutable -> set IMMUTABLE (deploys use unique sha-* tags)
+# AWS-0031 (ECR image tags mutable) fixed in the Phase 2.5 safe batch.
 AWS-0095  # SNS topic unencrypted -> enable SSE with the aws/sns managed key
 AWS-0096  # SQS queue unencrypted -> enable SSE-SQS (message-flow sensitive: reconfiguration queues; validate on stage)
 AWS-0131  # NAT instance block device unencrypted -> enable EBS encryption (free, default key)

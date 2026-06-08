@@ -68,8 +68,7 @@
                 {
                     "resource": "module.admin.aws_api_gateway_method_settings.general_settings",
                     "check_ids": [
-                        "CKV_AWS_225",
-                        "CKV_AWS_276"
+                        "CKV_AWS_225"
                     ]
                 },
                 {
@@ -121,17 +120,6 @@
                     "resource": "module.admin.aws_s3_bucket_lifecycle_configuration.expire_attachments",
                     "check_ids": [
                         "CKV_AWS_300"
-                    ]
-                }
-            ]
-        },
-        {
-            "file": "/modules/certbot_renewal/ecr.tf",
-            "findings": [
-                {
-                    "resource": "module.certbot_renewal.aws_ecr_repository.certbot",
-                    "check_ids": [
-                        "CKV_AWS_51"
                     ]
                 }
             ]
@@ -618,18 +606,6 @@
                         "CKV_AWS_117",
                         "CKV_AWS_272",
                         "CKV_AWS_50"
-                    ]
-                }
-            ]
-        },
-        {
-            "file": "/modules/user_pool/variables.tf",
-            "findings": [
-                {
-                    "resource": "module.pool.aws_iam_policy_document.sns_users",
-                    "check_ids": [
-                        "CKV_AWS_111",
-                        "CKV_AWS_356"
                     ]
                 }
             ]
