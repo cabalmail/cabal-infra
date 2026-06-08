@@ -86,6 +86,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   soft-fail; `make scan` now wires the baselines so a local run shows only the
   residual (Checkov and Trivy clean; tflint's 6 warnings remain, to be fixed
   outright in 2.5).
+- The bootstrap (`terraform/dns`) apply in `infra.yml` now requires manual
+  approval, via a new `bootstrap_approval` gate between `bootstrap_plan` and
+  `bootstrap_apply` - symmetric with the existing `approval` gate between the
+  infra-stage `plan` and `apply`. It uses the same `gate-*` environment (so the
+  same required reviewers apply) and only prompts when the bootstrap plan has
+  changes to apply (exit code 2); an unchanged-dns or no-op push skips it. The
+  dns scanners (`checkov_dns`/`tflint_dns`/`trivy_dns`) now gate through this
+  approval job rather than directly blocking `bootstrap_apply`.
 
 ## [0.10.12] - 2026-06-07
 

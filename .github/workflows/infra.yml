@@ -262,21 +262,43 @@ jobs:
       id: plan-terraform
       run: ../../.github/scripts/plan-terraform.sh
 
-  bootstrap_apply:
+  bootstrap_approval:
     needs:
     - bootstrap_plan
     - checkov_dns
     - tflint_dns
     - trivy_dns
-    # bootstrap_plan stays first so this job can read its exit_code output.
-    # The dns scanners are wired in so the bootstrap apply blocks on them
-    # the same way the infra apply blocks (via `approval`) on the infra
-    # scanners. In Phase 1 the scanners soft-fail, so a finding never
-    # blocks; only a scanner that fails to run does. No `!cancelled()`
-    # guard on purpose: when terraform/dns is unchanged, bootstrap_build
-    # and all of these predecessors are skipped, and this job should skip
-    # too - which is exactly what the default transitive-skip gives us.
+    # Manual approval gate for the bootstrap (terraform/dns) stage, mirroring
+    # the infra-stage `approval` job between `plan` and `apply`. No
+    # `!cancelled()` guard on purpose (unlike the infra-stage jobs): when
+    # terraform/dns is unchanged the whole bootstrap chain upstream of this
+    # job is skipped, and this gate should skip too rather than prompt for a
+    # no-op approval - the default transitive-skip gives exactly that. (The
+    # infra-stage jobs need `!cancelled()` because they sit downstream of the
+    # dns-side bootstrap_apply via `build`, which is skipped on the common
+    # push path; the bootstrap jobs have no such cross-stage skip to break.)
+    # Gate on exit_code == 2 so the approval only fires when bootstrap_plan
+    # actually has changes to apply, and on the dns scanners so the apply
+    # blocks on them the way the infra apply blocks on the infra scanners.
     if: ${{ needs.bootstrap_plan.outputs.exit_code == '2' && needs.checkov_dns.result == 'success' && needs.tflint_dns.result == 'success' && needs.trivy_dns.result == 'success' }}
+    environment: gate-${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
+    runs-on: ubuntu-latest
+    steps:
+    - name: approve
+      run: echo "Approved"
+
+  bootstrap_apply:
+    needs:
+    - bootstrap_approval
+    - bootstrap_plan
+    # bootstrap_plan stays in needs so this job can read its exit_code output
+    # (the needs context only exposes listed jobs - depending on
+    # bootstrap_approval alone would make that expression resolve to empty
+    # and skip every real apply). The dns scanners are now gated by
+    # bootstrap_approval, so they are no longer listed here. No `!cancelled()`
+    # guard: when terraform/dns is unchanged every predecessor is skipped and
+    # this job should skip too.
+    if: ${{ needs.bootstrap_approval.result == 'success' && needs.bootstrap_plan.outputs.exit_code == '2' }}
     runs-on: ubuntu-latest
     defaults:
       run:
