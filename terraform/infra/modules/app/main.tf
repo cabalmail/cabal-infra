@@ -44,8 +44,6 @@ module "cabal_method" {
   root_resource_id          = aws_api_gateway_rest_api.gateway.root_resource_id
   authorizer                = aws_api_gateway_authorizer.api_auth.id
   control_domain            = var.control_domain
-  relay_ips                 = var.relay_ips
-  repo                      = var.repo
   domains                   = var.domains
   bucket                    = var.bucket
   address_changed_topic_arn = var.address_changed_topic_arn
@@ -136,8 +134,10 @@ resource "aws_api_gateway_method_settings" "general_settings" {
   stage_name  = aws_api_gateway_stage.api_stage.stage_name
   method_path = "*/*"
   settings {
-    metrics_enabled        = true
-    data_trace_enabled     = true
+    metrics_enabled = true
+    # data_trace logs full request/response bodies to CloudWatch. For a mail
+    # API that means addresses, message content, and tokens - keep it off.
+    data_trace_enabled     = false
     logging_level          = "INFO"
     throttling_rate_limit  = 100
     throttling_burst_limit = 50

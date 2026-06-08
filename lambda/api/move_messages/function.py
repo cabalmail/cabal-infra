@@ -6,6 +6,10 @@ from helper import ( # pylint: disable=import-error
     validate_uid_list,
 )
 
+from helper import maintenance_guard # pylint: disable=import-error
+
+
+@maintenance_guard
 def handler(event, _context):
     '''Moves a message from source folder to destination folder'''
     user = event['requestContext']['authorizer']['claims']['cognito:username']

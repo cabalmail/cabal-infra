@@ -84,12 +84,9 @@ variable "image_tag" {
 }
 
 # -- Secrets ----------------------------------------------------
-
-variable "master_password" {
-  type        = string
-  description = "Master password for Lambda-to-IMAP access."
-  sensitive   = true
-}
+# (The IMAP master password reaches the containers via the SSM parameter
+# /cabal/master_password, referenced directly in the task definition's
+# valueFrom - it was never consumed as a module variable.)
 
 # -- Instance sizing -------------------------------------------
 

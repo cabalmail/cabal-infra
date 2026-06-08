@@ -1,0 +1,7 @@
+# Trivy IaC ignore file for the terraform/dns (bootstrap) stack.
+# Phase 2 of docs/0.10.x/iac-quality-gates-plan.md.
+#
+# This stack is clean - Trivy reports zero misconfigurations - so there
+# are nothing to ignore. The file exists for parity with terraform/infra.
+# Add an id (with a one-line justification and a BASELINE.md entry) only
+# if a future finding is accepted rather than fixed.

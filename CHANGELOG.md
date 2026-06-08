@@ -5,6 +5,118 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.13] - 2026-06-08
+
+### Added
+- Planned-maintenance signal for IMAP redeploys. The IMAP ECS service is
+  hard-capped at one task (Dovecot has Maildir-over-EFS concurrency issues), so
+  every IMAP image roll stops the old container before starting the new one - a
+  true zero-task window during which the IMAP-backed Lambdas previously relayed a
+  raw connection error that clients rendered as a scary message. The deploy
+  pipeline now raises a flag in SSM (`/cabal/maintenance/imap`) immediately
+  before triggering the roll (`app.yml`, imap tier only, via
+  `.github/scripts/maintenance-flag.sh`); `get_imap_client` consults it and the
+  new `maintenance_guard` decorator turns it into a friendly `503`
+  (`Retry-After`, `{"status":"maintenance", ...}`) across the IMAP-backed
+  handlers (reads, folder ops, flags, moves, cache-miss fetches). The React
+  webmail (global axios interceptor) and the Apple clients
+  (`CabalmailError.maintenance`) show "Email access is temporarily unavailable
+  due to planned maintenance." instead of an error; the Apple folder-status
+  poller treats it as transient and keeps polling. The flag read fails open
+  (a missing parameter or SSM hiccup never blocks mail), and the new IMAP
+  container clears the flag once Dovecot is serving
+  (`docker/shared/clear-maintenance.sh`, a supervisord daemon) since the
+  fire-and-forget deploy does not wait for the roll; an `until` epoch written
+  with the flag is a backstop so a failed deploy cannot wedge it on.
+- Outbound sending no longer blocks on IMAP. `/send` now delivers over SMTP
+  first, then stages the Bcc-free Sent copy to S3 (`sent-pending/<user>/<uuid>`
+  in the cache bucket) and enqueues it on a new `cabal-append-sent` SQS queue; a
+  new `append_sent` consumer Lambda writes the copy to the user's Sent folder
+  when IMAP is available - immediately in steady state, or after the roll during
+  an IMAP redeploy (the job retries until the new container serves, then DLQs
+  after `maxReceiveCount`). The append is idempotent (skips if the Message-Id is
+  already in Sent) so a duplicate delivery cannot double-file. The server-side
+  Outbox staging folder and the Outbox->Sent move are retired. Saving a draft is
+  interactive and IMAP-only, so it returns the maintenance `503` during a roll
+  instead of queueing.
+- `/send` is now idempotent against client retries. SMTP-first means a lost
+  `/send` response that the React client or the Apple `SendQueue` retries could
+  otherwise deliver twice; `/send` claims the Message-Id in `cabal-rate-limits`
+  (conditional write, TTL-expiring) before SMTP and releases it if SMTP fails,
+  so a retry of a delivered message reports success without re-sending while a
+  retry of a failed send still goes through.
+
+### Changed
+- IaC quality gates, Phase 1 (`docs/0.10.x/iac-quality-gates-plan.md`). The
+  three Terraform scanners in `infra.yml` were drifting into noise; this
+  rebuilds them on maintained, pinned tooling without yet changing what blocks
+  a deploy. tfsec (merged into Trivy and in maintenance mode, and already
+  disabled in the workflow) is replaced by Trivy IaC (`trivy config`, same Aqua
+  engine and `AVD-AWS-*` finding IDs). The `terraform/dns` bootstrap stack,
+  which had no scanners at all, now runs Checkov, tflint, and Trivy as
+  `checkov_dns` / `tflint_dns` / `trivy_dns` jobs wired into `bootstrap_apply`'s
+  `needs`. The silently-broken tflint loop (`for i in ...; do tflint; done`
+  never `cd`'d, so it scanned the stack root N times and never saw the modules)
+  is replaced with `tflint --recursive`, and `terraform/.tflint.hcl` gains the
+  bundled terraform `recommended` preset and moves the AWS ruleset from the
+  stale 0.20.0 to 0.40.0. tflint and Trivy run via actions pinned to commit
+  SHA; Checkov runs via pip at a pinned version (`checkov==3.2.530`) and the
+  exact CLI the Makefile uses, because the checkov-action is a Docker image
+  with positional args and no `output_file_path` input that mangles
+  `output_format` (it passes `-o cli,sarif` as one value, which checkov
+  rejects). (Previously: a `@master` action, a `curl | bash` installer, and a
+  deprecated tfsec wrapper.) Every scanner uploads SARIF to the GitHub
+  code-scanning tab (the repo is public, so
+  this needs no GitHub Advanced Security). All scanners still soft-fail -
+  findings are surfaced, not gated; the gate flips in a later phase once
+  baselines are established. Phase 0's finding inventory is recorded in
+  `docs/0.10.x/iac-baseline-snapshot.md`.
+- IaC quality gates, Phase 2 (baselines). Per-stack suppression and baseline
+  files are now checked in (`terraform/{infra,dns}/.checkov.yaml`,
+  `.checkov.baseline`, `.trivyignore`) with a reviewed `BASELINE.md` per stack
+  recording a rationale for every accepted finding and a target version for the
+  decay candidates. The biggest cluster - the customer-managed-KMS-key (CMK)
+  class (73 Checkov findings across 11 checks, 25 Trivy across 4) - is globally
+  suppressed as a deliberate posture: every flagged resource is already
+  encrypted at rest with an AWS-managed/default key, and a CMK's control
+  benefits are not exploitable by a single operator at the per-key cost. The
+  remaining 127 Checkov and 25 Trivy findings are baselined per resource and
+  classified (must-fix in 2.5 / design-driven / decay). `terraform/dns` is
+  clean, so its files are empty placeholders for parity. The gate is still
+  soft-fail; `make scan` now wires the baselines so a local run shows only the
+  residual (Checkov and Trivy clean; tflint's 6 warnings remain, to be fixed
+  outright in 2.5).
+- The bootstrap (`terraform/dns`) apply in `infra.yml` now requires manual
+  approval, via a new `bootstrap_approval` gate between `bootstrap_plan` and
+  `bootstrap_apply` - symmetric with the existing `approval` gate between the
+  infra-stage `plan` and `apply`. It uses the same `gate-*` environment (so the
+  same required reviewers apply) and only prompts when the bootstrap plan has
+  changes to apply (exit code 2); an unchanged-dns or no-op push skips it. The
+  dns scanners (`checkov_dns`/`tflint_dns`/`trivy_dns`) now gate through this
+  approval job rather than directly blocking `bootstrap_apply`.
+- IaC quality gates, Phase 2.5 safe batch (the low-risk, in-place fixes from the
+  baseline's must-fix set). API Gateway `data_trace_enabled` is now `false` - it
+  had been logging full request/response bodies (addresses, message content,
+  tokens) to CloudWatch. The certbot-renewal ECR repo is now `IMMUTABLE`,
+  matching every other cabal repo (deploys push unique `sha-*` tags). The `tls`
+  provider gets an explicit version pin (`~> 4.0`) in the app module. The
+  Cognito SMS-publish IAM policy's wildcard resource (CKV_AWS_111 / CKV_AWS_356)
+  is reclassified from the baseline to an inline design suppression: direct-to-
+  phone `sns:Publish` has no resource ARN to scope to, so `"*"` is required. The
+  corresponding baseline and `.trivyignore` entries are removed so the gate will
+  enforce these once it flips. Deferred within 2.5: SQS/SNS encryption (message-
+  flow sensitive - the reconfiguration pipeline) and NAT EBS encryption;
+  CKV_AWS_341 was reclassified to stage-validate after it turned out to be the
+  ECS mail-tier launch template (where IMDS `hop_limit=2` may be required for
+  containers), not the NAT.
+- Removed dead Terraform declarations flagged by tflint: `local.zip_file` and
+  the unused `relay_ips`/`repo` variables in the API-call submodule, `repo` in
+  the app module, `master_password` in the ecs module (the IMAP master password
+  reaches containers via the SSM `valueFrom`, never the variable), and `vpc_id`
+  in the elb module, along with their now-orphaned pass-throughs (root `var.repo`
+  stays - provider tags use it). Pure cleanup, no plan diff; it clears tflint to
+  zero, the last finding class before the Phase 3 gate flip.
+
 ## [0.10.12] - 2026-06-07
 
 ### Fixed

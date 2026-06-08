@@ -1,0 +1,42 @@
+# Trivy IaC ignore file for the terraform/infra stack.
+# Phase 2 of docs/0.10.x/iac-quality-gates-plan.md. Full rationale and
+# per-id classification + target versions are in terraform/infra/BASELINE.md.
+#
+# NOTE on coarseness: Trivy ignores by rule ID, not per resource, so an id
+# listed here is suppressed everywhere in the stack (a new resource that
+# violates an already-listed rule would not be caught). Acceptable for this
+# small, slow-changing stack; the must-fix ids below are removed as Phase 2.5
+# lands, and the Phase 3 drift check flags any id here that no longer matches.
+
+# --- CMK class: permanent, design-driven suppression -------------------
+# Every flagged resource is already encrypted at rest with an AWS-managed
+# or service-default key; these rules demand a customer-managed KMS key,
+# whose control benefits a solo operator cannot exploit, at per-key cost.
+# Cabalmail keeps AWS-default at-rest encryption. See BASELINE.md / CHANGELOG.
+AWS-0017  # CloudWatch log groups should use a CMK
+AWS-0025  # DynamoDB at-rest encryption with a CMK
+AWS-0033  # ECR repository should use a CMK
+AWS-0132  # S3 encryption should use a CMK
+
+# --- Other design-driven suppressions (permanent) ----------------------
+AWS-0104  # Unrestricted egress: ECS tasks and the NAT instance need broad outbound (image pulls, DNS, SMTP delivery) via NAT
+AWS-0320  # S3 bucket names not DNS-compliant: names are stable identifiers; renaming means a data migration
+AWS-0178  # VPC flow logs disabled: deliberate cost choice, consistent with monitoring being off in every environment
+AWS-0190  # API Gateway response caching disabled: caching is undesirable for this mailbox API
+
+# --- Must-fix in Phase 2.5 (baselined now; remove each as it lands) -----
+# These are genuine gaps that satisfy with a free AWS-managed/default key
+# or a one-line attribute. Tracked in BASELINE.md; the Phase 2.5 PRs drop
+# the corresponding line here so the gate enforces the fix.
+# AWS-0031 (ECR image tags mutable) fixed in the Phase 2.5 safe batch.
+AWS-0095  # SNS topic unencrypted -> enable SSE with the aws/sns managed key
+AWS-0096  # SQS queue unencrypted -> enable SSE-SQS (message-flow sensitive: reconfiguration queues; validate on stage)
+AWS-0131  # NAT instance block device unencrypted -> enable EBS encryption (free, default key)
+
+# --- Decay: low/medium hygiene, walk down over time --------------------
+AWS-0090  # S3 data versioning (transient cache/artifact buckets)
+AWS-0024  # DynamoDB point-in-time recovery (cabal-addresses also covered by AWS Backup when backup=true)
+AWS-0089  # S3 bucket access logging
+AWS-0066  # Lambda X-Ray tracing
+AWS-0124  # Security group rule missing description
+AWS-0003  # API Gateway X-Ray tracing

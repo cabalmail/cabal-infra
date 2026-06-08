@@ -34,17 +34,8 @@ variable "control_domain" {
   type = string
 }
 
-variable "relay_ips" {
-  type = list(string)
-}
-
 variable "domains" {
   type = list(any)
-}
-
-variable "repo" {
-  type        = string
-  description = "Repo tag value for SSM run command target."
 }
 
 variable "bucket" {

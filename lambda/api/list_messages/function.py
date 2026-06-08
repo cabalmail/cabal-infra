@@ -6,6 +6,10 @@ from helper import ( # pylint: disable=import-error
     validate_sort_criterion,
 )
 
+from helper import maintenance_guard # pylint: disable=import-error
+
+
+@maintenance_guard
 def handler(event, _context):
     '''Retrieves IMAP message ids for a user given a folder and sorting criteria'''
     query_string = event.get('queryStringParameters') or {}

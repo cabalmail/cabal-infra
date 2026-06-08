@@ -1,0 +1,10 @@
+# Checkov config for the terraform/dns (bootstrap) stack.
+# Phase 2 of docs/0.10.x/iac-quality-gates-plan.md.
+#
+# This stack is clean - Checkov reports zero failures - so there are no
+# suppressions. The file exists for parity with terraform/infra so the CI
+# and `make scan` invocations can treat both stacks identically. Add a
+# `skip-check:` list here only if a future finding is classified as a
+# design-driven suppression (see terraform/dns/BASELINE.md).
+framework:
+  - terraform

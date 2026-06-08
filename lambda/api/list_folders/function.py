@@ -3,6 +3,10 @@ import json
 from helper import get_imap_client # pylint: disable=import-error
 from helper import get_folder_list # pylint: disable=import-error
 
+from helper import maintenance_guard # pylint: disable=import-error
+
+
+@maintenance_guard
 def handler(event, _context):
     '''
     Retrieves IMAP folders for a user returning separate lists for all folders

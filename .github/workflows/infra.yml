@@ -65,6 +65,11 @@ permissions:
   # the sibling app.yml run on this commit so the Terraform plan orders
   # itself behind any concurrent image roll. Read-only.
   actions: read
+  # Phase 1 of docs/0.10.x/iac-quality-gates-plan.md: the scanner jobs
+  # (checkov / tflint / trivy, both stacks) upload SARIF to GitHub code
+  # scanning via github/codeql-action/upload-sarif. This repo is public,
+  # so code scanning is available without GitHub Advanced Security.
+  security-events: write
 
 # Serialize Terraform applies per ref so back-to-back pushes do not
 # race for the state lock. cancel-in-progress: false because we never
@@ -118,6 +123,112 @@ jobs:
         name: dns-backend.tf
         path: ./terraform/dns/backend.tf
 
+  # Phase 1 of docs/0.10.x/iac-quality-gates-plan.md: scan the bootstrap
+  # (terraform/dns) stack, which previously had no scanners at all. These
+  # mirror the infra-stage chekov / tflint / trivy jobs and are wired into
+  # bootstrap_apply's `needs` below so the bootstrap apply blocks on them
+  # the way the infra apply blocks (via `approval`) on the infra scanners.
+  # All soft-fail in Phase 1; the gate flips in Phase 3. They scan the
+  # committed source directly (no generated backend.tf), so the local
+  # `make scan` runner sees exactly the same input CI does.
+  checkov_dns:
+    needs: bootstrap_build
+    if: ${{ !cancelled() && needs.bootstrap_build.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@v5
+    - name: setup-python
+      uses: actions/setup-python@v6
+      with:
+        python-version: '3.12'
+    - name: install-checkov
+      run: pip install checkov==3.2.530
+    - name: checkov
+      run: >
+        checkov -d terraform/dns
+        --config-file terraform/dns/.checkov.yaml
+        --compact --soft-fail
+        -o cli -o sarif --output-file-path console,results.sarif
+    - name: upload-sarif
+      # Best-effort: a transient code-scanning upload hiccup must not fail
+      # the scanner job (which approval / bootstrap_apply now gate on). The
+      # scan step's own result is what gates once soft-fail is lifted.
+      if: success() || failure()
+      continue-on-error: true
+      uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e  # v4.36.2
+      with:
+        sarif_file: results.sarif
+        category: checkov-dns
+
+  tflint_dns:
+    needs: bootstrap_build
+    if: ${{ !cancelled() && needs.bootstrap_build.result == 'success' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./terraform/dns
+    env:
+      # tflint does not search parent dirs; point it at the shared config
+      # explicitly. Absolute path because --recursive lints each subdir.
+      TFLINT_CONFIG_FILE: ${{ github.workspace }}/terraform/.tflint.hcl
+    steps:
+    - name: checkout
+      uses: actions/checkout@v5
+    - name: install-tflint
+      uses: terraform-linters/setup-tflint@b480b8fcdaa6f2c577f8e4fa799e89e756bb7c93  # v6.2.2
+      with:
+        tflint_version: v0.63.1
+    - name: init-tflint
+      run: tflint --init
+    - name: run-linter
+      # Soft-fail (see the infra tflint job): swallow tflint's exit 2
+      # (findings) so it raises no ##[error] annotation; exit 1 still
+      # propagates. dns is clean today, but this keeps the two jobs identical.
+      continue-on-error: true
+      run: |
+        ec=0
+        tflint --recursive --format sarif > tflint.sarif || ec=$?
+        if [ "$ec" = "2" ]; then exit 0; fi
+        exit "$ec"
+    - name: upload-sarif
+      # Best-effort: a transient code-scanning upload hiccup must not fail
+      # the scanner job (which approval / bootstrap_apply now gate on). The
+      # scan step's own result is what gates once soft-fail is lifted.
+      if: success() || failure()
+      continue-on-error: true
+      uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e  # v4.36.2
+      with:
+        sarif_file: terraform/dns/tflint.sarif
+        category: tflint-dns
+
+  trivy_dns:
+    needs: bootstrap_build
+    if: ${{ !cancelled() && needs.bootstrap_build.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@v5
+    - name: trivy
+      uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+      with:
+        scan-type: config
+        scan-ref: terraform/dns
+        format: sarif
+        output: trivy-dns.sarif
+        # exit-code 0 = soft-fail in Phase 1. Flip to 1 in Phase 3.
+        exit-code: '0'
+    - name: upload-sarif
+      # Best-effort: a transient code-scanning upload hiccup must not fail
+      # the scanner job (which approval / bootstrap_apply now gate on). The
+      # scan step's own result is what gates once soft-fail is lifted.
+      if: success() || failure()
+      continue-on-error: true
+      uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e  # v4.36.2
+      with:
+        sarif_file: trivy-dns.sarif
+        category: trivy-dns
+
   bootstrap_plan:
     needs: bootstrap_build
     runs-on: ubuntu-latest
@@ -158,9 +269,43 @@ jobs:
       id: plan-terraform
       run: ../../.github/scripts/plan-terraform.sh
 
+  bootstrap_approval:
+    needs:
+    - bootstrap_plan
+    - checkov_dns
+    - tflint_dns
+    - trivy_dns
+    # Manual approval gate for the bootstrap (terraform/dns) stage, mirroring
+    # the infra-stage `approval` job between `plan` and `apply`. No
+    # `!cancelled()` guard on purpose (unlike the infra-stage jobs): when
+    # terraform/dns is unchanged the whole bootstrap chain upstream of this
+    # job is skipped, and this gate should skip too rather than prompt for a
+    # no-op approval - the default transitive-skip gives exactly that. (The
+    # infra-stage jobs need `!cancelled()` because they sit downstream of the
+    # dns-side bootstrap_apply via `build`, which is skipped on the common
+    # push path; the bootstrap jobs have no such cross-stage skip to break.)
+    # Gate on exit_code == 2 so the approval only fires when bootstrap_plan
+    # actually has changes to apply, and on the dns scanners so the apply
+    # blocks on them the way the infra apply blocks on the infra scanners.
+    if: ${{ needs.bootstrap_plan.outputs.exit_code == '2' && needs.checkov_dns.result == 'success' && needs.tflint_dns.result == 'success' && needs.trivy_dns.result == 'success' }}
+    environment: gate-${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
+    runs-on: ubuntu-latest
+    steps:
+    - name: approve
+      run: echo "Approved"
+
   bootstrap_apply:
-    needs: bootstrap_plan
-    if: needs.bootstrap_plan.outputs.exit_code == '2'
+    needs:
+    - bootstrap_approval
+    - bootstrap_plan
+    # bootstrap_plan stays in needs so this job can read its exit_code output
+    # (the needs context only exposes listed jobs - depending on
+    # bootstrap_approval alone would make that expression resolve to empty
+    # and skip every real apply). The dns scanners are now gated by
+    # bootstrap_approval, so they are no longer listed here. No `!cancelled()`
+    # guard: when terraform/dns is unchanged every predecessor is skipped and
+    # this job should skip too.
+    if: ${{ needs.bootstrap_approval.result == 'success' && needs.bootstrap_plan.outputs.exit_code == '2' }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -217,7 +362,7 @@ jobs:
         name: infra-backend.tf
         path: ./terraform/infra/backend.tf
 
-  # The chekov / tflint / tfsec / plan / apply / post_apply jobs each
+  # The chekov / tflint / trivy / plan / apply / post_apply jobs each
   # prefix their `if:` with `!cancelled() &&`. GitHub Actions auto-
   # skips a downstream job whenever ANY transitive predecessor was
   # skipped, REGARDLESS of an explicit `if:` clause - unless the
@@ -229,6 +374,17 @@ jobs:
   # `!cancelled() && needs.<upstream>.result == 'success'` form pins
   # each job to its immediate upstream's result and ignores the
   # transitive chain.
+  # Phase 1 of docs/0.10.x/iac-quality-gates-plan.md rewrote these three
+  # scanners: checkov pinned via pip (checkov==X.Y.Z; the checkov-action is
+  # a Docker image with positional args and no output_file_path that mangled
+  # output_format), tflint and trivy actions pinned to commit SHA (were a
+  # curl|bash installer and a deprecated tfsec wrapper); the broken tflint
+  # loop (which never cd'd, so it scanned the root N times and never saw the
+  # modules) replaced with --recursive; tfsec replaced by Trivy IaC (same
+  # Aqua engine, maintained); and each scanner uploads SARIF to GitHub code
+  # scanning. All soft-fail in Phase 1 - findings are surfaced, not gated.
+  # The scanners read the committed source directly (no generated
+  # backend.tf), so the local `make scan` runner sees the same input.
   chekov:
     needs: build
     if: ${{ !cancelled() && needs.build.result == 'success' }}
@@ -236,20 +392,38 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@v5
-    - name: retrieve-artifact
-      uses: actions/download-artifact@v7
+    - name: setup-python
+      uses: actions/setup-python@v6
       with:
-        name: infra-backend.tf
-    - name: move
-      run: mv backend.tf ./terraform/infra/backend.tf
+        python-version: '3.12'
+    - name: install-checkov
+      # Pinned tool version via pip rather than the checkov-action: that
+      # action is a Docker image with positional args, no output_file_path
+      # input, and no comma-split on output_format (it passed `-o cli,sarif`
+      # as one value, which checkov rejects). pip gives the exact CLI the
+      # Makefile uses (true local/CI parity) and an explicit version pin.
+      run: pip install checkov==3.2.530
     - name: chekov
-      uses: bridgecrewio/checkov-action@master
+      # --soft-fail (not continue-on-error) in Phase 1: findings exit 0,
+      # but a real checkov error (e.g. a bad flag) still fails the job so
+      # the scanner cannot silently break. The gate flips by dropping
+      # --soft-fail and adding --baseline in Phase 3. --config-file applies
+      # the CMK skip-check so the surfaced findings are the residual set.
+      run: >
+        checkov -d terraform/infra
+        --config-file terraform/infra/.checkov.yaml
+        --compact --soft-fail
+        -o cli -o sarif --output-file-path console,results.sarif
+    - name: upload-sarif
+      # Best-effort: a transient code-scanning upload hiccup must not fail
+      # the scanner job (which approval / bootstrap_apply now gate on). The
+      # scan step's own result is what gates once soft-fail is lifted.
+      if: success() || failure()
+      continue-on-error: true
+      uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e  # v4.36.2
       with:
-        directory: terraform/infra/
-        quiet: true
-        soft_fail: true
-        framework: terraform
-        download_external_modules: false
+        sarif_file: results.sarif
+        category: checkov-infra
 
   tflint:
     needs: build
@@ -258,40 +432,69 @@ jobs:
     defaults:
       run:
         working-directory: ./terraform/infra
+    env:
+      # tflint does not search parent dirs; point it at the shared config
+      # explicitly. Absolute path because --recursive lints each subdir.
+      TFLINT_CONFIG_FILE: ${{ github.workspace }}/terraform/.tflint.hcl
     steps:
     - name: checkout
       uses: actions/checkout@v5
-    - name: retrieve-artifact
-      uses: actions/download-artifact@v7
+    - name: install-tflint
+      uses: terraform-linters/setup-tflint@b480b8fcdaa6f2c577f8e4fa799e89e756bb7c93  # v6.2.2
       with:
-        name: infra-backend.tf
-    - name: move
-      run: mv ../../backend.tf backend.tf
-    - name: install-linters
-      run: curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
-    - name: initialize-linter
-      run: tflint --version && tflint --init
+        tflint_version: v0.63.1
+    - name: init-tflint
+      run: tflint --init
     - name: run-linter
-      run: for i in ./ modules/* modules/*/modules/* ; do tflint ; done
+      # Soft-fail in Phases 1-2. tflint exits 2 when it finds issues; swallow
+      # that exit so the step does not raise a scary ##[error] annotation for
+      # the expected findings (continue-on-error keeps the job green but does
+      # not suppress the annotation). A real tflint error (exit 1) still
+      # propagates. The gate flips in Phase 3 by dropping the exit-2 swallow
+      # (and continue-on-error) once the findings are fixed or baselined.
+      continue-on-error: true
+      run: |
+        ec=0
+        tflint --recursive --format sarif > tflint.sarif || ec=$?
+        if [ "$ec" = "2" ]; then exit 0; fi
+        exit "$ec"
+    - name: upload-sarif
+      # Best-effort: a transient code-scanning upload hiccup must not fail
+      # the scanner job (which approval / bootstrap_apply now gate on). The
+      # scan step's own result is what gates once soft-fail is lifted.
+      if: success() || failure()
+      continue-on-error: true
+      uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e  # v4.36.2
+      with:
+        sarif_file: terraform/infra/tflint.sarif
+        category: tflint-infra
 
-  # tfsec:
-  #   needs: build
-  #   if: ${{ !cancelled() && needs.build.result == 'success' }}
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #   - name: checkout
-  #     uses: actions/checkout@v5
-  #   - name: retrieve-artifact
-  #     uses: actions/download-artifact@v7
-  #     with:
-  #       name: infra-backend.tf
-  #   - name: move
-  #     run: mv backend.tf ./terraform/infra/backend.tf
-  #   - name: tfsec
-  #     uses: aquasecurity/tfsec-action@v1.0.0
-  #     with:
-  #       soft_fail: false
-  #       working_directory: ./terraform/infra
+  trivy:
+    needs: build
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@v5
+    - name: trivy
+      uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+      with:
+        scan-type: config
+        scan-ref: terraform/infra
+        format: sarif
+        output: trivy-infra.sarif
+        # exit-code 0 = soft-fail in Phase 1. Flip to 1 in Phase 3.
+        exit-code: '0'
+    - name: upload-sarif
+      # Best-effort: a transient code-scanning upload hiccup must not fail
+      # the scanner job (which approval / bootstrap_apply now gate on). The
+      # scan step's own result is what gates once soft-fail is lifted.
+      if: success() || failure()
+      continue-on-error: true
+      uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e  # v4.36.2
+      with:
+        sarif_file: trivy-infra.sarif
+        category: trivy-infra
 
   plan:
     needs: build
@@ -395,7 +598,7 @@ jobs:
     - plan
     - chekov
     - tflint
-    # - tfsec
+    - trivy
     # No `if:` defaults to success(), which inherits the bootstrap_apply
     # skip transitively (see the chekov/tflint/plan comment block above):
     # on the common push path bootstrap_apply is skipped, that skip flows
@@ -404,7 +607,7 @@ jobs:
     # jobs. Gate on exit_code == 2 as well so the manual approval only
     # fires when plan actually has changes to apply - otherwise every
     # no-op push would block on a human approving an empty apply.
-    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.chekov.result == 'success' && needs.tflint.result == 'success' && needs.plan.outputs.exit_code == '2' }}
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.chekov.result == 'success' && needs.tflint.result == 'success' && needs.trivy.result == 'success' && needs.plan.outputs.exit_code == '2' }}
     environment: gate-${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     runs-on: ubuntu-latest
     steps:

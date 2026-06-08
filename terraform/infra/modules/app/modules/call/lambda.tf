@@ -1,7 +1,6 @@
 locals {
   hosted_zone_arns = join(",", [for domain in var.domains : "\"${domain.arn}\""])
   wildcard         = "*"
-  zip_file         = "s3://${var.bucket}/lambda/${var.name}_lambda.zip"
 }
 
 resource "aws_lambda_permission" "api_exec" {
@@ -61,7 +60,10 @@ resource "aws_iam_role_policy" "lambda" {
             "Action": [
                 "ssm:GetParameter"
             ],
-            "Resource": "arn:aws:ssm:${var.region}:${var.account}:parameter/cabal/master_password"
+            "Resource": [
+                "arn:aws:ssm:${var.region}:${var.account}:parameter/cabal/master_password",
+                "arn:aws:ssm:${var.region}:${var.account}:parameter/cabal/maintenance/imap"
+            ]
         },
         {
             "Effect": "Allow",
@@ -126,6 +128,14 @@ resource "aws_iam_role_policy" "lambda" {
             "Effect": "Allow",
             "Action": "sns:Publish",
             "Resource": "${var.address_changed_topic_arn}"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "sqs:SendMessage",
+                "sqs:GetQueueUrl"
+            ],
+            "Resource": "arn:aws:sqs:${var.region}:${var.account}:cabal-append-sent"
         },
         {
             "Effect": "Allow",
