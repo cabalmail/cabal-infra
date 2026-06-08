@@ -1,0 +1,90 @@
+---
+name: Release
+
+# When a release is promoted (a stage -> main merge), CHANGELOG.md gains a new
+# dated "## [X.Y.Z] - DATE" section at the top, written by
+# .github/scripts/promote.sh (via collate-changelog.sh). This workflow turns
+# that into a GitHub release: it reads the top version and, if no release for
+# it exists yet, tags the merge commit and publishes a release whose notes are
+# that version's changelog section (.github/scripts/changelog-section.sh).
+#
+# Idempotent: any push to main that does not introduce a new top version (a
+# typo fix in an older section, a re-run, a fragment-only direct-to-main merge
+# that does not touch CHANGELOG.md) finds the release already present, or no
+# new version, and exits cleanly. The paths filter keeps it from running at all
+# unless CHANGELOG.md changed. workflow_dispatch allows (re)creating a release
+# for a specific version by hand.
+
+on:
+  push:
+    branches: [main]
+    paths: ['CHANGELOG.md']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to (re)create a release for. Empty = top of CHANGELOG.md.'
+        required: false
+        default: ''
+
+permissions:
+  contents: write   # create tags and releases
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Determine version
+        id: ver
+        run: |
+          set -euo pipefail
+          version="${{ github.event.inputs.version }}"
+          if [ -z "${version}" ]; then
+            version="$(sed -n 's/^## \[\([0-9]*\.[0-9]*\.[0-9]*\)\].*/\1/p' CHANGELOG.md | head -1)"
+          fi
+          if [ -z "${version}" ]; then
+            echo "No version section at the top of CHANGELOG.md; nothing to release."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Top changelog version: ${version}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Skip if release already exists
+        id: exists
+        if: steps.ver.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "${{ steps.ver.outputs.version }}" >/dev/null 2>&1; then
+            echo "Release ${{ steps.ver.outputs.version }} already exists; nothing to do."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build release notes
+        if: steps.ver.outputs.skip != 'true' && steps.exists.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          ./.github/scripts/changelog-section.sh "${{ steps.ver.outputs.version }}" > release-notes.md
+          echo "----- release notes -----"
+          cat release-notes.md
+
+      - name: Create release
+        if: steps.ver.outputs.skip != 'true' && steps.exists.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "${{ steps.ver.outputs.version }}" \
+            --target "${{ github.sha }}" \
+            --title "${{ steps.ver.outputs.version }}" \
+            --notes-file release-notes.md
+          echo "Created release ${{ steps.ver.outputs.version }}"
