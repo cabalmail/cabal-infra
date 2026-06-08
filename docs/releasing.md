@@ -42,9 +42,9 @@ Once the `stage -> main` PR merges, the `release.yml` workflow
 ([`.github/workflows/release.yml`](../.github/workflows/release.yml)) runs on
 the push to `main`: it reads the top `## [X.Y.Z]` section of `CHANGELOG.md` and,
 if no GitHub release for that version exists yet, tags the merge commit and
-publishes a release whose notes are that version's changelog section (extracted
-by `.github/scripts/changelog-section.sh`). There is no manual release step -
-merge the PR and the release appears.
+publishes a release whose notes are that version's changelog section, header and
+all (extracted by `.github/scripts/changelog-section.sh`). There is no manual
+release step - merge the PR and the release appears.
 
 It is idempotent: a push that introduces no new top version, or whose version
 is already released, does nothing, and it only runs when `CHANGELOG.md` changed.
