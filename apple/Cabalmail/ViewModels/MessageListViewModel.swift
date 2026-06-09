@@ -108,12 +108,12 @@ final class MessageListViewModel {
     /// moves are still returning.
     var pendingRemovedUIDs: Set<UInt32> = []
 
-    /// UIDs with an in-flight flag write (`\Seen` / `\Flagged`). While a UID
-    /// sits here `mergeFetched` keeps the optimistic flags rather than letting
-    /// a stale fetch revert them. Flag changes that originate in the detail
-    /// view (routed through `applyFlagChange`) are NOT tracked here - that
-    /// write's lifecycle lives in the detail view model, out of this type's
-    /// reach, so it has no completion signal to clear the shield with.
+    /// UIDs with an in-flight flag write (`\Seen` / `\Flagged`) that this view
+    /// model issued. While a UID sits here `mergeFetched` keeps the optimistic
+    /// flags rather than letting a stale fetch revert them. Flag writes that
+    /// originate in the detail view are tracked separately, in the shared
+    /// `AppState.pendingFlagWriteUIDs` (its write lifecycle lives in the detail
+    /// view model); `shieldFetched` consults both.
     var pendingFlagUIDs: Set<UInt32> = []
 
     init(folder: Folder, client: CabalmailClient, preferences: Preferences, appState: AppState) {

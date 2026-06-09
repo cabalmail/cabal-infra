@@ -11,8 +11,11 @@ import CabalmailKit
 final class MessageDetailViewModel {
     let folder: Folder
     let envelope: Envelope
-    private let client: CabalmailClient
-    private let preferences: Preferences
+    // Internal (not `private`) so the flag-handling methods, lifted into the
+    // `+Flags` sibling extension to keep this type body under SwiftLint's cap,
+    // can reach them.
+    let client: CabalmailClient
+    let preferences: Preferences
 
     var isLoading = false
     var errorMessage: String?
@@ -70,8 +73,9 @@ final class MessageDetailViewModel {
 
     /// Pending mark-as-read task for the `.afterDelay` behavior. Cancelled
     /// if the user navigates away before the 2-second threshold or marks the
-    /// message read manually in the meantime.
-    private var pendingMarkAsReadTask: Task<Void, Never>?
+    /// message read manually in the meantime. Internal so the `+Flags`
+    /// sibling extension that owns the mark-as-read logic can reach it.
+    var pendingMarkAsReadTask: Task<Void, Never>?
 
     /// In-flight body fetch (#403). Owned by the model so SwiftUI's `.task`
     /// double-fire can't cancel it. Torn down by `onDisappear()`.
@@ -82,6 +86,14 @@ final class MessageDetailViewModel {
     /// `MessageDetailView` after construction so the model itself stays
     /// decoupled from `AppState`.
     var onFlagChanged: ((Flag, Bool) -> Void)?
+
+    /// Brackets an in-flight flag write so the list can shield its optimistic
+    /// flag from a concurrent refresh: `true` when the STORE is dispatched,
+    /// `false` when it resolves (success or failure). Wired to
+    /// `AppState.setFlagWrite` in `MessageDetailView`; left nil in tests and
+    /// in the dispose path (the row leaves the list, so there's nothing to
+    /// shield). Same decoupling rationale as `onFlagChanged`.
+    var onFlagWriteInFlight: ((Bool) -> Void)?
 
     /// Delay for the `.afterDelay` mark-as-read mode. Matches the plan's
     /// "After delay (2s)" label and is low enough that a quick glance
@@ -192,80 +204,6 @@ final class MessageDetailViewModel {
         if let existing = loadTask, !existing.isCancelled { return }
         BodyFetchLog.startSpawn(uid: uid)
         loadTask = Task { @MainActor [weak self] in await self?.load() }
-    }
-
-    /// Toggles the server's `\Seen` flag. Drives both the toolbar button's
-    /// manual path and the `.onOpen` / `.afterDelay` mark-as-read
-    /// preferences — a successful flip cancels any still-pending delayed
-    /// task so the two paths can't race.
-    func toggleSeen() async {
-        await setSeen(!isSeen)
-    }
-
-    private func setSeen(_ shouldBeSeen: Bool) async {
-        // Optimistic flip: update the toolbar icon and signal the list
-        // before the server round trip so the user sees the change land
-        // instantly. The pending delayed-mark-as-read task is cancelled
-        // because either path supersedes it. On STORE failure we revert
-        // the flag and the cross-view signal so the row goes back to its
-        // truthful state.
-        let previous = isSeen
-        isSeen = shouldBeSeen
-        pendingMarkAsReadTask?.cancel()
-        pendingMarkAsReadTask = nil
-        onFlagChanged?(.seen, shouldBeSeen)
-        do {
-            try await client.imapClient.setFlags(
-                folder: folder.path,
-                uids: [envelope.uid],
-                flags: [.seen],
-                operation: shouldBeSeen ? .add : .remove
-            )
-        } catch {
-            isSeen = previous
-            onFlagChanged?(.seen, previous)
-            errorMessage = "\(error)"
-        }
-    }
-
-    private func scheduleMarkAsReadIfNeeded() {
-        guard !isSeen else { return }
-        switch preferences.markAsRead {
-        case .manual:
-            return
-        case .onOpen:
-            Task { await setSeen(true) }
-        case .afterDelay:
-            pendingMarkAsReadTask?.cancel()
-            pendingMarkAsReadTask = Task { [weak self] in
-                let delay = Self.markAsReadDelay
-                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-                guard !Task.isCancelled else { return }
-                await self?.setSeen(true)
-            }
-        }
-    }
-
-    /// Flip the server's `\Flagged` bit. Optimistic update with revert-on-
-    /// failure mirrors `setSeen(_:)`; the cross-view signal lets the list
-    /// row's flag indicator appear or disappear without a refresh.
-    func toggleFlagged() async {
-        let previous = isFlagged
-        let shouldBeFlagged = !previous
-        isFlagged = shouldBeFlagged
-        onFlagChanged?(.flagged, shouldBeFlagged)
-        do {
-            try await client.imapClient.setFlags(
-                folder: folder.path,
-                uids: [envelope.uid],
-                flags: [.flagged],
-                operation: shouldBeFlagged ? .add : .remove
-            )
-        } catch {
-            isFlagged = previous
-            onFlagChanged?(.flagged, previous)
-            errorMessage = "\(error)"
-        }
     }
 
     func toggleRemoteContent() {

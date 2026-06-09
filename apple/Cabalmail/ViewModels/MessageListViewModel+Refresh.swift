@@ -51,9 +51,15 @@ extension MessageListViewModel {
     /// agreement. The optimistic flags are read back from the current
     /// in-memory `envelopes`, which is where the write paths stash them.
     private func shieldFetched(_ fetched: [Envelope]) -> [Envelope] {
-        fetched.compactMap { fetchedEnvelope in
+        let detailFlagWrites = appState.pendingFlagWriteUIDs[folder.path] ?? []
+        return fetched.compactMap { fetchedEnvelope in
             if pendingRemovedUIDs.contains(fetchedEnvelope.uid) { return nil }
-            if pendingFlagUIDs.contains(fetchedEnvelope.uid),
+            // A flag write in flight from either this view model
+            // (`pendingFlagUIDs`) or the detail view (shared, folder-keyed
+            // `appState.pendingFlagWriteUIDs`) shields the row's flags.
+            let flagWriteInFlight = pendingFlagUIDs.contains(fetchedEnvelope.uid)
+                || detailFlagWrites.contains(fetchedEnvelope.uid)
+            if flagWriteInFlight,
                let local = envelopes.first(where: { $0.uid == fetchedEnvelope.uid }) {
                 return rebuildEnvelope(fetchedEnvelope, flags: local.flags)
             }

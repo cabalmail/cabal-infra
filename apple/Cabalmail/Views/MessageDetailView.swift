@@ -109,6 +109,18 @@ struct MessageDetailView: View {
                         added: added
                     )
                 }
+                // Bracket each flag write so the list shields the optimistic
+                // flag from a refresh that lands before the write resolves
+                // (the cross-view analogue of the list's own pending-flag
+                // shield). Folder-keyed so a UID collision across mailboxes
+                // can't mis-shield an unrelated row.
+                newModel.onFlagWriteInFlight = { [weak appState] inFlight in
+                    appState?.setFlagWrite(
+                        folderPath: folderPath,
+                        uid: uid,
+                        inFlight: inFlight
+                    )
+                }
                 model = newModel
                 activeModel = newModel
             }
