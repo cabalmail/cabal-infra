@@ -132,7 +132,35 @@ else
   log "opened PR: ${pr_url}"
 fi
 
-log "watching checks (Ctrl-C stops watching; the PR stays open)..."
-gh pr checks "${pr_url}" --watch || log "some checks did not pass - review before merging"
+# Wait for checks, then report the real outcome. A just-created PR usually has
+# NO checks registered for a few seconds (the same replication lag that delays
+# the PR appearing in the web UI). In that window `gh pr checks` returns
+# immediately - which we previously mistook for "checks failed". So first wait
+# for checks to APPEAR (poll until the "no checks reported" state clears), then
+# watch them to completion and branch on gh's documented exit codes
+# (0 = pass, 1 = fail, 8 = pending). Check status is advisory: the human reviews
+# and merges, so a failing/unknown result never fails this script.
+log "waiting for checks to register on ${pr_url} (can lag a few seconds after PR creation)..."
+appeared=0
+deadline=$(( $(date +%s) + 180 ))
+while [ "$(date +%s)" -lt "${deadline}" ]; do
+  out="$(gh pr checks "${pr_url}" 2>&1)" || true
+  printf '%s' "${out}" | grep -qi 'no checks' || { appeared=1; break; }
+  sleep 6
+done
+
+if [ "${appeared}" -ne 1 ]; then
+  log "no checks registered within the wait window - review on GitHub: ${pr_url}"
+else
+  log "watching checks (Ctrl-C stops watching; the PR stays open)..."
+  rc=0
+  gh pr checks "${pr_url}" --watch --interval 10 || rc=$?
+  case "${rc}" in
+    0) log "all checks passed." ;;
+    1) log "some checks FAILED - review before merging." ;;
+    8) log "checks still pending - review on GitHub." ;;
+    *) log "could not determine check status (gh exit ${rc}) - review on GitHub." ;;
+  esac
+fi
 
 log "done. Review and merge to promote to prod: ${pr_url}"

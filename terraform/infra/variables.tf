@@ -55,7 +55,7 @@ variable "repo" {
 
 variable "control_domain" {
   type        = string
-  description = "The domain used for naming your email infrastructure. E.g., if you want to host imap.example.com and smtp-out.example.com, then this would be 'example.com'. This domain is not used for email addresses."
+  description = "The domain used for naming your email infrastructure. E.g., if you want to host imap.example.com and smtp-out.example.com, then this would be 'example.com'. It may also be listed in mail_domains to host email addresses on its subdomains, in which case its bootstrap zone is reused rather than duplicated; its apex is never addressable."
   validation {
     condition     = can(regex("^(([[:alpha:]]|-|_|[[:digit:]])+\\.)+[[:alpha:]]+$", var.control_domain))
     error_message = "The control_domain does not appear to be a valid domain name."

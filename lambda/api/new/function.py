@@ -13,6 +13,20 @@ domains = json.loads(os.environ['DOMAINS'])
 control_domain = os.environ['CONTROL_DOMAIN']
 address_changed_topic_arn = os.environ.get('ADDRESS_CHANGED_TOPIC_ARN', '')
 
+# Subdomains reserved on the control domain. When the control domain doubles as
+# a mail domain (it appears in mail_domains), these labels already carry
+# infrastructure records in the control zone: CloudFront/NLB aliases (admin,
+# www, imap, smtp, smtp-in, smtp-out), the system mail user (mail-admin), and
+# the DKIM/DMARC selectors (cabal._domainkey, _dmarc). An address record at one
+# of these names would either fail (Route 53 rejects an MX/TXT alongside an
+# existing CNAME) or clobber an auth record (an SPF TXT UPSERT would overwrite
+# the apex DKIM/DMARC TXT). These collisions only exist on the control domain;
+# dedicated mail domains have no such records, so the guard is scoped to it.
+RESERVED_CONTROL_SUBDOMAINS = frozenset({
+    'admin', 'www', 'imap', 'smtp', 'smtp-in', 'smtp-out', 'mail-admin',
+    'cabal._domainkey', '_dmarc',
+})
+
 r53 = boto3.client('route53')
 ddb = boto3.resource('dynamodb')
 table = ddb.Table('cabal-addresses')
@@ -35,6 +49,17 @@ def handler(event, _context):
         return {
             'statusCode': 400,
             'body': json.dumps({'Error': f'Invalid input: {err}'})
+        }
+    if body['tld'] == control_domain and \
+            body['subdomain'].lower().rstrip('.') in RESERVED_CONTROL_SUBDOMAINS:
+        return {
+            'statusCode': 400,
+            'body': json.dumps({
+                'Error': (
+                    f"Subdomain \"{body['subdomain']}\" is reserved on the "
+                    f"control domain \"{control_domain}\""
+                )
+            })
         }
     if not user_authorized_for_domain(user, body['tld']):
         return {
