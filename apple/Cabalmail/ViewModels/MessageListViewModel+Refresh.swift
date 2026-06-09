@@ -42,16 +42,36 @@ extension MessageListViewModel {
         await refresh()
     }
 
+    /// Apply the in-flight-write shields to a freshly fetched page so a
+    /// stale refresh can't undo an optimistic update. Rows we've
+    /// optimistically removed (a move/dispose still settling) are dropped,
+    /// and rows with an in-flight flag write keep their optimistic flags
+    /// rather than the fetched (pre-toggle) ones. Both the in-memory merge
+    /// and the cache persist run through this so memory and disk stay in
+    /// agreement. The optimistic flags are read back from the current
+    /// in-memory `envelopes`, which is where the write paths stash them.
+    private func shieldFetched(_ fetched: [Envelope]) -> [Envelope] {
+        fetched.compactMap { fetchedEnvelope in
+            if pendingRemovedUIDs.contains(fetchedEnvelope.uid) { return nil }
+            if pendingFlagUIDs.contains(fetchedEnvelope.uid),
+               let local = envelopes.first(where: { $0.uid == fetchedEnvelope.uid }) {
+                return rebuildEnvelope(fetchedEnvelope, flags: local.flags)
+            }
+            return fetchedEnvelope
+        }
+    }
+
     /// Merges a fresh fetch into the in-memory envelope dictionary and
     /// re-sorts using the active `sortCriterion`. Used by both the top-
     /// page refresh and the older-page paginator — neither needs to know
     /// which sort is active, only that "the visible list should now
-    /// include these too."
+    /// include these too." Shielded so an in-flight local write survives a
+    /// concurrent refresh (see `shieldFetched`).
     func mergeFetched(_ fetched: [Envelope]) {
         var byUID: [UInt32: Envelope] = Dictionary(
             uniqueKeysWithValues: envelopes.map { ($0.uid, $0) }
         )
-        for envelope in fetched {
+        for envelope in shieldFetched(fetched) {
             byUID[envelope.uid] = envelope
         }
         envelopes = byUID.values.sorted(by: envelopeOrder)
@@ -91,8 +111,14 @@ extension MessageListViewModel {
         mergeFetched(fetched)
         lowestUID = envelopes.map(\.uid).min() ?? lowestUID
         hasMore = (lowestUID ?? 0) > 1
+        // Persist the shielded view, not the raw fetch: a row we've
+        // optimistically removed must stay out of the snapshot (it's inside
+        // `keepingRange`, so `replace` prunes it) and a row with an in-flight
+        // flag write keeps its optimistic flags on disk too. Otherwise a
+        // refresh landing mid-write would re-seed the cache with pre-write
+        // state and re-hydrate it on next launch.
         try await client.envelopeCache.replace(
-            envelopes: fetched,
+            envelopes: shieldFetched(fetched),
             uidValidity: uidValidity,
             uidNext: uidNext,
             keepingRange: keepingRange,

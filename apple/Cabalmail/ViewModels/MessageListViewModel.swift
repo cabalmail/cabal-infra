@@ -89,14 +89,32 @@ final class MessageListViewModel {
     /// one refresh by gating on elapsed time.
     private var lastRefreshFromWatcher: Date = .distantPast
 
-    /// UIDs currently in flight through `dispose(_:)`. Every swipe enqueues
-    /// the UID here, removes it in `defer`, and short-circuits duplicate
-    /// taps. Prevents re-entrant SwiftUI list mutation when a user taps
-    /// archive rapidly on several rows — the previous pattern queued one
-    /// `UID MOVE` per tap and mutated `envelopes` on completion, which
-    /// allowed `ForEach(model.envelopes)` to diff a shrinking array while
-    /// the in-flight moves were still returning.
-    private var pendingDisposeUIDs: Set<UInt32> = []
+    // The two pending-write sets below shield optimistic UI from a stale
+    // refresh. A refresh dispatched just before a local write lands returns
+    // the row's pre-write server state; applying it verbatim would resurrect
+    // a row we just moved or revert a flag we just toggled, leaving the user
+    // staring at an apparent no-op until the next refresh. While a UID sits
+    // in either set, `mergeFetched` (and the cache persist) refuse to apply
+    // the fetched copy for it; the sets clear when the write resolves, so the
+    // following refresh carries server truth. Internal (not `private`) so the
+    // write paths in the sibling extensions (`+Optimistic`, `+Move`, `+Bulk`)
+    // and the merge in `+Refresh` can reach them.
+
+    /// UIDs optimistically removed from `envelopes` (dispose or move) whose
+    /// server-side move is still in flight. Besides the merge shield this
+    /// doubles as `dispose(_:)`'s re-entrance guard: a duplicate rapid-swipe
+    /// tap whose UID is already enqueued short-circuits, preventing
+    /// re-entrant `ForEach(model.envelopes)` diffing while several in-flight
+    /// moves are still returning.
+    var pendingRemovedUIDs: Set<UInt32> = []
+
+    /// UIDs with an in-flight flag write (`\Seen` / `\Flagged`). While a UID
+    /// sits here `mergeFetched` keeps the optimistic flags rather than letting
+    /// a stale fetch revert them. Flag changes that originate in the detail
+    /// view (routed through `applyFlagChange`) are NOT tracked here - that
+    /// write's lifecycle lives in the detail view model, out of this type's
+    /// reach, so it has no completion signal to clear the shield with.
+    var pendingFlagUIDs: Set<UInt32> = []
 
     init(folder: Folder, client: CabalmailClient, preferences: Preferences, appState: AppState) {
         self.folder = folder
@@ -216,7 +234,7 @@ final class MessageListViewModel {
         // affordance for "show me more results," not infinite scroll.
         guard hasMore, !isLoadingMore, !isLoading,
               !isSearchActive,
-              pendingDisposeUIDs.isEmpty,
+              pendingRemovedUIDs.isEmpty,
               envelopes.last?.uid == currentItem.uid,
               let lowestUID,
               lowestUID > 1 else { return }
@@ -288,8 +306,8 @@ final class MessageListViewModel {
     /// for server confirmation — without that gate, a transient failure
     /// would leave the persistent snapshot disagreeing with the server.
     func dispose(_ envelope: Envelope) async {
-        guard pendingDisposeUIDs.insert(envelope.uid).inserted else { return }
-        defer { pendingDisposeUIDs.remove(envelope.uid) }
+        guard pendingRemovedUIDs.insert(envelope.uid).inserted else { return }
+        defer { pendingRemovedUIDs.remove(envelope.uid) }
 
         let destination = preferences.disposeAction.destinationFolder
         let source = sourceFolder(for: envelope)

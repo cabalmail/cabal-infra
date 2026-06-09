@@ -67,9 +67,15 @@ extension MessageListViewModel {
     /// styling flips before the wire call lands.
     func bulkSetSeen(_ shouldBeSeen: Bool) async {
         let grouping = selectedByFolder
-        for uid in selectedUIDs {
+        // Snapshot the selection before the optimistic loop: `exitBulkMode()`
+        // clears `selectedUIDs`, and the shield's `defer` must subtract the
+        // same set it added.
+        let shielded = selectedUIDs
+        for uid in shielded {
             applyOptimisticFlag(uid: uid, flag: .seen, add: shouldBeSeen)
         }
+        pendingFlagUIDs.formUnion(shielded)
+        defer { pendingFlagUIDs.subtract(shielded) }
         for (source, uids) in grouping {
             try? await client.imapClient.setFlags(
                 folder: source,
@@ -89,9 +95,12 @@ extension MessageListViewModel {
     /// bookkeeping (flagged isn't a count we surface in the sidebar).
     func bulkSetFlagged(_ shouldBeFlagged: Bool) async {
         let grouping = selectedByFolder
-        for uid in selectedUIDs {
+        let shielded = selectedUIDs
+        for uid in shielded {
             applyOptimisticFlag(uid: uid, flag: .flagged, add: shouldBeFlagged)
         }
+        pendingFlagUIDs.formUnion(shielded)
+        defer { pendingFlagUIDs.subtract(shielded) }
         for (source, uids) in grouping {
             try? await client.imapClient.setFlags(
                 folder: source,

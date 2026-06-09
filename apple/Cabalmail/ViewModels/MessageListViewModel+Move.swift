@@ -19,6 +19,11 @@ extension MessageListViewModel {
         let originalIndex = envelopes.firstIndex { $0.uid == envelope.uid }
         let wasUnread = !envelope.flags.contains(.seen)
         envelopes.removeAll { $0.uid == envelope.uid }
+        // Shield the removal from a concurrent refresh: until the move lands
+        // the source folder still returns this UID, and an unshielded merge
+        // would resurrect the row.
+        pendingRemovedUIDs.insert(envelope.uid)
+        defer { pendingRemovedUIDs.remove(envelope.uid) }
         if wasUnread {
             appState.applyUnreadDelta(folderPath: source, delta: -1)
             appState.applyUnreadDelta(folderPath: destination, delta: 1)
@@ -81,7 +86,12 @@ extension MessageListViewModel {
         ).mapValues { $0.count }
 
         // Optimistic prune. A per-source failure reinserts that group below.
+        // Shield every moving UID from a concurrent refresh until the whole
+        // batch settles - the source folders keep returning them until their
+        // move lands, and an unshielded merge would resurrect the rows.
         envelopes.removeAll { movingUIDs.contains($0.uid) }
+        pendingRemovedUIDs.formUnion(movingUIDs)
+        defer { pendingRemovedUIDs.subtract(movingUIDs) }
         for (source, count) in unreadBySource {
             appState.applyUnreadDelta(folderPath: source, delta: -count)
             if !markSeenFirst {

@@ -15,6 +15,10 @@ extension MessageListViewModel {
     func setFlag(_ flag: Flag, add: Bool, envelope: Envelope) async {
         let source = sourceFolder(for: envelope)
         applyOptimisticFlag(uid: envelope.uid, flag: flag, add: add)
+        // Shield the optimistic flag from a concurrent refresh until our own
+        // write resolves; the next refresh after that carries server truth.
+        pendingFlagUIDs.insert(envelope.uid)
+        defer { pendingFlagUIDs.remove(envelope.uid) }
         // Mirror the optimistic flag flip onto the source folder's unread
         // count when `.seen` changes — adding `.seen` to an unread message
         // drops one from the badge, removing it adds one back. Only fires
