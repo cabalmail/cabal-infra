@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.17] - 2026-06-09
+
+### Fixed
+- Apple clients: an action taken on a message (mark read/unread, flag,
+  archive, move) just before the folder's background refresh no longer
+  appears to undo itself. A refresh dispatched before the change reached
+  the server returned the row's pre-change state and the merge applied it
+  verbatim, reverting the optimistic update until the next refresh. The
+  message list now shields in-flight local writes: an optimistically
+  removed row stays gone and a freshly toggled flag stays toggled (in
+  memory and in the on-disk snapshot) until that write resolves, after
+  which the following refresh carries server truth.
+
 ## [0.10.16] - 2026-06-09
 
 ### Changed
