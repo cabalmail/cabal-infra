@@ -29,6 +29,18 @@ resource "aws_cognito_user_pool" "users" {
       min_value = 2000
     }
   }
+
+  # Threat Protection (formerly "advanced security") is incompatible
+  # with the ESSENTIALS pricing tier this pool runs on - any
+  # UpdateUserPool call fails with FeatureUnavailableInTierException
+  # if it is left on. Explicitly pin it OFF so the state is owned by
+  # Terraform and a manual flip in the console is reverted on next
+  # apply. Enabling it would require flipping the pool to the PLUS
+  # tier; see the user_pool hardening notes for the cost/feature
+  # trade-off.
+  user_pool_add_ons {
+    advanced_security_mode = "OFF"
+  }
   # custom_sms_sender (Twilio) is feature-flagged per env via
   # var.use_twilio_sms. When the flag is true Cognito hands SMS
   # delivery to the sms-sender Lambda, encrypts OTPs with the
