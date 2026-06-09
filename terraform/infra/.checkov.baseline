@@ -143,7 +143,6 @@
                     "check_ids": [
                         "CKV2_AWS_62",
                         "CKV_AWS_144",
-                        "CKV_AWS_145",
                         "CKV_AWS_18",
                         "CKV_AWS_21"
                     ]
@@ -270,18 +269,6 @@
             ]
         },
         {
-            "file": "/modules/elb/imap.tf",
-            "findings": [
-                {
-                    "resource": "module.load_balancer.aws_lb_listener.imap",
-                    "check_ids": [
-                        "CKV2_AWS_74",
-                        "CKV_AWS_103"
-                    ]
-                }
-            ]
-        },
-        {
             "file": "/modules/elb/main.tf",
             "findings": [
                 {
@@ -313,7 +300,6 @@
                         "CKV2_AWS_61",
                         "CKV2_AWS_62",
                         "CKV_AWS_144",
-                        "CKV_AWS_145",
                         "CKV_AWS_18",
                         "CKV_AWS_21"
                     ]
@@ -642,7 +628,6 @@
                         "CKV2_AWS_61",
                         "CKV2_AWS_62",
                         "CKV_AWS_144",
-                        "CKV_AWS_145",
                         "CKV_AWS_18",
                         "CKV_AWS_21"
                     ]
@@ -703,8 +688,7 @@
                 {
                     "resource": "module.vpc.aws_vpc.network",
                     "check_ids": [
-                        "CKV2_AWS_11",
-                        "CKV2_AWS_12"
+                        "CKV2_AWS_11"
                     ]
                 }
             ]
