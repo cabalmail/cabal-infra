@@ -14,15 +14,25 @@ Measured against commit `371dc6a1` (see [`docs/0.10.x/iac-baseline-snapshot.md`]
 
 ## Counts
 
-Updated after the Phase 2.5 safe batch (see [the safe-batch note](#phase-25-safe-batch-landed) below).
+Counts reflect **pip checkov** (what CI runs). See the [graph-check note](#graph-check-cohort-brew-to-pip-fix) below - the original `200 / 117` were generated with brew checkov, which silently omits the graph (`CKV2_*`) checks.
 
-| Tool | Total (Phase 0) | CMK global-suppress | Baselined | Fixed / inline-suppressed (2.5) | Residual |
-| ---- | --------------- | ------------------- | --------- | ------------------------------- | -------- |
-| Checkov | 200 | 73 (11 ids) | 117 (27 ids) | 10 (276, 51, 8, 341, 26, 27x3 fixed; 111, 356 inline) | 0 |
+| Tool | Total | CMK global-suppress | Baselined | Fixed / inline-suppressed (2.5) | Residual |
+| ---- | ----- | ------------------- | --------- | ------------------------------- | -------- |
+| Checkov | 242 | 76 (12 ids) | 153 (47 ids) | 13 (276, 51, 8, 341, 26, 27x3, 103, 74, 12 fixed; 111, 356 inline) | 0 |
 | Trivy   | 50  | 26 (5 ids)  | 20 (10 ids) | 4 (AWS-0031, 0095, 0096, 0131 fixed) | 0 |
 | tflint  | 6   | 0           | 0 (never baselined) | 6 fixed (`tls` version + 5 unused decls) | 0 |
 
-Verified: `checkov -d terraform/infra --config-file .checkov.yaml --baseline .checkov.baseline` exits 0; `trivy config terraform/infra --ignorefile .trivyignore` reports 0 misconfigurations.
+Verified (pip checkov): `checkov -d terraform/infra --config-file .checkov.yaml --baseline .checkov.baseline` exits 0; `trivy config terraform/infra --ignorefile .trivyignore` reports 0 misconfigurations.
+
+### Graph-check cohort (brew-to-pip fix)
+
+The baselines were first generated with **brew** checkov, which omits the graph (`CKV2_*`) checks. CI runs **pip** checkov, which runs them, so on the gate's first live run 42 infra + 2 dns graph findings appeared as "new" and failed CI. Fixed by regenerating both baselines with pip checkov (matching CI) and adding a `checkov-graph-guard` to the Makefile so a brew checkov is caught locally. The 42 are pre-existing, mostly design/decay (WAF off, no DNSSEC/query-logging, S3 versioning/replication/lifecycle, CloudFront response-headers, API-GW request-validation, EFS-in-backup, monitoring-tier LBs which are dormant) - grandfathered.
+
+Three were pulled out for a real look and resolved (not left in the baseline):
+
+- **CKV_AWS_103 / CKV2_AWS_74** on `module.load_balancer.aws_lb_listener.imap` - **fixed**: the IMAP NLB listener now pins `ssl_policy = "ELBSecurityPolicy-TLS13-1-2-2021-06"` (TLS 1.2/1.3, strong ciphers). It had no policy, so it defaulted to one that still permits TLS 1.0/1.1 on the client-facing IMAPS endpoint. **Stage-validate: confirm clients still connect.**
+- **CKV2_AWS_12** on `module.vpc.aws_vpc.network` - **fixed**: a deny-all `aws_default_security_group` now strips every rule from the VPC default SG (nothing referenced it, so it is safe).
+- **CKV_AWS_145** on the three S3 buckets - **reclassified** to the `.checkov.yaml` CMK `skip-check` (it is the same KMS-by-default posture suppressed elsewhere), not baselined.
 
 ## 1. CMK class - global, permanent suppression
 
@@ -30,7 +40,7 @@ The single biggest cluster. Every flagged resource is **already encrypted at res
 
 If Cabalmail later adopts CMKs for the few data-plane secrets that would actually benefit (EFS mailstore, `cabal-addresses`, the IMAP master-password SSM parameter), drop the relevant id from `.checkov.yaml` / `.trivyignore` and let the check enforce.
 
-- **Checkov** (`skip-check` in `.checkov.yaml`): CKV_AWS_158, CKV_AWS_337, CKV_AWS_136, CKV_AWS_119, CKV_AWS_173, CKV_AWS_297, CKV_AWS_166, CKV_AWS_184, CKV_AWS_180, CKV_AWS_200, CKV_AWS_199.
+- **Checkov** (`skip-check` in `.checkov.yaml`): CKV_AWS_158, CKV_AWS_337, CKV_AWS_136, CKV_AWS_145, CKV_AWS_119, CKV_AWS_173, CKV_AWS_297, CKV_AWS_166, CKV_AWS_184, CKV_AWS_180, CKV_AWS_200, CKV_AWS_199.
 - **Trivy** (`.trivyignore`): AWS-0017, AWS-0025, AWS-0033, AWS-0132, AWS-0136 (SNS - it is encrypted with the `aws/sns` managed key; the check wants a CMK).
 
 ## 2. Must-fix in Phase 2.5

@@ -61,6 +61,14 @@ heading_for() {
 [[ "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+].+)?$ ]] \
   || die "version '${VERSION}' is not semver (expected X.Y.Z)"
 
+# Refuse to reuse a version: collating it would insert a second "## [VERSION]"
+# header above the existing one. Dots are escaped so the version matches
+# literally. This guards the standalone `make changelog` path too, not just
+# promote.sh.
+ver_re="$(printf '%s' "${VERSION}" | sed 's/\./\\./g')"
+grep -qE "^## \[${ver_re}\]" "${CHANGELOG}" \
+  && die "CHANGELOG.md already has a ## [${VERSION}] section"
+
 # Collect fragments (everything but the README).
 shopt -s nullglob
 all_fragments=()

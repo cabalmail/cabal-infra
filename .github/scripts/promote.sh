@@ -50,6 +50,14 @@ BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 git diff --quiet && git diff --cached --quiet \
   || die "working tree not clean; commit or stash before releasing"
 
+# Refresh tags from origin so the bump computation and the reuse guard below see
+# versions already released by CI: release.yml tags on origin (via gh), not
+# locally, so a stale checkout would otherwise miss them. Best-effort - a fetch
+# failure (offline, no origin) must not block a release; the guard then falls
+# back to local + gh state.
+git fetch --tags --quiet origin 2>/dev/null \
+  || log "WARNING: could not fetch tags from origin; reuse check uses local/gh state only"
+
 # Resolve the version: explicit semver, or a bump from the latest semver tag.
 latest_tag() { git tag --sort=-v:refname | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | head -1; }
 case "${SPEC}" in
@@ -70,7 +78,15 @@ case "${SPEC}" in
     VERSION="${SPEC}"
     ;;
 esac
-git rev-parse "refs/tags/${VERSION}" >/dev/null 2>&1 && die "tag ${VERSION} already exists"
+# Refuse to reuse a version. After the fetch above, the local tag check covers
+# anything CI tagged on origin; the gh release check is an authoritative
+# cross-check when gh is available (collate-changelog.sh adds a third guard
+# against a duplicate CHANGELOG.md section).
+git rev-parse "refs/tags/${VERSION}" >/dev/null 2>&1 \
+  && die "version ${VERSION} is already tagged"
+if command -v gh >/dev/null 2>&1 && gh release view "${VERSION}" >/dev/null 2>&1; then
+  die "version ${VERSION} already has a GitHub release"
+fi
 
 # Fold fragments into a dated section (stages CHANGELOG.md + fragment deletions).
 "${SCRIPT_DIR}/collate-changelog.sh" "${VERSION}" ${DATE:+"${DATE}"}

@@ -27,9 +27,17 @@
                 {
                     "resource": "module.admin.aws_cloudfront_distribution.cdn",
                     "check_ids": [
+                        "CKV2_AWS_32",
+                        "CKV2_AWS_47",
                         "CKV_AWS_310",
                         "CKV_AWS_68",
                         "CKV_AWS_86"
+                    ]
+                },
+                {
+                    "resource": "module.admin.aws_ssm_parameter.cf_distribution",
+                    "check_ids": [
+                        "CKV2_AWS_34"
                     ]
                 }
             ]
@@ -80,6 +88,9 @@
                 {
                     "resource": "module.admin.aws_api_gateway_stage.api_stage",
                     "check_ids": [
+                        "CKV2_AWS_29",
+                        "CKV2_AWS_4",
+                        "CKV2_AWS_51",
                         "CKV_AWS_120",
                         "CKV_AWS_73"
                     ]
@@ -114,8 +125,28 @@
             ]
         },
         {
+            "file": "/modules/app/modules/call/main.tf",
+            "findings": [
+                {
+                    "resource": "module.admin.module.cabal_method.aws_api_gateway_method.api_call",
+                    "check_ids": [
+                        "CKV2_AWS_53"
+                    ]
+                }
+            ]
+        },
+        {
             "file": "/modules/app/s3.tf",
             "findings": [
+                {
+                    "resource": "module.admin.aws_s3_bucket.cache",
+                    "check_ids": [
+                        "CKV2_AWS_62",
+                        "CKV_AWS_144",
+                        "CKV_AWS_18",
+                        "CKV_AWS_21"
+                    ]
+                },
                 {
                     "resource": "module.admin.aws_s3_bucket_lifecycle_configuration.expire_attachments",
                     "check_ids": [
@@ -141,6 +172,18 @@
                         "CKV_AWS_117",
                         "CKV_AWS_272",
                         "CKV_AWS_50"
+                    ]
+                }
+            ]
+        },
+        {
+            "file": "/modules/domains/main.tf",
+            "findings": [
+                {
+                    "resource": "module.domains.aws_route53_zone.mail_dns",
+                    "check_ids": [
+                        "CKV2_AWS_38",
+                        "CKV2_AWS_39"
                     ]
                 }
             ]
@@ -198,12 +241,29 @@
             ]
         },
         {
+            "file": "/modules/ecs/sinkhole.tf",
+            "findings": [
+                {
+                    "resource": "module.ecs.aws_ssm_parameter.sinkhole_mode",
+                    "check_ids": [
+                        "CKV2_AWS_34"
+                    ]
+                }
+            ]
+        },
+        {
             "file": "/modules/efs/main.tf",
             "findings": [
                 {
                     "resource": "module.efs.aws_efs_access_point.smtp_queue",
                     "check_ids": [
                         "CKV_AWS_330"
+                    ]
+                },
+                {
+                    "resource": "module.efs.aws_efs_file_system.mailstore",
+                    "check_ids": [
+                        "CKV2_AWS_18"
                     ]
                 }
             ]
@@ -226,10 +286,28 @@
                 {
                     "resource": "module.front_door.aws_cloudfront_distribution.this",
                     "check_ids": [
+                        "CKV2_AWS_32",
+                        "CKV2_AWS_47",
                         "CKV_AWS_310",
                         "CKV_AWS_374",
                         "CKV_AWS_68",
                         "CKV_AWS_86"
+                    ]
+                },
+                {
+                    "resource": "module.front_door.aws_s3_bucket.this",
+                    "check_ids": [
+                        "CKV2_AWS_61",
+                        "CKV2_AWS_62",
+                        "CKV_AWS_144",
+                        "CKV_AWS_18",
+                        "CKV_AWS_21"
+                    ]
+                },
+                {
+                    "resource": "module.front_door.aws_ssm_parameter.cf_distribution",
+                    "check_ids": [
+                        "CKV2_AWS_34"
                     ]
                 }
             ]
@@ -240,6 +318,7 @@
                 {
                     "resource": "module.monitoring.aws_lb.uptime",
                     "check_ids": [
+                        "CKV2_AWS_28",
                         "CKV_AWS_150",
                         "CKV_AWS_91"
                     ]
@@ -390,6 +469,12 @@
                     "check_ids": [
                         "CKV_AWS_336"
                     ]
+                },
+                {
+                    "resource": "module.monitoring.aws_lb_target_group.grafana",
+                    "check_ids": [
+                        "CKV_AWS_378"
+                    ]
                 }
             ]
         },
@@ -400,6 +485,12 @@
                     "resource": "module.monitoring.aws_cloudwatch_log_group.healthchecks",
                     "check_ids": [
                         "CKV_AWS_338"
+                    ]
+                },
+                {
+                    "resource": "module.monitoring.aws_lb_target_group.healthchecks",
+                    "check_ids": [
+                        "CKV_AWS_378"
                     ]
                 }
             ]
@@ -454,6 +545,12 @@
                     "resource": "module.monitoring.aws_ecs_task_definition.ntfy",
                     "check_ids": [
                         "CKV_AWS_336"
+                    ]
+                },
+                {
+                    "resource": "module.monitoring.aws_lb_target_group.ntfy",
+                    "check_ids": [
+                        "CKV_AWS_378"
                     ]
                 }
             ]
@@ -523,6 +620,21 @@
             ]
         },
         {
+            "file": "/modules/s3/main.tf",
+            "findings": [
+                {
+                    "resource": "module.bucket.aws_s3_bucket.this",
+                    "check_ids": [
+                        "CKV2_AWS_61",
+                        "CKV2_AWS_62",
+                        "CKV_AWS_144",
+                        "CKV_AWS_18",
+                        "CKV_AWS_21"
+                    ]
+                }
+            ]
+        },
+        {
             "file": "/modules/user_pool/check_invite.tf",
             "findings": [
                 {
@@ -571,6 +683,17 @@
             ]
         },
         {
+            "file": "/modules/vpc/main.tf",
+            "findings": [
+                {
+                    "resource": "module.vpc.aws_vpc.network",
+                    "check_ids": [
+                        "CKV2_AWS_11"
+                    ]
+                }
+            ]
+        },
+        {
             "file": "/modules/vpc/nat.tf",
             "findings": [
                 {
@@ -578,6 +701,18 @@
                     "check_ids": [
                         "CKV_AWS_126",
                         "CKV_AWS_135"
+                    ]
+                },
+                {
+                    "resource": "module.vpc.aws_route53_record.smtp",
+                    "check_ids": [
+                        "CKV2_AWS_23"
+                    ]
+                },
+                {
+                    "resource": "module.vpc.aws_security_group.nat[0]",
+                    "check_ids": [
+                        "CKV2_AWS_5"
                     ]
                 },
                 {
@@ -598,6 +733,12 @@
         {
             "file": "/modules/vpc/nat_ami.tf",
             "findings": [
+                {
+                    "resource": "module.vpc.aws_security_group.imagebuilder[0]",
+                    "check_ids": [
+                        "CKV2_AWS_5"
+                    ]
+                },
                 {
                     "resource": "module.vpc.aws_security_group_rule.imagebuilder_egress[0]",
                     "check_ids": [

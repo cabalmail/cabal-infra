@@ -26,6 +26,7 @@ skip-check:
   - CKV_AWS_158  # CloudWatch Log Group encrypted by KMS (no AWS-managed-key option; needs a CMK)
   - CKV_AWS_337  # SSM parameters using a KMS CMK
   - CKV_AWS_136  # ECR repositories encrypted using KMS (default is AES256)
+  - CKV_AWS_145  # S3 buckets encrypted with KMS by default (default is SSE-S3/AES256)
   - CKV_AWS_119  # DynamoDB tables encrypted using a KMS CMK
   - CKV_AWS_173  # Lambda environment-variable encryption with a CMK
   - CKV_AWS_297  # EventBridge Scheduler uses a CMK
