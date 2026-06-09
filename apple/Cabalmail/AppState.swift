@@ -82,6 +82,28 @@ final class AppState {
     var lastEnvelopeFlagChange: EnvelopeFlagChange?
     private var flagChangeTick = 0
 
+    /// UIDs with a flag write in flight from the detail view, keyed by folder
+    /// path (IMAP UIDs are only unique within a mailbox, so a bare UID set
+    /// would let a pending write in one folder shield an unrelated row with
+    /// the same UID in another). `MessageListViewModel.shieldFetched` reads
+    /// this so a refresh that lands mid-write can't revert the detail view's
+    /// optimistic flag - the cross-view analogue of the list's own
+    /// `pendingFlagUIDs`. The detail view brackets each write via
+    /// `setFlagWrite(folderPath:uid:inFlight:)`. Read directly at merge time
+    /// (never from a view body), so observation tracking is irrelevant here.
+    private(set) var pendingFlagWriteUIDs: [String: Set<UInt32>] = [:]
+
+    /// UIDs the detail view has optimistically removed (archive / trash /
+    /// move) but whose server move is still in flight, keyed by source folder
+    /// path. The detail view prunes the list row up front via
+    /// `signalDisposed`; without this `MessageListViewModel.shieldFetched`
+    /// would let a refresh that lands before the move completes resurrect the
+    /// row (the source folder still returns the UID). The cross-view analogue
+    /// of the list's own `pendingRemovedUIDs`; bracketed via
+    /// `setMoveInFlight(folderPath:uid:inFlight:)`. Folder-keyed for the same
+    /// per-mailbox UID-uniqueness reason as `pendingFlagWriteUIDs`.
+    private(set) var pendingMoveUIDs: [String: Set<UInt32>] = [:]
+
     /// True while a message-row drag is in flight on a wide-screen layout.
     /// `MailRootView`'s sidebar watches this to temporarily reveal the
     /// folder list as a drop target when the user is on the Addresses tab,
@@ -149,6 +171,39 @@ final class AppState {
         )
         if flag == .seen {
             applyUnreadDelta(folderPath: folderPath, delta: added ? -1 : 1)
+        }
+    }
+
+    /// Mark a detail-view flag write as in flight (`true`, when the STORE is
+    /// dispatched) or resolved (`false`, on success or failure). While a UID
+    /// is in flight the list's merge keeps the optimistic flag instead of the
+    /// fetched one; clearing it lets the next refresh carry server truth. Safe
+    /// to call `false` for a UID that was never inserted (a no-op removal).
+    func setFlagWrite(folderPath: String, uid: UInt32, inFlight: Bool) {
+        if inFlight {
+            pendingFlagWriteUIDs[folderPath, default: []].insert(uid)
+        } else {
+            pendingFlagWriteUIDs[folderPath]?.remove(uid)
+            if pendingFlagWriteUIDs[folderPath]?.isEmpty == true {
+                pendingFlagWriteUIDs[folderPath] = nil
+            }
+        }
+    }
+
+    /// Mark a detail-view archive / trash / move as in flight (`true`, before
+    /// the server move) or resolved (`false`, on success or failure). While a
+    /// UID is in flight the list's merge keeps the optimistically-pruned row
+    /// gone; clearing it lets the next refresh re-add the row if the move
+    /// failed, or confirm its absence if it succeeded. Safe to call `false`
+    /// for a UID that was never inserted (a no-op removal).
+    func setMoveInFlight(folderPath: String, uid: UInt32, inFlight: Bool) {
+        if inFlight {
+            pendingMoveUIDs[folderPath, default: []].insert(uid)
+        } else {
+            pendingMoveUIDs[folderPath]?.remove(uid)
+            if pendingMoveUIDs[folderPath]?.isEmpty == true {
+                pendingMoveUIDs[folderPath] = nil
+            }
         }
     }
 
