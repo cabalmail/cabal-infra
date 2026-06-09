@@ -39,9 +39,13 @@ resource "aws_iam_role_policy" "lambda" {
     Statement = concat(
       [
         {
+          # Scope to this pool's ARN, not userpool/*. The post-confirmation
+          # trigger only ever updates the user that fired it, in this pool;
+          # the wildcard would have let it AdminUpdateUserAttributes on any
+          # user in any pool in the account.
           Effect   = "Allow"
           Action   = "cognito-idp:AdminUpdateUserAttributes"
-          Resource = "arn:aws:cognito-idp:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:userpool/${local.wildcard}"
+          Resource = aws_cognito_user_pool.users.arn
         },
         {
           Effect   = "Allow"
@@ -49,9 +53,13 @@ resource "aws_iam_role_policy" "lambda" {
           Resource = aws_dynamodb_table.counter.arn
         },
         {
+          # logs:CreateLogGroup only ever targets this Lambda's own log group
+          # (pre-created above), so scope it there rather than every group in
+          # the account. The trailing wildcard is the log-stream portion of the
+          # log-group ARN, which has no enumerable value.
           Effect   = "Allow"
           Action   = "logs:CreateLogGroup"
-          Resource = "arn:aws:logs:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:${local.wildcard}"
+          Resource = "arn:aws:logs:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/assign_osid:${local.wildcard}"
         },
         {
           Effect = "Allow"
