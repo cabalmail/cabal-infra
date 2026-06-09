@@ -54,7 +54,9 @@ aws_region = "us-west-1"
 
 control_domain = "example.net"
 
-# List the domains that you want to use for email addresses.
+# List the domains that you want to use for email addresses. The control_domain
+# may be included here to host addresses on its own subdomains; its existing
+# zone is reused (not duplicated) and its apex stays unaddressable.
 
 mail_domains = [
   "example.com",

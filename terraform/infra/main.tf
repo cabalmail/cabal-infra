@@ -71,10 +71,13 @@ module "front_door" {
   cert_arn        = module.cert.cert_arn
 }
 
-# Sets up Route 53 hosted zones for mail domains
+# Sets up Route 53 hosted zones for mail domains. When the control domain is
+# also a mail domain, its bootstrap zone is reused rather than duplicated.
 module "domains" {
-  source       = "./modules/domains"
-  mail_domains = var.mail_domains
+  source                 = "./modules/domains"
+  mail_domains           = var.mail_domains
+  control_domain         = var.control_domain
+  control_domain_zone_id = data.terraform_remote_state.zone.outputs.control_domain_zone_id
 }
 
 # Infrastructure and code for the administrative web site
