@@ -139,6 +139,8 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@v5
+    - name: check-suppression-justifications
+      run: ./.github/scripts/check-suppression-justifications.sh terraform/dns
     - name: setup-python
       uses: actions/setup-python@v6
       with:
@@ -162,6 +164,13 @@ jobs:
       with:
         sarif_file: results.sarif
         category: checkov-dns
+    - name: baseline-drift
+      # See the infra chekov job. dns baseline is empty, so this passes
+      # trivially; kept for symmetry and to catch a future stale entry.
+      run: |
+        checkov -d terraform/dns --config-file terraform/dns/.checkov.yaml \
+          --soft-fail --compact --quiet -o json > "$RUNNER_TEMP/checkov-all.json"
+        python3 .github/scripts/baseline-diff.py checkov "$RUNNER_TEMP/checkov-all.json" terraform/dns/.checkov.baseline
 
   tflint_dns:
     needs: bootstrap_build
@@ -229,6 +238,12 @@ jobs:
       with:
         sarif_file: trivy-dns.sarif
         category: trivy-dns
+    - name: ignore-drift
+      # See the infra trivy job. dns .trivyignore has no active ids, so this
+      # passes trivially; kept for symmetry.
+      run: |
+        trivy config terraform/dns --format json --quiet > "$RUNNER_TEMP/trivy-all.json"
+        python3 .github/scripts/baseline-diff.py trivy "$RUNNER_TEMP/trivy-all.json" terraform/dns/.trivyignore
 
   bootstrap_plan:
     needs: bootstrap_build
@@ -394,6 +409,8 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@v5
+    - name: check-suppression-justifications
+      run: ./.github/scripts/check-suppression-justifications.sh terraform/infra
     - name: setup-python
       uses: actions/setup-python@v6
       with:
@@ -427,6 +444,16 @@ jobs:
       with:
         sarif_file: results.sarif
         category: checkov-infra
+    - name: baseline-drift
+      # Fail if a .checkov.baseline entry no longer matches a finding (stale -
+      # the code was fixed but the grandfather entry was left behind). The
+      # --soft-fail here only suppresses the finding-exit so the JSON is
+      # produced; the gate is the --baseline run above. baseline-diff.py fails
+      # the step on a stale entry, blocking approval -> apply.
+      run: |
+        checkov -d terraform/infra --config-file terraform/infra/.checkov.yaml \
+          --soft-fail --compact --quiet -o json > "$RUNNER_TEMP/checkov-all.json"
+        python3 .github/scripts/baseline-diff.py checkov "$RUNNER_TEMP/checkov-all.json" terraform/infra/.checkov.baseline
 
   tflint:
     needs: build
@@ -495,6 +522,12 @@ jobs:
       with:
         sarif_file: trivy-infra.sarif
         category: trivy-infra
+    - name: ignore-drift
+      # Fail if a .trivyignore id no longer matches a finding (stale). The
+      # trivy binary (pinned above) is on PATH from the action.
+      run: |
+        trivy config terraform/infra --format json --quiet > "$RUNNER_TEMP/trivy-all.json"
+        python3 .github/scripts/baseline-diff.py trivy "$RUNNER_TEMP/trivy-all.json" terraform/infra/.trivyignore
 
   plan:
     needs: build

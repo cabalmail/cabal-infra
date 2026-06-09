@@ -5,5 +5,8 @@
   `.checkov.baseline` / `.trivyignore` with a `BASELINE.md` rationale; a new
   resource that trips a rule fails CI until it is fixed or deliberately
   accepted. Tool versions are pinned (Checkov, tflint + its AWS ruleset, and
-  the Trivy binary) so strictness changes only by a deliberate bump, and
-  `make scan` reproduces the CI pass/fail verdict locally.
+  the Trivy binary) so strictness changes only by a deliberate bump. Two
+  guards keep the accepted set honest: an inline suppression must carry a
+  written justification, and CI fails if a baseline/ignore entry goes stale
+  (its finding was fixed but the entry was left behind), so the accepted set
+  only shrinks. `make scan` reproduces the CI pass/fail verdict locally.
