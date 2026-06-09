@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.15] - 2026-06-08
+
+### Security
+- The ECS launch template's IMDS hop limit is reduced from 2 to 1, so a
+  compromised mail-tier container can no longer reach the host instance role
+  via IMDS. The tasks run in `awsvpc` mode and read credentials from the
+  task-role endpoint rather than the host IMDS, so they are unaffected. Takes
+  effect as instances cycle onto the new template.
+- The NAT instance root volume is now encrypted. With the stock AL2023 AMI
+  this replaces the NAT instance on first apply - a brief outbound blip for the
+  private subnets (and outbound SMTP delivery) while the new instance comes up.
+- The `cabal-address-changed` SNS topic is now encrypted at rest with the
+  AWS-managed `aws/sns` key. The new/revoke Lambda (the only publisher) is
+  granted `kms:GenerateDataKey`/`Decrypt` scoped via `kms:ViaService=sns`, so
+  publishing keeps working.
+- The per-tier `cabal-reconfig-*` SQS queues (the address-change
+  reconfiguration pipeline) are now encrypted at rest with SSE-SQS. The
+  SQS-owned key needs no management, and SNS->SQS delivery and the reconfigure
+  sidecar consumers are transparent to it.
+
 ## [0.10.14] - 2026-06-08
 
 ### Added
