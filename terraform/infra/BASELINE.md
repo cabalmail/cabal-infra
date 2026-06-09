@@ -14,15 +14,25 @@ Measured against commit `371dc6a1` (see [`docs/0.10.x/iac-baseline-snapshot.md`]
 
 ## Counts
 
-Updated after the Phase 2.5 safe batch (see [the safe-batch note](#phase-25-safe-batch-landed) below).
+Counts reflect **pip checkov** (what CI runs). See the [graph-check note](#graph-check-cohort-brew-to-pip-fix) below - the original `200 / 117` were generated with brew checkov, which silently omits the graph (`CKV2_*`) checks.
 
-| Tool | Total (Phase 0) | CMK global-suppress | Baselined | Fixed / inline-suppressed (2.5) | Residual |
-| ---- | --------------- | ------------------- | --------- | ------------------------------- | -------- |
-| Checkov | 200 | 73 (11 ids) | 117 (27 ids) | 10 (276, 51, 8, 341, 26, 27x3 fixed; 111, 356 inline) | 0 |
+| Tool | Total | CMK global-suppress | Baselined | Fixed / inline-suppressed (2.5) | Residual |
+| ---- | ----- | ------------------- | --------- | ------------------------------- | -------- |
+| Checkov | 242 | 73 (11 ids) | 159 (51 ids) | 10 (276, 51, 8, 341, 26, 27x3 fixed; 111, 356 inline) | 0 |
 | Trivy   | 50  | 26 (5 ids)  | 20 (10 ids) | 4 (AWS-0031, 0095, 0096, 0131 fixed) | 0 |
 | tflint  | 6   | 0           | 0 (never baselined) | 6 fixed (`tls` version + 5 unused decls) | 0 |
 
-Verified: `checkov -d terraform/infra --config-file .checkov.yaml --baseline .checkov.baseline` exits 0; `trivy config terraform/infra --ignorefile .trivyignore` reports 0 misconfigurations.
+Verified (pip checkov): `checkov -d terraform/infra --config-file .checkov.yaml --baseline .checkov.baseline` exits 0; `trivy config terraform/infra --ignorefile .trivyignore` reports 0 misconfigurations.
+
+### Graph-check cohort (brew-to-pip fix)
+
+The baselines were first generated with **brew** checkov, which omits the graph (`CKV2_*`) checks. CI runs **pip** checkov, which runs them, so on the gate's first live run 42 infra + 2 dns graph findings appeared as "new" and failed CI. Fixed by regenerating both baselines with pip checkov (matching CI) and adding a `checkov-graph-guard` to the Makefile so a brew checkov is caught locally. The 42 are pre-existing, mostly design/decay (WAF off, no DNSSEC/query-logging, S3 versioning/replication/lifecycle, CloudFront response-headers, API-GW request-validation, EFS-in-backup, monitoring-tier LBs which are dormant) - grandfathered.
+
+Three are worth a follow-up review rather than permanent acceptance:
+
+- **CKV_AWS_103 / CKV2_AWS_74** on `module.load_balancer.aws_lb_listener.imap` - the IMAP NLB's TLS policy / ciphers. Confirm it negotiates TLS 1.2+ with strong ciphers (real client-facing security; change with care for client compatibility).
+- **CKV2_AWS_12** on `module.vpc.aws_vpc.network` - the VPC default security group is not locked down. A one-resource `aws_default_security_group` (deny-all) fix.
+- **CKV_AWS_145** on the three S3 buckets (cache / front_door / bucket) - "encrypt with KMS by default." This is the same CMK posture we suppress elsewhere; candidate to move from the baseline to the `.checkov.yaml` CMK `skip-check` for consistency.
 
 ## 1. CMK class - global, permanent suppression
 
