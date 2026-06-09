@@ -18,8 +18,8 @@ Updated after the Phase 2.5 safe batch (see [the safe-batch note](#phase-25-safe
 
 | Tool | Total (Phase 0) | CMK global-suppress | Baselined | Fixed / inline-suppressed (2.5) | Residual |
 | ---- | --------------- | ------------------- | --------- | ------------------------------- | -------- |
-| Checkov | 200 | 73 (11 ids) | 123 (31 ids) | 4 (CKV_AWS_276, _51 fixed; _111, _356 inline) | 0 |
-| Trivy   | 50  | 25 (4 ids)  | 24 (13 ids) | 1 (AWS-0031 fixed) | 0 |
+| Checkov | 200 | 73 (11 ids) | 117 (27 ids) | 10 (276, 51, 8, 341, 26, 27x3 fixed; 111, 356 inline) | 0 |
+| Trivy   | 50  | 26 (5 ids)  | 20 (10 ids) | 4 (AWS-0031, 0095, 0096, 0131 fixed) | 0 |
 | tflint  | 6   | 0           | 0 (never baselined) | 6 fixed (`tls` version + 5 unused decls) | 0 |
 
 Verified: `checkov -d terraform/infra --config-file .checkov.yaml --baseline .checkov.baseline` exits 0; `trivy config terraform/infra --ignorefile .trivyignore` reports 0 misconfigurations.
@@ -31,7 +31,7 @@ The single biggest cluster. Every flagged resource is **already encrypted at res
 If Cabalmail later adopts CMKs for the few data-plane secrets that would actually benefit (EFS mailstore, `cabal-addresses`, the IMAP master-password SSM parameter), drop the relevant id from `.checkov.yaml` / `.trivyignore` and let the check enforce.
 
 - **Checkov** (`skip-check` in `.checkov.yaml`): CKV_AWS_158, CKV_AWS_337, CKV_AWS_136, CKV_AWS_119, CKV_AWS_173, CKV_AWS_297, CKV_AWS_166, CKV_AWS_184, CKV_AWS_180, CKV_AWS_200, CKV_AWS_199.
-- **Trivy** (`.trivyignore`): AWS-0017, AWS-0025, AWS-0033, AWS-0132.
+- **Trivy** (`.trivyignore`): AWS-0017, AWS-0025, AWS-0033, AWS-0132, AWS-0136 (SNS - it is encrypted with the `aws/sns` managed key; the check wants a CMK).
 
 ## 2. Must-fix in Phase 2.5
 
@@ -47,19 +47,14 @@ The low-risk, in-place subset shipped together:
 - **CKV_AWS_111 / CKV_AWS_356** - reclassified to **inline design suppression** (`#checkov:skip` in [`modules/user_pool/variables.tf`](modules/user_pool/variables.tf)): the `sns_users` policy is Cognito SMS publish (`sns:Publish` to a phone number), which has no resource ARN to scope to, so `"*"` is required, not fixable. These leave the baseline.
 - **tflint `terraform_unused_declarations` (the remaining 5)** - removed the dead declarations and their pass-throughs: `local.zip_file` and vars `relay_ips`/`repo` in the API-call submodule, `repo` in the app module, `master_password` in the ecs module (the password reaches containers via SSM `valueFrom`, never the variable), and `vpc_id` in the elb module (target groups live in the ecs module). Root `var.repo` stays (provider tags). Pure cleanup, no plan diff; `terraform validate` passes. **tflint is now at zero**, so its Phase 3 gate (drop the exit-2 swallow + `continue-on-error`) needs no further fix.
 
-### Still pending
+### Phase 2.5 remainder (landed - the message-flow / availability batch)
 
-| Checkov | Trivy | Resource(s) | Fix | Notes |
-| ------- | ----- | ----------- | --- | ----- |
-| CKV_AWS_26 | AWS-0095 | `aws_sns_topic.address_changed` | Encrypt with a KMS key (`alias/aws/sns`) | SNS has no managed-SSE option; the publisher + SNS->SQS path need `kms` perms. **Highest risk; stage-validate.** |
-| CKV_AWS_27 (x3) | AWS-0096 | `aws_sqs_queue.tier[*]` | `sqs_managed_sse_enabled = true` | Message-flow sensitive (reconfiguration pipeline); SSE-SQS is transparent but stage-validate. |
-| CKV_AWS_8 | AWS-0131 | NAT instance block device | `encrypted = true` | The custom AMI already encrypts; confirm `plan` does not force a NAT instance replacement (outbound blip). |
+All fixed; each needs a stage-validation check on deploy (noted):
 
-All three remaining are message-flow / availability sensitive and need a stage-validation pass.
-
-### Reclassified out of must-fix
-
-- **CKV_AWS_341** - on `module.ecs.aws_launch_template.ecs` (the **ECS mail-tier** instances, *not* the NAT as first scoped), `http_put_response_hop_limit = 2`. Reducing to 1 risks breaking any mail container that reaches the host IMDS (vs. the task-role endpoint), on the cluster that runs the mail tiers. Left in the baseline pending stage validation that nothing relies on host IMDS at hop 2; if confirmed safe, reduce to 1, otherwise convert to an inline design suppression.
+- **CKV_AWS_27 (x3) / AWS-0096** - `aws_sqs_queue.tier[*]` now set `sqs_managed_sse_enabled = true` (SSE-SQS). Transparent to SNS->SQS delivery and the reconfigure sidecar consumers.
+- **CKV_AWS_26 / AWS-0095** - `aws_sns_topic.address_changed` now sets `kms_master_key_id = "alias/aws/sns"`. The publisher (new/revoke Lambda) gets `kms:GenerateDataKey`/`Decrypt` scoped via `kms:ViaService=sns` in [`modules/app/modules/call/lambda.tf`](modules/app/modules/call/lambda.tf). Encrypting with the managed (not customer) key moved the SNS finding to **AWS-0136**, now in the CMK suppression. **Stage-validate: publish a test address change and confirm the tier queues receive it / reconfigure fires.**
+- **CKV_AWS_8 / AWS-0131** - the NAT instance now sets `root_block_device { encrypted = true }`. **Stage-validate: with the stock AMI this forces a NAT instance replacement (brief outbound blip).**
+- **CKV_AWS_341** - resolved to **fix**: `module.ecs.aws_launch_template.ecs` IMDS `http_put_response_hop_limit` reduced 2 -> 1. Safe because the tasks run `awsvpc` and use the task-role credential endpoint, not the host IMDS. **Stage-validate: confirm the mail tiers stay healthy as instances cycle onto the new launch template.**
 
 ## 3. Design-driven - baselined, won't-fix
 

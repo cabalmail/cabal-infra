@@ -167,12 +167,6 @@
                     ]
                 },
                 {
-                    "resource": "module.ecs.aws_launch_template.ecs",
-                    "check_ids": [
-                        "CKV_AWS_341"
-                    ]
-                },
-                {
                     "resource": "module.ecs.aws_security_group_rule.ecs_instance_egress",
                     "check_ids": [
                         "CKV_AWS_382"
@@ -199,40 +193,6 @@
                     "resource": "module.ecs.aws_security_group_rule.tier_egress[\"smtp-out\"]",
                     "check_ids": [
                         "CKV_AWS_382"
-                    ]
-                }
-            ]
-        },
-        {
-            "file": "/modules/ecs/sns.tf",
-            "findings": [
-                {
-                    "resource": "module.ecs.aws_sns_topic.address_changed",
-                    "check_ids": [
-                        "CKV_AWS_26"
-                    ]
-                }
-            ]
-        },
-        {
-            "file": "/modules/ecs/sqs.tf",
-            "findings": [
-                {
-                    "resource": "module.ecs.aws_sqs_queue.tier[\"imap\"]",
-                    "check_ids": [
-                        "CKV_AWS_27"
-                    ]
-                },
-                {
-                    "resource": "module.ecs.aws_sqs_queue.tier[\"smtp-in\"]",
-                    "check_ids": [
-                        "CKV_AWS_27"
-                    ]
-                },
-                {
-                    "resource": "module.ecs.aws_sqs_queue.tier[\"smtp-out\"]",
-                    "check_ids": [
-                        "CKV_AWS_27"
                     ]
                 }
             ]
@@ -617,8 +577,7 @@
                     "resource": "module.vpc.aws_instance.nat[0]",
                     "check_ids": [
                         "CKV_AWS_126",
-                        "CKV_AWS_135",
-                        "CKV_AWS_8"
+                        "CKV_AWS_135"
                     ]
                 },
                 {
