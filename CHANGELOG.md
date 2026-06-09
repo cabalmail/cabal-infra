@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.16] - 2026-06-09
+
+### Changed
+- The Terraform IaC scanners (Checkov, tflint, Trivy) now **gate** deploys
+  (IaC quality gates, Phase 3). A finding not in the stack's baseline / ignore
+  list fails the scanner job and blocks the apply, where before it only
+  surfaced in the Security tab. The accepted set is grandfathered per stack in
+  `.checkov.baseline` / `.trivyignore` with a `BASELINE.md` rationale; a new
+  resource that trips a rule fails CI until it is fixed or deliberately
+  accepted. Tool versions are pinned (Checkov, tflint + its AWS ruleset, and
+  the Trivy binary) so strictness changes only by a deliberate bump. Two
+  guards keep the accepted set honest: an inline suppression must carry a
+  written justification, and CI fails if a baseline/ignore entry goes stale
+  (its finding was fixed but the entry was left behind), so the accepted set
+  only shrinks. `make scan` reproduces the CI pass/fail verdict locally.
+
+### Security
+- The IMAP-over-TLS load balancer listener (port 993) now pins
+  `ssl_policy = "ELBSecurityPolicy-TLS13-1-2-2021-06"` (TLS 1.2/1.3, strong
+  ciphers). It previously set no policy, so the NLB defaulted to one that
+  still accepted TLS 1.0/1.1 on the client-facing IMAPS endpoint.
+- The VPC default security group is now locked down to deny-all. AWS ships
+  it with an allow-all-intra-group rule; an `aws_default_security_group` with
+  no rules strips them, so a resource accidentally left on the default group
+  is isolated rather than openly reachable.
+
 ## [0.10.15] - 2026-06-08
 
 ### Security
