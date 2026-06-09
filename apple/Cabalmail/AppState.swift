@@ -93,6 +93,17 @@ final class AppState {
     /// (never from a view body), so observation tracking is irrelevant here.
     private(set) var pendingFlagWriteUIDs: [String: Set<UInt32>] = [:]
 
+    /// UIDs the detail view has optimistically removed (archive / trash /
+    /// move) but whose server move is still in flight, keyed by source folder
+    /// path. The detail view prunes the list row up front via
+    /// `signalDisposed`; without this `MessageListViewModel.shieldFetched`
+    /// would let a refresh that lands before the move completes resurrect the
+    /// row (the source folder still returns the UID). The cross-view analogue
+    /// of the list's own `pendingRemovedUIDs`; bracketed via
+    /// `setMoveInFlight(folderPath:uid:inFlight:)`. Folder-keyed for the same
+    /// per-mailbox UID-uniqueness reason as `pendingFlagWriteUIDs`.
+    private(set) var pendingMoveUIDs: [String: Set<UInt32>] = [:]
+
     /// True while a message-row drag is in flight on a wide-screen layout.
     /// `MailRootView`'s sidebar watches this to temporarily reveal the
     /// folder list as a drop target when the user is on the Addresses tab,
@@ -175,6 +186,23 @@ final class AppState {
             pendingFlagWriteUIDs[folderPath]?.remove(uid)
             if pendingFlagWriteUIDs[folderPath]?.isEmpty == true {
                 pendingFlagWriteUIDs[folderPath] = nil
+            }
+        }
+    }
+
+    /// Mark a detail-view archive / trash / move as in flight (`true`, before
+    /// the server move) or resolved (`false`, on success or failure). While a
+    /// UID is in flight the list's merge keeps the optimistically-pruned row
+    /// gone; clearing it lets the next refresh re-add the row if the move
+    /// failed, or confirm its absence if it succeeded. Safe to call `false`
+    /// for a UID that was never inserted (a no-op removal).
+    func setMoveInFlight(folderPath: String, uid: UInt32, inFlight: Bool) {
+        if inFlight {
+            pendingMoveUIDs[folderPath, default: []].insert(uid)
+        } else {
+            pendingMoveUIDs[folderPath]?.remove(uid)
+            if pendingMoveUIDs[folderPath]?.isEmpty == true {
+                pendingMoveUIDs[folderPath] = nil
             }
         }
     }

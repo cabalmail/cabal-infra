@@ -95,6 +95,14 @@ final class MessageDetailViewModel {
     /// shield). Same decoupling rationale as `onFlagChanged`.
     var onFlagWriteInFlight: ((Bool) -> Void)?
 
+    /// Brackets an in-flight archive / trash / move so the list can shield the
+    /// optimistically-pruned row from a refresh that lands before the move
+    /// resolves: `true` when the move is dispatched, `false` when it resolves
+    /// (success or failure). Wired to `AppState.setMoveInFlight` in
+    /// `MessageDetailView`; nil in tests. Same decoupling rationale as
+    /// `onFlagChanged`.
+    var onMoveInFlight: ((Bool) -> Void)?
+
     /// Delay for the `.afterDelay` mark-as-read mode. Matches the plan's
     /// "After delay (2s)" label and is low enough that a quick glance
     /// doesn't bleed over into "read."
@@ -239,6 +247,11 @@ final class MessageDetailViewModel {
             pendingMarkAsReadTask = nil
             onFlagChanged?(.seen, true)
         }
+        // Shield the optimistic prune from a concurrent refresh until the move
+        // resolves; set before `onSuccess` (which prunes the list row) so the
+        // shield is in place before any refresh can re-add the row.
+        onMoveInFlight?(true)
+        defer { onMoveInFlight?(false) }
         onSuccess?()
         do {
             if !wasSeen {
@@ -293,6 +306,8 @@ final class MessageDetailViewModel {
         onSuccess: (() -> Void)? = nil,
         onFailure: ((Error) -> Void)? = nil
     ) async {
+        onMoveInFlight?(true)
+        defer { onMoveInFlight?(false) }
         onSuccess?()
         do {
             try await client.imapClient.move(

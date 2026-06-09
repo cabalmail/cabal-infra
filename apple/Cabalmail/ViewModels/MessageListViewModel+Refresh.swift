@@ -52,8 +52,13 @@ extension MessageListViewModel {
     /// in-memory `envelopes`, which is where the write paths stash them.
     private func shieldFetched(_ fetched: [Envelope]) -> [Envelope] {
         let detailFlagWrites = appState.pendingFlagWriteUIDs[folder.path] ?? []
+        let detailMoves = appState.pendingMoveUIDs[folder.path] ?? []
         return fetched.compactMap { fetchedEnvelope in
-            if pendingRemovedUIDs.contains(fetchedEnvelope.uid) { return nil }
+            // A row optimistically removed by either this view model
+            // (`pendingRemovedUIDs`) or the detail view (shared, folder-keyed
+            // `appState.pendingMoveUIDs`) stays gone until the move resolves.
+            if pendingRemovedUIDs.contains(fetchedEnvelope.uid)
+                || detailMoves.contains(fetchedEnvelope.uid) { return nil }
             // A flag write in flight from either this view model
             // (`pendingFlagUIDs`) or the detail view (shared, folder-keyed
             // `appState.pendingFlagWriteUIDs`) shields the row's flags.

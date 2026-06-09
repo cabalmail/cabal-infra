@@ -121,27 +121,22 @@ struct MessageDetailView: View {
                         inFlight: inFlight
                     )
                 }
+                // Likewise bracket archive / trash / move so the list keeps
+                // the optimistically-pruned row gone until the move resolves,
+                // rather than letting a mid-move refresh resurrect it.
+                newModel.onMoveInFlight = { [weak appState] inFlight in
+                    appState?.setMoveInFlight(
+                        folderPath: folderPath,
+                        uid: uid,
+                        inFlight: inFlight
+                    )
+                }
                 model = newModel
                 activeModel = newModel
             }
             activeModel.startLoadIfNeeded()
         }
         .onDisappear { model?.onDisappear() }
-    }
-
-    @ViewBuilder
-    private var moveSheet: some View {
-        if let client = appState.client {
-            MoveToFolderSheet(
-                currentFolder: folder,
-                client: client,
-                onSelect: { destination in
-                    moveSheetPresented = false
-                    Task { await performMove(to: destination.path) }
-                },
-                onCancel: { moveSheetPresented = false }
-            )
-        }
     }
 
     @ViewBuilder
@@ -153,31 +148,6 @@ struct MessageDetailView: View {
                 onClose: { sourceSheetTab = nil }
             )
         }
-    }
-
-    private func performMove(to destination: String) async {
-        guard let model else { return }
-        let sourceFolderPath = folder.path
-        let movedUID = envelope.uid
-        await model.move(
-            to: destination,
-            onSuccess: {
-                // Match dispose's signal so MessageListView prunes the row
-                // and advances selection to the next unread message — same
-                // optimistic UX, just routed through `signalDisposed` since
-                // the row is gone from the source folder either way.
-                appState.signalDisposed(
-                    folderPath: sourceFolderPath,
-                    uid: movedUID
-                )
-            },
-            onFailure: { error in
-                appState.showToast(Toast(
-                    kind: .error,
-                    message: "Couldn't move message: \(error.localizedDescription)"
-                ))
-            }
-        )
     }
 
     @ViewBuilder
