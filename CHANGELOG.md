@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.18] - 2026-06-09
+
+### Added
+- The control domain may now also be listed in `mail_domains` to host email
+  addresses on its own subdomains. Its existing bootstrap zone is reused instead
+  of creating a duplicate hosted zone (which would have split name servers and
+  silently blackholed one copy), and the `new`-address Lambda rejects subdomains
+  that are reserved for infrastructure on the control domain (`admin`, `www`,
+  `imap`, `smtp`, `smtp-in`, `smtp-out`, `mail-admin`, `cabal._domainkey`,
+  `_dmarc`). The control-domain apex remains unaddressable.
+
+### Fixed
+- `make promote` no longer reports "some checks did not pass" right after
+  opening the PR. `gh pr checks` returns immediately when a just-created PR has
+  no checks registered yet (the same replication lag that delays the PR
+  appearing in the web UI), which `promote.sh` misread as a failure. It now
+  waits for checks to register before watching them and reports the real outcome
+  from `gh`'s exit code (passed / failed / still pending / none registered).
+
 ## [0.10.17] - 2026-06-09
 
 ### Fixed
