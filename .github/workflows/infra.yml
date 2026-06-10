@@ -141,6 +141,8 @@ jobs:
       uses: actions/checkout@v5
     - name: check-suppression-justifications
       run: ./.github/scripts/check-suppression-justifications.sh terraform/dns
+    - name: check-iam-resource-scope
+      run: ./.github/scripts/check-iam-resource-scope.py terraform/dns
     - name: setup-python
       uses: actions/setup-python@v6
       with:
@@ -411,6 +413,8 @@ jobs:
       uses: actions/checkout@v5
     - name: check-suppression-justifications
       run: ./.github/scripts/check-suppression-justifications.sh terraform/infra
+    - name: check-iam-resource-scope
+      run: ./.github/scripts/check-iam-resource-scope.py terraform/infra
     - name: setup-python
       uses: actions/setup-python@v6
       with:
