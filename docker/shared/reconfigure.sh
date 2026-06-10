@@ -130,8 +130,23 @@ drain_queue() {
 }
 
 # ── Main loop ──────────────────────────────────────────────────
-# Skip immediate regeneration — entrypoint.sh already ran
-# generate-config.sh at startup.
+# Don't race the startup sendmail prep: on imap, prepare-sendmail.sh runs
+# in the background via supervisord (so Dovecot starts first) while this
+# loop is already up, and an SQS-triggered regenerate() running
+# generate-config.sh/makemap concurrently with it could corrupt a map db.
+# Wait for its sentinel before processing anything. On the smtp tiers the
+# sentinel exists before supervisord starts, so this is a no-op. Phase 3
+# of docs/0.10.x/imap-deploy-downtime-plan.md.
+if [ ! -f /run/sendmail-ready ]; then
+  echo "[reconfigure] Waiting for startup sendmail prep (/run/sendmail-ready)..."
+  until [ -f /run/sendmail-ready ]; do
+    sleep 5
+  done
+  echo "[reconfigure] Startup sendmail prep done."
+fi
+
+# Skip immediate regeneration — the startup prep just ran
+# generate-config.sh.
 LAST_REGEN=$(date +%s)
 
 while true; do
