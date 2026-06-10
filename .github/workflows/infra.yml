@@ -257,7 +257,6 @@ jobs:
         working-directory: ./terraform/dns
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     env:
-      TF_API_TOKEN: ${{ secrets.TF_TOKEN }}
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -273,7 +272,6 @@ jobs:
     - name: install-terraform
       uses: hashicorp/setup-terraform@v4
       with:
-        cli_config_credentials_token: ${{ secrets.TF_TOKEN }}
         terraform_wrapper: false
     - name: tfvars-terraform
       run: |
@@ -330,7 +328,6 @@ jobs:
         working-directory: ./terraform/dns
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     env:
-      TF_API_TOKEN: ${{ secrets.TF_TOKEN }}
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -345,8 +342,6 @@ jobs:
       run: mv ../../backend.tf backend.tf
     - name: install-terraform
       uses: hashicorp/setup-terraform@v4
-      with:
-        cli_config_credentials_token: ${{ secrets.TF_TOKEN }}
     - name: tfvars-terraform
       run: |
         echo "aws_region = \"${{ vars.TF_VAR_AWS_REGION}}\"" >> terraform.tfvars
@@ -544,7 +539,6 @@ jobs:
         working-directory: ./terraform/infra
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     env:
-      TF_API_TOKEN: ${{ secrets.TF_TOKEN }}
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -567,7 +561,6 @@ jobs:
     - name: install-terraform
       uses: hashicorp/setup-terraform@v4
       with:
-        cli_config_credentials_token: ${{ secrets.TF_TOKEN }}
         terraform_wrapper: false
     - name: wait-for-app-deploy
       # Cross-workflow ordering. If this same push also triggered app.yml
@@ -668,7 +661,6 @@ jobs:
         working-directory: ./terraform/infra
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     env:
-      TF_API_TOKEN: ${{ secrets.TF_TOKEN }}
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -690,8 +682,6 @@ jobs:
       run: mv ../../backend.tf backend.tf
     - name: install-terraform
       uses: hashicorp/setup-terraform@v4
-      with:
-        cli_config_credentials_token: ${{ secrets.TF_TOKEN }}
     - name: tfvars-terraform
       run: |
         echo "availability_zones = ${{ vars.TF_VAR_AVAILABILITY_ZONES}}" > terraform.tfvars
