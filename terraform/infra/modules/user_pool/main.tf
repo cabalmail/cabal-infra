@@ -33,6 +33,21 @@ resource "aws_cognito_user_pool" "users" {
     post_confirmation = aws_lambda_function.assign_osid.arn
     pre_sign_up       = aws_lambda_function.check_invite.arn
   }
+
+  # Threat protection requires the Plus feature plan; on the default
+  # ESSENTIALS tier, UpdateUserPool rejects the add-on below with
+  # FeatureUnavailableInTierException. Plus bills $0.02/MAU from the first
+  # user (Essentials has a 10k-MAU free allowance, Plus has none), so this
+  # line is where the pool starts costing money - a deliberate decision.
+  user_pool_tier = "PLUS"
+
+  # Cognito threat protection in AUDIT mode: score sign-in risk (impossible
+  # travel, compromised credentials) and surface it in CloudWatch without
+  # blocking the user. Promotion to ENFORCED is a deliberate later step
+  # (plan Phase 2.5) after a soak period to calibrate false positives.
+  user_pool_add_ons {
+    advanced_security_mode = "AUDIT"
+  }
 }
 
 # AWS End User Messaging toll-free number used by the SNS SMS path.
@@ -72,11 +87,23 @@ resource "aws_cognito_user_group" "admin" {
 }
 
 resource "aws_cognito_user_pool_client" "users" {
-  name                  = "cabal_admin_client"
-  user_pool_id          = aws_cognito_user_pool.users.id
-  explicit_auth_flows   = ["USER_PASSWORD_AUTH"]
-  access_token_validity = 12
-  id_token_validity     = 12
+  name                = "cabal_admin_client"
+  user_pool_id        = aws_cognito_user_pool.users.id
+  explicit_auth_flows = ["USER_PASSWORD_AUTH"]
+
+  access_token_validity  = 12
+  id_token_validity      = 12
+  refresh_token_validity = 7
+  token_validity_units {
+    access_token  = "hours"
+    id_token      = "hours"
+    refresh_token = "days"
+  }
+
+  # Bound a stolen/leaked refresh token to 7 days of exposure instead of the
+  # 30-day default. enable_token_revocation defaults to true, but state it so
+  # admin-user-global-sign-out reliably invalidates issued tokens.
+  enable_token_revocation = true
 }
 
 # Hosted-UI domain prefix used by the ALB authenticate-oidc action in the

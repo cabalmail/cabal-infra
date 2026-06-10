@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.19] - 2026-06-10
+
+### Fixed
+- Reconciled the bootstrap "cicd" IAM policy in docs/aws.md with what the
+  current Terraform code requires. Added the EC2 Image Builder (NAT AMI
+  pipeline), EventBridge Scheduler (certbot renewal, DMARC processing),
+  End User Messaging phone-number (optional, `TF_VAR_USE_EUM_SMS`), and
+  CloudWatch alarm actions; alphabetized the action list; and noted the
+  optional grants and the cross-account state-bucket consideration. A
+  fresh-account bootstrap following the doc now works for the current
+  terraform/infra and terraform/dns code.
+
+### Security
+- API Gateway no longer logs at `INFO` (execution logs drop to `ERROR`), the
+  Cognito authorizer result cache drops from 300s to 60s so a revoked token is
+  refused within a minute, and the per-method response cache is disabled on
+  user-personalised read endpoints (`list_envelopes`, `fetch_message`,
+  `list_attachments`, `fetch_attachment`, `fetch_inline_image`) so cached
+  private data cannot outlive an authorization change. The shared `fetch_bimi`
+  cache (keyed by sender domain, identical for every caller) is unchanged.
+- The Cognito post-confirmation trigger (`assign_osid`) can no longer call
+  `AdminUpdateUserAttributes` on any user in any pool in the account: its IAM
+  policy now names the specific user-pool ARN it actually uses. The
+  `logs:CreateLogGroup` grants on `assign_osid` and `check_invite` are likewise
+  narrowed from every log group in the account to each function's own group.
+- A CloudWatch alarm (`cabal-cognito-high-risk-signin`) now watches Cognito
+  threat protection's `AccountTakeoverRisk` metric and enters ALARM when a
+  sign-in is scored high-risk (adaptive auth: impossible travel, anomalous
+  device or IP). In audit mode the sign-in is not blocked, so the alarm flags
+  the account for investigation. It has no notification action yet; delivery
+  wiring is a follow-up.
+- Cognito threat protection is enabled in audit mode (`advanced_security_mode
+  = "AUDIT"`), scoring sign-in risk (impossible travel, compromised
+  credentials) without blocking. The user pool moves to the Plus feature plan
+  (threat protection is unavailable on Essentials), which is billed per
+  monthly active user from the first user. Refresh tokens now expire in 7
+  days instead of the 30-day default, bounding the exposure of a stolen
+  token, and token revocation is set explicitly so a global sign-out reliably
+  invalidates issued tokens.
+
 ## [0.10.18] - 2026-06-09
 
 ### Added
