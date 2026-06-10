@@ -41,7 +41,7 @@ describe('Folders rail', () => {
   beforeEach(() => {
     mockGetFolderList.mockResolvedValue({
       data: {
-        folders: ['INBOX', 'Drafts', 'Sent Messages', 'Archive', 'Deleted Messages', 'Junk', 'Receipts'],
+        folders: ['INBOX', 'Drafts', 'Sent Messages', 'Archive', 'Trash', 'Junk', 'Receipts'],
         sub_folders: ['Receipts'],
       },
     });

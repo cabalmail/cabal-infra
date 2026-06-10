@@ -24,7 +24,11 @@ def handler(event, _context):
     except ValueError as err:
         return _invalid(err)
     client = get_imap_client(body['host'], user, source.replace("/", "."))
-    if destination == "Deleted Messages":
+    # Dovecot advertises Trash as special-use but does not auto-create it
+    # (no auto= in 15-mailboxes.conf), so the first delete on a fresh
+    # mailbox has to create it here. Both web and Apple clients file
+    # deletions in Trash.
+    if destination == "Trash":
         try:
             client.create_folder(destination.replace("/", "."))
         except: # pylint: disable=bare-except

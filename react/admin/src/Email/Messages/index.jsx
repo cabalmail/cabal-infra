@@ -156,7 +156,7 @@ function Messages({
   const deleteSelected = useCallback(() => {
     if (!selectedCount) return;
     api
-      .moveMessages(folder, 'Deleted Messages', selectedIdsArray, sortDir.imap, sortKey.imap)
+      .moveMessages(folder, 'Trash', selectedIdsArray, sortDir.imap, sortKey.imap)
       .then(() => {
         refreshAfterMutation();
         exitBulk();

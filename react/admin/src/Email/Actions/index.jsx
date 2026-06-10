@@ -29,7 +29,7 @@ function Actions({
     }
     switch (action) {
       case "delete":
-        api.moveMessages(folder, "Deleted Messages", selected_messages, order, field);
+        api.moveMessages(folder, "Trash", selected_messages, order, field);
         break;
       case "move":
         setShowFolders(true);

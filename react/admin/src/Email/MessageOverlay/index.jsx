@@ -156,7 +156,7 @@ function MessageOverlay({
 
   const doDelete = useCallback(() => {
     if (!envelopeId) return;
-    api.moveMessages(folder, 'Deleted Messages', [envelopeId], '', ARRIVAL.imap)
+    api.moveMessages(folder, 'Trash', [envelopeId], '', ARRIVAL.imap)
       .then(() => hide())
       .catch((err) => {
         setMessage('Unable to delete message.', true);
