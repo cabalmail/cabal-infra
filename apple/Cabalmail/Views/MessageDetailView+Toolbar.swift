@@ -117,29 +117,7 @@ extension MessageDetailView {
     var disposeButton: some View {
         if let model {
             Button(role: disposeRole(for: model.disposeAction)) {
-                Task {
-                    await model.dispose(
-                        onSuccess: {
-                            // Fires before the server round trip so the
-                            // list selection advances and the row vanishes
-                            // instantly.
-                            appState.signalDisposed(
-                                folderPath: folder.path,
-                                uid: envelope.uid
-                            )
-                        },
-                        onFailure: { error in
-                            // The optimistic prune has already happened
-                            // upstream; surface a toast so the user knows
-                            // the move didn't take and can retry on the
-                            // next refresh.
-                            appState.showToast(Toast(
-                                kind: .error,
-                                message: failureMessage(for: model.disposeAction, error: error)
-                            ))
-                        }
-                    )
-                }
+                Task { await performDispose(model: model, action: model.disposeAction) }
             } label: {
                 disposeToolbarLabel(for: model.disposeAction)
             }
@@ -149,6 +127,48 @@ extension MessageDetailView {
             // hard-coding one or the other.
             .keyboardShortcut(.delete, modifiers: .command)
         }
+    }
+
+    /// Overflow-menu item for whichever dispose destination the toolbar
+    /// button does NOT cover: preference says Archive, the menu offers
+    /// Delete, and vice versa — both destinations stay one click away
+    /// without a second toolbar slot.
+    @ViewBuilder
+    func alternateDisposeMenuItem(model: MessageDetailViewModel) -> some View {
+        let alternate: DisposeAction = model.disposeAction == .archive ? .trash : .archive
+        Button(role: disposeRole(for: alternate)) {
+            Task { await performDispose(model: model, action: alternate) }
+        } label: {
+            switch alternate {
+            case .archive: Label("Archive", systemImage: "archivebox")
+            case .trash:   Label("Delete", systemImage: "trash")
+            }
+        }
+    }
+
+    /// Shared dispose flow behind the toolbar button (preference default)
+    /// and the overflow menu's alternate-destination item.
+    func performDispose(model: MessageDetailViewModel, action: DisposeAction) async {
+        await model.dispose(
+            action: action,
+            onSuccess: {
+                // Fires before the server round trip so the list selection
+                // advances and the row vanishes instantly.
+                appState.signalDisposed(
+                    folderPath: folder.path,
+                    uid: envelope.uid
+                )
+            },
+            onFailure: { error in
+                // The optimistic prune has already happened upstream;
+                // surface a toast so the user knows the move didn't take
+                // and can retry on the next refresh.
+                appState.showToast(Toast(
+                    kind: .error,
+                    message: failureMessage(for: action, error: error)
+                ))
+            }
+        )
     }
 
     @ViewBuilder
@@ -198,11 +218,13 @@ extension MessageDetailView {
 
     /// Overflow menu (•••) — houses the actions that don't earn their own
     /// toolbar slot. "Move to folder…" closes the same parity gap with the
-    /// React reader; "View source" / "View headers" expose the raw RFC 5322
-    /// the reader has already fetched. Cmd+Shift+M and Cmd+U match the
-    /// shortcuts on the existing macOS Reply/Forward menu pattern (the
-    /// button-level shortcut only fires when this scene is focused, which
-    /// matches the existing macOS mail-client convention).
+    /// React reader; the alternate dispose item covers whichever of
+    /// Archive / Delete the toolbar button doesn't; "View source" /
+    /// "View headers" expose the raw RFC 5322 the reader has already
+    /// fetched. Cmd+Shift+M and Cmd+U match the shortcuts on the existing
+    /// macOS Reply/Forward menu pattern (the button-level shortcut only
+    /// fires when this scene is focused, which matches the existing macOS
+    /// mail-client convention).
     @ViewBuilder
     var overflowMenuButton: some View {
         Menu {
@@ -213,6 +235,8 @@ extension MessageDetailView {
                     Label("Move to folder…", systemImage: "folder")
                 }
                 .keyboardShortcut("m", modifiers: [.command, .shift])
+
+                alternateDisposeMenuItem(model: model)
 
                 // Plain text alternative only makes sense when both parts
                 // exist; suppress the item otherwise so we don't show a

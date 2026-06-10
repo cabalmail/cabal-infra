@@ -228,6 +228,11 @@ final class MessageDetailViewModel {
     /// then run `UID MOVE` and prune both caches so a relaunch can't re-
     /// hydrate the message into the list.
     ///
+    /// `action` overrides the preference when the caller has already picked
+    /// a destination — the overflow menu's alternate dispose item offers
+    /// whichever of Archive / Delete the toolbar button doesn't. `nil`
+    /// keeps the read-the-preference-at-call-time behavior.
+    ///
     /// Optimistic UI: `onSuccess` fires before the server round trip so the
     /// list selection advances to the next unread message instantly. The
     /// list view also prunes the row in response. If the server work fails,
@@ -236,10 +241,11 @@ final class MessageDetailViewModel {
     /// pruning before that would leave the persistent snapshot disagreeing
     /// with the server on a transient failure.
     func dispose(
+        action: DisposeAction? = nil,
         onSuccess: (() -> Void)? = nil,
         onFailure: ((Error) -> Void)? = nil
     ) async {
-        let destination = preferences.disposeAction.destinationFolder
+        let destination = (action ?? preferences.disposeAction).destinationFolder
         let wasSeen = isSeen
         if !isSeen {
             isSeen = true
