@@ -1,9 +1,9 @@
-'''Moves a message from source folder to destination folder'''
+'''Permanently deletes every message in a trash folder'''
 import json
 from helper import ( # pylint: disable=import-error
+    delete_prefix,
     get_imap_client,
-    validate_folder_name,
-    validate_uid_list,
+    validate_trash_folder,
 )
 
 from helper import maintenance_guard # pylint: disable=import-error
@@ -11,30 +11,25 @@ from helper import maintenance_guard # pylint: disable=import-error
 
 @maintenance_guard
 def handler(event, _context):
-    '''Moves a message from source folder to destination folder'''
+    '''Permanently deletes every message in a trash folder'''
     user = event['requestContext']['authorizer']['claims']['cognito:username']
     try:
         body = json.loads(event['body'])
     except (TypeError, json.JSONDecodeError):
         return _invalid('request body is not valid JSON')
     try:
-        source = validate_folder_name(body.get('source'))
-        destination = validate_folder_name(body.get('destination'))
-        ids = validate_uid_list(body.get('ids'))
+        folder = validate_trash_folder(body.get('folder'))
     except ValueError as err:
         return _invalid(err)
-    client = get_imap_client(body['host'], user, source.replace("/", "."))
-    # Dovecot advertises Trash as special-use but does not auto-create it
-    # (no auto= in 15-mailboxes.conf), so the first delete on a fresh
-    # mailbox has to create it here. Both web and Apple clients file
-    # deletions in Trash.
-    if destination == "Trash":
-        try:
-            client.create_folder(destination.replace("/", "."))
-        except: # pylint: disable=bare-except
-            pass
+    host = body['host']
+    imap_folder = folder.replace("/", ".")
+    client = get_imap_client(host, user, imap_folder)
     try:
-        client.move(ids, destination.replace("/", "."))
+        # "1:*" covers the whole mailbox without materializing a UID list,
+        # so this stays one round trip however full the trash is. On an
+        # empty mailbox both calls are no-ops.
+        client.delete_messages('1:*')
+        client.expunge()
     except: # pylint: disable=bare-except
         client.logout()
         return {
@@ -44,10 +39,12 @@ def handler(event, _context):
             })
         }
     client.logout()
+    # Best effort: drop the folder's cached raw bodies too.
+    delete_prefix(host.replace("imap", "cache"), f"{user}/{imap_folder}/")
     return {
         "statusCode": 200,
         "body": json.dumps({
-            "status": "submitted"
+            "status": "emptied"
         })
     }
 

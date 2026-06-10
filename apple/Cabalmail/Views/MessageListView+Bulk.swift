@@ -89,7 +89,17 @@ extension MessageListView {
                     .foregroundStyle(.secondary)
                 Spacer()
                 bulkActionButton(systemImage: "archivebox", label: "Archive") {
-                    Task { await model.bulkDispose() }
+                    Task {
+                        // Inside Trash the dispose preference may point back
+                        // at Trash itself (a same-folder no-op); Archive on
+                        // this bar is the rescue path, so send the selection
+                        // to the real Archive folder there.
+                        if model.isTrashFolder {
+                            await model.bulkMove(to: DisposeAction.archive.destinationFolder)
+                        } else {
+                            await model.bulkDispose()
+                        }
+                    }
                     endSelectionMode()
                 }
                 bulkActionButton(systemImage: "folder", label: "Move…") {
@@ -107,6 +117,18 @@ extension MessageListView {
                 ) {
                     Task { await model.bulkSetFlagged(hasUnflagged) }
                 }
+                // Trash only: permanent delete for the whole selection,
+                // behind the same "Delete Forever?" confirmation as the
+                // row swipe.
+                if model.isTrashFolder {
+                    bulkActionButton(
+                        systemImage: "trash.slash",
+                        label: "Delete",
+                        role: .destructive
+                    ) {
+                        purgeCandidate = PurgeCandidate(uids: model.selectedUIDs)
+                    }
+                }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
@@ -119,9 +141,10 @@ extension MessageListView {
     private func bulkActionButton(
         systemImage: String,
         label: String,
+        role: ButtonRole? = nil,
         action: @escaping () -> Void
     ) -> some View {
-        Button(action: action) {
+        Button(role: role, action: action) {
             VStack(spacing: 2) {
                 Image(systemName: systemImage)
                 Text(label)
@@ -129,7 +152,9 @@ extension MessageListView {
             }
         }
         .buttonStyle(.plain)
-        .foregroundStyle(.tint)
+        // `.plain` drops the automatic destructive tinting, so red is
+        // applied explicitly for destructive roles.
+        .foregroundStyle(role == .destructive ? AnyShapeStyle(.red) : AnyShapeStyle(.tint))
         .accessibilityLabel(label)
     }
 

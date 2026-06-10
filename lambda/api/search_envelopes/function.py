@@ -37,9 +37,11 @@ TRUTHY = {'1', 'true', 'True', 'yes', 'YES'}
 # Path segments excluded from cross-folder ("all folders") search by default.
 # Matched case-insensitively against each `/`-separated segment, so a nested
 # `Archive/Trash` is also excluded. Trash is the only excluded folder —
-# Spam / Junk / Deleted Messages are searchable because users do legitimately
-# need to find misclassified mail in them. The list is intended to line up
-# with the FTS-autoindex exclude list that Phase 4 ships.
+# Spam / Junk are searchable because users do legitimately need to find
+# misclassified mail in them, and legacy "Deleted Messages" folders (the
+# web client's pre-Trash delete target) are ordinary folders that stay
+# searchable. The list is intended to line up with the FTS-autoindex
+# exclude list (fts_autoindex_exclude = \Trash in 90-fts.conf).
 CROSS_FOLDER_EXCLUDES = {'trash'}
 
 

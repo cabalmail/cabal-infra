@@ -7,7 +7,7 @@ describe('folderMeta', () => {
     expect(folderMeta('Drafts')).toMatchObject({ kind: 'drafts', label: 'Drafts', system: true });
     expect(folderMeta('Sent')).toMatchObject({ kind: 'sent', label: 'Sent', system: true });
     expect(folderMeta('Archive')).toMatchObject({ kind: 'archive', label: 'Archive', system: true });
-    expect(folderMeta('Deleted Messages')).toMatchObject({ kind: 'trash', label: 'Trash', system: true });
+    expect(folderMeta('Trash')).toMatchObject({ kind: 'trash', label: 'Trash', system: true });
     expect(folderMeta('Junk')).toMatchObject({ kind: 'junk', label: 'Junk', system: true });
   });
 
@@ -18,6 +18,11 @@ describe('folderMeta', () => {
   it('treats the legacy Sent Messages folder as an ordinary folder', () => {
     expect(folderMeta('Sent Messages'))
       .toMatchObject({ kind: 'folder', label: 'Sent Messages', system: false });
+  });
+
+  it('treats the legacy Deleted Messages folder as an ordinary folder', () => {
+    expect(folderMeta('Deleted Messages'))
+      .toMatchObject({ kind: 'folder', label: 'Deleted Messages', system: false });
   });
 });
 
@@ -31,7 +36,7 @@ describe('orderFolders', () => {
       'Newsletters',
       'Sent',
       'Drafts',
-      'Deleted Messages',
+      'Trash',
       'Receipts',
     ];
     const ordered = orderFolders(input).map((f) => f.id);
@@ -40,7 +45,7 @@ describe('orderFolders', () => {
       'Drafts',
       'Sent',
       'Archive',
-      'Deleted Messages',
+      'Trash',
       'Junk',
       'Newsletters',
       'Receipts',

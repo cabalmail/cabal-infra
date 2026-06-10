@@ -16,7 +16,10 @@ const SYSTEM_BY_NAME = {
   // treatment.
   'Sent':             { kind: 'sent',    label: 'Sent' },
   'Archive':          { kind: 'archive', label: 'Archive' },
-  'Deleted Messages': { kind: 'trash',   label: 'Trash' },
+  // 'Trash' is Dovecot's special-use \Trash mailbox, shared with the Apple
+  // clients. Legacy 'Deleted Messages' folders (the pre-0.10.x web delete
+  // target) deliberately fall through to ordinary-folder treatment.
+  'Trash':            { kind: 'trash',   label: 'Trash' },
   'Junk':             { kind: 'junk',    label: 'Junk' },
 };
 

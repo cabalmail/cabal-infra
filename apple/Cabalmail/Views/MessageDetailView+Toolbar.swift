@@ -116,15 +116,26 @@ extension MessageDetailView {
     @ViewBuilder
     var disposeButton: some View {
         if let model {
-            Button(role: disposeRole(for: model.disposeAction)) {
-                Task { await performDispose(model: model, action: model.disposeAction) }
+            Button(role: model.isTrashFolder ? .destructive : disposeRole(for: model.disposeAction)) {
+                if model.isTrashFolder {
+                    // In Trash, delete means gone forever — confirm first.
+                    purgeConfirmPresented = true
+                } else {
+                    Task { await performDispose(model: model, action: model.disposeAction) }
+                }
             } label: {
-                disposeToolbarLabel(for: model.disposeAction)
+                if model.isTrashFolder {
+                    Image(systemName: "trash.slash")
+                        .accessibilityLabel("Delete Forever")
+                } else {
+                    disposeToolbarLabel(for: model.disposeAction)
+                }
             }
             // Cmd+Delete — the same chord Mail.app and most macOS list
             // apps bind to "remove from list." Routes through dispose so
             // it follows the user's Archive/Trash preference rather than
-            // hard-coding one or the other.
+            // hard-coding one or the other. In Trash the chord stages the
+            // delete-forever confirmation instead of acting directly.
             .keyboardShortcut(.delete, modifiers: .command)
         }
     }
@@ -132,10 +143,14 @@ extension MessageDetailView {
     /// Overflow-menu item for whichever dispose destination the toolbar
     /// button does NOT cover: preference says Archive, the menu offers
     /// Delete, and vice versa — both destinations stay one click away
-    /// without a second toolbar slot.
+    /// without a second toolbar slot. Inside Trash the toolbar button is
+    /// Delete Forever and "move to Trash" is meaningless, so the
+    /// alternate is always Archive (the rescue path).
     @ViewBuilder
     func alternateDisposeMenuItem(model: MessageDetailViewModel) -> some View {
-        let alternate: DisposeAction = model.disposeAction == .archive ? .trash : .archive
+        let alternate: DisposeAction = model.isTrashFolder || model.disposeAction == .trash
+            ? .archive
+            : .trash
         Button(role: disposeRole(for: alternate)) {
             Task { await performDispose(model: model, action: alternate) }
         } label: {
@@ -169,6 +184,29 @@ extension MessageDetailView {
                 ))
             }
         )
+    }
+
+    /// Confirmed permanent delete. Shares the dispose button's optimistic
+    /// signal / failure-toast plumbing, but the wire call expunges instead
+    /// of moving.
+    func runPurge() {
+        guard let model else { return }
+        Task {
+            await model.purge(
+                onSuccess: {
+                    appState.signalDisposed(
+                        folderPath: folder.path,
+                        uid: envelope.uid
+                    )
+                },
+                onFailure: { error in
+                    appState.showToast(Toast(
+                        kind: .error,
+                        message: "Couldn't delete message: \(error.localizedDescription)"
+                    ))
+                }
+            )
+        }
     }
 
     @ViewBuilder

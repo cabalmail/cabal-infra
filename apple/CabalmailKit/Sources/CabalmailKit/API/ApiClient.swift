@@ -90,6 +90,15 @@ public protocol ApiClient: Sendable {
     func setFlag(_ request: SetFlagRequest) async throws -> [UInt32]
     func moveMessages(_ request: MoveMessagesRequest) async throws
 
+    /// Permanently deletes (flags `\Deleted` + expunges) the given messages.
+    /// The `/purge_messages` Lambda only accepts trash folders, so a client
+    /// bug can never expunge a non-trash folder server-side.
+    func purgeMessages(host: String, folder: String, ids: [UInt32]) async throws
+
+    /// Permanently deletes every message in a trash folder via the
+    /// `/empty_trash` Lambda (same trash-only restriction).
+    func emptyTrash(host: String, folder: String) async throws
+
     // MARK: Send
     /// Submits an outgoing message via the Lambda send pipeline (Outbox
     /// APPEND -> SMTP -> Sent move). Mirrors `react/admin/src/ApiClient.js

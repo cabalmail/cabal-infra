@@ -6,7 +6,7 @@ const GO_TARGETS = {
   i: 'INBOX',
   a: 'Archive',
   s: 'Sent',
-  t: 'Deleted Messages',
+  t: 'Trash',
   d: 'Drafts',
 };
 
