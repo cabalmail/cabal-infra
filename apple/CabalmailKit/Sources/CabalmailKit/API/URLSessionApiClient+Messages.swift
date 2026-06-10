@@ -243,6 +243,23 @@ extension URLSessionApiClient {
         _ = try await send(httpRequest, expectedStatuses: 200..<300)
     }
 
+    public func purgeMessages(host: String, folder: String, ids: [UInt32]) async throws {
+        let httpRequest = try await delete("/purge_messages", json: [
+            "host": host,
+            "folder": folder,
+            "ids": ids.map { Int($0) },
+        ])
+        _ = try await send(httpRequest, expectedStatuses: 200..<300)
+    }
+
+    public func emptyTrash(host: String, folder: String) async throws {
+        let httpRequest = try await delete("/empty_trash", json: [
+            "host": host,
+            "folder": folder,
+        ])
+        _ = try await send(httpRequest, expectedStatuses: 200..<300)
+    }
+
     // MARK: - Send
 
     public func sendMessage(_ request: SendMessageRequest) async throws {

@@ -64,11 +64,7 @@ extension MessageListView {
             .hoverEffect(.highlight)
             #endif
             .swipeActions(edge: .trailing) {
-                Button(role: .destructive) {
-                    Task { await model.dispose(envelope) }
-                } label: {
-                    disposeActionLabel(for: model.disposeAction)
-                }
+                disposeSwipeButton(for: envelope, model: model)
             }
             .swipeActions(edge: .leading) {
                 Button {
@@ -196,10 +192,27 @@ extension MessageListView {
         } label: {
             Label("Move to folder…", systemImage: "folder")
         }
+        disposeSwipeButton(for: envelope, model: model)
+    }
+
+    /// Trailing destructive swipe: dispose (Archive/Trash) everywhere
+    /// except inside Trash, where delete means gone forever and stages
+    /// the confirmation dialog instead of acting directly. Shared shape
+    /// with the context menu's destructive item.
+    @ViewBuilder
+    func disposeSwipeButton(for envelope: Envelope, model: MessageListViewModel) -> some View {
         Button(role: .destructive) {
-            Task { await model.dispose(envelope) }
+            if model.isTrashFolder {
+                envelopeToPurge = envelope
+            } else {
+                Task { await model.dispose(envelope) }
+            }
         } label: {
-            disposeActionLabel(for: model.disposeAction)
+            if model.isTrashFolder {
+                purgeActionLabel
+            } else {
+                disposeActionLabel(for: model.disposeAction)
+            }
         }
     }
 
@@ -209,6 +222,13 @@ extension MessageListView {
         case .archive: Label("Archive", systemImage: "archivebox")
         case .trash:   Label("Trash", systemImage: "trash")
         }
+    }
+
+    /// Delete affordance label inside the Trash folder, where the action
+    /// permanently deletes (after confirmation) instead of moving.
+    @ViewBuilder
+    var purgeActionLabel: some View {
+        Label("Delete Forever", systemImage: "trash.slash")
     }
 
     @ViewBuilder

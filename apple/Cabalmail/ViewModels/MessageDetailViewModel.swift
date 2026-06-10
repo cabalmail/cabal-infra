@@ -350,6 +350,19 @@ final class MessageDetailViewModel {
 // stored properties (`client`, `folder`, `envelope`) through the type's
 // `@MainActor` isolation, inherited by the extension.
 
+// Internal (not `private`) so the move/dispose/purge paths — including the
+// `+Purge` sibling extension — can resolve the folder's UIDVALIDITY for
+// body-cache pruning.
+extension MessageDetailViewModel {
+    func currentUIDValidity() async throws -> UInt32 {
+        if let snapshot = await client.envelopeCache.snapshot(for: folder.path) {
+            return snapshot.uidValidity
+        }
+        let status = try await client.imapClient.status(path: folder.path)
+        return status.uidValidity ?? 0
+    }
+}
+
 private extension MessageDetailViewModel {
     func fetchBodyBytes() async throws -> Data {
         let uidValidity = try await currentUIDValidity()
@@ -369,14 +382,6 @@ private extension MessageDetailViewModel {
             bytes: raw.bytes
         )
         return raw.bytes
-    }
-
-    func currentUIDValidity() async throws -> UInt32 {
-        if let snapshot = await client.envelopeCache.snapshot(for: folder.path) {
-            return snapshot.uidValidity
-        }
-        let status = try await client.imapClient.status(path: folder.path)
-        return status.uidValidity ?? 0
     }
 
     func hydrate(from root: MimePart) async throws {

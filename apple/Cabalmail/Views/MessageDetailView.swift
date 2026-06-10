@@ -30,6 +30,10 @@ struct MessageDetailView: View {
     @State var moveSheetPresented = false
     @State var sourceSheetTab: MessageSourceSheet.Tab?
     @State var senderContactName: String?
+    /// Presents the "Delete Forever?" confirmation when the delete button
+    /// fires while the message lives in Trash. Non-private so the
+    /// `+Toolbar` extension's dispose button can stage it.
+    @State var purgeConfirmPresented = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -68,6 +72,18 @@ struct MessageDetailView: View {
         }
         .sheet(item: $sourceSheetTab) { tab in
             sourceSheet(initialTab: tab)
+        }
+        .confirmationDialog(
+            "Delete Forever?",
+            isPresented: $purgeConfirmPresented,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Forever", role: .destructive) {
+                runPurge()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This message will be permanently deleted. This can't be undone.")
         }
         .onChange(of: appState.replyRequestTick) { _, _ in beginCompose(.reply) }
         .onChange(of: appState.replyAllRequestTick) { _, _ in beginCompose(.replyAll) }

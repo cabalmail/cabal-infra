@@ -301,6 +301,42 @@ export default class ApiClient {
     return response;
   } 
 
+  purgeMessages(folder, ids) {
+    const response = axios.delete('/purge_messages',
+      {
+        baseURL: this.baseURL,
+        data: JSON.stringify({
+          host: this.host,
+          folder: folder,
+          ids: ids
+        }),
+        headers: {
+          'Authorization': this.token
+        },
+        timeout: TIMEOUT
+      }
+    );
+    return response;
+  }
+
+  emptyTrash(folder) {
+    const response = axios.delete('/empty_trash',
+      {
+        baseURL: this.baseURL,
+        data: JSON.stringify({
+          host: this.host,
+          folder: folder
+        }),
+        headers: {
+          'Authorization': this.token
+        },
+        // Emptying a very full trash can exceed the default 10s.
+        timeout: ONE_SECOND * 30
+      }
+    );
+    return response;
+  }
+
   setFlag(folder, flag, op, ids, order, field) {
     const response = axios.put('/set_flag',
       JSON.stringify({

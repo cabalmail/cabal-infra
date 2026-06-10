@@ -1,4 +1,4 @@
-import { render, screen, waitFor, act, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, act, fireEvent, within } from '@testing-library/react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import MessageOverlay from './index';
 import AuthContext from '../../contexts/AuthContext';
@@ -41,6 +41,7 @@ const mockApi = {
   fetchImage: vi.fn().mockResolvedValue({ data: { url: 'http://img.url' } }),
   setFlag: vi.fn().mockResolvedValue({}),
   moveMessages: vi.fn().mockResolvedValue({}),
+  purgeMessages: vi.fn().mockResolvedValue({}),
 };
 
 vi.mock('../../hooks/useApi', () => ({
@@ -265,5 +266,61 @@ describe('MessageOverlay (Reader)', () => {
     } finally {
       unmount();
     }
+  });
+
+  describe('deleting from Trash', () => {
+    it('confirms, purges, and hides instead of moving', async () => {
+      const hide = vi.fn();
+      const { unmount } = renderOverlay({ folder: 'Deleted Messages', hide });
+      try {
+        await waitFor(() => expect(mockGetMessage).toHaveBeenCalled());
+        fireEvent.click(screen.getAllByLabelText('Delete forever')[0]);
+        // Nothing happens until the dialog is confirmed.
+        expect(mockApi.purgeMessages).not.toHaveBeenCalled();
+        const dialog = screen.getByRole('alertdialog');
+        fireEvent.click(within(dialog).getByRole('button', { name: /delete forever/i }));
+        await waitFor(() => {
+          expect(mockApi.purgeMessages).toHaveBeenCalledWith('Deleted Messages', [1]);
+        });
+        await waitFor(() => expect(hide).toHaveBeenCalled());
+        expect(mockApi.moveMessages).not.toHaveBeenCalled();
+      } finally {
+        unmount();
+      }
+    });
+
+    it('cancelling the confirmation leaves the message alone', async () => {
+      const hide = vi.fn();
+      const { unmount } = renderOverlay({ folder: 'Deleted Messages', hide });
+      try {
+        await waitFor(() => expect(mockGetMessage).toHaveBeenCalled());
+        fireEvent.click(screen.getAllByLabelText('Delete forever')[0]);
+        const dialog = screen.getByRole('alertdialog');
+        fireEvent.click(within(dialog).getByRole('button', { name: /cancel/i }));
+        expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+        expect(mockApi.purgeMessages).not.toHaveBeenCalled();
+        expect(hide).not.toHaveBeenCalled();
+      } finally {
+        unmount();
+      }
+    });
+
+    it('outside Trash, delete moves to Deleted Messages without confirmation', async () => {
+      const hide = vi.fn();
+      const { unmount } = renderOverlay({ hide });
+      try {
+        await waitFor(() => expect(mockGetMessage).toHaveBeenCalled());
+        fireEvent.click(screen.getAllByLabelText('Delete')[0]);
+        expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+        await waitFor(() => {
+          expect(mockApi.moveMessages).toHaveBeenCalledWith(
+            'INBOX', 'Deleted Messages', [1], '', expect.anything(),
+          );
+        });
+        expect(mockApi.purgeMessages).not.toHaveBeenCalled();
+      } finally {
+        unmount();
+      }
+    });
   });
 });
