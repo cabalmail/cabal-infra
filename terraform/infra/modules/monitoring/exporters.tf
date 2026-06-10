@@ -69,6 +69,8 @@ resource "aws_iam_role_policy" "cloudwatch_exporter_task" {
         "cloudwatch:GetMetricStatistics",
         "tag:GetResources",
       ]
+      # iam-wildcard-ok: cloudwatch metric reads and tag:GetResources are
+      # account-level list/read operations with no resource grammar.
       Resource = "*"
     }]
   })
@@ -92,6 +94,8 @@ resource "aws_iam_role_policy" "cloudwatch_exporter_task_exec" {
         "ssmmessages:OpenControlChannel",
         "ssmmessages:OpenDataChannel",
       ]
+      # iam-wildcard-ok: ssmmessages (ECS Exec session channels) has no
+      # resource-level grammar; the service requires "*".
       Resource = "*"
     }]
   })
@@ -311,6 +315,8 @@ resource "aws_iam_role_policy" "blackbox_exporter_task_exec" {
         "ssmmessages:OpenControlChannel",
         "ssmmessages:OpenDataChannel",
       ]
+      # iam-wildcard-ok: ssmmessages (ECS Exec session channels) has no
+      # resource-level grammar; the service requires "*".
       Resource = "*"
     }]
   })

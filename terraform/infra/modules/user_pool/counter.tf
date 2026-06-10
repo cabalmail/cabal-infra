@@ -55,11 +55,13 @@ resource "aws_iam_role_policy" "lambda" {
         {
           # logs:CreateLogGroup only ever targets this Lambda's own log group
           # (pre-created above), so scope it there rather than every group in
-          # the account. The trailing wildcard is the log-stream portion of the
-          # log-group ARN, which has no enumerable value.
+          # the account. Bare group ARN, no ":*" suffix: the log-group
+          # resource grammar has no trailing segment, and the IAM simulator
+          # shows the suffixed pattern fails to match (the suffix belongs on
+          # the log-stream statement below).
           Effect   = "Allow"
           Action   = "logs:CreateLogGroup"
-          Resource = "arn:aws:logs:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/assign_osid:${local.wildcard}"
+          Resource = "arn:aws:logs:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/assign_osid"
         },
         {
           Effect = "Allow"
@@ -68,10 +70,15 @@ resource "aws_iam_role_policy" "lambda" {
             "logs:PutLogEvents",
           ]
           Resource = [
+            # iam-wildcard-ok: log-stream names are runtime-generated; the
+            # group segment is pinned, the stream segment cannot be.
             "arn:aws:logs:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/assign_osid:${local.wildcard}",
           ]
         },
         {
+          # iam-wildcard-ok: rolls every mail-tier service after a signup;
+          # the service names are owned by the ecs module, so this is scoped
+          # to the cabal cluster path rather than named per service.
           Effect   = "Allow"
           Action   = "ecs:UpdateService"
           Resource = "arn:aws:ecs:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:service/${var.ecs_cluster_name}/${local.wildcard}"

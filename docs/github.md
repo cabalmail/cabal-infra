@@ -6,7 +6,6 @@ After signing up and logging in, [fork this repository](https://docs.github.com/
 
 1. Log in to your Github account.
 2. Navigate to the newly forked repository.
-3. [Set up a personal access token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token). The scope should be repo and workflows. You will need this token when you set up Terraform.
 
 ## Repository secrets
 
@@ -17,11 +16,10 @@ Navigate to **Settings -> Secrets and variables -> Actions -> Secrets** and add 
 | `AWS_ACCESS_KEY_ID` | Access key ID from [AWS setup](./aws.md) step 10. |
 | `AWS_SECRET_ACCESS_KEY` | Access key secret from [AWS setup](./aws.md) step 10. |
 | `AWS_REGION` | AWS region, e.g. `us-east-1`. Must match `TF_VAR_AWS_REGION`. |
-| `TF_TOKEN` | Terraform Cloud API token. See [Terraform setup](./terraform.md). |
 
 ## Environment variables and secrets
 
-The remaining configuration is set per-environment under **Settings -> Environments -> [environment name]**. Create two environments per named branch: `prod` (maps to `main`), `gate-prod`, `stage`, `gate-stage`, `development`, and `gate-development`. Optionally add protection rules to the three `gate-*` environments. Potentially destructive jobs in Github workflows are placed behind other jobs that depend on the `gate-*` environments, making them the best place for protection rules.
+The remaining configuration is set per-environment under **Settings -> Environments -> [environment name]**. Create two environments per named branch: `prod` (maps to `main`), `gate-prod`, `stage`, `gate-stage`, `development`, and `gate-development`. Optionally add protection rules to the three `gate-*` environments. Potentially destructive jobs in Github workflows are placed behind other jobs that depend on the `gate-*` environments, making them the best place for protection rules. Required reviewers on the gate environments are also what pause the first provisioning run between the dns and infra stages (see [setup](./setup.md)), so add them at least for that run.
 
 ### Core infrastructure
 

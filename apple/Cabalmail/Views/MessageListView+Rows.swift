@@ -5,7 +5,8 @@ import CabalmailKit
 // a same-module extension so the primary view body stays under
 // SwiftLint's `type_body_length` cap. Holds:
 //   - `row(for:model:isSelected:)` — list-row content + swipe actions
-//   - `rowContextMenu` — right-click / long-press menu mirroring swipes
+//   - `rowContextMenu` — compact iPhone's long-press menu (wide layouts
+//     use the List-level selection menu in `+Actions.swift` instead)
 //   - `disposeActionLabel` / `markReadLabel` — shared icons for both
 //   - `addressFilterChip` — the in-list banner when `addressFilter` is
 //     set (used by `Messages` view's address-tap surface)
@@ -36,52 +37,72 @@ extension MessageListView {
         let isChecked = model.selectedUIDs.contains(envelope.uid)
         let items = dragItems(for: envelope, model: model)
         withMessageDrag(items: items, subject: envelope.subject) {
-            Group {
-                if isWideLayout {
-                    wideRow(
-                        for: envelope,
-                        isSelected: isSelected,
-                        model: model,
-                        orderedVisible: orderedVisible
-                    )
-                } else if bulkMode {
-                    // No .tag() while in bulk mode — the list's selection
-                    // binding drives the detail pane, and we don't want a
-                    // checkbox tap to also pop the reader.
-                    Button {
-                        model.toggleSelection(envelope)
-                    } label: {
-                        MessageRow(envelope: envelope, isSelected: isChecked, isChecked: isChecked, bulkMode: true)
+            withRowContextMenu(for: envelope, model: model) {
+                Group {
+                    if isWideLayout {
+                        wideRow(
+                            for: envelope,
+                            isSelected: isSelected,
+                            model: model,
+                            orderedVisible: orderedVisible
+                        )
+                    } else if bulkMode {
+                        // No .tag() while in bulk mode — the list's selection
+                        // binding drives the detail pane, and we don't want a
+                        // checkbox tap to also pop the reader.
+                        Button {
+                            model.toggleSelection(envelope)
+                        } label: {
+                            MessageRow(envelope: envelope, isSelected: isChecked, isChecked: isChecked, bulkMode: true)
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        MessageRow(envelope: envelope, isSelected: isSelected, isChecked: false, bulkMode: false)
+                            .tag(envelope)
                     }
-                    .buttonStyle(.plain)
-                } else {
-                    MessageRow(envelope: envelope, isSelected: isSelected, isChecked: false, bulkMode: false)
-                        .tag(envelope)
+                }
+                #if os(visionOS)
+                .contentShape(Rectangle())
+                .hoverEffect(.highlight)
+                #endif
+                .swipeActions(edge: .trailing) {
+                    Button(role: .destructive) {
+                        Task { await model.dispose(envelope) }
+                    } label: {
+                        disposeActionLabel(for: model.disposeAction)
+                    }
+                }
+                .swipeActions(edge: .leading) {
+                    Button {
+                        Task { await model.toggleSeen(envelope) }
+                    } label: {
+                        markReadLabel(for: envelope)
+                    }
+                    .tint(.blue)
                 }
             }
-            #if os(visionOS)
-            .contentShape(Rectangle())
-            .hoverEffect(.highlight)
-            #endif
-            .swipeActions(edge: .trailing) {
-                Button(role: .destructive) {
-                    Task { await model.dispose(envelope) }
-                } label: {
-                    disposeActionLabel(for: model.disposeAction)
-                }
-            }
-            .swipeActions(edge: .leading) {
-                Button {
-                    Task { await model.toggleSeen(envelope) }
-                } label: {
-                    markReadLabel(for: envelope)
-                }
-                .tint(.blue)
-            }
-            .contextMenu { rowContextMenu(for: envelope, model: model) }
             .task {
                 await model.loadMoreIfNeeded(currentItem: envelope)
             }
+        }
+    }
+
+    /// Compact iPhone keeps the per-row long-press menu (single-
+    /// selection flow). Wide layouts must NOT carry a row-level
+    /// `.contextMenu` — it would intercept the right-click before the
+    /// List-level `contextMenu(forSelectionType:)` (see `wideList`)
+    /// could offer the menu for the whole multi-selection.
+    @ViewBuilder
+    private func withRowContextMenu(
+        for envelope: Envelope,
+        model: MessageListViewModel,
+        @ViewBuilder content: () -> some View
+    ) -> some View {
+        if isWideLayout {
+            content()
+        } else {
+            content()
+                .contextMenu { rowContextMenu(for: envelope, model: model) }
         }
     }
 
@@ -196,10 +217,18 @@ extension MessageListView {
         } label: {
             Label("Move to folder…", systemImage: "folder")
         }
-        Button(role: .destructive) {
-            Task { await model.dispose(envelope) }
+        // Both dispose destinations, not just the configured default —
+        // the swipe action keeps honoring the dispose preference; the
+        // menu is where the user reaches for the other one.
+        Button {
+            Task { await model.disposeMessages(uids: [envelope.uid], action: .archive) }
         } label: {
-            disposeActionLabel(for: model.disposeAction)
+            Label("Archive", systemImage: "archivebox")
+        }
+        Button(role: .destructive) {
+            Task { await model.disposeMessages(uids: [envelope.uid], action: .trash) }
+        } label: {
+            Label("Delete", systemImage: "trash")
         }
     }
 

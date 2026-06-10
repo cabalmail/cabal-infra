@@ -50,12 +50,14 @@ scan-dns: tflint-init checkov-graph-guard
 	tflint --chdir=terraform/dns --recursive
 	trivy config terraform/dns --ignorefile terraform/dns/.trivyignore --exit-code 1
 	./.github/scripts/check-suppression-justifications.sh terraform/dns
+	./.github/scripts/check-iam-resource-scope.py terraform/dns
 
 scan-infra: tflint-init checkov-graph-guard
 	checkov -d terraform/infra --config-file terraform/infra/.checkov.yaml --baseline terraform/infra/.checkov.baseline --quiet --compact
 	tflint --chdir=terraform/infra --recursive
 	trivy config terraform/infra --ignorefile terraform/infra/.trivyignore --exit-code 1
 	./.github/scripts/check-suppression-justifications.sh terraform/infra
+	./.github/scripts/check-iam-resource-scope.py terraform/infra
 
 # Drift: fail if a baseline / ignore entry no longer matches a finding (stale).
 # CI runs this inside the scanner jobs; run it locally when editing baselines.

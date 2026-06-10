@@ -968,17 +968,31 @@ MetricKit at all, so the collector is a no-op on that platform behind
 
 ### Commands dispatch through `AppState` tick counters
 
-macOS menu commands (File → New Message ⌘N, Mailbox → Refresh ⌘R) and
-iOS keyboard shortcuts need to reach whichever view currently owns the
-action — but `.commands { }` is defined at the scene level, so there's
-no direct reference to the focused view. `AppState` exposes two
-monotonic counters (`composeRequestTick`, `refreshRequestTick`);
-`MessageListView` / `SignedInRootView` watch them with `.onChange` and
-act on each bump. Avoids the `@FocusedValue` / responder-chain dance,
-and the same tick flow works on iOS (shortcuts) and macOS (menu bar).
-Reply (⌘R), Reply-All (⌘⇧D), Forward (⌘⇧J) are local to
-`MessageDetailView` and use plain `.keyboardShortcut` on the toolbar
-buttons.
+Menu commands (File → New Message ⌘N, Mailbox → Refresh, the Message
+menu) need to reach whichever view currently owns the action — but
+`.commands { }` is defined at the scene level, so there's no direct
+reference to the focused view. `AppState` exposes monotonic intent
+counters (`composeRequestTick`, `refreshRequestTick`, the reply /
+forward ticks, and the selection-scoped `toggleSeenRequestTick` /
+`toggleFlaggedRequestTick` / `moveSelectionRequestTick`); the views
+watch them with `.onChange` and act on each bump. Avoids the
+`@FocusedValue` / responder-chain dance, and the same tick flow works
+on iPadOS (hardware-keyboard menu) and macOS (menu bar). The shared
+Message menu (`MessageMenuCommands`, installed by both app targets)
+carries Reply ⌘R, Reply All ⌘⇧R, Forward ⌘⇧J, Mark as Read/Unread ⌘T,
+Flag/Unflag ⌘⇧8, and Move to Folder ⌘M — the ⌘M item deliberately
+shadows Window → Minimize, since custom command menus are matched
+before the Window menu. Dispose (⌘⌫) is deliberately NOT a menu item:
+menu equivalents fire app-wide, so it would trigger from the compose
+window and steal the text system's delete-to-line-start chord
+mid-draft. It rides window-scoped key equivalents instead — the detail
+toolbar's dispose button covers a single open message (and advances to
+the next unread), and the message list installs an invisible ⌘⌫ button
+while a multi-selection exists — so the chord acts on the mail window
+only, but works there regardless of whether the list or the reading
+pane has focus (users can rarely tell which it is). Esc and ⌘A stay
+focus-scoped on the list: window-scoped versions would steal them from
+the search field.
 
 ### Platform polish
 

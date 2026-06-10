@@ -24,13 +24,39 @@ extension MessageListView {
         #if !os(macOS)
         .environment(\.editMode, $editMode)
         #endif
+        // Right-click / long-press menu at the List level so SwiftUI
+        // resolves the target set natively: the whole selection when the
+        // click lands on a selected row, just the clicked row when it
+        // doesn't. Replaces the per-row `.contextMenu`, which only ever
+        // saw the row under the pointer.
+        .contextMenu(forSelectionType: UInt32.self) { uids in
+            selectionContextMenu(for: uids, model: model)
+        }
         // Cmd-A select-all and Esc clear, scoped to the list's focus so they
-        // never steal those chords from the search field.
+        // never steal those keys from the search field.
         .onKeyPress(.escape) { escapePressed(model: model) }
         .onKeyPress(keys: ["a"], phases: .down) { keyPress in
             guard keyPress.modifiers.contains(.command) else { return .ignored }
             model.selectAllVisible()
             return .handled
+        }
+        // Cmd+Delete for a multi-selection. Window-scoped (a key equivalent
+        // on an invisible button), NOT focus-scoped like Esc / Cmd-A above:
+        // the user can't easily tell whether the list or the reading pane
+        // holds focus, so the dispose chord must behave the same either way
+        // - exactly how the detail toolbar's own Cmd+Delete equivalent
+        // already works. Only installed while two or more rows are selected;
+        // a single selection is the reading pane's territory (its dispose
+        // button owns Cmd+Delete there and additionally advances to the next
+        // unread), and installing both at once would leave AppKit to pick a
+        // winner between two identical equivalents in one window.
+        .background {
+            if model.selectedUIDs.count > 1 {
+                Button("") { disposeSelection(model: model) }
+                    .keyboardShortcut(.delete, modifiers: .command)
+                    .opacity(0)
+                    .accessibilityHidden(true)
+            }
         }
         // Derive the reading-pane selection from the multi-select set: exactly
         // one selected -> show that message; zero or many -> the parent shows

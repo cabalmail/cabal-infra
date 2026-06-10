@@ -63,6 +63,14 @@ final class AppState {
     var replyRequestTick = 0
     var replyAllRequestTick = 0
     var forwardRequestTick = 0
+    /// Selection-scoped message-action intents bumped from the shared
+    /// Message menu (`MessageMenuCommands`: macOS menu bar, iPadOS
+    /// hardware-keyboard menu). The on-screen `MessageListView` observes
+    /// them and applies the action to its current selection; with nothing
+    /// selected the bump is a no-op, matching the Reply convention above.
+    var toggleSeenRequestTick = 0
+    var toggleFlaggedRequestTick = 0
+    var moveSelectionRequestTick = 0
 
     /// Latest envelope disposed from the detail view. `MessageListView`
     /// observes this via `.onChange` and prunes the matching UID from its
@@ -141,6 +149,8 @@ final class AppState {
     func requestReply() { replyRequestTick += 1 }
     func requestReplyAll() { replyAllRequestTick += 1 }
     func requestForward() { forwardRequestTick += 1 }
+    // The selection-scoped request bumpers live in the "Message-menu
+    // selection intents" extension below (SwiftLint type-body budget).
 
     func signalDisposed(folderPath: String, uid: UInt32, wasUnread: Bool = false) {
         disposedTick += 1
@@ -451,6 +461,16 @@ final class AppState {
         default:                  return nil
         }
     }
+}
+
+// MARK: - Message-menu selection intents
+
+// Bumpers for the selection-scoped tick counters declared on the main
+// type (stored properties can't live in an extension under @Observable).
+extension AppState {
+    func requestToggleSeen() { toggleSeenRequestTick += 1 }
+    func requestToggleFlagged() { toggleFlaggedRequestTick += 1 }
+    func requestMoveSelection() { moveSelectionRequestTick += 1 }
 }
 
 // MARK: - Per-folder unread + total counts

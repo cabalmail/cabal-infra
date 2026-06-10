@@ -117,6 +117,8 @@ resource "aws_iam_policy" "ecs_task" {
           "ssmmessages:OpenControlChannel",
           "ssmmessages:OpenDataChannel",
         ]
+        # iam-wildcard-ok: ssmmessages (ECS Exec session channels) has no
+        # resource-level grammar; the service requires "*".
         Resource = "*"
       },
       {

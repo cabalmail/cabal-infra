@@ -58,6 +58,10 @@ struct MessageListView: View {
     @State var envelopeToMove: Envelope?
     /// `true` while the bulk-move destination picker is presented.
     @State var bulkMoveSheetPresented = false
+    /// Set by the wide-layout selection context menu's "Move to folder…"
+    /// item and the Cmd+M shortcut; presents the MoveToFolderSheet for
+    /// the captured UID set (see `MessageListView+Actions.swift`).
+    @State var moveCandidate: SelectionMoveCandidate?
     /// `true` while the unsubscribed-folder banner's Refresh button is
     /// in flight. The banner lives in `+UnsubscribedBanner.swift`;
     /// hoisting the flag here lets the `safeAreaInset` builder see it
@@ -140,6 +144,9 @@ struct MessageListView: View {
                 bulkMoveSheet(model: model)
             }
         }
+        .sheet(item: $moveCandidate) { candidate in
+            selectionMoveSheet(for: candidate)
+        }
         .task {
             if model == nil, let client = appState.client {
                 model = MessageListViewModel(
@@ -204,6 +211,18 @@ struct MessageListView: View {
             // hitting `refresh()` directly; they fire too often to be
             // discarding cached envelopes on every tick.
             Task { await model?.hardReload() }
+        }
+        // Message-menu chords (Cmd+T / Cmd+Shift+8 / Cmd+M) acting on the
+        // current selection. Handlers live in `MessageListView+Actions.swift`;
+        // each no-ops when nothing is selected.
+        .onChange(of: appState.toggleSeenRequestTick) { _, _ in
+            if let model { toggleSeenOnSelection(model: model) }
+        }
+        .onChange(of: appState.toggleFlaggedRequestTick) { _, _ in
+            if let model { toggleFlaggedOnSelection(model: model) }
+        }
+        .onChange(of: appState.moveSelectionRequestTick) { _, _ in
+            if let model { moveSelection(model: model) }
         }
         .onChange(of: appState.lastDisposedEnvelope) { _, signal in
             // Detail view archived / trashed the current message. Advance
