@@ -56,6 +56,10 @@ struct MessageListView: View {
     /// `Identifiable` so `.sheet(item:)` reuses the same presentation
     /// machinery as composeSeed.
     @State var envelopeToMove: Envelope?
+    /// Set by the swipe / context-menu delete while the list shows Trash;
+    /// presents the "Delete Forever?" confirmation anchored to this
+    /// envelope. Non-private so the `+Rows` extension can stage it.
+    @State var envelopeToPurge: Envelope?
     /// `true` while the bulk-move destination picker is presented.
     @State var bulkMoveSheetPresented = false
     /// Set by the wide-layout selection context menu's "Move to folder…"
@@ -146,6 +150,23 @@ struct MessageListView: View {
         }
         .sheet(item: $moveCandidate) { candidate in
             selectionMoveSheet(for: candidate)
+        .confirmationDialog(
+            "Delete Forever?",
+            isPresented: purgeDialogBinding,
+            titleVisibility: .visible,
+            presenting: envelopeToPurge
+        ) { envelope in
+            Button("Delete Forever", role: .destructive) {
+                envelopeToPurge = nil
+                if let model {
+                    Task { await model.purge(envelope) }
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                envelopeToPurge = nil
+            }
+        } message: { _ in
+            Text("This message will be permanently deleted. This can't be undone.")
         }
         .task {
             if model == nil, let client = appState.client {
@@ -278,6 +299,17 @@ struct MessageListView: View {
             guard let request, let model else { return }
             Task { await model.applyMoveRequest(request) }
         }
+    }
+
+    /// Boolean projection of `envelopeToPurge` for the confirmation
+    /// dialog. Mirrors `FoldersAdminView`'s delete-dialog binding.
+    private var purgeDialogBinding: Binding<Bool> {
+        Binding(
+            get: { envelopeToPurge != nil },
+            set: { isPresented in
+                if !isPresented { envelopeToPurge = nil }
+            }
+        )
     }
 
     @ViewBuilder

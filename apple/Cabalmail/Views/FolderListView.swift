@@ -44,6 +44,9 @@ struct FolderListView: View {
     // `.onDrop(isTargeted:)` binding. Non-private so the `+Helpers` extension
     // that builds the drop modifier and handler can reach it.
     @State var dropTargetPath: String?
+    // Presents the "Empty Trash?" confirmation staged by the Trash row's
+    // context-menu item.
+    @State private var emptyTrashConfirmPresented = false
 
     var body: some View {
         let collapsedSet = decodeCollapsed()
@@ -141,6 +144,18 @@ struct FolderListView: View {
             autoExpandAncestors(of: newPath)
             lazyFetchCountIfNeeded(path: newPath)
         }
+        .confirmationDialog(
+            "Empty Trash?",
+            isPresented: $emptyTrashConfirmPresented,
+            titleVisibility: .visible
+        ) {
+            Button("Empty Trash", role: .destructive) {
+                Task { await model?.emptyTrash() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("All messages in Trash will be permanently deleted. This can't be undone.")
+        }
     }
 
     @ViewBuilder
@@ -191,6 +206,13 @@ struct FolderListView: View {
                         folder.isSubscribed ? "Unsubscribe" : "Subscribe",
                         systemImage: folder.isSubscribed ? "bell.slash" : "bell"
                     )
+                }
+                if folder.path == FolderTree.trashPath {
+                    Button(role: .destructive) {
+                        emptyTrashConfirmPresented = true
+                    } label: {
+                        Label("Empty Trash", systemImage: "trash.slash")
+                    }
                 }
             }
         }

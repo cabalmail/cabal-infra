@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Archive,
   ChevronDown,
+  Eraser,
   FileText,
   Folder,
   Inbox,
@@ -14,6 +15,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
+import ConfirmDialog from '../ConfirmDialog';
 import useApi from '../hooks/useApi';
 import {
   FOLDER_COLLAPSED_ALL,
@@ -71,7 +73,7 @@ function FolderIcon({ kind }) {
 
 function FolderRow({
   f, isActive, isSubscribed, canDelete, onSelect, onToggleSubscribe, onRemove,
-  onAddChild,
+  onAddChild, onEmptyTrash,
   depth = 0, showFullPath = false,
   hasChildren = false, isCollapsed = false, onToggleCollapse,
 }) {
@@ -125,6 +127,17 @@ function FolderRow({
         >
           <Star size={12} aria-hidden="true" />
         </button>
+        {f.kind === 'trash' && onEmptyTrash && (
+          <button
+            type="button"
+            className={styles.rowAction}
+            title="Empty trash"
+            aria-label="Empty trash"
+            onClick={(e) => onEmptyTrash(e, f.id)}
+          >
+            <Eraser size={12} aria-hidden="true" />
+          </button>
+        )}
         {canDelete && (
           <button
             type="button"
@@ -272,6 +285,28 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
     });
   }, [api, refresh, setMessage]);
 
+  // Emptying the trash stages the folder id, confirms via dialog, then
+  // permanently deletes everything in it server-side.
+  const [pendingEmpty, setPendingEmpty] = useState(null);
+
+  const requestEmptyTrash = useCallback((e, name) => {
+    e.stopPropagation();
+    setPendingEmpty(name);
+  }, []);
+
+  const confirmEmptyTrash = useCallback(() => {
+    const name = pendingEmpty;
+    setPendingEmpty(null);
+    if (!name) return;
+    api.emptyTrash(name).then(() => {
+      setMessage && setMessage('Trash emptied.', false);
+    }).catch(() => {
+      setMessage && setMessage('Unable to empty trash.', true);
+    });
+  }, [api, pendingEmpty, setMessage]);
+
+  const cancelEmptyTrash = useCallback(() => setPendingEmpty(null), []);
+
   const commitAdd = useCallback(() => {
     if (addingParent === null) return;
     const name = newName.trim();
@@ -365,6 +400,7 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
                   onSelect={handleSelect}
                   onToggleSubscribe={toggleSubscribe}
                   onRemove={removeFolder}
+                  onEmptyTrash={requestEmptyTrash}
                   showFullPath
                 />
               ))}
@@ -428,6 +464,7 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
                   onSelect={handleSelect}
                   onToggleSubscribe={toggleSubscribe}
                   onRemove={removeFolder}
+                  onEmptyTrash={requestEmptyTrash}
                   onAddChild={startAddChild}
                   depth={f.depth}
                   hasChildren={f.hasChildren}
@@ -467,6 +504,22 @@ function Folders({ setMessage, folder, setFolder, onNewMessage, asDrawer = false
           ) : null}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={pendingEmpty !== null}
+        title="Empty trash?"
+        message={
+          <>
+            All messages in <strong>Trash</strong> will be permanently deleted.
+            {' '}This can&rsquo;t be undone.
+          </>
+        }
+        confirmLabel="Empty trash"
+        cancelLabel="Cancel"
+        destructive
+        onConfirm={confirmEmptyTrash}
+        onCancel={cancelEmptyTrash}
+      />
     </section>
   );
 }

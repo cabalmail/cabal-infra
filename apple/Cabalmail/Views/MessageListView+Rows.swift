@@ -81,6 +81,22 @@ extension MessageListView {
                     .tint(.blue)
                 }
             }
+            #if os(visionOS)
+            .contentShape(Rectangle())
+            .hoverEffect(.highlight)
+            #endif
+            .swipeActions(edge: .trailing) {
+                disposeSwipeButton(for: envelope, model: model)
+            }
+            .swipeActions(edge: .leading) {
+                Button {
+                    Task { await model.toggleSeen(envelope) }
+                } label: {
+                    markReadLabel(for: envelope)
+                }
+                .tint(.blue)
+            }
+            .contextMenu { rowContextMenu(for: envelope, model: model) }
             .task {
                 await model.loadMoreIfNeeded(currentItem: envelope)
             }
@@ -229,6 +245,27 @@ extension MessageListView {
             Task { await model.disposeMessages(uids: [envelope.uid], action: .trash) }
         } label: {
             Label("Delete", systemImage: "trash")
+        disposeSwipeButton(for: envelope, model: model)
+    }
+
+    /// Trailing destructive swipe: dispose (Archive/Trash) everywhere
+    /// except inside Trash, where delete means gone forever and stages
+    /// the confirmation dialog instead of acting directly. Shared shape
+    /// with the context menu's destructive item.
+    @ViewBuilder
+    func disposeSwipeButton(for envelope: Envelope, model: MessageListViewModel) -> some View {
+        Button(role: .destructive) {
+            if model.isTrashFolder {
+                envelopeToPurge = envelope
+            } else {
+                Task { await model.dispose(envelope) }
+            }
+        } label: {
+            if model.isTrashFolder {
+                purgeActionLabel
+            } else {
+                disposeActionLabel(for: model.disposeAction)
+            }
         }
     }
 
@@ -238,6 +275,13 @@ extension MessageListView {
         case .archive: Label("Archive", systemImage: "archivebox")
         case .trash:   Label("Trash", systemImage: "trash")
         }
+    }
+
+    /// Delete affordance label inside the Trash folder, where the action
+    /// permanently deletes (after confirmation) instead of moving.
+    @ViewBuilder
+    var purgeActionLabel: some View {
+        Label("Delete Forever", systemImage: "trash.slash")
     }
 
     @ViewBuilder

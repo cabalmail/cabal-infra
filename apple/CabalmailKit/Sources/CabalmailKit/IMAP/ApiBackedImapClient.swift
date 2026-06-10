@@ -377,6 +377,21 @@ public actor ApiBackedImapClient: ImapClient {
     }
 }
 
+// MARK: - Purge (extension)
+
+// Permanent-deletion overrides for the trash-only Lambda endpoints. In an
+// extension for the same reason as search below: the primary actor body
+// sits near SwiftLint's 250-line cap.
+extension ApiBackedImapClient {
+    public func purge(folder: String, uids: [UInt32]) async throws {
+        try await api.purgeMessages(host: host, folder: folder, ids: uids)
+    }
+
+    public func emptyTrash(folder: String) async throws {
+        try await api.emptyTrash(host: host, folder: folder)
+    }
+}
+
 // MARK: - Search (extension)
 
 // `searchEnvelopes(_:)` lives in its own extension so the primary actor

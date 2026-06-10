@@ -11,8 +11,10 @@ import { ArrowLeft, PenSquare } from 'lucide-react';
 import Envelopes from './Envelopes';
 import FolderPicker from './Folders';
 import Icon from './icons';
+import ConfirmDialog from '../../ConfirmDialog';
 import useApi from '../../hooks/useApi';
 import { READ, UNREAD, FLAGGED, ASC, DESC, ARRIVAL, DATE, FROM, SUBJECT } from '../../constants';
+import { folderMeta } from '../../utils/folderMeta';
 import './Messages.css';
 
 const SORT_OPTIONS = [DATE, ARRIVAL, FROM, SUBJECT];
@@ -44,6 +46,11 @@ function Messages({
   const [loading, setLoading] = useState(true);
   const [visible, setVisible] = useState({ loaded: [], totalIds: 0, shownIds: [] });
   const [showMovePicker, setShowMovePicker] = useState(false);
+  const [confirmPurge, setConfirmPurge] = useState(false);
+
+  // In Trash, "Delete" means gone forever (purge + expunge) instead of
+  // another move into Trash, and always goes through a confirmation.
+  const isTrash = folderMeta(folder).kind === 'trash';
 
   const intervalRef = useRef(null);
   const lastSelectedRef = useRef(null);
@@ -155,6 +162,10 @@ function Messages({
 
   const deleteSelected = useCallback(() => {
     if (!selectedCount) return;
+    if (isTrash) {
+      setConfirmPurge(true);
+      return;
+    }
     api
       .moveMessages(folder, 'Deleted Messages', selectedIdsArray, sortDir.imap, sortKey.imap)
       .then(() => {
@@ -165,7 +176,24 @@ function Messages({
         setMessage('Unable to delete selected messages.', true);
         console.error(err);
       });
-  }, [api, folder, sortDir, sortKey, selectedIdsArray, selectedCount, refreshAfterMutation, exitBulk, setMessage]);
+  }, [api, folder, isTrash, sortDir, sortKey, selectedIdsArray, selectedCount, refreshAfterMutation, exitBulk, setMessage]);
+
+  const purgeSelected = useCallback(() => {
+    setConfirmPurge(false);
+    if (!selectedCount) return;
+    api
+      .purgeMessages(folder, selectedIdsArray)
+      .then(() => {
+        refreshAfterMutation();
+        exitBulk();
+      })
+      .catch((err) => {
+        setMessage('Unable to permanently delete selected messages.', true);
+        console.error(err);
+      });
+  }, [api, folder, selectedIdsArray, selectedCount, refreshAfterMutation, exitBulk, setMessage]);
+
+  const cancelPurge = useCallback(() => setConfirmPurge(false), []);
 
   const moveSelected = useCallback(
     (destination) => {
@@ -297,7 +325,7 @@ function Messages({
             </button>
             <button type="button" className="tool-btn danger" onClick={deleteSelected} disabled={!selectedCount}>
               <Icon name="trash" size={14} />
-              <span className="tool-btn-label">Delete</span>
+              <span className="tool-btn-label">{isTrash ? 'Delete forever' : 'Delete'}</span>
             </button>
           </div>
           <button
@@ -441,6 +469,21 @@ function Messages({
           archive={archiveOne}
         />
       )}
+      <ConfirmDialog
+        open={confirmPurge}
+        title="Delete forever?"
+        message={
+          <>
+            {selectedCount === 1 ? 'This message' : `These ${selectedCount} messages`} will be
+            permanently deleted. This can&rsquo;t be undone.
+          </>
+        }
+        confirmLabel="Delete forever"
+        cancelLabel="Cancel"
+        destructive
+        onConfirm={purgeSelected}
+        onCancel={cancelPurge}
+      />
     </div>
   );
 }
