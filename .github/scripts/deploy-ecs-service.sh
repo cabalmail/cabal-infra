@@ -44,12 +44,17 @@
 #                     cabal-cloudwatch-exporter-us-east-1).
 #
 # Exit codes:
-#   0  rolled the service and it reached a stable rollout
+#   0  rolled the service and it reached a stable rollout on the new
+#      revision
 #   1  required arg missing, service not found, no container in the task
-#      def references cabal-<tier>:<anything>, or the rolled service did
-#      not stabilize within the wait window (these mail services have no
-#      deployment circuit breaker, so a broken image never auto-rolls
-#      back - the deployment stays IN_PROGRESS and the wait times out)
+#      def references cabal-<tier>:<anything>, the rolled service did not
+#      stabilize within the wait window, or it stabilized on a different
+#      revision than the one we registered (the imap service runs a
+#      deployment circuit breaker with rollback - phase 2 of
+#      docs/0.10.x/imap-deploy-downtime-plan.md - so a broken image
+#      stabilizes back on the previous revision; the smtp services have
+#      no breaker, so a broken image never stabilizes and the wait times
+#      out)
 #   non-0 from aws CLI on any other failure
 
 set -euo pipefail
@@ -137,16 +142,35 @@ aws ecs update-service \
   --task-definition "${new_td_arn}" >/dev/null
 log "service ${SERVICE} rolling to ${new_td_arn}; waiting for stability"
 
-# Block until the new revision is fully rolled (rolloutState COMPLETED,
+# Block until the service is fully rolled (rolloutState COMPLETED,
 # runningCount == desiredCount, no in-flight deployment). This is the
-# barrier infra.yml's wait-for-app-deploy.sh orders behind. On these
+# barrier infra.yml's wait-for-app-deploy.sh orders behind. On the smtp
 # services (no deployment circuit breaker) a broken image never
 # stabilizes, so the wait times out and we exit non-zero rather than
 # report a deploy that never actually came up. `if` keeps set -e from
 # aborting before we can log the timeout.
 if aws ecs wait services-stable --cluster "${CLUSTER}" --services "${SERVICE}"; then
-  log "service ${SERVICE} stable on ${new_td_arn}"
+  log "service ${SERVICE} reached a stable rollout"
 else
   log "ERROR: ${SERVICE} did not stabilize on ${new_td_arn} within the wait window"
+  exit 1
+fi
+
+# "Stable" is not "deployed": the imap service runs a deployment circuit
+# breaker with rollback (phase 2 of docs/0.10.x/imap-deploy-downtime-plan.md),
+# so a broken image stabilizes back on the PREVIOUS revision and the wait
+# above succeeds. Assert the service actually landed on the revision we
+# registered before reporting success.
+stable_td_arn="$(aws ecs describe-services \
+  --cluster "${CLUSTER}" \
+  --services "${SERVICE}" \
+  --query 'services[0].taskDefinition' \
+  --output text)"
+
+if [ "${stable_td_arn}" = "${new_td_arn}" ]; then
+  log "service ${SERVICE} stable on ${new_td_arn}"
+else
+  log "ERROR: ${SERVICE} stabilized on ${stable_td_arn}, not ${new_td_arn};"
+  log "ERROR: the deployment circuit breaker rolled the deploy back"
   exit 1
 fi
