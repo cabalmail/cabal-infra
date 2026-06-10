@@ -42,8 +42,12 @@ ROLEPOLICY
 }
 
 resource "aws_iam_role_policy" "lambda" {
-  name   = "${var.name}_policy"
-  role   = aws_iam_role.lambda.id
+  name = "${var.name}_policy"
+  role = aws_iam_role.lambda.id
+  # iam-wildcard-ok: heredoc JSON cannot carry inline comments, so this
+  # directive covers both wildcards in the document below - S3 object keys
+  # under the per-user cache prefix and log-stream names are runtime values
+  # with no enumerable ARN. Every other statement names specific resources.
   policy = <<RUNPOLICY
 {
     "Version": "2012-10-17",

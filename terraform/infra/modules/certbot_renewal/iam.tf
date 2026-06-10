@@ -55,6 +55,8 @@ resource "aws_iam_role_policy" "route53" {
           "route53:ListHostedZones",
           "route53:ListHostedZonesByName",
         ]
+        # iam-wildcard-ok: route53 List* operations have no resource-level
+        # grammar; AWS requires "*".
         Resource = "*"
       }
     ]

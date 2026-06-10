@@ -78,6 +78,8 @@ resource "aws_iam_role_policy" "prometheus_task_exec" {
         "ssmmessages:OpenControlChannel",
         "ssmmessages:OpenDataChannel",
       ]
+      # iam-wildcard-ok: ssmmessages (ECS Exec session channels) has no
+      # resource-level grammar; the service requires "*".
       Resource = "*"
     }]
   })
