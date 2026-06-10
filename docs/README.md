@@ -1,3 +1,6 @@
+[![Build and Deploy Apple Client](https://github.com/cabalmail/cabal-infra/actions/workflows/apple.yml/badge.svg)](https://github.com/cabalmail/cabal-infra/actions/workflows/apple.yml)
+[![Build and Deploy Application](https://github.com/cabalmail/cabal-infra/actions/workflows/app.yml/badge.svg)](https://github.com/cabalmail/cabal-infra/actions/workflows/app.yml)
+[![Build and Deploy Infrastructure](https://github.com/cabalmail/cabal-infra/actions/workflows/infra.yml/badge.svg)](https://github.com/cabalmail/cabal-infra/actions/workflows/infra.yml)
 # About Cabalmail
 
 The Cabalmail developement team is hard at work preparing our 1.0 release. Stay tuned.
