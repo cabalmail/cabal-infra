@@ -29,28 +29,18 @@ resource "aws_cognito_user_pool" "users" {
       min_value = 2000
     }
   }
-
-  # Threat Protection (formerly "advanced security") is incompatible
-  # with the ESSENTIALS pricing tier this pool runs on - any
-  # UpdateUserPool call fails with FeatureUnavailableInTierException
-  # if it is left on. Explicitly pin it OFF so the state is owned by
-  # Terraform and a manual flip in the console is reverted on next
-  # apply. Enabling it would require flipping the pool to the PLUS
-  # tier; see the user_pool hardening notes for the cost/feature
-  # trade-off.
-  user_pool_add_ons {
-    advanced_security_mode = "OFF"
-  }
-  # custom_sms_sender (Twilio) is feature-flagged per env via
-  # var.use_twilio_sms. When the flag is true Cognito hands SMS
-  # delivery to the sms-sender Lambda, encrypts OTPs with the
-  # provided KMS key, and bypasses the SNS hot path. The
-  # sms_configuration block above stays in place because Cognito
-  # still validates it whenever a phone attribute is auto-verified.
-  # See docs/twilio.md.
   lambda_config {
     post_confirmation = aws_lambda_function.assign_osid.arn
     pre_sign_up       = aws_lambda_function.check_invite.arn
+  }
+
+  # Cognito threat protection in AUDIT mode: score sign-in risk (impossible
+  # travel, compromised credentials) and surface it in CloudWatch without
+  # blocking the user. This is a paid feature billed per-MAU even in audit
+  # mode (no free tier); promotion to ENFORCED is a deliberate later step
+  # (plan Phase 2.5) after a soak period to calibrate false positives.
+  user_pool_add_ons {
+    advanced_security_mode = "AUDIT"
   }
 }
 
