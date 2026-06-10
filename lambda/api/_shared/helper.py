@@ -259,12 +259,13 @@ _SYSTEM_FLAGS = {
 # RFC 5256 SORT keys we expose. ASC maps to no prefix, DESC to REVERSE.
 _SORT_FIELDS = {'ARRIVAL', 'CC', 'DATE', 'FROM', 'SIZE', 'SUBJECT', 'TO'}
 
-# The two trash folder names in active use: Dovecot's special-use \Trash
-# mailbox ("Trash", used by the Apple clients) and the React client's
-# auto-created "Deleted Messages". Destructive endpoints (purge_messages,
-# empty_trash) only operate on these so a client bug can never expunge a
-# non-trash folder.
-TRASH_FOLDERS = ('Trash', 'Deleted Messages')
+# Folder names the destructive endpoints (purge_messages, empty_trash)
+# may operate on, so a client bug can never expunge a non-trash folder.
+# Every client files deletions in Dovecot's special-use \Trash mailbox
+# ("Trash"). Legacy "Deleted Messages" folders (the web client's
+# pre-Trash delete target) are ordinary folders and deliberately not
+# purgeable; they are emptied by deleting the folder itself.
+TRASH_FOLDERS = ('Trash',)
 
 
 def validate_folder_name(name):

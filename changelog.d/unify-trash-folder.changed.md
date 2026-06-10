@@ -5,4 +5,5 @@
   instead of "Deleted Messages", fixing first-delete-to-Trash failures on
   fresh mailboxes. An existing "Deleted Messages" folder is left in place
   as an ordinary folder; it can now be emptied and removed from the web
-  folder manager.
+  folder manager. The new `/purge_messages` and `/empty_trash` endpoints
+  accept only "Trash".
