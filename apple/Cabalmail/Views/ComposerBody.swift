@@ -20,6 +20,10 @@ struct ComposerBody: View {
                 Text("Markdown").tag(ComposeViewModel.EditorMode.markdown)
             }
             .pickerStyle(.segmented)
+            // Keep the label for accessibility only. Outside a Form
+            // (the macOS compose layout) SwiftUI would otherwise
+            // render "Editor mode" beside the segmented control.
+            .labelsHidden()
             .padding(.horizontal, 6)
             .padding(.top, 6)
 
