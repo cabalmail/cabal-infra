@@ -4,14 +4,15 @@
 #
 # The IMAP ECS service is hard-capped at one task (Dovecot has Maildir-over-EFS
 # concurrency issues), so every IMAP image roll stops the old container before
-# starting the new one - a true zero-task window. CI calls `set` just before it
-# triggers that roll so the IMAP-backed Lambdas return a friendly 503 ("planned
+# starting the new one - a true zero-task window. deploy-ecs-service.sh calls
+# `set` after the imap preflight passes, immediately before it triggers that
+# roll, so the IMAP-backed Lambdas return a friendly 503 ("planned
 # maintenance") instead of relaying a raw connection error. The flag is NOT
-# cleared here: the deploy is fire-and-forget (deploy-ecs-service.sh returns as
-# soon as it has triggered the roll, not when the roll finishes), so the new
-# IMAP container clears it once Dovecot is serving (docker/shared/clear-
-# maintenance.sh). The `until` epoch written by `set` is a backstop so a
-# crashed/cancelled deploy job cannot wedge the flag on.
+# cleared by CI: the new IMAP container clears it once Dovecot is serving
+# (docker/shared/clear-maintenance.sh), which happens mid-roll, well before
+# deploy-ecs-service.sh's stability wait returns. The `until` epoch written by
+# `set` is a backstop so a crashed/cancelled deploy job cannot wedge the flag
+# on.
 #
 # `clear` is provided for manual operator use (e.g. stage verification); the
 # normal deploy path never calls it.

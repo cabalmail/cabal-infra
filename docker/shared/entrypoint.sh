@@ -18,6 +18,8 @@
 # Required env vars: TIER, CERT_DOMAIN, AWS_REGION, COGNITO_CLIENT_ID,
 #                    COGNITO_POOL_ID, TLS_CA_BUNDLE, TLS_CERT, TLS_KEY
 # Optional:          NETWORK_CIDR (VPC CIDR for Dovecot login_trusted_networks)
+#                    PREFLIGHT (=1: run all preparation steps, then exit 0
+#                    instead of starting services - deploy validation)
 # IMAP-only:         MASTER_PASSWORD
 # SMTP-OUT-only:     DKIM_PRIVATE_KEY
 set -euo pipefail
@@ -197,6 +199,23 @@ if [ "$TIER" != "imap" ]; then
   /usr/local/bin/prepare-sendmail.sh once
 fi
 
-# ── Step 9: Start services via supervisord ───────────────────
+# ── Step 9: Pre-flight mode (deploy validation) ───────────────
+# PREFLIGHT=1 is overlaid by the deploy pipeline's one-shot RunTask
+# (deploy-ecs-service.sh) to exercise this entrypoint - secrets, EFS
+# mount, Cognito, DynamoDB, sendmail compile - against a new image
+# BEFORE the old IMAP task is stopped. Run the sendmail prep that the
+# imap tier normally defers to supervisord, then exit 0 instead of
+# starting services. A failure in any step above (set -e) stops the
+# task non-zero and the deploy aborts with the old task still serving.
+# Phase 5 of docs/0.10.x/imap-deploy-downtime-plan.md.
+if [ "${PREFLIGHT:-0}" = "1" ]; then
+  if [ "$TIER" = "imap" ]; then
+    /usr/local/bin/prepare-sendmail.sh once
+  fi
+  echo "[entrypoint] PREFLIGHT complete; exiting without starting services."
+  exit 0
+fi
+
+# ── Step 10: Start services via supervisord ───────────────────
 echo "[entrypoint] Starting services via supervisord..."
 exec /usr/local/bin/supervisord -c /etc/supervisord.conf
