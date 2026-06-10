@@ -121,29 +121,7 @@ extension MessageDetailView {
                     // In Trash, delete means gone forever — confirm first.
                     purgeConfirmPresented = true
                 } else {
-                    Task {
-                        await model.dispose(
-                            onSuccess: {
-                                // Fires before the server round trip so the
-                                // list selection advances and the row vanishes
-                                // instantly.
-                                appState.signalDisposed(
-                                    folderPath: folder.path,
-                                    uid: envelope.uid
-                                )
-                            },
-                            onFailure: { error in
-                                // The optimistic prune has already happened
-                                // upstream; surface a toast so the user knows
-                                // the move didn't take and can retry on the
-                                // next refresh.
-                                appState.showToast(Toast(
-                                    kind: .error,
-                                    message: failureMessage(for: model.disposeAction, error: error)
-                                ))
-                            }
-                        )
-                    }
+                    Task { await performDispose(model: model, action: model.disposeAction) }
                 }
             } label: {
                 if model.isTrashFolder {
@@ -165,10 +143,14 @@ extension MessageDetailView {
     /// Overflow-menu item for whichever dispose destination the toolbar
     /// button does NOT cover: preference says Archive, the menu offers
     /// Delete, and vice versa — both destinations stay one click away
-    /// without a second toolbar slot.
+    /// without a second toolbar slot. Inside Trash the toolbar button is
+    /// Delete Forever and "move to Trash" is meaningless, so the
+    /// alternate is always Archive (the rescue path).
     @ViewBuilder
     func alternateDisposeMenuItem(model: MessageDetailViewModel) -> some View {
-        let alternate: DisposeAction = model.disposeAction == .archive ? .trash : .archive
+        let alternate: DisposeAction = model.isTrashFolder || model.disposeAction == .trash
+            ? .archive
+            : .trash
         Button(role: disposeRole(for: alternate)) {
             Task { await performDispose(model: model, action: alternate) }
         } label: {

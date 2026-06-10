@@ -66,11 +66,7 @@ extension MessageListView {
                 .hoverEffect(.highlight)
                 #endif
                 .swipeActions(edge: .trailing) {
-                    Button(role: .destructive) {
-                        Task { await model.dispose(envelope) }
-                    } label: {
-                        disposeActionLabel(for: model.disposeAction)
-                    }
+                    disposeSwipeButton(for: envelope, model: model)
                 }
                 .swipeActions(edge: .leading) {
                     Button {
@@ -81,22 +77,6 @@ extension MessageListView {
                     .tint(.blue)
                 }
             }
-            #if os(visionOS)
-            .contentShape(Rectangle())
-            .hoverEffect(.highlight)
-            #endif
-            .swipeActions(edge: .trailing) {
-                disposeSwipeButton(for: envelope, model: model)
-            }
-            .swipeActions(edge: .leading) {
-                Button {
-                    Task { await model.toggleSeen(envelope) }
-                } label: {
-                    markReadLabel(for: envelope)
-                }
-                .tint(.blue)
-            }
-            .contextMenu { rowContextMenu(for: envelope, model: model) }
             .task {
                 await model.loadMoreIfNeeded(currentItem: envelope)
             }
@@ -235,17 +215,28 @@ extension MessageListView {
         }
         // Both dispose destinations, not just the configured default —
         // the swipe action keeps honoring the dispose preference; the
-        // menu is where the user reaches for the other one.
+        // menu is where the user reaches for the other one. Inside Trash
+        // "move to Trash" is meaningless, so the destructive item becomes
+        // Delete Forever and stages the same confirmation as the swipe;
+        // Archive stays available as the rescue path.
         Button {
             Task { await model.disposeMessages(uids: [envelope.uid], action: .archive) }
         } label: {
             Label("Archive", systemImage: "archivebox")
         }
-        Button(role: .destructive) {
-            Task { await model.disposeMessages(uids: [envelope.uid], action: .trash) }
-        } label: {
-            Label("Delete", systemImage: "trash")
-        disposeSwipeButton(for: envelope, model: model)
+        if model.isTrashFolder {
+            Button(role: .destructive) {
+                envelopeToPurge = envelope
+            } label: {
+                purgeActionLabel
+            }
+        } else {
+            Button(role: .destructive) {
+                Task { await model.disposeMessages(uids: [envelope.uid], action: .trash) }
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
     }
 
     /// Trailing destructive swipe: dispose (Archive/Trash) everywhere

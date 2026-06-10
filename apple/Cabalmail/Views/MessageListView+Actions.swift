@@ -61,10 +61,17 @@ extension MessageListView {
             } label: {
                 Label("Archive", systemImage: "archivebox")
             }
-            Button(role: .destructive) {
-                Task { await model.disposeMessages(uids: uids, action: .trash) }
-            } label: {
-                Label("Delete", systemImage: "trash")
+            // Inside Trash "move to Trash" is a no-op (performMove skips
+            // same-folder groups) and multi-message delete-forever doesn't
+            // exist yet — single rows purge via the swipe or the reader,
+            // whole folders via Empty Trash — so the destructive item is
+            // omitted there rather than left inert.
+            if !model.isTrashFolder {
+                Button(role: .destructive) {
+                    Task { await model.disposeMessages(uids: uids, action: .trash) }
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
             }
         }
     }

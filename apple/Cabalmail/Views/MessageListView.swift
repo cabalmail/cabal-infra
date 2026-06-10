@@ -87,218 +87,14 @@ struct MessageListView: View {
     @State var editMode: EditMode = .inactive
     #endif
 
+    // `body` was a single ~200-line modifier chain; once the sheets, the
+    // purge confirmation, and the signal observers were all attached,
+    // Swift's type checker timed out on the one expression. Splitting it
+    // into layered computed properties keeps each expression small enough
+    // to check: chrome -> presentation (sheets / dialogs) -> lifecycle
+    // (tasks / teardown) -> observers (the onChange cluster).
     var body: some View {
-        Group {
-            if let model {
-                content(for: model)
-            } else {
-                ProgressView()
-            }
-        }
-        .navigationTitle(folder.name)
-        .toolbar {
-            // Compose stays as a toolbar item — it's a primary action
-            // pinned to the top edge in every Mac mail client. The list-
-            // shaping controls (filter / sort / select) moved into an
-            // inline action bar above the list (see `topInset` below);
-            // on wide screens the right-edge toolbar placement put them
-            // visually farther from the list they affect than the
-            // filter tabs that sat one row higher.
-            ToolbarItem {
-                Button {
-                    presentCompose(seed: ReplyBuilder.newDraft())
-                } label: {
-                    Image(systemName: "square.and.pencil")
-                        .accessibilityLabel("New Message")
-                }
-                .keyboardShortcut("n", modifiers: .command)
-            }
-            #if os(macOS)
-            // Force-reload button. macOS only — iOS / iPadOS / visionOS
-            // users reach the cheap merge-refresh via pull-to-refresh,
-            // which is the gesture those platforms expect. Routed
-            // through `requestRefresh()` so the toolbar button and the
-            // Mailbox > Refresh menu item share one code path — both
-            // land on `MessageListViewModel.hardReload()`, which wipes
-            // in-memory state before the server fetch so the user has a
-            // reliable escape from any stale-state bug the merge path
-            // doesn't catch.
-            ToolbarItem {
-                Button {
-                    appState.requestRefresh()
-                } label: {
-                    RefreshActivityIcon(isLoading: model?.isLoading == true)
-                        .accessibilityLabel("Refresh")
-                }
-                .disabled(model == nil || model?.isLoading == true)
-            }
-            #endif
-        }
-        .sheet(isPresented: $filtersPresented) {
-            filtersSheet
-        }
-        .sheet(item: $composeSeed) { seed in
-            composeSheet(for: seed)
-        }
-        .sheet(item: $envelopeToMove) { envelope in
-            moveSheet(for: envelope)
-        }
-        .sheet(isPresented: $bulkMoveSheetPresented) {
-            if let model {
-                bulkMoveSheet(model: model)
-            }
-        }
-        .sheet(item: $moveCandidate) { candidate in
-            selectionMoveSheet(for: candidate)
-        .confirmationDialog(
-            "Delete Forever?",
-            isPresented: purgeDialogBinding,
-            titleVisibility: .visible,
-            presenting: envelopeToPurge
-        ) { envelope in
-            Button("Delete Forever", role: .destructive) {
-                envelopeToPurge = nil
-                if let model {
-                    Task { await model.purge(envelope) }
-                }
-            }
-            Button("Cancel", role: .cancel) {
-                envelopeToPurge = nil
-            }
-        } message: { _ in
-            Text("This message will be permanently deleted. This can't be undone.")
-        }
-        .task {
-            if model == nil, let client = appState.client {
-                model = MessageListViewModel(
-                    folder: folder,
-                    client: client,
-                    preferences: preferences,
-                    appState: appState
-                )
-                await model?.loadInitial()
-                await model?.startWatching()
-            }
-            // Cold-launch mailto: arrives via `.onOpenURL` in the app
-            // entry, which parks the seed on AppState before this
-            // view's `.onChange(of: composeRequestTick)` is in the
-            // hierarchy. Drain it here so the compose surface opens
-            // on first appear.
-            if let seed = appState.consumePendingComposeSeed() {
-                presentCompose(seed: seed)
-            }
-        }
-        // Wall-clock fallback refresh. IDLE usually pushes new mail within
-        // seconds, but long-lived IDLE sockets can stall silently (iOS
-        // suspends idle connections, cellular handoffs drop the stream,
-        // NAT/middleboxes time out TCP after a few minutes). Polling every
-        // 60 seconds while the list is on screen guarantees the user sees
-        // new mail without pull-to-refresh. `.task` cancels automatically
-        // on `.onDisappear`, so the timer stops with the watcher.
-        .task {
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(60))
-                guard !Task.isCancelled else { break }
-                await model?.refresh()
-            }
-        }
-        .onDisappear {
-            // Tear down the IDLE watcher when the folder drops off-screen.
-            // The view is rebuilt (via `.id(folder.path)` in MailRootView)
-            // when the user picks another folder, so `startWatching` in the
-            // new instance's `.task` starts a fresh IDLE session against the
-            // new mailbox.
-            let model = model
-            Task { await model?.stopWatching() }
-        }
-        // macOS Commands menu (File → New Message, Mailbox → Refresh) and
-        // keyboard shortcuts route through `AppState` tick counters. The
-        // view lifted into view reacts by opening compose / kicking a
-        // refresh. Using the currently-displayed list as the refresh target
-        // matches every desktop mail client's convention.
-        .onChange(of: appState.composeRequestTick) { _, _ in
-            // Menu shortcuts pass nil; the mailto: URL handler parks
-            // a pre-filled draft. Fall back to a fresh draft when no
-            // seed accompanies the request.
-            let seed = appState.consumePendingComposeSeed() ?? ReplyBuilder.newDraft()
-            presentCompose(seed: seed)
-        }
-        .onChange(of: appState.refreshRequestTick) { _, _ in
-            // Manual refresh paths (Mailbox > Refresh menu item, the
-            // arrow.clockwise toolbar button) get hard-reload semantics
-            // — wipe in-memory state before refresh — so the user has a
-            // reliable escape from any stale-state bug the merge path
-            // doesn't catch. The IDLE watcher and the 60s timer keep
-            // hitting `refresh()` directly; they fire too often to be
-            // discarding cached envelopes on every tick.
-            Task { await model?.hardReload() }
-        }
-        // Message-menu chords (Cmd+T / Cmd+Shift+8 / Cmd+M) acting on the
-        // current selection. Handlers live in `MessageListView+Actions.swift`;
-        // each no-ops when nothing is selected.
-        .onChange(of: appState.toggleSeenRequestTick) { _, _ in
-            if let model { toggleSeenOnSelection(model: model) }
-        }
-        .onChange(of: appState.toggleFlaggedRequestTick) { _, _ in
-            if let model { toggleFlaggedOnSelection(model: model) }
-        }
-        .onChange(of: appState.moveSelectionRequestTick) { _, _ in
-            if let model { moveSelection(model: model) }
-        }
-        .onChange(of: appState.lastDisposedEnvelope) { _, signal in
-            // Detail view archived / trashed the current message. Advance
-            // the split-view selection to the next unread envelope (so the
-            // user can keep triaging without bouncing back to the list),
-            // then prune the matching row so it disappears immediately.
-            // Other folders ignore the signal.
-            guard let signal, signal.folderPath == folder.path else { return }
-            let current = model?.envelopes.first { $0.uid == signal.uid }
-            // Compute the advance target before pruning - `nextUnreadEnvelope`
-            // walks from `current`'s index, which disappears once it's pruned.
-            let next = current.flatMap { model?.nextUnreadEnvelope(after: $0) }
-            model?.pruneEnvelope(uid: signal.uid)
-            if isWideLayout {
-                // Wide layouts drive the reading pane off `selectedUIDs`;
-                // advancing the set re-derives `selection` via the list's
-                // `.onChange(of: selectedUIDs)` below.
-                model?.selectedUIDs = next.map { [$0.uid] } ?? []
-            } else {
-                selection = next
-            }
-        }
-        .onChange(of: appState.lastEnvelopeFlagChange) { _, signal in
-            // Detail view toggled \Seen (or another flag in the future).
-            // Apply it directly to the matching row so the bold styling +
-            // unread dot flip without waiting for the next IDLE refresh.
-            // Other folders ignore the signal.
-            guard let signal, signal.folderPath == folder.path else { return }
-            model?.applyFlagChange(
-                uid: signal.uid,
-                flag: signal.flag,
-                added: signal.added
-            )
-        }
-        // Push the selected envelope's true source folder up to the
-        // root view. In folder mode this is always `folder.path`; in
-        // cross-folder search mode the model's `sourceFolder(for:)`
-        // returns the per-row mailbox so the detail view's operations
-        // (mark read, archive, move) land in the right place.
-        .onChange(of: selection) { _, newSelection in
-            guard let model else { return }
-            let resolved = newSelection.map(model.sourceFolder(for:))
-            let projected = resolved.flatMap { $0 == folder.path ? nil : $0 }
-            onSearchResultSelected(projected)
-        }
-        // A folder row in the sidebar received a dropped message (or
-        // selection). The drop handler posts the destination + payload on
-        // AppState; route it through the view model so the move shares the
-        // optimistic-prune / unread-count / cache-cleanup path with the
-        // bulk and menu-driven moves. Only the list the drag came from has a
-        // model holding those UIDs, so other folders' lists no-op.
-        .onChange(of: appState.pendingMoveRequest) { _, request in
-            guard let request, let model else { return }
-            Task { await model.applyMoveRequest(request) }
-        }
+        observersLayer
     }
 
     /// Boolean projection of `envelopeToPurge` for the confirmation
@@ -426,4 +222,245 @@ struct MessageListView: View {
     // inline search field all live in same-module extension files
     // (`+Rows.swift`, `+Filter.swift`, `+Selection.swift`, `+Search.swift`,
     // `+macOS.swift`) so the primary struct body stays under SwiftLint's caps.
+}
+
+// MARK: - Body layers
+
+// Split out of the struct body for SwiftLint's `type_body_length` cap,
+// matching the sibling-extension pattern noted above. Same-file so the
+// layers keep access to the view's private state and helpers.
+extension MessageListView {
+    /// The list itself with its navigation chrome (title + toolbar).
+    private var chromeLayer: some View {
+        Group {
+            if let model {
+                content(for: model)
+            } else {
+                ProgressView()
+            }
+        }
+        .navigationTitle(folder.name)
+        .toolbar {
+            // Compose stays as a toolbar item — it's a primary action
+            // pinned to the top edge in every Mac mail client. The list-
+            // shaping controls (filter / sort / select) moved into an
+            // inline action bar above the list (see `topInset` below);
+            // on wide screens the right-edge toolbar placement put them
+            // visually farther from the list they affect than the
+            // filter tabs that sat one row higher.
+            ToolbarItem {
+                Button {
+                    presentCompose(seed: ReplyBuilder.newDraft())
+                } label: {
+                    Image(systemName: "square.and.pencil")
+                        .accessibilityLabel("New Message")
+                }
+                .keyboardShortcut("n", modifiers: .command)
+            }
+            #if os(macOS)
+            // Force-reload button. macOS only — iOS / iPadOS / visionOS
+            // users reach the cheap merge-refresh via pull-to-refresh,
+            // which is the gesture those platforms expect. Routed
+            // through `requestRefresh()` so the toolbar button and the
+            // Mailbox > Refresh menu item share one code path — both
+            // land on `MessageListViewModel.hardReload()`, which wipes
+            // in-memory state before the server fetch so the user has a
+            // reliable escape from any stale-state bug the merge path
+            // doesn't catch.
+            ToolbarItem {
+                Button {
+                    appState.requestRefresh()
+                } label: {
+                    RefreshActivityIcon(isLoading: model?.isLoading == true)
+                        .accessibilityLabel("Refresh")
+                }
+                .disabled(model == nil || model?.isLoading == true)
+            }
+            #endif
+        }
+    }
+
+    /// Sheets and confirmation dialogs presented over the list.
+    private var presentationLayer: some View {
+        chromeLayer
+        .sheet(isPresented: $filtersPresented) {
+            filtersSheet
+        }
+        .sheet(item: $composeSeed) { seed in
+            composeSheet(for: seed)
+        }
+        .sheet(item: $envelopeToMove) { envelope in
+            moveSheet(for: envelope)
+        }
+        .sheet(isPresented: $bulkMoveSheetPresented) {
+            if let model {
+                bulkMoveSheet(model: model)
+            }
+        }
+        .sheet(item: $moveCandidate) { candidate in
+            selectionMoveSheet(for: candidate)
+        }
+        .confirmationDialog(
+            "Delete Forever?",
+            isPresented: purgeDialogBinding,
+            titleVisibility: .visible,
+            presenting: envelopeToPurge
+        ) { envelope in
+            Button("Delete Forever", role: .destructive) {
+                envelopeToPurge = nil
+                if let model {
+                    Task { await model.purge(envelope) }
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                envelopeToPurge = nil
+            }
+        } message: { _ in
+            Text("This message will be permanently deleted. This can't be undone.")
+        }
+    }
+
+    /// Lifecycle: initial load + IDLE watcher start, the 60-second
+    /// fallback refresh, and watcher teardown.
+    private var lifecycleLayer: some View {
+        presentationLayer
+        .task {
+            if model == nil, let client = appState.client {
+                model = MessageListViewModel(
+                    folder: folder,
+                    client: client,
+                    preferences: preferences,
+                    appState: appState
+                )
+                await model?.loadInitial()
+                await model?.startWatching()
+            }
+            // Cold-launch mailto: arrives via `.onOpenURL` in the app
+            // entry, which parks the seed on AppState before this
+            // view's `.onChange(of: composeRequestTick)` is in the
+            // hierarchy. Drain it here so the compose surface opens
+            // on first appear.
+            if let seed = appState.consumePendingComposeSeed() {
+                presentCompose(seed: seed)
+            }
+        }
+        // Wall-clock fallback refresh. IDLE usually pushes new mail within
+        // seconds, but long-lived IDLE sockets can stall silently (iOS
+        // suspends idle connections, cellular handoffs drop the stream,
+        // NAT/middleboxes time out TCP after a few minutes). Polling every
+        // 60 seconds while the list is on screen guarantees the user sees
+        // new mail without pull-to-refresh. `.task` cancels automatically
+        // on `.onDisappear`, so the timer stops with the watcher.
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(60))
+                guard !Task.isCancelled else { break }
+                await model?.refresh()
+            }
+        }
+        .onDisappear {
+            // Tear down the IDLE watcher when the folder drops off-screen.
+            // The view is rebuilt (via `.id(folder.path)` in MailRootView)
+            // when the user picks another folder, so `startWatching` in the
+            // new instance's `.task` starts a fresh IDLE session against the
+            // new mailbox.
+            let model = model
+            Task { await model?.stopWatching() }
+        }
+    }
+
+    /// AppState signal observers: menu / shortcut ticks, detail-view
+    /// dispose and flag signals, selection routing, and drag-and-drop
+    /// move requests.
+    private var observersLayer: some View {
+        lifecycleLayer
+        // macOS Commands menu (File → New Message, Mailbox → Refresh) and
+        // keyboard shortcuts route through `AppState` tick counters. The
+        // view lifted into view reacts by opening compose / kicking a
+        // refresh. Using the currently-displayed list as the refresh target
+        // matches every desktop mail client's convention.
+        .onChange(of: appState.composeRequestTick) { _, _ in
+            // Menu shortcuts pass nil; the mailto: URL handler parks
+            // a pre-filled draft. Fall back to a fresh draft when no
+            // seed accompanies the request.
+            let seed = appState.consumePendingComposeSeed() ?? ReplyBuilder.newDraft()
+            presentCompose(seed: seed)
+        }
+        .onChange(of: appState.refreshRequestTick) { _, _ in
+            // Manual refresh paths (Mailbox > Refresh menu item, the
+            // arrow.clockwise toolbar button) get hard-reload semantics
+            // — wipe in-memory state before refresh — so the user has a
+            // reliable escape from any stale-state bug the merge path
+            // doesn't catch. The IDLE watcher and the 60s timer keep
+            // hitting `refresh()` directly; they fire too often to be
+            // discarding cached envelopes on every tick.
+            Task { await model?.hardReload() }
+        }
+        // Message-menu chords (Cmd+T / Cmd+Shift+8 / Cmd+M) acting on the
+        // current selection. Handlers live in `MessageListView+Actions.swift`;
+        // each no-ops when nothing is selected.
+        .onChange(of: appState.toggleSeenRequestTick) { _, _ in
+            if let model { toggleSeenOnSelection(model: model) }
+        }
+        .onChange(of: appState.toggleFlaggedRequestTick) { _, _ in
+            if let model { toggleFlaggedOnSelection(model: model) }
+        }
+        .onChange(of: appState.moveSelectionRequestTick) { _, _ in
+            if let model { moveSelection(model: model) }
+        }
+        .onChange(of: appState.lastDisposedEnvelope) { _, signal in
+            // Detail view archived / trashed the current message. Advance
+            // the split-view selection to the next unread envelope (so the
+            // user can keep triaging without bouncing back to the list),
+            // then prune the matching row so it disappears immediately.
+            // Other folders ignore the signal.
+            guard let signal, signal.folderPath == folder.path else { return }
+            let current = model?.envelopes.first { $0.uid == signal.uid }
+            // Compute the advance target before pruning - `nextUnreadEnvelope`
+            // walks from `current`'s index, which disappears once it's pruned.
+            let next = current.flatMap { model?.nextUnreadEnvelope(after: $0) }
+            model?.pruneEnvelope(uid: signal.uid)
+            if isWideLayout {
+                // Wide layouts drive the reading pane off `selectedUIDs`;
+                // advancing the set re-derives `selection` via the list's
+                // `.onChange(of: selectedUIDs)` below.
+                model?.selectedUIDs = next.map { [$0.uid] } ?? []
+            } else {
+                selection = next
+            }
+        }
+        .onChange(of: appState.lastEnvelopeFlagChange) { _, signal in
+            // Detail view toggled \Seen (or another flag in the future).
+            // Apply it directly to the matching row so the bold styling +
+            // unread dot flip without waiting for the next IDLE refresh.
+            // Other folders ignore the signal.
+            guard let signal, signal.folderPath == folder.path else { return }
+            model?.applyFlagChange(
+                uid: signal.uid,
+                flag: signal.flag,
+                added: signal.added
+            )
+        }
+        // Push the selected envelope's true source folder up to the
+        // root view. In folder mode this is always `folder.path`; in
+        // cross-folder search mode the model's `sourceFolder(for:)`
+        // returns the per-row mailbox so the detail view's operations
+        // (mark read, archive, move) land in the right place.
+        .onChange(of: selection) { _, newSelection in
+            guard let model else { return }
+            let resolved = newSelection.map(model.sourceFolder(for:))
+            let projected = resolved.flatMap { $0 == folder.path ? nil : $0 }
+            onSearchResultSelected(projected)
+        }
+        // A folder row in the sidebar received a dropped message (or
+        // selection). The drop handler posts the destination + payload on
+        // AppState; route it through the view model so the move shares the
+        // optimistic-prune / unread-count / cache-cleanup path with the
+        // bulk and menu-driven moves. Only the list the drag came from has a
+        // model holding those UIDs, so other folders' lists no-op.
+        .onChange(of: appState.pendingMoveRequest) { _, request in
+            guard let request, let model else { return }
+            Task { await model.applyMoveRequest(request) }
+        }
+    }
 }
