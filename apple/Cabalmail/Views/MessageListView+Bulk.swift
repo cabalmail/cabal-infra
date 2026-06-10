@@ -60,10 +60,13 @@ extension MessageListView {
     }
     #endif
 
-    /// Called when a bulk action commits. The action itself clears
-    /// `selectedUIDs` (via `exitBulkMode()`); this additionally drops any
-    /// touch EditMode so the action bar dismisses on iPad / visionOS. No-op on
-    /// macOS, which has no EditMode.
+    /// Called when a bulk move / dispose commits — the actions that remove
+    /// the selected rows. The action itself clears `selectedUIDs` (via
+    /// `exitBulkMode()`); this additionally drops any touch EditMode so the
+    /// action bar dismisses on iPad / visionOS. No-op on macOS, which has no
+    /// EditMode. The read/unread and flag buttons deliberately skip it:
+    /// their rows stay on screen, and keeping the selection lets the user
+    /// chain another action onto the same messages.
     private func endSelectionMode() {
         #if !os(macOS)
         editMode = .inactive
@@ -97,14 +100,12 @@ extension MessageListView {
                     label: hasUnread ? "Read" : "Unread"
                 ) {
                     Task { await model.bulkSetSeen(hasUnread) }
-                    endSelectionMode()
                 }
                 bulkActionButton(
                     systemImage: hasUnflagged ? "flag" : "flag.slash",
                     label: hasUnflagged ? "Flag" : "Unflag"
                 ) {
                     Task { await model.bulkSetFlagged(hasUnflagged) }
-                    endSelectionMode()
                 }
             }
             .padding(.horizontal, 14)
