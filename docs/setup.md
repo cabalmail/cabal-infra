@@ -26,36 +26,32 @@ If you don't have a preference for registrars, you can use the [Route 53 Registr
 
 # Provisioning
 
-The developers have striven to make provisioning as automated as possible. However, there are some necessarily manual steps. Several of these steps are discussed above under [Prerequisites](#Prerequisites), and others are discussed below under [Post-Automation Steps](#PostAutomation). However, one step unavoidably must be attended to during the initial provsioning. This is why the terraform directory has been subdivided into two subdirectories: The first performs the initial automation, and the second all the rest. The order is dns first and infra second. The overwhelming majority of resources are created by infra. In between, you will be instructed to update your domain registrations and add a secret to your Github repository settings.
+The developers have striven to make provisioning as automated as possible. However, there are some necessarily manual steps. Several of these steps are discussed above under [Prerequisites](#Prerequisites), and others are discussed below under [Post-Automation Steps](#PostAutomation). However, one step unavoidably must be attended to during the initial provisioning. This is why the terraform directory has been subdivided into two subdirectories: The first performs the initial automation, and the second all the rest. The order is dns first and infra second. The overwhelming majority of resources are created by infra. In between, you must update the domain registration for your control domain. Both stacks are deployed by the same "Build and Deploy Infrastructure" workflow; see [Terraform setup](./terraform.md) for how it works.
 
-1. Set up the [prerequisites](#Prerequisites) above.
+1. Set up the [prerequisites](#Prerequisites) above. For this first run, make sure you have added required reviewers to the `gate-*` environments ([GitHub setup](./github.md)) -- the pause at the approval gates is what lets you update your domain registration between the dns and infra stages.
 
-2. Run the terraform/dns workspace. WARNING: Performing this step will result in charges on your credit card from Amazon Web Services.
+2. Kick off the "Build and Deploy Infrastructure" workflow with the bootstrap stage forced. WARNING: Performing this step will result in charges on your credit card from Amazon Web Services.
 
-    1. Queue a plan in your Terraform Cloud terraform/dns workspace.
-    2. When it finishes the plan phase, confirm and apply.
-    3. Note the output. You will need it for step 3.
+    1. Navigate in your browser to your repository in GitHub.
+    2. Navigate to the Actions tab.
+    3. Navigate to "Build and Deploy Infrastructure".
+    4. Pull down the "Run workflow" menu, check "Force run of the bootstrap (terraform/dns) stage", and click the green "Run workflow" button.
+    5. Approve the bootstrap stage's gate when the run pauses there, and wait for the bootstrap apply to finish.
+    6. Note the output of the bootstrap apply. You will need it for step 3. The run will continue into the main (terraform/infra) stage and pause at a second approval gate. Leave it waiting there until step 5.
 
-3. The output from the Terraform run in step 2 will include name servers. [Update the domain registration](./registrar.md) for your control domain with these name servers. *Before proceeding to the terraform/infa workspace, make sure this change is complete*.
+3. The output from the bootstrap apply in step 2 will include name servers. [Update the domain registration](./registrar.md) for your control domain with these name servers. *Before approving the main stage, make sure this change is complete*.
 
 4. **WHOA**. Verify that steps 2 and 3 were successful. Do not proceed to step 5 otherwise.
 
-5. Kick off the "Build and Deploy Terraform Infrastructure" workflow.
+5. Approve the main stage's gate on the workflow run from step 2. (If the run is no longer waiting -- approval gates time out after 30 days, and without required reviewers the run proceeds on its own -- run "Build and Deploy Infrastructure" again from the Actions tab, this time without the bootstrap checkbox.) Note the output at the end of apply/apply-terraform. You will need it for the [post-automation tasks](#PostAutomation) below.
+
+6. Kick off the "Build and Deploy Application" workflow.
 
     1. Navigate in your browser to your repository in GitHub.
     2. Navigate to the Actions tab.
-    3. Navigate to "Build and Deploy Terraform Infrastructure".
+    3. Navigate to "Build and Deploy Application".
     4. Pull down the "Run workflow" menu.
-    5. Click on the green "Run workflow" button.
-    6. Note the output at the end of apply/apply-terraform. You will need it for the [post-automation tasks](#PostAutomation) below.
-
-6. Kick off the "Build and Push Docker Images" workflow
-
-    1. Navigate in your browser to your repository in GitHub.
-    2. Navigate to the Actions tab.
-    3. Navigate to "Build and Push Docker Images".
-    4. Pull down the "Run workflow" menu.
-    5. Click on the green "Run workflow" button.
+    5. Leave the area input at `all` and click on the green "Run workflow" button.
 
 7. Perform the [post-automation tasks](#PostAutomation) below.
 
