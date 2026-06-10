@@ -104,8 +104,19 @@ if [ "${ASSUME_YES}" -ne 1 ]; then
   else
     printf '[promote] commit release %s on stage, push, and open a PR to main? [y/N] ' "${VERSION}"
   fi
-  read -r reply
-  case "${reply}" in y|Y|yes|YES) ;; *) die "aborted; changes left staged for inspection" ;; esac
+  read -r reply || true
+  case "${reply}" in
+    y|Y|yes|YES) ;;
+    *)
+      # Undo the collation so a declined release leaves the tree exactly as it
+      # was. The pre-collate tree was clean (checked above) and nothing has been
+      # committed or pushed yet, so restoring these two paths to HEAD reverts the
+      # CHANGELOG.md edit and recreates the git-rm'd fragments.
+      git checkout -q HEAD -- CHANGELOG.md changelog.d
+      log "aborted; reverted the collated changes (fragments and CHANGELOG.md restored)."
+      exit 0
+      ;;
+  esac
 fi
 
 git commit -m "Set release date for version ${VERSION}"
