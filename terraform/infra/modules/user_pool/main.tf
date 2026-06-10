@@ -34,10 +34,16 @@ resource "aws_cognito_user_pool" "users" {
     pre_sign_up       = aws_lambda_function.check_invite.arn
   }
 
+  # Threat protection requires the Plus feature plan; on the default
+  # ESSENTIALS tier, UpdateUserPool rejects the add-on below with
+  # FeatureUnavailableInTierException. Plus bills $0.02/MAU from the first
+  # user (Essentials has a 10k-MAU free allowance, Plus has none), so this
+  # line is where the pool starts costing money - a deliberate decision.
+  user_pool_tier = "PLUS"
+
   # Cognito threat protection in AUDIT mode: score sign-in risk (impossible
   # travel, compromised credentials) and surface it in CloudWatch without
-  # blocking the user. This is a paid feature billed per-MAU even in audit
-  # mode (no free tier); promotion to ENFORCED is a deliberate later step
+  # blocking the user. Promotion to ENFORCED is a deliberate later step
   # (plan Phase 2.5) after a soak period to calibrate false positives.
   user_pool_add_ons {
     advanced_security_mode = "AUDIT"
