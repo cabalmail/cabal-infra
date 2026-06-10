@@ -58,6 +58,7 @@ on:
       - '.github/scripts/wait-for-app-deploy.sh'
       - '.github/scripts/record-lambda-hashes.sh'
       - '.github/scripts/post-apply-update-services.sh'
+      - '.github/scripts/annotate-terraform-outputs.sh'
 
 permissions:
   contents: read
@@ -104,6 +105,7 @@ jobs:
             - '.github/scripts/wait-for-app-deploy.sh'
             - '.github/scripts/record-lambda-hashes.sh'
             - '.github/scripts/post-apply-update-services.sh'
+            - '.github/scripts/annotate-terraform-outputs.sh'
 
   bootstrap_build:
     needs: changes
@@ -342,6 +344,12 @@ jobs:
       run: mv ../../backend.tf backend.tf
     - name: install-terraform
       uses: hashicorp/setup-terraform@v4
+      with:
+        # The wrapper interleaves its own bookkeeping lines into
+        # terraform's stdout, which would corrupt the command
+        # substitution in annotate-terraform-outputs.sh. Nothing in
+        # this job consumes the wrapper's step outputs.
+        terraform_wrapper: false
     - name: tfvars-terraform
       run: |
         echo "aws_region = \"${{ vars.TF_VAR_AWS_REGION}}\"" >> terraform.tfvars
@@ -352,6 +360,11 @@ jobs:
       run: terraform init
     - name: apply-terraform
       run: terraform apply -auto-approve -lock-timeout=30m -var-file="terraform.tfvars"
+    - name: annotate-outputs
+      # Surface the stack's Terraform outputs as a notice annotation on
+      # the run summary page. For dns this is the nameserver set that
+      # must be copied to the domain registrar (docs/registrar.md).
+      run: ../../.github/scripts/annotate-terraform-outputs.sh
 
   build:
     needs: [changes, bootstrap_apply]
@@ -682,6 +695,12 @@ jobs:
       run: mv ../../backend.tf backend.tf
     - name: install-terraform
       uses: hashicorp/setup-terraform@v4
+      with:
+        # The wrapper interleaves its own bookkeeping lines into
+        # terraform's stdout, which would corrupt the command
+        # substitution in annotate-terraform-outputs.sh. Nothing in
+        # this job consumes the wrapper's step outputs.
+        terraform_wrapper: false
     - name: tfvars-terraform
       run: |
         echo "availability_zones = ${{ vars.TF_VAR_AVAILABILITY_ZONES}}" > terraform.tfvars
@@ -724,6 +743,11 @@ jobs:
           fi
           exit $TF_EXIT
         fi
+    - name: annotate-outputs
+      # Surface the stack's Terraform outputs as a notice annotation on
+      # the run summary page so they are visible without digging
+      # through the apply log.
+      run: ../../.github/scripts/annotate-terraform-outputs.sh
 
   post_apply:
     needs: apply
