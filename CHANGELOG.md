@@ -5,6 +5,83 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.20] - 2026-06-10
+
+### Added
+- A new CI gate (`check-iam-resource-scope.py`, run in the Terraform scanner
+  jobs and by `make scan`) fails the build when an IAM policy grants a
+  wildcard resource - a literal `"*"` or the scanner-evading `local.wildcard`
+  indirection - without a written justification. Every legitimate wildcard in
+  the tree (ssmmessages session channels, route53 List*, cloudwatch metric
+  reads, runtime-generated log-stream and S3 object-key segments) now carries
+  an `# iam-wildcard-ok:` rationale comment.
+- Apple clients: message-list keyboard shortcuts on macOS and iPadOS.
+  Cmd+T toggles read/unread, Cmd+Shift+8 (Cmd+*) toggles the flag, Cmd+M
+  opens Move to Folder (shadowing Window > Minimize), and Cmd+Delete
+  archives or trashes the selection per the dispose preference, working
+  the same whether the list or the reading pane has focus. The Message
+  menu (Reply / Reply All / Forward plus the new items) is now installed
+  on iPadOS's hardware-keyboard menu as well as the macOS menu bar.
+
+### Changed
+- macOS compose window now uses a compact Mail-style header (narrow
+  trailing label column, full-width fields, editor filling the rest of
+  the window) instead of the default macOS form layout, which centered
+  the fields beside a label gutter and left the upper-left quadrant of
+  the window empty. iOS, iPadOS, and visionOS keep the grouped form.
+- Apple clients: right-clicking a message that is part of a multi-
+  selection now applies the context-menu action to the whole selection
+  (right-clicking an unselected row still acts on just that row), the
+  menu offers both Archive and Delete instead of only the configured
+  dispose default, and read/unread or flag operations keep the
+  selection intact so further actions can be chained. The reader's
+  overflow (...) menu likewise gains whichever of Archive / Delete the
+  toolbar's dispose button doesn't already cover.
+
+### Removed
+- The last Terraform Cloud leftovers: infra.yml, quiesce.yml, and
+  destroy_terraform.yml no longer plumb the unused TF_TOKEN secret
+  (TF_API_TOKEN env entries and setup-terraform
+  cli_config_credentials_token inputs - nothing contacts app.terraform.io
+  with the S3 backend); deleted docs/terraform.tfvars.example, the old
+  Terraform Cloud workspace-variables example whose github_token and
+  legacy EC2 scale variables no longer exist in either stack (variables
+  are supplied as GitHub Environment TF_VAR_* vars per docs/github.md);
+  and regenerated terraform/dns/README.md with terraform-docs, dropping
+  the stale github_token input and TFC-era resources from its tables.
+
+### Fixed
+- `make promote` no longer reports "some checks did not pass" right after
+  opening the PR. `gh pr checks` returns immediately when a just-created PR has
+  no checks registered yet (the same replication lag that delays the PR
+  appearing in the web UI), which `promote.sh` misread as a failure. It now
+  waits for checks to register before watching them and reports the real outcome
+  from `gh`'s exit code (passed / failed / still pending / none registered).
+- `make promote` now reverts its changes when you decline the confirmation
+  prompt. Answering `n` previously left the collated `CHANGELOG.md` edit and the
+  deleted fragments staged in the working tree; it now restores both so a
+  declined release leaves the tree exactly as it was before.
+- Rewrote docs/terraform.md, which still walked through creating Terraform
+  Cloud workspaces, to describe the actual setup: the S3 state bucket
+  (including the cross-account bucket policy needed when an environment's
+  account does not own the bucket) and how the infra.yml workflow drives
+  scan, plan, approval, and apply, including the dns bootstrap gating.
+  Updated the provisioning steps in docs/setup.md to match the
+  workflow-driven flow, and dropped the stale Terraform Cloud API token
+  and personal access token instructions from docs/github.md.
+
+### Security
+- A CloudWatch alarm (`cabal-cognito-high-risk-signin`) now watches Cognito
+  threat protection's `AccountTakeoverRisk` metric and enters ALARM when a
+  sign-in is scored high-risk (adaptive auth: impossible travel, anomalous
+  device or IP). In audit mode the sign-in is not blocked, so the alarm flags
+  the account for investigation. It has no notification action yet; delivery
+  wiring is a follow-up. Operator action: this is the first CloudWatch alarm
+  Terraform manages, so the CI deploy policy needs the `cloudwatch` alarm
+  actions added (PutMetricAlarm, DescribeAlarms, DeleteAlarms,
+  ListTagsForResource, TagResource, UntagResource) in each AWS account before
+  the apply succeeds - see the updated policy in `docs/aws.md`.
+
 ## [0.10.19] - 2026-06-10
 
 ### Fixed
