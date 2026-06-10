@@ -3,7 +3,7 @@ export const ONE_SECOND = 1000;
 export const PERMANENT_FOLDERS = [
   "INBOX",
   "Deleted Messages",
-  "Sent Messages",
+  "Sent",
   "Drafts",
   "Archive"
 ];

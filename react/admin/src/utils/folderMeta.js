@@ -10,7 +10,11 @@ const SYSTEM_KINDS = ['inbox', 'drafts', 'sent', 'archive', 'trash', 'junk'];
 const SYSTEM_BY_NAME = {
   'INBOX':            { kind: 'inbox',   label: 'Inbox' },
   'Drafts':           { kind: 'drafts',  label: 'Drafts' },
-  'Sent Messages':    { kind: 'sent',    label: 'Sent' },
+  // 'Sent' is Dovecot's special-use \Sent mailbox, the folder the server
+  // appends sent copies to and the one the Apple clients use. Legacy
+  // 'Sent Messages' folders deliberately fall through to ordinary-folder
+  // treatment.
+  'Sent':             { kind: 'sent',    label: 'Sent' },
   'Archive':          { kind: 'archive', label: 'Archive' },
   'Deleted Messages': { kind: 'trash',   label: 'Trash' },
   'Junk':             { kind: 'junk',    label: 'Junk' },

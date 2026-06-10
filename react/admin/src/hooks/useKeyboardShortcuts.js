@@ -5,7 +5,7 @@ const GO_PREFIX_MS = 1500;
 const GO_TARGETS = {
   i: 'INBOX',
   a: 'Archive',
-  s: 'Sent Messages',
+  s: 'Sent',
   t: 'Deleted Messages',
   d: 'Drafts',
 };
