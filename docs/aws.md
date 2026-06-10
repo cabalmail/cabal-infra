@@ -26,21 +26,36 @@ After signing up, perform the following steps:
                     "acm:RenewCertificate",
                     "acm:RequestCertificate",
                     "apigateway:*",
+                    "application-autoscaling:*",
                     "autoscaling:*",
                     "backup:*",
                     "backup-storage:*",
                     "cloudfront:*",
+                    "cloudwatch:DeleteAlarms",
+                    "cloudwatch:DescribeAlarms",
+                    "cloudwatch:ListTagsForResource",
+                    "cloudwatch:PutMetricAlarm",
+                    "cloudwatch:TagResource",
+                    "cloudwatch:UntagResource",
                     "cognito-identity:*",
                     "cognito-idp:*",
                     "dynamodb:*",
                     "ec2:*",
                     "ecr:*",
+                    "ecs:*",
                     "elasticfilesystem:*",
                     "elasticloadbalancing:*",
                     "iam:*",
+                    "imagebuilder:*",
                     "kms:CreateGrant",
                     "kms:DescribeKey",
                     "lambda:*",
+                    "logs:CreateLogGroup",
+                    "logs:DescribeLogGroups",
+                    "logs:ListTagsForResource",
+                    "logs:ListTagsLogGroup",
+                    "logs:PutRetentionPolicy",
+                    "logs:TagResource",
                     "route53:ChangeResourceRecordSets",
                     "route53:ChangeTagsForResource",
                     "route53:CreateHostedZone",
@@ -53,19 +68,17 @@ After signing up, perform the following steps:
                     "route53:ListTagsForResource",
                     "s3:*",
                     "s3-object-lambda:*",
-                    "ssm:*",
-                    "sts:GetCallerIdentity",
-                    "logs:CreateLogGroup",
-                    "logs:TagResource",
-                    "logs:PutRetentionPolicy",
-                    "logs:DescribeLogGroups",
-                    "logs:ListTagsForResource",
-                    "logs:ListTagsLogGroup",
-                    "ecs:*",
+                    "scheduler:*",
+                    "servicediscovery:*",
+                    "sms-voice:DescribePhoneNumbers",
+                    "sms-voice:ListTagsForResource",
+                    "sms-voice:ReleasePhoneNumber",
+                    "sms-voice:RequestPhoneNumber",
+                    "sms-voice:TagResource",
                     "sns:*",
                     "sqs:*",
-                    "application-autoscaling:*",
-                    "servicediscovery:*"
+                    "ssm:*",
+                    "sts:GetCallerIdentity"
                 ],
                 "Resource": "*"
             }
@@ -73,6 +86,12 @@ After signing up, perform the following steps:
     }
     ```
     (If you don't intend to use this repo to configure AWS Backup, then you may omit the `backup:*` and `backup-storage:*` lines.)
+
+    (If you don't intend to enable SMS verification through AWS End User Messaging (`TF_VAR_USE_EUM_SMS`, off by default), you may omit the five `sms-voice:` lines. If you do enable it, completing the toll-free verification registration requires an additional one-time policy; see [SMS toll-free verification setup](./sms-tfv-setup.md).)
+
+    (`imagebuilder:*` covers the EC2 Image Builder pipeline that bakes the custom NAT instance AMI. `scheduler:*` covers the EventBridge Scheduler schedules for certificate renewal and DMARC report processing.)
+
+    (Terraform state access is covered by `s3:*`. If your state bucket lives in a different AWS account than the one you are setting up here, that bucket's policy must also grant this user access; no extra statements are needed in this policy.)
 6. Create an IAM Group called "cicd" and assign the above policy.
 7. Create an IAM User called "cicd" and assign the above group. This user should be progamatic only -- *no console*. Make a note of the API key ID and secret. You will need them when you set up Terraform and GitHub. Note: you should rotate this key regularly!
 8. Optional but recommended: delete the default VPC in all regions.
