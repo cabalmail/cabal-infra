@@ -11,6 +11,10 @@ public enum FolderTree {
         "INBOX", "Sent", "Drafts", "Trash", "Junk", "Archive"
     ]
 
+    /// Dovecot's special-use \Trash mailbox. Delete affordances switch to
+    /// permanent deletion (purge / empty trash) when acting inside it.
+    public static let trashPath = "Trash"
+
     /// DFS through the `/`-delimited tree formed by `path`s, emitting peers
     /// alphabetically and children directly under their parent. Intermediate
     /// path segments that aren't themselves in `input` are skipped - we

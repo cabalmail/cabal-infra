@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.21] - 2026-06-10
+
+### Added
+- Surface the Terraform plan delta as a notice annotation on the
+  infra.yml run summary page so the pending change set can be reviewed
+  before approving the apply gate, and annotate the stack's Terraform
+  outputs after a successful apply. The plan annotation is rendered
+  from the saved plan file with `terraform show`, so it carries only
+  the change set, not the state-refresh log noise.
+- Deleting a message that is already in Trash now deletes it forever
+  (after a confirmation), in both the React and Apple clients, and the
+  Trash folder offers an "Empty trash" action (inline button in React,
+  context menu on Apple) that permanently deletes its entire contents.
+  On the Apple clients a multi-selection in Trash can also be deleted
+  forever - via the right-click selection menu, the bulk action bar, or
+  Cmd+Delete - behind a single count-aware confirmation, and the bar's
+  Archive button there always rescues to the Archive folder rather than
+  following the dispose preference.
+  Backed by two new Lambda endpoints, `/purge_messages` and
+  `/empty_trash`, which flag-and-expunge server-side, refuse to operate
+  on non-trash folders, and clear the affected messages from the S3
+  body cache.
+
+### Changed
+- The web client now treats the server's special-use "Sent" mailbox - the
+  folder sent copies are actually filed into, and the one the Apple clients
+  use - as the system Sent folder instead of "Sent Messages". The folder
+  rail, the g-s shortcut, and folder-manager protection all follow. An
+  existing "Sent Messages" folder is left in place as an ordinary folder;
+  it can now be emptied and removed from the web folder manager.
+- The web client now files deletions in the server's special-use "Trash"
+  mailbox, the same folder the Apple clients use, instead of its own
+  "Deleted Messages" folder. Deleted mail is no longer indexed for search
+  (matching the Apple clients), and `/move_messages` auto-creates "Trash"
+  instead of "Deleted Messages", fixing first-delete-to-Trash failures on
+  fresh mailboxes. An existing "Deleted Messages" folder is left in place
+  as an ordinary folder; it can now be emptied and removed from the web
+  folder manager. The new `/purge_messages` and `/empty_trash` endpoints
+  accept only "Trash".
+
+### Fixed
+- `plan-terraform.sh` now passes `-var-file=".terraform/lambda-pinned.tfvars"`
+  only when the file exists. The bootstrap (`terraform/dns`) plan job never
+  writes that file, so every dns plan logged a "Failed to read variables
+  file" error that a future Terraform upgrade could turn into a hard failure.
+
 ## [0.10.20] - 2026-06-10
 
 ### Added

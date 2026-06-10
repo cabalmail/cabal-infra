@@ -166,6 +166,7 @@ Response format: `{"statusCode": N, "body": json.dumps({...})}`. User extracted 
 | `fetch_bimi` | BIMI logo lookup for sender domains |
 | `send` | Send email via SMTP |
 | `move_messages` / `set_flag` | IMAP message operations |
+| `purge_messages` / `empty_trash` | Permanently delete (expunge) messages; trash folders only |
 
 ### React App (`react/admin/`)
 

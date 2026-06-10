@@ -46,6 +46,17 @@ public protocol ImapClient: Sendable {
     func setFlags(folder: String, uids: [UInt32], flags: Set<Flag>, operation: FlagOperation) async throws
     func move(folder: String, uids: [UInt32], destination: String) async throws
 
+    /// Permanently deletes (expunges) the given messages. The backing
+    /// `/purge_messages` Lambda only accepts trash folders, so callers
+    /// should gate this on the folder being Trash. The default extension
+    /// throws `protocolError`; the API-backed implementation overrides it
+    /// (same pattern as `searchEnvelopes`).
+    func purge(folder: String, uids: [UInt32]) async throws
+
+    /// Permanently deletes every message in a trash folder (backed by
+    /// `/empty_trash`, same trash-only restriction and default).
+    func emptyTrash(folder: String) async throws
+
     /// Structured search across one folder (`query.folder` set) or every
     /// subscribed folder (`query.folder == nil`). Returns envelopes with
     /// their source folder attached, plus the pagination cursor required
@@ -117,6 +128,22 @@ public extension ImapClient {
     func searchEnvelopes(_ query: SearchQuery) async throws -> SearchResult {
         throw CabalmailError.protocolError(
             "searchEnvelopes is not implemented by this ImapClient"
+        )
+    }
+
+    /// Default implementation — same rationale as `searchEnvelopes`: the
+    /// `/purge_messages` contract is API-only today and production never
+    /// routes through `LiveImapClient`.
+    func purge(folder: String, uids: [UInt32]) async throws {
+        throw CabalmailError.protocolError(
+            "purge is not implemented by this ImapClient"
+        )
+    }
+
+    /// Default implementation — see `purge(folder:uids:)` above.
+    func emptyTrash(folder: String) async throws {
+        throw CabalmailError.protocolError(
+            "emptyTrash is not implemented by this ImapClient"
         )
     }
 }

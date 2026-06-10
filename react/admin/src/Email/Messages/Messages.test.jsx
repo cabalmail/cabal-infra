@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor, act, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, act, fireEvent, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import Messages from './index';
 import AuthContext from '../../contexts/AuthContext';
@@ -9,6 +9,7 @@ import { DATE, DESC } from '../../constants';
 const mockGetMessages = vi.fn();
 const mockSetFlag = vi.fn();
 const mockMoveMessages = vi.fn();
+const mockPurgeMessages = vi.fn();
 const mockGetEnvelopes = vi.fn().mockResolvedValue({ data: { envelopes: {} } });
 const mockGetFolderList = vi.fn().mockResolvedValue({ data: { folders: [], sub_folders: [] } });
 
@@ -16,6 +17,7 @@ const mockApi = {
   getMessages: mockGetMessages,
   setFlag: mockSetFlag,
   moveMessages: mockMoveMessages,
+  purgeMessages: mockPurgeMessages,
   getEnvelopes: mockGetEnvelopes,
   getFolderList: mockGetFolderList,
 };
@@ -189,6 +191,96 @@ describe('Messages', () => {
       expect(container.querySelector('.msglist')?.classList.contains('select-mode')).toBe(true);
       // Bulk header replaces the regular one.
       expect(container.querySelector('.msglist-header.bulk')).toBeTruthy();
+    } finally {
+      unmount();
+    }
+  });
+});
+
+describe('Messages - deleting from Trash', () => {
+  beforeEach(() => {
+    mockGetMessages.mockResolvedValue({ data: { message_ids: [1, 2, 3] } });
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function renderTrashBulk() {
+    return render(
+      <Harness
+        folder="Trash"
+        overrides={{ bulkMode: true, selected: new Set([1, 2]) }}
+      />,
+    );
+  }
+
+  it('labels the bulk delete action "Delete forever" in Trash', async () => {
+    const { unmount } = renderTrashBulk();
+    try {
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /delete forever/i })).toBeInTheDocument();
+      });
+    } finally {
+      unmount();
+    }
+  });
+
+  it('asks for confirmation, then purges instead of moving', async () => {
+    mockPurgeMessages.mockResolvedValue({ data: { status: 'purged' } });
+    const { unmount } = renderTrashBulk();
+    try {
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /delete forever/i })).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByRole('button', { name: /delete forever/i }));
+      // Nothing happens until the dialog is confirmed.
+      expect(mockPurgeMessages).not.toHaveBeenCalled();
+      expect(mockMoveMessages).not.toHaveBeenCalled();
+      const dialog = screen.getByRole('alertdialog');
+      await act(async () => {
+        fireEvent.click(within(dialog).getByRole('button', { name: /delete forever/i }));
+      });
+      expect(mockPurgeMessages).toHaveBeenCalledWith('Trash', [1, 2]);
+      expect(mockMoveMessages).not.toHaveBeenCalled();
+    } finally {
+      unmount();
+    }
+  });
+
+  it('does nothing when the confirmation is cancelled', async () => {
+    const { unmount } = renderTrashBulk();
+    try {
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /delete forever/i })).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByRole('button', { name: /delete forever/i }));
+      const dialog = screen.getByRole('alertdialog');
+      fireEvent.click(within(dialog).getByRole('button', { name: /cancel/i }));
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      expect(mockPurgeMessages).not.toHaveBeenCalled();
+    } finally {
+      unmount();
+    }
+  });
+
+  it('outside Trash, delete still moves to Trash without confirmation', async () => {
+    mockMoveMessages.mockResolvedValue({ data: { status: 'submitted' } });
+    const { unmount } = render(
+      <Harness folder="INBOX" overrides={{ bulkMode: true, selected: new Set([3]) }} />,
+    );
+    try {
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /^delete$/i })).toBeInTheDocument();
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /^delete$/i }));
+      });
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      expect(mockMoveMessages).toHaveBeenCalledWith(
+        'INBOX', 'Trash', [3], 'REVERSE ', 'DATE',
+      );
+      expect(mockPurgeMessages).not.toHaveBeenCalled();
     } finally {
       unmount();
     }
