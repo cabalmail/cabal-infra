@@ -17,10 +17,13 @@ import SwiftUI
 /// Window menu, so Move to Folder wins. Filing messages is the far more
 /// frequent action in a mail client.
 ///
-/// The Delete-key archive/trash chord is NOT here: a bare-key menu
-/// equivalent would steal Backspace from every text field. It lives as
-/// a focus-scoped `.onKeyPress(.delete)` on the message list instead,
-/// beside the Esc / Cmd-A handlers.
+/// The Cmd+Delete dispose chord is NOT here: menu equivalents fire
+/// app-wide, so it would trigger from the compose window and steal the
+/// text system's delete-to-line-start chord mid-draft. It rides window-
+/// scoped key equivalents instead — the detail toolbar's dispose button
+/// for a single open message, an invisible button on the message list
+/// for a multi-selection — so it acts on the mail window only, but
+/// works there regardless of which pane has focus.
 struct MessageMenuCommands: Commands {
     let appState: AppState
 

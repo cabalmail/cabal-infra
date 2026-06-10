@@ -130,16 +130,14 @@ extension MessageListView {
         moveCandidate = SelectionMoveCandidate(uids: uids)
     }
 
-    /// Delete key, wired via `.onKeyPress(.delete)` on the wide list so
-    /// it only fires while the list holds focus — a menu-bar key
-    /// equivalent for a bare Backspace would steal it from every text
-    /// field. Honors the dispose preference (Archive or Trash), same as
-    /// the trailing swipe.
-    func disposeSelection(model: MessageListViewModel) -> KeyPress.Result {
+    /// Cmd+Delete with a multi-selection, fired by the invisible window-
+    /// scoped equivalent in `wideList` (a single selection's Cmd+Delete
+    /// belongs to the detail toolbar's dispose button). Honors the
+    /// dispose preference (Archive or Trash), same as the trailing swipe.
+    func disposeSelection(model: MessageListViewModel) {
         let uids = shortcutTargetUIDs(model: model)
-        guard !uids.isEmpty else { return .ignored }
+        guard !uids.isEmpty else { return }
         let action = model.disposeAction
         Task { await model.disposeMessages(uids: uids, action: action) }
-        return .handled
     }
 }

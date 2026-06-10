@@ -982,10 +982,17 @@ Message menu (`MessageMenuCommands`, installed by both app targets)
 carries Reply ⌘R, Reply All ⌘⇧R, Forward ⌘⇧J, Mark as Read/Unread ⌘T,
 Flag/Unflag ⌘⇧8, and Move to Folder ⌘M — the ⌘M item deliberately
 shadows Window → Minimize, since custom command menus are matched
-before the Window menu. Delete-to-archive/trash is NOT a menu item (a
-bare-key equivalent would steal Backspace from text fields); the
-message list binds it with a focus-scoped `.onKeyPress(.delete)`
-beside its Esc / ⌘A handlers.
+before the Window menu. Dispose (⌘⌫) is deliberately NOT a menu item:
+menu equivalents fire app-wide, so it would trigger from the compose
+window and steal the text system's delete-to-line-start chord
+mid-draft. It rides window-scoped key equivalents instead — the detail
+toolbar's dispose button covers a single open message (and advances to
+the next unread), and the message list installs an invisible ⌘⌫ button
+while a multi-selection exists — so the chord acts on the mail window
+only, but works there regardless of whether the list or the reading
+pane has focus (users can rarely tell which it is). Esc and ⌘A stay
+focus-scoped on the list: window-scoped versions would steal them from
+the search field.
 
 ### Platform polish
 
