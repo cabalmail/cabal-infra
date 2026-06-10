@@ -56,10 +56,12 @@ struct MessageListView: View {
     /// `Identifiable` so `.sheet(item:)` reuses the same presentation
     /// machinery as composeSeed.
     @State var envelopeToMove: Envelope?
-    /// Set by the swipe / context-menu delete while the list shows Trash;
-    /// presents the "Delete Forever?" confirmation anchored to this
-    /// envelope. Non-private so the `+Rows` extension can stage it.
-    @State var envelopeToPurge: Envelope?
+    /// Set by the delete affordances while the list shows Trash (row
+    /// swipe / menu for a single message; selection menu, action bar,
+    /// and Cmd+Delete for a multi-selection); presents the "Delete
+    /// Forever?" confirmation for the captured UID set. Non-private so
+    /// the `+Rows` / `+Bulk` / `+Actions` extensions can stage it.
+    @State var purgeCandidate: PurgeCandidate?
     /// `true` while the bulk-move destination picker is presented.
     @State var bulkMoveSheetPresented = false
     /// Set by the wide-layout selection context menu's "Move to folder…"
@@ -97,13 +99,13 @@ struct MessageListView: View {
         observersLayer
     }
 
-    /// Boolean projection of `envelopeToPurge` for the confirmation
+    /// Boolean projection of `purgeCandidate` for the confirmation
     /// dialog. Mirrors `FoldersAdminView`'s delete-dialog binding.
     private var purgeDialogBinding: Binding<Bool> {
         Binding(
-            get: { envelopeToPurge != nil },
+            get: { purgeCandidate != nil },
             set: { isPresented in
-                if !isPresented { envelopeToPurge = nil }
+                if !isPresented { purgeCandidate = nil }
             }
         )
     }
@@ -304,19 +306,23 @@ extension MessageListView {
             "Delete Forever?",
             isPresented: purgeDialogBinding,
             titleVisibility: .visible,
-            presenting: envelopeToPurge
-        ) { envelope in
+            presenting: purgeCandidate
+        ) { candidate in
             Button("Delete Forever", role: .destructive) {
-                envelopeToPurge = nil
+                purgeCandidate = nil
                 if let model {
-                    Task { await model.purge(envelope) }
+                    Task { await model.purgeMessages(uids: candidate.uids) }
                 }
             }
             Button("Cancel", role: .cancel) {
-                envelopeToPurge = nil
+                purgeCandidate = nil
             }
-        } message: { _ in
-            Text("This message will be permanently deleted. This can't be undone.")
+        } message: { candidate in
+            Text(
+                candidate.uids.count == 1
+                ? "This message will be permanently deleted. This can't be undone."
+                : "These \(candidate.uids.count) messages will be permanently deleted. This can't be undone."
+            )
         }
     }
 

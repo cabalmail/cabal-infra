@@ -9,35 +9,53 @@ import CabalmailKit
 // calling this.
 extension MessageListViewModel {
     /// True when this list shows the Trash folder. Delete affordances
-    /// (swipe, context menu) switch from "move to Trash" to "delete
-    /// forever" and route through a confirmation dialog.
+    /// (swipe, context menu, selection menu, action bar, Cmd+Delete)
+    /// switch from "move to Trash" to "delete forever" and route
+    /// through a confirmation dialog.
     var isTrashFolder: Bool { folder.path == FolderTree.trashPath }
 
-    func purge(_ envelope: Envelope) async {
-        let source = sourceFolder(for: envelope)
-        // The `/purge_messages` Lambda rejects non-trash folders; gate
-        // client-side too so a mis-wired call surfaces as a no-op rather
-        // than a server error toast.
-        guard source == FolderTree.trashPath else { return }
-        guard pendingRemovedUIDs.insert(envelope.uid).inserted else { return }
-        defer { pendingRemovedUIDs.remove(envelope.uid) }
+    /// Permanently delete an explicit UID set. Serves both the single-
+    /// row surfaces (swipe, row menu — a one-element set) and the
+    /// multi-selection surfaces (selection menu, action bar,
+    /// Cmd+Delete); every caller confirms with the user first.
+    ///
+    /// Mirrors `performMove`'s optimistic prune / restore shape. UIDs
+    /// whose row isn't truly in Trash (a cross-folder search row, or a
+    /// UID already mid-removal) are dropped up front — the
+    /// `/purge_messages` Lambda rejects non-trash folders, so gating
+    /// client-side turns a mis-wired call into a no-op rather than a
+    /// server error toast.
+    func purgeMessages(uids: Set<UInt32>) async {
+        let condemned = envelopes.filter {
+            uids.contains($0.uid) && sourceFolder(for: $0) == FolderTree.trashPath
+        }
+        guard !condemned.isEmpty else { return }
+        let condemnedUIDs = Set(condemned.map(\.uid))
+        let unreadCount = condemned.filter { !$0.flags.contains(.seen) }.count
 
-        let originalIndex = envelopes.firstIndex { $0.uid == envelope.uid }
-        let wasUnread = !envelope.flags.contains(.seen)
-        envelopes.removeAll { $0.uid == envelope.uid }
-        if wasUnread {
-            appState.applyUnreadDelta(folderPath: source, delta: -1)
+        envelopes.removeAll { condemnedUIDs.contains($0.uid) }
+        pendingRemovedUIDs.formUnion(condemnedUIDs)
+        defer { pendingRemovedUIDs.subtract(condemnedUIDs) }
+        if unreadCount > 0 {
+            appState.applyUnreadDelta(folderPath: FolderTree.trashPath, delta: -unreadCount)
         }
 
         do {
-            try await client.imapClient.purge(folder: source, uids: [envelope.uid])
-            await pruneCachesAfter(move: source, uid: envelope.uid)
+            try await client.imapClient.purge(
+                folder: FolderTree.trashPath,
+                uids: condemned.map(\.uid)
+            )
+            await pruneCachesAfter(move: FolderTree.trashPath, uids: condemned.map(\.uid))
         } catch {
-            restoreEnvelope(envelope, at: originalIndex)
-            if wasUnread {
-                appState.applyUnreadDelta(folderPath: source, delta: 1)
+            envelopes.append(contentsOf: condemned)
+            envelopes.sort(by: envelopeOrder)
+            if unreadCount > 0 {
+                appState.applyUnreadDelta(folderPath: FolderTree.trashPath, delta: unreadCount)
             }
             errorMessage = "\(error)"
         }
+        // Purged rows leave any active selection; like `moveMessages`,
+        // UIDs outside the set stay selected.
+        selectedUIDs.subtract(condemnedUIDs)
     }
 }

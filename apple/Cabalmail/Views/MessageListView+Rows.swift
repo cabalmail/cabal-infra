@@ -226,7 +226,7 @@ extension MessageListView {
         }
         if model.isTrashFolder {
             Button(role: .destructive) {
-                envelopeToPurge = envelope
+                purgeCandidate = PurgeCandidate(uids: [envelope.uid])
             } label: {
                 purgeActionLabel
             }
@@ -247,7 +247,7 @@ extension MessageListView {
     func disposeSwipeButton(for envelope: Envelope, model: MessageListViewModel) -> some View {
         Button(role: .destructive) {
             if model.isTrashFolder {
-                envelopeToPurge = envelope
+                purgeCandidate = PurgeCandidate(uids: [envelope.uid])
             } else {
                 Task { await model.dispose(envelope) }
             }

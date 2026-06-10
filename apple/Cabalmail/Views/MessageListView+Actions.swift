@@ -10,6 +10,15 @@ struct SelectionMoveCandidate: Identifiable {
     let id = UUID()
 }
 
+/// UID set staged for the "Delete Forever?" confirmation inside Trash —
+/// a one-element set from the row swipe / menu, the whole selection from
+/// the selection menu, action bar, or Cmd+Delete. Identifiable for the
+/// same reason as `SelectionMoveCandidate`.
+struct PurgeCandidate: Identifiable {
+    let uids: Set<UInt32>
+    let id = UUID()
+}
+
 // Selection-scoped actions for `MessageListView`'s wide/keyboard
 // layouts (macOS, iPad regular, visionOS): the List-level context menu
 // that acts on the whole multi-selection, and the handlers behind the
@@ -61,12 +70,16 @@ extension MessageListView {
             } label: {
                 Label("Archive", systemImage: "archivebox")
             }
-            // Inside Trash "move to Trash" is a no-op (performMove skips
-            // same-folder groups) and multi-message delete-forever doesn't
-            // exist yet — single rows purge via the swipe or the reader,
-            // whole folders via Empty Trash — so the destructive item is
-            // omitted there rather than left inert.
-            if !model.isTrashFolder {
+            // Inside Trash "move to Trash" is meaningless: delete means
+            // gone forever, so the destructive item stages the same
+            // confirmation as the row swipe, for the whole set.
+            if model.isTrashFolder {
+                Button(role: .destructive) {
+                    purgeCandidate = PurgeCandidate(uids: uids)
+                } label: {
+                    purgeActionLabel
+                }
+            } else {
                 Button(role: .destructive) {
                     Task { await model.disposeMessages(uids: uids, action: .trash) }
                 } label: {
@@ -140,10 +153,16 @@ extension MessageListView {
     /// Cmd+Delete with a multi-selection, fired by the invisible window-
     /// scoped equivalent in `wideList` (a single selection's Cmd+Delete
     /// belongs to the detail toolbar's dispose button). Honors the
-    /// dispose preference (Archive or Trash), same as the trailing swipe.
+    /// dispose preference (Archive or Trash), same as the trailing
+    /// swipe; inside Trash it stages the delete-forever confirmation
+    /// like every other purge surface.
     func disposeSelection(model: MessageListViewModel) {
         let uids = shortcutTargetUIDs(model: model)
         guard !uids.isEmpty else { return }
+        if model.isTrashFolder {
+            purgeCandidate = PurgeCandidate(uids: uids)
+            return
+        }
         let action = model.disposeAction
         Task { await model.disposeMessages(uids: uids, action: action) }
     }
