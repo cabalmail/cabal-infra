@@ -112,6 +112,26 @@ final class FolderListViewModel {
         )
     }
 
+    /// Permanently deletes everything in Trash. Called only after the
+    /// sidebar's confirmation dialog. On success the cached envelope
+    /// snapshot for Trash is dropped, the sidebar badge zeroes, and the
+    /// visible message list (if it is Trash) is told to hard-reload.
+    func emptyTrash() async {
+        let path = FolderTree.trashPath
+        do {
+            try await client.imapClient.connectAndAuthenticate()
+            try await client.imapClient.emptyTrash(folder: path)
+            try? await client.envelopeCache.invalidate(folder: path)
+            appState.setFolderCounts(folderPath: path, unread: 0, total: 0)
+            appState.requestRefresh()
+            errorMessage = nil
+        } catch let error as CabalmailError {
+            errorMessage = String(describing: error)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     /// Fetch the INBOX STATUS and publish it. Called as early as
     /// possible at launch so the inbox badge is correct by the time the
     /// user's eyes reach it. Safe to fire in parallel with

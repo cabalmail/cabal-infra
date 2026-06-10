@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import Folders from './index';
 import AuthContext from '../contexts/AuthContext';
@@ -8,6 +8,7 @@ const mockSubscribe = vi.fn();
 const mockUnsubscribe = vi.fn();
 const mockDeleteFolder = vi.fn();
 const mockNewFolder = vi.fn();
+const mockEmptyTrash = vi.fn();
 
 const mockApi = {
   getFolderList: mockGetFolderList,
@@ -15,6 +16,7 @@ const mockApi = {
   unsubscribeFolder: mockUnsubscribe,
   deleteFolder: mockDeleteFolder,
   newFolder: mockNewFolder,
+  emptyTrash: mockEmptyTrash,
 };
 
 vi.mock('../hooks/useApi', () => ({
@@ -115,6 +117,56 @@ describe('Folders rail', () => {
     await waitFor(() => expect(screen.getByText('Inbox')).toBeInTheDocument());
     expect(screen.queryByRole('button', { name: /remove inbox/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /remove drafts/i })).not.toBeInTheDocument();
+  });
+
+  describe('empty trash', () => {
+    it('offers Empty trash only on the trash row', async () => {
+      renderFolders();
+      await waitFor(() => expect(screen.getByText('Trash')).toBeInTheDocument());
+      // One trash folder in the fixture, unsubscribed, so exactly one button.
+      expect(screen.getAllByRole('button', { name: /empty trash/i })).toHaveLength(1);
+      const trashRow = screen.getByText('Trash').closest('li');
+      expect(within(trashRow).getByRole('button', { name: /empty trash/i })).toBeInTheDocument();
+    });
+
+    it('empties the trash after confirmation', async () => {
+      mockEmptyTrash.mockResolvedValue({ data: { status: 'emptied' } });
+      const setMessage = vi.fn();
+      renderFolders({ setMessage });
+      await waitFor(() => expect(screen.getByText('Trash')).toBeInTheDocument());
+      fireEvent.click(screen.getByRole('button', { name: /empty trash/i }));
+      // Nothing happens until the dialog is confirmed.
+      expect(mockEmptyTrash).not.toHaveBeenCalled();
+      const dialog = screen.getByRole('alertdialog');
+      await act(async () => {
+        fireEvent.click(within(dialog).getByRole('button', { name: /empty trash/i }));
+      });
+      expect(mockEmptyTrash).toHaveBeenCalledWith('Trash');
+      await waitFor(() => expect(setMessage).toHaveBeenCalledWith('Trash emptied.', false));
+    });
+
+    it('does nothing when the confirmation is cancelled', async () => {
+      renderFolders();
+      await waitFor(() => expect(screen.getByText('Trash')).toBeInTheDocument());
+      fireEvent.click(screen.getByRole('button', { name: /empty trash/i }));
+      const dialog = screen.getByRole('alertdialog');
+      fireEvent.click(within(dialog).getByRole('button', { name: /cancel/i }));
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      expect(mockEmptyTrash).not.toHaveBeenCalled();
+    });
+
+    it('surfaces an error message when emptying fails', async () => {
+      mockEmptyTrash.mockRejectedValue(new Error('boom'));
+      const setMessage = vi.fn();
+      renderFolders({ setMessage });
+      await waitFor(() => expect(screen.getByText('Trash')).toBeInTheDocument());
+      fireEvent.click(screen.getByRole('button', { name: /empty trash/i }));
+      const dialog = screen.getByRole('alertdialog');
+      await act(async () => {
+        fireEvent.click(within(dialog).getByRole('button', { name: /empty trash/i }));
+      });
+      await waitFor(() => expect(setMessage).toHaveBeenCalledWith('Unable to empty trash.', true));
+    });
   });
 
   describe('add folder', () => {

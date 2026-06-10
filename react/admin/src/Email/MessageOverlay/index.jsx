@@ -16,6 +16,7 @@ import ReaderBody from './ReaderBody';
 import Attachments from './Attachments';
 import OverflowMenu from './OverflowMenu';
 import ViewSourceModal from './ViewSourceModal';
+import ConfirmDialog from '../../ConfirmDialog';
 import useApi from '../../hooks/useApi';
 import { useAppMessage } from '../../contexts/AppMessageContext';
 import {
@@ -62,6 +63,9 @@ function MessageOverlay({
   const [rawText, setRawText] = useState('');
   const [rawLoading, setRawLoading] = useState(false);
   const [rawError, setRawError] = useState(false);
+
+  // Confirmation for permanent deletion out of Trash.
+  const [confirmPurge, setConfirmPurge] = useState(false);
 
   const envelopeId = envelope && envelope.id;
   const seen = envelope && envelope.flags
@@ -154,15 +158,36 @@ function MessageOverlay({
       });
   }, [api, folder, envelopeId, hide, setMessage]);
 
+  // In Trash, "Delete" purges the message for good (after confirmation)
+  // instead of moving it into Trash again.
+  const isTrash = folderMeta(folder).kind === 'trash';
+
   const doDelete = useCallback(() => {
     if (!envelopeId) return;
+    if (isTrash) {
+      setConfirmPurge(true);
+      return;
+    }
     api.moveMessages(folder, 'Trash', [envelopeId], '', ARRIVAL.imap)
       .then(() => hide())
       .catch((err) => {
         setMessage('Unable to delete message.', true);
         console.log(err);
       });
+  }, [api, folder, isTrash, envelopeId, hide, setMessage]);
+
+  const doPurge = useCallback(() => {
+    setConfirmPurge(false);
+    if (!envelopeId) return;
+    api.purgeMessages(folder, [envelopeId])
+      .then(() => hide())
+      .catch((err) => {
+        setMessage('Unable to permanently delete message.', true);
+        console.log(err);
+      });
   }, [api, folder, envelopeId, hide, setMessage]);
+
+  const cancelPurge = useCallback(() => setConfirmPurge(false), []);
 
   const toggleFlagged = useCallback(() => {
     runFlag(isFlagged ? { ...FLAGGED, op: 'unset' } : FLAGGED);
@@ -395,8 +420,8 @@ function MessageOverlay({
           type="button"
           className="reader-btn icon-only"
           onClick={doDelete}
-          title="Delete"
-          aria-label="Delete"
+          title={isTrash ? 'Delete forever' : 'Delete'}
+          aria-label={isTrash ? 'Delete forever' : 'Delete'}
         >
           <Trash2 size={16} aria-hidden="true" />
         </button>
@@ -499,7 +524,7 @@ function MessageOverlay({
             type="button"
             className="reader-tab reader-tab--danger"
             onClick={doDelete}
-            aria-label="Delete"
+            aria-label={isTrash ? 'Delete forever' : 'Delete'}
           >
             <Trash2 size={20} aria-hidden="true" />
           </button>
@@ -514,6 +539,17 @@ function MessageOverlay({
         error={rawError}
         onClose={closeSource}
         initialTab={sourceInitialTab}
+      />
+
+      <ConfirmDialog
+        open={confirmPurge}
+        title="Delete forever?"
+        message={<>This message will be permanently deleted. This can&rsquo;t be undone.</>}
+        confirmLabel="Delete forever"
+        cancelLabel="Cancel"
+        destructive
+        onConfirm={doPurge}
+        onCancel={cancelPurge}
       />
     </div>
   );

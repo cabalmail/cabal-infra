@@ -132,6 +132,22 @@ locals {
       cache     = true
       cache_ttl = 0
     },
+    purge_messages = {
+      runtime = "python3.13"
+
+      method    = "DELETE"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    empty_trash = {
+      runtime = "python3.13"
+
+      method    = "DELETE"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
     send = {
       runtime = "python3.13"
 
