@@ -45,6 +45,7 @@ on:
       - '.github/scripts/build-api-one.sh'
       - '.github/scripts/build-counter.sh'
       - '.github/scripts/deploy-ecs-service.sh'
+      - '.github/scripts/prepull-image.sh'
       - '.github/scripts/deploy-lambda-image.sh'
       - '.github/scripts/deploy-lambda-zip.sh'
       - '.github/scripts/render-front-door.py'
@@ -133,6 +134,7 @@ jobs:
           docker:
             - 'docker/**'
             - '.github/scripts/deploy-ecs-service.sh'
+            - '.github/scripts/prepull-image.sh'
             - '.github/scripts/ecr-scan-report.sh'
           lambda_api:
             - 'lambda/api/**'
@@ -295,6 +297,21 @@ jobs:
           -t "${IMAGE}:${TAG}" \
           --push \
           docker/
+
+    # Pre-pull the freshly pushed image onto the cluster's container
+    # instance(s) while the old IMAP task is still serving, so the roll
+    # below does not pay the 30-60s cold layer pull inside its zero-task
+    # window. Fail-soft: any failure (missing SSM grants, no instances,
+    # pull error) logs a warning and the deploy proceeds on the slow
+    # path. imap only - the smtp tiers roll with overlap, so pull time
+    # there is not client-facing. Phase 4 of
+    # docs/0.10.x/imap-deploy-downtime-plan.md.
+    - name: prepull-image
+      if: matrix.tier == 'imap'
+      run: |
+        ./.github/scripts/prepull-image.sh \
+          "${{ matrix.tier }}" \
+          "${{ needs.setup.outputs.image_tag }}"
 
     # IMAP rolls with a true zero-task window (single-task service: the old
     # container stops before the new one starts), so raise the planned-
