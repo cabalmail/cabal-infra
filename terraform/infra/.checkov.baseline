@@ -697,7 +697,13 @@
             "file": "/modules/vpc/nat.tf",
             "findings": [
                 {
-                    "resource": "module.vpc.aws_instance.nat[0]",
+                    "resource": "module.vpc.aws_eip.nat_eip[0]",
+                    "check_ids": [
+                        "CKV2_AWS_19"
+                    ]
+                },
+                {
+                    "resource": "module.vpc.aws_instance.nat",
                     "check_ids": [
                         "CKV_AWS_126",
                         "CKV_AWS_135"
@@ -710,20 +716,14 @@
                     ]
                 },
                 {
-                    "resource": "module.vpc.aws_security_group.nat[0]",
-                    "check_ids": [
-                        "CKV2_AWS_5"
-                    ]
-                },
-                {
-                    "resource": "module.vpc.aws_security_group_rule.nat_egress[0]",
+                    "resource": "module.vpc.aws_security_group_rule.nat_egress",
                     "check_ids": [
                         "CKV_AWS_23",
                         "CKV_AWS_382"
                     ]
                 },
                 {
-                    "resource": "module.vpc.aws_security_group_rule.nat_ingress_vpc[0]",
+                    "resource": "module.vpc.aws_security_group_rule.nat_ingress_vpc",
                     "check_ids": [
                         "CKV_AWS_23"
                     ]

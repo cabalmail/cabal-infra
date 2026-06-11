@@ -122,10 +122,21 @@ variable "quiesced" {
   default     = false
 }
 
-variable "use_custom_nat_ami" {
+# NAT egress mode. Both modes are first-class and reuse the same EIPs, so
+# smtp.<control-domain>, SPF, and the port-25 allow-list are identical either
+# way. Instances are the cheap small-scale default; a gateway is the managed
+# option and also the bootstrap path for a new instance-mode environment
+# (which has no custom NAT AMI to launch from yet). See docs/nat.md.
+variable "use_nat_instance" {
   type        = bool
-  description = "When true, NAT instances launch from the EC2 Image Builder-baked AL2023 AMI (nftables pre-installed) instead of the stock Amazon Linux 2 AMI. Leave false until the Image Builder pipeline has produced at least one AMI (the data.aws_ami lookup hard-errors on an empty result). Also doubles as a rollback lever: set back to false to return to the stock AL2 NAT bootstrap."
-  default     = false
+  description = "When true (the default), private-subnet egress runs through EC2 NAT instances launched from the Image Builder-baked AL2023 AMI; requires that pipeline to have produced at least one AMI (the data.aws_ami lookup hard-errors on an empty result). When false, egress runs through AWS-managed NAT Gateways, which need no AMI."
+  default     = true
+}
+
+variable "build_nat_ami" {
+  type        = bool
+  description = "Whether to provision the EC2 Image Builder pipeline that bakes the custom AL2023 NAT AMI. Independent of use_nat_instance so the AMI can be built while bootstrapping through a NAT Gateway. Set false only in a pure-gateway environment that will never run NAT instances."
+  default     = true
 }
 
 # Populated by .github/scripts/record-lambda-hashes.sh at CI time and

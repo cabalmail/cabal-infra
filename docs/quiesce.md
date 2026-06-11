@@ -12,8 +12,8 @@ The `quiesce` workflow scales a development or stage environment's running compu
 | ECS-instance Auto Scaling Group | `min_size = 0`, `desired_capacity = 0`, `max_size = 0` |
 | ASG instance scale-in protection (`protect_from_scale_in`) | Disabled, so the running instance can actually be terminated |
 | ECS capacity provider `managed_termination_protection` | Disabled, so the capacity provider stops fighting the ASG drain |
-| NAT instances | `count = 0`. The Elastic IPs are kept, so SMTP allow-lists do not need to be re-issued on resume. |
-| Private subnet default route | Removed. The NAT-instance NIC it pointed to is gone, and nothing runs in private subnets while quiesced. |
+| NAT (instances or gateways, per the environment's mode - see [nat.md](./nat.md)) | `count = 0`. The Elastic IPs are kept, so SMTP allow-lists do not need to be re-issued on resume. |
+| Private subnet default route | Removed. The NAT target it pointed to is gone, and nothing runs in private subnets while quiesced. |
 
 The DAEMON `node-exporter` ECS service is not gated explicitly. It places one task per EC2 instance in the cluster; with the ASG at zero, it has no instances to schedule on and naturally goes to zero with the rest of the compute.
 

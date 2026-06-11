@@ -28,6 +28,16 @@ Verified (pip checkov): `checkov -d terraform/infra --config-file .checkov.yaml 
 
 The baselines were first generated with **brew** checkov, which omits the graph (`CKV2_*`) checks. CI runs **pip** checkov, which runs them, so on the gate's first live run 42 infra + 2 dns graph findings appeared as "new" and failed CI. Fixed by regenerating both baselines with pip checkov (matching CI) and adding a `checkov-graph-guard` to the Makefile so a brew checkov is caught locally. The 42 are pre-existing, mostly design/decay (WAF off, no DNSSEC/query-logging, S3 versioning/replication/lifecycle, CloudFront response-headers, API-GW request-validation, EFS-in-backup, monitoring-tier LBs which are dormant) - grandfathered.
 
+### NAT-mode refactor re-key (0.10.x)
+
+The NAT gateway-bootstrap refactor ([`docs/0.10.x/nat-gateway-bootstrap-plan.md`](../../docs/0.10.x/nat-gateway-bootstrap-plan.md)) replaced the literal `use_nat_instance = true` in the `vpc` module block with an operator variable. Checkov can no longer statically resolve the `count` on the NAT-instance resources, which re-keys their findings:
+
+- `aws_instance.nat[0]`, `aws_security_group_rule.nat_egress[0]`, and `aws_security_group_rule.nat_ingress_vpc[0]` lost the `[0]` index (same findings, same rationales as the rows below).
+- CKV2_AWS_5 on `aws_security_group.nat[0]` no longer fires at all - entry removed.
+- CKV2_AWS_19 ("EIP not attached to an EC2 instance") on `aws_eip.nat_eip[0]` is newly reported. The EIPs *are* attached - to NAT instances via `aws_eip_association` in instance mode, or to NAT gateways via `allocation_id` in gateway mode - but the conditional attachment is no longer statically resolvable. They are also deliberately retained unattached while a non-prod environment is quiesced (stable relay IPs). Design-driven, won't-fix.
+
+Net baseline count is unchanged (one entry removed, one added).
+
 Three were pulled out for a real look and resolved (not left in the baseline):
 
 - **CKV_AWS_103 / CKV2_AWS_74** on `module.load_balancer.aws_lb_listener.imap` - **fixed**: the IMAP NLB listener now pins `ssl_policy = "ELBSecurityPolicy-TLS13-1-2-2021-06"` (TLS 1.2/1.3, strong ciphers). It had no policy, so it defaulted to one that still permits TLS 1.0/1.1 on the client-facing IMAPS endpoint. **Stage-validate: confirm clients still connect.**
@@ -83,6 +93,7 @@ Accepted as intentional architecture. Baselined **per resource** (not globally s
 | CKV_AWS_258, CKV_AWS_301 (x2) | - | Monitoring `alert_sink` Lambda URL - the monitoring tier is dormant (`TF_VAR_MONITORING=false` everywhere); revisit if it is ever enabled |
 | CKV_AWS_338 (x23) | - | CloudWatch retention - see decay (candidate to set an explicit retention rather than accept) |
 | CKV_AWS_330 | - | EFS access point user identity - mailstore needs specific uid/gid; revisit |
+| CKV2_AWS_19 | - | NAT EIPs attach to whichever NAT mode is active (instance association or gateway allocation); kept unattached while quiesced for stable relay IPs |
 | - | AWS-0320 | S3 bucket names not DNS-compliant - names are stable identifiers; renaming is a data migration |
 | - | AWS-0178 | VPC flow logs off - deliberate cost choice |
 

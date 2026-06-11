@@ -25,8 +25,8 @@ variable "zone_id" {
 
 variable "use_nat_instance" {
   type        = bool
-  description = "Use EC2 NAT instances instead of NAT Gateway."
-  default     = false
+  description = "Egress mode: true runs EC2 NAT instances from the custom AL2023 AMI (cheapest; requires the Image Builder pipeline to have produced at least one AMI - data.aws_ami.custom_nat hard-errors on an empty result, which is the guard against flipping to instances too early). False runs AWS-managed NAT Gateways, which need no AMI and are therefore also the bootstrap path for a brand-new instance-mode environment. Both modes are first-class and reuse the same EIPs."
+  default     = true
 }
 
 variable "nat_instance_type" {
@@ -46,8 +46,8 @@ variable "region" {
   description = "AWS region. Used to build the EC2 Image Builder managed-image ARN for the custom NAT AMI."
 }
 
-variable "use_custom_nat_ami" {
+variable "build_nat_ami" {
   type        = bool
-  description = "When true, NAT instances launch from the Image Builder-baked AL2023 AMI (nftables pre-installed) instead of the stock Amazon Linux 2 AMI. Leave false until the pipeline has produced at least one AMI (data.aws_ami.custom_nat hard-errors on an empty result)."
-  default     = false
+  description = "Whether to provision the EC2 Image Builder pipeline that bakes the custom AL2023 NAT AMI (nat_ami.tf). Independent of use_nat_instance so a gateway-mode environment can still build the AMI ahead of a switch to instances; pure-gateway environments that will never run instances can set this false to skip the pipeline entirely."
+  default     = true
 }
