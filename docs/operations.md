@@ -20,7 +20,7 @@ Setting `TF_VAR_MONITORING` to `true` in a GitHub environment adds [monitoring](
 
 # NAT and private-subnet egress
 
-Every private-subnet container reaches the internet and all AWS service APIs through the VPC's NAT instances, and the VPC has no VPC endpoints, so NAT health is load-bearing: if egress breaks, outbound mail stalls, the `/send` Lambda hangs, and the mail tiers stop shipping logs to CloudWatch even though the containers keep running. See [NAT and private-subnet egress](./nat.md) for how NAT is configured, how to stand it up in a new environment, the stock-AL2 vs. custom-AL2023-AMI choice and bootstrap, and how to diagnose an egress outage.
+Every private-subnet container reaches the internet and all AWS service APIs through the VPC's NAT, and the VPC has no VPC endpoints, so NAT health is load-bearing: if egress breaks, outbound mail stalls, the `/send` Lambda hangs, and the mail tiers stop shipping logs to CloudWatch even though the containers keep running. See [NAT and private-subnet egress](./nat.md) for the two NAT modes (EC2 instances or NAT Gateways), the gateway-based instance-mode bootstrap, and how to diagnose an egress outage.
 
 # Quiescing a non-prod environment
 

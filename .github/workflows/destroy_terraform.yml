@@ -80,6 +80,8 @@ jobs:
         echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
         echo "backup = ${{ vars.TF_VAR_BACKUP }}" >> terraform.tfvars
         echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
+        echo "use_nat_instance = ${{ vars.TF_VAR_USE_NAT_INSTANCE || 'true' }}" >> terraform.tfvars
+        echo "build_nat_ami = ${{ vars.TF_VAR_BUILD_NAT_AMI || 'true' }}" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
     - name: destroy-terraform
