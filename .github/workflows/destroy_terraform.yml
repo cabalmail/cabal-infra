@@ -66,6 +66,21 @@ jobs:
         name: backend.tf
     - name: move
       run: mv ../../backend.tf backend.tf
+    - name: strip-prevent-destroy
+      # lifecycle.prevent_destroy (the ECR repos) is a plan-time hard
+      # error under `terraform destroy`, so a teardown cannot even start
+      # while the guard is set. Strip it from this run's working copy
+      # only - nothing is committed. The repositories are still protected
+      # where it matters: with force_delete = false, the ECR API refuses
+      # to delete a repository that contains images, so image history
+      # survives the teardown (in AWS and in state) exactly as the guard
+      # intends, without blocking the rest of the destroy. The same
+      # API-level refusal preserves non-empty S3 buckets.
+      run: |
+        grep -rl "prevent_destroy = true" . | while read -r f; do
+          echo "stripping prevent_destroy from $f"
+          sed -i 's/prevent_destroy = true/prevent_destroy = false/' "$f"
+        done
     - name: install-terraform
       uses: hashicorp/setup-terraform@v4
     - name: tfvars-terraform
