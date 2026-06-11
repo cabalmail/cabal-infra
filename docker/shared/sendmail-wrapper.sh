@@ -4,6 +4,19 @@
 # Uses -bD (foreground daemon mode) so supervisord directly owns the
 # sendmail process - no PID file monitoring, no orphan daemons.
 
+# Sendmail's prerequisites (sendmail.cf, hash maps, aliases) are produced
+# by prepare-sendmail.sh - in the background via supervisord on imap so
+# Dovecot starts first, inline in the entrypoint on the smtp tiers. Block
+# until they exist; exec'ing sendmail without sendmail.cf would just
+# crash-loop. Phase 3 of docs/0.10.x/imap-deploy-downtime-plan.md.
+if [ ! -f /run/sendmail-ready ]; then
+  echo "[sendmail-wrapper] Waiting for sendmail prerequisites (/run/sendmail-ready)..."
+  until [ -f /run/sendmail-ready ]; do
+    sleep 1
+  done
+  echo "[sendmail-wrapper] Prerequisites ready."
+fi
+
 # Kill any stale sendmail daemon orphaned from a previous wrapper run
 pkill -x sendmail 2>/dev/null || true
 sleep 1

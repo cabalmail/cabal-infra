@@ -10,8 +10,8 @@
 # Lambdas resume serving instead of returning the maintenance 503.
 #
 # Run as a supervisord daemon (imap image only). After clearing, it execs into a
-# no-op wait so it stays RUNNING - the imap HEALTHCHECK flags any program that is
-# not RUNNING, so a one-shot that EXITed would mark the container unhealthy.
+# no-op wait so it stays RUNNING - the program runs under autorestart=true, so a
+# one-shot that EXITed would just be restarted and re-run pointlessly.
 #
 # Fail-soft by design: a failed readiness wait or a failed SSM write only logs a
 # warning and idles. Failing to clear the flag must NEVER crash-loop the IMAP
@@ -33,7 +33,7 @@ dovecot_ready() {
   (exec 3<>"/dev/tcp/${READY_HOST}/${READY_PORT}") 2>/dev/null
 }
 
-# Stay RUNNING forever so supervisord's status stays green. Only CI sets the
+# Stay RUNNING forever so autorestart=true does not re-run us. Only CI sets the
 # flag, and that happens before this container exists, so there is nothing left
 # to do once it has been cleared once.
 idle() {

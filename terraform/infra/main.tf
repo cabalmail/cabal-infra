@@ -200,7 +200,13 @@ module "ecs" {
   image_tag           = data.aws_ssm_parameter.deployed_image_tag.value
 
   # Health-check tuning - raise these to keep containers alive for debugging.
-  health_check_grace_period = 600
+  # health_check_grace_period is consumed by the imap service only. 120s
+  # comfortably covers image pull + entrypoint + Dovecot startup on a healthy
+  # task; a task still failing NLB checks after that is a bad deploy, and the
+  # imap deployment circuit breaker rolls it back instead of letting it
+  # thrash (was 600, which gave a stuck task 10 minutes before ECS gave up).
+  # Phase 2 of docs/0.10.x/imap-deploy-downtime-plan.md.
+  health_check_grace_period = 120
   deregistration_delay      = 120
   unhealthy_threshold       = 10
 
