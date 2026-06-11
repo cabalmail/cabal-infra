@@ -5,6 +5,70 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.23] - 2026-06-11
+
+### Added
+- A "Build NAT AMI" workflow (`nat_ami_build.yml`): triggers the
+  `cabal-nat-al2023` Image Builder pipeline for the selected environment
+  and waits for the image, so the instance-mode bootstrap and
+  off-schedule rebuilds can be driven entirely from GitHub, without
+  local AWS credentials.
+
+### Changed
+- NAT instances and NAT Gateways are now two first-class egress modes,
+  selected per environment via `TF_VAR_USE_NAT_INSTANCE` (default `true`,
+  matching the existing instance mode). A new instance-mode environment
+  bootstraps through a NAT Gateway: apply once in gateway mode, build the
+  first AL2023 NAT AMI through it (the Image Builder pipeline is now gated
+  on its own `TF_VAR_BUILD_NAT_AMI` flag, independent of the egress mode),
+  then flip to instances. Both modes share the same Elastic IPs, so
+  `smtp.<control-domain>`, SPF, and the port-25 allow-list are unaffected
+  by the mode choice. See `docs/nat.md`.
+
+### Removed
+- The stock Amazon Linux 2 NAT bootstrap path: the AL2 AMI lookup, its
+  iptables `user_data`, the `use_custom_nat_ami` toggle, and the module's
+  `ROLLBACK.md` (superseded by the mode-switch section of `docs/nat.md`).
+  Instance-mode NAT always launches from the Image Builder-baked AL2023
+  AMI; AL2 (EOL) is gone from the stack entirely.
+
+### Fixed
+- The `lambda-certbot` job in `app.yml` no longer pushes a `latest` tag
+  alongside the `sha-*` tag. The `cabal/certbot-renewal` ECR repository
+  was made immutable in the Phase 2.5 IaC hardening, so the first
+  content-changing build after that failed with "tag is immutable" and
+  aborted before the deploy step, leaving the certbot-renewal Lambda on
+  a stale image. Nothing consumed `latest`: the deploy script and the
+  Terraform `resolved_image_uri` both use the `sha-*` tag.
+- The checkov half of the baseline drift check (`make drift` and the
+  baseline-drift step in `infra.yml`) now actually detects stale
+  `.checkov.baseline` entries. The parser read `resource`/`check_ids`
+  directly off each `failed_checks` entry, but the baseline nests them
+  under per-file `findings`, so the check always compared an empty set
+  and passed trivially. Entries are keyed on (resource, check_id)
+  exactly as checkov's own baseline matcher does. The trivy half was
+  unaffected.
+- The destroy workflow strips `lifecycle.prevent_destroy` from its
+  working copy before running, since the guard (on the ECR repos since
+  0.9.5) is a plan-time hard error that blocked the entire teardown.
+  Image history is still preserved: `force_delete = false` makes the
+  ECR API refuse to delete repositories that contain images, so they
+  survive the teardown in AWS and in state, as before.
+- The generated IMAP master password now guarantees at least one
+  character from every class the Cognito default password policy
+  requires. A draw without a digit (seen bootstrapping development)
+  wedged every subsequent apply at the master Cognito user. Note: the
+  pinned minimums force a one-time master-password rotation on existing
+  environments at their next apply; SSM and Cognito rotate together,
+  with a seconds-scale mismatch window mid-apply.
+- The quiesce workflow now passes `sinkhole`, `use_eum_sms`, and the
+  invitation code through to Terraform the same way `infra.yml` does.
+  Its tfvars block previously fell back to the variable defaults, so a
+  quiesce apply tried to release the deletion-protected EUM phone
+  number (observed failing on development), and a stage quiesce would
+  have silently destroyed the sinkhole tier and blanked the
+  `check_invite` invitation code.
+
 ## [0.10.22] - 2026-06-11
 
 ### Added

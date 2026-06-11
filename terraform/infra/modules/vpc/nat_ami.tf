@@ -5,7 +5,7 @@
 # a boot-time install is fragile - it broke all private-subnet egress in 0.10.1.
 # Instead, bake nftables + the masquerade ruleset + ip_forward + an enabled
 # nftables.service into a custom AMI here, and launch the NAT instances from it
-# (see var.use_custom_nat_ami and nat.tf).
+# (see aws_instance.nat in nat.tf).
 #
 # The pipeline rebuilds only when the AL2023 base image actually has updates
 # (EXPRESSION_MATCH_AND_DEPENDENCY_UPDATES_AVAILABLE), so it tracks AL2023
@@ -15,18 +15,21 @@
 # a deliberate, plan-reviewed apply.
 #
 # The build and test instances run in a private subnet and reach the internet
-# through the existing NAT instances. A build therefore needs a healthy NAT; if
-# egress is down the build simply fails and the last-good AMI stays in place (a
-# safe no-op). This is also why the NAT is never launched from a not-yet-built
-# image: bootstrap by leaving use_custom_nat_ami = false until the first AMI
-# exists (see the toggle in variables.tf and the swap in nat.tf).
+# through the environment's NAT (instances or gateway - whichever mode is
+# active). A build therefore needs healthy egress; if egress is down the build
+# simply fails and the last-good AMI stays in place (a safe no-op). A
+# brand-new instance-mode environment has no AMI to launch from yet, so it
+# bootstraps in gateway mode (use_nat_instance = false), builds the first AMI
+# through the gateway, then flips to instances - see docs/nat.md. The pipeline
+# is gated on var.build_nat_ami, independent of the egress mode, so it exists
+# during that gateway-mode bootstrap window.
 #
 # Arch note: parent_image and instance_types are x86_64, matching the NAT's
 # var.nat_instance_type default (t3.micro). Keep both on the same architecture.
 # =============================================================================
 
 resource "aws_iam_role" "imagebuilder" {
-  count = var.use_nat_instance ? 1 : 0
+  count = var.build_nat_ami ? 1 : 0
   name  = "cabal-nat-imagebuilder-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -39,25 +42,25 @@ resource "aws_iam_role" "imagebuilder" {
 }
 
 resource "aws_iam_role_policy_attachment" "imagebuilder_core" {
-  count      = var.use_nat_instance ? 1 : 0
+  count      = var.build_nat_ami ? 1 : 0
   role       = aws_iam_role.imagebuilder[0].name
   policy_arn = "arn:aws:iam::aws:policy/EC2InstanceProfileForImageBuilder"
 }
 
 resource "aws_iam_role_policy_attachment" "imagebuilder_ssm" {
-  count      = var.use_nat_instance ? 1 : 0
+  count      = var.build_nat_ami ? 1 : 0
   role       = aws_iam_role.imagebuilder[0].name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
 resource "aws_iam_instance_profile" "imagebuilder" {
-  count = var.use_nat_instance ? 1 : 0
+  count = var.build_nat_ami ? 1 : 0
   name  = "cabal-nat-imagebuilder-profile"
   role  = aws_iam_role.imagebuilder[0].name
 }
 
 resource "aws_security_group" "imagebuilder" {
-  count       = var.use_nat_instance ? 1 : 0
+  count       = var.build_nat_ami ? 1 : 0
   name        = "cabal-nat-imagebuilder-sg"
   description = "Egress-only SG for the NAT AMI Image Builder build/test instances"
   vpc_id      = aws_vpc.network.id
@@ -67,7 +70,7 @@ resource "aws_security_group" "imagebuilder" {
 }
 
 resource "aws_security_group_rule" "imagebuilder_egress" {
-  count             = var.use_nat_instance ? 1 : 0
+  count             = var.build_nat_ami ? 1 : 0
   type              = "egress"
   protocol          = "-1"
   from_port         = 0
@@ -77,7 +80,7 @@ resource "aws_security_group_rule" "imagebuilder_egress" {
 }
 
 resource "aws_imagebuilder_component" "nat_nftables" {
-  count       = var.use_nat_instance ? 1 : 0
+  count       = var.build_nat_ami ? 1 : 0
   name        = "cabal-nat-nftables"
   platform    = "Linux"
   version     = "1.0.1"
@@ -96,7 +99,7 @@ resource "aws_imagebuilder_component" "nat_nftables" {
 }
 
 resource "aws_imagebuilder_image_recipe" "nat" {
-  count   = var.use_nat_instance ? 1 : 0
+  count   = var.build_nat_ami ? 1 : 0
   name    = "cabal-nat-al2023"
   version = "1.0.1"
   # "x.x.x" resolves to the latest AL2023 x86_64 managed image. Using the
@@ -127,7 +130,7 @@ resource "aws_imagebuilder_image_recipe" "nat" {
 }
 
 resource "aws_imagebuilder_infrastructure_configuration" "nat" {
-  count                         = var.use_nat_instance ? 1 : 0
+  count                         = var.build_nat_ami ? 1 : 0
   name                          = "cabal-nat-al2023"
   instance_profile_name         = aws_iam_instance_profile.imagebuilder[0].name
   instance_types                = [var.nat_instance_type]
@@ -142,7 +145,7 @@ resource "aws_imagebuilder_infrastructure_configuration" "nat" {
 }
 
 resource "aws_imagebuilder_distribution_configuration" "nat" {
-  count = var.use_nat_instance ? 1 : 0
+  count = var.build_nat_ami ? 1 : 0
   name  = "cabal-nat-al2023"
 
   distribution {
@@ -160,7 +163,7 @@ resource "aws_imagebuilder_distribution_configuration" "nat" {
 }
 
 resource "aws_imagebuilder_image_pipeline" "nat" {
-  count                            = var.use_nat_instance ? 1 : 0
+  count                            = var.build_nat_ami ? 1 : 0
   name                             = "cabal-nat-al2023"
   image_recipe_arn                 = aws_imagebuilder_image_recipe.nat[0].arn
   infrastructure_configuration_arn = aws_imagebuilder_infrastructure_configuration.nat[0].arn
@@ -178,9 +181,11 @@ resource "aws_imagebuilder_image_pipeline" "nat" {
   }
 }
 
-# Latest baked AMI, consumed by aws_instance.nat when use_custom_nat_ami = true.
-# Gated on the toggle so the stack does not hard-fail before the first build
-# exists: a data.aws_ami with no match is an error, not an empty result.
+# Latest baked AMI, consumed by aws_instance.nat. Gated on use_nat_instance
+# (read only when actually running instances) because a data.aws_ami with no
+# match is an error, not an empty result - and that hard error is deliberate:
+# it is the guard that stops an operator flipping use_nat_instance to true
+# before the pipeline has produced an AMI to launch from.
 #
 # The tag:Role filter is load-bearing: Image Builder creates the output AMI
 # during the build stage (so it already has the cabal-nat-al2023-* name) but
@@ -189,7 +194,7 @@ resource "aws_imagebuilder_image_pipeline" "nat" {
 # WITHOUT the Role tag - filtering on tag:Role = cabal-nat ensures most_recent
 # can only ever resolve to a test-passed, fully distributed image.
 data "aws_ami" "custom_nat" {
-  count       = var.use_custom_nat_ami ? 1 : 0
+  count       = var.use_nat_instance ? 1 : 0
   owners      = ["self"]
   most_recent = true
   filter {
