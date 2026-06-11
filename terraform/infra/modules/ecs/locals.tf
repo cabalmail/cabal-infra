@@ -46,11 +46,21 @@ locals {
 
   # Target groups are keyed by function, not tier, because smtp-out
   # maps to two target groups (submission + starttls).
+  #
+  # health_check_interval: imap probes every 10s so a freshly started
+  # task is in service ~20s after Dovecot listens (healthy_threshold=2)
+  # instead of 60s. The imap service deploys with a zero-task window
+  # (single-task hard cap), so health-check latency is pure client-facing
+  # downtime there. Trade-off accepted on imap: a broken task is removed
+  # after unhealthy_threshold x 10s instead of x 30s, shrinking the
+  # operator-debugging window by 3x. The smtp tiers roll with overlap
+  # (min_healthy=100), so they keep the relaxed 30s probe. Phase 1 of
+  # docs/0.10.x/imap-deploy-downtime-plan.md.
   target_groups = {
-    imap       = { port = 143 }
-    relay      = { port = 25 }
-    submission = { port = 465 } # Dovecot submission (implicit TLS); NLB passes through to container port 465
-    starttls   = { port = 587 }
+    imap       = { port = 143, health_check_interval = 10 }
+    relay      = { port = 25, health_check_interval = 30 }
+    submission = { port = 465, health_check_interval = 30 } # Dovecot submission (implicit TLS); NLB passes through to container port 465
+    starttls   = { port = 587, health_check_interval = 30 }
   }
 
   # Flatten per-tier port lists into a map keyed by "tier-port" for
