@@ -33,7 +33,7 @@ environment by `use_nat_instance` (a GitHub Environment variable,
 
 | Mode | `use_nat_instance` | What | Who it's for |
 |---|---|---|---|
-| **NAT instances** | `true` (default) | One EC2 instance per AZ from a custom AL2023 AMI baked by EC2 Image Builder | Cheapest; small / personal / family deployments (the current prod + stage choice) |
+| **NAT instances** | `true` (default) | One EC2 instance per AZ from a custom AL2023 AMI baked by EC2 Image Builder | Cheapest; small / personal / family deployments |
 | **NAT Gateway** | `false` | One AWS-managed NAT Gateway per AZ; no AMI, no OS | Commercial / at-scale operators, or anyone preferring managed over cheap |
 
 Approximate us-east-1 monthly cost (the reason instances are the small-scale
@@ -43,11 +43,12 @@ gateway is roughly half the run-rate; at commercial volume the managed
 reliability wins.
 
 **Both modes reuse the same Elastic IPs** (`aws_eip.nat_eip`, one per AZ).
-These are the stable outbound source IPs for mail: the public
-`smtp.<control-domain>` A record points at them, they are what you allow-list
-for the port-25 block (see below), and they are what your SPF records
-authorize. Switching modes does not change them, and they are preserved across
-quiesce, so allow-lists never need re-issuing.
+These are the stable outbound source IPs for mail: `nat.tf` maintains a
+public `smtp.<control-domain>` A record over them (the forward record that
+the EIPs' reverse DNS is validated against - see `aws_eip_domain_name`),
+they are what you allow-list for the port-25 block (see below), and they are
+what your SPF records authorize. Switching modes does not change them, and
+they are preserved across quiesce, so allow-lists never need re-issuing.
 
 ## How NAT is wired
 
@@ -73,8 +74,9 @@ The resources live in
 
 A NAT instance needs a userspace firewall tool to install the masquerade
 (SNAT) rule that makes it a NAT, and AL2023's base AMI ships none (neither
-`nftables` nor `iptables`) - a boot-time install is fragile and broke all
-egress in 0.10.1 when the install step failed silently. So instance mode
+`nftables` nor `iptables`) - and a boot-time install is fragile: if it fails,
+the instance forwards without SNAT and all private-subnet egress silently
+breaks. So instance mode
 *always* launches from a custom AMI: an EC2 Image Builder pipeline
 ([nat_ami.tf](../terraform/infra/modules/vpc/nat_ami.tf) +
 [nat-nftables-component.yaml](../terraform/infra/modules/vpc/nat-nftables-component.yaml))
@@ -242,10 +244,10 @@ recipe versions are immutable.
 
 ## Troubleshooting: egress is down
 
-Symptoms (this is exactly the 0.10.1 incident): sends time out at the `/send`
-Lambda; outbound mail queues instead of delivering; the mail tiers go silent in
-CloudWatch (logs stop shipping because the `awslogs` driver can't reach the Logs
-endpoint); private-subnet API calls hang.
+Symptoms: sends time out at the `/send` Lambda; outbound mail queues instead
+of delivering; the mail tiers go silent in CloudWatch (logs stop shipping
+because the `awslogs` driver can't reach the Logs endpoint); private-subnet
+API calls hang.
 
 1. **Confirm it's egress.** Check whether the tiers stopped logging at roughly
    the same moment (the "Verifying egress" log-timestamp check). Simultaneous
@@ -270,13 +272,3 @@ endpoint); private-subnet API calls hang.
    culprit, flip the environment to gateway mode (`TF_VAR_USE_NAT_INSTANCE =
    false`) and apply: managed gateways restore egress on the same EIPs with no
    AMI in the path. Rebuild or fix the AMI, then flip back in a window.
-
-## History
-
-Instance mode originally bootstrapped on stock Amazon Linux 2 (which
-preinstalls `iptables`) behind a `use_custom_nat_ami` toggle, with the custom
-AL2023 AMI as a second step. The AL2 path was retired in 0.10.x - AL2 is EOL,
-and routing the bootstrap through a NAT Gateway removed the need for any
-stock-AMI NAT at all. See
-[docs/0.10.x/nat-gateway-bootstrap-plan.md](./0.10.x/nat-gateway-bootstrap-plan.md)
-for the plan that drove this.
