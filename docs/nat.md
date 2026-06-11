@@ -136,7 +136,8 @@ instances. Bootstrap is a deliberate double-apply:
    private routes at them, and destroys the gateways. Expect a brief per-AZ
    egress blip while the EIPs move; for a bootstrap (nothing running yet) this
    is a non-event, but for a mode switch on a live environment do it in a
-   window.
+   window. **Expect to apply twice** - see "The gateway-to-instance cutover
+   takes two applies" below.
 
 ### 3. Clear the port-25 block (both modes)
 
@@ -163,6 +164,31 @@ hard-error stops the apply if you forget.
 Gateway mode is also the rollback path if the NAT instances themselves are
 misbehaving (e.g. a bad AMI build): flip to the gateway, fix or rebuild the
 AMI, flip back.
+
+### The gateway-to-instance cutover takes two applies
+
+When flipping gateway -> instances (bootstrap step 3, or a live mode switch),
+the first apply reliably fails at `aws_eip_association.nat` with a misleading
+
+```
+AuthFailure: You do not have permission to access the specified resource.
+```
+
+This is not an IAM problem. EC2 returns that error when associating an EIP
+that a deleting NAT gateway still holds: Terraform starts the association as
+soon as the NAT instance exists, while the gateway (whose deletion frees the
+EIP) takes a few minutes to go away in parallel. There is no clean way to
+order a create after an unrelated destroy in Terraform - `depends_on` orders
+dependent creates *before* the dependency's destroy, which would make the
+failure deterministic rather than racy - so the retry is accepted as the cost
+of a rare, deliberate operation. Everything else in the cutover (instance,
+route repoint, gateway deletion) completes on the first apply; private-subnet
+egress is down in the gap because the route already points at an instance
+that does not have its public IP yet. **Re-run the apply** once the gateway
+shows `deleted`; the association is the only remaining change and the second
+apply converges in seconds. The instance -> gateway direction does not have
+this race (the association is destroyed before the EIP is handed to the new
+gateway, in correct dependency order).
 
 ## Verifying egress
 
