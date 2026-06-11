@@ -5,6 +5,58 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.22] - 2026-06-11
+
+### Added
+- IMAP deploys now pre-flight the new image before touching the running
+  service: deploy-ecs-service.sh runs the freshly registered revision as
+  a one-shot task with PREFLIGHT=1 (the entrypoint exercises secrets,
+  EFS, Cognito, DynamoDB, and the sendmail compile, then exits without
+  starting services) and aborts the deploy while the old task is still
+  serving if it fails. The planned-maintenance flag is now raised by the
+  deploy script only after the preflight passes, so a failed deploy
+  never 503s the admin app at all. Costs ~30-60s per successful deploy;
+  saves the full outage window on a bad image. Phase 5 of
+  docs/0.10.x/imap-deploy-downtime-plan.md.
+- IMAP deploys pre-pull the freshly pushed image onto the cluster's
+  container instance(s) via SSM Run Command while the old task is still
+  serving, so the roll no longer pays the 30-60s cold layer download
+  inside its zero-task window. Fail-soft: a failed or unauthorized
+  pre-pull logs a warning and the deploy proceeds on the previous slow
+  path. Phase 4 of docs/0.10.x/imap-deploy-downtime-plan.md.
+
+### Changed
+- Bad IMAP deploys now fail fast and roll back: the IMAP service's
+  health-check grace period drops from 600s to 120s and a deployment
+  circuit breaker returns the service to the last working revision
+  instead of letting a broken task thrash the single-task service.
+  deploy-ecs-service.sh now asserts the service stabilized on the
+  revision it registered, so a rolled-back deploy fails CI instead of
+  reporting success. Phase 2 of docs/0.10.x/imap-deploy-downtime-plan.md.
+- The IMAP container now starts Dovecot as soon as its prerequisites
+  (TLS, Cognito auth script, user sync, master password) are ready,
+  instead of behind the full sendmail preparation. The sendmail side
+  (sendmail.mc render, DynamoDB map generation, sendmail.cf compile,
+  aliases) moved to a prepare-sendmail.sh script that runs as a
+  background supervisord program on imap and inline in the entrypoint on
+  the smtp tiers; sendmail-wrapper.sh blocks on its /run/sendmail-ready
+  sentinel and reconfigure.sh waits for it before processing changes.
+  Cuts 20-40s of IMAP client downtime per deploy. Phase 3 of
+  docs/0.10.x/imap-deploy-downtime-plan.md.
+- The IMAP NLB target group now health-checks every 10s (was 30s), so a
+  freshly deployed IMAP task enters service about 20s after Dovecot starts
+  listening instead of up to 60s. The smtp target groups keep the 30s
+  probe. Phase 1 of docs/0.10.x/imap-deploy-downtime-plan.md.
+
+### Removed
+- Removed the Docker HEALTHCHECK from the three mail-tier images (imap,
+  smtp-in, smtp-out). It could never pass: the check ran supervisorctl, but no
+  tier's supervisord.conf configures an RPC endpoint for it to reach, so the
+  Docker daemon marked every container "unhealthy" on the host - and ECS
+  ignores image health checks anyway (it only honors healthCheck blocks in the
+  task definition, and none are defined). Liveness continues to come from the
+  NLB target-group TCP checks on the service ports, which ECS does act on.
+
 ## [0.10.21] - 2026-06-10
 
 ### Added
