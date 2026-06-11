@@ -114,8 +114,9 @@ instances. Bootstrap is a deliberate double-apply:
    `infra.yml` apply. NAT Gateways provide egress; the Image Builder pipeline
    (present because `build_nat_ami` defaults to `true`) can now reach the
    internet through them.
-2. **Build the first AMI.** Trigger the pipeline (or wait for its daily
-   schedule):
+2. **Build the first AMI.** Run the "Build NAT AMI" workflow
+   (`nat_ami_build.yml`) from the environment's branch - it triggers the
+   pipeline and waits for the image. Or, with local AWS credentials:
    ```
    aws imagebuilder start-image-pipeline-execution \
      --image-pipeline-arn "$(aws imagebuilder list-image-pipelines \
@@ -199,8 +200,10 @@ security patches without churning no-op images. Builds are asynchronous and do
 **not** roll the NAT on their own: `nat.tf` reads the latest AMI via
 `data.aws_ami.custom_nat` (`owners = ["self"]`, `most_recent = true`), so a fresh
 build appears as a NAT replacement in the next plan and is adopted only when you
-deliberately apply it. To force an off-schedule rebuild (e.g. an urgent CVE), run
-the `start-image-pipeline-execution` command from the bootstrap steps above.
+deliberately apply it. To force an off-schedule rebuild (e.g. an urgent CVE),
+run the "Build NAT AMI" workflow (`nat_ami_build.yml`) from the environment's
+branch, or the `start-image-pipeline-execution` command from the bootstrap
+steps above.
 
 The build and test instances run in a private subnet, so a rebuild needs
 healthy egress (either mode) - if egress is down the build fails and the

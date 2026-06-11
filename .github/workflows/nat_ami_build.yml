@@ -1,0 +1,105 @@
+---
+# Trigger the cabal-nat-al2023 EC2 Image Builder pipeline and wait for
+# the resulting image to become available. This is the GitHub-driven
+# equivalent of the aws imagebuilder start-image-pipeline-execution
+# command in docs/nat.md, for operators (and automation) without local
+# AWS credentials. Used during the instance-mode bootstrap (build the
+# first NAT AMI through the NAT Gateway) and for off-schedule rebuilds
+# (e.g. an urgent CVE).
+#
+# A successful build does NOT roll the NAT instances: the new AMI
+# surfaces as a NAT instance replacement in the next infra.yml plan and
+# is adopted only on a deliberate apply. See docs/nat.md.
+
+name: Build NAT AMI
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment. Must match the branch this run is started from."
+        required: true
+        type: choice
+        options:
+          - development
+          - stage
+          - prod
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: require-branch-matching-input
+        run: |
+          REF="${{ github.ref_name }}"
+          case "$REF" in
+            main) ENV_FOR_REF="prod" ;;
+            stage) ENV_FOR_REF="stage" ;;
+            development) ENV_FOR_REF="development" ;;
+            *)
+              echo "::error::nat_ami_build.yml must run from main, stage, or development (got '$REF')."
+              exit 1
+              ;;
+          esac
+          if [[ "$ENV_FOR_REF" != "${{ inputs.environment }}" ]]; then
+            echo "::error::Branch '$REF' maps to environment '$ENV_FOR_REF', not '${{ inputs.environment }}'. Re-run from the matching branch."
+            exit 1
+          fi
+
+  build:
+    runs-on: ubuntu-latest
+    needs:
+      - guard
+    # The pipeline build itself takes ~15-25 minutes; its test phase has
+    # a 60-minute timeout of its own. Give the poll loop headroom.
+    timeout-minutes: 90
+    environment: ${{ inputs.environment }}
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+    steps:
+      - name: start-pipeline
+        id: start
+        run: |
+          PIPELINE_ARN=$(aws imagebuilder list-image-pipelines \
+            --query "imagePipelineList[?name=='cabal-nat-al2023'].arn | [0]" --output text)
+          if [ -z "$PIPELINE_ARN" ] || [ "$PIPELINE_ARN" = "None" ]; then
+            echo "::error::Image pipeline 'cabal-nat-al2023' not found. Has infra.yml applied with build_nat_ami = true?"
+            exit 1
+          fi
+          echo "Starting $PIPELINE_ARN"
+          BUILD_ARN=$(aws imagebuilder start-image-pipeline-execution \
+            --image-pipeline-arn "$PIPELINE_ARN" \
+            --query imageBuildVersionArn --output text)
+          echo "Build version: $BUILD_ARN"
+          echo "build_arn=$BUILD_ARN" >> "$GITHUB_OUTPUT"
+      - name: wait-for-image
+        run: |
+          BUILD_ARN="${{ steps.start.outputs.build_arn }}"
+          while true; do
+            STATUS=$(aws imagebuilder get-image \
+              --image-build-version-arn "$BUILD_ARN" \
+              --query 'image.state.status' --output text)
+            echo "$(date -u +%H:%M:%S) status: $STATUS"
+            case "$STATUS" in
+              AVAILABLE)
+                break
+                ;;
+              FAILED|CANCELLED|DELETED)
+                REASON=$(aws imagebuilder get-image \
+                  --image-build-version-arn "$BUILD_ARN" \
+                  --query 'image.state.reason' --output text)
+                echo "::error::Image build ended $STATUS: $REASON"
+                exit 1
+                ;;
+            esac
+            sleep 60
+          done
+          AMI=$(aws imagebuilder get-image \
+            --image-build-version-arn "$BUILD_ARN" \
+            --query 'image.outputResources.amis[0].image' --output text)
+          echo "::notice::NAT AMI build complete: $AMI. Adopt it via the next infra.yml plan/apply (instance mode), or flip TF_VAR_USE_NAT_INSTANCE=true if bootstrapping."
