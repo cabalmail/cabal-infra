@@ -39,11 +39,20 @@ def checkov_current_pairs(data):
 
 
 def checkov_baseline_pairs(baseline):
+    # The baseline nests findings under per-file entries:
+    #   {"failed_checks": [{"file": ..., "findings":
+    #       [{"resource": ..., "check_ids": [...]}]}]}
+    # Key on (resource, check_id) exactly as checkov's own
+    # Baseline._is_check_in_baseline does: file is ignored and count/for_each
+    # indices ([0], ["imap"]) are part of the resource address. No index
+    # normalization - if the address form drifts (foo vs foo[0]), checkov's
+    # --baseline gate stops matching the entry too, so it IS stale.
     pairs = set()
     for entry in baseline.get("failed_checks", []):
-        resource = entry.get("resource")
-        for cid in entry.get("check_ids", []):
-            pairs.add((resource, cid))
+        for finding in entry.get("findings", []):
+            resource = finding.get("resource")
+            for cid in finding.get("check_ids", []):
+                pairs.add((resource, cid))
     return pairs
 
 
