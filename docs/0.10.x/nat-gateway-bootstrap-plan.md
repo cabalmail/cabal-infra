@@ -1,7 +1,7 @@
 # Plan: route the NAT-instance bootstrap through a NAT Gateway (retire AL2)
 
-**Status: planned (0.10.x).** This is a forward-looking spec. The operator-facing
-guide lands in [docs/nat.md](../nat.md) once implemented.
+**Status: implemented (0.10.x).** Kept as the historical planning record. The
+operator-facing guide is [docs/nat.md](../nat.md).
 
 ## Goal
 

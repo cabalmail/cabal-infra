@@ -1,4 +1,4 @@
-FROM prom/alertmanager:v0.28.1
+FROM prom/alertmanager:v0.32.2@sha256:b85533a2eb45865835315810315f6951331b2dbc8c93a6cf9a51e156a006a706
 
 USER root
 

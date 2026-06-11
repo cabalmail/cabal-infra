@@ -166,6 +166,7 @@ Response format: `{"statusCode": N, "body": json.dumps({...})}`. User extracted 
 | `fetch_bimi` | BIMI logo lookup for sender domains |
 | `send` | Send email via SMTP |
 | `move_messages` / `set_flag` | IMAP message operations |
+| `purge_messages` / `empty_trash` | Permanently delete (expunge) messages; trash folders only |
 
 ### React App (`react/admin/`)
 
@@ -193,9 +194,9 @@ Trade-offs of the API-backed path (full notes in `apple/CabalmailKit/Sources/Cab
 ### Docker Services (`docker/`)
 
 Three container images based on `amazonlinux:2023`, managed by supervisord:
-- **`imap`**: Dovecot (IMAP) + Sendmail (local delivery) + Procmail + fail2ban
-- **`smtp-in`**: Sendmail (inbound relay) + fail2ban
-- **`smtp-out`**: Sendmail (outbound) + Dovecot (submission auth) + OpenDKIM + fail2ban
+- **`imap`**: Dovecot (IMAP) + Sendmail (local delivery) + Procmail
+- **`smtp-in`**: Sendmail (inbound relay)
+- **`smtp-out`**: Sendmail (outbound) + Dovecot (submission auth) + OpenDKIM
 
 Shared infrastructure:
 - `docker/shared/entrypoint.sh` — writes TLS certs, renders sendmail.mc, generates Cognito auth script, syncs OS users, generates sendmail maps from DynamoDB
@@ -233,7 +234,7 @@ Shared infrastructure:
 
 ## CHANGELOG
 
-Use semantic versioning. Create a new version when appropriate. When creating a new version, use "Unreleased" instead of a date, since you don't know when it's going to be released. Only record what shipped, not trials or blind alleys.
+Use semantic versioning. Record changelog entries as **fragments**, not by editing `CHANGELOG.md` directly: add a file `changelog.d/<slug>.<category>.md` whose body is the entry exactly as it should appear (leading `- `, hard-wrapped, two-space continuation indent). `<category>` is one of `added`/`changed`/`deprecated`/`removed`/`fixed`/`security`. Do not create an `## [Unreleased]` section and do not pre-assign a version - the release collator (`.github/scripts/collate-changelog.sh`, run by `promote.sh` / `make promote`) folds every pending fragment into a dated section at release time. Only record what shipped, not trials or blind alleys. See [`changelog.d/README.md`](changelog.d/README.md) and [`docs/releasing.md`](docs/releasing.md).
 
 ## Roadmap
 

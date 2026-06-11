@@ -9,6 +9,10 @@ from helper import validate_content_id # pylint: disable=import-error
 from helper import validate_folder_name # pylint: disable=import-error
 from helper import validate_uid # pylint: disable=import-error
 
+from helper import maintenance_guard # pylint: disable=import-error
+
+
+@maintenance_guard
 def handler(event, _context):
     '''Preps an inline image attachment for download from S3 given a folder,
     message ID, and attachment uuid'''

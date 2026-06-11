@@ -30,6 +30,10 @@ struct MessageDetailView: View {
     @State var moveSheetPresented = false
     @State var sourceSheetTab: MessageSourceSheet.Tab?
     @State var senderContactName: String?
+    /// Presents the "Delete Forever?" confirmation when the delete button
+    /// fires while the message lives in Trash. Non-private so the
+    /// `+Toolbar` extension's dispose button can stage it.
+    @State var purgeConfirmPresented = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -68,6 +72,18 @@ struct MessageDetailView: View {
         }
         .sheet(item: $sourceSheetTab) { tab in
             sourceSheet(initialTab: tab)
+        }
+        .confirmationDialog(
+            "Delete Forever?",
+            isPresented: $purgeConfirmPresented,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Forever", role: .destructive) {
+                runPurge()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This message will be permanently deleted. This can't be undone.")
         }
         .onChange(of: appState.replyRequestTick) { _, _ in beginCompose(.reply) }
         .onChange(of: appState.replyAllRequestTick) { _, _ in beginCompose(.replyAll) }
@@ -109,27 +125,34 @@ struct MessageDetailView: View {
                         added: added
                     )
                 }
+                // Bracket each flag write so the list shields the optimistic
+                // flag from a refresh that lands before the write resolves
+                // (the cross-view analogue of the list's own pending-flag
+                // shield). Folder-keyed so a UID collision across mailboxes
+                // can't mis-shield an unrelated row.
+                newModel.onFlagWriteInFlight = { [weak appState] inFlight in
+                    appState?.setFlagWrite(
+                        folderPath: folderPath,
+                        uid: uid,
+                        inFlight: inFlight
+                    )
+                }
+                // Likewise bracket archive / trash / move so the list keeps
+                // the optimistically-pruned row gone until the move resolves,
+                // rather than letting a mid-move refresh resurrect it.
+                newModel.onMoveInFlight = { [weak appState] inFlight in
+                    appState?.setMoveInFlight(
+                        folderPath: folderPath,
+                        uid: uid,
+                        inFlight: inFlight
+                    )
+                }
                 model = newModel
                 activeModel = newModel
             }
             activeModel.startLoadIfNeeded()
         }
         .onDisappear { model?.onDisappear() }
-    }
-
-    @ViewBuilder
-    private var moveSheet: some View {
-        if let client = appState.client {
-            MoveToFolderSheet(
-                currentFolder: folder,
-                client: client,
-                onSelect: { destination in
-                    moveSheetPresented = false
-                    Task { await performMove(to: destination.path) }
-                },
-                onCancel: { moveSheetPresented = false }
-            )
-        }
     }
 
     @ViewBuilder
@@ -141,31 +164,6 @@ struct MessageDetailView: View {
                 onClose: { sourceSheetTab = nil }
             )
         }
-    }
-
-    private func performMove(to destination: String) async {
-        guard let model else { return }
-        let sourceFolderPath = folder.path
-        let movedUID = envelope.uid
-        await model.move(
-            to: destination,
-            onSuccess: {
-                // Match dispose's signal so MessageListView prunes the row
-                // and advances selection to the next unread message — same
-                // optimistic UX, just routed through `signalDisposed` since
-                // the row is gone from the source folder either way.
-                appState.signalDisposed(
-                    folderPath: sourceFolderPath,
-                    uid: movedUID
-                )
-            },
-            onFailure: { error in
-                appState.showToast(Toast(
-                    kind: .error,
-                    message: "Couldn't move message: \(error.localizedDescription)"
-                ))
-            }
-        )
     }
 
     @ViewBuilder

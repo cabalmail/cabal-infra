@@ -1,5 +1,5 @@
-output "domains" {
-  value = [
+locals {
+  created_domains = [
     for k, v in aws_route53_zone.mail_dns : {
       "domain"       = k,
       "zone_id"      = v.id
@@ -7,5 +7,23 @@ output "domains" {
       "arn"          = v.arn
     }
   ]
-  description = "List of maps with domains and their Route 53 zone IDs."
+
+  # When the control domain doubles as a mail domain, surface its pre-existing
+  # zone (looked up via data source) with the same shape. This is empty when the
+  # control domain is not a mail domain (the data source has count 0). Appended
+  # last so domains[0] remains the first dedicated mail domain for existing
+  # deployments.
+  control_domain_entry = [
+    for z in data.aws_route53_zone.control : {
+      "domain"       = var.control_domain,
+      "zone_id"      = z.zone_id
+      "name_servers" = z.name_servers
+      "arn"          = z.arn
+    }
+  ]
+}
+
+output "domains" {
+  value       = concat(local.created_domains, local.control_domain_entry)
+  description = "List of maps with domains and their Route 53 zone IDs. Includes the control domain (reusing its bootstrap zone) when it is also a mail domain."
 }

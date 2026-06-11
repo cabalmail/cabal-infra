@@ -187,13 +187,21 @@ resource "aws_lambda_function" "healthchecks_iac" {
 # Lambda no-ops when the API key is still placeholder, so the first
 # apply doesn't fail before the operator has bootstrapped the key.
 #
-# `lifecycle_scope = "CRUD"` re-invokes on triggers change AND on
-# destroy; we want the invoke-on-update behavior.
+# Scope is the default CREATE_ONLY (lifecycle_scope omitted): a change
+# to triggers.source_code_hash replaces this resource and re-invokes
+# on create, which is exactly the invoke-on-config-change behavior we
+# want. We deliberately do NOT use "CRUD": its only added behavior is
+# a destroy-time invoke, and that is a footgun. Disabling monitoring
+# (TF_VAR_MONITORING=false) sets this whole module to count = 0, which
+# destroys the invocation; a CRUD destroy-invoke then fires a final
+# Lambda call during teardown. With the Healthchecks task gone (and,
+# in a quiesced env, NAT scaled to zero so SSM is unreachable), that
+# call blackholes to the 60s Lambda timeout and fails the apply. There
+# is nothing to reconcile on teardown anyway. The handler also guards
+# the delete action defensively in case scope is ever changed back.
 resource "aws_lambda_invocation" "healthchecks_iac" {
   function_name = aws_lambda_function.healthchecks_iac.function_name
   input         = jsonencode({})
-
-  lifecycle_scope = "CRUD"
 
   triggers = {
     source_code_hash = aws_lambda_function.healthchecks_iac.source_code_hash

@@ -24,6 +24,18 @@ resource "aws_ecs_service" "imap" {
   deployment_maximum_percent         = 100
   deployment_minimum_healthy_percent = 0
 
+  # With the grace period at 120s (was 600s), pair fail-fast with an
+  # automatic exit: a bad deploy (broken image, missing secret, task that
+  # never passes NLB health checks) rolls back to the last working
+  # revision instead of thrashing the single-task service indefinitely.
+  # deploy-ecs-service.sh detects the rollback after its stability wait
+  # and fails the CI run. Phase 2 of
+  # docs/0.10.x/imap-deploy-downtime-plan.md.
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
+
   capacity_provider_strategy {
     capacity_provider = aws_ecs_capacity_provider.ec2.name
     weight            = 100

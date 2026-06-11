@@ -1,0 +1,37 @@
+# Checkov config for the terraform/infra stack.
+# Phase 2 of docs/0.10.x/iac-quality-gates-plan.md.
+#
+# `skip-check` below is the GLOBAL, design-driven suppression of the
+# customer-managed-KMS-key (CMK) class. Rationale (see terraform/infra/
+# BASELINE.md and the CHANGELOG): every resource these checks flag is
+# already encrypted at rest with an AWS-managed or service-default key.
+# The checks demand an upgrade to a customer-managed KMS key, which buys
+# key-policy control, a disable/delete kill switch, and separation of
+# duties - none of which a single-operator system can meaningfully
+# exploit - at $1/month/key plus request and operational cost. Cabalmail
+# deliberately keeps AWS-default at-rest encryption. This is a posture
+# decision, not a backlog item, so it is a global skip rather than a
+# baseline entry that would imply "fix later".
+#
+# If Cabalmail ever adopts CMKs for the few data-plane secrets that would
+# benefit (EFS mailstore, cabal-addresses, the IMAP master-password SSM
+# parameter), remove the corresponding id here and let the check enforce.
+#
+# These are POLICY only (what to skip). The directory and baseline are
+# supplied by the caller (CI action inputs / the Makefile) so this file
+# stays invocation-agnostic.
+framework:
+  - terraform
+skip-check:
+  - CKV_AWS_158  # CloudWatch Log Group encrypted by KMS (no AWS-managed-key option; needs a CMK)
+  - CKV_AWS_337  # SSM parameters using a KMS CMK
+  - CKV_AWS_136  # ECR repositories encrypted using KMS (default is AES256)
+  - CKV_AWS_145  # S3 buckets encrypted with KMS by default (default is SSE-S3/AES256)
+  - CKV_AWS_119  # DynamoDB tables encrypted using a KMS CMK
+  - CKV_AWS_173  # Lambda environment-variable encryption with a CMK
+  - CKV_AWS_297  # EventBridge Scheduler uses a CMK
+  - CKV_AWS_166  # Backup Vault encrypted at rest using a KMS CMK
+  - CKV_AWS_184  # Resource encrypted by KMS using a CMK
+  - CKV_AWS_180  # Image Builder component encrypted by a CMK (NAT custom-AMI pipeline)
+  - CKV_AWS_200  # Image Recipe EBS disk encrypted with a CMK (NAT custom-AMI pipeline)
+  - CKV_AWS_199  # Image Builder distribution config encrypts AMIs with a CMK

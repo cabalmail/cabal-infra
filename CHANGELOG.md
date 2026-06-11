@@ -5,7 +5,843 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.10.3] - Unreleased
+## [0.10.22] - 2026-06-11
+
+### Added
+- IMAP deploys now pre-flight the new image before touching the running
+  service: deploy-ecs-service.sh runs the freshly registered revision as
+  a one-shot task with PREFLIGHT=1 (the entrypoint exercises secrets,
+  EFS, Cognito, DynamoDB, and the sendmail compile, then exits without
+  starting services) and aborts the deploy while the old task is still
+  serving if it fails. The planned-maintenance flag is now raised by the
+  deploy script only after the preflight passes, so a failed deploy
+  never 503s the admin app at all. Costs ~30-60s per successful deploy;
+  saves the full outage window on a bad image. Phase 5 of
+  docs/0.10.x/imap-deploy-downtime-plan.md.
+- IMAP deploys pre-pull the freshly pushed image onto the cluster's
+  container instance(s) via SSM Run Command while the old task is still
+  serving, so the roll no longer pays the 30-60s cold layer download
+  inside its zero-task window. Fail-soft: a failed or unauthorized
+  pre-pull logs a warning and the deploy proceeds on the previous slow
+  path. Phase 4 of docs/0.10.x/imap-deploy-downtime-plan.md.
+
+### Changed
+- Bad IMAP deploys now fail fast and roll back: the IMAP service's
+  health-check grace period drops from 600s to 120s and a deployment
+  circuit breaker returns the service to the last working revision
+  instead of letting a broken task thrash the single-task service.
+  deploy-ecs-service.sh now asserts the service stabilized on the
+  revision it registered, so a rolled-back deploy fails CI instead of
+  reporting success. Phase 2 of docs/0.10.x/imap-deploy-downtime-plan.md.
+- The IMAP container now starts Dovecot as soon as its prerequisites
+  (TLS, Cognito auth script, user sync, master password) are ready,
+  instead of behind the full sendmail preparation. The sendmail side
+  (sendmail.mc render, DynamoDB map generation, sendmail.cf compile,
+  aliases) moved to a prepare-sendmail.sh script that runs as a
+  background supervisord program on imap and inline in the entrypoint on
+  the smtp tiers; sendmail-wrapper.sh blocks on its /run/sendmail-ready
+  sentinel and reconfigure.sh waits for it before processing changes.
+  Cuts 20-40s of IMAP client downtime per deploy. Phase 3 of
+  docs/0.10.x/imap-deploy-downtime-plan.md.
+- The IMAP NLB target group now health-checks every 10s (was 30s), so a
+  freshly deployed IMAP task enters service about 20s after Dovecot starts
+  listening instead of up to 60s. The smtp target groups keep the 30s
+  probe. Phase 1 of docs/0.10.x/imap-deploy-downtime-plan.md.
+
+### Removed
+- Removed the Docker HEALTHCHECK from the three mail-tier images (imap,
+  smtp-in, smtp-out). It could never pass: the check ran supervisorctl, but no
+  tier's supervisord.conf configures an RPC endpoint for it to reach, so the
+  Docker daemon marked every container "unhealthy" on the host - and ECS
+  ignores image health checks anyway (it only honors healthCheck blocks in the
+  task definition, and none are defined). Liveness continues to come from the
+  NLB target-group TCP checks on the service ports, which ECS does act on.
+
+## [0.10.21] - 2026-06-10
+
+### Added
+- Surface the Terraform plan delta as a notice annotation on the
+  infra.yml run summary page so the pending change set can be reviewed
+  before approving the apply gate, and annotate the stack's Terraform
+  outputs after a successful apply. The plan annotation is rendered
+  from the saved plan file with `terraform show`, so it carries only
+  the change set, not the state-refresh log noise.
+- Deleting a message that is already in Trash now deletes it forever
+  (after a confirmation), in both the React and Apple clients, and the
+  Trash folder offers an "Empty trash" action (inline button in React,
+  context menu on Apple) that permanently deletes its entire contents.
+  On the Apple clients a multi-selection in Trash can also be deleted
+  forever - via the right-click selection menu, the bulk action bar, or
+  Cmd+Delete - behind a single count-aware confirmation, and the bar's
+  Archive button there always rescues to the Archive folder rather than
+  following the dispose preference.
+  Backed by two new Lambda endpoints, `/purge_messages` and
+  `/empty_trash`, which flag-and-expunge server-side, refuse to operate
+  on non-trash folders, and clear the affected messages from the S3
+  body cache.
+
+### Changed
+- The web client now treats the server's special-use "Sent" mailbox - the
+  folder sent copies are actually filed into, and the one the Apple clients
+  use - as the system Sent folder instead of "Sent Messages". The folder
+  rail, the g-s shortcut, and folder-manager protection all follow. An
+  existing "Sent Messages" folder is left in place as an ordinary folder;
+  it can now be emptied and removed from the web folder manager.
+- The web client now files deletions in the server's special-use "Trash"
+  mailbox, the same folder the Apple clients use, instead of its own
+  "Deleted Messages" folder. Deleted mail is no longer indexed for search
+  (matching the Apple clients), and `/move_messages` auto-creates "Trash"
+  instead of "Deleted Messages", fixing first-delete-to-Trash failures on
+  fresh mailboxes. An existing "Deleted Messages" folder is left in place
+  as an ordinary folder; it can now be emptied and removed from the web
+  folder manager. The new `/purge_messages` and `/empty_trash` endpoints
+  accept only "Trash".
+
+### Fixed
+- `plan-terraform.sh` now passes `-var-file=".terraform/lambda-pinned.tfvars"`
+  only when the file exists. The bootstrap (`terraform/dns`) plan job never
+  writes that file, so every dns plan logged a "Failed to read variables
+  file" error that a future Terraform upgrade could turn into a hard failure.
+
+## [0.10.20] - 2026-06-10
+
+### Added
+- A new CI gate (`check-iam-resource-scope.py`, run in the Terraform scanner
+  jobs and by `make scan`) fails the build when an IAM policy grants a
+  wildcard resource - a literal `"*"` or the scanner-evading `local.wildcard`
+  indirection - without a written justification. Every legitimate wildcard in
+  the tree (ssmmessages session channels, route53 List*, cloudwatch metric
+  reads, runtime-generated log-stream and S3 object-key segments) now carries
+  an `# iam-wildcard-ok:` rationale comment.
+- Apple clients: message-list keyboard shortcuts on macOS and iPadOS.
+  Cmd+T toggles read/unread, Cmd+Shift+8 (Cmd+*) toggles the flag, Cmd+M
+  opens Move to Folder (shadowing Window > Minimize), and Cmd+Delete
+  archives or trashes the selection per the dispose preference, working
+  the same whether the list or the reading pane has focus. The Message
+  menu (Reply / Reply All / Forward plus the new items) is now installed
+  on iPadOS's hardware-keyboard menu as well as the macOS menu bar.
+
+### Changed
+- macOS compose window now uses a compact Mail-style header (narrow
+  trailing label column, full-width fields, editor filling the rest of
+  the window) instead of the default macOS form layout, which centered
+  the fields beside a label gutter and left the upper-left quadrant of
+  the window empty. iOS, iPadOS, and visionOS keep the grouped form.
+- Apple clients: right-clicking a message that is part of a multi-
+  selection now applies the context-menu action to the whole selection
+  (right-clicking an unselected row still acts on just that row), the
+  menu offers both Archive and Delete instead of only the configured
+  dispose default, and read/unread or flag operations keep the
+  selection intact so further actions can be chained. The reader's
+  overflow (...) menu likewise gains whichever of Archive / Delete the
+  toolbar's dispose button doesn't already cover.
+
+### Removed
+- The last Terraform Cloud leftovers: infra.yml, quiesce.yml, and
+  destroy_terraform.yml no longer plumb the unused TF_TOKEN secret
+  (TF_API_TOKEN env entries and setup-terraform
+  cli_config_credentials_token inputs - nothing contacts app.terraform.io
+  with the S3 backend); deleted docs/terraform.tfvars.example, the old
+  Terraform Cloud workspace-variables example whose github_token and
+  legacy EC2 scale variables no longer exist in either stack (variables
+  are supplied as GitHub Environment TF_VAR_* vars per docs/github.md);
+  and regenerated terraform/dns/README.md with terraform-docs, dropping
+  the stale github_token input and TFC-era resources from its tables.
+
+### Fixed
+- `make promote` no longer reports "some checks did not pass" right after
+  opening the PR. `gh pr checks` returns immediately when a just-created PR has
+  no checks registered yet (the same replication lag that delays the PR
+  appearing in the web UI), which `promote.sh` misread as a failure. It now
+  waits for checks to register before watching them and reports the real outcome
+  from `gh`'s exit code (passed / failed / still pending / none registered).
+- `make promote` now reverts its changes when you decline the confirmation
+  prompt. Answering `n` previously left the collated `CHANGELOG.md` edit and the
+  deleted fragments staged in the working tree; it now restores both so a
+  declined release leaves the tree exactly as it was before.
+- Rewrote docs/terraform.md, which still walked through creating Terraform
+  Cloud workspaces, to describe the actual setup: the S3 state bucket
+  (including the cross-account bucket policy needed when an environment's
+  account does not own the bucket) and how the infra.yml workflow drives
+  scan, plan, approval, and apply, including the dns bootstrap gating.
+  Updated the provisioning steps in docs/setup.md to match the
+  workflow-driven flow, and dropped the stale Terraform Cloud API token
+  and personal access token instructions from docs/github.md.
+
+### Security
+- A CloudWatch alarm (`cabal-cognito-high-risk-signin`) now watches Cognito
+  threat protection's `AccountTakeoverRisk` metric and enters ALARM when a
+  sign-in is scored high-risk (adaptive auth: impossible travel, anomalous
+  device or IP). In audit mode the sign-in is not blocked, so the alarm flags
+  the account for investigation. It has no notification action yet; delivery
+  wiring is a follow-up. Operator action: this is the first CloudWatch alarm
+  Terraform manages, so the CI deploy policy needs the `cloudwatch` alarm
+  actions added (PutMetricAlarm, DescribeAlarms, DeleteAlarms,
+  ListTagsForResource, TagResource, UntagResource) in each AWS account before
+  the apply succeeds - see the updated policy in `docs/aws.md`.
+
+## [0.10.19] - 2026-06-10
+
+### Fixed
+- Reconciled the bootstrap "cicd" IAM policy in docs/aws.md with what the
+  current Terraform code requires. Added the EC2 Image Builder (NAT AMI
+  pipeline), EventBridge Scheduler (certbot renewal, DMARC processing),
+  End User Messaging phone-number (optional, `TF_VAR_USE_EUM_SMS`), and
+  CloudWatch alarm actions; alphabetized the action list; and noted the
+  optional grants and the cross-account state-bucket consideration. A
+  fresh-account bootstrap following the doc now works for the current
+  terraform/infra and terraform/dns code.
+
+### Security
+- API Gateway no longer logs at `INFO` (execution logs drop to `ERROR`), the
+  Cognito authorizer result cache drops from 300s to 60s so a revoked token is
+  refused within a minute, and the per-method response cache is disabled on
+  user-personalised read endpoints (`list_envelopes`, `fetch_message`,
+  `list_attachments`, `fetch_attachment`, `fetch_inline_image`) so cached
+  private data cannot outlive an authorization change. The shared `fetch_bimi`
+  cache (keyed by sender domain, identical for every caller) is unchanged.
+- The Cognito post-confirmation trigger (`assign_osid`) can no longer call
+  `AdminUpdateUserAttributes` on any user in any pool in the account: its IAM
+  policy now names the specific user-pool ARN it actually uses. The
+  `logs:CreateLogGroup` grants on `assign_osid` and `check_invite` are likewise
+  narrowed from every log group in the account to each function's own group.
+- A CloudWatch alarm (`cabal-cognito-high-risk-signin`) now watches Cognito
+  threat protection's `AccountTakeoverRisk` metric and enters ALARM when a
+  sign-in is scored high-risk (adaptive auth: impossible travel, anomalous
+  device or IP). In audit mode the sign-in is not blocked, so the alarm flags
+  the account for investigation. It has no notification action yet; delivery
+  wiring is a follow-up.
+- Cognito threat protection is enabled in audit mode (`advanced_security_mode
+  = "AUDIT"`), scoring sign-in risk (impossible travel, compromised
+  credentials) without blocking. The user pool moves to the Plus feature plan
+  (threat protection is unavailable on Essentials), which is billed per
+  monthly active user from the first user. Refresh tokens now expire in 7
+  days instead of the 30-day default, bounding the exposure of a stolen
+  token, and token revocation is set explicitly so a global sign-out reliably
+  invalidates issued tokens.
+
+## [0.10.18] - 2026-06-09
+
+### Added
+- The control domain may now also be listed in `mail_domains` to host email
+  addresses on its own subdomains. Its existing bootstrap zone is reused instead
+  of creating a duplicate hosted zone (which would have split name servers and
+  silently blackholed one copy), and the `new`-address Lambda rejects subdomains
+  that are reserved for infrastructure on the control domain (`admin`, `www`,
+  `imap`, `smtp`, `smtp-in`, `smtp-out`, `mail-admin`, `cabal._domainkey`,
+  `_dmarc`). The control-domain apex remains unaddressable.
+
+### Fixed
+- `make promote` no longer reports "some checks did not pass" right after
+  opening the PR. `gh pr checks` returns immediately when a just-created PR has
+  no checks registered yet (the same replication lag that delays the PR
+  appearing in the web UI), which `promote.sh` misread as a failure. It now
+  waits for checks to register before watching them and reports the real outcome
+  from `gh`'s exit code (passed / failed / still pending / none registered).
+
+## [0.10.17] - 2026-06-09
+
+### Fixed
+- Apple clients: an action taken on a message (mark read/unread, flag,
+  archive, move) just before the folder's background refresh no longer
+  appears to undo itself. A refresh dispatched before the change reached
+  the server returned the row's pre-change state and the merge applied it
+  verbatim, reverting the optimistic update until the next refresh. The
+  message list now shields in-flight local writes: an optimistically
+  removed row stays gone and a freshly toggled flag stays toggled (in
+  memory and in the on-disk snapshot) until that write resolves, after
+  which the following refresh carries server truth.
+
+## [0.10.16] - 2026-06-09
+
+### Changed
+- The Terraform IaC scanners (Checkov, tflint, Trivy) now **gate** deploys
+  (IaC quality gates, Phase 3). A finding not in the stack's baseline / ignore
+  list fails the scanner job and blocks the apply, where before it only
+  surfaced in the Security tab. The accepted set is grandfathered per stack in
+  `.checkov.baseline` / `.trivyignore` with a `BASELINE.md` rationale; a new
+  resource that trips a rule fails CI until it is fixed or deliberately
+  accepted. Tool versions are pinned (Checkov, tflint + its AWS ruleset, and
+  the Trivy binary) so strictness changes only by a deliberate bump. Two
+  guards keep the accepted set honest: an inline suppression must carry a
+  written justification, and CI fails if a baseline/ignore entry goes stale
+  (its finding was fixed but the entry was left behind), so the accepted set
+  only shrinks. `make scan` reproduces the CI pass/fail verdict locally.
+
+### Security
+- The IMAP-over-TLS load balancer listener (port 993) now pins
+  `ssl_policy = "ELBSecurityPolicy-TLS13-1-2-2021-06"` (TLS 1.2/1.3, strong
+  ciphers). It previously set no policy, so the NLB defaulted to one that
+  still accepted TLS 1.0/1.1 on the client-facing IMAPS endpoint.
+- The VPC default security group is now locked down to deny-all. AWS ships
+  it with an allow-all-intra-group rule; an `aws_default_security_group` with
+  no rules strips them, so a resource accidentally left on the default group
+  is isolated rather than openly reachable.
+
+## [0.10.15] - 2026-06-08
+
+### Security
+- The ECS launch template's IMDS hop limit is reduced from 2 to 1, so a
+  compromised mail-tier container can no longer reach the host instance role
+  via IMDS. The tasks run in `awsvpc` mode and read credentials from the
+  task-role endpoint rather than the host IMDS, so they are unaffected. Takes
+  effect as instances cycle onto the new template.
+- The NAT instance root volume is now encrypted. With the stock AL2023 AMI
+  this replaces the NAT instance on first apply - a brief outbound blip for the
+  private subnets (and outbound SMTP delivery) while the new instance comes up.
+- The `cabal-address-changed` SNS topic is now encrypted at rest with the
+  AWS-managed `aws/sns` key. The new/revoke Lambda (the only publisher) is
+  granted `kms:GenerateDataKey`/`Decrypt` scoped via `kms:ViaService=sns`, so
+  publishing keeps working.
+- The per-tier `cabal-reconfig-*` SQS queues (the address-change
+  reconfiguration pipeline) are now encrypted at rest with SSE-SQS. The
+  SQS-owned key needs no management, and SNS->SQS delivery and the reconfigure
+  sidecar consumers are transparent to it.
+
+## [0.10.14] - 2026-06-08
+
+### Added
+- Changelog fragments and a release-promotion script. Unreleased entries are
+  now added as individual files under `changelog.d/` (named
+  `<slug>.<category>.md`) instead of editing `CHANGELOG.md` directly, so
+  concurrent branches and Claude Code sessions no longer collide on a shared
+  `## [Unreleased]` block or need to renumber when a release lands in between.
+  `.github/scripts/collate-changelog.sh` folds all pending fragments into a
+  dated section at release time, and `.github/scripts/promote.sh` (also
+  `make promote VERSION=<x.y.z>`) collates, commits on `stage`, pushes, and
+  opens the `stage -> main` PR, leaving the merge to prod as a manual step. See
+  `changelog.d/README.md` and `docs/releasing.md`.
+- GitHub releases are now created automatically on merge to `main`. The new
+  `release.yml` workflow reads the freshly promoted top section of
+  `CHANGELOG.md`, tags the merge commit, and publishes a release whose notes are
+  that version's changelog section (via `.github/scripts/changelog-section.sh`),
+  replacing the manual copy-the-changelog-into-a-new-release step. It is
+  idempotent and runs only when `CHANGELOG.md` changes.
+
+### Fixed
+- Reload buttons in the Apple clients no longer grow when they start
+  refreshing. The message-list, folder-list, and address-list reload controls
+  swap their `arrow.clockwise` glyph for a `ProgressView` spinner while the list
+  updates, but the default spinner is larger than the glyph, so the button
+  enlarged and shoved its neighbors aside - most visibly the message-list reload
+  button displacing the adjacent New Message button. A new shared
+  `RefreshActivityIcon` view (`apple/Cabalmail/Views/RefreshActivityIcon.swift`)
+  keeps the glyph in the layout slot (hidden via opacity) and rides a
+  `controlSize(.small)` spinner in an `overlay`, so the spinner can never feed
+  back into the button's measured size; the footprint is now identical in both
+  states. All seven reload sites across the iOS and macOS targets route through
+  it, and the macOS in-list refresh rows keep their "Refresh" text visible
+  instead of collapsing to a bare spinner.
+
+## [0.10.13] - 2026-06-08
+
+### Added
+- Planned-maintenance signal for IMAP redeploys. The IMAP ECS service is
+  hard-capped at one task (Dovecot has Maildir-over-EFS concurrency issues), so
+  every IMAP image roll stops the old container before starting the new one - a
+  true zero-task window during which the IMAP-backed Lambdas previously relayed a
+  raw connection error that clients rendered as a scary message. The deploy
+  pipeline now raises a flag in SSM (`/cabal/maintenance/imap`) immediately
+  before triggering the roll (`app.yml`, imap tier only, via
+  `.github/scripts/maintenance-flag.sh`); `get_imap_client` consults it and the
+  new `maintenance_guard` decorator turns it into a friendly `503`
+  (`Retry-After`, `{"status":"maintenance", ...}`) across the IMAP-backed
+  handlers (reads, folder ops, flags, moves, cache-miss fetches). The React
+  webmail (global axios interceptor) and the Apple clients
+  (`CabalmailError.maintenance`) show "Email access is temporarily unavailable
+  due to planned maintenance." instead of an error; the Apple folder-status
+  poller treats it as transient and keeps polling. The flag read fails open
+  (a missing parameter or SSM hiccup never blocks mail), and the new IMAP
+  container clears the flag once Dovecot is serving
+  (`docker/shared/clear-maintenance.sh`, a supervisord daemon) since the
+  fire-and-forget deploy does not wait for the roll; an `until` epoch written
+  with the flag is a backstop so a failed deploy cannot wedge it on.
+- Outbound sending no longer blocks on IMAP. `/send` now delivers over SMTP
+  first, then stages the Bcc-free Sent copy to S3 (`sent-pending/<user>/<uuid>`
+  in the cache bucket) and enqueues it on a new `cabal-append-sent` SQS queue; a
+  new `append_sent` consumer Lambda writes the copy to the user's Sent folder
+  when IMAP is available - immediately in steady state, or after the roll during
+  an IMAP redeploy (the job retries until the new container serves, then DLQs
+  after `maxReceiveCount`). The append is idempotent (skips if the Message-Id is
+  already in Sent) so a duplicate delivery cannot double-file. The server-side
+  Outbox staging folder and the Outbox->Sent move are retired. Saving a draft is
+  interactive and IMAP-only, so it returns the maintenance `503` during a roll
+  instead of queueing.
+- `/send` is now idempotent against client retries. SMTP-first means a lost
+  `/send` response that the React client or the Apple `SendQueue` retries could
+  otherwise deliver twice; `/send` claims the Message-Id in `cabal-rate-limits`
+  (conditional write, TTL-expiring) before SMTP and releases it if SMTP fails,
+  so a retry of a delivered message reports success without re-sending while a
+  retry of a failed send still goes through.
+
+### Changed
+- IaC quality gates, Phase 1 (`docs/0.10.x/iac-quality-gates-plan.md`). The
+  three Terraform scanners in `infra.yml` were drifting into noise; this
+  rebuilds them on maintained, pinned tooling without yet changing what blocks
+  a deploy. tfsec (merged into Trivy and in maintenance mode, and already
+  disabled in the workflow) is replaced by Trivy IaC (`trivy config`, same Aqua
+  engine and `AVD-AWS-*` finding IDs). The `terraform/dns` bootstrap stack,
+  which had no scanners at all, now runs Checkov, tflint, and Trivy as
+  `checkov_dns` / `tflint_dns` / `trivy_dns` jobs wired into `bootstrap_apply`'s
+  `needs`. The silently-broken tflint loop (`for i in ...; do tflint; done`
+  never `cd`'d, so it scanned the stack root N times and never saw the modules)
+  is replaced with `tflint --recursive`, and `terraform/.tflint.hcl` gains the
+  bundled terraform `recommended` preset and moves the AWS ruleset from the
+  stale 0.20.0 to 0.40.0. tflint and Trivy run via actions pinned to commit
+  SHA; Checkov runs via pip at a pinned version (`checkov==3.2.530`) and the
+  exact CLI the Makefile uses, because the checkov-action is a Docker image
+  with positional args and no `output_file_path` input that mangles
+  `output_format` (it passes `-o cli,sarif` as one value, which checkov
+  rejects). (Previously: a `@master` action, a `curl | bash` installer, and a
+  deprecated tfsec wrapper.) Every scanner uploads SARIF to the GitHub
+  code-scanning tab (the repo is public, so
+  this needs no GitHub Advanced Security). All scanners still soft-fail -
+  findings are surfaced, not gated; the gate flips in a later phase once
+  baselines are established. Phase 0's finding inventory is recorded in
+  `docs/0.10.x/iac-baseline-snapshot.md`.
+- IaC quality gates, Phase 2 (baselines). Per-stack suppression and baseline
+  files are now checked in (`terraform/{infra,dns}/.checkov.yaml`,
+  `.checkov.baseline`, `.trivyignore`) with a reviewed `BASELINE.md` per stack
+  recording a rationale for every accepted finding and a target version for the
+  decay candidates. The biggest cluster - the customer-managed-KMS-key (CMK)
+  class (73 Checkov findings across 11 checks, 25 Trivy across 4) - is globally
+  suppressed as a deliberate posture: every flagged resource is already
+  encrypted at rest with an AWS-managed/default key, and a CMK's control
+  benefits are not exploitable by a single operator at the per-key cost. The
+  remaining 127 Checkov and 25 Trivy findings are baselined per resource and
+  classified (must-fix in 2.5 / design-driven / decay). `terraform/dns` is
+  clean, so its files are empty placeholders for parity. The gate is still
+  soft-fail; `make scan` now wires the baselines so a local run shows only the
+  residual (Checkov and Trivy clean; tflint's 6 warnings remain, to be fixed
+  outright in 2.5).
+- The bootstrap (`terraform/dns`) apply in `infra.yml` now requires manual
+  approval, via a new `bootstrap_approval` gate between `bootstrap_plan` and
+  `bootstrap_apply` - symmetric with the existing `approval` gate between the
+  infra-stage `plan` and `apply`. It uses the same `gate-*` environment (so the
+  same required reviewers apply) and only prompts when the bootstrap plan has
+  changes to apply (exit code 2); an unchanged-dns or no-op push skips it. The
+  dns scanners (`checkov_dns`/`tflint_dns`/`trivy_dns`) now gate through this
+  approval job rather than directly blocking `bootstrap_apply`.
+- IaC quality gates, Phase 2.5 safe batch (the low-risk, in-place fixes from the
+  baseline's must-fix set). API Gateway `data_trace_enabled` is now `false` - it
+  had been logging full request/response bodies (addresses, message content,
+  tokens) to CloudWatch. The certbot-renewal ECR repo is now `IMMUTABLE`,
+  matching every other cabal repo (deploys push unique `sha-*` tags). The `tls`
+  provider gets an explicit version pin (`~> 4.0`) in the app module. The
+  Cognito SMS-publish IAM policy's wildcard resource (CKV_AWS_111 / CKV_AWS_356)
+  is reclassified from the baseline to an inline design suppression: direct-to-
+  phone `sns:Publish` has no resource ARN to scope to, so `"*"` is required. The
+  corresponding baseline and `.trivyignore` entries are removed so the gate will
+  enforce these once it flips. Deferred within 2.5: SQS/SNS encryption (message-
+  flow sensitive - the reconfiguration pipeline) and NAT EBS encryption;
+  CKV_AWS_341 was reclassified to stage-validate after it turned out to be the
+  ECS mail-tier launch template (where IMDS `hop_limit=2` may be required for
+  containers), not the NAT.
+- Removed dead Terraform declarations flagged by tflint: `local.zip_file` and
+  the unused `relay_ips`/`repo` variables in the API-call submodule, `repo` in
+  the app module, `master_password` in the ecs module (the IMAP master password
+  reaches containers via the SSM `valueFrom`, never the variable), and `vpc_id`
+  in the elb module, along with their now-orphaned pass-throughs (root `var.repo`
+  stays - provider tags use it). Pure cleanup, no plan diff; it clears tflint to
+  zero, the last finding class before the Phase 3 gate flip.
+
+## [0.10.12] - 2026-06-07
+
+### Fixed
+- Closed the `app.yml`/`infra.yml` stale-image deploy race flagged in the
+  0.10.9 note - the failure mode that wedged the smtp-in cap-drop rollout.
+  When a single push touches both `docker/**` and `terraform/infra/**`, the
+  two workflows run concurrently; `infra.yml`'s plan could reach
+  `refresh-ssm-from-running.sh` before `app.yml` had rolled imap to the
+  freshly-built image, read imap's pre-roll (stale) tag into
+  `/cabal/deployed_image_tag`, and then a marker-triggered task-def
+  re-registration (`*_taskdef_revision_marker` bump) would pin the new task
+  def to the old image. Fixed in three layers:
+  - `deploy-ecs-service.sh` now waits for the rolled service to reach a
+    stable rollout (`aws ecs wait services-stable`) after `update-service`,
+    so an `app.yml` docker job only reports success once the image is
+    actually running. These mail services have no deployment circuit
+    breaker, so a broken image never auto-rolls back; the wait times out and
+    the job fails loudly instead of reporting a phantom success.
+  - New `.github/scripts/wait-for-app-deploy.sh`, run at the start of
+    `infra.yml`'s plan job, blocks the plan until the sibling `app.yml` run
+    for the same commit finishes (no-op when no such run exists, i.e. the
+    common terraform-only push). This establishes the happens-before that a
+    stability wait alone cannot, since the two workflows have independent
+    concurrency groups. Requires the new read-only `actions: read`
+    permission on `infra.yml`.
+  - `refresh-ssm-from-running.sh` now waits for the canonical imap service
+    to settle before reading its tag and refuses to pin a mid-roll tag, as
+    a belt-and-suspenders backstop to the ordering step.
+  Steady state is unchanged: a terraform-only push triggers no `app.yml`
+  run, the ordering step is a no-op, imap is already stable, and SSM stays
+  in lockstep exactly as before.
+
+## [0.10.11] - 2026-06-07
+
+### Security
+- Dovecot now rejects plaintext auth on connections it does not consider
+  secured (`disable_plaintext_auth = yes` on both imap and smtp-out; phase 4
+  of `docs/0.10.x/container-runtime-hardening-plan.md`). For imap the NLB
+  terminates TLS (993 -> 143) and forwards plain TCP, so the entrypoint marks
+  the NLB public-subnet CIDRs as `login_trusted_networks` - a new
+  `LOGIN_TRUSTED_NETWORKS` env derived per-environment from the NLB's actual
+  public subnets (`module.vpc.public_subnets[*].cidr_block`). A session
+  reaching Dovecot's 143 from anywhere else in the VPC (an ECS Exec shell, a
+  sidecar, a private-subnet container) is untrusted and must use real TLS.
+  Previously `login_trusted_networks` was the whole VPC CIDR, which would have
+  made the flag a no-op. The value falls back to the VPC CIDR if the env is
+  empty, so the change fails open (no lockout of legitimate logins) rather
+  than closed. For smtp-out submission (587/465) the NLB passes TCP straight
+  through and Dovecot terminates TLS itself, so the flag just enforces
+  STARTTLS-before-AUTH on 587 and TLS on 465.
+- Added Dovecot login throttling: `auth_failure_delay = 2 secs` on both tiers
+  to slow credential stuffing, plus high-security login services
+  (`client_limit = 1`, one connection per login process) with `process_limit`
+  caps (1024 for imap-login, 512 for submission-login) and `service auth`
+  `client_limit = 4096`.
+- The imap and smtp-out task-def revision markers are bumped (imap v4 -> v5,
+  smtp-out v3 -> v4) so the new `LOGIN_TRUSTED_NETWORKS` env reaches the
+  running tasks. `auth_mechanisms` stays `plain` (LOGIN is not added).
+
+### Note
+- This is an auth-path change and must be validated in stage against every
+  client (React webmail, the Apple clients, a raw IMAP login) before
+  promotion to prod. Confirm both that legitimate NLB-forwarded logins still
+  succeed and that a plaintext login over a non-TLS path inside the VPC
+  (simulating an NLB bypass) is now refused with `[PRIVACYREQUIRED] Plaintext
+  authentication disallowed`.
+
+## [0.10.10] - 2026-06-07
+
+### Security
+- Re-dropped the smtp-in `CHOWN`/`FOWNER`/`DAC_OVERRIDE` capabilities (phase
+  2a, second attempt; leaving `KILL`, `NET_BIND_SERVICE`, `SETUID`,
+  `SETGID`). This time it is a Terraform-only change: the entrypoint cleanups
+  that gate `sync-users.sh` and `cognito.bash` off smtp-in already shipped
+  (0.10.8) and are running in both environments, so the image smtp-in runs
+  already needs none of these caps at startup, and with no docker rebuild
+  there is no app.yml/infra.yml image-tag race (the failure mode that broke
+  the first attempt - see 0.10.9). smtp-in task-def revision marker bumped
+  v5 -> v6. Gated on a stage soak: it must be validated against real inbound
+  mail through stage smtp-in (sendmail relays to imap with no `CHOWN` errors)
+  before promotion to prod; if sendmail needs `CHOWN` at queue/relay time,
+  only that one cap is added back.
+
+## [0.10.9] - 2026-06-07
+
+### Changed
+- Reverted the smtp-in capability drop from 0.10.8 (restored `CHOWN`,
+  `FOWNER`, `DAC_OVERRIDE`; smtp-in is back on the full phase-2 set). The
+  drop reached prod without the runtime mail-flow validation the hardening
+  plan mandated, and the rollout failed: a stale `/cabal/deployed_image_tag`
+  caused the cap-drop task definition to be registered against the *pre-2a*
+  smtp-in image, which still generates `/usr/bin/cognito.bash` (chmod 100)
+  and therefore needs `DAC_OVERRIDE` to rewrite it - so the new task died at
+  startup with `cognito.bash: Permission denied` while ECS kept the prior
+  healthy task in service (no mail interruption). The harmless entrypoint
+  cleanups from 0.10.8 stay (smtp-in still skips the unused `sync-users.sh`
+  and `cognito.bash` generation). The capability drop will be re-attempted
+  only after a real inbound-mail soak through smtp-in in stage confirms
+  sendmail needs none of those caps at runtime. smtp-in task-def revision
+  marker bumped v4 -> v5.
+
+### Note
+- The stale-SSM-tag failure mode above is a deploy-pipeline issue
+  independent of this change: when `app.yml` and `infra.yml` run for the
+  same push, `refresh-ssm-from-running.sh` can read imap's pre-roll tag (the
+  ECS deploy does not wait for stabilization), so a marker-triggered
+  task-def re-registration in the same run can pin a stale image. Worth a
+  follow-up (e.g. have the app deploy wait for service stability, or gate the
+  infra plan on it).
+
+## [0.10.8] - 2026-06-07
+
+### Security
+- Tightened the smtp-in (inbound relay) Linux capability set: dropped
+  `CHOWN`, `FOWNER`, and `DAC_OVERRIDE`, leaving `KILL`, `NET_BIND_SERVICE`,
+  `SETUID`, `SETGID` (phase 2a of
+  `docs/0.10.x/container-runtime-hardening-plan.md`). smtp-in is a pure
+  relay - its mailertable routes every hosted-domain message to the imap
+  container over SMTP and it runs no dovecot - so it resolves no local OS
+  users. The entrypoint now skips, on smtp-in, both `sync-users.sh` and the
+  `cognito.bash` PAM-auth script generation (smtp-in has no SMTP AUTH, so the
+  script is unused there) - these were the consumers of those three caps - so
+  the most internet-exposed tier no longer carries the ability to bypass
+  file-permission checks (`DAC_OVERRIDE`) or change file ownership (`CHOWN`).
+  imap and smtp-out are
+  unchanged - both genuinely provision local users (smtp-out's submission
+  auth resolves against the system passwd db), and review confirmed their
+  sets are already minimal. The smtp-in task-def revision marker is bumped
+  v3 -> v4 so the cap change deploys; it is ordered to roll only after the
+  entrypoint change is live.
+
+## [0.10.7] - 2026-06-07
+
+### Security
+- Enabled EFS transit encryption on the IMAP mailstore mount
+  (`transit_encryption = "ENABLED"` on the imap task definition's mailstore
+  volume; Phase 6 of `docs/0.10.x/container-runtime-hardening-plan.md`). The
+  NFS traffic between the imap task and EFS is now TLS-wrapped in transit; it
+  was already encrypted at rest. No access point was added - the mailstore is
+  a multi-user tree at the EFS root, so an access point could only be a
+  transparent pass-through with no security gain, and transit encryption
+  needs none (rationale in the plan doc). The smtp-out queue already ran with
+  transit encryption on these same ECS EC2 hosts, so the path was proven. The
+  imap task-def revision marker was bumped v3 -> v4 so the volume change
+  actually deploys (volume edits, like container_definitions edits, are
+  otherwise held back by the task def's `ignore_changes`); the roll is one
+  imap task replacement, a brief IMAP blip.
+
+### Added
+- The smtp-in `hosts-pin` daemon emits a throttled heartbeat log
+  (`heartbeat: imap.cabal.internal pinned to <ip>`) on a steady cadence
+  (default every 600s, `HOSTS_PIN_HEARTBEAT`-overridable, `0` to
+  disable) so a healthy but idle daemon is distinguishable from a hung
+  one in CloudWatch. It previously logged only on a pin change or a
+  resolve failure, so steady state produced no output at all and
+  liveness could only be inferred from `supervisorctl` or the container
+  health check. The cadence is derived from the poll interval, so it
+  holds even if `HOSTS_PIN_INTERVAL` is retuned.
+
+### Fixed
+- Moved `app.yml`'s "components flagged for build/deploy" blast-radius
+  summary out of the `approval` job and into the `setup` job
+  (`flagged-summary` step). The summary was meant to let the gate
+  reviewer see which areas would deploy before approving, but it lived
+  in the gate job itself, which is bound to the `gate-${env}`
+  environment and does not run until after approval - so the list could
+  never be seen in time to inform the decision. setup runs before the
+  gate, so the summary is now visible (in both the log and the run's
+  step summary) while the run waits at the gate. The `approval` job
+  keeps a no-op `approve` step as the gate.
+
+## [0.10.6] - 2026-06-06
+
+### Security
+- Digest-pinned every container image `FROM` line to its tag + SHA256
+  digest (Phase 3 of `docs/0.10.x/container-runtime-hardening-plan.md`):
+  the three mail tiers and the sinkhole fixture on `amazonlinux:2023`, the
+  certbot-renewal Lambda base on `public.ecr.aws/lambda/python`, and the
+  (dormant) monitoring images on their upstreams. A pinned digest means a
+  rebuild pulls the exact base bytes that were reviewed rather than
+  whatever a floating tag resolves to that day. The three ARG-driven
+  monitoring FROMs (uptime-kuma, ntfy, healthchecks) were flattened to
+  literal `tag@digest` so the pin is uniform and Dependabot-updatable. The
+  ECS task definitions deliberately keep referencing the immutable
+  `cabal-<tier>:sha-<8>` tags - since ECR `image_tag_mutability` is
+  `IMMUTABLE`, each tag already binds one digest apiece, so a digest
+  reference there was dropped as zero-gain (rationale in the plan doc).
+- Added a nightly image vulnerability scan
+  (`.github/workflows/image-scan.yml`): Trivy scans the image each prod
+  mail-tier ECS service is actually running - resolved from the live task
+  definition, so it follows out-of-band deploys - uploads SARIF to the
+  Security -> Code scanning tab, and attaches the raw report as a build
+  artifact. This catches CVEs disclosed after an image was built and left
+  running, which scan-on-push cannot.
+- `app.yml`'s docker build job now reads the ECR scan-on-push result for
+  the image it just pushed and reports the severity counts into the run
+  summary, warning (soft-fail) on HIGH/CRITICAL
+  (`.github/scripts/ecr-scan-report.sh`). The repos have scanned on push
+  since they were created in 0.9.x; nothing had been surfacing the
+  findings.
+
+### Added
+- `.github/dependabot.yml`. The repo previously had no Dependabot
+  version-update config (only the high/critical alert-monitor workflow).
+  Scoped to the Docker ecosystem across every Dockerfile directory and
+  targeting `stage`, it opens weekly PRs to advance the pinned base-image
+  digests, grouped so the mail-tier bases (amazonlinux + the Lambda Python
+  base) land separately from the dormant monitoring images.
+
+- Conventional message-selection idioms in the keyboard-optimized Apple clients
+  (iPad regular width and macOS). The message list now uses native multiple
+  selection: a plain click selects and opens one message, shift-click extends a
+  contiguous range, command-click toggles an individual message, Cmd-A selects
+  everything currently visible (respecting the active All/Unread/Flagged tab),
+  shift+up/down extends the selection from the keyboard, and Esc clears it. When
+  more than one message is selected the reading pane shows an "N Messages
+  Selected" placeholder and the existing bottom action bar (Archive / Move /
+  Read / Flag) operates on the whole selection; dragging any selected row onto a
+  sidebar folder still carries the entire selection. Cmd-A and Esc are scoped to
+  the list's keyboard focus so they don't disturb the search field. On iPad the
+  Select button now toggles the system edit mode so touch users can still multi-
+  select without a keyboard; on macOS that button is gone since modifier-clicks
+  are always available. Compact iPhone is unchanged - single tap to open, plus
+  the existing Select/checkbox flow.
+
+### Changed
+- Retuned the Apple client's SwiftLint `file_length` rule from its inherited
+  default (warning at 400) to warning 500 / error 800 with
+  `ignore_comment_only_lines` (`apple/.swiftlint.yml`). Under CI's
+  `swiftlint --strict` the 400-line default was a hard build failure, which had
+  bred a layer of extension-splits whose only purpose was to stay under the
+  cap. Folded the three such `AppState` splits (`AppStateCounts`,
+  `AppStateCompose`, `AppStateDrag` - tiny method-buckets whose backing storage
+  already lived on `AppState`) back into `AppState.swift` as same-file
+  extensions, and dropped the `// swiftlint:disable file_length` banner from
+  `MessageDetailViewModel`. `type_body_length` / `function_body_length` are
+  left at their defaults, so the splits that exist to satisfy those rules are
+  unchanged.
+- The `app.yml` deploy-gate `approval` job now lists which app components
+  (docker, lambda_api, lambda_counter, lambda_certbot, react, front_door) are
+  flagged for build/deploy, instead of just echoing "Approved". The list is
+  printed to the job log and written to the run's step summary so a gate
+  reviewer can see the blast radius before approving. It reads the same
+  per-area flags the `setup` job already resolves (dorny/paths-filter on push,
+  the `areas` input on workflow_dispatch).
+
+### Fixed
+- Inbound mail no longer 550-bounces with `Host unknown (Name server:
+  [imap.cabal.internal]: host not found)` when smtp-in cold-starts
+  during an IMAP outage. The 0.9.24 `/etc/hosts` pin
+  (`docker/shared/hosts-pin.sh`) only protected an already-running
+  smtp-in across an IMAP-only redeploy: if smtp-in itself was replaced
+  while the IMAP task was unregistered (e.g. a `docker/shared/*` change
+  rebuilds and rolls all three tiers at once), the `init` resolve
+  returned nothing, no pin was written, and every inbound message fell
+  through to DNS, hit a Cloud Map NXDOMAIN, and took a permanent 5xx.
+  `hosts-pin.sh` now writes an RFC 5737 TEST-NET sentinel
+  (`192.0.2.1`, overridable via `HOSTS_PIN_SENTINEL`) whenever it
+  cannot resolve and no prior pin exists, so the name always resolves
+  to something that TCP-fails into a queueable 4xx. The 30s daemon's
+  existing diff-and-overwrite replaces the sentinel (or a stale IP)
+  with the real address within one poll interval of IMAP becoming
+  resolvable again.
+- smtp-in's sendmail is now explicitly pointed at a
+  `/etc/mail/service.switch` (`hosts files dns`) via
+  `confSERVICE_SWITCH_FILE`, guaranteeing it consults `/etc/hosts`
+  before DNS. Previously the pin's effectiveness silently depended on
+  the stock resolver order; an out-of-the-box build that went straight
+  to the VPC resolver would have ignored the pin entirely. Shipped as a
+  static file (`docker/shared/service.switch`) copied in by
+  `docker/smtp-in/Dockerfile`.
+- The smtp-in `hosts-pin` daemon logs the `cabal.internal` SOA record
+  TTL and minimum at startup, making the worst-case NXDOMAIN
+  negative-cache window - the bound on how long a stale pin can persist
+  after IMAP returns - observable in the container logs.
+
+## [0.10.5] - 2026-06-05
+
+### Fixed
+- Mail-tier ECS tasks could fail to start after monitoring was turned off in an
+  environment. Turning monitoring off deletes the
+  `/cabal/healthcheck_ping_*` SSM parameters, but the `imap` and `smtp-in` task
+  definitions still referenced `/cabal/healthcheck_ping_ecs_reconfigure` as the
+  `HEALTHCHECK_PING_URL` secret. Because the mail task definitions carry
+  `lifecycle { ignore_changes = [container_definitions] }`, dropping the secret
+  from config never reached a new revision on its own, and the first image roll
+  after the monitoring removal (which clones the live task definition) produced a
+  revision the ECS agent could not start - it errored fetching the missing
+  parameter. Bumped the `imap` and `smtp-in` task-def revision markers to force a
+  clean re-registration, and keyed all three mail-tier markers on
+  `var.healthcheck_ping_param` (the `+hc` hook, mirroring the existing
+  `smtp-out` `+sinkhole` hook) so flipping monitoring in either direction now
+  forces the `HEALTHCHECK_PING_URL` secret to be added or dropped in step with
+  the SSM parameter that backs it. `smtp-out` was already clean (its v3 marker
+  re-registered it after the monitoring removal); the `+hc` hook is a no-op for
+  it today and only future-proofs it against a re-enable.
+
+## [0.10.4] - 2026-06-05
+
+### Added
+- Drag-and-drop of messages onto sidebar folders in the wide-screen Apple
+  clients (iPad regular width, macOS, visionOS). A message row can be dragged
+  straight onto any selectable folder in the sidebar to move it there; the
+  targeted folder shows an accent border while the drag hovers it. Multi-select
+  is supported - dragging any selected row carries the whole selection, while
+  dragging an unselected row (or any row in normal mode) carries just that
+  message. If the sidebar is showing Addresses when the drag starts, it
+  temporarily flips to Folders so there is somewhere to drop, then flips back to
+  Addresses on release. The move runs through the same optimistic-prune /
+  unread-count / cache-cleanup path as the existing bulk and "Move to folder..."
+  actions, and cross-folder search selections route each message back to its own
+  source mailbox. Compact iPhone is unaffected (the sidebar and message list
+  never share the screen there). The drag carries an app-private UTType that no
+  other app recognizes (a small {uid, sourceFolder} payload, never any message
+  body).
+
+### Security
+- Dropped the unused `NET_ADMIN` Linux capability from all three mail-tier ECS
+  task definitions (imap, smtp-in, smtp-out). The capability existed only so
+  fail2ban could manipulate iptables; fail2ban has been disabled since 0.7.0
+  and nothing else used it, so this shrinks the container escape surface with
+  no behaviour change. Phase 1 of
+  `docs/0.10.x/container-runtime-hardening-plan.md`.
+- Hardened the runtime posture of all three mail-tier containers (phase 2 of
+  the same plan): `cap_drop: ALL` with a minimal analyzed add-back set
+  (`NET_BIND_SERVICE`, `SETUID`, `SETGID`, `CHOWN`, `DAC_OVERRIDE`, `FOWNER`,
+  `KILL`, plus `SYS_CHROOT` on the dovecot tiers imap and smtp-out),
+  `no-new-privileges`, and a real PID-1 init (`initProcessEnabled`). The
+  add-back set is the analyzed working estimate for these root-running
+  sendmail/dovecot/opendkim containers, which fork privilege-dropped children
+  and provision OS users at startup; the development soak tightens it before
+  stage/prod. Net reduction vs. the Docker default capability set: `NET_RAW`,
+  `MKNOD`, `AUDIT_WRITE`, `SETFCAP`, `SETPCAP`. `readOnlyRootFilesystem` on the
+  mail tiers is deliberately deferred (they regenerate `/etc/mail` +
+  `/etc/opendkim` at runtime); the monitoring tier gets it separately.
+- Tightened OpenDKIM's signing scope (phase 5 of the same plan): the generated
+  `TrustedHosts` is now loopback only (`127.0.0.1`, `::1`, `localhost`) instead
+  of `0.0.0.0/0`. opendkim signs only mail handed over by the local sendmail
+  through the loopback milter socket, so a signature now requires both the
+  network position (loopback) and a From-domain match in the SigningTable - not
+  either one alone.
+- Removed SMTP AUTH from the smtp-in inbound relay (the whole
+  `confAUTH_OPTIONS` / `TRUST_AUTH_MECH` / `confAUTH_MECHANISMS` stanza,
+  including the legacy DIGEST-MD5 and CRAM-MD5 mechanisms that RFC 6331
+  obsoleted). The inbound relay accepts mail for hosted domains and never
+  authenticates senders - submission auth is on smtp-out via Dovecot - so AUTH
+  was dead, weak surface. STARTTLS is unaffected.
+- Added sendmail resource and rate limits to all three mail tiers: a 50 MB
+  message-size cap (`confMAX_MESSAGE_SIZE`, the user-visible outbound limit,
+  kept in step across tiers so a relayed message is not accepted upstream then
+  bounced downstream for size), a daemon-children cap
+  (`confMAX_DAEMON_CHILDREN = 40`), a single-source connection throttle
+  (`confCONNECTION_RATE_THROTTLE = 5`), and `restrictmailq` in
+  `confPRIVACY_FLAGS` so non-trusted users can no longer inspect the mail queue.
+
+### Removed
+- fail2ban is gone from the mail-tier images entirely: the `dnf install`
+  package on all three tiers, the commented-out `[program:fail2ban]`
+  supervisord blocks, and the entrypoint `/etc/fail2ban/jail.local` stanza. It
+  had been commented out of supervisord (and thus never actually running) since
+  0.7.0. Host-level login-rate limiting moves to Dovecot's own knobs (a later
+  phase of the hardening plan) and, prospectively, the NLB/WAF. Operator
+  runbooks and `docs/monitoring.md` are updated to match.
+
+### Changed
+- The imap and smtp-in ECS task definitions now carry `replace_triggered_by`
+  revision markers (mirroring the existing smtp-out marker). Without them,
+  `lifecycle.ignore_changes = [container_definitions]` silently held back
+  deliberate task-def edits, so the NET_ADMIN drop above would never have
+  reached a running task. Forcing the imap replacement also reconciles its
+  container to the in-config `memory = 1024` cap, which had been committed with
+  the Dovecot vsz_limit bump but never deployed under the prior ignore.
+
+### Fixed
+- `generate-config.sh` now writes every generated sendmail/OpenDKIM map
+  atomically (stage to a temp file in the same directory, `fsync`,
+  `os.replace`). A SIGHUP, restart, or a sendmail `makemap` that lands mid-write
+  no longer reads a partially written map. Phase 5 of
+  `docs/0.10.x/container-runtime-hardening-plan.md`.
+- `app.yml`'s `docker` job again lists `setup` in `needs`, not just the
+  `approval` gate introduced in 0.10.3. The job's matrix reads
+  `fromJson(needs.setup.outputs.tiers)`, and a job's `strategy.matrix` can only
+  resolve `needs.<job>.outputs` for jobs named directly in its own `needs` -
+  `approval` (which needs setup) does not re-export setup's outputs - so the
+  matrix got empty input and errored at strategy evaluation. The first push to
+  touch `docker/**` after the gate landed surfaced it. The other five area jobs
+  read `needs.setup.outputs.*` only from `if`, which resolved fine via the
+  transitive dependency and kept deploying normally; they now list `setup`
+  directly too for correctness and to guard against the same matrix foot-gun.
+
+## [0.10.3] - 2026-06-01
+
+### Changed
+- Approval for potentially destructive workflow steps are now gated behind
+  three new "gate" environments. These environments hold the protection rules
+  instead of the three original environments, thus affording more targetted
+  and less redundant approval steps.
 
 ### Added
 - EC2 Image Builder pipeline that bakes a custom AL2023 NAT AMI with nftables
@@ -30,6 +866,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   environment, egress verification, and egress-outage troubleshooting.
 
 ### Fixed
+- Disabling monitoring (`TF_VAR_MONITORING=false`) no longer hangs the apply on
+  the `cabal-healthchecks-iac` Lambda. The `aws_lambda_invocation` resource used
+  `lifecycle_scope = "CRUD"`, whose destroy-time invoke fired a final Lambda call
+  as the monitoring module was torn down (`count = 0`); with the Healthchecks
+  task gone - and, in a quiesced env, NAT scaled to zero so SSM was unreachable -
+  that call blackholed to the 60s Lambda timeout and failed the apply with
+  `Sandbox.Timedout`. Dropped the scope to the default `CREATE_ONLY`, which still
+  re-invokes when `config.py` changes (via `triggers.source_code_hash`) but never
+  invokes on destroy. The handler also now no-ops defensively on a Terraform
+  `delete` action in case the scope is ever changed back.
 - `destroy_terraform.yml` now passes `TF_MODULE=infra` to `make-terraform.sh` in
   its `generate-versions` step. The script became module-aware and started
   requiring `TF_MODULE` when the dns S3 backend was added, but the destroy
@@ -168,7 +1014,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `logging`. Surfaced while extending `pylint` coverage to the shared
   `_shared/*.py` modules (previously only `*/function.py` was linted).
 
-## [0.9.46] - Unreleased
+## [0.9.46] - 2026-05-29
 
 ### Fixed
 - macOS contact picker came up blank. The "Choose Contacts" sheet

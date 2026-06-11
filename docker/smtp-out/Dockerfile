@@ -1,4 +1,4 @@
-FROM amazonlinux:2023
+FROM amazonlinux:2023@sha256:ad882807c6c88f478186fa2632637380e06071a303e2b3bd96ab71846a77c6a3
 
 # System packages
 RUN dnf install -y \
@@ -6,7 +6,6 @@ RUN dnf install -y \
       sendmail-milter \
       dovecot \
       opendkim \
-      fail2ban \
       procmail \
       rsyslog \
       make \
@@ -44,6 +43,7 @@ COPY shared/generate-config.sh             /usr/local/bin/generate-config.sh
 COPY shared/sync-users.sh                  /usr/local/bin/sync-users.sh
 COPY shared/reconfigure.sh                 /usr/local/bin/reconfigure.sh
 COPY shared/sendmail-wrapper.sh            /usr/local/bin/sendmail-wrapper.sh
+COPY shared/prepare-sendmail.sh            /usr/local/bin/prepare-sendmail.sh
 
 # Rsyslog config (ships sendmail logs to /var/log/maillog for CloudWatch)
 COPY shared/rsyslog-mail.conf              /etc/rsyslog.conf
@@ -54,8 +54,5 @@ COPY smtp-out/supervisord.conf             /etc/supervisord.conf
 RUN chmod +x /entrypoint.sh /usr/local/bin/*.sh
 
 EXPOSE 465 587
-
-HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-  CMD supervisorctl status | grep -v RUNNING && exit 1 || exit 0
 
 ENTRYPOINT ["/entrypoint.sh"]

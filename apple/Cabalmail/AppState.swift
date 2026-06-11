@@ -63,6 +63,14 @@ final class AppState {
     var replyRequestTick = 0
     var replyAllRequestTick = 0
     var forwardRequestTick = 0
+    /// Selection-scoped message-action intents bumped from the shared
+    /// Message menu (`MessageMenuCommands`: macOS menu bar, iPadOS
+    /// hardware-keyboard menu). The on-screen `MessageListView` observes
+    /// them and applies the action to its current selection; with nothing
+    /// selected the bump is a no-op, matching the Reply convention above.
+    var toggleSeenRequestTick = 0
+    var toggleFlaggedRequestTick = 0
+    var moveSelectionRequestTick = 0
 
     /// Latest envelope disposed from the detail view. `MessageListView`
     /// observes this via `.onChange` and prunes the matching UID from its
@@ -82,28 +90,67 @@ final class AppState {
     var lastEnvelopeFlagChange: EnvelopeFlagChange?
     private var flagChangeTick = 0
 
+    /// UIDs with a flag write in flight from the detail view, keyed by folder
+    /// path (IMAP UIDs are only unique within a mailbox, so a bare UID set
+    /// would let a pending write in one folder shield an unrelated row with
+    /// the same UID in another). `MessageListViewModel.shieldFetched` reads
+    /// this so a refresh that lands mid-write can't revert the detail view's
+    /// optimistic flag - the cross-view analogue of the list's own
+    /// `pendingFlagUIDs`. The detail view brackets each write via
+    /// `setFlagWrite(folderPath:uid:inFlight:)`. Read directly at merge time
+    /// (never from a view body), so observation tracking is irrelevant here.
+    private(set) var pendingFlagWriteUIDs: [String: Set<UInt32>] = [:]
+
+    /// UIDs the detail view has optimistically removed (archive / trash /
+    /// move) but whose server move is still in flight, keyed by source folder
+    /// path. The detail view prunes the list row up front via
+    /// `signalDisposed`; without this `MessageListViewModel.shieldFetched`
+    /// would let a refresh that lands before the move completes resurrect the
+    /// row (the source folder still returns the UID). The cross-view analogue
+    /// of the list's own `pendingRemovedUIDs`; bracketed via
+    /// `setMoveInFlight(folderPath:uid:inFlight:)`. Folder-keyed for the same
+    /// per-mailbox UID-uniqueness reason as `pendingFlagWriteUIDs`.
+    private(set) var pendingMoveUIDs: [String: Set<UInt32>] = [:]
+
+    /// True while a message-row drag is in flight on a wide-screen layout.
+    /// `MailRootView`'s sidebar watches this to temporarily reveal the
+    /// folder list as a drop target when the user is on the Addresses tab,
+    /// flipping back when the drag ends. Driven through `beginMessageDrag()`
+    /// / `endMessageDrag()` in the drag-and-drop extension below; internal
+    /// (not `private(set)`) so those same-type extension methods can write it.
+    var messageDragInProgress = false
+
+    /// Latest drag-and-drop move. A folder row's drop handler posts this with
+    /// the destination path; the active `MessageListView` observes it via
+    /// `.onChange` and routes the payload through its view model so the move
+    /// shares the optimistic-prune / unread-count / cache-cleanup path with
+    /// the menu-driven and bulk moves.
+    var pendingMoveRequest: MessageMoveRequest?
+    // Internal so `requestMove` in the drag-and-drop extension below can bump it.
+    var moveRequestTick = 0
+
     /// Authoritative Inbox unread count, refreshed by the badge poller.
     /// Exposed as an observable so future views (e.g. a sidebar indicator)
     /// can mirror what shows on the dock/home-screen badge.
     private(set) var inboxUnreadCount: Int = 0
 
-    // Per-folder unread + total counts live in an extension on
-    // `AppStateCounts.swift` so this file stays under the swiftlint
-    // file-length cap. The storage is still owned by this type — the
-    // extension just hosts the helpers.
+    // Per-folder unread + total counts. The mutators that maintain these
+    // maps live in the "Per-folder unread + total counts" extension below.
     var folderUnreadCounts: [String: Int] = [:]
     var folderTotalCounts: [String: Int] = [:]
     private var inboxBadgeTask: Task<Void, Never>?
     private let inboxBadgePollInterval: UInt64 = 60 * 1_000_000_000
 
-    // `requestCompose(seed:)` and `consumePendingComposeSeed()` live in
-    // `AppStateCompose.swift` alongside the contacts-access helper so
-    // this file stays under the SwiftLint length cap.
+    // `requestCompose(seed:)` and `consumePendingComposeSeed()` live in the
+    // "Compose routing + onboarding" extension below, alongside the
+    // contacts-access helper.
     func requestCompose() { composeRequestTick += 1 }
     func requestRefresh() { refreshRequestTick += 1 }
     func requestReply() { replyRequestTick += 1 }
     func requestReplyAll() { replyAllRequestTick += 1 }
     func requestForward() { forwardRequestTick += 1 }
+    // The selection-scoped request bumpers live in the "Message-menu
+    // selection intents" extension below (SwiftLint type-body budget).
 
     func signalDisposed(folderPath: String, uid: UInt32, wasUnread: Bool = false) {
         disposedTick += 1
@@ -134,6 +181,39 @@ final class AppState {
         )
         if flag == .seen {
             applyUnreadDelta(folderPath: folderPath, delta: added ? -1 : 1)
+        }
+    }
+
+    /// Mark a detail-view flag write as in flight (`true`, when the STORE is
+    /// dispatched) or resolved (`false`, on success or failure). While a UID
+    /// is in flight the list's merge keeps the optimistic flag instead of the
+    /// fetched one; clearing it lets the next refresh carry server truth. Safe
+    /// to call `false` for a UID that was never inserted (a no-op removal).
+    func setFlagWrite(folderPath: String, uid: UInt32, inFlight: Bool) {
+        if inFlight {
+            pendingFlagWriteUIDs[folderPath, default: []].insert(uid)
+        } else {
+            pendingFlagWriteUIDs[folderPath]?.remove(uid)
+            if pendingFlagWriteUIDs[folderPath]?.isEmpty == true {
+                pendingFlagWriteUIDs[folderPath] = nil
+            }
+        }
+    }
+
+    /// Mark a detail-view archive / trash / move as in flight (`true`, before
+    /// the server move) or resolved (`false`, on success or failure). While a
+    /// UID is in flight the list's merge keeps the optimistically-pruned row
+    /// gone; clearing it lets the next refresh re-add the row if the move
+    /// failed, or confirm its absence if it succeeded. Safe to call `false`
+    /// for a UID that was never inserted (a no-op removal).
+    func setMoveInFlight(folderPath: String, uid: UInt32, inFlight: Bool) {
+        if inFlight {
+            pendingMoveUIDs[folderPath, default: []].insert(uid)
+        } else {
+            pendingMoveUIDs[folderPath]?.remove(uid)
+            if pendingMoveUIDs[folderPath]?.isEmpty == true {
+                pendingMoveUIDs[folderPath] = nil
+            }
         }
     }
 
@@ -375,7 +455,138 @@ final class AppState {
         case .timeout:            return "Request timed out."
         case .cancelled:          return "Cancelled."
         case .notSignedIn:        return "Not signed in."
+        // Planned IMAP redeploy: show the API's friendly copy verbatim, no
+        // "Server error:" prefix.
+        case .maintenance(let message): return message
         default:                  return nil
         }
+    }
+}
+
+// MARK: - Message-menu selection intents
+
+// Bumpers for the selection-scoped tick counters declared on the main
+// type (stored properties can't live in an extension under @Observable).
+extension AppState {
+    func requestToggleSeen() { toggleSeenRequestTick += 1 }
+    func requestToggleFlagged() { toggleFlaggedRequestTick += 1 }
+    func requestMoveSelection() { moveSelectionRequestTick += 1 }
+}
+
+// MARK: - Per-folder unread + total counts
+//
+// Mutators for the `folderUnreadCounts` / `folderTotalCounts` storage declared
+// on the main type above. Subscribed folders' counts get refreshed proactively
+// by `FolderListViewModel`; unsubscribed folders are populated lazily on
+// selection, and the unsubscribed-folder banner's Refresh button writes the
+// freshest values through `setFolderCounts` so the sidebar badge and the
+// message-list view advance together. Kept as a same-file extension so the
+// primary class body stays under SwiftLint's `type_body_length` cap.
+@MainActor
+extension AppState {
+    /// Replace the unread count for one folder. Called after an
+    /// authoritative `STATUS (UNSEEN)` when the caller doesn't have the
+    /// total in hand (e.g. an optimistic delta-based recovery path).
+    func setUnreadCount(folderPath: String, count: Int) {
+        folderUnreadCounts[folderPath] = max(0, count)
+    }
+
+    /// Replace the unread + total counts for one folder in one shot.
+    /// Preferred over `setUnreadCount` whenever a full STATUS reply is
+    /// in hand, so the two maps don't drift.
+    func setFolderCounts(folderPath: String, unread: Int, total: Int) {
+        folderUnreadCounts[folderPath] = max(0, unread)
+        folderTotalCounts[folderPath] = max(0, total)
+    }
+
+    /// Replace the whole unread map. Used by the folder list view model
+    /// after a full STATUS walk so any folders that have disappeared
+    /// drop out.
+    func setUnreadCounts(_ counts: [String: Int]) {
+        folderUnreadCounts = counts.mapValues { max(0, $0) }
+    }
+
+    /// Bump (or reduce) the count for one folder. Clamped at zero so a
+    /// stale +1 from a doubled signal can't make the badge negative.
+    func applyUnreadDelta(folderPath: String, delta: Int) {
+        let current = folderUnreadCounts[folderPath] ?? 0
+        folderUnreadCounts[folderPath] = max(0, current + delta)
+    }
+}
+
+// MARK: - Compose routing + onboarding
+//
+// The compose-seed helpers (`requestCompose(seed:)` /
+// `consumePendingComposeSeed`) plumb a pre-filled draft from the `mailto:`
+// URL handler through to `MessageListView`'s receiver without bypassing the
+// existing `composeRequestTick` mechanism that macOS menu shortcuts already
+// use. The contacts-access helper kicks off the system permission prompt
+// during sign-in / restore.
+@MainActor
+extension AppState {
+    /// Variant of `requestCompose` that pairs an explicit seed with
+    /// the request. Used by the mailto: URL handler; menu shortcuts
+    /// and toolbar buttons continue to call the zero-arg form, which
+    /// leaves `pendingComposeSeed` nil and lets the receiver fall
+    /// back to a fresh draft.
+    func requestCompose(seed: Draft) {
+        pendingComposeSeed = seed
+        composeRequestTick += 1
+    }
+
+    /// Reads and clears the pending compose seed. Called by the
+    /// compose-request receiver in `MessageListView` both on
+    /// `.onChange(of: composeRequestTick)` (warm path) and on the
+    /// view's initial `.task` (cold-launch mailto: arrived before the
+    /// view was in the hierarchy).
+    func consumePendingComposeSeed() -> Draft? {
+        defer { pendingComposeSeed = nil }
+        return pendingComposeSeed
+    }
+
+    /// Kick off a one-shot contacts authorization request,
+    /// fire-and-forget. `CNContactStore.requestAccess` no-ops after
+    /// the user has already responded, so calling this on every
+    /// sign-in / restore is harmless. We prompt at sign-in (rather
+    /// than lazily on first compose / message open) so the request
+    /// lands while the user is already in onboarding mode and the
+    /// message list that immediately follows shows hydrated names
+    /// from the first paint.
+    func requestContactsAccessIfNeeded() {
+        let store = contactsStore
+        Task {
+            _ = await store.requestAccess()
+        }
+    }
+}
+
+// MARK: - Drag-and-drop coordination
+//
+// Mutators for the `messageDragInProgress` / `pendingMoveRequest` /
+// `moveRequestTick` storage declared on the main type above. The drag flag
+// and the move request are the two halves of moving a message onto a sidebar
+// folder: the flag lets the sidebar reveal folders mid-drag (see
+// `MailRootView`), and the move request hands the dropped payload to the
+// active message list (see `MessageListView`). See
+// `Cabalmail/Views/MessageDrag.swift` for the drag/drop plumbing itself.
+@MainActor
+extension AppState {
+    /// Drag lifecycle, driven from SwiftUI drag/drop closures. `begin` fires
+    /// when a row is lifted; `end` fires on drop or release. Both are
+    /// idempotent so the burst of drag callbacks the system can emit doesn't
+    /// matter.
+    func beginMessageDrag() { messageDragInProgress = true }
+    func endMessageDrag() { messageDragInProgress = false }
+
+    /// Post a drag-and-drop move for the active message list to perform.
+    /// `tick` is monotonic so dragging onto the same folder twice still fires
+    /// the list's `.onChange` observer.
+    func requestMove(items: [MessageDragItem], to destination: String) {
+        moveRequestTick += 1
+        pendingMoveRequest = MessageMoveRequest(
+            destination: destination,
+            items: items,
+            tick: moveRequestTick
+        )
     }
 }

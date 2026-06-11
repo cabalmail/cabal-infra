@@ -97,6 +97,16 @@ def _put_ssm_if_changed(name, value):
 
 def handler(event, _context):  # pylint: disable=unused-argument
     '''Entry point. Returns a status dict; Terraform surfaces it on apply.'''
+    # Defensive teardown guard. The aws_lambda_invocation resource uses the
+    # default CREATE_ONLY scope, which never fires on destroy. But if it is
+    # ever switched back to "CRUD", Terraform injects {"tf": {"action":
+    # "delete"}} and invokes this Lambda one last time as the monitoring
+    # module is torn down - at which point the Healthchecks API (and, in a
+    # quiesced env, the route to SSM) is gone and any network call would hang
+    # to the 60s timeout. There is nothing to reconcile on teardown, so no-op.
+    if isinstance(event, dict) and event.get('tf', {}).get('action') == 'delete':
+        return {'status': 'skipped', 'reason': 'terraform delete action'}
+
     api_key = ssm.get_parameter(Name=API_KEY_PARAM, WithDecryption=True)['Parameter']['Value']
     if api_key.startswith(PLACEHOLDER_PREFIX):
         # Bootstrap chicken-and-egg: the operator needs to create the

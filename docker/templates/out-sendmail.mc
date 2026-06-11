@@ -5,7 +5,16 @@ define(`confLOG_LEVEL', `2')dnl
 define(`confPID_FILE', `/var/run/sendmail.pid')dnl
 define(`confDEF_USER_ID',``8:12'')
 define(`ALIAS_FILE',`/etc/aliases')dnl
-define(`confPRIVACY_FLAGS', `authwarnings,needmailhelo,noexpn,novrfy')dnl
+define(`confPRIVACY_FLAGS', `authwarnings,needmailhelo,noexpn,novrfy,restrictmailq')dnl
+dnl Resource and rate limits (phase 5 of
+dnl docs/0.10.x/container-runtime-hardening-plan.md): cap message size at
+dnl 50 MB (the user-visible outbound limit), bound concurrent daemon
+dnl children, and throttle connection bursts. confREJECT_LOG_INTERVAL
+dnl rate-limits the log volume on repeated rejections.
+define(`confMAX_MESSAGE_SIZE', `52428800')dnl
+define(`confMAX_DAEMON_CHILDREN', `40')dnl
+define(`confCONNECTION_RATE_THROTTLE', `5')dnl
+define(`confREJECT_LOG_INTERVAL', `3h')dnl
 define(`confTO_QUEUERETURN', `4d')dnl
 define(`confTO_QUEUEWARN', `4h')dnl
 dnl Minimum age before a queued message is eligible for a fresh delivery

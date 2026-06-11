@@ -12,10 +12,15 @@ import UniformTypeIdentifiers
 ///
 /// The form is four labeled fields (From picker, To/Cc/Bcc tokens, subject,
 /// dual-mode rich-text + Markdown body) plus an attachment strip and a Send
-/// button. The primary affordance of the From picker is **"Create new
-/// address…"** — per `docs/README.md`, minting a fresh subdomain-scoped
-/// address per contact is Cabalmail's core idiom, so the picker never
-/// silently preselects one and Send stays disabled until the user chooses.
+/// button. iOS / iPadOS / visionOS render the fields as a grouped `Form`;
+/// macOS uses a compact Mail-style header grid with the editor filling the
+/// remaining window (`ComposeMacHeader` + `macLayout`) because SwiftUI's
+/// default macOS form style centers the fields beside a label gutter that
+/// wastes roughly half the window. The primary affordance of the From
+/// picker is **"Create new address…"** — per `docs/README.md`, minting a
+/// fresh subdomain-scoped address per contact is Cabalmail's core idiom, so
+/// the picker never silently preselects one and Send stays disabled until
+/// the user chooses.
 struct ComposeView: View {
     /// SwiftUI focus targets. The body editor is a WKWebView and isn't part
     /// of the SwiftUI focus system; we route body focus through
@@ -49,69 +54,8 @@ struct ComposeView: View {
     #endif
 
     var body: some View {
-        @Bindable var model = model
         NavigationStack {
-            Form {
-                Section("From") {
-                    FromPicker(
-                        model: model,
-                        onCreateAddress: { showNewAddressSheet = true }
-                    )
-                }
-                Section("Recipients") {
-                    RecipientFieldWithSuggestions(
-                        label: "To",
-                        text: $model.toText,
-                        candidates: recipientCandidates,
-                        focusBinding: $focusedField,
-                        focusValue: Field.to
-                    )
-                    RecipientFieldWithSuggestions(
-                        label: "Cc",
-                        text: $model.ccText,
-                        candidates: recipientCandidates,
-                        focusBinding: $focusedField,
-                        focusValue: Field.cc
-                    )
-                    RecipientFieldWithSuggestions(
-                        label: "Bcc",
-                        text: $model.bccText,
-                        candidates: recipientCandidates,
-                        focusBinding: $focusedField,
-                        focusValue: Field.bcc
-                    )
-                }
-                Section("Subject") {
-                    TextField("Subject", text: $model.subject)
-                }
-                Section("Message") {
-                    ComposerBody(model: model)
-                }
-                if !model.attachments.isEmpty {
-                    Section("Attachments") {
-                        ForEach(model.attachments) { attachment in
-                            attachmentRow(attachment)
-                        }
-                        if model.attachmentTotalExceedsWarning {
-                            let total = ByteCountFormatter.string(
-                                fromByteCount: Int64(model.attachmentTotalBytes),
-                                countStyle: .file
-                            )
-                            let warning = "Attachments total \(total). Many mail servers reject "
-                                + "messages over 25 MB; delivery may fail."
-                            Label(warning, systemImage: "exclamationmark.triangle")
-                                .font(.caption)
-                                .foregroundStyle(.orange)
-                        }
-                    }
-                }
-                if let errorMessage = model.errorMessage {
-                    Section {
-                        Label(errorMessage, systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(.red)
-                    }
-                }
-            }
+            composeContent
             .navigationTitle("New Message")
             #if os(iOS) || os(visionOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -317,6 +261,127 @@ struct ComposeView: View {
             model.addAttachment(filename: filename, mimeType: "image/jpeg", data: data)
         }
         photoSelection = []
+    }
+    #endif
+}
+
+// MARK: - Layout fork
+
+// Same-file extension so these builders can reach the `private`
+// focus / sheet / candidate state (file-scoped `private` covers
+// extensions of the type in the same file).
+extension ComposeView {
+    /// Platform fork for the compose surface. iOS / iPadOS / visionOS
+    /// keep the grouped `Form`; macOS gets a Mail-style compact layout
+    /// because SwiftUI's default macOS form style (`.columns`) centers
+    /// the controls beside a label gutter sized at roughly half the
+    /// window, leaving the upper-left quadrant empty.
+    @ViewBuilder
+    private var composeContent: some View {
+        #if os(macOS)
+        macLayout
+        #else
+        composeForm
+        #endif
+    }
+
+    #if !os(macOS)
+    private var composeForm: some View {
+        @Bindable var model = model
+        return Form {
+            Section("From") {
+                FromPicker(
+                    model: model,
+                    onCreateAddress: { showNewAddressSheet = true }
+                )
+            }
+            Section("Recipients") {
+                RecipientFieldWithSuggestions(
+                    label: "To",
+                    text: $model.toText,
+                    candidates: recipientCandidates,
+                    focusBinding: $focusedField,
+                    focusValue: Field.to
+                )
+                RecipientFieldWithSuggestions(
+                    label: "Cc",
+                    text: $model.ccText,
+                    candidates: recipientCandidates,
+                    focusBinding: $focusedField,
+                    focusValue: Field.cc
+                )
+                RecipientFieldWithSuggestions(
+                    label: "Bcc",
+                    text: $model.bccText,
+                    candidates: recipientCandidates,
+                    focusBinding: $focusedField,
+                    focusValue: Field.bcc
+                )
+            }
+            Section("Subject") {
+                TextField("Subject", text: $model.subject)
+            }
+            Section("Message") {
+                ComposerBody(model: model)
+            }
+            if !model.attachments.isEmpty {
+                Section("Attachments") {
+                    ForEach(model.attachments) { attachment in
+                        attachmentRow(attachment)
+                    }
+                    if model.attachmentTotalExceedsWarning {
+                        attachmentSizeWarning
+                    }
+                }
+            }
+            if let errorMessage = model.errorMessage {
+                Section {
+                    Label(errorMessage, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.red)
+                }
+            }
+        }
+    }
+    #endif
+
+    #if os(macOS)
+    /// Mail-style macOS layout: compact header grid up top, editor
+    /// filling the rest of the window. Attachments and send errors
+    /// render as bottom strips instead of Form sections.
+    private var macLayout: some View {
+        VStack(spacing: 0) {
+            ComposeMacHeader(
+                model: model,
+                candidates: recipientCandidates,
+                focusBinding: $focusedField,
+                onCreateAddress: { showNewAddressSheet = true }
+            )
+            Divider()
+            ComposerBody(model: model)
+            if !model.attachments.isEmpty {
+                Divider()
+                macAttachmentStrip
+            }
+            if let errorMessage = model.errorMessage {
+                Divider()
+                Label(errorMessage, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.red)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(10)
+            }
+        }
+    }
+
+    private var macAttachmentStrip: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(model.attachments) { attachment in
+                attachmentRow(attachment)
+            }
+            if model.attachmentTotalExceedsWarning {
+                attachmentSizeWarning
+            }
+        }
+        .padding(10)
     }
     #endif
 }

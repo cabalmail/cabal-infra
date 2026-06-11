@@ -1,6 +1,8 @@
 resource "aws_ecr_repository" "certbot" {
-  name                 = "cabal/certbot-renewal"
-  image_tag_mutability = "MUTABLE"
+  name = "cabal/certbot-renewal"
+  # IMMUTABLE to match every other cabal ECR repo (the ecr module). Deploys
+  # push unique sha-<8> tags (app.yml), so immutability never blocks a push.
+  image_tag_mutability = "IMMUTABLE"
   force_delete         = false
 
   image_scanning_configuration {

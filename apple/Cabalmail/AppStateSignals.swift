@@ -36,3 +36,24 @@ struct EnvelopeFlagChange: Equatable, Sendable {
     let added: Bool
     let tick: Int
 }
+
+/// One message inside a drag payload: the UID plus the mailbox that owns it.
+/// Folder-mode lists collapse to a single source; a cross-folder search
+/// selection can span several, so each item carries its own `sourceFolder`
+/// rather than relying on the sidebar's current selection. Codable so it
+/// rides inside the drag `NSItemProvider` (see `MessageDragPayload`).
+struct MessageDragItem: Codable, Hashable, Sendable {
+    let uid: UInt32
+    let sourceFolder: String
+}
+
+/// Signal payload for a drag-and-drop move. Posted by a folder row's drop
+/// handler in `FolderListView` (which knows the destination) and observed by
+/// the active `MessageListView` (which owns the view model that performs the
+/// optimistic prune / unread bookkeeping / cache cleanup). `tick` is
+/// monotonic so dragging onto the same folder twice still fires the observer.
+struct MessageMoveRequest: Equatable, Sendable {
+    let destination: String
+    let items: [MessageDragItem]
+    let tick: Int
+}

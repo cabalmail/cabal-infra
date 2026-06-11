@@ -27,4 +27,9 @@ public enum CabalmailError: Error, Sendable, Equatable {
 
     /// SMTP server refused a command. `code` is the 3-digit reply.
     case smtpCommandFailed(code: Int, detail: String)
+
+    /// The IMAP tier is mid-redeploy (planned maintenance): the API returned a
+    /// 503 with `{"status":"maintenance"}`. `message` is the client-facing copy
+    /// so the UI can show "temporarily unavailable" instead of a raw error.
+    case maintenance(message: String)
 }

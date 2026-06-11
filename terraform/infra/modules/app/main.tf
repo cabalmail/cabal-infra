@@ -21,6 +21,10 @@ resource "aws_api_gateway_authorizer" "api_auth" {
   name        = "cabal_pool"
   rest_api_id = aws_api_gateway_rest_api.gateway.id
   type        = "COGNITO_USER_POOLS"
+  # Cap how long API Gateway trusts a cached authorizer result. At the default
+  # 300s a token revoked in Cognito stays usable against the API for up to five
+  # minutes; 60s bounds that window to one minute.
+  authorizer_result_ttl_in_seconds = 60
   provider_arns = [join("", [
     "arn:aws:cognito-idp:",
     var.region,
@@ -44,8 +48,6 @@ module "cabal_method" {
   root_resource_id          = aws_api_gateway_rest_api.gateway.root_resource_id
   authorizer                = aws_api_gateway_authorizer.api_auth.id
   control_domain            = var.control_domain
-  relay_ips                 = var.relay_ips
-  repo                      = var.repo
   domains                   = var.domains
   bucket                    = var.bucket
   address_changed_topic_arn = var.address_changed_topic_arn
@@ -136,9 +138,14 @@ resource "aws_api_gateway_method_settings" "general_settings" {
   stage_name  = aws_api_gateway_stage.api_stage.stage_name
   method_path = "*/*"
   settings {
-    metrics_enabled        = true
-    data_trace_enabled     = true
-    logging_level          = "INFO"
+    metrics_enabled = true
+    # data_trace logs full request/response bodies to CloudWatch. For a mail
+    # API that means addresses, message content, and tokens - keep it off.
+    data_trace_enabled = false
+    # ERROR, not INFO: at INFO every call writes a multi-KB execution-log line
+    # for a mail API. The access-log stream (set on the stage) already captures
+    # caller, method, path, status, and latency - the useful per-request signal.
+    logging_level          = "ERROR"
     throttling_rate_limit  = 100
     throttling_burst_limit = 50
   }

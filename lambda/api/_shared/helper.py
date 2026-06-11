@@ -2,11 +2,13 @@
 address lookups, S3 message caching and presigned URLs, envelope decoding, and
 the request-input validators used across the handlers.'''
 import email
+import functools
 import io
 import json
 import logging
 import os
 import re
+import time
 from email.header import decode_header
 from email.policy import default as default_policy
 import boto3  # pylint: disable=import-error
@@ -30,6 +32,127 @@ mpw = ssm.get_parameter(Name='/cabal/master_password',
 def get_mpw():
     """Returns the master password"""
     return mpw
+
+
+# ---------------------------------------------------------------------------
+# Planned-maintenance signal.
+#
+# The IMAP service is hard-capped at one ECS task (Dovecot has Maildir-over-EFS
+# concurrency issues), so every IMAP image roll has a true zero-task window: the
+# old container stops before the new one starts. During that window a fresh IMAP
+# connection fails, and without this the handlers would relay a raw 500/timeout
+# that clients render as a scary error.
+#
+# A planned roll writes /cabal/maintenance/imap = {"active": true, ...} before
+# triggering the roll; the new container clears it once Dovecot is back.
+# get_imap_client() consults the flag and raises MaintenanceError instead of
+# dialing a dead server, and the maintenance_guard decorator turns that into a
+# friendly 503 + Retry-After. A cache-served read (get_message hit) never calls
+# get_imap_client, so it keeps working through the window.
+#
+# Fail-open everywhere: a missing parameter, an unparseable value, an IAM gap,
+# or any SSM error is treated as "not in maintenance" so a flag-read hiccup can
+# never wedge mail access.
+# ---------------------------------------------------------------------------
+
+MAINTENANCE_PARAM = '/cabal/maintenance/imap'
+_MAINTENANCE_TTL = 15.0
+_DEFAULT_MAINTENANCE_MESSAGE = (
+    'Email access is temporarily unavailable due to planned maintenance.'
+)
+_DEFAULT_RETRY_AFTER = 30
+# Per-warm-container cache so per-request SSM traffic stays negligible:
+# {'at': monotonic seconds, 'value': parsed dict or None}.
+_maintenance_cache = {'at': float('-inf'), 'value': None}
+
+
+class MaintenanceError(Exception):
+    '''Raised by get_imap_client when a planned IMAP roll is in progress.
+    maintenance_guard translates it into a 503 maintenance response.'''
+    def __init__(self, state):
+        self.state = state or {}
+        super().__init__('IMAP is in planned maintenance')
+
+
+def _read_maintenance_param():
+    '''Returns the parsed maintenance flag dict, or None. TTL-cached per warm
+    container. Fails open to None on any read/parse error.'''
+    now = time.monotonic()
+    if now - _maintenance_cache['at'] < _MAINTENANCE_TTL:
+        return _maintenance_cache['value']
+    value = None
+    try:
+        raw = ssm.get_parameter(Name=MAINTENANCE_PARAM)["Parameter"]["Value"]
+        parsed = json.loads(raw)
+        if isinstance(parsed, dict):
+            value = parsed
+    except ssm.exceptions.ParameterNotFound:
+        value = None
+    except Exception as err:  # pylint: disable=broad-exception-caught
+        # Never let a flag-read problem block mail access.
+        logging.warning(
+            'maintenance flag read failed, assuming not in maintenance: %s', err
+        )
+        value = None
+    _maintenance_cache['at'] = now
+    _maintenance_cache['value'] = value
+    return value
+
+
+def maintenance_state():
+    '''Returns the active maintenance flag dict when a planned roll is in
+    progress and has not expired, else None.'''
+    value = _read_maintenance_param()
+    if not value or not value.get('active'):
+        return None
+    until = value.get('until')
+    # Backstop: a crashed/cancelled deploy could leave the flag on. Once `until`
+    # passes, treat the window as over regardless of `active`.
+    if isinstance(until, (int, float)) and not isinstance(until, bool):
+        if time.time() > until:
+            return None
+    return value
+
+
+def _raise_if_maintenance():
+    '''Raises MaintenanceError when a planned IMAP roll is in progress.'''
+    state = maintenance_state()
+    if state is not None:
+        raise MaintenanceError(state)
+
+
+def maintenance_response(state):
+    '''Builds the 503 maintenance proxy response from a flag dict.'''
+    state = state or {}
+    retry_after = state.get('retry_after', _DEFAULT_RETRY_AFTER)
+    try:
+        retry_after = int(retry_after)
+    except (TypeError, ValueError):
+        retry_after = _DEFAULT_RETRY_AFTER
+    message = state.get('message') or _DEFAULT_MAINTENANCE_MESSAGE
+    return {
+        "statusCode": 503,
+        "headers": {"Retry-After": str(retry_after)},
+        "body": json.dumps({
+            "status": "maintenance",
+            "message": message,
+            "retry_after": retry_after,
+        })
+    }
+
+
+def maintenance_guard(handler):
+    '''Decorator: turns a MaintenanceError raised anywhere inside an IMAP-backed
+    handler into a friendly 503 maintenance response so clients can show a
+    "temporarily unavailable" message instead of a raw connection error.'''
+    @functools.wraps(handler)
+    def wrapper(event, context):
+        try:
+            return handler(event, context)
+        except MaintenanceError as err:
+            return maintenance_response(err.state)
+    return wrapper
+
 
 def admin_response_or_none(event):
     """Returns a 403 response when the caller lacks the admin group, else None"""
@@ -56,7 +179,14 @@ def find_managed_apex(domains_map, domain):
     return (best_apex, best_zone)
 
 def get_imap_client(host, user, folder, read_only=False):
-    '''Returns an IMAP client for host/user with folder selected'''
+    '''Returns an IMAP client for host/user with folder selected.
+
+    Raises MaintenanceError when a planned IMAP roll is in progress, so callers
+    short-circuit to a friendly 503 (via maintenance_guard) instead of dialing a
+    server that is mid-restart. Every IMAP-touching path flows through here, so
+    this one check covers reads, folder ops, flags, moves, and cache-miss
+    fetches; cache hits never reach this function and keep working.'''
+    _raise_if_maintenance()
     client = IMAPClient(host=host, use_uid=True, ssl=True)
     client.login(f"{user}*admin", mpw)
     client.select_folder(folder, read_only)
@@ -129,6 +259,14 @@ _SYSTEM_FLAGS = {
 # RFC 5256 SORT keys we expose. ASC maps to no prefix, DESC to REVERSE.
 _SORT_FIELDS = {'ARRIVAL', 'CC', 'DATE', 'FROM', 'SIZE', 'SUBJECT', 'TO'}
 
+# Folder names the destructive endpoints (purge_messages, empty_trash)
+# may operate on, so a client bug can never expunge a non-trash folder.
+# Every client files deletions in Dovecot's special-use \Trash mailbox
+# ("Trash"). Legacy "Deleted Messages" folders (the web client's
+# pre-Trash delete target) are ordinary folders and deliberately not
+# purgeable; they are emptied by deleting the folder itself.
+TRASH_FOLDERS = ('Trash',)
+
 
 def validate_folder_name(name):
     '''Validates a `/`-separated display folder name and returns it unchanged.
@@ -151,6 +289,15 @@ def validate_folder_name(name):
     # segment.
     if any(seg in ('', '.', '..') for seg in name.split('/')):
         raise ValueError(f'invalid folder name: {name!r}')
+    return name
+
+
+def validate_trash_folder(name):
+    '''Validates a folder name and additionally requires it to be one of the
+    known trash folders (TRASH_FOLDERS). Raises ValueError otherwise.'''
+    name = validate_folder_name(name)
+    if name not in TRASH_FOLDERS:
+        raise ValueError(f'not a trash folder: {name!r}')
     return name
 
 
@@ -436,6 +583,28 @@ def get_object(bucket, key):
     '''Returns an object from s3'''
     obj = s3r.Object(bucket, key)
     return obj.get()['Body'].read()
+
+def delete_object(bucket, key):
+    '''Deletes an object from s3. Returns True on success, False on error.'''
+    try:
+        s3r.Object(bucket, key).delete()
+    except ClientError as e:
+        logging.error(e)
+        return False
+    return True
+
+def delete_prefix(bucket, prefix):
+    '''Deletes every object under a key prefix. Returns True on success,
+    False on error. The prefix must be non-empty and end with "/" so a
+    folder prefix can never match a sibling folder's keys.'''
+    if not prefix or not prefix.endswith('/'):
+        raise ValueError(f'invalid delete prefix: {prefix!r}')
+    try:
+        s3r.Bucket(bucket).objects.filter(Prefix=prefix).delete()
+    except ClientError as e:
+        logging.error(e)
+        return False
+    return True
 
 def sign_url(bucket, key, expiration=86400):
     '''Signs a URL for an object hosted in s3'''

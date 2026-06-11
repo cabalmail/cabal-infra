@@ -1,7 +1,6 @@
 locals {
   hosted_zone_arns = join(",", [for domain in var.domains : "\"${domain.arn}\""])
   wildcard         = "*"
-  zip_file         = "s3://${var.bucket}/lambda/${var.name}_lambda.zip"
 }
 
 resource "aws_lambda_permission" "api_exec" {
@@ -43,8 +42,12 @@ ROLEPOLICY
 }
 
 resource "aws_iam_role_policy" "lambda" {
-  name   = "${var.name}_policy"
-  role   = aws_iam_role.lambda.id
+  name = "${var.name}_policy"
+  role = aws_iam_role.lambda.id
+  # iam-wildcard-ok: heredoc JSON cannot carry inline comments, so this
+  # directive covers both wildcards in the document below - S3 object keys
+  # under the per-user cache prefix and log-stream names are runtime values
+  # with no enumerable ARN. Every other statement names specific resources.
   policy = <<RUNPOLICY
 {
     "Version": "2012-10-17",
@@ -61,7 +64,10 @@ resource "aws_iam_role_policy" "lambda" {
             "Action": [
                 "ssm:GetParameter"
             ],
-            "Resource": "arn:aws:ssm:${var.region}:${var.account}:parameter/cabal/master_password"
+            "Resource": [
+                "arn:aws:ssm:${var.region}:${var.account}:parameter/cabal/master_password",
+                "arn:aws:ssm:${var.region}:${var.account}:parameter/cabal/maintenance/imap"
+            ]
         },
         {
             "Effect": "Allow",
@@ -126,6 +132,27 @@ resource "aws_iam_role_policy" "lambda" {
             "Effect": "Allow",
             "Action": "sns:Publish",
             "Resource": "${var.address_changed_topic_arn}"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "kms:GenerateDataKey",
+                "kms:Decrypt"
+            ],
+            "Resource": "arn:aws:kms:${var.region}:${var.account}:key/*",
+            "Condition": {
+                "StringEquals": {
+                    "kms:ViaService": "sns.${var.region}.amazonaws.com"
+                }
+            }
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "sqs:SendMessage",
+                "sqs:GetQueueUrl"
+            ],
+            "Resource": "arn:aws:sqs:${var.region}:${var.account}:cabal-append-sent"
         },
         {
             "Effect": "Allow",

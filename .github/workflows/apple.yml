@@ -214,13 +214,21 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             | xcbeautify --renderer github-actions
 
+  approval:
+    needs: [kit-test, app-build]
+    environment: gate-${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
+    runs-on: ubuntu-latest
+    steps:
+    - name: approve
+      run: echo "Approved"
+
   # -----------------------------------------------------------------------
   # Signed archive + TestFlight upload for iOS/iPadOS/visionOS. Only runs
   # on main or stage and only if the required secrets are configured.
   # -----------------------------------------------------------------------
   upload-ios:
     name: Upload iOS to TestFlight
-    needs: [kit-test, app-build]
+    needs: approval
     if: ${{ github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'stage') }}
     runs-on: macos-15
     environment: ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
@@ -482,7 +490,7 @@ jobs:
     permissions:
       contents: read
       actions: write
-    needs: [kit-test, app-build]
+    needs: approval
     if: ${{ github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'stage') }}
     runs-on: macos-15
     environment: ${{ github.ref_name == 'main' && 'prod' || 'stage' }}

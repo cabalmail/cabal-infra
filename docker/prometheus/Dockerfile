@@ -1,4 +1,4 @@
-FROM prom/prometheus:v3.5.0
+FROM prom/prometheus:v3.12.0@sha256:69f5241418838263316593f7274a304b095c40bcf22e57272865da91bd60a8ac
 
 USER root
 

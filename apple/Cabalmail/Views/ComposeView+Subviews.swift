@@ -34,6 +34,22 @@ extension ComposeView {
         }
     }
 
+    /// Byte-total warning shown under the attachment rows once the
+    /// total crosses the model's warning threshold. Shared by the
+    /// grouped-Form path (iOS et al.) and the macOS bottom strip.
+    @ViewBuilder
+    var attachmentSizeWarning: some View {
+        let total = ByteCountFormatter.string(
+            fromByteCount: Int64(model.attachmentTotalBytes),
+            countStyle: .file
+        )
+        let warning = "Attachments total \(total). Many mail servers reject "
+            + "messages over 25 MB; delivery may fail."
+        Label(warning, systemImage: "exclamationmark.triangle")
+            .font(.caption)
+            .foregroundStyle(.orange)
+    }
+
     func ingestFileImport(_ result: Result<[URL], Error>) async {
         switch result {
         case .success(let urls):

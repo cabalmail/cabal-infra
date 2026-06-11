@@ -5,9 +5,21 @@
 # or AWS service queries (DynamoDB, Cognito). Static config is baked into
 # the image by the Dockerfile (Phase 1).
 #
+# The synchronous steps here are only what the tier's front-line listener
+# needs before supervisord starts. The sendmail-side preparation (DynamoDB
+# scan, sendmail.cf compile, aliases) lives in prepare-sendmail.sh: on the
+# imap tier it runs as a supervisord program so Dovecot starts without
+# waiting the 20-40s it takes, and on the smtp tiers — where sendmail IS
+# the front-line listener — it runs inline at the end of this script.
+# Either way sendmail-wrapper.sh blocks on the /run/sendmail-ready
+# sentinel that prepare-sendmail.sh writes. Phase 3 of
+# docs/0.10.x/imap-deploy-downtime-plan.md.
+#
 # Required env vars: TIER, CERT_DOMAIN, AWS_REGION, COGNITO_CLIENT_ID,
 #                    COGNITO_POOL_ID, TLS_CA_BUNDLE, TLS_CERT, TLS_KEY
-# Optional:          NETWORK_CIDR (VPC CIDR for fail2ban whitelist)
+# Optional:          NETWORK_CIDR (VPC CIDR for Dovecot login_trusted_networks)
+#                    PREFLIGHT (=1: run all preparation steps, then exit 0
+#                    instead of starting services - deploy validation)
 # IMAP-only:         MASTER_PASSWORD
 # SMTP-OUT-only:     DKIM_PRIVATE_KEY
 set -euo pipefail
@@ -57,18 +69,17 @@ if [ "$TIER" = "smtp-out" ]; then
 
 fi
 
-# ── Step 2: Render sendmail.mc ────────────────────────────────
-# The .mc template has __CERT_DOMAIN__ placeholders; replace with
-# the actual domain and compile.
-echo "[entrypoint] Rendering sendmail.mc..."
-sed "s/__CERT_DOMAIN__/${CERT_DOMAIN}/g" \
-  /etc/mail/sendmail.mc.template > /etc/mail/sendmail.mc
-
-# ── Step 3: Cognito auth script ───────────────────────────────
+# ── Step 2: Cognito auth script (imap + smtp-out only) ────────
 # Replaces: chef/cabal/templates/default/cognito.bash.erb
-# Used by PAM to authenticate IMAP/SMTP users against Cognito.
-echo "[entrypoint] Generating cognito.bash..."
-cat > /usr/bin/cognito.bash <<COGNITO
+# Used by PAM to authenticate IMAP/SMTP users against Cognito. smtp-in is a
+# pure relay with no SMTP AUTH and no dovecot, so it never invokes this
+# script - generating it there is dead work. It also breaks under the phase
+# 2a cap drop: the file is chmod 100 (no owner write), so overwriting it on
+# any entrypoint re-run needs DAC_OVERRIDE, which smtp-in no longer carries.
+# Gate it to the tiers that actually authenticate.
+if [ "$TIER" = "imap" ] || [ "$TIER" = "smtp-out" ]; then
+  echo "[entrypoint] Generating cognito.bash..."
+  cat > /usr/bin/cognito.bash <<COGNITO
 #!/bin/bash
 
 COGNITO_PASSWORD=\$(cat -)
@@ -81,9 +92,10 @@ aws cognito-idp initiate-auth \\
   --client-id ${COGNITO_CLIENT_ID} \\
   --auth-parameters "USERNAME=\${COGNITO_USER},PASSWORD=\"\${COGNITO_PASSWORD}\""
 COGNITO
-chmod 100 /usr/bin/cognito.bash
+  chmod 100 /usr/bin/cognito.bash
+fi
 
-# ── Step 4: Dovecot SSL config (IMAP + SMTP-OUT) ─────────────
+# ── Step 3: Dovecot SSL config (IMAP + SMTP-OUT) ─────────────
 # Replaces: chef/cabal/templates/default/dovecot-10-ssl.conf.erb
 if [ "$TIER" = "imap" ] || [ "$TIER" = "smtp-out" ]; then
   echo "[entrypoint] Building full certificate chain for Dovecot..."
@@ -110,84 +122,100 @@ ssl_key = </etc/pki/tls/private/${CERT_DOMAIN}.key
 ssl_min_protocol = TLSv1.2
 SSLCONF
 
-  # Tell Dovecot that NLB health-check IPs are trusted. This suppresses
-  # the noisy "Disconnected (no auth attempts)" info logs from NLB TCP
-  # probes that connect and immediately close.
-  if [ -n "${NETWORK_CIDR:-}" ]; then
-    echo "[entrypoint] Setting Dovecot login_trusted_networks = ${NETWORK_CIDR}"
+  # Set Dovecot login_trusted_networks: the source networks whose sessions
+  # count as "secured" for auth. With disable_plaintext_auth = yes (Phase 4,
+  # 10-auth.conf) only these may auth over the plain connection the imap NLB
+  # forwards (993 -> TLS-terminated -> 143); anything reaching Dovecot from
+  # elsewhere in the VPC must use real TLS. LOGIN_TRUSTED_NETWORKS is the NLB
+  # public-subnet CIDRs (injected per-env by the task definition). It falls
+  # back to NETWORK_CIDR (the whole VPC CIDR) so a missing/empty value fails
+  # OPEN - no lockout of legitimate NLB-forwarded logins - rather than closed.
+  # This also suppresses the noisy "Disconnected (no auth attempts)" logs from
+  # the NLB's TCP health probes.
+  _login_trusted="${LOGIN_TRUSTED_NETWORKS:-${NETWORK_CIDR:-}}"
+  if [ -n "${_login_trusted}" ]; then
+    echo "[entrypoint] Setting Dovecot login_trusted_networks = ${_login_trusted}"
     cat > /etc/dovecot/conf.d/05-login.conf <<LOGINCONF
-login_trusted_networks = ${NETWORK_CIDR}
+login_trusted_networks = ${_login_trusted}
 LOGINCONF
   fi
 fi
 
-# ── Step 5: Create OS users from Cognito ──────────────────────
+# ── Step 4: Create OS users from Cognito (imap + smtp-out only) ─
 # Replaces: chef/cabal/recipes/_common_users.rb
-echo "[entrypoint] Syncing users from Cognito..."
-/usr/local/bin/sync-users.sh
-
-# ── Step 6: Generate sendmail maps from DynamoDB ──────────────
-# Replaces: chef/cabal/libraries/scan.rb + all ERB templates
-echo "[entrypoint] Generating config from DynamoDB..."
-/usr/local/bin/generate-config.sh
-
-# ── Step 7: Compile sendmail config ───────────────────────────
-echo "[entrypoint] Compiling sendmail configuration..."
-make -C /etc/mail
-
-# ── Step 8: Assemble aliases (IMAP only) ─────────────────────
-# Static system aliases are baked into the image. Dynamic aliases
-# (multi-user targets) are generated by generate-config.sh.
-if [ "$TIER" = "imap" ]; then
-  echo "[entrypoint] Assembling aliases..."
-  cat /etc/aliases.static > /etc/aliases
-  if [ -f /etc/aliases.dynamic ]; then
-    echo "" >> /etc/aliases
-    echo "# Dynamic aliases (generated from DynamoDB)" >> /etc/aliases
-    cat /etc/aliases.dynamic >> /etc/aliases
-  fi
-  newaliases
+#
+# smtp-in is a pure relay: its mailertable routes every hosted-domain
+# message to the imap container over SMTP (.tld -> smtp:[imap_host]) and it
+# runs no dovecot, so it never resolves a local OS user. Skipping the sync
+# there means smtp-in does no useradd/groupadd/install -o at startup, which
+# lets its task definition drop CHOWN/FOWNER/DAC_OVERRIDE (phase 2a of
+# docs/0.10.x/container-runtime-hardening-plan.md). imap delivers locally
+# via procmail and smtp-out resolves submission auth against the system
+# passwd db (dovecot userdb { driver = passwd }), so both still need them.
+if [ "$TIER" = "imap" ] || [ "$TIER" = "smtp-out" ]; then
+  echo "[entrypoint] Syncing users from Cognito..."
+  /usr/local/bin/sync-users.sh
+else
+  echo "[entrypoint] Skipping user sync for $TIER (relay tier; no local users needed)."
 fi
 
-# ── Step 9: Dovecot master password (IMAP only) ──────────────
-# Creates the master user for admin access to all mailboxes.
+# ── Step 5: Dovecot master password (IMAP only) ──────────────
+# Creates the master user for admin access to all mailboxes. Must run
+# before Dovecot starts or the master-user auth path silently fails.
 if [ "$TIER" = "imap" ]; then
   echo "[entrypoint] Setting dovecot master password..."
   htpasswd -b -c -s /etc/dovecot/master-users admin "${MASTER_PASSWORD}"
 fi
 
-# ── Step 10: fail2ban — whitelist VPC CIDR ─────────────────────
-# NLB health checks arrive from NLB node IPs within the VPC. These
-# TCP probes connect and immediately close without TLS or auth,
-# generating "Disconnected" entries in Dovecot logs. Without a
-# whitelist, fail2ban eventually bans the NLB IPs, causing health
-# checks to fail and the NLB to stop forwarding ALL traffic.
-echo "[entrypoint] Configuring fail2ban to ignore VPC CIDR (${NETWORK_CIDR:-not set})..."
-if [ -n "${NETWORK_CIDR:-}" ]; then
-  cat > /etc/fail2ban/jail.local <<F2B
-[DEFAULT]
-ignoreip = 127.0.0.0/8 ::1 ${NETWORK_CIDR}
-F2B
-fi
-
-# ── Step 11: Prepare rsyslog working directory ─────────────────
+# ── Step 6: Prepare rsyslog working directory ─────────────────
 echo "[entrypoint] Preparing rsyslog..."
 mkdir -p /var/lib/rsyslog
 
-# ── Step 12: Pin IMAP_INTERNAL_HOST in /etc/hosts (smtp-in only) ──
+# ── Step 7: Pin IMAP_INTERNAL_HOST in /etc/hosts (smtp-in only) ──
 # Converts a transient Cloud Map outage from a permanent 5xx bounce
 # ("Host unknown") into a queueable 4xx (TCP connection refused or
-# timeout), which sendmail retries for ~4 days. The companion
-# `hosts-pin` daemon (started by supervisord) refreshes the entry on
-# IMAP-task IP changes. Init runs before supervisord so the very first
-# delivery attempt already sees the pin. Smtp-in only; smtp-out keeps
-# stock DNS so a user-typo'd external recipient still bounces fast.
+# timeout), which sendmail retries for ~4 days. `init` always leaves
+# TARGET resolvable - the real IMAP IP when available, otherwise a
+# last-known pin or the TEST-NET sentinel - so even a cold start during
+# an IMAP outage defers rather than bounces. The companion `hosts-pin`
+# daemon (started by supervisord) then converges the pin to the real IP
+# within one poll interval. Smtp-in only; smtp-out keeps stock DNS so a
+# user-typo'd external recipient still bounces fast.
 if [ "$TIER" = "smtp-in" ]; then
   echo "[entrypoint] Pinning ${IMAP_INTERNAL_HOST:-imap.cabal.internal} in /etc/hosts..."
   /usr/local/bin/hosts-pin.sh init \
-    || echo "[entrypoint] WARN initial hosts-pin failed; deliveries may NXDOMAIN until the daemon refreshes"
+    || echo "[entrypoint] WARN hosts-pin init returned non-zero; daemon will converge the pin"
 fi
 
-# ── Step 13: Start services via supervisord ───────────────────
+# ── Step 8: Sendmail preparation (smtp tiers only) ────────────
+# Render sendmail.mc, generate maps from DynamoDB, compile sendmail.cf,
+# and (on imap) assemble aliases. On the smtp tiers sendmail is the
+# front-line listener, so this stays synchronous. On imap it is deferred
+# to the [program:prepare-sendmail] supervisord program so Dovecot comes
+# up first; until it finishes, smtp-in's deliveries to imap port 25 see
+# connection refused and queue-and-retry, exactly as they do during the
+# deploy gap itself. Phase 3 of docs/0.10.x/imap-deploy-downtime-plan.md.
+if [ "$TIER" != "imap" ]; then
+  /usr/local/bin/prepare-sendmail.sh once
+fi
+
+# ── Step 9: Pre-flight mode (deploy validation) ───────────────
+# PREFLIGHT=1 is overlaid by the deploy pipeline's one-shot RunTask
+# (deploy-ecs-service.sh) to exercise this entrypoint - secrets, EFS
+# mount, Cognito, DynamoDB, sendmail compile - against a new image
+# BEFORE the old IMAP task is stopped. Run the sendmail prep that the
+# imap tier normally defers to supervisord, then exit 0 instead of
+# starting services. A failure in any step above (set -e) stops the
+# task non-zero and the deploy aborts with the old task still serving.
+# Phase 5 of docs/0.10.x/imap-deploy-downtime-plan.md.
+if [ "${PREFLIGHT:-0}" = "1" ]; then
+  if [ "$TIER" = "imap" ]; then
+    /usr/local/bin/prepare-sendmail.sh once
+  fi
+  echo "[entrypoint] PREFLIGHT complete; exiting without starting services."
+  exit 0
+fi
+
+# ── Step 10: Start services via supervisord ───────────────────
 echo "[entrypoint] Starting services via supervisord..."
 exec /usr/local/bin/supervisord -c /etc/supervisord.conf

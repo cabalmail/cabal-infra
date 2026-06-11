@@ -13,7 +13,7 @@
 #   https://github.com/slusarz/dovecot-fts-flatcurve (v1.0.5)
 # Licences are preserved at /usr/share/doc/{xapian,fts-flatcurve}/
 # in the runtime image; see docs/operations.md.
-FROM amazonlinux:2023 AS fts-builder
+FROM amazonlinux:2023@sha256:ad882807c6c88f478186fa2632637380e06071a303e2b3bd96ab71846a77c6a3 AS fts-builder
 
 ARG XAPIAN_VERSION=1.4.31
 ARG FTS_FLATCURVE_VERSION=v1.0.5
@@ -85,13 +85,12 @@ RUN rm -rf /staging/usr/local \
 # ───────────────────────────────────────────────────────────────
 # Runtime image
 # ───────────────────────────────────────────────────────────────
-FROM amazonlinux:2023
+FROM amazonlinux:2023@sha256:ad882807c6c88f478186fa2632637380e06071a303e2b3bd96ab71846a77c6a3
 
 # System packages
 RUN dnf install -y \
       sendmail sendmail-cf \
       dovecot \
-      fail2ban \
       procmail \
       rsyslog \
       httpd-tools \
@@ -138,6 +137,10 @@ COPY shared/generate-config.sh             /usr/local/bin/generate-config.sh
 COPY shared/sync-users.sh                  /usr/local/bin/sync-users.sh
 COPY shared/reconfigure.sh                 /usr/local/bin/reconfigure.sh
 COPY shared/sendmail-wrapper.sh            /usr/local/bin/sendmail-wrapper.sh
+COPY shared/prepare-sendmail.sh            /usr/local/bin/prepare-sendmail.sh
+
+# Clears the planned-maintenance SSM flag once Dovecot is serving (imap only).
+COPY shared/clear-maintenance.sh           /usr/local/bin/clear-maintenance.sh
 
 # Rsyslog config (ships sendmail logs to /var/log/maillog for CloudWatch)
 COPY shared/rsyslog-mail.conf              /etc/rsyslog.conf
@@ -149,8 +152,5 @@ RUN chmod +x /entrypoint.sh /usr/local/bin/*.sh \
     && ldconfig
 
 EXPOSE 143 993 25
-
-HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-  CMD supervisorctl status | grep -v RUNNING && exit 1 || exit 0
 
 ENTRYPOINT ["/entrypoint.sh"]

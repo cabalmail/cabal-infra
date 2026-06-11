@@ -117,7 +117,17 @@ resource "aws_iam_policy" "ecs_task" {
           "ssmmessages:OpenControlChannel",
           "ssmmessages:OpenDataChannel",
         ]
+        # iam-wildcard-ok: ssmmessages (ECS Exec session channels) has no
+        # resource-level grammar; the service requires "*".
         Resource = "*"
+      },
+      {
+        # The imap container clears the planned-maintenance flag once Dovecot is
+        # serving (docker/shared/clear-maintenance.sh). Shared task role, so
+        # scope this tightly to the single maintenance parameter.
+        Effect   = "Allow"
+        Action   = ["ssm:PutParameter"]
+        Resource = "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/cabal/maintenance/imap"
       },
     ]
   })

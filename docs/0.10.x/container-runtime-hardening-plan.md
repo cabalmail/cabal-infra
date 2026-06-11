@@ -182,6 +182,15 @@ The posture changes are still the highest-touch part of this plan. Migration ord
 
 Pre-flight: a development-environment soak under load is essential before stage rollout.
 
+#### Phase 2a as implemented (0.10.8) — capability tightening
+
+The 0.10.4 add-back sets were flagged to tighten during the soak. Reviewed per tier against what each actually runs:
+
+- **imap and smtp-out — already minimal.** Both run `sync-users.sh` (`useradd`/`install -o` → CHOWN/FOWNER/DAC_OVERRIDE), fork privilege-dropped daemon children (SETUID/SETGID/KILL), bind <1024 (NET_BIND_SERVICE), and chroot dovecot login (SYS_CHROOT); smtp-out additionally resolves submission auth against the system passwd db (`userdb { driver = passwd }`), so it genuinely needs the synced users. Nothing to drop.
+- **smtp-in — dropped CHOWN, FOWNER, DAC_OVERRIDE.** A pure relay (sendmail only, no dovecot; its mailertable routes every hosted-domain message to imap over SMTP, no local delivery), so it resolves no local OS users — `sync-users.sh` was running on it only as a uniform-entrypoint artifact. The entrypoint now skips the sync there, removing the only consumers of those three caps; the remaining set is KILL, NET_BIND_SERVICE, SETUID, SETGID (sendmail's own mail/smmsp privilege drops, kept absent an empirical signal to remove them).
+
+Shipped as two ordered deploys: (1) the entrypoint `sync-users` gate via app.yml, with smtp-in verified healthy and relaying; then (2) the task-def cap drop via Terraform (smtp-in marker v3 → v4). The cap drop must not roll before the gate is live, or smtp-in startup would fail without caps it is still using.
+
 ### Phase 3 — Image digest pinning + ECR scan on push
 
 Three pieces:
@@ -191,6 +200,14 @@ Three pieces:
 3. ECR repositories gain `image_scanning_configuration { scan_on_push = true }` and `image_tag_mutability = "IMMUTABLE"` in [`terraform/infra/modules/ecr/main.tf`](../../terraform/infra/modules/ecr/main.tf). Findings surfaced via the existing `app.yml` deploy job (poll `aws ecr describe-image-scan-findings` after push; warn on HIGH/CRITICAL until a baseline is established, then fail).
 
 Nightly Trivy scan against the current digest-pinned images, results to GitHub Code Scanning (same surface as the Trivy IaC scan from [`iac-quality-gates-plan.md`](./iac-quality-gates-plan.md)).
+
+#### Phase 3 as implemented (0.10.6)
+
+Reconciled against the codebase as it actually stood, Phase 3 shipped three of the four pieces above; piece 2 was dropped.
+
+- **Piece 1 (digest pinning) — shipped.** Every Dockerfile `FROM` is pinned to `tag@sha256:<digest>`: the three mail tiers and the sinkhole fixture on `amazonlinux:2023`, certbot-renewal on the Lambda Python base, and the monitoring images on their upstreams (the three ARG-driven monitoring FROMs — uptime-kuma, ntfy, healthchecks — were flattened to literal `tag@digest`). Automated bumps come from a new [`.github/dependabot.yml`](../../.github/dependabot.yml) scoped to the Docker ecosystem — Dependabot, not Renovate, since the repo already runs Dependabot's alert feed — with PRs targeting `stage`.
+- **Piece 3 (scan-on-push + immutable tags) — already shipped.** [`terraform/infra/modules/ecr/main.tf`](../../terraform/infra/modules/ecr/main.tf) already sets `scan_on_push = true` and `image_tag_mutability = "IMMUTABLE"` on every repo (it landed with the 0.9.x build-deploy simplification). What was missing was *surfacing* the findings: `app.yml`'s docker job now reads the scan result and warns on HIGH/CRITICAL ([`.github/scripts/ecr-scan-report.sh`](../../.github/scripts/ecr-scan-report.sh)), and a nightly [`.github/workflows/image-scan.yml`](../../.github/workflows/image-scan.yml) runs Trivy against the running prod images and uploads SARIF to Code scanning.
+- **Piece 2 (digest references in the ECS task definitions) — dropped.** Its premise ("re-tagging a published image to a different SHA is permitted") is false now that `image_tag_mutability = IMMUTABLE` is in force: each `cabal-<tier>:sha-<8>` tag is already permanently bound to one digest, so a digest reference in the task def buys no additional integrity. Against that ~zero benefit, the cost is real — the deploy path stores one shared git-sha tag in `/cabal/deployed_image_tag` for all tiers ([`locals.tf`](../../terraform/infra/modules/ecs/locals.tf) `tier_image`), and digests are per-image, so the change would force a per-tier SSM refactor of `refresh-ssm-from-running.sh`, `deploy-ecs-service.sh`, and the task-def wiring, a path that has already caused production incidents. If task-def digest references ever become a hard requirement, do it as part of moving to per-tier image parameters, not as a bolt-on.
 
 ### Phase 4 — Dovecot plaintext-off + login throttling
 
@@ -229,7 +246,29 @@ The TLS terminator question: IMAP traffic arrives at the container in clear (NLB
 
 Recommendation: option (1), with the NLB-subnet CIDR plumbed as an env var (`LOGIN_TRUSTED_NETWORKS`) injected by the ECS task definition. The entrypoint writes it to the dovecot config.
 
+#### Phase 4 reconnaissance (verified live 2026-06-06)
+
+The option-(1) assumption was checked against the running infrastructure before committing to it; it holds, with one refinement.
+
+- **Source IP is the NLB, not the client — confirmed.** `preserve_client_ip.enabled = false` on the `cabal-ecs-imap-tg` target group (`target_type = "ip"`, `protocol = "TCP"`, port 143) in **both prod and stage** (`aws elbv2 describe-target-group-attributes`). It is not set in Terraform, so the AWS default governs, and for an IP-type target group with a TCP/TLS protocol that default is *disabled*. So the NLB SNATs and Dovecot sees the NLB node's private IP — exactly what `login_trusted_networks` needs. (The IMAP NLB listener is TLS-terminating, 993 -> 143, which is *why* plaintext reaches the container; submission is the opposite, see below.)
+- **The trusted range is the NLB's public-subnet CIDRs, and it is per-environment** (verified 2026-06-06):
+  - **prod** (VPC `10.0.0.0/16`): two public subnets, `10.0.64.0/19` (us-east-1a) + `10.0.96.0/19` (us-east-1b). They tile the `10.0.64.0/18` "public tier" exactly; the private subnets live in the separate `10.0.0.0/18`.
+  - **stage**: a single public subnet `10.64.64.0/18` (us-east-1a).
+- **Derive the list; do not hardcode and do not collapse.** `LOGIN_TRUSTED_NETWORKS` should be emitted per-env from the NLB's actual subnet CIDRs (Terraform) and passed as a space-separated list — Dovecot's `login_trusted_networks` accepts a list natively. Resist collapsing prod's two /19s into `10.0.64.0/18`: it is exact *today*, but it loses the auto-tracking property — it would miss a future us-east-1c public subnet (outside the /18) and would silently trust anything later carved into `10.0.64.0/18` that is not an NLB subnet. Deriving from the subnet data tracks the source of truth; a literal does not.
+- **Submission (587/465) needs none of this.** Those listeners are TCP passthrough and Dovecot terminates TLS itself, so `disable_plaintext_auth = yes` works there directly, with no trusted-networks marking.
+- **Guard the coupling.** If `preserve_client_ip.enabled` is ever flipped to `true` (e.g. to log or rate-limit on real client IPs), the trusted-networks assumption breaks silently and *every* IMAP login starts failing. Tie the two together — at minimum a comment where the attribute is (un)set, ideally a check — so the dependency is not invisible.
+
 For submission, NLB does TCP passthrough; Dovecot already terminates TLS; `disable_plaintext_auth = yes` works out of the box without trusted-networks games.
+
+#### Phase 4 as implemented (0.10.11)
+
+Shipped as designed, with these specifics:
+
+- **`disable_plaintext_auth = yes` on both tiers** ([imap 10-auth.conf](../../docker/imap/configs/dovecot/10-auth.conf), [smtp-out 10-auth.conf](../../docker/smtp-out/configs/dovecot/10-auth.conf)), plus `auth_failure_delay = 2 secs`. `auth_mechanisms` stays `plain` (the existing value); LOGIN was not added.
+- **`login_trusted_networks` is now the NLB public-subnet CIDRs, not the VPC CIDR.** The entrypoint already wrote `login_trusted_networks = $NETWORK_CIDR` (the whole VPC) to suppress health-probe log noise — but trusting the whole VPC makes `disable_plaintext_auth = yes` a no-op, since everything that can reach Dovecot is in the VPC. It now writes a new `LOGIN_TRUSTED_NETWORKS` env derived per-environment in Terraform from `module.vpc.public_subnets[*].cidr_block` (the subnets the NLB actually lives in), and **falls back to `NETWORK_CIDR` if that env is empty**, so any deploy-ordering or stale-image permutation fails *open* (no lockout) rather than closed. The imap (v5) and smtp-out (v4) revision markers carry the new env to the running tasks.
+- **Login throttling** via Dovecot's own service knobs — `client_limit = 1` (high-security, one connection per login process), `process_limit` caps, and `service auth client_limit` — in [20-imap.conf](../../docker/imap/configs/dovecot/20-imap.conf) and [20-submission.conf](../../docker/smtp-out/configs/dovecot/20-submission.conf).
+
+Unlike the 2a capability work, there is no startup-crash or lockout failure mode: `disable_plaintext_auth = yes` only takes effect with the new image, and that image always writes *some* `login_trusted_networks` (the NLB CIDRs, or the VPC fallback), so it never rejects legitimate NLB-forwarded auth. The stage gate is therefore about confirming the *intended* effect — real clients (React, Apple, raw IMAP) still authenticate, and a non-TLS bypass path is now refused — not about avoiding a self-inflicted outage.
 
 ### Phase 5 — Sendmail and OpenDKIM hardening
 
@@ -299,6 +338,12 @@ volume {
 A new EFS access point on the mailstore (mirroring the existing `smtp_queue_access_point_id` pattern) constrains the IMAP task to `/maildir` (or wherever the existing mount root effectively points). Created in [`terraform/infra/modules/efs/main.tf`](../../terraform/infra/modules/efs/main.tf).
 
 The access-point creation has to land *before* the task-definition change references it; that is one Terraform apply, since both files are in the same stack.
+
+#### Phase 6 as implemented (0.10.7)
+
+Shipped as **transit encryption only — no access point.** The sketch above mirrors the smtp-queue access point, but the mailstore is not analogous to the queue: it is a multi-user tree rooted at the EFS root `/` (mounted to `/home`, one maildir per user, each owned by that user's UID via `sync-users.sh`), whereas the queue is a single `/smtp-queue` subtree. An access point would therefore have to be `root_directory = "/"` with no `posix_user` — any posix override squashes the per-user ownership and every mailbox reads empty — and `iam = "DISABLED"` (the queue AP already disables IAM "for parity with the IMAP mount"). That is a transparent pass-through: zero gain over plain transit encryption, plus a data-path footgun if the root were ever mis-set. And `transit_encryption = "ENABLED"` does not require an access point — the queue pairs them only because it needed the AP to pin `/smtp-queue` and set the creation owner.
+
+So the change is just `transit_encryption = "ENABLED"` on the existing `root_directory = "/"` mailstore volume, with the imap revision marker bumped v3 -> v4 so the volume edit actually deploys (a volume edit, like a `container_definitions` edit, is otherwise held back by `ignore_changes`). The smtp-out tier already runs `ENABLED` on these same ECS EC2 hosts, so the transit path is proven; the roll is one task replacement (brief IMAP blip). If per-tier IAM auth on EFS is ever wanted (the identity-IAM-hardening plan), add the access point then with `iam = "ENABLED"` — that is when an AP earns its keep.
 
 ## Migration sequence
 

@@ -44,17 +44,13 @@ resource "aws_nat_gateway" "nat" {
 
 # =============================================================================
 # NAT Instance (when use_nat_instance = true)
+#
+# Instances always launch from the custom AL2023 AMI baked by the Image
+# Builder pipeline in nat_ami.tf. A brand-new environment has no such AMI
+# yet, so it bootstraps with use_nat_instance = false (NAT Gateway egress),
+# builds the first AMI through the gateway, then flips to instances. See
+# docs/nat.md.
 # =============================================================================
-
-data "aws_ami" "amazon_linux_2" {
-  count       = var.use_nat_instance ? 1 : 0
-  most_recent = true
-  owners      = ["amazon"]
-  filter {
-    name   = "name"
-    values = ["amzn2-ami-hvm-2.0.*-x86_64-gp2"]
-  }
-}
 
 resource "aws_security_group" "nat" {
   count       = var.use_nat_instance ? 1 : 0
@@ -111,65 +107,29 @@ resource "aws_iam_instance_profile" "nat" {
   role  = aws_iam_role.nat[0].name
 }
 
-locals {
-  # Stock AL2 NAT bootstrap (iptables), used only when use_custom_nat_ami =
-  # false. The custom AL2023 AMI (see nat_ami.tf) bakes nftables in, so it needs
-  # no boot-time config and user_data is null on that path.
-  nat_al2_user_data = <<-EOF
-    #!/bin/bash
-    # Enable IP forwarding (persists across reboots via sysctl.d)
-    echo "net.ipv4.ip_forward = 1" > /etc/sysctl.d/nat.conf
-    sysctl -p /etc/sysctl.d/nat.conf
-
-    # Set up iptables NAT rules
-    iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
-    iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
-    iptables -A FORWARD -j ACCEPT
-
-    # Persist rules to disk (iptables-save is in the base AMI, no package needed)
-    mkdir -p /etc/sysconfig
-    iptables-save > /etc/sysconfig/iptables
-
-    # Create a systemd service to restore rules on boot (replaces iptables-services
-    # which requires yum and can't be installed during first boot - the instance has
-    # no public IP until the EIP is associated after creation).
-    # Uses printf instead of a nested heredoc to avoid delimiter issues
-    # inside Terraform's <<-EOF.
-    printf '%s\n' \
-      '[Unit]' \
-      'Description=Restore iptables NAT rules' \
-      'After=network.target' \
-      '' \
-      '[Service]' \
-      'Type=oneshot' \
-      'ExecStart=/sbin/iptables-restore /etc/sysconfig/iptables' \
-      'RemainAfterExit=yes' \
-      '' \
-      '[Install]' \
-      'WantedBy=multi-user.target' \
-      > /etc/systemd/system/restore-iptables.service
-
-    systemctl daemon-reload
-    systemctl enable restore-iptables.service
-  EOF
-
-  nat_user_data = var.use_custom_nat_ami ? null : local.nat_al2_user_data
-}
-
 resource "aws_instance" "nat" {
   count                  = var.use_nat_instance && !var.quiesced ? length(var.az_list) : 0
-  ami                    = var.use_custom_nat_ami ? one(data.aws_ami.custom_nat[*].id) : data.aws_ami.amazon_linux_2[0].id
+  ami                    = one(data.aws_ami.custom_nat[*].id)
   instance_type          = var.nat_instance_type
   subnet_id              = aws_subnet.public[count.index].id
   vpc_security_group_ids = [aws_security_group.nat[0].id]
   source_dest_check      = false
   iam_instance_profile   = aws_iam_instance_profile.nat[0].name
 
-  user_data = local.nat_user_data
+  # No user_data: the custom AMI bakes nftables, the masquerade ruleset, and
+  # ip_forward in (nat_ami.tf), so the instance boots as a working NAT with
+  # no boot-time configuration.
 
   metadata_options {
     http_tokens   = "required"
     http_endpoint = "enabled"
+  }
+
+  # The custom NAT AMI already builds an encrypted root (nat_ami.tf); this
+  # keeps the launched volume explicitly encrypted as well so scanners can
+  # see it.
+  root_block_device {
+    encrypted = true
   }
 
   tags = {

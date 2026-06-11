@@ -17,6 +17,50 @@ locals {
 
 # -- IMAP task definition --------------------------------------
 
+# Forces a one-time imap task-def replacement whenever this string
+# changes. The imap container_definitions are otherwise frozen by
+# lifecycle.ignore_changes (so out-of-band image deploys via
+# deploy-ecs-service.sh are not rolled back); the side effect is that
+# topology edits to the container block never reach a new revision on
+# their own. Bumping the version token here forces a destroy+recreate,
+# whose fresh create is not governed by ignore_changes and so picks up
+# the full container_definitions from config (image included, re-pinned
+# to reality by refresh-ssm-from-running.sh at plan time). See the
+# smtp_out marker for the original use of this pattern.
+#   v1: NET_ADMIN capability drop. The replacement also reconciles the
+#       container to its current full config - notably the memory = 1024
+#       cap that has been in config since the vsz_limit bump but never
+#       deployed under ignore_changes.
+#       (docs/0.10.x/container-runtime-hardening-plan.md phase 1)
+#   v2: runtime posture - cap drop=ALL + analyzed add set, no-new-privileges,
+#       initProcessEnabled (same plan, phase 2)
+#   v3: re-register from current config to drop a dangling HEALTHCHECK_PING_URL
+#       secret left baked in from when monitoring was enabled. Turning monitoring
+#       off deleted the SSM param /cabal/healthcheck_ping_ecs_reconfigure, but
+#       ignore_changes kept the now-broken secret reference on the running
+#       task def, so the first image roll after that (which clones the live
+#       task def) produced a revision the ECS agent could not start - it failed
+#       fetching the missing parameter.
+#
+# The +hc suffix keys this marker on whether the healthcheck secret is present
+# (var.healthcheck_ping_param != "", i.e. var.monitoring in the parent stack),
+# the same condition that gates local.healthcheck_secrets below. This mirrors
+# the smtp_out +sinkhole hook: flipping monitoring in either direction now
+# forces a task-def replacement that adds or drops the HEALTHCHECK_PING_URL
+# secret in step with the SSM param that backs it, so the secret set can never
+# again drift from the parameters that exist.
+#
+# v4 (phase 6 of docs/0.10.x/container-runtime-hardening-plan.md): forces a
+# replacement so the transit_encryption = "ENABLED" added to the mailstore
+# volume below actually deploys. A volume edit, like a container_definitions
+# edit, only reaches a running task through a marker bump.
+# v5 (phase 4 of the same plan): add the LOGIN_TRUSTED_NETWORKS env var (NLB
+# public-subnet CIDRs) the entrypoint needs to keep NLB-forwarded logins
+# working once disable_plaintext_auth = yes lands in the image.
+resource "terraform_data" "imap_taskdef_revision_marker" {
+  input = var.healthcheck_ping_param != "" ? "imap-taskdef-v5+hc" : "imap-taskdef-v5"
+}
+
 resource "aws_ecs_task_definition" "imap" {
   family                   = "cabal-imap"
   requires_compatibilities = ["EC2"]
@@ -32,7 +76,7 @@ resource "aws_ecs_task_definition" "imap" {
     # Aligned with the Dovecot service-level vsz_limit in
     # docker/imap/configs/dovecot/20-imap.conf. The hard cap accommodates
     # one full-size imap worker (1G vsz) plus the supporting processes
-    # (sendmail, procmail, supervisord, fail2ban) and a second concurrent
+    # (sendmail, procmail, supervisord) and a second concurrent
     # imap worker peaking. Soft reservation leaves the scheduler room to
     # pack other containers on the same m6g.medium when the imap tier is
     # idle.
@@ -52,6 +96,7 @@ resource "aws_ecs_task_definition" "imap" {
       { name = "COGNITO_CLIENT_ID", value = var.client_id },
       { name = "COGNITO_POOL_ID", value = var.user_pool_id },
       { name = "NETWORK_CIDR", value = var.cidr_block },
+      { name = "LOGIN_TRUSTED_NETWORKS", value = join(" ", var.login_trusted_cidrs) },
       { name = "SQS_QUEUE_URL", value = aws_sqs_queue.tier["imap"].url },
     ]
 
@@ -67,11 +112,45 @@ resource "aws_ecs_task_definition" "imap" {
       containerPath = "/home"
     }]
 
+    # Runtime posture, phase 2 of
+    # docs/0.10.x/container-runtime-hardening-plan.md. Drop every Linux
+    # capability, then add back only what this tier's root-owned process
+    # tree actually needs. This is the analyzed working set; the mandated
+    # dev soak should TIGHTEN it - remove any cap that proves unnecessary
+    # under load before promoting to stage/prod.
+    #   NET_BIND_SERVICE  dovecot binds 143/993, sendmail binds 25 (all <1024)
+    #   SETUID, SETGID    dovecot forks imap workers as the logged-in user;
+    #                     sendmail runs delivery agents as mail/smmsp; procmail
+    #                     delivers as the recipient
+    #   CHOWN             sync-users.sh `install -o/-g` + useradd home dirs on
+    #                     the EFS mailstore
+    #   DAC_OVERRIDE      useradd/groupadd write /etc/shadow + /etc/gshadow (0000)
+    #   FOWNER            useradd/install metadata ops on files they do not own
+    #   KILL              the root dovecot/sendmail masters signal their
+    #                     privilege-dropped (non-root) children
+    #   SYS_CHROOT        dovecot imap-login chroots by default
+    # initProcessEnabled runs a real init as PID 1 (reaps the supervisord
+    # tree's zombies). no-new-privileges blocks setuid-binary escalation.
     linuxParameters = {
+      initProcessEnabled = true
       capabilities = {
-        add = ["NET_ADMIN"]
+        drop = ["ALL"]
+        add = [
+          "CHOWN",
+          "DAC_OVERRIDE",
+          "FOWNER",
+          "KILL",
+          "NET_BIND_SERVICE",
+          "SETGID",
+          "SETUID",
+          "SYS_CHROOT",
+        ]
       }
     }
+
+    # ECS wants the bare token; the plan's "no-new-privileges:true" is the
+    # docker-CLI spelling and register-task-definition rejects it.
+    dockerSecurityOptions = ["no-new-privileges"]
 
     logConfiguration = {
       logDriver = "awslogs"
@@ -84,23 +163,65 @@ resource "aws_ecs_task_definition" "imap" {
     }
   }])
 
+  # Phase 6 of docs/0.10.x/container-runtime-hardening-plan.md: encrypt the
+  # NFS traffic between the imap task and EFS in transit (it is already
+  # encrypted at rest, see modules/efs). No access point: the mailstore is a
+  # multi-user tree rooted at "/" with per-user file ownership, so an access
+  # point could only be a transparent root-"/" pass-through (iam disabled, no
+  # posix_user) - zero gain over transit encryption and a data-path risk if
+  # the root were ever set wrong. transit_encryption needs no access point.
+  # The smtp-out queue already runs ENABLED on these same hosts.
   volume {
     name = "mailstore"
     efs_volume_configuration {
-      file_system_id = var.efs_id
-      root_directory = "/"
+      file_system_id     = var.efs_id
+      root_directory     = "/"
+      transit_encryption = "ENABLED"
     }
   }
 
   # See docs/0.9.x/build-deploy-simplification-plan.md. App deploys mutate
   # the image tag out-of-band via aws ecs register-task-definition; Terraform
-  # must not roll those forward updates back on a topology-only apply.
+  # must not roll those forward updates back on a topology-only apply. The
+  # replace_triggered_by marker is how deliberate container_definitions
+  # changes (which ignore_changes would otherwise swallow) get deployed.
   lifecycle {
-    ignore_changes = [container_definitions]
+    ignore_changes       = [container_definitions]
+    replace_triggered_by = [terraform_data.imap_taskdef_revision_marker]
   }
 }
 
 # -- SMTP-IN task definition -----------------------------------
+
+# See imap_taskdef_revision_marker for the full rationale. Bump the
+# version token to force a one-time smtp-in task-def replacement when
+# its container block changes and must be deployed.
+#   v1: NET_ADMIN capability drop
+#       (docs/0.10.x/container-runtime-hardening-plan.md phase 1)
+#   v2: runtime posture (cap drop=ALL + adds, no-new-privileges, init) - phase 2
+#   v3: re-register from current config to drop the dangling HEALTHCHECK_PING_URL
+#       secret stranded by the monitoring removal (see the imap marker for the
+#       full story). The +hc suffix keys the marker on the healthcheck secret's
+#       presence so a future monitoring flip can't strand it again.
+#   v4: drop CHOWN/FOWNER/DAC_OVERRIDE now that the entrypoint skips
+#       sync-users.sh on this relay tier - phase 2a.
+#   v5: REVERT v4 - restore the full cap set. The v4 drop reached prod
+#       without the mandated runtime (mail-flow) validation and the rollout
+#       broke: a stale /cabal/deployed_image_tag paired the dropped caps with
+#       the PRE-2a image, which still writes /usr/bin/cognito.bash and so
+#       needs DAC_OVERRIDE. Backed out to the known-good full set; the drop
+#       will be re-attempted only after a real inbound-mail soak through
+#       smtp-in in stage. See CHANGELOG 0.10.9.
+#   v6: re-drop CHOWN/FOWNER/DAC_OVERRIDE - phase 2a, second attempt. Now a
+#       pure Terraform change: the entrypoint cleanups that v4 needed (skip
+#       sync-users + cognito.bash on smtp-in) already shipped, so the running
+#       image needs none of these at startup, and with no docker rebuild there
+#       is no app.yml/infra.yml image-tag race. MUST be soaked in stage with
+#       real inbound mail (confirm sendmail relays, no CHOWN errors in the
+#       logs) before promoting to prod. See CHANGELOG 0.10.10.
+resource "terraform_data" "smtp_in_taskdef_revision_marker" {
+  input = var.healthcheck_ping_param != "" ? "smtp-in-taskdef-v6+hc" : "smtp-in-taskdef-v6"
+}
 
 resource "aws_ecs_task_definition" "smtp_in" {
   family                   = "cabal-smtp-in"
@@ -138,11 +259,33 @@ resource "aws_ecs_task_definition" "smtp_in" {
       { name = "TLS_KEY", valueFrom = "/cabal/control_domain_ssl_key" },
     ], local.healthcheck_secrets)
 
+    # Runtime posture, phase 2 + 2a (see the imap task def for the full
+    # rationale). smtp-in is a pure relay: no dovecot (no SYS_CHROOT) and no
+    # local delivery (mailertable routes every hosted-domain message to imap
+    # over SMTP), and the entrypoint skips sync-users.sh + cognito.bash on it,
+    # so it resolves no local OS users and writes no owner-unwritable files at
+    # startup. That removed every startup consumer of CHOWN/DAC_OVERRIDE/
+    # FOWNER, so they are dropped (2a, second attempt: the first reached prod
+    # on a stale image and broke; this is now a Terraform-only change, so no
+    # image-tag race). Soak in stage with real inbound mail before prod - if
+    # sendmail turns out to need CHOWN at queue/relay time, add just CHOWN back.
+    #   NET_BIND_SERVICE  sendmail binds 25
+    #   SETUID, SETGID    delivery/queue agents run as mail/smmsp
+    #   KILL              root sendmail master signals non-root children
     linuxParameters = {
+      initProcessEnabled = true
       capabilities = {
-        add = ["NET_ADMIN"]
+        drop = ["ALL"]
+        add = [
+          "KILL",
+          "NET_BIND_SERVICE",
+          "SETGID",
+          "SETUID",
+        ]
       }
     }
+
+    dockerSecurityOptions = ["no-new-privileges"]
 
     logConfiguration = {
       logDriver = "awslogs"
@@ -156,7 +299,8 @@ resource "aws_ecs_task_definition" "smtp_in" {
   }])
 
   lifecycle {
-    ignore_changes = [container_definitions]
+    ignore_changes       = [container_definitions]
+    replace_triggered_by = [terraform_data.smtp_in_taskdef_revision_marker]
   }
 }
 
@@ -181,12 +325,23 @@ resource "aws_ecs_task_definition" "smtp_in" {
 # See also docs/0.9.x/smtp-out-queue-persistence-plan.md for the
 # original use of this marker.
 resource "terraform_data" "smtp_out_taskdef_revision_marker" {
-  # Default state retains the pre-sinkhole marker so environments
-  # where var.sinkhole stays false (prod, and stage/dev pre-rollout)
-  # do not see a one-time replacement when phase 5 lands. Only the
-  # sinkhole=true state has a distinct marker, so flipping the flag
-  # in either direction forces the smtp-out task-def to replace.
-  input = var.sinkhole ? "smtp-queue-mount-v1+sinkhole" : "smtp-queue-mount-v1"
+  # Bump the version token for any change that must deploy (see the
+  # mechanism described above):
+  #   v1: EFS queue mount + stop-grace
+  #       (docs/0.9.x/smtp-out-queue-persistence-plan.md)
+  #   v2: NET_ADMIN capability drop
+  #       (docs/0.10.x/container-runtime-hardening-plan.md phase 1)
+  #   v3: runtime posture (cap drop=ALL + adds, no-new-privileges, init) - phase 2
+  #   v4: add the LOGIN_TRUSTED_NETWORKS env var (NLB public-subnet CIDRs) for
+  #       disable_plaintext_auth = yes - phase 4
+  # The +sinkhole suffix is the var.sinkhole hook described above; the +hc
+  # suffix is the analogous var.healthcheck_ping_param hook (see the imap
+  # marker) that keeps the HEALTHCHECK_PING_URL secret in step with whether
+  # monitoring is enabled. smtp-out was already re-registered clean at v3 by
+  # the queue/sinkhole work after monitoring was removed, so appending +hc is a
+  # no-op for the current (monitoring-off) state and only future-proofs this
+  # tier against a re-enable.
+  input = "${var.sinkhole ? "smtp-queue-mount-v4+sinkhole" : "smtp-queue-mount-v4"}${var.healthcheck_ping_param != "" ? "+hc" : ""}"
 }
 
 resource "aws_ecs_task_definition" "smtp_out" {
@@ -228,6 +383,7 @@ resource "aws_ecs_task_definition" "smtp_out" {
       { name = "COGNITO_CLIENT_ID", value = var.client_id },
       { name = "COGNITO_POOL_ID", value = var.user_pool_id },
       { name = "NETWORK_CIDR", value = var.cidr_block },
+      { name = "LOGIN_TRUSTED_NETWORKS", value = join(" ", var.login_trusted_cidrs) },
       { name = "SQS_QUEUE_URL", value = aws_sqs_queue.tier["smtp-out"].url },
       { name = "IMAP_INTERNAL_HOST", value = "${aws_service_discovery_service.imap.name}.${aws_service_discovery_private_dns_namespace.mail.name}" },
       ], var.sinkhole ? [
@@ -246,11 +402,36 @@ resource "aws_ecs_task_definition" "smtp_out" {
       containerPath = "/var/spool/mqueue"
     }]
 
+    # Runtime posture, phase 2 (see the imap task def for the full
+    # rationale). smtp-out runs sendmail + dovecot submission + opendkim;
+    # opendkim drops to opendkim:opendkim (UserID in opendkim.conf) and
+    # dovecot submission-login chroots, so it needs the full set. Dev soak
+    # should TIGHTEN this.
+    #   NET_BIND_SERVICE  dovecot binds 465/587 (submission)
+    #   SETUID, SETGID    sendmail delivery agents; dovecot workers; opendkim
+    #                     drops to its own uid
+    #   CHOWN             sync-users.sh; opendkim key chown; mqueue root:mail
+    #   DAC_OVERRIDE, FOWNER  user provisioning
+    #   KILL              root masters signal non-root children
+    #   SYS_CHROOT        dovecot submission-login chroots by default
     linuxParameters = {
+      initProcessEnabled = true
       capabilities = {
-        add = ["NET_ADMIN"]
+        drop = ["ALL"]
+        add = [
+          "CHOWN",
+          "DAC_OVERRIDE",
+          "FOWNER",
+          "KILL",
+          "NET_BIND_SERVICE",
+          "SETGID",
+          "SETUID",
+          "SYS_CHROOT",
+        ]
       }
     }
+
+    dockerSecurityOptions = ["no-new-privileges"]
 
     logConfiguration = {
       logDriver = "awslogs"

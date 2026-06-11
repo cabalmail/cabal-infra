@@ -230,6 +230,7 @@ extension URLSessionApiClient {
             return try await retryAfterAuthRefresh(request, expectedStatuses: expectedStatuses)
         }
         guard expectedStatuses.contains(response.statusCode) else {
+            if let maintenance = cabalMaintenanceError(data, response) { throw maintenance }
             throw CabalmailError.server(
                 code: String(response.statusCode),
                 message: String(data: data, encoding: .utf8) ?? ""
@@ -253,6 +254,7 @@ extension URLSessionApiClient {
             throw CabalmailError.authExpired
         }
         guard expectedStatuses.contains(retryResponse.statusCode) else {
+            if let maintenance = cabalMaintenanceError(retryData, retryResponse) { throw maintenance }
             throw CabalmailError.server(
                 code: String(retryResponse.statusCode),
                 message: String(data: retryData, encoding: .utf8) ?? ""
@@ -260,4 +262,30 @@ extension URLSessionApiClient {
         }
         return retryData
     }
+}
+
+/// Shape of the API's planned-maintenance 503 body
+/// (`lambda/api/_shared/helper.py` `maintenance_response`).
+private struct CabalMaintenanceBody: Decodable {
+    let status: String
+    let message: String?
+}
+
+/// Maps a 503 `{"status":"maintenance"}` response to `.maintenance` so an IMAP
+/// redeploy surfaces friendly "temporarily unavailable" copy instead of a
+/// generic `.server` error. Returns nil for any other status or body shape, so
+/// unrelated 503s fall through to the normal error path.
+private func cabalMaintenanceError(
+    _ data: Data,
+    _ response: HTTPURLResponse
+) -> CabalmailError? {
+    guard response.statusCode == 503,
+          let body = try? JSONDecoder().decode(CabalMaintenanceBody.self, from: data),
+          body.status == "maintenance" else {
+        return nil
+    }
+    return .maintenance(
+        message: body.message
+            ?? "Email access is temporarily unavailable due to planned maintenance."
+    )
 }

@@ -22,7 +22,7 @@ resource "aws_lb_target_group" "tier" {
 
   health_check {
     enabled             = true
-    interval            = 30
+    interval            = each.value.health_check_interval
     port                = "traffic-port"
     protocol            = "TCP"
     healthy_threshold   = 2

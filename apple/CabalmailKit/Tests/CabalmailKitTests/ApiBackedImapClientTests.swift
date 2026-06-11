@@ -143,6 +143,47 @@ final class ApiBackedImapClientTests: XCTestCase {
         XCTAssertEqual(payload?["destination"] as? String, "Archive")
     }
 
+    func testPurgeIssuesDeleteWithExpectedBody() async throws {
+        let body = #"{"status":"purged"}"#
+        let http = RecordingHTTPTransport(responses: [(Data(body.utf8), 200)])
+        let api = URLSessionApiClient(
+            configuration: makeConfiguration(),
+            authService: StubAuthService(),
+            transport: http
+        )
+        let client = ApiBackedImapClient(api: api, host: "imap.example.com")
+        try await client.purge(folder: "Trash", uids: [4, 5])
+        let requests = await http.requests
+        XCTAssertEqual(requests.count, 1)
+        let request = requests[0]
+        XCTAssertEqual(request.httpMethod, "DELETE")
+        XCTAssertTrue(request.url!.absoluteString.contains("/purge_messages"))
+        let payload = try JSONSerialization.jsonObject(with: request.httpBody ?? Data()) as? [String: Any]
+        XCTAssertEqual(payload?["folder"] as? String, "Trash")
+        XCTAssertEqual(payload?["ids"] as? [Int], [4, 5])
+        XCTAssertEqual(payload?["host"] as? String, "imap.example.com")
+    }
+
+    func testEmptyTrashIssuesDeleteWithExpectedBody() async throws {
+        let body = #"{"status":"emptied"}"#
+        let http = RecordingHTTPTransport(responses: [(Data(body.utf8), 200)])
+        let api = URLSessionApiClient(
+            configuration: makeConfiguration(),
+            authService: StubAuthService(),
+            transport: http
+        )
+        let client = ApiBackedImapClient(api: api, host: "imap.example.com")
+        try await client.emptyTrash(folder: "Trash")
+        let requests = await http.requests
+        XCTAssertEqual(requests.count, 1)
+        let request = requests[0]
+        XCTAssertEqual(request.httpMethod, "DELETE")
+        XCTAssertTrue(request.url!.absoluteString.contains("/empty_trash"))
+        let payload = try JSONSerialization.jsonObject(with: request.httpBody ?? Data()) as? [String: Any]
+        XCTAssertEqual(payload?["folder"] as? String, "Trash")
+        XCTAssertEqual(payload?["host"] as? String, "imap.example.com")
+    }
+
     func testSendMessageHitsLambdaWithExpectedShape() async throws {
         let http = RecordingHTTPTransport(responses: [(Data(#"{"status":"submitted"}"#.utf8), 200)])
         let api = URLSessionApiClient(

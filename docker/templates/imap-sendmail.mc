@@ -11,7 +11,16 @@ define(`PROCMAIL_MAILER_PATH',`/usr/bin/procmail')dnl
 define(`ALIAS_FILE', `/etc/aliases')dnl
 define(`UUCP_MAILER_MAX', `2000000')dnl
 define(`confUSERDB_SPEC', `/etc/mail/userdb.db')dnl
-define(`confPRIVACY_FLAGS', `authwarnings,novrfy,noexpn,restrictqrun')dnl
+define(`confPRIVACY_FLAGS', `authwarnings,novrfy,noexpn,restrictqrun,restrictmailq')dnl
+dnl Resource and rate limits (phase 5 of
+dnl docs/0.10.x/container-runtime-hardening-plan.md): cap message size at
+dnl 50 MB - kept in step with smtp-in/smtp-out so a message accepted
+dnl upstream is not bounced here for size - bound daemon children, and
+dnl throttle connection bursts. confREJECT_LOG_INTERVAL rate-limits logs.
+define(`confMAX_MESSAGE_SIZE', `52428800')dnl
+define(`confMAX_DAEMON_CHILDREN', `40')dnl
+define(`confCONNECTION_RATE_THROTTLE', `5')dnl
+define(`confREJECT_LOG_INTERVAL', `3h')dnl
 define(`confAUTH_OPTIONS', `A')dnl
 define(`confBAD_RCPT_THROTTLE', `1')dnl
 define(`confTO_ICONNECT', `15s')dnl

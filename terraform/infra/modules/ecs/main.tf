@@ -74,9 +74,13 @@ resource "aws_launch_template" "ecs" {
   }
 
   metadata_options {
-    http_tokens                 = "required"
-    http_endpoint               = "enabled"
-    http_put_response_hop_limit = 2
+    http_tokens   = "required"
+    http_endpoint = "enabled"
+    # hop_limit 1 (was 2): the tasks run in awsvpc mode and get credentials
+    # from the ECS task-role endpoint, not the host IMDS, so they do not need
+    # the extra hop. 1 blocks a compromised container from reaching the host
+    # role via IMDS. Takes effect as instances cycle onto the new template.
+    http_put_response_hop_limit = 1
   }
 
   lifecycle {

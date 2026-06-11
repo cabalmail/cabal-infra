@@ -35,10 +35,12 @@ locals {
     list_envelopes = {
       runtime = "python3.13"
 
-      method    = "GET"
-      memory    = 128
-      cache     = true
-      cache_ttl = 3600
+      method = "GET"
+      memory = 128
+      cache  = true
+      # Personalised response: not cached at the gateway, so a revoked token
+      # cannot read another caller's cached private data within the TTL window.
+      cache_ttl = 0
     },
     fetch_message = {
       runtime = "python3.13"
@@ -46,14 +48,16 @@ locals {
       method    = "GET"
       memory    = 1024
       cache     = true
-      cache_ttl = 3600
+      cache_ttl = 0 # personalised: not gateway-cached (see list_envelopes)
     },
     fetch_bimi = {
       runtime = "python3.13"
 
-      method    = "GET"
-      memory    = 1024
-      cache     = true
+      method = "GET"
+      memory = 1024
+      cache  = true
+      # Non-personalised: keyed by sender domain, identical for every caller,
+      # so a shared gateway cache is safe and worthwhile.
       cache_ttl = 3600
     },
     list_attachments = {
@@ -62,7 +66,7 @@ locals {
       method    = "GET"
       memory    = 1024
       cache     = true
-      cache_ttl = 3600
+      cache_ttl = 0 # personalised: not gateway-cached (see list_envelopes)
     },
     fetch_attachment = {
       runtime = "python3.13"
@@ -70,7 +74,7 @@ locals {
       method    = "GET"
       memory    = 1024
       cache     = true
-      cache_ttl = 3600
+      cache_ttl = 0 # personalised: not gateway-cached (see list_envelopes)
     },
     fetch_inline_image = {
       runtime = "python3.13"
@@ -78,7 +82,7 @@ locals {
       method    = "GET"
       memory    = 1024
       cache     = true
-      cache_ttl = 3600
+      cache_ttl = 0 # personalised: not gateway-cached (see list_envelopes)
     },
     set_flag = {
       runtime = "python3.13"
@@ -126,6 +130,22 @@ locals {
       method    = "PUT"
       memory    = 128
       cache     = true
+      cache_ttl = 0
+    },
+    purge_messages = {
+      runtime = "python3.13"
+
+      method    = "DELETE"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    empty_trash = {
+      runtime = "python3.13"
+
+      method    = "DELETE"
+      memory    = 128
+      cache     = false
       cache_ttl = 0
     },
     send = {

@@ -14,6 +14,11 @@ data "aws_iam_policy_document" "users" {
 }
 
 data "aws_iam_policy_document" "sns_users" {
+  # Cognito SMS (sns:Publish to a phone number) has no resource ARN to scope
+  # to, so the wildcard resource is required, not a finding to fix. Inline
+  # design suppression; see terraform/infra/BASELINE.md.
+  #checkov:skip=CKV_AWS_111:SMS direct-publish has no resource ARN, so "*" is required
+  #checkov:skip=CKV_AWS_356:SMS direct-publish has no resource ARN, so "*" is required
   statement {
     actions = [
       "sns:Publish",

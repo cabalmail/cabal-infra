@@ -204,6 +204,37 @@ function App() {
     }, e ? 15000 : 4000);
   }, [checkSession]);
 
+  // Surface a friendly banner when an IMAP-backed API call returns the
+  // planned-maintenance 503 (see lambda/api/_shared/helper.py maintenance_guard):
+  // the IMAP tier rolls with a brief single-task outage, and without this the
+  // raw 503 surfaces as a scary per-view error. We also rewrite error.message to
+  // the friendly copy so any catch that displays it shows the same thing, and
+  // tag error.isMaintenance for callers that want to branch on it. Non-
+  // maintenance errors pass through untouched.
+  useEffect(() => {
+    const id = axios.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        const res = error && error.response;
+        if (res && res.status === 503) {
+          let body = res.data;
+          if (typeof body === 'string') {
+            try { body = JSON.parse(body); } catch { body = null; }
+          }
+          if (body && body.status === 'maintenance') {
+            const friendly = body.message
+              || 'Email access is temporarily unavailable due to planned maintenance.';
+            setMessage(friendly, true);
+            error.isMaintenance = true;
+            error.message = friendly;
+          }
+        }
+        return Promise.reject(error);
+      }
+    );
+    return () => axios.interceptors.response.eject(id);
+  }, [setMessage]);
+
   // Fetch config and restore session on mount.
   //
   // If the /config.js fetch fails on a first visit (no localStorage),

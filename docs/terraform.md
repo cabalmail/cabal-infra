@@ -1,24 +1,85 @@
-# Recommended Steps for Setting Up Terraform
+# Setting Up Terraform
 
-You must install Terraform or set up an account with [Terraform Cloud](https://app.terraform.io/signup/account). HashiCorp offers a free tier. These instructions assume you are using Terraform Cloud.
+You do not need to install Terraform locally, and you do not need a HashiCorp account. Terraform is planned and applied exclusively by CI/CD: the "Build and Deploy Infrastructure" workflow ([`.github/workflows/infra.yml`](../.github/workflows/infra.yml)) owns both stacks -- `terraform/dns` (the bootstrap stack) and `terraform/infra` (everything else). Earlier versions of this repository drove Terraform through Terraform Cloud workspaces; that integration is gone. No Terraform Cloud workspaces, variables, or API tokens are needed.
 
-After signing up, perform the following steps:
+The one Terraform-specific resource you must create by hand is the S3 bucket that stores remote state.
 
-1. [Create a workspace](https://learn.hashicorp.com/tutorials/terraform/cloud-workspace-create?in=terraform/cloud-get-started) of type version control workflow called "dns". Connect it to your forked repository. While creating the workspace, expand the "Advanced options" area and fill out the fields with these values:
+## State backend
 
-    | Field                       | Value                                                         |
-    | --------------------------- | ------------------------------------------------------------- |
-    | Description                 | Create DNS Zone for Cabalmail control domain                  |
-    | Terraform Working Directory | terraform/dns                                                 |
-    | Automatic Run Triggering    | Only trigger runs when the files in the spcified paths change |
-    | - Paths                     | terraform/dns                                                 |
-    | VCS branch                  | default                                                       |
-    | Include submodules on clone | Unchecked                                                     |
+The backend configuration is not committed. At CI time, [`make-terraform.sh`](../.github/scripts/make-terraform.sh) writes a `backend.tf` into the stack being deployed:
 
-2. Using [terraform.tfvars.example](./terraform.tfvars.example) as a guide, [create variables in your workspace](https://learn.hashicorp.com/tutorials/terraform/cloud-workspace-configure?in=terraform/cloud-get-started). This is where your GitHub personal access token will go. The Github token should be designated "sensitive". Also, make sure the value you specify for aws_region matches the value you specify in your [GitHub setup](./github.md).
+| Setting | Value |
+| --- | --- |
+| Bucket | `cabal-tf-backend` |
+| Key, `terraform/infra` stack | The environment's `TF_VAR_ENVIRONMENT` value, e.g. `production` |
+| Key, `terraform/dns` stack | `TF_VAR_ENVIRONMENT` plus `-bootstrap`, e.g. `production-bootstrap` |
+| Region | The environment's `TF_VAR_AWS_REGION` value |
 
-3. [Create environment variables](https://learn.hashicorp.com/tutorials/terraform/cloud-workspace-configure?in=terraform/cloud-get-started) for `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` using the values you saved from [the AWS section step 7](./aws.md). The secret access key should be designated "sensitive". (Don't forget to rotate this key regularly!) Finally, create a third environment variable for `AWS_DEFAULT_REGION`. Set it to the same region you use for your infrastructure. The region should match what you specify in your [Github setup](./github.md).
+One bucket serves every environment; each environment-stack pair gets its own key.
 
-4. Create a second workspace of type CLI-driven workflow called "infra".
+There is no DynamoDB lock table. Concurrent runs are prevented in the workflow instead: a GitHub Actions concurrency group serializes runs per branch and never cancels an in-flight apply.
 
-5. [Create an API token](https://developer.hashicorp.com/terraform/cloud-docs/users-teams-organizations/users#creating-a-token) and store it in your GitHub repository's Actions secrets as described in [GitHub setup](./gitnub.md).
+### Creating the bucket
+
+S3 bucket names are globally unique, so your fork cannot reuse `cabal-tf-backend`. Pick a name of your own and change the `bucket` value in [`make-terraform.sh`](../.github/scripts/make-terraform.sh).
+
+Create the bucket before the first workflow run, in the same region as `TF_VAR_AWS_REGION`:
+
+- Enable bucket versioning. State files are the one thing you will be glad to have old versions of.
+- Keep "Block all public access" on and leave Object Ownership at the default "bucket owner enforced".
+- Default encryption (SSE-S3) is sufficient.
+
+### Cross-account access
+
+Each environment (prod, stage, development) runs in its own AWS account, but all of their state lives in this one bucket, which exists in exactly one of those accounts (or in a separate account altogether). The `cicd` user in each environment account already has the identity-side S3 permission (see [AWS setup](./aws.md) step 5), but identity-side permission alone does not cross account boundaries: for every environment account other than the one that owns the bucket, the bucket's policy must also grant access. In the bucket-owner account, attach a bucket policy like this, listing each foreign-account `cicd` user:
+
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "CrossAccountTerraformState",
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": [
+                    "arn:aws:iam::222222222222:user/cicd",
+                    "arn:aws:iam::333333333333:user/cicd"
+                ]
+            },
+            "Action": [
+                "s3:ListBucket",
+                "s3:GetObject",
+                "s3:PutObject",
+                "s3:DeleteObject"
+            ],
+            "Resource": [
+                "arn:aws:s3:::cabal-tf-backend",
+                "arn:aws:s3:::cabal-tf-backend/*"
+            ]
+        }
+    ]
+}
+```
+
+The bucket-owner account's own `cicd` user needs no statement here.
+
+## How the workflow drives plan and apply
+
+The workflow runs on pushes to the three named branches -- `main` (prod), `stage` (stage), and `development` (development) -- that touch `terraform/dns/**`, `terraform/infra/**`, the workflow itself, or its helper scripts. It can also be run manually from the Actions tab (`workflow_dispatch`). Pushes from any other branch never deploy.
+
+The branch selects the GitHub Environment, and the environment supplies everything Terraform needs: AWS credentials come from the repository secrets, and `terraform.tfvars` is assembled at CI time from the environment's `TF_VAR_*` variables. There is no committed tfvars file; [GitHub setup](./github.md) documents every secret and variable. For each stack the sequence is:
+
+1. **Generate the backend.** `make-terraform.sh` writes `backend.tf` as described above.
+2. **Scan.** Checkov, tflint, and Trivy scan the stack. A finding that is not in the stack's checked-in baseline/ignore files fails the job and blocks the apply.
+3. **Plan.** `terraform plan -detailed-exitcode`. If the plan is empty, the stack's run stops here.
+4. **Approve.** When the plan has changes and all scanners passed, an approval job runs against the environment's `gate-*` counterpart (`gate-prod`, `gate-stage`, `gate-development`). If you added required reviewers to the gate environments ([GitHub setup](./github.md)), the run pauses here for a human; otherwise the gate passes on its own.
+5. **Apply.** `terraform apply -auto-approve`.
+6. **Post-apply.** Any ECS service whose task-definition family advanced during the apply is rolled to the new revision.
+
+The plan and apply jobs also reconcile the deployed Docker image tag (SSM parameter `/cabal/deployed_image_tag`) and the deployed Lambda code hashes with what is actually running, so a topology-only Terraform change does not roll back an application deploy that happened out of band via the "Build and Deploy Application" workflow.
+
+## The dns bootstrap stage
+
+`terraform/dns` stands up the Route 53 zone for the control domain. It is a separate stack because its output (the zone's name servers) must be applied to your domain registration before the main stack's certificate validation can succeed; see the provisioning steps in [setup.md](./setup.md).
+
+Within the same workflow, the bootstrap stage is gated: it runs only when a push actually changes `terraform/dns/**`, or when the workflow is dispatched manually with the bootstrap checkbox set. On every other run it is skipped, and the workflow proceeds directly to the main stack. The bootstrap stage has its own scanner jobs and its own approval against the same `gate-*` environment, and like the main stage it applies only when its plan reports changes.

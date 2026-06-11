@@ -248,7 +248,7 @@ function Search({
   }, [api, groupByFolder, selectedIdsArray, selectedCount, refreshAfterMutation, exitBulk]);
 
   const archiveSelected = useCallback(() => moveSelectedTo('Archive'), [moveSelectedTo]);
-  const deleteSelected = useCallback(() => moveSelectedTo('Deleted Messages'), [moveSelectedTo]);
+  const deleteSelected = useCallback(() => moveSelectedTo('Trash'), [moveSelectedTo]);
 
   const markReadSelected = useCallback(() => runFlagOp(READ, selectedIdsArray), [runFlagOp, selectedIdsArray]);
   const markUnreadSelected = useCallback(() => runFlagOp(UNREAD, selectedIdsArray), [runFlagOp, selectedIdsArray]);

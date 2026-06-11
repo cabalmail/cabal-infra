@@ -6,6 +6,10 @@ from helper import ( # pylint: disable=import-error
     validate_uid_list,
 )
 
+from helper import maintenance_guard # pylint: disable=import-error
+
+
+@maintenance_guard
 def handler(event, _context):
     '''Moves a message from source folder to destination folder'''
     user = event['requestContext']['authorizer']['claims']['cognito:username']
@@ -20,7 +24,11 @@ def handler(event, _context):
     except ValueError as err:
         return _invalid(err)
     client = get_imap_client(body['host'], user, source.replace("/", "."))
-    if destination == "Deleted Messages":
+    # Dovecot advertises Trash as special-use but does not auto-create it
+    # (no auto= in 15-mailboxes.conf), so the first delete on a fresh
+    # mailbox has to create it here. Both web and Apple clients file
+    # deletions in Trash.
+    if destination == "Trash":
         try:
             client.create_folder(destination.replace("/", "."))
         except: # pylint: disable=bare-except

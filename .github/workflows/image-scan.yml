@@ -1,0 +1,134 @@
+---
+# Nightly vulnerability scan of the currently-deployed mail-tier images.
+#
+# Phase 3 of docs/0.10.x/container-runtime-hardening-plan.md. ECR
+# scan-on-push (see .github/scripts/ecr-scan-report.sh) catches CVEs at
+# deploy time; this catches CVEs that are *disclosed after* an image was
+# built and is still running unchanged. It scans exactly what the prod
+# ECS services reference today (resolved from the running task def, not a
+# tag assumption), uploads SARIF to the Security -> Code scanning tab, and
+# keeps the raw SARIF as a build artifact.
+#
+# Scope is the three internet-facing mail tiers (imap, smtp-in, smtp-out).
+# The monitoring tiers do not run (TF_VAR_MONITORING is false everywhere)
+# and the certbot-renewal Lambda image is a separate, short-lived surface;
+# both are candidates for a later matrix expansion.
+#
+# Informational only: a finding never fails the workflow. The signal is
+# the Security tab and the per-run job summary.
+name: Nightly image scan
+
+on:
+  schedule:
+    # 06:17 UTC daily. Off-peak and offset from the 09:00 Dependabot
+    # alert monitor so the two security jobs do not contend.
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+# Pin Trivy so a scan is reproducible and the installer cannot drift.
+env:
+  TRIVY_VERSION: "v0.71.0"
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    # Scheduled runs use the default branch (main), so this resolves to
+    # prod - the images actually serving users.
+    environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
+    strategy:
+      fail-fast: false
+      matrix:
+        tier: [imap, smtp-in, smtp-out]
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+    steps:
+    - name: resolve-deployed-image
+      id: img
+      # Read the image off the running task definition so we scan what is
+      # actually deployed, including out-of-band app.yml deploys that
+      # never flow through Terraform.
+      run: |
+        TD=$(aws ecs describe-services \
+              --cluster cabal-mail \
+              --services "cabal-${{ matrix.tier }}" \
+              --query 'services[0].taskDefinition' \
+              --output text)
+        if [ -z "${TD}" ] || [ "${TD}" = "None" ]; then
+          echo "::warning::cabal-${{ matrix.tier }} not found on cabal-mail; nothing to scan"
+          echo "image=" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        IMAGE=$(aws ecs describe-task-definition \
+              --task-definition "${TD}" \
+              --query "taskDefinition.containerDefinitions[?name=='${{ matrix.tier }}'] | [0].image" \
+              --output text)
+        echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+        echo "resolved cabal-${{ matrix.tier }} -> ${IMAGE}"
+
+    - name: install-trivy
+      if: steps.img.outputs.image != ''
+      run: |
+        curl -sfL "https://raw.githubusercontent.com/aquasecurity/trivy/${TRIVY_VERSION}/contrib/install.sh" \
+          | sh -s -- -b /usr/local/bin "${TRIVY_VERSION}"
+        trivy --version
+
+    - name: scan
+      if: steps.img.outputs.image != ''
+      # Scan once to JSON (the expensive step pulls and analyzes the
+      # image), then convert to the other formats below. Trivy
+      # authenticates to ECR via the AWS credential chain (the AWS_* env
+      # above). ignore-unfixed drops CVEs with no upstream fix so the
+      # report stays actionable. No --exit-code: this run never fails.
+      run: |
+        trivy image \
+          --severity HIGH,CRITICAL \
+          --ignore-unfixed \
+          --format json \
+          --output "trivy-${{ matrix.tier }}.json" \
+          "${{ steps.img.outputs.image }}"
+
+    - name: report
+      if: steps.img.outputs.image != ''
+      # Convert the single scan to SARIF (for the upload below) and a
+      # table (into the run summary) without re-scanning the image.
+      run: |
+        trivy convert \
+          --format sarif \
+          --output "trivy-${{ matrix.tier }}.sarif" \
+          "trivy-${{ matrix.tier }}.json"
+        {
+          echo "### Trivy: \`${{ steps.img.outputs.image }}\`"
+          echo ""
+          echo '```'
+          trivy convert --format table "trivy-${{ matrix.tier }}.json"
+          echo '```'
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: upload-sarif
+      # Populates Security -> Code scanning. Free on this public repo (no
+      # license needed); a private repo would need a GitHub Code Security
+      # license for SARIF upload. continue-on-error keeps a transient
+      # upload failure (or a future flip to private) from failing the run -
+      # the artifact and job summary above stand on their own.
+      if: steps.img.outputs.image != ''
+      continue-on-error: true
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: "trivy-${{ matrix.tier }}.sarif"
+        category: "trivy-image-${{ matrix.tier }}"
+
+    - name: upload-artifact
+      if: steps.img.outputs.image != ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: "trivy-sarif-${{ matrix.tier }}"
+        path: "trivy-${{ matrix.tier }}.sarif"
+        if-no-files-found: warn

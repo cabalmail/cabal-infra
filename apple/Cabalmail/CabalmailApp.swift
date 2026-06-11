@@ -49,6 +49,13 @@ struct CabalmailApp: App {
                     }
                 }
         }
+        // Same Message menu the macOS menu bar shows. On iPadOS the
+        // commands surface through the hardware-keyboard menu (hold
+        // Cmd) so Reply / Mark / Flag / Move get the same chords as
+        // the Mac; iPhone carries them inertly.
+        .commands {
+            MessageMenuCommands(appState: appState)
+        }
         // iPadOS and visionOS open compose as a real scene; iPhone
         // ignores the group because `composeOpensInWindow` keeps it on
         // the sheet path. Installing the WindowGroup on every iOS

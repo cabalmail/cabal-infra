@@ -1,5 +1,4 @@
-ARG NTFY_VERSION=v2.14.0
-FROM binwiederhier/ntfy:${NTFY_VERSION}
+FROM binwiederhier/ntfy:v2.24.0@sha256:f8a9b104313b87cc24ae4f775f39e6328205b57dff6ede3eaf098a91e5d79f59
 
 # The upstream image listens on 80 by default when NTFY_LISTEN_HTTP=:80.
 # Cache + auth DB are expected at /var/cache/ntfy/ (EFS-backed in the

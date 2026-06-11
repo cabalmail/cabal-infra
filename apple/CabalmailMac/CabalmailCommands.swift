@@ -5,19 +5,21 @@ import CabalmailKit
 ///
 /// Phase 7 polish: add a native menu bar that matches every other Mac
 /// mail client — File → New Message, Mailbox → Refresh, Message → Reply
-/// / Reply All / Forward. Commands dispatch through `AppState`'s tick
-/// counters so the focused view (or the always-on-screen list) reacts
-/// via `onChange` without the menu bar needing a direct reference to a
-/// view model.
+/// / Reply All / Forward / Mark / Flag / Move. Commands dispatch through
+/// `AppState`'s tick counters so the focused view (or the always-on-
+/// screen list) reacts via `onChange` without the menu bar needing a
+/// direct reference to a view model.
 ///
-/// Why Reply / Reply All / Forward live here rather than on the detail
-/// view's toolbar Menu Buttons: a `.keyboardShortcut` attached to a
-/// Button inside a Menu only fires while the detail scene holds AppKit
+/// Why the Message actions live in the menu bar rather than on the
+/// detail view's toolbar Menu Buttons: a `.keyboardShortcut` attached to
+/// a Button inside a Menu only fires while the detail scene holds AppKit
 /// first-responder focus, and that focus is lost the moment a compose
 /// window opens. Subsequent Cmd+R presses then no-op until the user
 /// clicks back into the detail view. Hoisting the shortcuts up to the
 /// menu bar keeps them globally active, with the detail view simply
-/// observing the tick to run its existing `beginCompose(_:)` flow.
+/// observing the tick to run its existing `beginCompose(_:)` flow. The
+/// Message menu itself lives in the shared `MessageMenuCommands` so the
+/// iPadOS hardware-keyboard menu carries the same chords.
 struct CabalmailCommands: Commands {
     let appState: AppState
 
@@ -28,14 +30,7 @@ struct CabalmailCommands: Commands {
             }
             .keyboardShortcut("n", modifiers: .command)
         }
-        CommandMenu("Message") {
-            Button("Reply") { appState.requestReply() }
-                .keyboardShortcut("r", modifiers: .command)
-            Button("Reply All") { appState.requestReplyAll() }
-                .keyboardShortcut("r", modifiers: [.command, .shift])
-            Button("Forward") { appState.requestForward() }
-                .keyboardShortcut("j", modifiers: [.command, .shift])
-        }
+        MessageMenuCommands(appState: appState)
         CommandMenu("Mailbox") {
             // No keyboard shortcut. Cmd+R is the Reply chord in the
             // Message menu above (Cmd+Shift+R reaches Reply All);

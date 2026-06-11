@@ -8,6 +8,10 @@ from helper import ( # pylint: disable=import-error
     validate_uid_list,
 )
 
+from helper import maintenance_guard # pylint: disable=import-error
+
+
+@maintenance_guard
 def handler(event, _context):
     '''Retrieves IMAP envelopes for a user given a folder and list of message ids'''
     query_string = event.get('queryStringParameters') or {}

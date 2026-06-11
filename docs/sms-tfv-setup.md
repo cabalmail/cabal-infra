@@ -54,6 +54,8 @@ For each environment you want to enable TFV in (typically `stage` first, then `p
 
 ## Triggering the workflow
 
+Note: This workflow is just a convenience. The rules for completing the registration are highly opaque, with branching requirements that change based on prior answers. We don't guarantee that this workflow will succeed for every case. You can always update or replace the registration manually via the AWS console. See [the AWS documentation])(https://docs.aws.amazon.com/sms-voice/latest/userguide/registrations.html) for details.
+
 1. GitHub -> Actions -> "Submit AWS End User Messaging TFV" -> **Run workflow**.
 2. Pick the target environment (`stage` or `prod`).
 3. Either leave `opt_in_image_url` empty (uses the file at `front-door/opt-in-screenshot.png` if committed) or paste a public HTTPS URL to the screenshot.
@@ -87,7 +89,6 @@ If the registration comes back `REQUIRES_UPDATES`:
 1. Read the rejection reason in the AWS console (Configurations -> Registrations -> your registration -> View history) or via `describe-registration-versions`.
 2. Fix the corresponding GitHub Environment variable (typically `TFV_USE_CASE_DETAILS`, `TFV_OPT_IN_DESCRIPTION`, or the opt-in screenshot).
 3. Re-run the workflow. The script is idempotent: it re-applies all field values to the existing registration and re-submits.
-
 ## After approval
 
 Once status is `COMPLETE`:

@@ -71,10 +71,13 @@ module "front_door" {
   cert_arn        = module.cert.cert_arn
 }
 
-# Sets up Route 53 hosted zones for mail domains
+# Sets up Route 53 hosted zones for mail domains. When the control domain is
+# also a mail domain, its bootstrap zone is reused rather than duplicated.
 module "domains" {
-  source       = "./modules/domains"
-  mail_domains = var.mail_domains
+  source                 = "./modules/domains"
+  mail_domains           = var.mail_domains
+  control_domain         = var.control_domain
+  control_domain_zone_id = data.terraform_remote_state.zone.outputs.control_domain_zone_id
 }
 
 # Infrastructure and code for the administrative web site
@@ -92,7 +95,6 @@ module "admin" {
   bucket_domain_name  = module.bucket.domain_name
   relay_ips           = module.vpc.relay_ips
   origin              = module.bucket.origin
-  repo                = var.repo
   dev_mode            = var.prod ? false : true
 
   address_changed_topic_arn = module.ecs.sns_topic_arn
@@ -111,22 +113,21 @@ module "table" {
 
 # Creates the VPC and network infrastructure
 module "vpc" {
-  source             = "./modules/vpc"
-  use_nat_instance   = true
-  cidr_block         = var.cidr_block
-  control_domain     = var.control_domain
-  az_list            = var.availability_zones
-  zone_id            = data.terraform_remote_state.zone.outputs.control_domain_zone_id
-  quiesced           = var.quiesced
-  region             = var.aws_region
-  use_custom_nat_ami = var.use_custom_nat_ami
+  source           = "./modules/vpc"
+  use_nat_instance = var.use_nat_instance
+  build_nat_ami    = var.build_nat_ami
+  cidr_block       = var.cidr_block
+  control_domain   = var.control_domain
+  az_list          = var.availability_zones
+  zone_id          = data.terraform_remote_state.zone.outputs.control_domain_zone_id
+  quiesced         = var.quiesced
+  region           = var.aws_region
 }
 
 # Creates a network load balancer shared by machines in the stack
 module "load_balancer" {
   source            = "./modules/elb"
   public_subnet_ids = module.vpc.public_subnets[*].id
-  vpc_id            = module.vpc.vpc.id
   zone_id           = data.terraform_remote_state.zone.outputs.control_domain_zone_id
   private_zone_id   = module.vpc.private_zone.zone_id
   control_domain    = var.control_domain
@@ -179,8 +180,12 @@ module "ecs" {
   private_subnets = module.vpc.private_subnets
   vpc_id          = module.vpc.vpc.id
   cidr_block      = var.cidr_block
-  region          = var.aws_region
-  control_domain  = var.control_domain
+  # The NLB lives in the public subnets and SNATs to its own ENIs
+  # (preserve_client_ip is off for the ip/TCP target groups), so Dovecot sees
+  # these CIDRs as the source of NLB-forwarded imap traffic. Phase 4.
+  login_trusted_cidrs = module.vpc.public_subnets[*].cidr_block
+  region              = var.aws_region
+  control_domain      = var.control_domain
 
   table_arn = module.table.table_arn
   efs_id    = module.efs.efs_id
@@ -194,10 +199,14 @@ module "ecs" {
   ecr_repository_urls = module.ecr.repository_urls
   image_tag           = data.aws_ssm_parameter.deployed_image_tag.value
 
-  master_password = module.admin.master_password
-
   # Health-check tuning - raise these to keep containers alive for debugging.
-  health_check_grace_period = 600
+  # health_check_grace_period is consumed by the imap service only. 120s
+  # comfortably covers image pull + entrypoint + Dovecot startup on a healthy
+  # task; a task still failing NLB checks after that is a bad deploy, and the
+  # imap deployment circuit breaker rolls it back instead of letting it
+  # thrash (was 600, which gave a stuck task 10 minutes before ECS gave up).
+  # Phase 2 of docs/0.10.x/imap-deploy-downtime-plan.md.
+  health_check_grace_period = 120
   deregistration_delay      = 120
   unhealthy_threshold       = 10
 

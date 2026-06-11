@@ -5,60 +5,186 @@ import CabalmailKit
 // a same-module extension so the primary view body stays under
 // SwiftLint's `type_body_length` cap. Holds:
 //   - `row(for:model:isSelected:)` — list-row content + swipe actions
-//   - `rowContextMenu` — right-click / long-press menu mirroring swipes
+//   - `rowContextMenu` — compact iPhone's long-press menu (wide layouts
+//     use the List-level selection menu in `+Actions.swift` instead)
 //   - `disposeActionLabel` / `markReadLabel` — shared icons for both
 //   - `addressFilterChip` — the in-list banner when `addressFilter` is
 //     set (used by `Messages` view's address-tap surface)
 //   - `filteredEnvelopes` — case-insensitive `To`/`Cc` substring filter
 //     applied above the list when an address filter is active.
 extension MessageListView {
+    /// True on layouts where the sidebar and the message list are visible at
+    /// once (iPad regular width, macOS, visionOS) - the only place a message-
+    /// to-folder drag makes sense. macOS has no size class and is always
+    /// wide; everywhere else reads the environment size class set on the
+    /// main struct.
+    var isWideLayout: Bool {
+        #if os(macOS)
+        return true
+        #else
+        return horizontalSizeClass == .regular
+        #endif
+    }
+
     @ViewBuilder
     func row(
         for envelope: Envelope,
         model: MessageListViewModel,
-        isSelected: Bool
+        isSelected: Bool,
+        orderedVisible: [Envelope]
     ) -> some View {
         let bulkMode = model.bulkMode
         let isChecked = model.selectedUIDs.contains(envelope.uid)
-        Group {
-            if bulkMode {
-                // No .tag() while in bulk mode — the list's selection
-                // binding drives the detail pane, and we don't want a
-                // checkbox tap to also pop the reader.
-                Button {
-                    model.toggleSelection(envelope)
-                } label: {
-                    MessageRow(envelope: envelope, isSelected: isChecked, isChecked: isChecked, bulkMode: true)
+        let items = dragItems(for: envelope, model: model)
+        withMessageDrag(items: items, subject: envelope.subject) {
+            withRowContextMenu(for: envelope, model: model) {
+                Group {
+                    if isWideLayout {
+                        wideRow(
+                            for: envelope,
+                            isSelected: isSelected,
+                            model: model,
+                            orderedVisible: orderedVisible
+                        )
+                    } else if bulkMode {
+                        // No .tag() while in bulk mode — the list's selection
+                        // binding drives the detail pane, and we don't want a
+                        // checkbox tap to also pop the reader.
+                        Button {
+                            model.toggleSelection(envelope)
+                        } label: {
+                            MessageRow(envelope: envelope, isSelected: isChecked, isChecked: isChecked, bulkMode: true)
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        MessageRow(envelope: envelope, isSelected: isSelected, isChecked: false, bulkMode: false)
+                            .tag(envelope)
+                    }
                 }
-                .buttonStyle(.plain)
-            } else {
-                MessageRow(envelope: envelope, isSelected: isSelected, isChecked: false, bulkMode: false)
-                    .tag(envelope)
+                #if os(visionOS)
+                .contentShape(Rectangle())
+                .hoverEffect(.highlight)
+                #endif
+                .swipeActions(edge: .trailing) {
+                    disposeSwipeButton(for: envelope, model: model)
+                }
+                .swipeActions(edge: .leading) {
+                    Button {
+                        Task { await model.toggleSeen(envelope) }
+                    } label: {
+                        markReadLabel(for: envelope)
+                    }
+                    .tint(.blue)
+                }
+            }
+            .task {
+                await model.loadMoreIfNeeded(currentItem: envelope)
             }
         }
-        #if os(visionOS)
-        .contentShape(Rectangle())
-        .hoverEffect(.highlight)
-        #endif
-        .swipeActions(edge: .trailing) {
-            Button(role: .destructive) {
-                Task { await model.dispose(envelope) }
-            } label: {
-                disposeActionLabel(for: model.disposeAction)
-            }
+    }
+
+    /// Compact iPhone keeps the per-row long-press menu (single-
+    /// selection flow). Wide layouts must NOT carry a row-level
+    /// `.contextMenu` — it would intercept the right-click before the
+    /// List-level `contextMenu(forSelectionType:)` (see `wideList`)
+    /// could offer the menu for the whole multi-selection.
+    @ViewBuilder
+    private func withRowContextMenu(
+        for envelope: Envelope,
+        model: MessageListViewModel,
+        @ViewBuilder content: () -> some View
+    ) -> some View {
+        if isWideLayout {
+            content()
+        } else {
+            content()
+                .contextMenu { rowContextMenu(for: envelope, model: model) }
         }
-        .swipeActions(edge: .leading) {
-            Button {
-                Task { await model.toggleSeen(envelope) }
-            } label: {
-                markReadLabel(for: envelope)
-            }
-            .tint(.blue)
+    }
+
+    /// The wide-layout (native multi-select) row: a UID-tagged `MessageRow` so
+    /// the list's `Set<UInt32>` binding owns selection and the system draws the
+    /// highlight (and selection circles in iPad edit mode). `isSelected` is set
+    /// membership, used only to keep the unread dot legible. On iOS it also
+    /// carries the hardware-keyboard shift / command-click handling SwiftUI
+    /// doesn't wire into the native list there; plain taps fall through to the
+    /// list. Kept beside `MessageRow` (which is file-private) and out of
+    /// `row(for:)` so that function stays under SwiftLint's body-length cap.
+    @ViewBuilder
+    func wideRow(
+        for envelope: Envelope,
+        isSelected: Bool,
+        model: MessageListViewModel,
+        orderedVisible: [Envelope]
+    ) -> some View {
+        MessageRow(envelope: envelope, isSelected: isSelected, isChecked: false, bulkMode: false)
+            .tag(envelope.uid)
+            #if os(iOS)
+            .gesture(ModifierClickGesture { kind in
+                switch kind {
+                case .toggle:
+                    applyToggleSelection(envelope, model: model)
+                case .range:
+                    applyRangeSelection(to: envelope, model: model, ordered: orderedVisible)
+                }
+            })
+            #endif
+    }
+
+    /// The drag payload for a row. When a multi-selection exists and this row
+    /// is part of it, dragging carries the whole selection; dragging a row that
+    /// isn't part of the selection (or when nothing/just one is selected)
+    /// carries just that message - matching Finder / Mail, where grabbing an
+    /// unselected item drags only it. This now covers both the native multi-
+    /// select highlight (shift / command-click) and the touch checkbox flow,
+    /// since both populate `selectedUIDs`. Each item is tagged with its owning
+    /// mailbox via `sourceFolder(for:)` so a cross-folder search selection
+    /// still routes every UID back to the right source folder on drop.
+    private func dragItems(for envelope: Envelope, model: MessageListViewModel) -> [MessageDragItem] {
+        if model.selectedUIDs.count > 1, model.selectedUIDs.contains(envelope.uid) {
+            return model.envelopes
+                .filter { model.selectedUIDs.contains($0.uid) }
+                .map { MessageDragItem(uid: $0.uid, sourceFolder: model.sourceFolder(for: $0)) }
         }
-        .contextMenu { rowContextMenu(for: envelope, model: model) }
-        .task {
-            await model.loadMoreIfNeeded(currentItem: envelope)
+        return [MessageDragItem(uid: envelope.uid, sourceFolder: model.sourceFolder(for: envelope))]
+    }
+
+    /// Wraps a row in `.draggable` on wide layouts so it can be dragged onto a
+    /// sidebar folder. On compact iPhone the modifier is skipped entirely
+    /// (see `isWideLayout`): there's nowhere to drop, and the long-press drag
+    /// would fight the row's context menu.
+    ///
+    /// `.draggable` (not `.onDrag`) so a plain click still selects the row -
+    /// `.onDrag` on a `List(selection:)` row swallows clicks on the rendered
+    /// content on macOS. `.onDrag`'s drag-start closure was where the sidebar
+    /// got flipped to reveal folders; `.draggable` has no such hook, so the
+    /// flip rides two drag-start signals for robustness: the payload
+    /// autoclosure (evaluated when the drag lifts) and the preview's
+    /// `.onAppear` (fired when the drag image is built). `beginMessageDrag()`
+    /// is idempotent, so firing both is harmless.
+    @ViewBuilder
+    private func withMessageDrag(
+        items: [MessageDragItem],
+        subject: String?,
+        @ViewBuilder content: () -> some View
+    ) -> some View {
+        if isWideLayout, !items.isEmpty {
+            content()
+                .draggable(dragPayload(items)) {
+                    MessageDragPreview(count: items.count, subject: subject)
+                        .onAppear { appState.beginMessageDrag() }
+                }
+        } else {
+            content()
         }
+    }
+
+    /// Builds the drag payload and flips the sidebar's drag flag. Called from
+    /// `.draggable`'s `@autoclosure` payload, so the side effect lands exactly
+    /// when the drag begins.
+    private func dragPayload(_ items: [MessageDragItem]) -> MessageDragPayload {
+        appState.beginMessageDrag()
+        return MessageDragPayload(items: items)
     }
 
     @ViewBuilder
@@ -87,10 +213,50 @@ extension MessageListView {
         } label: {
             Label("Move to folder…", systemImage: "folder")
         }
-        Button(role: .destructive) {
-            Task { await model.dispose(envelope) }
+        // Both dispose destinations, not just the configured default —
+        // the swipe action keeps honoring the dispose preference; the
+        // menu is where the user reaches for the other one. Inside Trash
+        // "move to Trash" is meaningless, so the destructive item becomes
+        // Delete Forever and stages the same confirmation as the swipe;
+        // Archive stays available as the rescue path.
+        Button {
+            Task { await model.disposeMessages(uids: [envelope.uid], action: .archive) }
         } label: {
-            disposeActionLabel(for: model.disposeAction)
+            Label("Archive", systemImage: "archivebox")
+        }
+        if model.isTrashFolder {
+            Button(role: .destructive) {
+                purgeCandidate = PurgeCandidate(uids: [envelope.uid])
+            } label: {
+                purgeActionLabel
+            }
+        } else {
+            Button(role: .destructive) {
+                Task { await model.disposeMessages(uids: [envelope.uid], action: .trash) }
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
+    }
+
+    /// Trailing destructive swipe: dispose (Archive/Trash) everywhere
+    /// except inside Trash, where delete means gone forever and stages
+    /// the confirmation dialog instead of acting directly. Shared shape
+    /// with the context menu's destructive item.
+    @ViewBuilder
+    func disposeSwipeButton(for envelope: Envelope, model: MessageListViewModel) -> some View {
+        Button(role: .destructive) {
+            if model.isTrashFolder {
+                purgeCandidate = PurgeCandidate(uids: [envelope.uid])
+            } else {
+                Task { await model.dispose(envelope) }
+            }
+        } label: {
+            if model.isTrashFolder {
+                purgeActionLabel
+            } else {
+                disposeActionLabel(for: model.disposeAction)
+            }
         }
     }
 
@@ -100,6 +266,13 @@ extension MessageListView {
         case .archive: Label("Archive", systemImage: "archivebox")
         case .trash:   Label("Trash", systemImage: "trash")
         }
+    }
+
+    /// Delete affordance label inside the Trash folder, where the action
+    /// permanently deletes (after confirmation) instead of moving.
+    @ViewBuilder
+    var purgeActionLabel: some View {
+        Label("Delete Forever", systemImage: "trash.slash")
     }
 
     @ViewBuilder

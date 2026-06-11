@@ -33,10 +33,29 @@ struct MailRootView: View {
     /// sidebar's current selection. Nil for same-folder rows and folder-
     /// mode lists, so `detailFolder` falls back to `selectedFolder`.
     @State private var crossFolderDetail: Folder?
+    /// How many messages the list currently has selected, reported by
+    /// `MessageListView` on wide/keyboard layouts. Drives the "N messages
+    /// selected" reading-pane placeholder when a multi-selection is active;
+    /// stays 0 on compact iPhone (single-selection there).
+    @State private var listSelectionCount = 0
     @AppStorage("cabalmail.sidebar.tab") private var sidebarTabRaw: String = SidebarTab.folders.rawValue
+    @Environment(AppState.self) private var appState
+    /// Non-nil while a message drag temporarily overrides the visible sidebar
+    /// tab. When the user starts dragging a message while viewing Addresses,
+    /// this flips the sidebar to Folders so they have somewhere to drop;
+    /// clearing it on drag end falls the display back to the persisted tab
+    /// (Addresses), satisfying "release flips back to addresses." Kept
+    /// separate from `sidebarTabRaw` so the override never persists.
+    @State private var sidebarDragOverride: SidebarTab?
 
     private var sidebarTab: SidebarTab {
         SidebarTab(rawValue: sidebarTabRaw) ?? .folders
+    }
+
+    /// The tab the sidebar actually shows: the drag override if one is
+    /// active, otherwise the user's persisted choice.
+    private var effectiveSidebarTab: SidebarTab {
+        sidebarDragOverride ?? sidebarTab
     }
 
     /// Folder that drives `MessageDetailView`. Cross-folder search results
@@ -57,7 +76,8 @@ struct MailRootView: View {
                     onClearAddressFilter: { selectedAddress = nil },
                     onSearchResultSelected: { sourceFolderPath in
                         crossFolderDetail = sourceFolderPath.map { Folder(path: $0) }
-                    }
+                    },
+                    onSelectionCountChanged: { listSelectionCount = $0 }
                 )
                 .id(selectedFolder.path)
             } else {
@@ -68,7 +88,19 @@ struct MailRootView: View {
                 )
             }
         } detail: {
-            if let folder = detailFolder, let selectedEnvelope {
+            if listSelectionCount >= 2 {
+                // Multi-selection: no single message to read, so mirror Mail's
+                // "N Messages Selected" pane. Bulk actions live in the action
+                // bar beneath the message list.
+                ContentUnavailableView(
+                    "\(listSelectionCount) Messages Selected",
+                    systemImage: "envelope.badge",
+                    description: Text("Use the action bar below the list to act on them together.")
+                )
+                #if os(macOS)
+                .toolbar { emptyDetailToolbar }
+                #endif
+            } else if let folder = detailFolder, let selectedEnvelope {
                 MessageDetailView(
                     folder: folder,
                     envelope: selectedEnvelope
@@ -100,6 +132,30 @@ struct MailRootView: View {
             selectedEnvelope = nil
             selectedAddress = nil
             crossFolderDetail = nil
+            listSelectionCount = 0
+        }
+        // Reveal Folders as drop targets the moment a message drag starts on
+        // the Addresses tab, and fall back to the persisted tab when it ends.
+        // The drag flag is flipped by the row's `.onDrag` (start) and by the
+        // folder-row / catch-all drop handlers (end).
+        .onChange(of: appState.messageDragInProgress) { _, dragging in
+            if dragging {
+                if effectiveSidebarTab == .addresses {
+                    sidebarDragOverride = .folders
+                }
+            } else {
+                sidebarDragOverride = nil
+            }
+        }
+        // Catch-all drop target behind the whole split view: a message
+        // released anywhere that isn't a folder row (the message list, the
+        // reading pane, sidebar chrome) ends the drag so the sidebar flips
+        // back. Folder rows are nested, more-specific drop targets, so a real
+        // drop onto a folder is handled there and never reaches this. Returns
+        // false - nothing is moved on a cancelled drag.
+        .dropDestination(for: MessageDragPayload.self) { _, _ in
+            appState.endMessageDrag()
+            return false
         }
     }
 
@@ -136,7 +192,7 @@ struct MailRootView: View {
             Picker(
                 "Sidebar",
                 selection: Binding(
-                    get: { sidebarTab },
+                    get: { effectiveSidebarTab },
                     set: { sidebarTabRaw = $0.rawValue }
                 )
             ) {
@@ -149,7 +205,7 @@ struct MailRootView: View {
             .padding(.top, 8)
             .padding(.bottom, 4)
 
-            switch sidebarTab {
+            switch effectiveSidebarTab {
             case .folders:
                 FolderListView(
                     selection: $selectedFolder,

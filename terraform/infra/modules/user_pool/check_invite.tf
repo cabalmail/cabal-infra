@@ -71,9 +71,14 @@ resource "aws_iam_role_policy" "check_invite" {
     Version = "2012-10-17"
     Statement = [
       {
+        # logs:CreateLogGroup only ever targets this Lambda's own log group
+        # (declared below), so scope it there rather than every group in the
+        # account. Bare group ARN, no ":*" suffix: the log-group resource
+        # grammar has no trailing segment, and the suffixed pattern fails to
+        # match (the suffix belongs on the log-stream statement below).
         Effect   = "Allow"
         Action   = "logs:CreateLogGroup"
-        Resource = "arn:aws:logs:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:${local.wildcard}"
+        Resource = "arn:aws:logs:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/check_invite"
       },
       {
         Effect = "Allow"
@@ -82,6 +87,8 @@ resource "aws_iam_role_policy" "check_invite" {
           "logs:PutLogEvents",
         ]
         Resource = [
+          # iam-wildcard-ok: log-stream names are runtime-generated; the
+          # group segment is pinned, the stream segment cannot be.
           "arn:aws:logs:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/check_invite:${local.wildcard}",
         ]
       },
