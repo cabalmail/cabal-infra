@@ -19,6 +19,12 @@ variable "prod" {
   default     = false
 }
 
+variable "dnssec_enabled" {
+  type        = bool
+  description = "Whether to create per-zone KSKs and enable DNSSEC signing on the mail-domain zones. Enabling signing is safe on its own; the chain of trust only forms when the operator publishes each zone's DS record at its registrar afterwards (sign first, DS second - see docs/dnssec.md). Default false."
+  default     = false
+}
+
 variable "dr_region" {
   type        = string
   description = "AWS region for the disaster-recovery copy of AWS Backup recovery points. Must differ from aws_region. Only consulted when var.backup is true. Default us-west-2."

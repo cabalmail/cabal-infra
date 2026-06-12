@@ -18,6 +18,10 @@ You also _could_ create a single address on a Cabalmail system and just give tha
 
 Setting `TF_VAR_MONITORING` to `true` in a GitHub environment adds [monitoring](./monitoring.md) infrastructure. Setting up monitoring is not turn-key. There are many manual steps involved in establishing alert thresholds, communication, configuration, etc. Once established, there are some run books in [the operations/runbooks directory](./operations/runbooks) that you can use as the basis for incident response. These are provided as templates. You should modify them as appropriate for your use cases and requirements.
 
+# DNSSEC
+
+DNSSEC signing for the control-domain and mail-apex zones is opt-in per environment (`TF_VAR_DNSSEC_ENABLED`). Enabling, disabling, and KSK rotation all involve registrar DS-record steps whose ordering matters - a DS record published against an unsigned zone is an outage. See [DNSSEC](./dnssec.md) for the runbooks before touching any of it.
+
 # NLB access logs
 
 The mail NLB writes TLS-connection access logs (the IMAPS listener; SMTP listeners are TCP passthrough and produce none) to a dedicated, versioned, 180-day-lifecycled S3 bucket. See [NLB access logs](./nlb-access-logs.md) for what the logs do and do not cover and for the Athena setup to query them.

@@ -281,6 +281,7 @@ jobs:
         echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
         echo "control_domain = \"${{ vars.TF_VAR_CONTROL_DOMAIN}}\"" >> terraform.tfvars
         echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
+        echo "dnssec_enabled = ${{ vars.TF_VAR_DNSSEC_ENABLED || 'false' }}" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
     - name: plan-terraform
@@ -356,6 +357,7 @@ jobs:
         echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
         echo "control_domain = \"${{ vars.TF_VAR_CONTROL_DOMAIN}}\"" >> terraform.tfvars
         echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
+        echo "dnssec_enabled = ${{ vars.TF_VAR_DNSSEC_ENABLED || 'false' }}" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
     - name: apply-terraform
@@ -643,6 +645,7 @@ jobs:
         echo "use_nat_instance = ${{ vars.TF_VAR_USE_NAT_INSTANCE || 'true' }}" >> terraform.tfvars
         echo "build_nat_ami = ${{ vars.TF_VAR_BUILD_NAT_AMI || 'true' }}" >> terraform.tfvars
         echo "dr_region = \"${{ vars.TF_VAR_DR_REGION || 'us-west-2' }}\"" >> terraform.tfvars
+        echo "dnssec_enabled = ${{ vars.TF_VAR_DNSSEC_ENABLED || 'false' }}" >> terraform.tfvars
         # invitation_code is supplied via the TF_VAR_invitation_code env
         # var on this job (see env: block above) rather than echoed into
         # tfvars, so shell-special characters like `$` survive unmangled.
@@ -742,6 +745,7 @@ jobs:
         echo "use_nat_instance = ${{ vars.TF_VAR_USE_NAT_INSTANCE || 'true' }}" >> terraform.tfvars
         echo "build_nat_ami = ${{ vars.TF_VAR_BUILD_NAT_AMI || 'true' }}" >> terraform.tfvars
         echo "dr_region = \"${{ vars.TF_VAR_DR_REGION || 'us-west-2' }}\"" >> terraform.tfvars
+        echo "dnssec_enabled = ${{ vars.TF_VAR_DNSSEC_ENABLED || 'false' }}" >> terraform.tfvars
         # invitation_code is supplied via the TF_VAR_invitation_code env
         # var on this job (see env: block above) rather than echoed into
         # tfvars, so shell-special characters like `$` survive unmangled.

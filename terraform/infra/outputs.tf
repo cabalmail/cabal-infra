@@ -19,6 +19,11 @@ output "domains" {
   description = "Nameservers to be added to your domain registrations."
 }
 
+output "mail_domain_ds_records" {
+  value       = module.domains.ds_records
+  description = "Per-apex DNSSEC DS record values to publish at each domain registrar once signing is verified (sign first, DS second - see docs/dnssec.md). Empty until var.dnssec_enabled is true."
+}
+
 output "sms_phone_number" {
   value       = module.pool.sms_phone_number
   description = "AWS End User Messaging toll-free phone number for SMS verification. Empty when var.use_eum_sms is false."

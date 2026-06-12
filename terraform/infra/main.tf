@@ -140,11 +140,19 @@ module "front_door" {
 
 # Sets up Route 53 hosted zones for mail domains. When the control domain is
 # also a mail domain, its bootstrap zone is reused rather than duplicated.
+# DNSSEC signing is opt-in per environment (var.dnssec_enabled); the
+# control-domain zone's signing lives in the bootstrap dns stack.
 module "domains" {
   source                 = "./modules/domains"
   mail_domains           = var.mail_domains
   control_domain         = var.control_domain
   control_domain_zone_id = data.terraform_remote_state.zone.outputs.control_domain_zone_id
+  dnssec_enabled         = var.dnssec_enabled
+
+  providers = {
+    aws      = aws
+    aws.use1 = aws.use1
+  }
 }
 
 # Infrastructure and code for the administrative web site
