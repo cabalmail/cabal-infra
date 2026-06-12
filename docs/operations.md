@@ -18,6 +18,10 @@ You also _could_ create a single address on a Cabalmail system and just give tha
 
 Setting `TF_VAR_MONITORING` to `true` in a GitHub environment adds [monitoring](./monitoring.md) infrastructure. Setting up monitoring is not turn-key. There are many manual steps involved in establishing alert thresholds, communication, configuration, etc. Once established, there are some run books in [the operations/runbooks directory](./operations/runbooks) that you can use as the basis for incident response. These are provided as templates. You should modify them as appropriate for your use cases and requirements.
 
+# NLB access logs
+
+The mail NLB writes TLS-connection access logs (the IMAPS listener; SMTP listeners are TCP passthrough and produce none) to a dedicated, versioned, 180-day-lifecycled S3 bucket. See [NLB access logs](./nlb-access-logs.md) for what the logs do and do not cover and for the Athena setup to query them.
+
 # NAT and private-subnet egress
 
 Every private-subnet container reaches the internet and all AWS service APIs through the VPC's NAT, and the VPC has no VPC endpoints, so NAT health is load-bearing: if egress breaks, outbound mail stalls, the `/send` Lambda hangs, and the mail tiers stop shipping logs to CloudWatch even though the containers keep running. See [NAT and private-subnet egress](./nat.md) for the two NAT modes (EC2 instances or NAT Gateways), the gateway-based instance-mode bootstrap, and how to diagnose an egress outage.

@@ -285,8 +285,7 @@
                 {
                     "resource": "module.load_balancer.aws_lb.elb",
                     "check_ids": [
-                        "CKV_AWS_150",
-                        "CKV_AWS_91"
+                        "CKV_AWS_150"
                     ]
                 }
             ]

@@ -33,6 +33,7 @@ The baselines were first generated with **brew** checkov, which omits the graph 
 The resilience/continuity hardening work ([`docs/0.10.x/resilience-continuity-hardening-plan.md`](../../docs/0.10.x/resilience-continuity-hardening-plan.md)) fixed findings rather than baselining them:
 
 - **CKV_AWS_28 / AWS-0024** (DynamoDB PITR) - cleared: the `cabal-counter` table was the last table without `point_in_time_recovery`; it now has PITR, explicit SSE, and deletion protection. Baseline entry and `.trivyignore` id removed.
+- **CKV_AWS_91** on `module.load_balancer.aws_lb.elb` - cleared: the mail NLB now writes access logs to the `cabal-nlb-access-logs-<account>` bucket (TLS listeners only, i.e. IMAPS; SMTP is TCP passthrough). The id remains baselined for the dormant monitoring ALB. The new log bucket carries three inline, justified skips (CKV_AWS_18 self-logging recursion, CKV_AWS_144 replication, CKV2_AWS_62 event notifications).
 
 ### NAT-mode refactor re-key (0.10.x)
 
@@ -113,7 +114,7 @@ Low-value hygiene. Each release should clear or re-justify entries whose target 
 | CKV_AWS_338 (x23) | - | Set explicit CloudWatch log retention (also caps cost vs. never-expire) | 0.11.x |
 | CKV_AWS_115 (x9) | - | Lambda reserved concurrency | 1.0.0 |
 | CKV_AWS_116 (x9) | - | Lambda DLQ (where a dropped invoke matters) | 1.0.0 |
-| CKV_AWS_86, CKV_AWS_91 | AWS-0089 | CloudFront / ELB / S3 access logging | 1.0.0 |
+| CKV_AWS_86, CKV_AWS_91 | AWS-0089 | CloudFront / S3 access logging (CKV_AWS_91 on the mail NLB cleared in 0.10.x - resilience plan Phase 3; the remaining CKV_AWS_91 is the dormant monitoring ALB) | 1.0.0 |
 | CKV_AWS_150 (x2) | - | Load balancer deletion protection | 0.11.x |
 | CKV_AWS_23 (x3) | AWS-0124 | Security group rule descriptions | 0.11.x |
 | CKV_AWS_300 | - | S3 lifecycle: abort incomplete multipart uploads | 0.11.x |
