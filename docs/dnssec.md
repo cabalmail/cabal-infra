@@ -14,7 +14,7 @@ The same rule inverted governs disablement: **remove DS first, stop signing seco
 
 Run this in development first, then stage, then prod. The DS step requires registrar access and at least one wait, so budget a day per environment.
 
-1. **Check the CI deploy policy.** The first apply uses KMS (`kms:CreateKey`, `kms:CreateAlias`, `kms:PutKeyPolicy`, ...) and the Route 53 DNSSEC APIs (`route53:CreateKeySigningKey`, `route53:EnableHostedZoneDNSSEC`, ...). The per-account CI policy is hand-managed; if these grants are missing the apply fails with AccessDenied and the grant has to be added in that account.
+1. **Check the CI deploy policy.** The first apply needs `kms:*` and the Route 53 DNSSEC actions (`route53:CreateKeySigningKey`, `route53:EnableHostedZoneDNSSEC`, `route53:DisableHostedZoneDNSSEC`, plus `ActivateKeySigningKey`/`DeactivateKeySigningKey`/`DeleteKeySigningKey` for the disable path). Grant KMS as `kms:*`, not an enumerated list - in practice Terraform's key lifecycle surfaced new `kms:` actions one AccessDenied at a time until the enumeration was abandoned. The per-account CI policy is hand-managed; the reference policy in [the AWS setup guide](./aws.md) carries these grants, but an existing account's live policy may predate them.
 2. **Set the variable.** In the GitHub environment for the target account, set `TF_VAR_DNSSEC_ENABLED=true`.
 3. **Apply the bootstrap stack.** The dns stage only runs when `terraform/dns/**` changes, so dispatch `infra.yml` manually with the `bootstrap` input checked. This signs the control-domain zone and outputs `control_domain_ds_record`.
 4. **Apply the infra stack.** The same dispatch (or any infra push) signs every mail-apex zone and outputs `mail_domain_ds_records`.

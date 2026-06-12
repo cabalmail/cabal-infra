@@ -47,21 +47,7 @@ After signing up, perform the following steps:
                     "elasticloadbalancing:*",
                     "iam:*",
                     "imagebuilder:*",
-                    "kms:CreateAlias",
-                    "kms:CreateGrant",
-                    "kms:CreateKey",
-                    "kms:DeleteAlias",
-                    "kms:DescribeKey",
-                    "kms:GetKeyPolicy",
-                    "kms:GetKeyRotationStatus",
-                    "kms:ListAliases",
-                    "kms:ListResourceTags",
-                    "kms:PutKeyPolicy",
-                    "kms:ScheduleKeyDeletion",
-                    "kms:TagResource",
-                    "kms:UntagResource",
-                    "kms:UpdateAlias",
-                    "kms:UpdateKeyDescription",
+                    "kms:*",
                     "lambda:*",
                     "logs:CreateLogGroup",
                     "logs:DescribeLogGroups",
@@ -106,7 +92,7 @@ After signing up, perform the following steps:
     ```
     (If you don't intend to use this repo to configure AWS Backup, then you may omit the `backup:*` and `backup-storage:*` lines. If you do enable backups (`TF_VAR_BACKUP`), one additional one-time CLI step - the advanced DynamoDB backup-features opt-in - is required for cross-region copy; see [Disaster recovery](./disaster-recovery.md).)
 
-    (If you don't intend to enable DNSSEC signing (`TF_VAR_DNSSEC_ENABLED`, off by default), you may omit every `kms:` line except `kms:CreateGrant` and `kms:DescribeKey`, and the six `route53:` lines that mention `KeySigningKey` or `DNSSEC` except `route53:GetDNSSEC`, which Terraform reads unconditionally. See [DNSSEC](./dnssec.md).)
+    (`kms:*` exists for DNSSEC signing (`TF_VAR_DNSSEC_ENABLED`, off by default). An enumerated grant was tried and abandoned: Terraform's key lifecycle touched new `kms:` actions on every apply stage - more than twenty in all - and chasing them one AccessDenied at a time is not worth it for a policy that already carries `iam:*`. If you don't intend to enable DNSSEC, you may shrink it to `kms:CreateGrant` and `kms:DescribeKey`, and omit the six `route53:` lines that mention `KeySigningKey` or `DNSSEC` - but not `route53:GetDNSSEC`, which Terraform reads unconditionally. See [DNSSEC](./dnssec.md).)
 
     (If you don't intend to enable SMS verification through AWS End User Messaging (`TF_VAR_USE_EUM_SMS`, off by default), you may omit the five `sms-voice:` lines. If you do enable it, completing the toll-free verification registration requires an additional one-time policy; see [SMS toll-free verification setup](./sms-tfv-setup.md).)
 
