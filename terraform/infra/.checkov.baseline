@@ -193,7 +193,6 @@
                 {
                     "resource": "module.domains.aws_route53_zone.mail_dns",
                     "check_ids": [
-                        "CKV2_AWS_38",
                         "CKV2_AWS_39"
                     ]
                 }

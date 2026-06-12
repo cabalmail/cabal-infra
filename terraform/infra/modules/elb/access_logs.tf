@@ -23,10 +23,10 @@ data "aws_region" "current" {}
 # bucket for meta-logs is not worth it for operational TLS-connection
 # records; replication is likewise skipped because the logs expire in
 # 180 days and exist for incident response, not durability.
-#checkov:skip=CKV_AWS_18:access-logging the access-log bucket recurses; meta-logs not worth a second bucket
-#checkov:skip=CKV_AWS_144:operational logs with 180-day expiry; cross-region replication buys nothing
-#checkov:skip=CKV2_AWS_62:no consumer for object-created events on a log bucket
 resource "aws_s3_bucket" "nlb_access_logs" {
+  #checkov:skip=CKV_AWS_18:access-logging the access-log bucket recurses; meta-logs not worth a second bucket
+  #checkov:skip=CKV_AWS_144:operational logs with 180-day expiry; cross-region replication buys nothing
+  #checkov:skip=CKV2_AWS_62:no consumer for object-created events on a log bucket
   bucket = "cabal-nlb-access-logs-${data.aws_caller_identity.current.account_id}"
 }
 

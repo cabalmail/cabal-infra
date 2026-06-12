@@ -44,11 +44,28 @@ resource "aws_s3_bucket_public_access_block" "this" {
   restrict_public_buckets = true
 }
 
+# LEGACY origin access identity, superseded by the OAC below (Phase 5
+# of docs/0.10.x/resilience-continuity-hardening-plan.md). Kept,
+# together with its bucket-policy statement, so the distribution keeps
+# serving while the OAC config propagates and as the rollback path.
+# Removal order, once the OAC cutover is verified in every
+# environment: delete this resource and the OAI statement in the
+# policy document below in one apply - nothing else references them.
 resource "aws_cloudfront_origin_access_identity" "this" {
   comment = "Cabalmail front door site (${local.site_host})"
 }
 
+resource "aws_cloudfront_origin_access_control" "this" {
+  name                              = "cabal-front-door-oac"
+  description                       = "OAC for the front door bucket (${local.site_host})"
+  origin_access_control_origin_type = "s3"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
+
 data "aws_iam_policy_document" "bucket" {
+  # Legacy OAI grant - delete together with the OAI resource above
+  # once the OAC cutover is verified.
   statement {
     actions   = ["s3:GetObject"]
     resources = ["${aws_s3_bucket.this.arn}/*"]
@@ -56,6 +73,23 @@ data "aws_iam_policy_document" "bucket" {
     principals {
       type        = "AWS"
       identifiers = [aws_cloudfront_origin_access_identity.this.iam_arn]
+    }
+  }
+
+  # OAC grant: CloudFront signs origin requests as the service
+  # principal, scoped to exactly our distribution by SourceArn.
+  statement {
+    actions   = ["s3:GetObject"]
+    resources = ["${aws_s3_bucket.this.arn}/*"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["cloudfront.amazonaws.com"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "AWS:SourceArn"
+      values   = [aws_cloudfront_distribution.this.arn]
     }
   }
 }
@@ -69,12 +103,9 @@ resource "aws_s3_bucket_policy" "this" {
 #tfsec:ignore:aws-cloudfront-enable-waf
 resource "aws_cloudfront_distribution" "this" {
   origin {
-    domain_name = aws_s3_bucket.this.bucket_regional_domain_name
-    origin_id   = "front_door_s3"
-
-    s3_origin_config {
-      origin_access_identity = aws_cloudfront_origin_access_identity.this.cloudfront_access_identity_path
-    }
+    domain_name              = aws_s3_bucket.this.bucket_regional_domain_name
+    origin_id                = "front_door_s3"
+    origin_access_control_id = aws_cloudfront_origin_access_control.this.id
   }
 
   enabled             = true
@@ -113,7 +144,10 @@ resource "aws_cloudfront_distribution" "this" {
     cloudfront_default_certificate = false
     acm_certificate_arn            = var.cert_arn
     ssl_support_method             = "sni-only"
-    minimum_protocol_version       = "TLSv1.2_2021"
+    # Newest TLS 1.2 policy AWS publishes (the plan named TLSv1.2_2023,
+    # which does not exist). Still permits TLS 1.2 clients; a TLSv1.3
+    # floor is a separate decision.
+    minimum_protocol_version = "TLSv1.2_2025"
   }
 }
 

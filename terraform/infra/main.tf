@@ -108,6 +108,18 @@ module "bucket" {
   control_domain = var.control_domain
 }
 
+# Phase 5 of docs/0.10.x/resilience-continuity-hardening-plan.md moved
+# the admin bucket's policy from the s3 module to the app module so
+# the OAC grant can reference the distribution ARN without the two
+# modules referencing each other. Adopt the existing policy in place
+# instead of delete-and-recreate, which would race and could leave the
+# live bucket policyless for a window. Safe to delete this block once
+# every environment has applied past it.
+moved {
+  from = module.bucket.aws_s3_bucket_policy.react_policy
+  to   = module.admin.aws_s3_bucket_policy.admin_bucket
+}
+
 # Creates a Cognito User Pool
 module "pool" {
   source                 = "./modules/user_pool"
@@ -167,9 +179,10 @@ module "admin" {
   private_zone_id     = module.vpc.private_zone.zone_id
   domains             = module.domains.domains
   bucket              = module.bucket.bucket
+  bucket_arn          = module.bucket.bucket_arn
   bucket_domain_name  = module.bucket.domain_name
+  oai_iam_arn         = module.bucket.oai_iam_arn
   relay_ips           = module.vpc.relay_ips
-  origin              = module.bucket.origin
   dev_mode            = var.prod ? false : true
 
   address_changed_topic_arn = module.ecs.sns_topic_arn

@@ -21,9 +21,9 @@ data "aws_caller_identity" "current" {}
 # Automatic rotation does not exist for asymmetric KMS keys, so the
 # rotation finding is structurally unfixable here; key rotation is the
 # manual KSK-rotation procedure in docs/dnssec.md.
-#checkov:skip=CKV_AWS_7:asymmetric signing keys do not support automatic rotation; rotation is the manual KSK procedure in docs/dnssec.md
 #trivy:ignore:AVD-AWS-0065 # asymmetric signing keys do not support automatic rotation; rotation is the manual KSK procedure in docs/dnssec.md
 resource "aws_kms_key" "dnssec" {
+  #checkov:skip=CKV_AWS_7:asymmetric signing keys do not support automatic rotation; rotation is the manual KSK procedure in docs/dnssec.md
   count    = var.dnssec_enabled ? 1 : 0
   provider = aws.use1
 
@@ -50,6 +50,12 @@ resource "aws_kms_alias" "dnssec" {
 # guard. KMS key policies are self-referential - "*" means "this key"
 # - so the wildcard resource is the only valid spelling.
 data "aws_iam_policy_document" "dnssec_key_policy" {
+  # KMS key policies are self-referential: "*" can only ever mean the
+  # key the policy is attached to, so the wildcard-resource checks do
+  # not apply (same reasoning as the iam-wildcard-ok markers below).
+  #checkov:skip=CKV_AWS_109:KMS key policy; "*" is this key only and the root statement is the required anti-lockout grant
+  #checkov:skip=CKV_AWS_111:KMS key policy; "*" is this key only
+  #checkov:skip=CKV_AWS_356:KMS key policy; "*" is this key only
   statement {
     sid     = "AllowRoute53DnssecService"
     actions = ["kms:DescribeKey", "kms:GetPublicKey", "kms:Sign"]
