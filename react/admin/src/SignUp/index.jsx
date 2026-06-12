@@ -68,7 +68,7 @@ function SignUp({
   return (
     <AuthShell headerRight={headerRight} cardSize="wide">
       <p className="auth__eyebrow">Sign up</p>
-      <h1 className="auth__title">Create your account.</h1>
+      <h1 className="auth__title">Create your Cabalmail account.</h1>
       <p className="auth__subtitle">
         Pick a username and password. Your phone number is used only for recovery.
       </p>
