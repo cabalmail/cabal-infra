@@ -2,9 +2,9 @@
 
 Mail is stored in AWS Elastic File System, and address data is stored in DynamoDB. AWS EFS is designed to achieve [99.999999999% (eleven nines) durability](https://aws.amazon.com/efs/faq/#Data_protection_.26_availability). AWS does not publish a durability rating for DynamoDB, but they [do say](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Introduction.html#ddb_highavailability) that they replicate DynamoDB tables across multiple availability zones for "high durability". But however much you may trust AWS's assurances, they cannot protect you from users deliberately deleting mail and then changing their mind.
 
-If you want Cabalmail to establish backups for you, set the `backup` input variable to `true`. Doing this may prevent clean destruction of a Cabalmail stack. If you would prefer to roll your own backups, AWS publishes instructions for backing up [EFS](https://docs.aws.amazon.com/efs/latest/ug/efs-backup-solutions.html) and [DynamoDB](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Backup.Tutorial.html).
+If you want Cabalmail to establish backups for you, set the `backup` input variable to `true`. Nightly recovery points of the addresses table and the EFS mailstore land in a lock-protected vault, are copied to a second locked vault in `dr_region`, and are retained for a year. Cross-region copy of the DynamoDB recovery points requires a one-time account opt-in to advanced DynamoDB backup features. See [Disaster recovery](./disaster-recovery.md) for the opt-in, the verification commands, and the restore runbooks. If you would prefer to roll your own backups, AWS publishes instructions for backing up [EFS](https://docs.aws.amazon.com/efs/latest/ug/efs-backup-solutions.html) and [DynamoDB](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Backup.Tutorial.html).
 
-Cabalmail sets `prevent_destroy` on the backup vault, so enabling Cabalmail backups will prevent a complete clean up by `terraform destroy`.
+Cabalmail sets `prevent_destroy` and a governance-mode vault lock on the backup vaults, so enabling Cabalmail backups deliberately prevents a one-shot clean up by `terraform destroy`; the teardown procedure is in the disaster-recovery doc.
 
 # Everyday Use
 
