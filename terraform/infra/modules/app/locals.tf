@@ -159,6 +159,16 @@ locals {
       cache     = true
       cache_ttl = 0
     },
+    save_draft = {
+      runtime = "python3.13"
+
+      method = "PUT"
+      # Same compose pipeline as /send (attachments staged from S3 and
+      # MIME-encoded in memory), so it needs the same headroom.
+      memory    = 512
+      cache     = false
+      cache_ttl = 0
+    },
     upload_url = {
       runtime = "python3.13"
 

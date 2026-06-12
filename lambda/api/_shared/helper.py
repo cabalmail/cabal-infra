@@ -10,6 +10,7 @@ import os
 import re
 import time
 from email.header import decode_header
+from email.parser import HeaderParser
 from email.policy import default as default_policy
 import boto3  # pylint: disable=import-error
 from botocore.exceptions import ClientError  # pylint: disable=import-error
@@ -660,9 +661,36 @@ def key_exists(bucket, key):
 # endpoints return the same per-envelope JSON shape; the helpers live here so
 # the wire format stays in sync and pylint's duplicate-code check stays quiet.
 
+# References is not part of the RFC 3501 ENVELOPE, so it rides the same
+# header fetch as X-PRIORITY. imapclient keys the response dict by the
+# requested atom, so the constant and the lookup in envelope_dict must stay
+# in lockstep — hence the single shared key.
+ENVELOPE_HEADER_FIELDS_KEY = 'BODY[HEADER.FIELDS (X-PRIORITY REFERENCES)]'
+
 ENVELOPE_FETCH_KEYS = [
-    'ENVELOPE', 'FLAGS', 'BODYSTRUCTURE', 'BODY[HEADER.FIELDS (X-PRIORITY)]'
+    'ENVELOPE', 'FLAGS', 'BODYSTRUCTURE', ENVELOPE_HEADER_FIELDS_KEY
 ]
+
+# Deep threads grow References without bound and envelopes are fetched ~50 at
+# a time, so emit only the newest ids. RFC 5322 itself sanctions trimming old
+# ids; reply threading only ever appends one id to what it received.
+MAX_REFERENCES_IDS = 20
+
+_MSGID_RE = re.compile(r'<[^<>]+>')
+
+
+def parse_message_ids(raw):
+    '''Extracts the angle-bracketed message-ids from a header value.
+
+    Accepts bytes or str (IMAP ENVELOPE fields arrive as bytes) and returns a
+    list of `<id>` strings — the same wire shape /fetch_message emits — so
+    client-side decoders are shared between the two payloads.
+    '''
+    if raw is None:
+        return []
+    if isinstance(raw, bytes):
+        raw = raw.decode(errors='replace')
+    return _MSGID_RE.findall(raw)
 
 
 def envelope_dict(msgid, data):
@@ -673,7 +701,12 @@ def envelope_dict(msgid, data):
     decoders, so changes here ripple to both clients.
     '''
     envelope = data[b'ENVELOPE']
-    priority_header = data[b'BODY[HEADER.FIELDS (X-PRIORITY)]'].decode()
+    # The header blob now carries two fields with possible RFC 5322 folding,
+    # so parse it properly instead of splitting on whitespace.
+    headers = HeaderParser().parsestr(
+        data.get(ENVELOPE_HEADER_FIELDS_KEY.encode(), b'').decode(errors='replace')
+    )
+    priority_header = headers.get('X-Priority') or ''
     return {
         "id": msgid,
         "date": str(envelope.date),
@@ -683,7 +716,10 @@ def envelope_dict(msgid, data):
         "cc": decode_address(envelope.cc),
         "flags": decode_flags(data[b'FLAGS']),
         "struct": decode_body_structure(data[b'BODYSTRUCTURE']),
-        "priority": [f"priority-{s}" for s in priority_header.split() if s.isdigit()]
+        "priority": [f"priority-{s}" for s in priority_header.split() if s.isdigit()],
+        "message_id": parse_message_ids(envelope.message_id),
+        "in_reply_to": parse_message_ids(envelope.in_reply_to),
+        "references": parse_message_ids(headers.get('References'))[-MAX_REFERENCES_IDS:]
     }
 
 
