@@ -48,7 +48,7 @@ Run this in development first, then stage, then prod. The DS step requires regis
    whois <apex> | grep -i dnssec
    ```
 
-   [DNSViz](https://dnsviz.net/) gives a full-chain visualization if anything looks off.
+   A missing AD flag in the first hours is usually resolver-side negative caching, not a problem: any lookup made before the registry published the DS (including this step's own test queries) caches an "insecure delegation" proof until the parent's DS TTL expires, and big anycast resolvers expire it per cache node, so results can differ between resolvers and even between repeated queries. To distinguish lag from a real fault, skip the caches: ask the TLD's own name servers for the DS (`dig @<tld-ns> <apex> DS +norecurse`, e.g. `a0.nic.io` for .io) and compare it byte-for-byte with the `ds_record` output, and cross-check a second resolver (`dig +dnssec @1.1.1.1 ...`). Registry DS matches and *any* validating resolver sets AD = the chain is correct, wait out the caches. A *mismatched* registry DS also looks like "not working yet" until caches expire and then becomes an outage - that is the case this check exists to catch early. [DNSViz](https://dnsviz.net/) gives a full-chain visualization if anything still looks off.
 8. **Watch mail flow.** DMARC/SPF/MX lookups now carry signatures. Watch the smtp tiers' CloudWatch logs and the DMARC dashboard for a day before promoting the change to the next environment.
 
 ## Disabling DNSSEC (rollback)
