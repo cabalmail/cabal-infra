@@ -95,7 +95,8 @@ Versioned subdirectories of `docs/` (e.g. `docs/0.4.0/`, `docs/0.7.0/`, `docs/0.
 
 ### Docker Images
 - Built and pushed via `.github/workflows/app.yml` (the `docker` job)
-- Three core tiers built in matrix: `imap`, `smtp-in`, `smtp-out`. When `vars.TF_VAR_MONITORING == 'true'` the matrix also builds `uptime-kuma`, `ntfy`, `healthchecks`, `prometheus`, `alertmanager`, `grafana`, `cloudwatch-exporter`, `blackbox-exporter`, `node-exporter`
+- Three core tiers in the matrix: `imap`, `smtp-in`, `smtp-out`. When `vars.TF_VAR_MONITORING == 'true'` the matrix also includes `uptime-kuma`, `ntfy`, `healthchecks`, `prometheus`, `alertmanager`, `grafana`, `cloudwatch-exporter`, `blackbox-exporter`, `node-exporter`
+- Pushes build only the tiers whose inputs changed (per-tier `docker_*` filters in `app.yml`; core tiers also rebuild on `docker/shared/**` and their own `docker/templates/*.mc`). `check-docker-tier-filters.sh` fails CI if a Dockerfile `COPY` drifts from the filter map. A `workflow_dispatch` run builds every tier in scope; `force_tiers` narrows it.
 - Images tagged `sha-{first8}` and pushed to ECR (`cabal-{tier}`)
 - A certbot-renewal image is also built (arm64, for Lambda container) by the `lambda-certbot` job in `app.yml`
 - Each `docker` matrix job deploys directly to ECS via `aws ecs register-task-definition` + `aws ecs update-service` (see `.github/scripts/deploy-ecs-service.sh`); no Terraform on the deploy path
@@ -104,7 +105,7 @@ Versioned subdirectories of `docs/` (e.g. `docs/0.4.0/`, `docs/0.7.0/`, `docs/0.
 
 | Workflow | Trigger (path) | What it does |
 |---|---|---|
-| `app.yml` | `docker/**`, `lambda/**`, `react/admin/**` | Per-area path-filtered parallel build + out-of-band deploy: ECS update-service for docker tiers and certbot, `aws lambda update-function-code` for api/counter zips, `s3 sync` + CloudFront invalidation for the React bundle. Does not touch Terraform. |
+| `app.yml` | `docker/**`, `lambda/**`, `react/admin/**` | Per-area (and, within docker, per-tier) path-filtered parallel build + out-of-band deploy: ECS update-service for the changed docker tiers and certbot, `aws lambda update-function-code` for api/counter zips, `s3 sync` + CloudFront invalidation for the React bundle. Does not touch Terraform. |
 | `infra.yml` | `terraform/dns/**`, `terraform/infra/**` | Owns both the bootstrap (`terraform/dns`) and main (`terraform/infra`) stages. Bootstrap is gated on a `dorny/paths-filter` step or a `workflow_dispatch` boolean. Runs Checkov/tflint/tfsec, plans, applies, then `post-apply-update-services.sh` to roll any ECS services whose task-def family advanced. |
 | `quiesce.yml` | Manual (`workflow_dispatch`) | Scales a non-prod env's ECS services, ECS-instance ASG, and NAT instances to zero (or restores them). Refuses to run against prod. See `docs/quiesce.md`. |
 | `destroy_terraform.yml` | Manual (`workflow_dispatch`) | Tears down `terraform/infra` for the selected environment. |
@@ -138,7 +139,7 @@ Deploy workflows select environment based on branch: `main`=prod, `stage`=stage,
 | `certbot_renewal` | Scheduled Lambda for Let's Encrypt cert renewal |
 | `backup` | AWS Backup for DynamoDB + EFS (conditional) |
 
-Image tags are stored in SSM Parameter Store (`/cabal/deployed_image_tag`) and read by Terraform at plan time.
+Image tags are stored per tier in SSM Parameter Store (`/cabal/deployed_image_tag/<tier>`, reconciled with the running services by `refresh-ssm-from-running.sh` before each plan) and read by Terraform at plan time; the legacy `/cabal/deployed_image_tag` key tracks the imap tier and is the fallback/bootstrap sentinel.
 
 ### Lambda Functions (`lambda/api/`)
 

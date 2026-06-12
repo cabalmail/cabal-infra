@@ -53,6 +53,12 @@ The developers have striven to make provisioning as automated as possible. Howev
     4. Pull down the "Run workflow" menu.
     5. Leave the area input at `all` and click on the green "Run workflow" button.
 
+    A manual run is required here (not just convenient): pushes build only
+    the docker tiers whose files changed, and a fresh environment has no
+    deployed baseline. A manual run always builds and deploys every tier in
+    scope, which populates the ECR repositories and the per-tier image-tag
+    parameters in one pass.
+
 7. Perform the [post-automation tasks](#PostAutomation) below.
 
 # Reprovisioning

@@ -21,11 +21,12 @@
 # this path: app.yml mutates ECS directly via the AWS CLI instead of
 # routing through Terraform. The phase 1 lifecycle clause
 # (ignore_changes = [container_definitions]) protects the new revision
-# from being clobbered by a topology-only Terraform apply, and the
-# phase 1 .github/scripts/refresh-ssm-from-running.sh keeps SSM
-# /cabal/deployed_image_tag in lockstep with whatever app.yml just
-# deployed so a Terraform-driven topology change re-pins to reality
-# rather than to a stale SSM value.
+# from being clobbered by a topology-only Terraform apply, and
+# .github/scripts/refresh-ssm-from-running.sh keeps the per-tier SSM
+# keys (/cabal/deployed_image_tag/<tier>, plus the legacy global key
+# tracking imap) in lockstep with whatever app.yml just deployed so a
+# Terraform-driven topology change re-pins each tier to its own
+# reality rather than to a stale SSM value.
 #
 # After update-service this script waits for the service to reach a
 # stable rollout (aws ecs wait services-stable). That is what makes
