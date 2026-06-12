@@ -144,3 +144,7 @@ The output contains the IP address of each of your outgoing mail relays. (More s
 ## NAT
 
 All private-subnet egress (outbound mail and every AWS service call) flows through the VPC's NAT, and there are no VPC endpoints, so NAT health is load-bearing for the whole data plane. For the two NAT modes (EC2 instances or NAT Gateways), how to bring either up in a new environment, and how to diagnose an egress outage, see [NAT and private-subnet egress](./nat.md).
+
+## COMPATABILITY
+
+See our [Compatability Contract](./compatibility.md) for details of how we apply semantic versioning.
