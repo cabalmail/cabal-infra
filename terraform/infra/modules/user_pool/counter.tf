@@ -147,14 +147,28 @@ resource "aws_lambda_permission" "allow_cognito" {
   source_arn    = aws_cognito_user_pool.users.arn
 }
 
+# This table is the source of truth for OS user IDs: losing it would
+# orphan every existing mailbox's UID mapping and make new signups
+# collide with existing UIDs. PITR is the only realistic recovery
+# (rebuilding means scanning Cognito custom attributes), and deletion
+# protection means a destroy plan cannot drop the table until the flag
+# is flipped off in a prior apply.
+#tfsec:ignore:aws-dynamodb-table-customer-key
 resource "aws_dynamodb_table" "counter" {
-  name         = "cabal-counter"
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "counter"
+  name                        = "cabal-counter"
+  billing_mode                = "PAY_PER_REQUEST"
+  hash_key                    = "counter"
+  deletion_protection_enabled = true
 
   attribute {
     name = "counter"
     type = "S"
+  }
+  server_side_encryption {
+    enabled = true
+  }
+  point_in_time_recovery {
+    enabled = true
   }
 }
 

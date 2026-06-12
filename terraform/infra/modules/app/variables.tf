@@ -65,12 +65,17 @@ variable "bucket" {
 
 variable "bucket_domain_name" {
   type        = string
-  description = "Domain name of s3 bucket"
+  description = "Regional domain name of the s3 bucket (OAC sigv4 signing requires the regional endpoint)."
 }
 
-variable "origin" {
+variable "bucket_arn" {
   type        = string
-  description = "S3 Origin ID for CloudFront"
+  description = "ARN of the admin app s3 bucket, granted to CloudFront in the bucket policy."
+}
+
+variable "oai_iam_arn" {
+  type        = string
+  description = "IAM ARN of the legacy CloudFront origin access identity. Transitional: its bucket-policy grant keeps the distribution serving while the OAC config propagates; removed once the OAC cutover is verified."
 }
 
 variable "address_changed_topic_arn" {

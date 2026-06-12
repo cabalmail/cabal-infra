@@ -6,7 +6,6 @@
                 {
                     "resource": "aws_route53_zone.cabal_control_zone",
                     "check_ids": [
-                        "CKV2_AWS_38",
                         "CKV2_AWS_39"
                     ]
                 }

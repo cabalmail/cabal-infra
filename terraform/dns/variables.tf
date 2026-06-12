@@ -28,3 +28,9 @@ variable "prod" {
   default     = false
   description = "Set to true to treat this stack as a production workload."
 }
+
+variable "dnssec_enabled" {
+  type        = bool
+  description = "Whether to create a KSK and enable DNSSEC signing on the control-domain zone. Enabling signing is safe on its own; the chain of trust only forms when the operator publishes the DS record at the registrar afterwards (sign first, DS second - see docs/dnssec.md). Default false."
+  default     = false
+}

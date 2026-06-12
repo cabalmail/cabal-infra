@@ -193,7 +193,6 @@
                 {
                     "resource": "module.domains.aws_route53_zone.mail_dns",
                     "check_ids": [
-                        "CKV2_AWS_38",
                         "CKV2_AWS_39"
                     ]
                 }
@@ -285,8 +284,7 @@
                 {
                     "resource": "module.load_balancer.aws_lb.elb",
                     "check_ids": [
-                        "CKV_AWS_150",
-                        "CKV_AWS_91"
+                        "CKV_AWS_150"
                     ]
                 }
             ]
@@ -673,12 +671,6 @@
                     "resource": "module.pool.aws_cloudwatch_log_group.assign_osid",
                     "check_ids": [
                         "CKV_AWS_338"
-                    ]
-                },
-                {
-                    "resource": "module.pool.aws_dynamodb_table.counter",
-                    "check_ids": [
-                        "CKV_AWS_28"
                     ]
                 },
                 {

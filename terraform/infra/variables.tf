@@ -19,6 +19,26 @@ variable "prod" {
   default     = false
 }
 
+variable "dnssec_enabled" {
+  type        = bool
+  description = "Whether to create per-zone KSKs and enable DNSSEC signing on the mail-domain zones. Enabling signing is safe on its own; the chain of trust only forms when the operator publishes each zone's DS record at its registrar afterwards (sign first, DS second - see docs/dnssec.md). Default false."
+  default     = false
+}
+
+variable "dr_region" {
+  type        = string
+  description = "AWS region for the disaster-recovery copy of AWS Backup recovery points. Must differ from aws_region. Only consulted when var.backup is true. Default us-west-2."
+  default     = "us-west-2"
+  validation {
+    condition     = can(regex("^[[:alpha:]]{2}-(central|(north|south)?(east|west))-[[:digit:]]$", var.dr_region))
+    error_message = "The dr_region does not appear to be a valid AWS region string."
+  }
+  validation {
+    condition     = var.dr_region != var.aws_region
+    error_message = "The dr_region must differ from aws_region; a same-region backup copy defeats the purpose of the DR vault."
+  }
+}
+
 variable "email" {
   type        = string
   description = "Email for the CSR."

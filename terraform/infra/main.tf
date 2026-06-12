@@ -108,6 +108,18 @@ module "bucket" {
   control_domain = var.control_domain
 }
 
+# Phase 5 of docs/0.10.x/resilience-continuity-hardening-plan.md moved
+# the admin bucket's policy from the s3 module to the app module so
+# the OAC grant can reference the distribution ARN without the two
+# modules referencing each other. Adopt the existing policy in place
+# instead of delete-and-recreate, which would race and could leave the
+# live bucket policyless for a window. Safe to delete this block once
+# every environment has applied past it.
+moved {
+  from = module.bucket.aws_s3_bucket_policy.react_policy
+  to   = module.admin.aws_s3_bucket_policy.admin_bucket
+}
+
 # Creates a Cognito User Pool
 module "pool" {
   source                 = "./modules/user_pool"
@@ -140,11 +152,19 @@ module "front_door" {
 
 # Sets up Route 53 hosted zones for mail domains. When the control domain is
 # also a mail domain, its bootstrap zone is reused rather than duplicated.
+# DNSSEC signing is opt-in per environment (var.dnssec_enabled); the
+# control-domain zone's signing lives in the bootstrap dns stack.
 module "domains" {
   source                 = "./modules/domains"
   mail_domains           = var.mail_domains
   control_domain         = var.control_domain
   control_domain_zone_id = data.terraform_remote_state.zone.outputs.control_domain_zone_id
+  dnssec_enabled         = var.dnssec_enabled
+
+  providers = {
+    aws      = aws
+    aws.use1 = aws.use1
+  }
 }
 
 # Infrastructure and code for the administrative web site
@@ -159,9 +179,10 @@ module "admin" {
   private_zone_id     = module.vpc.private_zone.zone_id
   domains             = module.domains.domains
   bucket              = module.bucket.bucket
+  bucket_arn          = module.bucket.bucket_arn
   bucket_domain_name  = module.bucket.domain_name
+  oai_iam_arn         = module.bucket.oai_iam_arn
   relay_ips           = module.vpc.relay_ips
-  origin              = module.bucket.origin
   dev_mode            = var.prod ? false : true
 
   address_changed_topic_arn = module.ecs.sns_topic_arn
@@ -301,12 +322,20 @@ module "certbot_renewal" {
   healthcheck_ping_param = local.hc_ping_certbot
 }
 
-# Establishes a daily backup schedule for mail and address data
+# Establishes a daily backup schedule for mail and address data. The
+# vaults are lock-protected (governance mode) and every recovery point
+# is copied to a second-region vault; see the module docstring and
+# docs/disaster-recovery.md.
 module "backup" {
   source = "./modules/backup"
   count  = var.backup ? 1 : 0
   table  = module.table.table_arn
   efs    = module.efs.efs_arn
+
+  providers = {
+    aws           = aws
+    aws.dr_region = aws.dr_region
+  }
 }
 
 # Phase 1 + 2 monitoring & alerting (0.7.0). See docs/0.7.0/monitoring-plan.md.

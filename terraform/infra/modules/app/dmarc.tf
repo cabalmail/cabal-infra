@@ -4,10 +4,11 @@
 
 #tfsec:ignore:aws-dynamodb-table-customer-key
 resource "aws_dynamodb_table" "dmarc_reports" {
-  name         = "cabal-dmarc-reports"
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "pk"
-  range_key    = "sk"
+  name                        = "cabal-dmarc-reports"
+  billing_mode                = "PAY_PER_REQUEST"
+  hash_key                    = "pk"
+  range_key                   = "sk"
+  deletion_protection_enabled = true
 
   attribute {
     name = "pk"
