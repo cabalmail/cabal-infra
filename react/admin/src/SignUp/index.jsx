@@ -43,6 +43,7 @@ function SignUp({
   const privacyHref = frontDoorOrigin ? `${frontDoorOrigin}/privacy.html` : '#';
   const [showPassword, setShowPassword] = useState(false);
   const [confirm, setConfirm] = useState('');
+  const [smsConsent, setSmsConsent] = useState(false);
   const score = useMemo(() => strengthScore(password), [password]);
   const usernameValid = /^[a-z0-9-]{3,32}$/.test(username || '') &&
     !/^-/.test(username || '') && !/-$/.test(username || '');
@@ -50,7 +51,10 @@ function SignUp({
   const passwordValid = (password || '').length >= 12;
   const confirmValid = confirm.length > 0 && confirm === password;
   const inviteCodeValid = !invitation_required || (inviteCode || '').length > 0;
-  const valid = usernameValid && phoneValid && passwordValid && confirmValid && inviteCodeValid;
+  // SMS consent is a mandatory, affirmative opt-in: the form will not submit
+  // until the user explicitly checks it (it is never pre-checked).
+  const valid = usernameValid && phoneValid && passwordValid && confirmValid &&
+    inviteCodeValid && smsConsent;
 
   const handleSubmit = (e) => {
     if (!valid) { e.preventDefault(); return; }
@@ -193,11 +197,22 @@ function SignUp({
           By creating an account you agree to the{' '}
           <a href={termsHref} target="_blank" rel="noopener noreferrer">Terms</a>
           {' '}and{' '}
-          <a href={privacyHref} target="_blank" rel="noopener noreferrer">Privacy Policy</a>,
-          and to receive transactional SMS (signup verification, password reset,
-          sign-in codes) at the phone number you provide. Reply{' '}
-          <code>STOP</code> to opt out at any time; message and data rates may apply.
+          <a href={privacyHref} target="_blank" rel="noopener noreferrer">Privacy Policy</a>.
         </p>
+        <label className="auth__consent">
+          <input
+            type="checkbox"
+            className="auth__consent-box"
+            checked={smsConsent}
+            onChange={(e) => setSmsConsent(e.target.checked)}
+            required
+          />
+          <span className="auth__consent-label">
+            I agree to receive transactional SMS (signup verification, password
+            reset, and sign-in codes) at the phone number above. Reply{' '}
+            <code>STOP</code> to opt out at any time; message and data rates may apply.
+          </span>
+        </label>
         <button
           type="submit"
           className="auth__btn-primary"

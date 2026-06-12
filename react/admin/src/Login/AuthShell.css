@@ -344,6 +344,31 @@
   text-decoration: underline;
 }
 
+/* ---- SMS consent checkbox (Signup) --------------------------------- */
+
+.auth__consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 4px 0 0;
+  cursor: pointer;
+}
+
+.auth__consent-box {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 1px 0 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.auth__consent-label {
+  font-size: 11.5px;
+  color: var(--ink-quiet);
+  line-height: 1.55;
+}
+
 /* ---- success state (ForgotPassword) --------------------------------- */
 
 .auth__success {

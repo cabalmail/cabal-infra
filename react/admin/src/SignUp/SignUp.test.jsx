@@ -70,6 +70,7 @@ describe('SignUp', () => {
     fireEvent.change(screen.getByLabelText('Confirm password'), {
       target: { value: validProps.password },
     });
+    fireEvent.click(screen.getByRole('checkbox'));
     fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
     expect(onSubmit).toHaveBeenCalledTimes(1);
   });
@@ -83,8 +84,28 @@ describe('SignUp', () => {
     fireEvent.change(screen.getByLabelText('Confirm password'), {
       target: { value: validProps.password },
     });
+    fireEvent.click(screen.getByRole('checkbox'));
     fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
     expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders a mandatory SMS consent checkbox, unchecked by default', () => {
+    render(withAuth(<SignUp {...defaultProps} />));
+    const consent = screen.getByRole('checkbox');
+    expect(consent).toBeInTheDocument();
+    expect(consent).not.toBeChecked();
+  });
+
+  it('keeps submit disabled until the SMS consent box is checked', () => {
+    const onSubmit = vi.fn(e => e.preventDefault());
+    render(withAuth(<SignUp {...defaultProps} {...validProps} inviteCode="" onSubmit={onSubmit} />));
+    fireEvent.change(screen.getByLabelText('Confirm password'), {
+      target: { value: validProps.password },
+    });
+    // Every other field is valid; the consent gate alone holds submit closed.
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('checkbox'));
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeEnabled();
   });
 
   it('keeps submit disabled when invitation code is empty and required', () => {
