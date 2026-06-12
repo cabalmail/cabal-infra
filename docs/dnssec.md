@@ -38,7 +38,9 @@ Run this in development first, then stage, then prod. The DS step requires regis
        --query 'KeySigningKeys[?Status==`ACTIVE`].PublicKey' --output text
      ```
 
-   Either way, once the registry has propagated, confirm the published DS matches Terraform's `ds_record` output: `dig <apex> DS +short`.
+     Use the *public* zone's id: the control domain also has a VPC-private twin zone with the same name, so filter on `Config.PrivateZone == false` when looking the id up by name.
+
+   Do not be alarmed that every mail apex shows the same public key and key tag: the mail zones deliberately share one KMS key, so their KSKs are identical (the control zone's differs - its key belongs to the bootstrap stack). Only the DS digest is per-domain, because it hashes the owner name. Either way, once the registry has propagated, confirm each published DS matches Terraform's `ds_record` output for that apex: `dig <apex> DS +short`.
 7. **Verify the chain of trust.**
 
    ```sh
