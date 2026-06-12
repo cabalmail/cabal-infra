@@ -14,7 +14,7 @@ The same rule inverted governs disablement: **remove DS first, stop signing seco
 
 Run this in development first, then stage, then prod. The DS step requires registrar access and at least one wait, so budget a day per environment.
 
-1. **Check the CI deploy policy.** The first apply uses KMS (`kms:CreateKey`, `kms:CreateAlias`, `kms:PutKeyPolicy`, ...) and the Route 53 DNSSEC APIs (`route53:CreateKeySigningKey`, `route53:EnableHostedZoneDNSSEC`, ...). The per-account CI policy is hand-managed; if these grants are missing the apply fails with AccessDenied and the grant has to be added in that account.
+1. **Check the CI deploy policy.** The first apply needs `kms:*` and the Route 53 DNSSEC actions (`route53:CreateKeySigningKey`, `route53:EnableHostedZoneDNSSEC`, `route53:DisableHostedZoneDNSSEC`, plus `ActivateKeySigningKey`/`DeactivateKeySigningKey`/`DeleteKeySigningKey` for the disable path). Grant KMS as `kms:*`, not an enumerated list - in practice Terraform's key lifecycle surfaced new `kms:` actions one AccessDenied at a time until the enumeration was abandoned. The per-account CI policy is hand-managed; the reference policy in [the AWS setup guide](./aws.md) carries these grants, but an existing account's live policy may predate them.
 2. **Set the variable.** In the GitHub environment for the target account, set `TF_VAR_DNSSEC_ENABLED=true`.
 3. **Apply the bootstrap stack.** The dns stage only runs when `terraform/dns/**` changes, so dispatch `infra.yml` manually with the `bootstrap` input checked. This signs the control-domain zone and outputs `control_domain_ds_record`.
 4. **Apply the infra stack.** The same dispatch (or any infra push) signs every mail-apex zone and outputs `mail_domain_ds_records`.
@@ -28,7 +28,19 @@ Run this in development first, then stage, then prod. The DS step requires regis
    ```
 
    Wait until RRSIGs appear and the zone's old (unsigned) TTLs have expired - give it 24 hours after the apply.
-6. **Publish DS records at each registrar.** Copy each zone's `ds_record` output value to the corresponding domain registration (same console as the nameserver delegation, see [registrar.md](./registrar.md)). The control domain and each mail apex are separate registrations; each needs its own DS record.
+6. **Publish the chain of trust at each registrar.** The control domain and each mail apex are separate registrations; each needs this step (same console as the nameserver delegation, see [registrar.md](./registrar.md)). What the registrar asks for varies, and pasting the wrong shape silently produces a DS record that matches nothing - the outage case:
+
+   - Most registrars take the **DS record** directly. Paste the zone's `ds_record` output value, *without* the surrounding quotes Terraform prints.
+   - **Route 53 Registered Domains** (and a few other registrars) instead take the KSK's base64 **public key** plus key type and algorithm, and the registry derives the DS record itself. In Registered domains > the apex > DNSSEC keys > Add: key type `257 - KSK`, algorithm `13 - ECDSAP256SHA256`, and the public key - NOT the `ds_record` value, whose hex digest can pass the field's validation and then break resolution. Fetch the public key with:
+
+     ```sh
+     aws route53 get-dnssec --hosted-zone-id <zone-id> \
+       --query 'KeySigningKeys[?Status==`ACTIVE`].PublicKey' --output text
+     ```
+
+     Use the *public* zone's id: the control domain also has a VPC-private twin zone with the same name, so filter on `Config.PrivateZone == false` when looking the id up by name.
+
+   Do not be alarmed that every mail apex shows the same public key and key tag: the mail zones deliberately share one KMS key, so their KSKs are identical (the control zone's differs - its key belongs to the bootstrap stack). Only the DS digest is per-domain, because it hashes the owner name. Either way, once the registry has propagated, confirm each published DS matches Terraform's `ds_record` output for that apex: `dig <apex> DS +short`.
 7. **Verify the chain of trust.**
 
    ```sh
@@ -38,7 +50,7 @@ Run this in development first, then stage, then prod. The DS step requires regis
    whois <apex> | grep -i dnssec
    ```
 
-   [DNSViz](https://dnsviz.net/) gives a full-chain visualization if anything looks off.
+   A missing AD flag in the first hours is usually resolver-side negative caching, not a problem: any lookup made before the registry published the DS (including this step's own test queries) caches an "insecure delegation" proof until the parent's DS TTL expires, and big anycast resolvers expire it per cache node, so results can differ between resolvers and even between repeated queries. To distinguish lag from a real fault, skip the caches: ask the TLD's own name servers for the DS (`dig @<tld-ns> <apex> DS +norecurse`, e.g. `a0.nic.io` for .io) and compare it byte-for-byte with the `ds_record` output, and cross-check a second resolver (`dig +dnssec @1.1.1.1 ...`). Registry DS matches and *any* validating resolver sets AD = the chain is correct, wait out the caches. A *mismatched* registry DS also looks like "not working yet" until caches expire and then becomes an outage - that is the case this check exists to catch early. [DNSViz](https://dnsviz.net/) gives a full-chain visualization if anything still looks off.
 8. **Watch mail flow.** DMARC/SPF/MX lookups now carry signatures. Watch the smtp tiers' CloudWatch logs and the DMARC dashboard for a day before promoting the change to the next environment.
 
 ## Disabling DNSSEC (rollback)
