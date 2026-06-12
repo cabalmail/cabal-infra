@@ -18,7 +18,7 @@ Counts reflect **pip checkov** (what CI runs). See the [graph-check note](#graph
 
 | Tool | Total | CMK global-suppress | Baselined | Fixed / inline-suppressed (2.5) | Residual |
 | ---- | ----- | ------------------- | --------- | ------------------------------- | -------- |
-| Checkov | 242 | 76 (12 ids) | 153 (47 ids) | 13 (276, 51, 8, 341, 26, 27x3, 103, 74, 12 fixed; 111, 356 inline) | 0 |
+| Checkov | 243 | 76 (12 ids) | 154 (47 ids) | 13 (276, 51, 8, 341, 26, 27x3, 103, 74, 12 fixed; 111, 356 inline) | 0 |
 | Trivy   | 50  | 26 (5 ids)  | 20 (10 ids) | 4 (AWS-0031, 0095, 0096, 0131 fixed) | 0 |
 | tflint  | 6   | 0           | 0 (never baselined) | 6 fixed (`tls` version + 5 unused decls) | 0 |
 
@@ -93,6 +93,7 @@ Accepted as intentional architecture. Baselined **per resource** (not globally s
 | CKV_AWS_258, CKV_AWS_301 (x2) | - | Monitoring `alert_sink` Lambda URL - the monitoring tier is dormant (`TF_VAR_MONITORING=false` everywhere); revisit if it is ever enabled |
 | CKV_AWS_338 (x23) | - | CloudWatch retention - see decay (candidate to set an explicit retention rather than accept) |
 | CKV_AWS_330 | - | EFS access point user identity - mailstore needs specific uid/gid; revisit |
+| CKV2_AWS_34 (x4) | - | SSM parameters holding deploy metadata (per-tier image tags, CloudFront distribution ids, sinkhole mode) are plaintext String by design - they are not secrets |
 | CKV2_AWS_19 | - | NAT EIPs attach to whichever NAT mode is active (instance association or gateway allocation); kept unattached while quiesced for stable relay IPs |
 | - | AWS-0320 | S3 bucket names not DNS-compliant - names are stable identifiers; renaming is a data migration |
 | - | AWS-0178 | VPC flow logs off - deliberate cost choice |

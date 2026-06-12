@@ -6,13 +6,80 @@
 
 # -- Image tag resolution ------------------------------------
 #
-# The Docker build and Terraform workflows write the active image tag to SSM
-# Parameter Store after a successful deployment.  Terraform always reads the
-# tag from SSM so that cron and push-triggered runs use the correct image
-# without requiring an explicit input.
+# app.yml's docker job builds per-tier images and rolls the ECS
+# services out of band, rebuilding only the tiers whose inputs changed
+# (docs/0.10.x/per-tier-docker-deploy-plan.md), so sibling tiers
+# legitimately diverge in image tag. infra.yml's plan job
+# (.github/scripts/refresh-ssm-from-running.sh) copies each tier's
+# RUNNING image tag into a per-tier SSM parameter before every plan,
+# and Terraform reads those parameters here, so a topology change that
+# regenerates a task definition re-pins each tier to the tag that tier
+# is actually running - not to whichever tier deployed most recently.
+#
+# The per-tier parameters are seeded with the bootstrap sentinel and
+# thereafter written only by CI (ignore_changes = [value]); referencing
+# the resource attribute reads the refreshed real value back at plan
+# time. The legacy global parameter is hand-provisioned at account
+# genesis (it is not Terraform-managed, and it survives an environment
+# teardown) and is kept as the fallback for any tier whose per-tier key
+# still holds the sentinel: that is the cutover path for environments
+# that predate the per-tier keys, and the bootstrap path for brand-new
+# environments, where the legacy key holds the sentinel too and every
+# consuming module falls back to its public placeholder image.
 
 data "aws_ssm_parameter" "deployed_image_tag" {
   name = "/cabal/deployed_image_tag"
+}
+
+locals {
+  # Everything app.yml's docker matrix can build and deploy. Core mail
+  # tiers always; sinkhole and the monitoring tiers are gated per
+  # environment (vars.TF_VAR_SINKHOLE / TF_VAR_MONITORING), but their
+  # tag parameters exist everywhere for the same reason their ECR repos
+  # do - so the deploy pipeline never has to special-case a gate flip.
+  core_mail_tiers = ["imap", "smtp-in", "smtp-out"]
+  monitoring_tiers = [
+    "uptime-kuma",
+    "ntfy",
+    "healthchecks",
+    "prometheus",
+    "alertmanager",
+    "grafana",
+    "cloudwatch-exporter",
+    "blackbox-exporter",
+    "node-exporter",
+  ]
+  docker_tiers = concat(local.core_mail_tiers, ["sinkhole"], local.monitoring_tiers)
+
+  # Must match the placeholder_image_tag locals in the ecs, monitoring,
+  # and certbot_renewal modules.
+  bootstrap_sentinel = "bootstrap-placeholder"
+}
+
+# CKV2_AWS_34 (SecureString) is baselined for this resource: image tags
+# are deploy metadata, not secrets, so a plaintext String is deliberate
+# (same posture as the cf_distribution and sinkhole_mode parameters).
+resource "aws_ssm_parameter" "tier_image_tag" {
+  for_each    = toset(local.docker_tiers)
+  name        = "/cabal/deployed_image_tag/${each.value}"
+  description = "Image tag running on the cabal-${each.value} tier. Written by .github/scripts/refresh-ssm-from-running.sh; Terraform only seeds it."
+  type        = "String"
+  value       = local.bootstrap_sentinel
+
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
+
+locals {
+  tier_image_tags = {
+    for tier in local.docker_tiers :
+    tier => (
+      aws_ssm_parameter.tier_image_tag[tier].value == local.bootstrap_sentinel
+      ? data.aws_ssm_parameter.deployed_image_tag.value
+      : aws_ssm_parameter.tier_image_tag[tier].value
+    )
+  }
 }
 
 # -- Phase 2 heartbeat parameter names -----------------------
@@ -157,20 +224,8 @@ module "efs" {
 # (or trimming the docker matrix in app.yml) is now a no-op against
 # the ECR repos rather than a destroy.
 module "ecr" {
-  source = "./modules/ecr"
-  monitoring_repositories = [
-    # Phase 1 / Phase 2 monitoring services
-    "uptime-kuma",
-    "ntfy",
-    "healthchecks",
-    # Phase 3 monitoring stack
-    "prometheus",
-    "alertmanager",
-    "grafana",
-    "cloudwatch-exporter",
-    "blackbox-exporter",
-    "node-exporter",
-  ]
+  source                  = "./modules/ecr"
+  monitoring_repositories = local.monitoring_tiers
 }
 
 # ECS cluster, services, and task definitions for containerized mail tiers.
@@ -197,7 +252,10 @@ module "ecs" {
   client_id     = module.pool.user_pool_client_id
 
   ecr_repository_urls = module.ecr.repository_urls
-  image_tag           = data.aws_ssm_parameter.deployed_image_tag.value
+  image_tags = {
+    for tier in concat(local.core_mail_tiers, ["sinkhole"]) :
+    tier => local.tier_image_tags[tier]
+  }
 
   # Health-check tuning - raise these to keep containers alive for debugging.
   # health_check_grace_period is consumed by the imap service only. 120s
@@ -222,11 +280,16 @@ module "ecs" {
 
 # Runs certbot on a schedule to renew Let's Encrypt certificates and restart ECS services
 module "certbot_renewal" {
-  source           = "./modules/certbot_renewal"
-  control_domain   = var.control_domain
-  zone_id          = data.terraform_remote_state.zone.outputs.control_domain_zone_id
-  email            = var.email
-  region           = var.aws_region
+  source         = "./modules/certbot_renewal"
+  control_domain = var.control_domain
+  zone_id        = data.terraform_remote_state.zone.outputs.control_domain_zone_id
+  email          = var.email
+  region         = var.aws_region
+  # Deliberately still the legacy global tag, not a per-tier key: the
+  # certbot image follows the lambda_certbot area of app.yml (not the
+  # docker matrix), and the Lambda ignores image_uri changes after
+  # creation (see modules/certbot_renewal/lambda.tf), so this value is
+  # only ever consumed at create time.
   image_tag        = data.aws_ssm_parameter.deployed_image_tag.value
   ecs_cluster_name = module.ecs.cluster_name
   ecs_service_names = [
@@ -275,7 +338,7 @@ module "monitoring" {
   cloudwatch_exporter_ecr_repository_url = module.ecr.repository_urls["cloudwatch-exporter"]
   blackbox_exporter_ecr_repository_url   = module.ecr.repository_urls["blackbox-exporter"]
   node_exporter_ecr_repository_url       = module.ecr.repository_urls["node-exporter"]
-  image_tag                              = data.aws_ssm_parameter.deployed_image_tag.value
+  image_tags                             = { for tier in local.monitoring_tiers : tier => local.tier_image_tags[tier] }
   environment                            = var.environment
 
   user_pool_id     = module.pool.user_pool_id

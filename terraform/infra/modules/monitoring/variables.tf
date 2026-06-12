@@ -113,9 +113,17 @@ variable "environment" {
   description = "Environment name (prod/stage/dev). Used as an external label on Prometheus metrics so multi-env Grafana dashboards can filter."
 }
 
-variable "image_tag" {
-  type        = string
-  description = "Image tag to deploy for the monitoring services, shared with the mail tiers."
+variable "image_tags" {
+  type        = map(string)
+  description = "Map of monitoring tier name to docker image tag. The parent stack reads one tag per tier from SSM (/cabal/deployed_image_tag/<tier>) so each task definition pins to the tag its own tier is actually running."
+
+  validation {
+    condition = alltrue([
+      for tier in ["uptime-kuma", "ntfy", "healthchecks", "prometheus", "alertmanager", "grafana", "cloudwatch-exporter", "blackbox-exporter", "node-exporter"] :
+      contains(keys(var.image_tags), tier)
+    ])
+    error_message = "image_tags must contain a key for every monitoring tier."
+  }
 }
 
 variable "user_pool_id" {

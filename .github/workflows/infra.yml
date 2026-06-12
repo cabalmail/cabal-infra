@@ -37,7 +37,7 @@ on:
         default: false
         type: boolean
       image_tag:
-        description: 'Docker image tag to pin in /cabal/deployed_image_tag (e.g. sha-abc12345). Leave empty to defer to refresh-ssm-from-running.sh.'
+        description: 'Docker image tag to pin for the mail tiers (e.g. sha-abc12345). Written to /cabal/deployed_image_tag and the per-tier imap/smtp-in/smtp-out keys; the tag must exist in each tier ECR repo. Leave empty to defer to refresh-ssm-from-running.sh.'
         required: false
         type: string
   push:
@@ -589,21 +589,40 @@ jobs:
         GH_TOKEN: ${{ github.token }}
       run: ../../.github/scripts/wait-for-app-deploy.sh
     - name: refresh-ssm-from-running
-      # Phase 1: reconcile /cabal/deployed_image_tag with the image
-      # tag actually running on cabal-imap before plan, so a
-      # topology-only apply that regenerates container_definitions
-      # does not roll back an out-of-band app deploy. Waits for the
-      # imap rollout to settle first (see script header) so it never
-      # pins a mid-roll tag.
+      # Reconcile the per-tier /cabal/deployed_image_tag/<tier> keys
+      # (and the legacy global key, kept tracking imap) with the image
+      # tags actually running on the cabal-* services before plan, so a
+      # topology-only apply that regenerates a task definition re-pins
+      # each tier to its own running image rather than rolling back an
+      # out-of-band app deploy. Waits for the rollouts to settle first
+      # (see script header) so it never pins a mid-roll tag. Phase 2 of
+      # docs/0.10.x/per-tier-docker-deploy-plan.md.
       run: ../../.github/scripts/refresh-ssm-from-running.sh
     - name: update-image-tag-in-ssm
       if: inputs.image_tag != ''
+      # Operator pin for mail-tier rollbacks (see the lambda-5xx-spike
+      # runbook). Writes the legacy global key plus the per-tier keys
+      # for the core mail tiers - but only keys that already exist:
+      # creating one here would collide with the Terraform resource
+      # that seeds it, and a tier whose key is missing follows the
+      # legacy parameter anyway via the sentinel fallback in main.tf.
+      # Sinkhole and monitoring tiers are left alone; pin those by hand
+      # if an exotic rollback ever needs it.
       run: |
         aws ssm put-parameter \
           --name "/cabal/deployed_image_tag" \
           --value "${{ inputs.image_tag }}" \
           --type String \
           --overwrite
+        for tier in imap smtp-in smtp-out; do
+          if aws ssm get-parameter --name "/cabal/deployed_image_tag/${tier}" >/dev/null 2>&1; then
+            aws ssm put-parameter \
+              --name "/cabal/deployed_image_tag/${tier}" \
+              --value "${{ inputs.image_tag }}" \
+              --type String \
+              --overwrite
+          fi
+        done
     - name: tfvars-terraform
       run: |
         echo "availability_zones = ${{ vars.TF_VAR_AVAILABILITY_ZONES}}" > terraform.tfvars

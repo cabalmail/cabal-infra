@@ -27,7 +27,7 @@ The label `apiname` identifies which API. For Cabalmail there is one API (`cabal
 
 ## Escalation
 
-- **Recent deploy?** Roll back. The image tag is in SSM at `/cabal/deployed_image_tag`; the previous tag is in CloudWatch on the `lambda_api_python` workflow runs. Re-trigger the Terraform workflow with the older tag in SSM.
+- **Recent deploy?** Roll back. Image tags are in SSM per tier at `/cabal/deployed_image_tag/<tier>` (the legacy global key `/cabal/deployed_image_tag` tracks the imap tier); previous tags are visible on the "Build and Deploy Application" workflow runs. Re-trigger the Terraform workflow with the older tag in its `image_tag` input, which pins the legacy key plus the mail-tier keys. The tag must still exist in each tier's ECR repo - tiers only push a tag when they actually build, so verify before pinning.
 - **DynamoDB throttling correlated?** Check the [DynamoDB throttling runbook](./dynamodb-throttling.md); the cause may not be the Lambda itself.
 - **IMAP backend down?** Most read-side handlers proxy to the IMAP tier. Check the [probe-failure runbook](./probe-failure.md) for IMAP first, then come back here.
 - If the issue persists with no root cause, capture a request ID from CloudWatch and X-Ray (if enabled) and open a GitHub issue with the log excerpt.

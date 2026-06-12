@@ -78,9 +78,14 @@ variable "ecr_repository_urls" {
   description = "Map of tier name to ECR repository URL (e.g. {imap = '...', smtp-in = '...', smtp-out = '...'})."
 }
 
-variable "image_tag" {
-  type        = string
-  description = "Docker image tag (e.g. sha-abc12345)."
+variable "image_tags" {
+  type        = map(string)
+  description = "Map of tier name to docker image tag (e.g. {imap = \"sha-abc12345\", ...}). The parent stack reads one tag per tier from SSM (/cabal/deployed_image_tag/<tier>) so each task definition pins to the tag its own tier is actually running. Must include the sinkhole key even when var.sinkhole is false."
+
+  validation {
+    condition     = alltrue([for tier in ["imap", "smtp-in", "smtp-out", "sinkhole"] : contains(keys(var.image_tags), tier)])
+    error_message = "image_tags must contain the keys imap, smtp-in, smtp-out, and sinkhole."
+  }
 }
 
 # -- Secrets ----------------------------------------------------

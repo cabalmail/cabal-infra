@@ -76,7 +76,7 @@ The branch selects the GitHub Environment, and the environment supplies everythi
 5. **Apply.** `terraform apply -auto-approve`.
 6. **Post-apply.** Any ECS service whose task-definition family advanced during the apply is rolled to the new revision.
 
-The plan and apply jobs also reconcile the deployed Docker image tag (SSM parameter `/cabal/deployed_image_tag`) and the deployed Lambda code hashes with what is actually running, so a topology-only Terraform change does not roll back an application deploy that happened out of band via the "Build and Deploy Application" workflow.
+The plan and apply jobs also reconcile the deployed Docker image tags and the deployed Lambda code hashes with what is actually running, so a topology-only Terraform change does not roll back an application deploy that happened out of band via the "Build and Deploy Application" workflow. Image tags are tracked per tier: each `cabal-*` ECS service's running tag is copied into the SSM parameter `/cabal/deployed_image_tag/<tier>` before plan, and each task definition reads its own tier's parameter, so tiers that deploy at different times keep their own tags. The legacy global parameter `/cabal/deployed_image_tag` remains as the fallback for any tier whose per-tier key has not been written yet, and as the bootstrap-sentinel carrier for brand-new environments.
 
 ## The dns bootstrap stage
 
