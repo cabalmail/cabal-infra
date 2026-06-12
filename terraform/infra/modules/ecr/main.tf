@@ -41,46 +41,6 @@ resource "aws_ecr_repository" "monitoring" {
   }
 }
 
-# State migration for the 0.9.5 split. Monitoring repos used to live
-# under aws_ecr_repository.tier (via extra_repositories); the rename is
-# state-only - no resource is destroyed.
-moved {
-  from = aws_ecr_repository.tier["uptime-kuma"]
-  to   = aws_ecr_repository.monitoring["uptime-kuma"]
-}
-moved {
-  from = aws_ecr_repository.tier["ntfy"]
-  to   = aws_ecr_repository.monitoring["ntfy"]
-}
-moved {
-  from = aws_ecr_repository.tier["healthchecks"]
-  to   = aws_ecr_repository.monitoring["healthchecks"]
-}
-moved {
-  from = aws_ecr_repository.tier["prometheus"]
-  to   = aws_ecr_repository.monitoring["prometheus"]
-}
-moved {
-  from = aws_ecr_repository.tier["alertmanager"]
-  to   = aws_ecr_repository.monitoring["alertmanager"]
-}
-moved {
-  from = aws_ecr_repository.tier["grafana"]
-  to   = aws_ecr_repository.monitoring["grafana"]
-}
-moved {
-  from = aws_ecr_repository.tier["cloudwatch-exporter"]
-  to   = aws_ecr_repository.monitoring["cloudwatch-exporter"]
-}
-moved {
-  from = aws_ecr_repository.tier["blackbox-exporter"]
-  to   = aws_ecr_repository.monitoring["blackbox-exporter"]
-}
-moved {
-  from = aws_ecr_repository.tier["node-exporter"]
-  to   = aws_ecr_repository.monitoring["node-exporter"]
-}
-
 # SMTP sinkhole test fixture (docs/0.9.x/sinkhole-test-harness-plan.md).
 # Same prevent_destroy posture as the monitoring repos: the ECR repo is
 # created unconditionally so images can be pre-built and history is
