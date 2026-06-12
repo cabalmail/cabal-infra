@@ -676,12 +676,6 @@
                     ]
                 },
                 {
-                    "resource": "module.pool.aws_dynamodb_table.counter",
-                    "check_ids": [
-                        "CKV_AWS_28"
-                    ]
-                },
-                {
                     "resource": "module.pool.aws_lambda_function.assign_osid",
                     "check_ids": [
                         "CKV_AWS_115",

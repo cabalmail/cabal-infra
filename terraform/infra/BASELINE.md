@@ -28,6 +28,12 @@ Verified (pip checkov): `checkov -d terraform/infra --config-file .checkov.yaml 
 
 The baselines were first generated with **brew** checkov, which omits the graph (`CKV2_*`) checks. CI runs **pip** checkov, which runs them, so on the gate's first live run 42 infra + 2 dns graph findings appeared as "new" and failed CI. Fixed by regenerating both baselines with pip checkov (matching CI) and adding a `checkov-graph-guard` to the Makefile so a brew checkov is caught locally. The 42 are pre-existing, mostly design/decay (WAF off, no DNSSEC/query-logging, S3 versioning/replication/lifecycle, CloudFront response-headers, API-GW request-validation, EFS-in-backup, monitoring-tier LBs which are dormant) - grandfathered.
 
+### Resilience hardening clears (0.10.x)
+
+The resilience/continuity hardening work ([`docs/0.10.x/resilience-continuity-hardening-plan.md`](../../docs/0.10.x/resilience-continuity-hardening-plan.md)) fixed findings rather than baselining them:
+
+- **CKV_AWS_28 / AWS-0024** (DynamoDB PITR) - cleared: the `cabal-counter` table was the last table without `point_in_time_recovery`; it now has PITR, explicit SSE, and deletion protection. Baseline entry and `.trivyignore` id removed.
+
 ### NAT-mode refactor re-key (0.10.x)
 
 The NAT gateway-bootstrap refactor ([`docs/0.10.x/nat-gateway-bootstrap-plan.md`](../../docs/0.10.x/nat-gateway-bootstrap-plan.md)) replaced the literal `use_nat_instance = true` in the `vpc` module block with an operator variable. Checkov can no longer statically resolve the `count` on the NAT-instance resources, which re-keys their findings:
@@ -111,7 +117,6 @@ Low-value hygiene. Each release should clear or re-justify entries whose target 
 | CKV_AWS_150 (x2) | - | Load balancer deletion protection | 0.11.x |
 | CKV_AWS_23 (x3) | AWS-0124 | Security group rule descriptions | 0.11.x |
 | CKV_AWS_300 | - | S3 lifecycle: abort incomplete multipart uploads | 0.11.x |
-| CKV_AWS_28 | AWS-0024 | DynamoDB PITR (note: `cabal-addresses` is also covered by AWS Backup when `backup=true`) | 1.0.0 |
 | CKV_AWS_135 | AWS-0090 | EC2 EBS-optimized / S3 versioning | 1.0.0 |
 | CKV_AWS_237 | - | API Gateway create-before-destroy lifecycle | 1.0.0 |
 

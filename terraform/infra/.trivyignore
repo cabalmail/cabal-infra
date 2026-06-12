@@ -32,8 +32,9 @@ AWS-0190  # API Gateway response caching disabled: caching is undesirable for th
 # AWS-0136 in the CMK suppression above.
 
 # --- Decay: low/medium hygiene, walk down over time --------------------
+# AWS-0024 (DynamoDB PITR) cleared in 0.10.x: every table now enables
+# point_in_time_recovery (the counter table was the last holdout).
 AWS-0090  # S3 data versioning (transient cache/artifact buckets)
-AWS-0024  # DynamoDB point-in-time recovery (cabal-addresses also covered by AWS Backup when backup=true)
 AWS-0089  # S3 bucket access logging
 AWS-0066  # Lambda X-Ray tracing
 AWS-0124  # Security group rule missing description
