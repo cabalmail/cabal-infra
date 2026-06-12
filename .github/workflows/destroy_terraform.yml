@@ -97,6 +97,7 @@ jobs:
         echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
         echo "use_nat_instance = ${{ vars.TF_VAR_USE_NAT_INSTANCE || 'true' }}" >> terraform.tfvars
         echo "build_nat_ami = ${{ vars.TF_VAR_BUILD_NAT_AMI || 'true' }}" >> terraform.tfvars
+        echo "dr_region = \"${{ vars.TF_VAR_DR_REGION || 'us-west-2' }}\"" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
     - name: destroy-terraform

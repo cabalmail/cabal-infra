@@ -301,12 +301,20 @@ module "certbot_renewal" {
   healthcheck_ping_param = local.hc_ping_certbot
 }
 
-# Establishes a daily backup schedule for mail and address data
+# Establishes a daily backup schedule for mail and address data. The
+# vaults are lock-protected (governance mode) and every recovery point
+# is copied to a second-region vault; see the module docstring and
+# docs/disaster-recovery.md.
 module "backup" {
   source = "./modules/backup"
   count  = var.backup ? 1 : 0
   table  = module.table.table_arn
   efs    = module.efs.efs_arn
+
+  providers = {
+    aws           = aws
+    aws.dr_region = aws.dr_region
+  }
 }
 
 # Phase 1 + 2 monitoring & alerting (0.7.0). See docs/0.7.0/monitoring-plan.md.
