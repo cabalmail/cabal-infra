@@ -99,6 +99,19 @@ public protocol ApiClient: Sendable {
     /// `/empty_trash` Lambda (same trash-only restriction).
     func emptyTrash(host: String, folder: String) async throws
 
+    // MARK: Preferences
+    /// Fetches the caller's display-name preference from `/get_preferences`.
+    /// The Lambda returns the full preferences row; the other keys
+    /// (theme/accent/density) are web-client concerns, so only `name` is
+    /// surfaced here. Empty string means "no display name".
+    func fetchDisplayName() async throws -> String
+
+    /// Persists the display-name preference via `/set_preferences`. The
+    /// Lambda merges per-key, so sending only `name` never clobbers the web
+    /// client's theme preferences. The `/send` Lambda reads this value
+    /// server-side when composing the From header.
+    func updateDisplayName(_ name: String) async throws
+
     // MARK: Send
     /// Submits an outgoing message via the Lambda send pipeline (Outbox
     /// APPEND -> SMTP -> Sent move). Mirrors `react/admin/src/ApiClient.js

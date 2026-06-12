@@ -232,6 +232,20 @@ public actor CabalmailClient {
         await addressCache.invalidate()
     }
 
+    /// Fetches the user's display-name preference. The `/send` Lambda uses
+    /// it server-side as the From header's display name, so this value only
+    /// drives the Settings field - outgoing mail picks it up with no client
+    /// involvement. Empty string means unset.
+    public func displayName() async throws -> String {
+        try await apiClient.fetchDisplayName()
+    }
+
+    /// Persists the display-name preference server-side, where it is shared
+    /// with the other clients (the React app edits the same row).
+    public func setDisplayName(_ name: String) async throws {
+        try await apiClient.updateDisplayName(name)
+    }
+
     /// Submits an outgoing message via the Cabalmail `/send` Lambda.
     ///
     /// Issue #371 — the same Lambda the React app uses now handles the

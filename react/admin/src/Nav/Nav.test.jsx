@@ -105,6 +105,48 @@ describe('Nav', () => {
     expect(doLogout).toHaveBeenCalledTimes(1);
   });
 
+  describe('display name field', () => {
+    it('renders the current display name in the menu', () => {
+      render(
+        <Nav
+          {...baseProps}
+          loggedIn={true}
+          userName="alex"
+          displayName="Alex Example"
+          onChangeDisplayName={vi.fn()}
+        />,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Account menu' }));
+      const input = screen.getByRole('textbox', { name: 'Display name for outgoing mail' });
+      expect(input.value).toBe('Alex Example');
+    });
+
+    it('calls onChangeDisplayName as the user types', () => {
+      const onChangeDisplayName = vi.fn();
+      render(
+        <Nav
+          {...baseProps}
+          loggedIn={true}
+          userName="alex"
+          displayName=""
+          onChangeDisplayName={onChangeDisplayName}
+        />,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Account menu' }));
+      const input = screen.getByRole('textbox', { name: 'Display name for outgoing mail' });
+      fireEvent.change(input, { target: { value: 'Alex' } });
+      expect(onChangeDisplayName).toHaveBeenCalledWith('Alex');
+    });
+
+    it('hides the field when no onChangeDisplayName handler is supplied', () => {
+      render(<Nav {...baseProps} loggedIn={true} userName="alex" />);
+      fireEvent.click(screen.getByRole('button', { name: 'Account menu' }));
+      expect(
+        screen.queryByRole('textbox', { name: 'Display name for outgoing mail' }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
   it('calls onSelectAccent when an accent swatch is clicked', () => {
     const onSelectAccent = vi.fn();
     render(<Nav {...baseProps} loggedIn={true} userName="alex" onSelectAccent={onSelectAccent} />);

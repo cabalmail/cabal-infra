@@ -1,6 +1,7 @@
 '''Sends an email message'''
 import copy
 import json
+import os
 import re
 import smtplib
 import time
@@ -9,6 +10,7 @@ from email.message import EmailMessage
 from email.utils import formatdate, getaddresses
 import boto3 # pylint: disable=import-error
 from botocore.exceptions import ClientError # pylint: disable=import-error
+from helper import format_mailbox # pylint: disable=import-error
 from helper import get_imap_client # pylint: disable=import-error
 from helper import get_mpw # pylint: disable=import-error
 from helper import get_object # pylint: disable=import-error
@@ -35,6 +37,12 @@ sqs = boto3.client('sqs')
 ddb = boto3.resource('dynamodb')
 _dedupe_table = ddb.Table(DEDUPE_TABLE)
 _queue_url_cache = {}
+
+# The user's display-name preference (set via /set_preferences) becomes the
+# From header's display name. It is read server-side - never from the request
+# body - so a client cannot put an arbitrary name on the wire per message.
+PREFERENCES_TABLE = os.environ.get('USER_PREFERENCES_TABLE_NAME', 'cabal-user-preferences')
+_preferences_table = ddb.Table(PREFERENCES_TABLE)
 
 # Attachments are uploaded to S3 via the /upload_url Lambda's presigned
 # PUT URLs (the cache bucket's 2-day lifecycle handles cleanup). Total
@@ -82,7 +90,12 @@ def handler(event, _context):
             })
         }
 
-    msg = compose_message(body['subject'], sender, {
+    # The visible From may carry the user's display-name preference, but the
+    # address part is always the bare validated sender, which is also what the
+    # SMTP MAIL FROM below pins to.
+    from_header = format_mailbox(_sender_display_name(user), sender)
+
+    msg = compose_message(body['subject'], from_header, {
                             "to": ','.join(body['to_list']),
                             "cc": ','.join(body['cc_list']),
                             "bcc": ','.join(body['bcc_list']),
@@ -142,6 +155,32 @@ def handler(event, _context):
             "status": "submitted"
         })
     }
+
+
+def _sender_display_name(user):
+    '''Returns the user's display-name preference, or empty string.
+
+    Fails open: any lookup problem means the From header simply omits the
+    display name rather than blocking the send. Control characters are
+    rejected here as well as at write time (set_preferences) so a stored
+    name can never smuggle headers into the composed message.
+
+    A future per-address override would resolve here: the sender's row in
+    cabal-addresses (already fetched by user_authorized_for_sender) would
+    take precedence over this user-level preference.
+    '''
+    try:
+        item = _preferences_table.get_item(Key={'user': user}).get('Item', {})
+    except ClientError as err:
+        print(f'[send] WARN display-name lookup failed: {err}')
+        return ''
+    name = item.get('name', '')
+    if not isinstance(name, str):
+        return ''
+    name = name.strip()
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in name):
+        return ''
+    return name
 
 
 def _save_draft(host, user, msg):
@@ -281,11 +320,13 @@ def load_attachments(raw, bucket, user):
     return decoded
 
 # pylint: disable=too-many-arguments,too-many-positional-arguments
-def compose_message(subject, sender, headers, text, html, attachments=None):
-    """Create a message object"""
+def compose_message(subject, from_header, headers, text, html, attachments=None):
+    """Create a message object. from_header is a full RFC 5322 mailbox
+    (optionally carrying a display name); the bare envelope sender is pinned
+    separately in the handler."""
     msg = EmailMessage()
     msg['Subject'] = subject
-    msg['From'] = sender
+    msg['From'] = from_header
     if len(headers['to']):
         msg['To'] = headers['to']
     if len(headers['cc']):

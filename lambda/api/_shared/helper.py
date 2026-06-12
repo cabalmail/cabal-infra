@@ -732,18 +732,22 @@ def decode_name(raw):
     return ''.join(pieces).strip()
 
 
-def format_address(fragment):
-    '''Renders one ENVELOPE address in RFC 5322 mailbox form, including display name when set'''
-    mailbox = fragment.mailbox.decode()
-    host = fragment.host.decode()
-    addr = f"{mailbox}@{host}"
-    name = decode_name(fragment.name)
+def format_mailbox(name, addr):
+    '''Renders an RFC 5322 mailbox string, quoting the display name when one is set'''
     if name:
         # Quote and escape the display name for safe RFC 5322 rendering. Existing
         # clients parse `"Name" <addr@host>` via a `<...>` regex.
         escaped = name.replace('\\', '\\\\').replace('"', '\\"')
         return f'"{escaped}" <{addr}>'
     return addr
+
+
+def format_address(fragment):
+    '''Renders one ENVELOPE address in RFC 5322 mailbox form, including display name when set'''
+    mailbox = fragment.mailbox.decode()
+    host = fragment.host.decode()
+    name = decode_name(fragment.name)
+    return format_mailbox(name, f"{mailbox}@{host}")
 
 
 def decode_address(data):
