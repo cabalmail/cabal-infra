@@ -242,6 +242,15 @@ extension MessageListView {
             }
         }
         .navigationTitle(folder.name)
+        #if os(iOS) || os(visionOS)
+        // Without this, `.searchable` + the `safeAreaInset(.top)` filter
+        // tabs leave the default large-title bar in a half-collapsed
+        // state on first appearance: the folder name (e.g. "INBOX") is
+        // hidden until the user pulls down or scrolls up. Inline keeps
+        // it pinned to the nav bar at all times, matching how the same
+        // platforms treat MessageDetailView.
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
         .toolbar {
             // Compose stays as a toolbar item — it's a primary action
             // pinned to the top edge in every Mac mail client. The list-
