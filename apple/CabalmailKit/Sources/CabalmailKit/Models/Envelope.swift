@@ -26,10 +26,15 @@ public struct EmailAddress: Sendable, Codable, Hashable {
         return name
     }
 
+    /// Human-readable mailbox rendering for UI surfaces (detail To/Cc
+    /// lines, forwarded-message headers): `Name <addr@host>` without RFC
+    /// 5322 phrase quoting, matching the React client. Not for wire use -
+    /// the API path sends bare addresses and the /send Lambda owns From
+    /// quoting server-side.
     public var formatted: String {
         let addr = "\(mailbox)@\(host)"
         if let displayName {
-            return "\"\(displayName)\" <\(addr)>"
+            return "\(displayName) <\(addr)>"
         }
         return addr
     }

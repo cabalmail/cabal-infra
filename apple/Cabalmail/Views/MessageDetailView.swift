@@ -207,10 +207,10 @@ struct MessageDetailView: View {
     private func headerFromLabel(for address: EmailAddress) -> String {
         let addrPart = "\(address.mailbox)@\(address.host)"
         if let name = address.displayName, !name.isEmpty {
-            return "\"\(name)\" <\(addrPart)>"
+            return "\(name) <\(addrPart)>"
         }
         if let name = senderContactName, !name.isEmpty {
-            return "\"\(name)\" <\(addrPart)>"
+            return "\(name) <\(addrPart)>"
         }
         return addrPart
     }

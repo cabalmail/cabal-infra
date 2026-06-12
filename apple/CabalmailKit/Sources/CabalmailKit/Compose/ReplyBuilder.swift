@@ -202,7 +202,9 @@ public enum ReplyBuilder {
     }
 
     private static func attributionLine(envelope: Envelope) -> String {
-        let sender = envelope.from.first?.name
+        // displayName, not raw name: cached pre-strip envelopes may still
+        // carry RFC 5322 wrapping quotes in `name`.
+        let sender = envelope.from.first?.displayName
             ?? envelope.from.first.map { "\($0.mailbox)@\($0.host)" }
             ?? "someone"
         guard let date = envelope.date ?? envelope.internalDate else {
