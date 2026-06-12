@@ -38,6 +38,12 @@ aws backup list-recovery-points-by-backup-vault \
 
 # Copy jobs are succeeding
 aws backup list-copy-jobs --by-state COMPLETED --max-results 5
+
+# PITR on a table. NOTE: describe-table does NOT report PITR (it shows
+# SSE and deletion protection only); PITR lives behind the
+# continuous-backups API.
+aws dynamodb describe-continuous-backups --table-name cabal-counter
+# expect: "PointInTimeRecoveryStatus": "ENABLED"
 ```
 
 ## Runbook: restore the addresses table from last night
