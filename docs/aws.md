@@ -47,8 +47,21 @@ After signing up, perform the following steps:
                     "elasticloadbalancing:*",
                     "iam:*",
                     "imagebuilder:*",
+                    "kms:CreateAlias",
                     "kms:CreateGrant",
+                    "kms:CreateKey",
+                    "kms:DeleteAlias",
                     "kms:DescribeKey",
+                    "kms:GetKeyPolicy",
+                    "kms:GetKeyRotationStatus",
+                    "kms:ListAliases",
+                    "kms:ListResourceTags",
+                    "kms:PutKeyPolicy",
+                    "kms:ScheduleKeyDeletion",
+                    "kms:TagResource",
+                    "kms:UntagResource",
+                    "kms:UpdateAlias",
+                    "kms:UpdateKeyDescription",
                     "lambda:*",
                     "logs:CreateLogGroup",
                     "logs:DescribeLogGroups",
@@ -56,10 +69,16 @@ After signing up, perform the following steps:
                     "logs:ListTagsLogGroup",
                     "logs:PutRetentionPolicy",
                     "logs:TagResource",
+                    "route53:ActivateKeySigningKey",
                     "route53:ChangeResourceRecordSets",
                     "route53:ChangeTagsForResource",
                     "route53:CreateHostedZone",
+                    "route53:CreateKeySigningKey",
+                    "route53:DeactivateKeySigningKey",
                     "route53:DeleteHostedZone",
+                    "route53:DeleteKeySigningKey",
+                    "route53:DisableHostedZoneDNSSEC",
+                    "route53:EnableHostedZoneDNSSEC",
                     "route53:GetChange",
                     "route53:GetDNSSEC",
                     "route53:GetHostedZone",
@@ -85,7 +104,9 @@ After signing up, perform the following steps:
         ]
     }
     ```
-    (If you don't intend to use this repo to configure AWS Backup, then you may omit the `backup:*` and `backup-storage:*` lines.)
+    (If you don't intend to use this repo to configure AWS Backup, then you may omit the `backup:*` and `backup-storage:*` lines. If you do enable backups (`TF_VAR_BACKUP`), one additional one-time CLI step - the advanced DynamoDB backup-features opt-in - is required for cross-region copy; see [Disaster recovery](./disaster-recovery.md).)
+
+    (If you don't intend to enable DNSSEC signing (`TF_VAR_DNSSEC_ENABLED`, off by default), you may omit every `kms:` line except `kms:CreateGrant` and `kms:DescribeKey`, and the six `route53:` lines that mention `KeySigningKey` or `DNSSEC` except `route53:GetDNSSEC`, which Terraform reads unconditionally. See [DNSSEC](./dnssec.md).)
 
     (If you don't intend to enable SMS verification through AWS End User Messaging (`TF_VAR_USE_EUM_SMS`, off by default), you may omit the five `sms-voice:` lines. If you do enable it, completing the toll-free verification registration requires an additional one-time policy; see [SMS toll-free verification setup](./sms-tfv-setup.md).)
 
