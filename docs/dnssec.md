@@ -28,7 +28,17 @@ Run this in development first, then stage, then prod. The DS step requires regis
    ```
 
    Wait until RRSIGs appear and the zone's old (unsigned) TTLs have expired - give it 24 hours after the apply.
-6. **Publish DS records at each registrar.** Copy each zone's `ds_record` output value to the corresponding domain registration (same console as the nameserver delegation, see [registrar.md](./registrar.md)). The control domain and each mail apex are separate registrations; each needs its own DS record.
+6. **Publish the chain of trust at each registrar.** The control domain and each mail apex are separate registrations; each needs this step (same console as the nameserver delegation, see [registrar.md](./registrar.md)). What the registrar asks for varies, and pasting the wrong shape silently produces a DS record that matches nothing - the outage case:
+
+   - Most registrars take the **DS record** directly. Paste the zone's `ds_record` output value, *without* the surrounding quotes Terraform prints.
+   - **Route 53 Registered Domains** (and a few other registrars) instead take the KSK's base64 **public key** plus key type and algorithm, and the registry derives the DS record itself. In Registered domains > the apex > DNSSEC keys > Add: key type `257 - KSK`, algorithm `13 - ECDSAP256SHA256`, and the public key - NOT the `ds_record` value, whose hex digest can pass the field's validation and then break resolution. Fetch the public key with:
+
+     ```sh
+     aws route53 get-dnssec --hosted-zone-id <zone-id> \
+       --query 'KeySigningKeys[?Status==`ACTIVE`].PublicKey' --output text
+     ```
+
+   Either way, once the registry has propagated, confirm the published DS matches Terraform's `ds_record` output: `dig <apex> DS +short`.
 7. **Verify the chain of trust.**
 
    ```sh
