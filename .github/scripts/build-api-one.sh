@@ -46,7 +46,12 @@ find . -maxdepth 1 -type f -name '*.py' -exec cp {} ./build/ \;
 if [ -s requirements.txt ]; then
   pip install --no-compile -r requirements.txt -t ./build 2>/dev/null || true
 fi
-if grep -qE '^[[:space:]]*(from|import)[[:space:]]+helper' function.py 2>/dev/null; then
+if grep -qE '^[[:space:]]*(from|import)[[:space:]]+compose' function.py 2>/dev/null; then
+  cp ../_shared/compose.py ./build/compose.py
+fi
+# compose.py itself imports helper, so scan the staged copy too: a handler
+# that only imports compose still needs helper.py in its zip.
+if grep -qE '^[[:space:]]*(from|import)[[:space:]]+helper' function.py ./build/compose.py 2>/dev/null; then
   cp ../_shared/helper.py ./build/helper.py
 fi
 if grep -qE '^[[:space:]]*(from|import)[[:space:]]+admin_limits' function.py 2>/dev/null; then

@@ -280,6 +280,10 @@ struct MessageDetailView: View {
     private var toolbarContent: some ToolbarContent {
         #if os(iOS) || os(visionOS)
         ToolbarItemGroup(placement: .bottomBar) {
+            if model?.isDraftsFolder == true {
+                editDraftButton
+                Spacer()
+            }
             replyButton
             Spacer()
             seenButton
@@ -295,6 +299,9 @@ struct MessageDetailView: View {
             overflowMenuButton
         }
         #else
+        if model?.isDraftsFolder == true {
+            ToolbarItem { editDraftButton }
+        }
         ToolbarItem { replyButton }
         ToolbarItem { seenButton }
         ToolbarItem { flagButton }

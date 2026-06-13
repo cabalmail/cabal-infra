@@ -35,11 +35,11 @@ public struct ApiFolderStatus: Sendable, Codable, Hashable {
 
 /// One envelope as returned by `/list_envelopes`.
 ///
-/// The Lambda flattens RFC 3501 ENVELOPE into stringified `mailbox@host`
-/// addresses (no display names), a stringified date, a flag list, and the
-/// raw BODYSTRUCTURE tree. Display name is unavailable on the wire — we
-/// surface what we have and let the UI fall back to mailbox-only rendering
-/// for messages that came through the API path.
+/// The Lambda flattens RFC 3501 ENVELOPE into stringified RFC 5322 mailbox
+/// addresses, a stringified date, a flag list, and the raw BODYSTRUCTURE
+/// tree, plus the RFC 5322 threading identity (`message_id`,
+/// `in_reply_to`, `references`) as lists of angle-bracketed ids — the same
+/// wire shape `/fetch_message` uses, so decoders are shared.
 public struct ApiEnvelope: Sendable, Codable, Hashable {
     public let id: UInt32
     public let date: String?
@@ -53,10 +53,46 @@ public struct ApiEnvelope: Sendable, Codable, Hashable {
     /// detect attachments. Stored as a typed enum so it stays Sendable.
     public let structure: BodyStructureNode?
     public let priority: [String]?
+    /// Threading headers as lists of angle-bracketed ids. Optional so a
+    /// payload from a Lambda predating the fields still decodes; the
+    /// server emits `references` capped at the newest 20 ids.
+    public let messageId: [String]?
+    public let inReplyTo: [String]?
+    public let references: [String]?
 
     private enum CodingKeys: String, CodingKey {
-        case id, date, subject, from, to, cc, flags, priority
+        case id, date, subject, from, to, cc, flags, priority, references
         case structure = "struct"
+        case messageId = "message_id"
+        case inReplyTo = "in_reply_to"
+    }
+
+    public init(
+        id: UInt32,
+        date: String?,
+        subject: String?,
+        from: [String],
+        to: [String],
+        cc: [String],
+        flags: [String],
+        structure: BodyStructureNode?,
+        priority: [String]?,
+        messageId: [String]? = nil,
+        inReplyTo: [String]? = nil,
+        references: [String]? = nil
+    ) {
+        self.id = id
+        self.date = date
+        self.subject = subject
+        self.from = from
+        self.to = to
+        self.cc = cc
+        self.flags = flags
+        self.structure = structure
+        self.priority = priority
+        self.messageId = messageId
+        self.inReplyTo = inReplyTo
+        self.references = references
     }
 }
 
@@ -236,10 +272,16 @@ public struct ApiSearchEnvelope: Sendable, Hashable, Codable {
     public let structure: BodyStructureNode?
     public let priority: [String]?
     public let folder: String
+    /// Threading headers; same shape and optionality as `ApiEnvelope`.
+    public let messageId: [String]?
+    public let inReplyTo: [String]?
+    public let references: [String]?
 
     private enum CodingKeys: String, CodingKey {
-        case id, date, subject, from, to, cc, flags, priority, folder
+        case id, date, subject, from, to, cc, flags, priority, folder, references
         case structure = "struct"
+        case messageId = "message_id"
+        case inReplyTo = "in_reply_to"
     }
 
     public init(
@@ -252,7 +294,10 @@ public struct ApiSearchEnvelope: Sendable, Hashable, Codable {
         flags: [String],
         structure: BodyStructureNode?,
         priority: [String]?,
-        folder: String
+        folder: String,
+        messageId: [String]? = nil,
+        inReplyTo: [String]? = nil,
+        references: [String]? = nil
     ) {
         self.id = id
         self.date = date
@@ -264,6 +309,34 @@ public struct ApiSearchEnvelope: Sendable, Hashable, Codable {
         self.structure = structure
         self.priority = priority
         self.folder = folder
+        self.messageId = messageId
+        self.inReplyTo = inReplyTo
+        self.references = references
+    }
+}
+
+/// `/save_draft` response. `uid` / `uidValidity` are the UIDPLUS
+/// coordinates of the freshly-appended draft copy (nil when the server
+/// could not report them — the draft was still saved, but the next save
+/// creates a new copy instead of replacing). `replaced` reports whether
+/// the prior copy named by `replaces_uid` was expunged; false means the
+/// UIDVALIDITY guard declined and both copies survive.
+public struct ApiSaveDraftResponse: Sendable, Codable, Hashable {
+    public let status: String
+    public let uid: UInt32?
+    public let uidValidity: UInt32?
+    public let replaced: Bool?
+
+    private enum CodingKeys: String, CodingKey {
+        case status, uid, replaced
+        case uidValidity = "uidvalidity"
+    }
+
+    public init(status: String, uid: UInt32?, uidValidity: UInt32?, replaced: Bool?) {
+        self.status = status
+        self.uid = uid
+        self.uidValidity = uidValidity
+        self.replaced = replaced
     }
 }
 

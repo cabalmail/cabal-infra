@@ -8,9 +8,11 @@ import Foundation
 /// loop in `ComposeViewModel` updates the same draft in place — no fsync
 /// fight between multiple compose windows because each owns a distinct `id`.
 ///
-/// Plan (Phase 5): local storage only. Phase 5.1 layers IMAP `APPEND` to the
-/// `Drafts` folder on top of this for cross-device sync; the on-disk format
-/// below is the canonical source of truth either way.
+/// Cross-device sync layers on top of this store, not inside it: compose
+/// pushes the buffer to the IMAP `Drafts` folder via `/save_draft`
+/// (close-without-send plus a long debounce) and records the server
+/// coordinates on the persisted `Draft`. This on-disk copy remains the live
+/// editing buffer and the crash-recovery story.
 public actor DraftStore {
     private let directory: URL
 

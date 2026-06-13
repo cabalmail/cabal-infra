@@ -165,7 +165,8 @@ Response format: `{"statusCode": N, "body": json.dumps({...})}`. User extracted 
 | `fetch_message` | Fetch full email body (with S3 cache) |
 | `fetch_attachment` / `list_attachments` / `fetch_inline_image` | Attachment handling |
 | `fetch_bimi` | BIMI logo lookup for sender domains |
-| `send` | Send email via SMTP |
+| `send` | Send email via SMTP (optionally discarding a superseded draft copy) |
+| `save_draft` | Save/replace/discard a draft in the Drafts folder (UIDPLUS lifecycle) |
 | `move_messages` / `set_flag` | IMAP message operations |
 | `purge_messages` / `empty_trash` | Permanently delete (expunge) messages; trash folders only |
 
@@ -190,7 +191,7 @@ Native SwiftUI clients for iOS (iPhone/iPad), macOS, and visionOS. The Xcode pro
 
 **Mail traffic goes through the Lambda API, not direct IMAP.** `CabalmailKit/CabalmailClient.live(...)` wires the production `imapClient` to `ApiBackedImapClient`, which adapts the React-shaped Lambda endpoints (`/list_folders`, `/list_envelopes`, `/fetch_message`, `/set_flag`, `/move_messages`, `/send`, etc.) onto the `ImapClient` protocol. Issue #371 captures the switch: the hand-rolled IMAP stack (`LiveImapClient`, `ImapConnection`, `NetworkByteStream`) proved unreliable across network transitions, sleep/wake, and provider quirks, while the React client had been running off the same Lambda surface since 0.2.0 with no such trouble. **Before debugging anything that looks like an IMAP-level issue in the Apple clients, confirm which `ImapClient` is wired up — `LiveImapClient` still compiles and has its own tests, but production paths don't use it.** Errors that say "cancelled" in the UI typically come from `URLError.cancelled` (URLSession data task), not the `CabalmailError.cancelled` enum case.
 
-Trade-offs of the API-backed path (full notes in `apple/CabalmailKit/Sources/CabalmailKit/IMAP/ApiBackedImapClient.swift`): no IDLE (folder status is polled), no APPEND (`/send` handles Outbox + Sent server-side), no `fetchPart` (fetch the full body and parse MIME client-side), and envelope display names are flattened to bare addresses.
+Trade-offs of the API-backed path (full notes in `apple/CabalmailKit/Sources/CabalmailKit/IMAP/ApiBackedImapClient.swift`): no IDLE (folder status is polled), no raw APPEND (`/send` handles Outbox + Sent server-side; `/save_draft` owns the Drafts lifecycle, which the Apple draft sync uses — see `docs/draft-sync-and-threading.md`), and no `fetchPart` (fetch the full body and parse MIME client-side). Envelopes carry RFC 5322 display-name mailbox strings and, since 0.10.x, the threading identity (`message_id` / `in_reply_to` / `references`).
 
 ### Docker Services (`docker/`)
 

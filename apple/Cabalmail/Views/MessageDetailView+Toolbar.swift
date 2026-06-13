@@ -7,6 +7,22 @@ import CabalmailKit
 // `model` and route their actions back through it.
 
 extension MessageDetailView {
+    /// Drafts-folder affordance: resume the open draft in compose.
+    /// Disabled until the body fetch + MIME parse complete so a tap can't
+    /// seed an empty compose over a draft that hasn't loaded yet.
+    @ViewBuilder
+    var editDraftButton: some View {
+        if let model {
+            Button {
+                beginResumeDraft()
+            } label: {
+                Image(systemName: "square.and.pencil")
+                    .accessibilityLabel("Edit Draft")
+            }
+            .disabled(!model.canResumeDraft)
+        }
+    }
+
     @ViewBuilder
     var replyButton: some View {
         // Keyboard shortcuts for Reply / Reply All / Forward live on the

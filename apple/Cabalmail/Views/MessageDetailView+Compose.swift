@@ -28,17 +28,32 @@ extension MessageDetailView {
     /// Opens compose pre-populated for a `reply` / `replyAll` / `forward`.
     /// Pulls the user's address list so `ReplyBuilder` can pick a default
     /// From by matching the original message's recipients against owned
-    /// addresses (per the React app's 0.3.0 behavior).
+    /// addresses (per the React app's 0.3.0 behavior). Threads from the
+    /// fetched message's headers when the body has loaded — the list
+    /// envelope may lack the threading fields (Phase 0 of the draft-sync
+    /// plan).
     func beginCompose(_ mode: ReplyBuilder.ReplyMode) {
         guard let client = appState.client else { return }
         Task { @MainActor in
             let addresses = (try? await client.addresses()) ?? []
             let seed = ReplyBuilder.build(
-                from: envelope,
+                from: model?.threadedEnvelope ?? envelope,
                 body: model?.plainText,
                 mode: mode,
                 userAddresses: addresses
             )
+            presentCompose(seed: seed)
+        }
+    }
+
+    /// Opens compose resuming the open Drafts-folder message: recipients,
+    /// subject, and body from the fetched draft, with the server
+    /// coordinates wired so the first re-save replaces this copy and a
+    /// send discards it.
+    func beginResumeDraft() {
+        guard let model else { return }
+        Task { @MainActor in
+            let seed = await model.resumeDraftSeed()
             presentCompose(seed: seed)
         }
     }

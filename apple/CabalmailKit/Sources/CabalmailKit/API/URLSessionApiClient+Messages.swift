@@ -275,7 +275,7 @@ extension URLSessionApiClient {
                 "s3_key": attachment.s3Key,
             ]
         }
-        let httpRequest = try await put("/send", json: [
+        var json: [String: Any] = [
             "host": request.host,
             "smtp_host": request.smtpHost,
             "sender": request.sender,
@@ -288,7 +288,14 @@ extension URLSessionApiClient {
             "text": request.textBody,
             "draft": request.draft,
             "attachments": attachmentsJson,
-        ])
+        ]
+        // Send-from-draft cleanup; the pair only means anything together
+        // (the Lambda's expunge is UIDVALIDITY-guarded).
+        if let uid = request.discardDraftUid, let validity = request.discardDraftUidValidity {
+            json["discard_draft_uid"] = Int(uid)
+            json["discard_draft_uidvalidity"] = Int(validity)
+        }
+        let httpRequest = try await put("/send", json: json)
         _ = try await send(httpRequest, expectedStatuses: 200..<300)
     }
 

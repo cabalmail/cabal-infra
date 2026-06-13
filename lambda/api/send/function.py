@@ -1,21 +1,24 @@
 '''Sends an email message'''
 import copy
 import json
-import os
-import re
 import smtplib
 import time
 import uuid
-from email.message import EmailMessage
-from email.utils import formatdate, getaddresses
+from email.utils import getaddresses
 import boto3 # pylint: disable=import-error
 from botocore.exceptions import ClientError # pylint: disable=import-error
-from helper import format_mailbox # pylint: disable=import-error
+from compose import ( # pylint: disable=import-error
+    DRAFTS_FOLDER,
+    append_draft,
+    compose_from_body,
+    guarded_draft_expunge,
+    unauthorized_sender_response_or_none,
+)
+from helper import delete_object # pylint: disable=import-error
 from helper import get_imap_client # pylint: disable=import-error
 from helper import get_mpw # pylint: disable=import-error
-from helper import get_object # pylint: disable=import-error
 from helper import upload_object # pylint: disable=import-error
-from helper import user_authorized_for_sender # pylint: disable=import-error
+from helper import validate_uid # pylint: disable=import-error
 from helper import MaintenanceError, maintenance_response # pylint: disable=import-error
 
 # Sending is SMTP-first: outbound delivery never blocks on IMAP. The Bcc-free
@@ -38,29 +41,6 @@ ddb = boto3.resource('dynamodb')
 _dedupe_table = ddb.Table(DEDUPE_TABLE)
 _queue_url_cache = {}
 
-# The user's display-name preference (set via /set_preferences) becomes the
-# From header's display name. It is read server-side - never from the request
-# body - so a client cannot put an arbitrary name on the wire per message.
-PREFERENCES_TABLE = os.environ.get('USER_PREFERENCES_TABLE_NAME', 'cabal-user-preferences')
-_preferences_table = ddb.Table(PREFERENCES_TABLE)
-
-# Attachments are uploaded to S3 via the /upload_url Lambda's presigned
-# PUT URLs (the cache bucket's 2-day lifecycle handles cleanup). Total
-# decoded payload is hard-capped well above the React/Apple soft warning
-# at 20 MB so clients can present a friendly warning while a malformed
-# or hostile request still hits a server-side ceiling.
-MAX_TOTAL_ATTACHMENT_BYTES = 25 * 1024 * 1024
-# Hard ceiling on attachment count per message (Phase 2 of
-# docs/0.10.x/application-surface-hardening-plan.md). The React/Apple UIs
-# never attach more than a handful; this bounds a hostile request whose
-# individual parts each stay under the byte cap.
-MAX_ATTACHMENTS = 10
-ALLOWED_KEY_PREFIX = 'outbound'
-# Matches `outbound/<user>/<uuid>/<filename>` keys minted by upload_url.
-# The user segment must equal the authenticated caller; we still pin the
-# overall shape here so a malformed key is rejected before any S3 call.
-_KEY_SHAPE = re.compile(r'^outbound/([^/]+)/[^/]+/[^/]+$')
-
 def handler(event, _context):
     '''Sends an email message'''
 
@@ -70,18 +50,12 @@ def handler(event, _context):
     # as the SMTP MAIL FROM below, so a display-name game in the From header
     # cannot leave the envelope sender and the visible From disagreeing.
     sender = body['sender']
-    if not user_authorized_for_sender(user, sender):
-        return {
-            "statusCode": 500,
-            "body": json.dumps({
-                "status": "Sender address not associated with authenticated user"
-            })
-        }
+    unauthorized = unauthorized_sender_response_or_none(user, sender)
+    if unauthorized:
+        return unauthorized
 
-    bucket = body['host'].replace('imap', 'cache')
     try:
-        validate_outbound_headers(body)
-        attachments = load_attachments(body.get('attachments', []), bucket, user)
+        msg = compose_from_body(body, user)
     except ValueError as err:
         return {
             "statusCode": 400,
@@ -89,21 +63,6 @@ def handler(event, _context):
                 "status": str(err)
             })
         }
-
-    # The visible From may carry the user's display-name preference, but the
-    # address part is always the bare validated sender, which is also what the
-    # SMTP MAIL FROM below pins to.
-    from_header = format_mailbox(_sender_display_name(user), sender)
-
-    msg = compose_message(body['subject'], from_header, {
-                            "to": ','.join(body['to_list']),
-                            "cc": ','.join(body['cc_list']),
-                            "bcc": ','.join(body['bcc_list']),
-                            "message_id": body['other_headers']['message_id'],
-                            "in_reply_to": body['other_headers']['in_reply_to'],
-                            "references": body['other_headers']['references']
-                          },
-                          body['text'], body['html'], attachments)
 
     if body.get('draft'):
         return _save_draft(body['host'], user, msg)
@@ -149,6 +108,11 @@ def handler(event, _context):
     # loses only the Sent record, not the delivery).
     _queue_sent_copy(sent_copy, body['host'], user, message_id)
 
+    # Send-from-draft cleanup (best effort, same spirit as the Sent copy):
+    # when the client passes the draft's coordinates, expunge the now-stale
+    # server copy so it does not linger in Drafts after delivery.
+    _discard_draft_copy(body, user)
+
     return {
         "statusCode": 200,
         "body": json.dumps({
@@ -157,42 +121,21 @@ def handler(event, _context):
     }
 
 
-def _sender_display_name(user):
-    '''Returns the user's display-name preference, or empty string.
-
-    Fails open: any lookup problem means the From header simply omits the
-    display name rather than blocking the send. Control characters are
-    rejected here as well as at write time (set_preferences) so a stored
-    name can never smuggle headers into the composed message.
-
-    A future per-address override would resolve here: the sender's row in
-    cabal-addresses (already fetched by user_authorized_for_sender) would
-    take precedence over this user-level preference.
-    '''
-    try:
-        item = _preferences_table.get_item(Key={'user': user}).get('Item', {})
-    except ClientError as err:
-        print(f'[send] WARN display-name lookup failed: {err}')
-        return ''
-    name = item.get('name', '')
-    if not isinstance(name, str):
-        return ''
-    name = name.strip()
-    if any(ord(ch) < 32 or ord(ch) == 127 for ch in name):
-        return ''
-    return name
-
-
 def _save_draft(host, user, msg):
     '''Saves a draft to the user's Drafts folder. Drafts keep Bcc (the user is
     still composing). Interactive and IMAP-only, so during a planned IMAP roll
     there is nothing to queue - return the maintenance signal and let the client
-    retry rather than failing.'''
+    retry rather than failing.
+
+    Create-only on purpose: this branch keeps its original response shape for
+    the React explicit-save flow. /save_draft (which shares append_draft) is
+    the lifecycle-aware endpoint that returns the new copy's UIDPLUS
+    coordinates and can replace or discard a prior copy.'''
     try:
         client = get_imap_client(host, user, 'INBOX')
     except MaintenanceError as err:
         return maintenance_response(err.state)
-    append_drafts(msg, client)
+    append_draft(client, msg)
     client.logout()
     return {
         "statusCode": 200,
@@ -200,6 +143,32 @@ def _save_draft(host, user, msg):
             "status": "saved"
         })
     }
+
+
+def _discard_draft_copy(body, user):
+    '''Best-effort removal of the server-side draft copy after a successful
+    send-from-draft. The expunge is UIDVALIDITY-guarded and Drafts-scoped;
+    any failure (including a planned IMAP roll) is logged rather than
+    surfaced - the message has already been delivered, and the worst outcome
+    is a stale draft copy the user can delete by hand.'''
+    if body.get('discard_draft_uid') is None:
+        return
+    try:
+        uid = validate_uid(body.get('discard_draft_uid'))
+        uidvalidity = validate_uid(body.get('discard_draft_uidvalidity'))
+        client = get_imap_client(body['host'], user, 'INBOX')
+        try:
+            expunged = guarded_draft_expunge(client, uid, uidvalidity)
+        finally:
+            client.logout()
+        if expunged:
+            # Drop the cached raw body so the expunged draft is not
+            # retrievable from the cache bucket afterwards (same hygiene as
+            # purge_messages).
+            bucket = body['host'].replace('imap', 'cache')
+            delete_object(bucket, f'{user}/{DRAFTS_FOLDER}/{uid}/raw')
+    except Exception as err:  # pylint: disable=broad-except
+        print(f'[send] WARN failed to discard draft copy: {err}')
 
 
 def _append_sent_queue_url():
@@ -263,94 +232,6 @@ def _release_send(message_id):
     except ClientError as err:
         print(f'[send-dedupe] WARN release failed: {err}')
 
-def load_attachments(raw, bucket, user):
-    """Resolve attachment references against S3 and validate the bundle.
-
-    Each entry must carry `filename`, `mime_type`, and an `s3_key` minted
-    by /upload_url. The key's user segment is checked against the
-    authenticated caller so a request can't pull from another user's
-    upload prefix. Total fetched size is capped above the client-side
-    warning threshold as a defensive ceiling.
-    """
-    if not raw:
-        return []
-    if not isinstance(raw, list):
-        raise ValueError("attachments must be a list")
-    if len(raw) > MAX_ATTACHMENTS:
-        raise ValueError(f"at most {MAX_ATTACHMENTS} attachments per message")
-    decoded = []
-    total = 0
-    for index, entry in enumerate(raw):
-        if not isinstance(entry, dict):
-            raise ValueError(f"attachment {index} is not an object")
-        filename = entry.get('filename')
-        mime_type = entry.get('mime_type') or 'application/octet-stream'
-        s3_key = entry.get('s3_key')
-        if not filename or not isinstance(filename, str):
-            raise ValueError(f"attachment {index} is missing a filename")
-        if not s3_key or not isinstance(s3_key, str):
-            raise ValueError(f"attachment {index} is missing s3_key")
-        match = _KEY_SHAPE.match(s3_key)
-        if not match or match.group(1) != user:
-            raise ValueError(
-                f"attachment {index} ({filename}) has an invalid s3_key"
-            )
-        try:
-            data = get_object(bucket, s3_key)
-        except Exception as err: # pylint: disable=broad-except
-            raise ValueError(
-                f"attachment {index} ({filename}) could not be fetched from staging"
-            ) from err
-        total += len(data)
-        if total > MAX_TOTAL_ATTACHMENT_BYTES:
-            raise ValueError(
-                "attachments exceed the "
-                f"{MAX_TOTAL_ATTACHMENT_BYTES // (1024 * 1024)} MB total limit"
-            )
-        if '/' in mime_type:
-            maintype, subtype = mime_type.split('/', 1)
-        else:
-            maintype, subtype = 'application', 'octet-stream'
-        decoded.append({
-            'filename': filename,
-            'maintype': maintype,
-            'subtype': subtype,
-            'data': data,
-        })
-    return decoded
-
-# pylint: disable=too-many-arguments,too-many-positional-arguments
-def compose_message(subject, from_header, headers, text, html, attachments=None):
-    """Create a message object. from_header is a full RFC 5322 mailbox
-    (optionally carrying a display name); the bare envelope sender is pinned
-    separately in the handler."""
-    msg = EmailMessage()
-    msg['Subject'] = subject
-    msg['From'] = from_header
-    if len(headers['to']):
-        msg['To'] = headers['to']
-    if len(headers['cc']):
-        msg['Cc'] = headers['cc']
-    if len(headers['bcc']):
-        msg['Bcc'] = headers['bcc']
-    if len(headers['message_id']):
-        msg['Message-Id'] = headers['message_id'][0]
-    if len(headers['in_reply_to']):
-        msg['In-Reply-To'] = headers['in_reply_to'][0]
-    if len(headers['references']):
-        msg['References'] = ' '.join(headers['references'])
-    msg['Date'] = formatdate(localtime=True)
-    msg.set_content(text, subtype='plain')
-    msg.add_alternative(html, subtype='html')
-    for attachment in attachments or []:
-        msg.add_attachment(
-            attachment['data'],
-            maintype=attachment['maintype'],
-            subtype=attachment['subtype'],
-            filename=attachment['filename'],
-        )
-    return msg
-
 def strip_bcc(msg):
     """Returns a copy of msg with every Bcc header removed.
 
@@ -362,48 +243,6 @@ def strip_bcc(msg):
     copied = copy.copy(msg)
     del copied['Bcc']
     return copied
-
-def _reject_crlf(value, field):
-    """Raises ValueError if a header value carries a CR or LF.
-
-    Embedded line breaks are how header injection smuggles extra headers; we
-    reject them outright rather than trust EmailMessage's uneven per-field
-    validation to fold or drop them.
-    """
-    if not isinstance(value, str):
-        return
-    if '\r' in value or '\n' in value:
-        raise ValueError(f"{field} contains illegal line breaks")
-
-def validate_outbound_headers(body):
-    """Validates caller-supplied header values for header injection.
-
-    Checks subject, every recipient entry, message-id, in-reply-to, and each
-    references token for embedded CR/LF. Raises ValueError (-> 400) on the
-    first offending value.
-    """
-    _reject_crlf(body.get('subject'), 'subject')
-    for field, label in (('to_list', 'to'), ('cc_list', 'cc'), ('bcc_list', 'bcc')):
-        for entry in body.get(field, []) or []:
-            _reject_crlf(entry, label)
-    others = body.get('other_headers', {}) or {}
-    for mid in others.get('message_id', []) or []:
-        _reject_crlf(mid, 'message_id')
-    for irt in others.get('in_reply_to', []) or []:
-        _reject_crlf(irt, 'in_reply_to')
-    for ref in others.get('references', []) or []:
-        _reject_crlf(ref, 'references')
-
-def append_drafts(msg, client):
-    """Appends an email message to the user's Drafts folder with the
-    \\Draft flag set. Creates the folder if it does not exist (create-then-
-    append) so a missing Drafts folder on a fresh mailbox does not fail the
-    call."""
-    try:
-        client.create_folder('Drafts')
-    except: # pylint: disable=bare-except
-        pass
-    client.append('Drafts', msg.as_string().encode(), flags=[rb"\Draft", rb"\Seen"])
 
 def send(msg, smtp_host, from_addr, to_addrs):
     """Send the message.

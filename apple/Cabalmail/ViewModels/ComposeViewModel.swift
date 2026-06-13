@@ -18,13 +18,23 @@ import CabalmailKit
 ///   - both filled -> send each as the author wrote it
 ///
 /// Drafts persist locally via `DraftStore` (autosave every 5 s) and store the
-/// Markdown source plus the user's editor-mode preference. Cross-device IMAP
-/// `Drafts` sync is Phase 5.1.
+/// Markdown source plus the user's editor-mode preference. Cross-device sync
+/// layers on top: the buffer is pushed to the IMAP `Drafts` folder via
+/// `/save_draft` on close-without-send and on a long debounce, with
+/// `serverDraftRef` threading the replace chain so every device sees one
+/// copy (see `docs/draft-sync-and-threading.md`).
 @Observable
 @MainActor
 final class ComposeViewModel {
-    /// Interval between autosave flushes. Matches the plan.
+    /// Interval between local autosave flushes. Matches the plan.
     static let autosaveInterval: TimeInterval = 5
+
+    /// Interval between server-side draft pushes while composing. Long on
+    /// purpose — the 5 s local autosave is the crash-recovery story, and
+    /// each server save costs a Lambda invocation plus EFS churn. Close-
+    /// without-send always pushes, so this only bounds how stale another
+    /// device's view of an *open* compose window can be.
+    static let serverAutosaveInterval: TimeInterval = 60
 
     /// Soft-warn the user when total attachment payload exceeds this size.
     /// Many mail servers reject messages over ~25 MB, so anything above 20
@@ -77,7 +87,16 @@ final class ComposeViewModel {
     let references: [String]
     private let composeIntent: ComposeIntent
 
+    /// Server-side Drafts copy the next save replaces (and a send
+    /// discards). Seeded from the draft when resuming; updated after every
+    /// successful `/save_draft` round trip.
+    var serverDraftRef: DraftServerRef?
+    /// Serializes server saves so the debounce loop and an in-progress
+    /// close-without-send can't append racing copies.
+    var serverSaveInFlight = false
+
     private var autosaveTask: Task<Void, Never>?
+    private var serverAutosaveTask: Task<Void, Never>?
     /// When true, the rich editor and the markdown source are in sync — the
     /// user hasn't typed in the rich pane since the last seed/import. The
     /// send logic treats them as "rich is empty" so single-mode markdown
@@ -121,6 +140,7 @@ final class ComposeViewModel {
         self.inReplyTo = seed.inReplyTo
         self.references = seed.references
         self.composeIntent = seed.composeIntent ?? .new
+        self.serverDraftRef = seed.serverRef
         // Append the preference signature to the seeded body, but only once.
         // Replies / forwards seed with an attribution + quoted body; the
         // signature goes *above* that block so the user's reply text lands
@@ -143,14 +163,16 @@ final class ComposeViewModel {
         }
     }
 
-    /// Cancel the autosave loop. Called from the view's `onDisappear` and
+    /// Cancel the autosave loops. Called from the view's `onDisappear` and
     /// from every flow that dismisses the sheet (`send`, `cancel`, `discard`)
-    /// so the background `Task` always winds down deterministically.
+    /// so the background `Task`s always wind down deterministically.
     /// Swift 5.10 strict concurrency makes `deinit` nonisolated, so we can't
     /// just cancel from there — view-level lifecycle is the right hook.
     func stop() {
         autosaveTask?.cancel()
         autosaveTask = nil
+        serverAutosaveTask?.cancel()
+        serverAutosaveTask = nil
     }
 
     func start() async {
@@ -160,6 +182,14 @@ final class ComposeViewModel {
                 try? await Task.sleep(nanoseconds: UInt64(Self.autosaveInterval * 1_000_000_000))
                 if Task.isCancelled { return }
                 await self?.persistCurrentDraft()
+            }
+        }
+        serverAutosaveTask?.cancel()
+        serverAutosaveTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: UInt64(Self.serverAutosaveInterval * 1_000_000_000))
+                if Task.isCancelled { return }
+                await self?.autosaveToServer()
             }
         }
         await seedRichFromMarkdown()
@@ -183,8 +213,9 @@ final class ComposeViewModel {
     }
 
     /// Reply / reply-all focus the body; forward / new focus the To field.
-    /// Driven by the explicit `composeIntent` because `inReplyTo` is always
-    /// nil on the Apple API-backed IMAP path (no Message-ID surfaced).
+    /// Driven by the explicit `composeIntent` rather than `inReplyTo`: a
+    /// resumed or persisted draft can carry threading headers without
+    /// being a freshly-seeded reply.
     var shouldFocusBodyOnAppear: Bool {
         composeIntent == .reply || composeIntent == .replyAll
     }
@@ -263,7 +294,11 @@ final class ComposeViewModel {
         defer { isSending = false }
         do {
             let message = await buildOutgoingMessage(from: fromEmail)
-            let outcome = try await client.send(message)
+            // Send-from-draft cleans up the server copy after delivery
+            // (best-effort, server-side). A queued send drops the ref; the
+            // stale copy survives, which beats discarding a draft for a
+            // message that hasn't actually left yet.
+            let outcome = try await client.send(message, discardingDraft: serverDraftRef)
             lastSendOutcome = outcome
             // Whether the message left the device or got queued, the draft
             // is no longer authoritative — the outbox owns it from here.
@@ -280,17 +315,20 @@ final class ComposeViewModel {
     }
 
     /// Cancel button (or the macOS close-button intercept) — flushes one
-    /// last autosave, pushes the draft to IMAP `Drafts` so it shows up on
-    /// every device, and dismisses. Returns true when the window can close;
-    /// false when the IMAP push surfaced a hard error and the user should
-    /// see the banner before the window goes away.
+    /// last autosave, pushes the draft to IMAP `Drafts` (replacing the copy
+    /// a previous save produced) so it shows up on every device, and
+    /// dismisses. Returns true when the window can close; false when the
+    /// push surfaced a hard error and the user should see the banner before
+    /// the window goes away — the local copy is still on disk either way,
+    /// so nothing is lost by retrying or by force-closing.
     ///
     /// Empty drafts and drafts without a valid `From` address fall back to
-    /// the local-only autosave: empty composes leave nothing behind, and a
-    /// half-finished compose without a sender selected can't APPEND to a
-    /// remote mailbox (no envelope to authorize against). `DraftStore.save`
-    /// silently removes empty drafts so a user who opens Compose and closes
-    /// immediately leaves no breadcrumb.
+    /// the local-only autosave: empty composes leave nothing behind (any
+    /// stale server copy is discarded), and a half-finished compose without
+    /// a sender selected can't be saved server-side (no envelope to
+    /// authorize against). `DraftStore.save` silently removes empty drafts
+    /// so a user who opens Compose and closes immediately leaves no
+    /// breadcrumb.
     @discardableResult
     func cancel() async -> Bool {
         await persistCurrentDraft()
@@ -300,23 +338,21 @@ final class ComposeViewModel {
             return true
         }
         let message = await buildOutgoingMessage(from: fromEmail)
-        // Empty body + empty subject + empty recipients means there's
-        // nothing worth APPENDing — leave Drafts alone and dismiss.
-        let hasAnything = !subject.isEmpty
-            || !(message.textBody?.isEmpty ?? true)
-            || !(message.htmlBody?.isEmpty ?? true)
-            || !message.to.isEmpty
-            || !message.cc.isEmpty
-            || !message.bcc.isEmpty
-            || !message.attachments.isEmpty
-        guard hasAnything else {
+        guard hasDraftContent(message) else {
+            if let ref = serverDraftRef {
+                _ = try? await client.discardDraft(ref)
+            }
             try? await draftStore.remove(id: draftId)
             stop()
             onClose()
             return true
         }
         do {
-            try await client.saveDraft(message)
+            serverSaveInFlight = true
+            defer { serverSaveInFlight = false }
+            if let ref = try await client.saveDraft(message, replacing: serverDraftRef) {
+                serverDraftRef = ref
+            }
             try? await draftStore.remove(id: draftId)
             stop()
             onClose()
@@ -330,9 +366,13 @@ final class ComposeViewModel {
     }
 
     /// Delete the draft entirely (user confirmed "Discard draft") and
-    /// dismiss.
+    /// dismiss. Also removes the server-side copy when one is recorded —
+    /// discarding on one device should discard everywhere.
     func discard() async {
         try? await draftStore.remove(id: draftId)
+        if let ref = serverDraftRef {
+            _ = try? await client.discardDraft(ref)
+        }
         stop()
         onClose()
     }

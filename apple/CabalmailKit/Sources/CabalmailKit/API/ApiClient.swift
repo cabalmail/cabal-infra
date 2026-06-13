@@ -118,6 +118,21 @@ public protocol ApiClient: Sendable {
     /// sendMessage` byte-for-byte.
     func sendMessage(_ request: SendMessageRequest) async throws
 
+    // MARK: Drafts
+    /// Saves (or atomically replaces) a draft via the `/save_draft` Lambda
+    /// and returns the new copy's UIDPLUS coordinates. When the request
+    /// carries `replacesUid` / `replacesUidValidity`, the Lambda appends
+    /// the new copy first and only then expunges the old one, guarded by
+    /// UIDVALIDITY — a guard miss keeps both copies and reports
+    /// `replaced: false`, never a lost draft.
+    func saveDraft(_ request: SaveDraftRequest) async throws -> ApiSaveDraftResponse
+
+    /// Discards one server-side draft copy (`/save_draft` with
+    /// `op: discard`). Returns whether the copy was actually expunged;
+    /// false means the UIDVALIDITY guard declined (the coordinates are
+    /// stale), which callers treat as already-gone rather than an error.
+    func discardDraft(host: String, uid: UInt32, uidValidity: UInt32) async throws -> Bool
+
     /// Requests one presigned S3 PUT URL per outbound attachment. Used to
     /// bypass API Gateway's 10 MB request ceiling on /send — clients PUT
     /// each body to the returned URL and then pass the `key` back via
@@ -240,6 +255,11 @@ public struct SendMessageRequest: Sendable {
     public let textBody: String
     public let draft: Bool
     public let attachments: [ApiSendAttachment]
+    /// Send-from-draft cleanup: when set, the Lambda best-effort expunges
+    /// this Drafts-folder copy after successful SMTP delivery (guarded by
+    /// UIDVALIDITY, so stale coordinates simply leave the copy in place).
+    public let discardDraftUid: UInt32?
+    public let discardDraftUidValidity: UInt32?
 
     public init(
         host: String,
@@ -253,7 +273,9 @@ public struct SendMessageRequest: Sendable {
         htmlBody: String,
         textBody: String,
         draft: Bool,
-        attachments: [ApiSendAttachment] = []
+        attachments: [ApiSendAttachment] = [],
+        discardDraftUid: UInt32? = nil,
+        discardDraftUidValidity: UInt32? = nil
     ) {
         self.host = host
         self.smtpHost = smtpHost
@@ -267,6 +289,54 @@ public struct SendMessageRequest: Sendable {
         self.textBody = textBody
         self.draft = draft
         self.attachments = attachments
+        self.discardDraftUid = discardDraftUid
+        self.discardDraftUidValidity = discardDraftUidValidity
+    }
+}
+
+/// Parameters for `/save_draft` (op: save). The compose payload is the
+/// `/send` shape minus SMTP concerns; `replacesUid` / `replacesUidValidity`
+/// name the prior server copy this save supersedes (both or neither).
+public struct SaveDraftRequest: Sendable {
+    public let host: String
+    public let sender: String
+    public let toList: [String]
+    public let ccList: [String]
+    public let bccList: [String]
+    public let subject: String
+    public let otherHeaders: ApiSendOtherHeaders
+    public let htmlBody: String
+    public let textBody: String
+    public let attachments: [ApiSendAttachment]
+    public let replacesUid: UInt32?
+    public let replacesUidValidity: UInt32?
+
+    public init(
+        host: String,
+        sender: String,
+        toList: [String],
+        ccList: [String],
+        bccList: [String],
+        subject: String,
+        otherHeaders: ApiSendOtherHeaders,
+        htmlBody: String,
+        textBody: String,
+        attachments: [ApiSendAttachment] = [],
+        replacesUid: UInt32? = nil,
+        replacesUidValidity: UInt32? = nil
+    ) {
+        self.host = host
+        self.sender = sender
+        self.toList = toList
+        self.ccList = ccList
+        self.bccList = bccList
+        self.subject = subject
+        self.otherHeaders = otherHeaders
+        self.htmlBody = htmlBody
+        self.textBody = textBody
+        self.attachments = attachments
+        self.replacesUid = replacesUid
+        self.replacesUidValidity = replacesUidValidity
     }
 }
 

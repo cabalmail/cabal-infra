@@ -34,6 +34,10 @@ Every private-subnet container reaches the internet and all AWS service APIs thr
 
 The `quiesce` GitHub workflow scales a development or stage environment's running compute (ECS services, the ECS-instance ASG, NAT instances) to zero so it stops accruing hourly charges. Data is preserved. The workflow refuses to run against prod. See [Quiesce: scale a non-prod environment to zero](./quiesce.md) for the full list of what gets scaled, what is preserved, and how to make the quiesce durable across other Terraform runs.
 
+# Draft sync and threading headers
+
+Envelope payloads from `/list_envelopes` and `/search_envelopes` carry the RFC 5322 threading identity (`message_id` / `in_reply_to` / `references`), and the `/save_draft` Lambda gives drafts a server-side lifecycle (save returns UIDPLUS coordinates, save can atomically replace a prior copy, discard removes one — all Drafts-scoped and UIDVALIDITY-guarded). The Apple clients sync compose drafts across devices through that path. See [Draft sync and threading headers](./draft-sync-and-threading.md) for the wire contract, the safety posture, and the client sync loop.
+
 # IMAP full-text search index
 
 The `imap` container ships [dovecot-fts-flatcurve](https://github.com/slusarz/dovecot-fts-flatcurve) (pinned upstream tag and commit baked into `docker/imap/Dockerfile`, licence preserved at `/usr/share/doc/fts-flatcurve/` inside the image). The plugin gives `/search_envelopes` an inverted index instead of a sequential body scan; configuration lives in `docker/imap/configs/dovecot/90-fts.conf`.

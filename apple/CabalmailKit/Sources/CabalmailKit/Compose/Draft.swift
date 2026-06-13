@@ -3,10 +3,9 @@ import Foundation
 /// Why a compose session was opened. Carried explicitly on the seed
 /// `Draft` so the compose view can route initial focus + reply-style
 /// HTML scaffolding without depending on envelope-derived signals like
-/// `inReplyTo` — the Apple client's API-backed IMAP path doesn't
-/// surface Message-ID, so `inReplyTo` is always nil even for genuine
-/// reply seeds, and the previous heuristic silently treated every
-/// reply as if it were a new compose.
+/// `inReplyTo` — a resumed or persisted draft can carry threading headers
+/// without being a freshly-seeded reply, and envelopes cached before the
+/// server surfaced Message-ID have none even for genuine replies.
 public enum ComposeIntent: String, Sendable, Codable, Hashable {
     case new
     case reply
@@ -14,11 +13,29 @@ public enum ComposeIntent: String, Sendable, Codable, Hashable {
     case forward
 }
 
+/// Server-side coordinates of a draft copy in the IMAP Drafts folder, as
+/// reported by `/save_draft` (UIDPLUS APPENDUID). The pair is only
+/// meaningful together — a UID can be reused after a mailbox reset bumps
+/// UIDVALIDITY — so every replace / discard call sends both and the
+/// Lambda's guard declines on mismatch.
+public struct DraftServerRef: Sendable, Codable, Hashable {
+    public let uid: UInt32
+    public let uidValidity: UInt32
+
+    public init(uid: UInt32, uidValidity: UInt32) {
+        self.uid = uid
+        self.uidValidity = uidValidity
+    }
+}
+
 /// Locally-persisted compose state.
 ///
-/// Phase 5 keeps drafts local only — `DraftStore` autosaves them under the app
-/// support directory so a mid-compose app kill is recoverable. The plan's
-/// IMAP-backed cross-device draft sync lives in Phase 5.1.
+/// `DraftStore` autosaves drafts under the app support directory so a
+/// mid-compose app kill is recoverable; it remains the live editing buffer.
+/// Cross-device sync layers on top: compose pushes the buffer to the IMAP
+/// `Drafts` folder via `/save_draft` (close-without-send, plus a long
+/// debounce), recording `serverUid` / `serverUidValidity` so the next save
+/// replaces the prior copy and a send discards it.
 ///
 /// `EmailAddress` values are stored as their canonical string form and
 /// re-parsed on load; this keeps the persisted shape stable even if the
@@ -37,6 +54,12 @@ public struct Draft: Sendable, Codable, Hashable, Identifiable {
     /// Optional so drafts persisted before this field existed still
     /// decode cleanly; `nil` is treated as `.new` at use sites.
     public var composeIntent: ComposeIntent?
+    /// Coordinates of the server-side Drafts copy this draft was last
+    /// saved to (or resumed from); nil for never-synced drafts. Stored as
+    /// two optionals rather than a `DraftServerRef` so pre-sync persisted
+    /// JSON decodes cleanly and the fields stay independently inspectable.
+    public var serverUid: UInt32?
+    public var serverUidValidity: UInt32?
 
     public init(
         id: UUID = UUID(),
@@ -49,7 +72,9 @@ public struct Draft: Sendable, Codable, Hashable, Identifiable {
         body: String = "",
         inReplyTo: String? = nil,
         references: [String] = [],
-        composeIntent: ComposeIntent? = nil
+        composeIntent: ComposeIntent? = nil,
+        serverUid: UInt32? = nil,
+        serverUidValidity: UInt32? = nil
     ) {
         self.id = id
         self.updatedAt = updatedAt
@@ -62,6 +87,15 @@ public struct Draft: Sendable, Codable, Hashable, Identifiable {
         self.inReplyTo = inReplyTo
         self.references = references
         self.composeIntent = composeIntent
+        self.serverUid = serverUid
+        self.serverUidValidity = serverUidValidity
+    }
+
+    /// The server coordinates as a `DraftServerRef`, when both halves are
+    /// present.
+    public var serverRef: DraftServerRef? {
+        guard let serverUid, let serverUidValidity else { return nil }
+        return DraftServerRef(uid: serverUid, uidValidity: serverUidValidity)
     }
 
     /// A draft with no recipients, subject, or body is considered empty and
