@@ -9,17 +9,25 @@ After signing up and logging in, [fork this repository](https://docs.github.com/
 
 ## Repository secrets
 
-Navigate to **Settings -> Secrets and variables -> Actions -> Secrets** and add the following secrets. These apply to all workflows across every environment.
+Navigate to **Settings -> Secrets and variables -> Actions -> Secrets** and add the following secret. It applies to all workflows across every environment.
 
 | Secret | Value |
 | --- | --- |
-| `AWS_ACCESS_KEY_ID` | Access key ID from [AWS setup](./aws.md) step 10. |
-| `AWS_SECRET_ACCESS_KEY` | Access key secret from [AWS setup](./aws.md) step 10. |
 | `AWS_REGION` | AWS region, e.g. `us-east-1`. Must match `TF_VAR_AWS_REGION`. |
+
+CI authenticates to AWS with GitHub OIDC, not a static access key, so there are no `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` secrets to set. The role each environment assumes is configured per-environment below (`AWS_DEPLOY_ROLE_ARN`).
 
 ## Environment variables and secrets
 
 The remaining configuration is set per-environment under **Settings -> Environments -> [environment name]**. Create two environments per named branch: `prod` (maps to `main`), `gate-prod`, `stage`, `gate-stage`, `development`, and `gate-development`. Optionally add protection rules to the three `gate-*` environments. Potentially destructive jobs in Github workflows are placed behind other jobs that depend on the `gate-*` environments, making them the best place for protection rules. Required reviewers on the gate environments are also what pause the first provisioning run between the dns and infra stages (see [setup](./setup.md)), so add them at least for that run.
+
+### AWS deploy role (OIDC)
+
+CI assumes an IAM role via GitHub OIDC instead of using static keys. Set this as a **variable** (not a secret) on each of `prod`, `stage`, and `development`, pointing at the `cicd` role in that environment's AWS account.
+
+| Variable | Example | Notes |
+| --- | --- | --- |
+| `AWS_DEPLOY_ROLE_ARN` | `arn:aws:iam::123456789012:role/cicd` | The role ARN from [AWS setup](./aws.md) step 7 for this environment's account. The deploy workflows assume it via `aws-actions/configure-aws-credentials`. Create the role + provider before the first deploy into that account. |
 
 ### Core infrastructure
 
