@@ -103,3 +103,36 @@ These are used by the `register-tfv` workflow to submit a toll-free verification
 | `TFV_CONTACT_EMAIL` | `support@example.com` | Goes on the public TFV submission. Use an alias you do not mind appearing on a regulatory form. |
 | `TFV_CONTACT_PHONE` | `+15551234567` | E.164 format. Same caveat as email. |
 | `TFV_TAX_ID` | `12-3456789` | Business identification number (EIN for a US LLC). Leave unset for `SOLE_PROPRIETOR` entities -- carriers reject sole-proprietor submissions that include tax fields, and the workflow ignores `TFV_TAX_ID` when `TFV_BUSINESS_TYPE=SOLE_PROPRIETOR`. Stored as a secret to keep it out of workflow logs; it still appears on the public TFV submission to carriers. |
+
+## Claude automation tool allowlist
+
+The Claude automation workflow (`.github/workflows/claude.yml`) runs the
+Claude Code Action with an explicit `--allowed-tools` allowlist and
+`--permission-mode acceptEdits`, not `bypassPermissions`. File edits apply
+automatically (there is no human in CI to approve them), but every shell
+command is checked against the allowlist and anything outside it fails
+closed. Because the prompt embeds untrusted issue and comment text, the
+allowlist is a security boundary, not just a convenience: destructive shell
+verbs such as `rm` are deliberately absent so a prompt-injection payload
+cannot run them even if it slips past the untrusted-input wrapper.
+
+Both jobs -- `on-labeled-issue` and `on-mention` -- carry the same list, and
+the Dependabot remediation job (`.github/workflows/dependabot.yml`) carries
+its own narrower one.
+
+When a legitimate Claude run needs a tool that is not on the list, the
+command is denied and the denial is visible in the run log (the on-mention
+job sets `show_full_output: true`, and the labeled-issue job surfaces it in
+the transcript). To grant it:
+
+1. Edit the `claude_args` line in **both** `on-labeled-issue` and
+   `on-mention` in `claude.yml`, keeping the two lists identical.
+2. Add the entry as `Bash(<command>:*)` for a shell command (for example
+   `Bash(make:*)`), or as the bare tool name for a built-in
+   (`Read`, `Edit`, `Write`, `Glob`, `Grep`).
+3. Keep the list single-quoted and on one line so YAML line-folding does not
+   insert spaces into it.
+4. Do not add destructive primitives (`rm`, `dd`, `mkfs`, `sudo`, raw
+   `curl`/`wget` to arbitrary hosts). If a task genuinely needs to remove a
+   file, prefer the `Edit`/`Write` tools or a scoped `git` command already
+   covered by `Bash(git:*)`.
