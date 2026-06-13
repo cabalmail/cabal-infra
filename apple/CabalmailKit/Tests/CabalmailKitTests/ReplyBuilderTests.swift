@@ -1,12 +1,45 @@
 import XCTest
 @testable import CabalmailKit
 
-final class ReplyBuilderTests: XCTestCase {
-    private let fixedDate = Date(timeIntervalSince1970: 1_717_171_717)
-    private let clock: @Sendable () -> Date = {
-        Date(timeIntervalSince1970: 1_717_171_717)
-    }
+// Shared fixtures for both ReplyBuilder suites below (the threading tests
+// live in their own class so each body stays under SwiftLint's
+// type_body_length cap).
 
+private let fixedDate = Date(timeIntervalSince1970: 1_717_171_717)
+private let clock: @Sendable () -> Date = {
+    Date(timeIntervalSince1970: 1_717_171_717)
+}
+
+private func makeEnvelope(
+    from: [(String, String)] = [],
+    replyTo: [(String, String)] = [],
+    to: [(String, String)] = [],
+    cc: [(String, String)] = [],
+    subject: String? = nil,
+    date: Date? = nil,
+    messageId: String? = nil,
+    inReplyTo: String? = nil,
+    references: [String] = []
+) -> Envelope {
+    Envelope(
+        uid: 1,
+        messageId: messageId,
+        date: date,
+        subject: subject,
+        from: from.map { EmailAddress(name: nil, mailbox: $0.0, host: $0.1) },
+        replyTo: replyTo.map { EmailAddress(name: nil, mailbox: $0.0, host: $0.1) },
+        to: to.map { EmailAddress(name: nil, mailbox: $0.0, host: $0.1) },
+        cc: cc.map { EmailAddress(name: nil, mailbox: $0.0, host: $0.1) },
+        inReplyTo: inReplyTo,
+        references: references,
+        flags: [],
+        internalDate: date,
+        size: nil,
+        hasAttachments: false
+    )
+}
+
+final class ReplyBuilderTests: XCTestCase {
     // MARK: - Subject prefixing
 
     func testReplyPrefixesSubject() {
@@ -185,9 +218,11 @@ final class ReplyBuilderTests: XCTestCase {
         )
         XCTAssertEqual(draft.body, "")
     }
+}
 
-    // MARK: - Threading
-
+/// RFC 5322 §3.6.4 threading behavior, in its own suite so neither test
+/// class trips SwiftLint's type_body_length under `--strict`.
+final class ReplyBuilderThreadingTests: XCTestCase {
     func testReplyThreadingHeaders() {
         let envelope = makeEnvelope(
             from: [("bob", "example.com")],
@@ -198,6 +233,40 @@ final class ReplyBuilderTests: XCTestCase {
             from: envelope, body: nil, mode: .reply, userAddresses: [], now: clock
         )
         XCTAssertEqual(draft.inReplyTo, "m-1@example.com")
+        XCTAssertEqual(draft.references, ["m-0@example.com", "m-1@example.com"])
+    }
+
+    func testReplyPrefersRealReferencesChain() {
+        // With the envelope carrying the original's full References list
+        // (server-side Phase 1), the reply chains it per RFC 5322 §3.6.4
+        // instead of reconstructing one hop from In-Reply-To.
+        let envelope = makeEnvelope(
+            from: [("bob", "example.com")],
+            messageId: "<m-2@example.com>",
+            inReplyTo: "<m-1@example.com>",
+            references: ["<m-0@example.com>", "<m-1@example.com>"]
+        )
+        let draft = ReplyBuilder.build(
+            from: envelope, body: nil, mode: .reply, userAddresses: [], now: clock
+        )
+        XCTAssertEqual(draft.inReplyTo, "m-2@example.com")
+        XCTAssertEqual(
+            draft.references,
+            ["m-0@example.com", "m-1@example.com", "m-2@example.com"]
+        )
+    }
+
+    func testReplyReferencesDoNotDuplicateMessageId() {
+        // A malformed (or self-referencing) chain that already contains the
+        // original's Message-ID must not gain a second copy.
+        let envelope = makeEnvelope(
+            from: [("bob", "example.com")],
+            messageId: "<m-1@example.com>",
+            references: ["<m-0@example.com>", "<m-1@example.com>"]
+        )
+        let draft = ReplyBuilder.build(
+            from: envelope, body: nil, mode: .reply, userAddresses: [], now: clock
+        )
         XCTAssertEqual(draft.references, ["m-0@example.com", "m-1@example.com"])
     }
 
@@ -247,35 +316,6 @@ final class ReplyBuilderTests: XCTestCase {
         XCTAssertTrue(text.contains("In-Reply-To: <orig@example.com>"))
         XCTAssertTrue(text.contains("References: <orig@example.com>"))
         XCTAssertTrue(text.contains("Subject: Re: Proposal"))
-    }
-
-    // MARK: - Helpers
-
-    private func makeEnvelope(
-        from: [(String, String)] = [],
-        replyTo: [(String, String)] = [],
-        to: [(String, String)] = [],
-        cc: [(String, String)] = [],
-        subject: String? = nil,
-        date: Date? = nil,
-        messageId: String? = nil,
-        inReplyTo: String? = nil
-    ) -> Envelope {
-        Envelope(
-            uid: 1,
-            messageId: messageId,
-            date: date,
-            subject: subject,
-            from: from.map { EmailAddress(name: nil, mailbox: $0.0, host: $0.1) },
-            replyTo: replyTo.map { EmailAddress(name: nil, mailbox: $0.0, host: $0.1) },
-            to: to.map { EmailAddress(name: nil, mailbox: $0.0, host: $0.1) },
-            cc: cc.map { EmailAddress(name: nil, mailbox: $0.0, host: $0.1) },
-            inReplyTo: inReplyTo,
-            flags: [],
-            internalDate: date,
-            size: nil,
-            hasAttachments: false
-        )
     }
 }
 

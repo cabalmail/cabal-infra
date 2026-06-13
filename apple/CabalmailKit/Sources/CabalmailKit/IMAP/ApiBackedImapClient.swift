@@ -21,10 +21,11 @@ import Foundation
 ///     pagination cursor in a single round trip. The raw-IMAP-syntax
 ///     `/search` Lambda was retired in 0.9.x (Phase 6 of
 ///     `docs/0.9.x/imap-search-plan.md`).
-///   * No APPEND — `/send` already handles the Outbox + Sent shuffle
-///     server-side, so `CabalmailClient.send(_:)` no longer needs a
-///     client-side APPEND. `append(_:_:_:)` here throws `protocolError`
-///     to make accidental callers obvious.
+///   * No raw APPEND — `/send` handles the Outbox + Sent shuffle
+///     server-side and `/save_draft` owns the Drafts-folder lifecycle
+///     (save / replace / discard with UIDPLUS coordinates), so no caller
+///     needs a byte-level APPEND. `append(_:_:_:)` here throws
+///     `protocolError` to make accidental callers obvious.
 ///   * Envelope addresses arrive in RFC 5322 mailbox form — the Lambda
 ///     emits `"Display Name" <mailbox@host>` when an addr-name is set
 ///     and bare `mailbox@host` otherwise. `parseAddress` splits the two
@@ -222,7 +223,8 @@ public actor ApiBackedImapClient: ImapClient {
 
     public func append(folder: String, message: Data, flags: Set<Flag>) async throws {
         throw CabalmailError.protocolError(
-            "append is not supported by the API-backed client; /send already handles Outbox + Sent"
+            "append is not supported by the API-backed client; "
+                + "/send handles Outbox + Sent and /save_draft handles Drafts"
         )
     }
 
@@ -278,15 +280,18 @@ public actor ApiBackedImapClient: ImapClient {
     private var defaultSortOrder: String { "REVERSE " }
     private var defaultSortField: String { "ARRIVAL" }
 
-    /// Builds an `Envelope` from the Lambda payload. `messageId`,
-    /// `internalDate`, and `size` are omitted — the Lambda doesn't surface
-    /// them and the cache keys on UID + UIDVALIDITY, so no behavior depends.
+    /// Builds an `Envelope` from the Lambda payload. `internalDate` and
+    /// `size` are approximated/omitted — the Lambda doesn't surface them
+    /// and the cache keys on UID + UIDVALIDITY. The threading identity
+    /// (`messageId` / `inReplyTo` / `references`) is populated when the
+    /// payload carries it (Lambdas since the 0.10.x draft-sync work);
+    /// `ReplyBuilder` threads replies from these fields.
     static func makeEnvelope(_ raw: ApiEnvelope) -> Envelope {
         let date = parseLambdaDate(raw.date)
         let flags = Set(raw.flags.map { Flag(wireValue: $0) })
         return Envelope(
             uid: raw.id,
-            messageId: nil,
+            messageId: raw.messageId?.first,
             date: date,
             subject: raw.subject,
             from: raw.from.compactMap(parseAddress),
@@ -295,7 +300,8 @@ public actor ApiBackedImapClient: ImapClient {
             to: raw.to.compactMap(parseAddress),
             cc: raw.cc.compactMap(parseAddress),
             bcc: [],
-            inReplyTo: nil,
+            inReplyTo: raw.inReplyTo?.first,
+            references: raw.references ?? [],
             flags: flags,
             internalDate: date,
             size: nil,
@@ -410,7 +416,10 @@ extension ApiBackedImapClient {
                 cc: wire.cc,
                 flags: wire.flags,
                 structure: wire.structure,
-                priority: wire.priority
+                priority: wire.priority,
+                messageId: wire.messageId,
+                inReplyTo: wire.inReplyTo,
+                references: wire.references
             )
             return SearchedEnvelope(envelope: Self.makeEnvelope(inner), folder: wire.folder)
         }

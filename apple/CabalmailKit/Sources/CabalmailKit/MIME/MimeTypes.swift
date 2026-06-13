@@ -93,6 +93,14 @@ public struct MimePart: Sendable, Hashable {
         self.children = children
     }
 
+    /// First header with the given name, matched case-insensitively, or
+    /// nil. Used for the RFC 5322 message headers (Message-ID, References,
+    /// Bcc, ...) that only the root part carries.
+    public func headerValue(_ name: String) -> String? {
+        let needle = name.lowercased()
+        return headers.first { $0.name.lowercased() == needle }?.value
+    }
+
     /// Convenience: find the first descendant matching `predicate`. Used
     /// by the renderer to pick a `text/html` alternative over `text/plain`.
     public func firstPart(where predicate: (MimePart) -> Bool) -> MimePart? {

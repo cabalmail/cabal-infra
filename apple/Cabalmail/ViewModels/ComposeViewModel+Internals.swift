@@ -90,9 +90,49 @@ extension ComposeViewModel {
             subject: subject,
             body: markdownBody,
             inReplyTo: inReplyTo,
-            references: references
+            references: references,
+            serverUid: serverDraftRef?.uid,
+            serverUidValidity: serverDraftRef?.uidValidity
         )
         try? await draftStore.save(snapshot)
+    }
+
+    /// True when the assembled message carries anything worth keeping —
+    /// the shared emptiness check behind close-without-send and the
+    /// server-save debounce.
+    func hasDraftContent(_ message: OutgoingMessage) -> Bool {
+        !subject.isEmpty
+            || !(message.textBody?.isEmpty ?? true)
+            || !(message.htmlBody?.isEmpty ?? true)
+            || !message.to.isEmpty
+            || !message.cc.isEmpty
+            || !message.bcc.isEmpty
+            || !message.attachments.isEmpty
+    }
+
+    /// Debounced server-side draft push (the `serverAutosaveInterval`
+    /// loop). Quietly skips when there's nothing to save, no From to
+    /// authorize against, a send is running, or another server save is in
+    /// flight. Failures are silent on purpose: the 5-second local autosave
+    /// is the durability story, and the next tick — or the always-pushed
+    /// close-without-send — retries, which is the offline behavior the
+    /// plan calls for without a second persistent queue.
+    func autosaveToServer() async {
+        guard !isSending, !serverSaveInFlight else { return }
+        guard let fromEmail = currentFromEmail() else { return }
+        let message = await buildOutgoingMessage(from: fromEmail)
+        guard hasDraftContent(message) else { return }
+        serverSaveInFlight = true
+        defer { serverSaveInFlight = false }
+        do {
+            if let ref = try await client.saveDraft(message, replacing: serverDraftRef) {
+                serverDraftRef = ref
+            }
+        } catch {
+            // Swallowed: see the doc comment. A failed replace server-side
+            // already degrades to save-as-new, so the worst outcome here is
+            // a duplicate draft copy, never a lost one.
+        }
     }
 
     /// Parses a comma/semicolon-separated list of addresses into

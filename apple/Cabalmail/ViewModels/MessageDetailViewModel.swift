@@ -24,6 +24,18 @@ final class MessageDetailViewModel {
     var attachments: [Attachment] = []
     var inlineImages: [String: URL] = [:]
 
+    /// RFC 5322 threading identity parsed from the fetched message's
+    /// headers (angle-bracketed, like the envelope payload). The list
+    /// envelope may predate the server emitting these fields, so the
+    /// open-message reply path overlays them via `threadedEnvelope`
+    /// (Phase 0 of the draft-sync-and-threading plan).
+    var threadingMessageId: String?
+    var threadingInReplyTo: String?
+    var threadingReferences: [String] = []
+    /// Root-part headers, retained for the Drafts resume path — Bcc and
+    /// the threading headers live only here.
+    var rootHeaders: [MimeHeader] = []
+
     /// Flips to `true` after the first `load()` call finishes — successfully
     /// or otherwise. The view treats the pre-attempt state as "loading" so a
     /// fast-failing fetch can never paint the error/retry screen before the
@@ -397,6 +409,10 @@ private extension MessageDetailViewModel {
         if let html = root.firstPart(where: { $0.contentType.mimeType == "text/html" }) {
             htmlBody = html.textContent()
         }
+        rootHeaders = root.headers
+        threadingMessageId = MessageIds.parse(root.headerValue("Message-ID")).first
+        threadingInReplyTo = MessageIds.parse(root.headerValue("In-Reply-To")).first
+        threadingReferences = MessageIds.parse(root.headerValue("References"))
         var attachmentList: [Attachment] = []
         var inlineMap: [String: URL] = [:]
         for leaf in root.leafParts where isAttachmentLike(leaf) {

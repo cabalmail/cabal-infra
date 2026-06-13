@@ -53,6 +53,11 @@ public struct Envelope: Sendable, Codable, Hashable, Identifiable {
     public let cc: [EmailAddress]
     public let bcc: [EmailAddress]
     public let inReplyTo: String?
+    /// RFC 5322 References chain (angle-bracketed ids, oldest first). The
+    /// server caps it at the newest 20 ids; reply threading only ever
+    /// appends one id to what it received, so the cap is loss-free for
+    /// composing. Empty for envelopes cached before the field existed.
+    public let references: [String]
     public let flags: Set<Flag>
     public let internalDate: Date?
     public let size: UInt32?
@@ -83,6 +88,7 @@ public struct Envelope: Sendable, Codable, Hashable, Identifiable {
         cc: [EmailAddress] = [],
         bcc: [EmailAddress] = [],
         inReplyTo: String? = nil,
+        references: [String] = [],
         flags: Set<Flag> = [],
         internalDate: Date? = nil,
         size: UInt32? = nil,
@@ -100,6 +106,7 @@ public struct Envelope: Sendable, Codable, Hashable, Identifiable {
         self.cc = cc
         self.bcc = bcc
         self.inReplyTo = inReplyTo
+        self.references = references
         self.flags = flags
         self.internalDate = internalDate
         self.size = size
@@ -120,6 +127,10 @@ public struct Envelope: Sendable, Codable, Hashable, Identifiable {
         self.cc = try container.decodeIfPresent([EmailAddress].self, forKey: .cc) ?? []
         self.bcc = try container.decodeIfPresent([EmailAddress].self, forKey: .bcc) ?? []
         self.inReplyTo = try container.decodeIfPresent(String.self, forKey: .inReplyTo)
+        // Default so envelope-cache snapshots written before this field
+        // existed decode against the previous schema (same rationale as
+        // `isImportant` below).
+        self.references = try container.decodeIfPresent([String].self, forKey: .references) ?? []
         self.flags = try container.decodeIfPresent(Set<Flag>.self, forKey: .flags) ?? []
         self.internalDate = try container.decodeIfPresent(Date.self, forKey: .internalDate)
         self.size = try container.decodeIfPresent(UInt32.self, forKey: .size)
@@ -129,5 +140,39 @@ public struct Envelope: Sendable, Codable, Hashable, Identifiable {
         // snapshot decode failure followed by a refetch) is correct but
         // costs the user a wait on every first launch after the upgrade.
         self.isImportant = try container.decodeIfPresent(Bool.self, forKey: .isImportant) ?? false
+    }
+}
+
+extension Envelope {
+    /// Returns a copy with the RFC 5322 threading identity replaced.
+    ///
+    /// Used by the open-message reply path: a cached or pre-rollout
+    /// envelope may lack `messageId` / `inReplyTo` / `references`, but the
+    /// fetched message body always carries the real headers, so the detail
+    /// view overlays them before seeding `ReplyBuilder`.
+    public func withThreading(
+        messageId: String?,
+        inReplyTo: String?,
+        references: [String]
+    ) -> Envelope {
+        Envelope(
+            uid: uid,
+            messageId: messageId,
+            date: date,
+            subject: subject,
+            from: from,
+            sender: sender,
+            replyTo: replyTo,
+            to: to,
+            cc: cc,
+            bcc: bcc,
+            inReplyTo: inReplyTo,
+            references: references,
+            flags: flags,
+            internalDate: internalDate,
+            size: size,
+            hasAttachments: hasAttachments,
+            isImportant: isImportant
+        )
     }
 }
