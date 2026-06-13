@@ -120,14 +120,14 @@ jobs:
       # the artifact and job summary above stand on their own.
       if: steps.img.outputs.image != ''
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@v3
+      uses: github/codeql-action/upload-sarif@dd903d2e4f5405488e5ef1422510ee31c8b32357  # v3.36.2
       with:
         sarif_file: "trivy-${{ matrix.tier }}.sarif"
         category: "trivy-image-${{ matrix.tier }}"
 
     - name: upload-artifact
       if: steps.img.outputs.image != ''
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
       with:
         name: "trivy-sarif-${{ matrix.tier }}"
         path: "trivy-${{ matrix.tier }}.sarif"

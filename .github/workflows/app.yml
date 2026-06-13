@@ -99,7 +99,7 @@ jobs:
       front_door: ${{ steps.areas.outputs.front_door }}
     steps:
     - name: checkout
-      uses: actions/checkout@v5
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
 
     # Guard against per-tier filter drift: if a Dockerfile gains a
     # COPY/ADD of a file under docker/ that its tier's changed-paths
@@ -172,7 +172,7 @@ jobs:
     - name: changed-paths
       id: filter
       if: github.event_name == 'push'
-      uses: dorny/paths-filter@v4
+      uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d  # v4.0.1
       with:
         # base MUST be the pushed branch. paths-filter's base defaults
         # to the repository default branch (main), which makes a push
@@ -452,7 +452,7 @@ jobs:
       AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
-      uses: actions/checkout@v5
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
 
     - name: login-to-ecr
       id: ecr
@@ -465,7 +465,7 @@ jobs:
         echo "registry=${REGISTRY}" >> "$GITHUB_OUTPUT"
 
     - name: set-up-buildx
-      uses: docker/setup-buildx-action@v4
+      uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
 
     - name: build-and-push
       run: |
@@ -550,7 +550,7 @@ jobs:
       AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
-      uses: actions/checkout@v5
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
 
     - name: login-to-ecr
       id: ecr
@@ -563,7 +563,7 @@ jobs:
         echo "registry=${REGISTRY}" >> "$GITHUB_OUTPUT"
 
     - name: set-up-buildx
-      uses: docker/setup-buildx-action@v4
+      uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
 
     - name: build-and-push
       id: image
@@ -599,7 +599,7 @@ jobs:
       AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
-      uses: actions/checkout@v5
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
 
     - name: pylint
       run: pip install pylint && cd ./lambda/api && pylint --rcfile .pylintrc _shared/*.py */function.py
@@ -684,7 +684,7 @@ jobs:
       AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
-      uses: actions/checkout@v5
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
 
     - name: pylint
       run: pip install pylint && pylint --rcfile ./lambda/api/.pylintrc ./lambda/counter/*/function.py
@@ -723,7 +723,7 @@ jobs:
       AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
-      uses: actions/checkout@v5
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
 
     - name: build
       env:
@@ -762,7 +762,7 @@ jobs:
       AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
-      uses: actions/checkout@v5
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
 
     # Substitute {{VAR}} placeholders in front-door/* with values from
     # environment variables of the same name. Anything left as a

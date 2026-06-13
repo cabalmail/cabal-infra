@@ -17,6 +17,30 @@
 # config. This file adds the version-update PRs.
 version: 2
 updates:
+  # GitHub Actions are SHA-pinned with a trailing `# vX.Y.Z` comment
+  # (Phase 2b of docs/0.10.x/supply-chain-hardening-plan.md). Dependabot's
+  # github-actions updater keeps those digests current: when a pinned tag
+  # advances it bumps the SHA and rewrites the version comment. This is the
+  # same native updater that already owns the Docker digests below, so the
+  # plan's Renovate config is unnecessary -- one bot, no duplicate PRs, no
+  # extra app to install. The directory is the repo root; Dependabot scans
+  # `.github/workflows/` and `.github/actions/` under it.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    target-branch: "stage"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "deps(actions)"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
   - package-ecosystem: "docker"
     directories:
       - "/docker/*"
