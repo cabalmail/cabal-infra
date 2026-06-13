@@ -29,6 +29,9 @@ permissions:
   contents: read
   security-events: write
   actions: read
+  # OIDC token for AWS auth (configure-aws-credentials assumes
+  # vars.AWS_DEPLOY_ROLE_ARN). See docs/aws.md / docs/github.md.
+  id-token: write
 
 # Pin Trivy so a scan is reproducible and the installer cannot drift.
 env:
@@ -45,11 +48,14 @@ jobs:
       matrix:
         tier: [imap, smtp-in, smtp-out]
     env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     steps:
+    - name: configure-aws-credentials
+      uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4.3.1
+      with:
+        role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+        aws-region: ${{ secrets.AWS_REGION }}
     - name: resolve-deployed-image
       id: img
       # Read the image off the running task definition so we scan what is
