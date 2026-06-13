@@ -570,12 +570,15 @@ jobs:
       run: |
         IMAGE="${{ steps.ecr.outputs.registry }}/cabal/certbot-renewal"
         TAG="${{ needs.setup.outputs.image_tag }}"
-        # Provenance attestations (buildx default, mode=min) are pushed to
-        # ECR alongside the image as the SLSA build record. Do not re-add
-        # --provenance=false: the manifest-list interop issue that once
-        # required it is resolved. See docs/0.10.x/supply-chain-hardening-plan.md.
+        # Provenance stays OFF for this image, unlike the mail tiers above.
+        # This is a Lambda container image (deploy-lambda-image.sh runs
+        # `aws lambda update-function-code --image-uri`), and Lambda rejects
+        # the multi-manifest OCI index that buildx produces when provenance
+        # is attached -- it requires a single image manifest. Keeping the
+        # SLSA attestation here would break the certbot deploy.
         docker buildx build \
           --platform linux/arm64 \
+          --provenance=false \
           -t "${IMAGE}:${TAG}" \
           --push \
           lambda/certbot-renewal/
