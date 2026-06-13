@@ -471,9 +471,12 @@ jobs:
       run: |
         IMAGE="${{ steps.ecr.outputs.registry }}/cabal-${{ matrix.tier }}"
         TAG="${{ needs.setup.outputs.image_tag }}"
+        # Provenance attestations (buildx default, mode=min) are pushed to
+        # ECR alongside the image as the SLSA build record. Do not re-add
+        # --provenance=false: the manifest-list interop issue that once
+        # required it is resolved. See docs/0.10.x/supply-chain-hardening-plan.md.
         docker buildx build \
           --platform linux/arm64 \
-          --provenance=false \
           -f docker/${{ matrix.tier }}/Dockerfile \
           -t "${IMAGE}:${TAG}" \
           --push \
@@ -567,9 +570,12 @@ jobs:
       run: |
         IMAGE="${{ steps.ecr.outputs.registry }}/cabal/certbot-renewal"
         TAG="${{ needs.setup.outputs.image_tag }}"
+        # Provenance attestations (buildx default, mode=min) are pushed to
+        # ECR alongside the image as the SLSA build record. Do not re-add
+        # --provenance=false: the manifest-list interop issue that once
+        # required it is resolved. See docs/0.10.x/supply-chain-hardening-plan.md.
         docker buildx build \
           --platform linux/arm64 \
-          --provenance=false \
           -t "${IMAGE}:${TAG}" \
           --push \
           lambda/certbot-renewal/
@@ -727,7 +733,13 @@ jobs:
     - name: upload
       env:
         TF_VAR_CONTROL_DOMAIN: ${{ vars.TF_VAR_CONTROL_DOMAIN }}
-      run: aws s3 sync react/admin/dist "s3://admin.${TF_VAR_CONTROL_DOMAIN}" --no-progress
+      run: |
+        # --expected-bucket-owner fails the sync closed if a leaked
+        # credential ever points at a same-named bucket in another account.
+        ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+        aws s3 sync react/admin/dist "s3://admin.${TF_VAR_CONTROL_DOMAIN}" \
+          --no-progress \
+          --expected-bucket-owner "${ACCOUNT_ID}"
 
     - name: invalidate-cache
       run: |
@@ -772,9 +784,13 @@ jobs:
       env:
         TF_VAR_CONTROL_DOMAIN: ${{ vars.TF_VAR_CONTROL_DOMAIN }}
       run: |
+        # --expected-bucket-owner fails the sync closed if a leaked
+        # credential ever points at a same-named bucket in another account.
+        ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
         aws s3 sync front-door-rendered "s3://www.${TF_VAR_CONTROL_DOMAIN}" \
           --delete \
-          --no-progress
+          --no-progress \
+          --expected-bucket-owner "${ACCOUNT_ID}"
 
     - name: invalidate-cache
       run: |
