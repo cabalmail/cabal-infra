@@ -80,3 +80,7 @@ popd >/dev/null
 openssl dgst -sha256 -binary "${FUNC}.zip" | openssl enc -base64 | tr -d "\n" > "${FUNC}.zip.base64sha256"
 aws s3 cp "${FUNC}.zip.base64sha256" "s3://${AWS_S3_BUCKET}/lambda/${FUNC}.zip.base64sha256" --profile deploy_lambda --no-progress --acl private --content-type text/plain --expected-bucket-owner "${EXPECTED_BUCKET_OWNER}"
 aws s3 cp "${FUNC}.zip" "s3://${AWS_S3_BUCKET}/lambda/${FUNC}.zip" --profile deploy_lambda --no-progress --acl private --expected-bucket-owner "${EXPECTED_BUCKET_OWNER}"
+
+# Build-provenance manifest (sha256 + git commit + builder identity) next
+# to the zip in S3. See .github/scripts/emit-lambda-manifest.sh.
+../../.github/scripts/emit-lambda-manifest.sh "${FUNC}" "${FUNC}.zip" "${AWS_S3_BUCKET}"
