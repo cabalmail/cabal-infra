@@ -34,6 +34,10 @@ Every private-subnet container reaches the internet and all AWS service APIs thr
 
 The `quiesce` GitHub workflow scales a development or stage environment's running compute (ECS services, the ECS-instance ASG, NAT instances) to zero so it stops accruing hourly charges. Data is preserved. The workflow refuses to run against prod. See [Quiesce: scale a non-prod environment to zero](./quiesce.md) for the full list of what gets scaled, what is preserved, and how to make the quiesce durable across other Terraform runs.
 
+# Terraform state encryption
+
+By default the Terraform state bucket uses SSE-S3, so any principal with `s3:GetObject` reads state back decrypted. You can upgrade an environment to SSE-KMS under a per-environment customer-managed key, so that reading state also requires `kms:Decrypt`. It is opt-in per environment via the `STATE_KMS_KEY_ID` GitHub variable. See [Encrypting Terraform state with SSE-KMS](./terraform-state-encryption.md) for the key-creation, greenfield, and migration runbooks.
+
 # Draft sync and threading headers
 
 Envelope payloads from `/list_envelopes` and `/search_envelopes` carry the RFC 5322 threading identity (`message_id` / `in_reply_to` / `references`), and the `/save_draft` Lambda gives drafts a server-side lifecycle (save returns UIDPLUS coordinates, save can atomically replace a prior copy, discard removes one — all Drafts-scoped and UIDVALIDITY-guarded). The Apple clients sync compose drafts across devices through that path. See [Draft sync and threading headers](./draft-sync-and-threading.md) for the wire contract, the safety posture, and the client sync loop.

@@ -118,7 +118,7 @@ jobs:
     - name: checkout
       uses: actions/checkout@v5
     - name: generate-backend
-      run: env TF_MODULE=dns TF_ENVIRONMENT="${{ vars.TF_VAR_ENVIRONMENT }}" ./.github/scripts/make-terraform.sh
+      run: env TF_MODULE=dns TF_ENVIRONMENT="${{ vars.TF_VAR_ENVIRONMENT }}" STATE_KMS_KEY_ID="${{ vars.STATE_KMS_KEY_ID }}" ./.github/scripts/make-terraform.sh
     - name: store-artifact
       uses: actions/upload-artifact@v6
       with:
@@ -383,7 +383,7 @@ jobs:
     - name: checkout
       uses: actions/checkout@v5
     - name: generate-backend
-      run: env TF_MODULE=infra TF_ENVIRONMENT="${{ vars.TF_VAR_ENVIRONMENT }}" ./.github/scripts/make-terraform.sh
+      run: env TF_MODULE=infra TF_ENVIRONMENT="${{ vars.TF_VAR_ENVIRONMENT }}" STATE_KMS_KEY_ID="${{ vars.STATE_KMS_KEY_ID }}" ./.github/scripts/make-terraform.sh
     - name: store-artifact
       uses: actions/upload-artifact@v6
       with:
