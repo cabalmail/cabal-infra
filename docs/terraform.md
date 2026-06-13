@@ -17,6 +17,8 @@ The backend configuration is not committed. At CI time, [`make-terraform.sh`](..
 
 One bucket serves every environment; each environment-stack pair gets its own key.
 
+By default state objects use SSE-S3, which any principal with `s3:GetObject` can read back decrypted. An environment can be upgraded to SSE-KMS under a per-environment customer-managed key -- so that reading state also requires `kms:Decrypt` -- by setting the `STATE_KMS_KEY_ID` GitHub variable for that environment. See [Encrypting Terraform state with SSE-KMS](./terraform-state-encryption.md).
+
 There is no DynamoDB lock table. Concurrent runs are prevented in the workflow instead: a GitHub Actions concurrency group serializes runs per branch and never cancels an in-flight apply.
 
 ### Creating the bucket
@@ -27,7 +29,7 @@ Create the bucket before the first workflow run, in the same region as `TF_VAR_A
 
 - Enable bucket versioning. State files are the one thing you will be glad to have old versions of.
 - Keep "Block all public access" on and leave Object Ownership at the default "bucket owner enforced".
-- Default encryption (SSE-S3) is sufficient.
+- Default encryption (SSE-S3) is sufficient to start; you can later upgrade any environment's state to SSE-KMS under a customer-managed key (see [Encrypting Terraform state with SSE-KMS](./terraform-state-encryption.md)).
 
 ### Cross-account access
 

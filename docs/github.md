@@ -60,6 +60,14 @@ Note that quotation marks must be escaped with a single backslash. (If you're re
 | --- | --- | --- |
 | `TF_VAR_QUIESCED` | `false` | Set `true` after running `quiesce` with `action: down` to keep the environment scaled down across subsequent Terraform runs. Omit or set `false` for normal operation. |
 
+### State encryption
+
+`STATE_KMS_KEY_ID` opts an environment into SSE-KMS encryption of its Terraform state. It is read by [`make-terraform.sh`](../.github/scripts/make-terraform.sh), not by Terraform, so it has no `TF_VAR_` prefix. Leave it unset for the default SSE-S3 backend. See [Encrypting Terraform state with SSE-KMS](./terraform-state-encryption.md) for the key-creation and activation runbook.
+
+| Variable | Example | Notes |
+| --- | --- | --- |
+| `STATE_KMS_KEY_ID` | `arn:aws:kms:us-east-1:111122223333:key/abcd-1234` | Optional. Key ARN of the environment's state CMK. When set, state objects are written with SSE-KMS under this key; reading state then also requires `kms:Decrypt`. Unset/empty keeps the default SSE-S3 backend. |
+
 ### Monitoring
 
 These variables gate the optional monitoring stack. See [monitoring.md](./monitoring.md) for the full setup guide.
