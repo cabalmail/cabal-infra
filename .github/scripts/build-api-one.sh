@@ -11,7 +11,7 @@
 # Caller must:
 #   - cd to lambda/api/ before invoking
 #   - set TF_VAR_CONTROL_DOMAIN
-#   - have an aws CLI profile named deploy_lambda configured
+#   - have AWS credentials available (the OIDC default chain in CI)
 #
 # Usage:
 #   build-api-one.sh <func_dir>
@@ -80,8 +80,8 @@ rm -rf ./build
 popd >/dev/null
 
 openssl dgst -sha256 -binary "${FUNC}.zip" | openssl enc -base64 | tr -d "\n" > "${FUNC}.zip.base64sha256"
-aws s3 cp "${FUNC}.zip.base64sha256" "s3://${AWS_S3_BUCKET}/lambda/${FUNC}.zip.base64sha256" --profile deploy_lambda --no-progress --acl private --content-type text/plain
-aws s3 cp "${FUNC}.zip" "s3://${AWS_S3_BUCKET}/lambda/${FUNC}.zip" --profile deploy_lambda --no-progress --acl private
+aws s3 cp "${FUNC}.zip.base64sha256" "s3://${AWS_S3_BUCKET}/lambda/${FUNC}.zip.base64sha256" --no-progress --acl private --content-type text/plain
+aws s3 cp "${FUNC}.zip" "s3://${AWS_S3_BUCKET}/lambda/${FUNC}.zip" --no-progress --acl private
 
 # Build-provenance manifest (sha256 + git commit + builder identity) next
 # to the zip in S3. See .github/scripts/emit-lambda-manifest.sh.

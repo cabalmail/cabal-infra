@@ -70,6 +70,10 @@ on:
 
 permissions:
   contents: read
+  # AWS auth is via GitHub OIDC (aws-actions/configure-aws-credentials
+  # assumes vars.AWS_DEPLOY_ROLE_ARN); the runner needs to mint an OIDC
+  # token. See docs/aws.md / docs/github.md.
+  id-token: write
 
 # Serialize per-ref so back-to-back app deploys roll services in order
 # rather than racing each other. Phase 3 of
@@ -446,13 +450,17 @@ jobs:
       matrix:
         tier: ${{ fromJson(needs.setup.outputs.changed_tiers) }}
     env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
       uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
+
+    - name: configure-aws-credentials
+      uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4.3.1
+      with:
+        role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+        aws-region: ${{ secrets.AWS_REGION }}
 
     - name: login-to-ecr
       id: ecr
@@ -544,13 +552,17 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
       uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
+
+    - name: configure-aws-credentials
+      uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4.3.1
+      with:
+        role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+        aws-region: ${{ secrets.AWS_REGION }}
 
     - name: login-to-ecr
       id: ecr
@@ -596,25 +608,20 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
       uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
 
+    - name: configure-aws-credentials
+      uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4.3.1
+      with:
+        role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
     - name: pylint
       run: pip install pylint && cd ./lambda/api && pylint --rcfile .pylintrc _shared/*.py */function.py
-
-    - name: configure-aws
-      run: |
-        aws configure --profile deploy_lambda <<-EOF > /dev/null 2>&1
-        ${{ secrets.AWS_ACCESS_KEY_ID }}
-        ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        ${{ secrets.AWS_REGION }}
-        json
-        EOF
 
     - name: build
       env:
@@ -681,25 +688,20 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
       uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
 
+    - name: configure-aws-credentials
+      uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4.3.1
+      with:
+        role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
     - name: pylint
       run: pip install pylint && pylint --rcfile ./lambda/api/.pylintrc ./lambda/counter/*/function.py
-
-    - name: configure-aws
-      run: |
-        aws configure --profile deploy_lambda <<-EOF > /dev/null 2>&1
-        ${{ secrets.AWS_ACCESS_KEY_ID }}
-        ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        ${{ secrets.AWS_REGION }}
-        json
-        EOF
 
     - name: build
       env:
@@ -720,13 +722,17 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
       uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
+
+    - name: configure-aws-credentials
+      uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4.3.1
+      with:
+        role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+        aws-region: ${{ secrets.AWS_REGION }}
 
     - name: build
       env:
@@ -758,13 +764,17 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
       uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
+
+    - name: configure-aws-credentials
+      uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4.3.1
+      with:
+        role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+        aws-region: ${{ secrets.AWS_REGION }}
 
     # Substitute {{VAR}} placeholders in front-door/* with values from
     # environment variables of the same name. Anything left as a

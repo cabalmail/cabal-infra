@@ -14,7 +14,7 @@ AWS_S3_BUCKET="admin.${TF_VAR_CONTROL_DOMAIN}"
 # Verify the deploy bucket is owned by this account before any upload; the
 # high-level `aws s3 cp` below cannot take --expected-bucket-owner, so this
 # head-bucket preflight is the gate (see verify-bucket-owner.sh).
-../../.github/scripts/verify-bucket-owner.sh "${AWS_S3_BUCKET}" deploy_lambda
+../../.github/scripts/verify-bucket-owner.sh "${AWS_S3_BUCKET}"
 
 export SOURCE_DATE_EPOCH=946684800
 export PYTHONDONTWRITEBYTECODE=1
@@ -39,8 +39,8 @@ for FUNC in */ ; do
   find . -type f -print | LC_ALL=C sort | zip -X -D -@ ../"${FUNC}.zip" >/dev/null
   popd >/dev/null
   openssl dgst -sha256 -binary "${FUNC}.zip" | openssl enc -base64 | tr -d "\n" > "${FUNC}.zip.base64sha256"
-  aws s3 cp "${FUNC}.zip.base64sha256" "s3://${AWS_S3_BUCKET}/lambda/${FUNC}.zip.base64sha256" --profile deploy_lambda --no-progress --acl private --content-type text/plain
-  aws s3 cp "${FUNC}.zip" "s3://${AWS_S3_BUCKET}/lambda/${FUNC}.zip" --profile deploy_lambda --no-progress --acl private
+  aws s3 cp "${FUNC}.zip.base64sha256" "s3://${AWS_S3_BUCKET}/lambda/${FUNC}.zip.base64sha256" --no-progress --acl private --content-type text/plain
+  aws s3 cp "${FUNC}.zip" "s3://${AWS_S3_BUCKET}/lambda/${FUNC}.zip" --no-progress --acl private
   # Build-provenance manifest next to the zip in S3.
   ../../.github/scripts/emit-lambda-manifest.sh "${FUNC}" "${FUNC}.zip" "${AWS_S3_BUCKET}"
 done

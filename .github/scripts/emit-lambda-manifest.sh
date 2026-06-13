@@ -19,7 +19,7 @@
 # Usage:
 #   emit-lambda-manifest.sh <func> <zip_path> <s3_bucket>
 #
-# Requires: aws CLI (profile deploy_lambda), openssl, git.
+# Requires: aws CLI (default credential chain), openssl, git.
 # The caller (build-api.sh / build-counter.sh) verifies bucket ownership
 # before invoking this; see .github/scripts/verify-bucket-owner.sh.
 
@@ -65,5 +65,5 @@ cat > "${MANIFEST}" <<JSON
 JSON
 
 aws s3 cp "${MANIFEST}" "s3://${BUCKET}/lambda/${FUNC}.zip.manifest.json" \
-  --profile deploy_lambda --no-progress --acl private \
+  --no-progress --acl private \
   --content-type application/json
