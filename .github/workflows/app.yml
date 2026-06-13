@@ -737,12 +737,11 @@ jobs:
       env:
         TF_VAR_CONTROL_DOMAIN: ${{ vars.TF_VAR_CONTROL_DOMAIN }}
       run: |
-        # --expected-bucket-owner fails the sync closed if a leaked
-        # credential ever points at a same-named bucket in another account.
-        ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-        aws s3 sync react/admin/dist "s3://admin.${TF_VAR_CONTROL_DOMAIN}" \
-          --no-progress \
-          --expected-bucket-owner "${ACCOUNT_ID}"
+        # Verify the bucket is owned by this account before syncing; the
+        # high-level `aws s3 sync` cannot take --expected-bucket-owner, so
+        # this head-bucket preflight is the fail-closed gate.
+        ./.github/scripts/verify-bucket-owner.sh "admin.${TF_VAR_CONTROL_DOMAIN}"
+        aws s3 sync react/admin/dist "s3://admin.${TF_VAR_CONTROL_DOMAIN}" --no-progress
 
     - name: invalidate-cache
       run: |
@@ -787,13 +786,13 @@ jobs:
       env:
         TF_VAR_CONTROL_DOMAIN: ${{ vars.TF_VAR_CONTROL_DOMAIN }}
       run: |
-        # --expected-bucket-owner fails the sync closed if a leaked
-        # credential ever points at a same-named bucket in another account.
-        ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+        # Verify the bucket is owned by this account before syncing; the
+        # high-level `aws s3 sync` cannot take --expected-bucket-owner, so
+        # this head-bucket preflight is the fail-closed gate.
+        ./.github/scripts/verify-bucket-owner.sh "www.${TF_VAR_CONTROL_DOMAIN}"
         aws s3 sync front-door-rendered "s3://www.${TF_VAR_CONTROL_DOMAIN}" \
           --delete \
-          --no-progress \
-          --expected-bucket-owner "${ACCOUNT_ID}"
+          --no-progress
 
     - name: invalidate-cache
       run: |

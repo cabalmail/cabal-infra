@@ -11,10 +11,10 @@ set -euo pipefail
 cd ./lambda/counter
 AWS_S3_BUCKET="admin.${TF_VAR_CONTROL_DOMAIN}"
 
-# Account that must own AWS_S3_BUCKET; --expected-bucket-owner fails each
-# upload closed if a leaked credential ever points deploy_lambda at a
-# same-named bucket in another account.
-EXPECTED_BUCKET_OWNER="${EXPECTED_BUCKET_OWNER:-$(aws sts get-caller-identity --profile deploy_lambda --query Account --output text)}"
+# Verify the deploy bucket is owned by this account before any upload; the
+# high-level `aws s3 cp` below cannot take --expected-bucket-owner, so this
+# head-bucket preflight is the gate (see verify-bucket-owner.sh).
+../../.github/scripts/verify-bucket-owner.sh "${AWS_S3_BUCKET}" deploy_lambda
 
 export SOURCE_DATE_EPOCH=946684800
 export PYTHONDONTWRITEBYTECODE=1
@@ -39,8 +39,8 @@ for FUNC in */ ; do
   find . -type f -print | LC_ALL=C sort | zip -X -D -@ ../"${FUNC}.zip" >/dev/null
   popd >/dev/null
   openssl dgst -sha256 -binary "${FUNC}.zip" | openssl enc -base64 | tr -d "\n" > "${FUNC}.zip.base64sha256"
-  aws s3 cp "${FUNC}.zip.base64sha256" "s3://${AWS_S3_BUCKET}/lambda/${FUNC}.zip.base64sha256" --profile deploy_lambda --no-progress --acl private --content-type text/plain --expected-bucket-owner "${EXPECTED_BUCKET_OWNER}"
-  aws s3 cp "${FUNC}.zip" "s3://${AWS_S3_BUCKET}/lambda/${FUNC}.zip" --profile deploy_lambda --no-progress --acl private --expected-bucket-owner "${EXPECTED_BUCKET_OWNER}"
+  aws s3 cp "${FUNC}.zip.base64sha256" "s3://${AWS_S3_BUCKET}/lambda/${FUNC}.zip.base64sha256" --profile deploy_lambda --no-progress --acl private --content-type text/plain
+  aws s3 cp "${FUNC}.zip" "s3://${AWS_S3_BUCKET}/lambda/${FUNC}.zip" --profile deploy_lambda --no-progress --acl private
   # Build-provenance manifest next to the zip in S3.
   ../../.github/scripts/emit-lambda-manifest.sh "${FUNC}" "${FUNC}.zip" "${AWS_S3_BUCKET}"
 done

@@ -20,15 +20,14 @@
 #   emit-lambda-manifest.sh <func> <zip_path> <s3_bucket>
 #
 # Requires: aws CLI (profile deploy_lambda), openssl, git.
-# Reads EXPECTED_BUCKET_OWNER from the environment (set by the caller) to
-# verify the upload target account.
+# The caller (build-api.sh / build-counter.sh) verifies bucket ownership
+# before invoking this; see .github/scripts/verify-bucket-owner.sh.
 
 set -euo pipefail
 
 FUNC="${1:?function name required}"
 ZIP="${2:?zip path required}"
 BUCKET="${3:?s3 bucket required}"
-: "${EXPECTED_BUCKET_OWNER:?EXPECTED_BUCKET_OWNER must be set by the caller}"
 
 [ -f "${ZIP}" ] || { echo "[emit-lambda-manifest] missing zip ${ZIP}" >&2; exit 1; }
 
@@ -67,5 +66,4 @@ JSON
 
 aws s3 cp "${MANIFEST}" "s3://${BUCKET}/lambda/${FUNC}.zip.manifest.json" \
   --profile deploy_lambda --no-progress --acl private \
-  --content-type application/json \
-  --expected-bucket-owner "${EXPECTED_BUCKET_OWNER}"
+  --content-type application/json

@@ -39,11 +39,11 @@ cd ./lambda/api
 
 JOBS="${BUILD_JOBS:-8}"
 
-# Resolve the deploy account once and pass it to every parallel child so
-# each s3 upload can verify --expected-bucket-owner without making its own
-# sts call. The deploy_lambda profile is configured by app.yml before this
-# runs; fall back to a per-child lookup if it is somehow unset.
-export EXPECTED_BUCKET_OWNER="${EXPECTED_BUCKET_OWNER:-$(aws sts get-caller-identity --profile deploy_lambda --query Account --output text)}"
+# Verify the deploy bucket is owned by this account once, before fanning out
+# to the parallel uploads. The high-level `aws s3 cp` the children use cannot
+# take --expected-bucket-owner, so this head-bucket preflight is the gate
+# (see .github/scripts/verify-bucket-owner.sh).
+../../.github/scripts/verify-bucket-owner.sh "admin.${TF_VAR_CONTROL_DOMAIN}" deploy_lambda
 
 funcs=()
 for FUNC in */ ; do
