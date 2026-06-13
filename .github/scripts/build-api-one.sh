@@ -49,8 +49,13 @@ pushd "${FUNC}" >/dev/null
 rm -rf ./build
 mkdir -p ./build
 find . -maxdepth 1 -type f -name '*.py' -exec cp {} ./build/ \;
-if [ -s requirements.txt ]; then
-  pip install --no-compile -r requirements.txt -t ./build 2>/dev/null || true
+# Only invoke pip when there is a real requirement (a non-blank,
+# non-comment line); a whitespace-only requirements.txt would otherwise
+# make pip error. --require-hashes makes a missing or mismatched hash fail
+# the build instead of silently shipping a drifted wheel, so errors are
+# no longer swallowed.
+if grep -qE '^[[:space:]]*[^[:space:]#]' requirements.txt 2>/dev/null; then
+  pip install --no-compile --require-hashes -r requirements.txt -t ./build
 fi
 if grep -qE '^[[:space:]]*(from|import)[[:space:]]+compose' function.py 2>/dev/null; then
   cp ../_shared/compose.py ./build/compose.py

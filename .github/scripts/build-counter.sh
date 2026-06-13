@@ -24,7 +24,12 @@ for FUNC in */ ; do
   [ -d "${FUNC}" ] || continue
   pushd "${FUNC}" >/dev/null
   rm -rf ./python
-  pip install --no-compile -r requirements.txt -t ./python 2>/dev/null || true
+  # Only invoke pip when there is a real requirement; --require-hashes
+  # fails the build on any unpinned or hash-mismatched package rather than
+  # silently shipping a drifted wheel.
+  if grep -qE '^[[:space:]]*[^[:space:]#]' requirements.txt 2>/dev/null; then
+    pip install --no-compile --require-hashes -r requirements.txt -t ./python
+  fi
   find . -depth -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
   find . -name '*.pyc' -delete 2>/dev/null || true
   find . -name 'direct_url.json' -delete 2>/dev/null || true
