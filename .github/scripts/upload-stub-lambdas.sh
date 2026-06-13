@@ -33,6 +33,10 @@ set -euo pipefail
 
 BUCKET="${BUCKET:?BUCKET env var required (typically admin.\${TF_VAR_CONTROL_DOMAIN})}"
 
+# Account that must own BUCKET; --expected-bucket-owner makes every head
+# and upload fail closed against a same-named bucket in another account.
+EXPECTED_BUCKET_OWNER="${EXPECTED_BUCKET_OWNER:-$(aws sts get-caller-identity --query Account --output text)}"
+
 log() { echo "[upload-stub-lambdas] $*"; }
 
 if [ ! -d lambda/api ] || [ ! -d lambda/counter ]; then
@@ -93,8 +97,8 @@ for name in "${names[@]}"; do
 
   zip_present=0
   sha_present=0
-  aws s3api head-object --bucket "${BUCKET}" --key "${zip_key}" >/dev/null 2>&1 && zip_present=1
-  aws s3api head-object --bucket "${BUCKET}" --key "${sha_key}" >/dev/null 2>&1 && sha_present=1
+  aws s3api head-object --bucket "${BUCKET}" --key "${zip_key}" --expected-bucket-owner "${EXPECTED_BUCKET_OWNER}" >/dev/null 2>&1 && zip_present=1
+  aws s3api head-object --bucket "${BUCKET}" --key "${sha_key}" --expected-bucket-owner "${EXPECTED_BUCKET_OWNER}" >/dev/null 2>&1 && sha_present=1
 
   if [ "${zip_present}" -eq 1 ] && [ "${sha_present}" -eq 1 ]; then
     skipped=$((skipped + 1))
@@ -103,9 +107,11 @@ for name in "${names[@]}"; do
 
   log "uploading stub for ${name} -> s3://${BUCKET}/${zip_key} (zip_present=${zip_present} sha_present=${sha_present})"
   aws s3 cp "${stub_zip}" "s3://${BUCKET}/${zip_key}" \
-    --no-progress --acl private >/dev/null
+    --no-progress --acl private \
+    --expected-bucket-owner "${EXPECTED_BUCKET_OWNER}" >/dev/null
   aws s3 cp "${stub_sha_file}" "s3://${BUCKET}/${sha_key}" \
-    --no-progress --acl private --content-type text/plain >/dev/null
+    --no-progress --acl private --content-type text/plain \
+    --expected-bucket-owner "${EXPECTED_BUCKET_OWNER}" >/dev/null
   uploaded=$((uploaded + 1))
 done
 

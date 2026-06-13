@@ -39,6 +39,12 @@ cd ./lambda/api
 
 JOBS="${BUILD_JOBS:-8}"
 
+# Resolve the deploy account once and pass it to every parallel child so
+# each s3 upload can verify --expected-bucket-owner without making its own
+# sts call. The deploy_lambda profile is configured by app.yml before this
+# runs; fall back to a per-child lookup if it is somehow unset.
+export EXPECTED_BUCKET_OWNER="${EXPECTED_BUCKET_OWNER:-$(aws sts get-caller-identity --profile deploy_lambda --query Account --output text)}"
+
 funcs=()
 for FUNC in */ ; do
   FUNC="${FUNC%/}"
