@@ -49,6 +49,7 @@ struct SettingsView: View {
         NavigationStack {
             form
                 .navigationTitle("Settings")
+                .settingsSheetDoneButton()
                 .task {
                     await loadAddresses()
                     await loadDisplayName()
