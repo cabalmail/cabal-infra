@@ -42,6 +42,7 @@ struct FoldersAdminView: View {
             content
                 .navigationTitle("Folders")
                 .toolbar { toolbarContent }
+                .settingsSheetDoneButton()
                 .searchable(text: $filterQuery, prompt: "Filter folders")
                 .refreshable { await model?.refresh() }
                 .task { await ensureModel() }

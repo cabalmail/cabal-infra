@@ -3,32 +3,37 @@ import CabalmailKit
 
 /// Signed-in root.
 ///
-/// iOS, iPadOS, and visionOS show every section (Mail / Addresses /
-/// Folders / Settings) inside a SwiftUI 18 `TabView` with the
-/// `.sidebarAdaptable` style: iPhone gets a tab bar, iPad / visionOS
-/// get a sidebar that collapses in compact trait environments.
+/// The section layout (Mail / Addresses / Folders / Settings) branches on
+/// horizontal size class:
 ///
-/// macOS doesn't tab between sections — it follows the standard Mac
-/// idiom and puts each non-mail section in its own window scene
-/// (`AddressesScene`, `FoldersScene` in `CabalmailMacApp`), reachable
-/// from the Window menu and ⌘⌥1 / ⌘⌥2. The main window therefore is
-/// just `MailRootView`, with no extra picker bar competing with its
-/// own `NavigationSplitView`. Settings continues to live in the
-/// dedicated Settings scene wired to ⌘,.
+/// - Compact (iPhone, iPad in narrow multitasking): a bottom `TabView`, one
+///   tab per section. This is the natural compact idiom and the inner
+///   `MailRootView` `NavigationSplitView` collapses to a stack here, so the
+///   two never compete for the left edge.
+/// - Regular (iPad / visionOS): just `MailRootView` — a single show/hide
+///   sidebar owns the left edge, matching the macOS main window. Addresses /
+///   Folders / Settings move into a modal `SettingsSheet`, opened by the
+///   sidebar gear button or the ⌘, app command via
+///   `AppState.settingsRequestTick`.
+/// - macOS renders `MailRootView` directly and reaches the three sections
+///   through its dedicated Settings scene (⌘,, `SettingsTabsView`).
+///
+/// The regular-width branch replaced an earlier `TabView(.sidebarAdaptable)`
+/// that governed every iOS width. Its adaptive top-bar / sidebar chrome was
+/// harmless on compact (it renders as a plain tab bar) but collided with
+/// `MailRootView`'s own `NavigationSplitView` at regular width: the section
+/// bar overlapped the split view's headers, and sidebar mode stacked two
+/// redundant rails.
 struct SignedInRootView: View {
-    enum Section: Hashable {
-        case mail
-        case addresses
-        case folders
-        case settings
-    }
-
-    @State private var selected: Section = .mail
     @Environment(AppState.self) private var appState
     @State private var isOffline = false
+    #if !os(macOS)
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @State private var settingsPresented = false
+    #endif
 
     var body: some View {
-        platformBody
+        sectionLayout
             .overlay(alignment: .top) {
                 statusBanners
                     .animation(.default, value: isOffline)
@@ -38,27 +43,50 @@ struct SignedInRootView: View {
     }
 
     @ViewBuilder
-    private var platformBody: some View {
+    private var sectionLayout: some View {
         #if os(macOS)
         MailRootView()
         #else
-        TabView(selection: $selected) {
-            Tab("Mail", systemImage: "tray", value: Section.mail) {
+        if horizontalSizeClass == .compact {
+            compactTabs
+        } else {
+            MailRootView()
+                .environment(\.showsSettingsGear, true)
+                .sheet(isPresented: $settingsPresented) {
+                    SettingsSheet()
+                }
+                // The gear button and the ⌘, command both bump the tick;
+                // routing through it (rather than a direct binding) keeps the
+                // trigger working regardless of which column holds focus.
+                .onChange(of: appState.settingsRequestTick) { _, _ in
+                    settingsPresented = true
+                }
+        }
+        #endif
+    }
+
+    #if !os(macOS)
+    /// Compact-width section switcher: a plain bottom tab bar. No
+    /// `.sidebarAdaptable` - at compact width there's no sidebar to adapt to,
+    /// and the regular-width path never renders this, so the adaptive style's
+    /// collision with the inner split view can't recur.
+    private var compactTabs: some View {
+        TabView {
+            Tab("Mail", systemImage: "tray") {
                 MailRootView()
             }
-            Tab("Addresses", systemImage: "at", value: Section.addresses) {
+            Tab("Addresses", systemImage: "at") {
                 AddressesView()
             }
-            Tab("Folders", systemImage: "folder", value: Section.folders) {
+            Tab("Folders", systemImage: "folder") {
                 FoldersAdminView()
             }
-            Tab("Settings", systemImage: "gear", value: Section.settings) {
+            Tab("Settings", systemImage: "gear") {
                 SettingsView()
             }
         }
-        .tabViewStyle(.sidebarAdaptable)
-        #endif
     }
+    #endif
 
     @ViewBuilder
     private var statusBanners: some View {

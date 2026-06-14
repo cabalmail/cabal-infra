@@ -71,6 +71,11 @@ final class AppState {
     var toggleSeenRequestTick = 0
     var toggleFlaggedRequestTick = 0
     var moveSelectionRequestTick = 0
+    /// Intent to open the iOS / iPadOS / visionOS settings sheet (General /
+    /// Addresses / Folders). Bumped by the sidebar gear button and the ⌘,
+    /// app command; `SignedInRootView` observes it and presents the sheet.
+    /// macOS ignores it - settings there is the dedicated ⌘, scene.
+    var settingsRequestTick = 0
 
     /// Latest envelope disposed from the detail view. `MessageListView`
     /// observes this via `.onChange` and prunes the matching UID from its
@@ -149,6 +154,7 @@ final class AppState {
     func requestReply() { replyRequestTick += 1 }
     func requestReplyAll() { replyAllRequestTick += 1 }
     func requestForward() { forwardRequestTick += 1 }
+    func requestSettings() { settingsRequestTick += 1 }
     // The selection-scoped request bumpers live in the "Message-menu
     // selection intents" extension below (SwiftLint type-body budget).
 
