@@ -15,9 +15,12 @@ PLAN_FILE="${RUNNER_TEMP:-/tmp}/tf.plan"
 STACK="$(basename "$(pwd)")"
 
 set +e
-PLAN_ARGS=(-lock-timeout=30m -detailed-exitcode -var-file="terraform.tfvars")
-# record-lambda-hashes.sh writes this file in the infra-stage jobs only; the
-# dns stack has no lambda code to pin, so the file is absent there.
+# -out saves the plan to disk so `terraform show` can re-render just the
+# delta below; without it that re-render reads a nonexistent file and the
+# annotation falls back to a placeholder. record-lambda-hashes.sh writes
+# lambda-pinned.tfvars in the infra-stage jobs only; the dns stack has no
+# lambda code to pin, so the file is absent there.
+PLAN_ARGS=(-lock-timeout=30m -detailed-exitcode -out="$PLAN_FILE" -var-file="terraform.tfvars")
 if [[ -f ".terraform/lambda-pinned.tfvars" ]]; then
   PLAN_ARGS+=(-var-file=".terraform/lambda-pinned.tfvars")
 fi
@@ -27,17 +30,22 @@ echo ">$EXIT_CODE<"
 echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
 cat $GITHUB_OUTPUT
 if [[ $EXIT_CODE -eq 2 ]]; then
-  PLAN_TEXT="$(terraform show -no-color "$PLAN_FILE" 2>/dev/null)"
+  # Render only the change set from the saved plan file (no refresh
+  # chatter). stderr stays attached to the step log so a future failure
+  # here is visible instead of silently producing an empty annotation.
+  PLAN_TEXT="$(terraform show -no-color "$PLAN_FILE")"
   if [[ -z "$PLAN_TEXT" ]]; then
     PLAN_TEXT="(could not render the saved plan file - see the plan-terraform step log for the full plan)"
   fi
   # GitHub truncates annotation messages around 4096 characters of the
-  # escaped command line; stay well short of that and point at the
-  # step log, which always has the full plan.
+  # escaped command line. When the delta is longer, keep the TAIL: the
+  # "Plan: N to add, N to change, N to destroy" summary lives at the end
+  # of the render and is the line you most want when reviewing before
+  # approval. The full plan is always in the step log above.
   MAX=3000
   if [[ ${#PLAN_TEXT} -gt $MAX ]]; then
-    PLAN_TEXT="${PLAN_TEXT:0:$MAX}
-... (truncated - see the plan-terraform step log for the full plan)"
+    PLAN_TEXT="... (truncated - see the plan-terraform step log for the full plan)
+${PLAN_TEXT: -MAX}"
   fi
   # Escape for the ::notice workflow command: literal %, CR, LF.
   PLAN_TEXT="${PLAN_TEXT//'%'/%25}"
