@@ -269,12 +269,6 @@
                     "check_ids": [
                         "CKV_AWS_330"
                     ]
-                },
-                {
-                    "resource": "module.efs.aws_efs_file_system.mailstore",
-                    "check_ids": [
-                        "CKV2_AWS_18"
-                    ]
                 }
             ]
         },
