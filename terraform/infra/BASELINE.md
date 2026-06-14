@@ -18,7 +18,7 @@ Counts reflect **pip checkov** (what CI runs). See the [graph-check note](#graph
 
 | Tool | Total | CMK global-suppress | Baselined | Fixed / inline-suppressed (2.5) | Residual |
 | ---- | ----- | ------------------- | --------- | ------------------------------- | -------- |
-| Checkov | 243 | 76 (12 ids) | 154 (47 ids) | 13 (276, 51, 8, 341, 26, 27x3, 103, 74, 12 fixed; 111, 356 inline) | 0 |
+| Checkov | 243 | 76 (12 ids) | 153 (46 ids) | 14 (276, 51, 8, 341, 26, 27x3, 103, 74, 12 fixed; 111, 356, 2_18 inline) | 0 |
 | Trivy   | 50  | 26 (5 ids)  | 20 (10 ids) | 4 (AWS-0031, 0095, 0096, 0131 fixed) | 0 |
 | tflint  | 6   | 0           | 0 (never baselined) | 6 fixed (`tls` version + 5 unused decls) | 0 |
 
@@ -37,6 +37,12 @@ The resilience/continuity hardening work ([`docs/0.10.x/resilience-continuity-ha
 - **AWS-0025** (DynamoDB SSE/CMK, Trivy) - cleared from `.trivyignore`: the counter table was the only table without an explicit `server_side_encryption` block; with it in place no table trips the rule.
 - **CKV2_AWS_38** on `module.domains.aws_route53_zone.mail_dns` - cleared: DNSSEC signing exists behind `var.dnssec_enabled` (default false; see `docs/dnssec.md`). The graph check connects zone to `aws_route53_hosted_zone_dnssec` without evaluating the count gate, so it passes even while the flag is off; the entry had to come out to keep the drift check green. The real signing posture is per-environment (`TF_VAR_DNSSEC_ENABLED`). CKV2_AWS_39 (query logging) remains baselined.
 - **OAC migration (Phase 5)**: both CloudFront distributions moved from OAI to origin access control and the viewer TLS floor rose to `TLSv1.2_2025`. The admin bucket policy moved from the s3 module to the app module - Terraform tolerates the mutual module reference the OAC SourceArn would otherwise need (acyclic at the resource level), but checkov's graph renderer does not: it stops resolving unrelated variables and reports phantom findings on count-gated resources (observed on the sinkhole SG rule and log group). Keep cross-module references one-directional.
+
+### Decay clears (Phase 4)
+
+The weekly decay task walks the grandfathered findings down one at a time:
+
+- **CKV2_AWS_18** on `module.efs.aws_efs_file_system.mailstore` - cleared via inline skip (not a code change): the mailstore *is* in the AWS Backup selection (`module.backup` `aws_backup_selection.resources` includes `var.efs`), so the finding is a false positive. The backup module is count-gated on `var.backup` and the EFS ARN crosses the module boundary as a variable, neither of which the graph check can trace, so it reports the mailstore as unbacked even when backups are on. Replaced the opaque baseline entry with a co-located `#checkov:skip` carrying the rationale; baseline entry removed. Per-environment backup posture is still governed by `TF_VAR_BACKUP` (off in non-prod for cost, on in prod) - that gating is the design choice, documented in the `backup` module.
 
 ### NAT-mode refactor re-key (0.10.x)
 
