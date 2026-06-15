@@ -4,7 +4,6 @@ from helper import ( # pylint: disable=import-error
     get_imap_client,
     validate_flag,
     validate_folder_name,
-    validate_sort_criterion,
     validate_uid_list,
 )
 
@@ -23,8 +22,6 @@ def handler(event, _context):
         folder = validate_folder_name(body.get('folder'))
         ids = validate_uid_list(body.get('ids'))
         flag = validate_flag(body.get('flag'))
-        sort_criterion = validate_sort_criterion(
-            body.get('sort_order'), body.get('sort_field'))
     except ValueError as err:
         return _invalid(err)
     client = get_imap_client(body['host'], user, folder.replace("/", "."))
@@ -32,12 +29,14 @@ def handler(event, _context):
         client.add_flags(ids, flag, True)
     else:
         client.remove_flags(ids, flag, True)
-    response = client.sort(sort_criterion, [b'NOT', b'DELETED'])
+    # No post-store SORT: both clients discard the returned UID list and
+    # re-poll for ordering, so the second full-folder walk was pure waste on
+    # large mailboxes. Acknowledge like /move_messages does.
     client.logout()
     return {
         "statusCode": 200,
         "body": json.dumps({
-            "message_ids": response
+            "status": "submitted"
         })
     } # pylint: disable=duplicate-code
 
