@@ -106,6 +106,19 @@ describe('Envelopes', () => {
     expect(mockGetEnvelopes).toHaveBeenCalledTimes(2);
   });
 
+  it('lazily fetches only the initial pages, not the whole folder', async () => {
+    // 300 ids = 10 pages. The old code fanned out all 10 on mount (and again
+    // on every poll); lazy loading fetches only the opening viewport.
+    const ids = Array.from({ length: 300 }, (_, i) => i + 1);
+    mockGetEnvelopes.mockResolvedValue({ data: { envelopes: {} } });
+
+    render(<Harness message_ids={ids} />);
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+
+    // INITIAL_PAGES (3) pages up front; the scroll sentinel is inert in jsdom.
+    expect(mockGetEnvelopes).toHaveBeenCalledTimes(3);
+  });
+
   it('renders the empty-state hint when nothing matches the filter', async () => {
     mockGetEnvelopes.mockResolvedValue({ data: { envelopes: {} } });
     const { container } = render(

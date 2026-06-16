@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import Observer from './Observer';
 import { SwipeableList, Type } from 'react-swipeable-list';
 import 'react-swipeable-list/dist/styles.css';
@@ -6,6 +6,10 @@ import Envelope from './Envelope';
 import useApi from '../../hooks/useApi';
 import { PAGE_SIZE } from '../../constants';
 import './Envelopes.css';
+
+// Pages fetched up front to fill the first viewport before scroll-driven lazy
+// loading takes over.
+const INITIAL_PAGES = 3;
 
 function matchesFilter(envelope, filter) {
   if (!envelope) return false;
@@ -41,62 +45,63 @@ function Envelopes({
   const api = useApi();
 
   const [envelopes, setEnvelopes] = useState({});
-  const [pages, setPages] = useState([]);
+  // Refs, not state: these gate fetches, they don't drive rendering.
+  // `fetchedPagesRef` dedupes requests; `frontierRef` is the highest page the
+  // lazy loader has reached so far.
+  const fetchedPagesRef = useRef(new Set());
+  const frontierRef = useRef(-1);
 
-  const loadPages = useCallback((pageNums) => {
-    setPages((currentPages) => {
-      setEnvelopes((prev) => {
-        let merged = { ...prev };
-        for (const p of pageNums) {
-          if (currentPages[p]) {
-            merged = { ...merged, ...currentPages[p] };
-          }
-        }
-        return merged;
-      });
-      return currentPages;
-    });
-  }, []);
-
-  // Fetch envelopes when message_ids change
-  useEffect(() => {
-    let cancelled = false;
-    const numIds = message_ids.length;
-
-    for (let i = 0; i < numIds; i += PAGE_SIZE) {
-      const ids = message_ids.slice(i, i + PAGE_SIZE);
-      const page = Math.floor(i / PAGE_SIZE);
-
-      api.getEnvelopes(folder, ids).then((data) => {
-        if (cancelled) return;
-
-        setPages((prev) => {
-          const next = prev.slice();
-          next[page] = data.data.envelopes;
-          return next;
+  const fetchPage = useCallback(
+    (pageNum, { refresh = false } = {}) => {
+      const start = pageNum * PAGE_SIZE;
+      if (pageNum < 0 || start >= message_ids.length) return;
+      if (!refresh && fetchedPagesRef.current.has(pageNum)) return;
+      fetchedPagesRef.current.add(pageNum);
+      const ids = message_ids.slice(start, start + PAGE_SIZE);
+      api
+        .getEnvelopes(folder, ids)
+        .then((data) => {
+          setEnvelopes((prev) => ({ ...prev, ...data.data.envelopes }));
+        })
+        .catch((e) => {
+          if (!refresh) fetchedPagesRef.current.delete(pageNum); // allow retry
+          console.log(e);
         });
+    },
+    [api, folder, message_ids],
+  );
 
-        if (page < 4) {
-          setEnvelopes((prev) => ({
-            ...prev,
-            ...data.data.envelopes,
-          }));
-        }
-      }).catch((e) => {
-        console.log(e);
-      });
-    }
-
-    return () => {
-      cancelled = true;
-    };
-  }, [api, folder, message_ids]);
-
-  // Clear envelopes and pages when folder changes so stale data doesn't leak.
+  // Clear caches when the folder changes so stale data doesn't leak.
   useEffect(() => {
     setEnvelopes({});
-    setPages([]);
+    fetchedPagesRef.current = new Set();
+    frontierRef.current = -1;
   }, [folder]);
+
+  // First pass fills the opening viewport; later passes (the parent re-polls
+  // /list_messages every 10s, handing down a fresh array) refresh only the
+  // pages already loaded -- to pick up flag changes and new top-of-folder
+  // messages -- instead of re-fanning out the entire folder every poll.
+  useEffect(() => {
+    if (message_ids.length === 0) return;
+    if (fetchedPagesRef.current.size === 0) {
+      const totalPages = Math.ceil(message_ids.length / PAGE_SIZE);
+      const last = Math.min(INITIAL_PAGES, totalPages) - 1;
+      for (let p = 0; p <= last; p++) fetchPage(p);
+      frontierRef.current = last;
+    } else {
+      for (const p of Array.from(fetchedPagesRef.current)) {
+        fetchPage(p, { refresh: true });
+      }
+    }
+  }, [message_ids, fetchPage]);
+
+  const loadMore = useCallback(() => {
+    const next = frontierRef.current + 1;
+    if (next * PAGE_SIZE >= message_ids.length) return;
+    frontierRef.current = next;
+    fetchPage(next);
+  }, [message_ids, fetchPage]);
 
   const shownIds = useMemo(() => {
     const list = [];
@@ -191,13 +196,16 @@ function Envelopes({
 
   const archive = useCallback((id) => archiveProp(id), [archiveProp]);
 
+  // Trigger the next lazy page when a row near the end of the loaded list
+  // scrolls into view.
+  const sentinelIdx = Math.max(0, shownIds.length - Math.ceil(PAGE_SIZE / 2));
+
   const rows = shownIds.map((k, idx) => {
     const e = envelopes[k.toString()];
-    let observer = null;
-    const page = Math.floor(idx / PAGE_SIZE);
-    if (idx % PAGE_SIZE === 0) {
-      observer = <Observer pageLoader={loadPages} page={page + 2} key={page + 2} />;
-    }
+    const observer =
+      idx === sentinelIdx ? (
+        <Observer onVisible={loadMore} key={`load-${shownIds.length}`} />
+      ) : null;
     const id = Number(e.id);
     return (
       <Envelope

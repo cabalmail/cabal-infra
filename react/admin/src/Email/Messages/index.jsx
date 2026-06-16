@@ -90,18 +90,11 @@ function Messages({
     lastSelectedRef.current = null;
   }, [folder, addressFilter, setSelected]);
 
-  // Counts from the loaded envelopes. These undercount until all pages load,
-  // matching the prototype where the full set lives in memory.
-  const counts = useMemo(() => {
-    const loaded = visible.loaded || [];
-    let unread = 0;
-    let flagged = 0;
-    for (const e of loaded) {
-      if (!e.flags.includes('\\Seen')) unread++;
-      if (e.flags.includes('\\Flagged')) flagged++;
-    }
-    return { all: loaded.length, unread, flagged };
-  }, [visible.loaded]);
+  // Filter pills are plain toggles. Live Unread/Flagged counts can't be
+  // accurate now that the list loads lazily (we no longer hold every
+  // envelope in memory); the accurate folder total shows in the header
+  // "N of M", and per-flag counts return with server-side counts (folder
+  // STATUS) in a later phase.
 
   const selectedIdsArray = useMemo(() => Array.from(selected), [selected]);
   const selectedCount = selected.size;
@@ -398,7 +391,6 @@ function Messages({
               onClick={() => setFilter(f)}
             >
               <span className="msglist-tab-label">{f[0].toUpperCase() + f.slice(1)}</span>
-              <span className="msglist-tab-count">{counts[f]}</span>
             </button>
           ))}
         </div>
