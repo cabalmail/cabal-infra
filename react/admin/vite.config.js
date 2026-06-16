@@ -40,6 +40,14 @@ export default defineConfig({
       },
     }),
   ],
+  // amazon-cognito-identity-js bundles an old `buffer` that references Node's
+  // `global`, which is undefined in browsers ("Can't find variable: global").
+  // Vite 6 (esbuild) tolerated it; Vite 8 (rolldown) emits the bare reference,
+  // so map it to the browser standard. Harmless to app code, which never uses
+  // a bare `global`.
+  define: {
+    global: 'globalThis'
+  },
   server: {
     port: 3000,
     open: true
