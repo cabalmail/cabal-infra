@@ -48,12 +48,16 @@ public protocol ApiClient: Sendable {
 
     // MARK: Messages
     /// Sorted UID list for the folder. Sort defaults match the React
-    /// client's call site (REVERSE ARRIVAL — most recent first).
+    /// client's call site (REVERSE ARRIVAL — most recent first). `offset` and
+    /// `limit` request a server-sliced page of the sorted result (Phase 3 of
+    /// the large-mailbox plan); pass `nil` for both to get the full list.
     func listMessageIds(
         host: String,
         folder: String,
         sortOrder: String,
-        sortField: String
+        sortField: String,
+        offset: UInt32?,
+        limit: UInt32?
     ) async throws -> [UInt32]
     func listEnvelopes(host: String, folder: String, ids: [UInt32]) async throws -> [ApiEnvelope]
 
@@ -153,6 +157,28 @@ public protocol ApiClient: Sendable {
     /// string, and S3 rejects requests with both a Bearer header and a
     /// signed URL.
     func fetchPresignedData(url: URL) async throws -> Data
+}
+
+public extension ApiClient {
+    /// Convenience overload: the full, unpaginated sorted UID list. Lets
+    /// callers that genuinely need every UID (e.g. the legacy UID-range
+    /// `envelopes`) stay terse while the paginated requirement carries the
+    /// `offset`/`limit` slice.
+    func listMessageIds(
+        host: String,
+        folder: String,
+        sortOrder: String,
+        sortField: String
+    ) async throws -> [UInt32] {
+        try await listMessageIds(
+            host: host,
+            folder: folder,
+            sortOrder: sortOrder,
+            sortField: sortField,
+            offset: nil,
+            limit: nil
+        )
+    }
 }
 
 /// One entry in the `/upload_url` request. Carries only the metadata the

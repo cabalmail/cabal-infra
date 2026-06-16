@@ -103,14 +103,15 @@ public actor ApiBackedImapClient: ImapClient {
 
     // MARK: - Envelopes
 
+    // Legacy UID-range fetch. The view model now paginates positionally via
+    // `envelopes(offset:limit:)`; this remains only to satisfy the protocol
+    // requirement shared with `LiveImapClient`. It still pulls the full UID
+    // list, so it is not on any hot path.
     public func envelopes(
         folder: String,
         range: ClosedRange<UInt32>,
         sort: SortCriterion
     ) async throws -> [Envelope] {
-        // The Lambda has no UID-range endpoint. Pull the sorted UID list,
-        // filter to the requested window, then fetch envelopes for that
-        // subset. For typical folder sizes the filter is the cheap part.
         let allIds = try await api.listMessageIds(
             host: host,
             folder: folder,
@@ -123,6 +124,29 @@ public actor ApiBackedImapClient: ImapClient {
         return raw.map { Self.makeEnvelope($0) }
     }
 
+    public func envelopes(
+        folder: String,
+        offset: UInt32,
+        limit: UInt32,
+        sort: SortCriterion
+    ) async throws -> [Envelope] {
+        // Ask the Lambda for just this page of the sorted UID list, then fetch
+        // its envelopes. Trust the server slice (no client-side prefix): at a
+        // non-zero offset a defensive prefix would hand back the wrong window
+        // if the slice ever arrived larger than requested.
+        let ids = try await api.listMessageIds(
+            host: host,
+            folder: folder,
+            sortOrder: sort.direction.wireOrder,
+            sortField: sort.field.wireField,
+            offset: offset,
+            limit: limit
+        )
+        guard !ids.isEmpty else { return [] }
+        let raw = try await api.listEnvelopes(host: host, folder: folder, ids: ids)
+        return raw.map { Self.makeEnvelope($0) }
+    }
+
     public func topEnvelopes(
         folder: String,
         limit: UInt32,
@@ -130,15 +154,18 @@ public actor ApiBackedImapClient: ImapClient {
         sort: SortCriterion
     ) async throws -> [Envelope] {
         if totalMessages == 0 { return [] }
-        let allIds = try await api.listMessageIds(
+        let ids = try await api.listMessageIds(
             host: host,
             folder: folder,
             sortOrder: sort.direction.wireOrder,
-            sortField: sort.field.wireField
+            sortField: sort.field.wireField,
+            offset: 0,
+            limit: limit
         )
-        // The Lambda already applies the requested sort, so the prefix is
-        // the top page. Trim to the requested page size.
-        let head = Array(allIds.prefix(Int(limit)))
+        // Offset 0 is the top of the sorted list, so a defensive prefix is
+        // always correct -- it also shields against an older Lambda that
+        // predates pagination and ignores the params, returning the full list.
+        let head = Array(ids.prefix(Int(limit)))
         guard !head.isEmpty else { return [] }
         let raw = try await api.listEnvelopes(host: host, folder: folder, ids: head)
         return raw.map { Self.makeEnvelope($0) }

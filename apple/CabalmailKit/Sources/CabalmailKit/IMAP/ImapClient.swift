@@ -25,6 +25,21 @@ public protocol ImapClient: Sendable {
         sort: SortCriterion
     ) async throws -> [Envelope]
 
+    /// Fetches a positional page: the `limit` envelopes starting at `offset`
+    /// in the sorted result (offset 0 is the newest page under the default
+    /// reverse sort). Unlike the UID-range variant this respects any sort
+    /// field -- UID order is not sort order under From/Subject -- and never
+    /// dead-ends on sparse folders, since the caller stops when the loaded
+    /// count reaches the folder's STATUS message count. The API-backed client
+    /// overrides this with `/list_messages?offset=&limit=`; the default throws
+    /// (production never paginates through `LiveImapClient`).
+    func envelopes(
+        folder: String,
+        offset: UInt32,
+        limit: UInt32,
+        sort: SortCriterion
+    ) async throws -> [Envelope]
+
     /// Fetches up to `limit` most-recent envelopes by sequence number. Use
     /// this for the first/top page of a folder — a UID range window can
     /// return fewer envelopes than requested when UIDs are sparse after
@@ -96,6 +111,26 @@ public extension ImapClient {
     /// order is all they need.
     func envelopes(folder: String, range: ClosedRange<UInt32>) async throws -> [Envelope] {
         try await envelopes(folder: folder, range: range, sort: .default)
+    }
+
+    /// Convenience overload — see `envelopes(folder:offset:limit:sort:)`.
+    func envelopes(folder: String, offset: UInt32, limit: UInt32) async throws -> [Envelope] {
+        try await envelopes(folder: folder, offset: offset, limit: limit, sort: .default)
+    }
+
+    /// Default: positional pagination is an API-backed contract (offset/limit
+    /// on `/list_messages`). `LiveImapClient` and test doubles inherit this
+    /// throw; production never paginates through them. The legacy UID-range
+    /// `envelopes(folder:range:)` remains for `LiveImapClient`'s own tests.
+    func envelopes(
+        folder: String,
+        offset: UInt32,
+        limit: UInt32,
+        sort: SortCriterion
+    ) async throws -> [Envelope] {
+        throw CabalmailError.protocolError(
+            "envelopes(offset:limit:) is not implemented by this ImapClient"
+        )
     }
 
     /// Convenience overload — see `envelopes(folder:range:)` above.

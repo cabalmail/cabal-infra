@@ -66,7 +66,7 @@ extension MessageListViewModel {
         searchTruncated = false
         searchFoldersSearched = []
         envelopes.removeAll()
-        lowestUID = nil
+        totalMessages = 0
         hasMore = true
         await refresh()
     }

@@ -36,7 +36,7 @@ extension MessageListViewModel {
     func hardReload() async {
         try? await client.envelopeCache.invalidate(folder: folder.path)
         envelopes.removeAll()
-        lowestUID = nil
+        totalMessages = 0
         hasMore = true
         sourceFolderByUID = [:]
         await refresh()
@@ -120,8 +120,9 @@ extension MessageListViewModel {
             }
         }
         mergeFetched(fetched)
-        lowestUID = envelopes.map(\.uid).min() ?? lowestUID
-        hasMore = (lowestUID ?? 0) > 1
+        // Positional paging: more to load iff the top page is smaller than the
+        // folder's STATUS message count.
+        hasMore = UInt32(envelopes.count) < totalMessages
         // Persist the shielded view, not the raw fetch: a row we've
         // optimistically removed must stay out of the snapshot (it's inside
         // `keepingRange`, so `replace` prunes it) and a row with an in-flight

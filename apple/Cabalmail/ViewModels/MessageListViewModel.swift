@@ -2,13 +2,17 @@ import Foundation
 import Observation
 import CabalmailKit
 
-/// Backs `MessageListView`. Owns the sliding UID window, envelope cache
-/// hydration, search results, and the per-row mark-as-read / dispose actions.
+/// Backs `MessageListView`. Owns the paginated envelope window, envelope
+/// cache hydration, search results, and the per-row mark-as-read / dispose
+/// actions.
 ///
-/// Window strategy (per Phase 4 plan): on open, `STATUS` the folder to pick
-/// up `UIDNEXT`, then `UID FETCH (uidNext - pageSize):uidNext`. Older pages
-/// lazy-load as the user scrolls. The envelope cache stores everything keyed
-/// by `UIDVALIDITY` so reopen is instant while the refresh runs in the
+/// Window strategy: on open, `STATUS` the folder for its message count, then
+/// fetch the top page via `topEnvelopes`. Older pages lazy-load as the user
+/// scrolls, through positional `envelopes(offset:limit:)` calls against the
+/// paginated `/list_messages` (large-mailbox plan Layer 3.1). The loaded
+/// count versus the STATUS total decides `hasMore`, so sparse folders no
+/// longer dead-end (Layer 3.3). The envelope cache stores everything keyed by
+/// `UIDVALIDITY` so reopen is instant while the refresh runs in the
 /// background.
 @Observable
 @MainActor
@@ -73,9 +77,10 @@ final class MessageListViewModel {
     var sourceFolderByUID: [UInt32: String] = [:]
 
     private var uidValidity: UInt32?
-    // Internal so the +Refresh sibling extension can update them after a
-    // page merge; they're otherwise driven from the main view-model only.
-    var lowestUID: UInt32?
+    // Folder message count from the last STATUS. Pagination loads until the
+    // loaded envelope count reaches it. Internal so the +Refresh sibling
+    // extension can read it after a page merge to recompute `hasMore`.
+    var totalMessages: UInt32 = 0
     var hasMore = true
 
     /// Foreground-only IDLE loop. Nil when the view is offscreen; started on
@@ -197,13 +202,13 @@ final class MessageListViewModel {
                 try? await client.envelopeCache.invalidate(folder: folder.path)
                 try? await client.bodyCache.invalidate(folder: folder.path)
                 envelopes = []
-                lowestUID = nil
             }
             self.uidValidity = uidValidity
-            // Top page uses sequence-number FETCH via `topEnvelopes` — see
-            // the protocol doc for why UID range fetches go wrong on sparse
-            // folders. `loadMoreIfNeeded` handles older pages by UID.
+            // Top page uses sequence-number FETCH via `topEnvelopes` (robust on
+            // sparse folders); `loadMoreIfNeeded` loads older pages positionally
+            // by offset. `totalMessages` from STATUS gates pagination.
             let messages = UInt32(max(0, status.messages ?? 0))
+            totalMessages = messages
             let fetched = try await client.imapClient.topEnvelopes(
                 folder: folder.path,
                 limit: pageSize,
@@ -235,31 +240,24 @@ final class MessageListViewModel {
         guard hasMore, !isLoadingMore, !isLoading,
               !isSearchActive,
               pendingRemovedUIDs.isEmpty,
-              envelopes.last?.uid == currentItem.uid,
-              let lowestUID,
-              lowestUID > 1 else { return }
+              envelopes.last?.uid == currentItem.uid else { return }
         isLoadingMore = true
         defer { isLoadingMore = false }
         do {
-            let upper = lowestUID - 1
-            let lower = upper > pageSize ? upper - pageSize : 1
+            // Positional page: the next `pageSize` envelopes after what's
+            // loaded, in the current sort order. `mergeFetched` dedups, so a
+            // shifted offset (a concurrent removal) can't double-insert.
             let fetched = try await client.imapClient.envelopes(
                 folder: folder.path,
-                range: lower...upper,
+                offset: UInt32(envelopes.count),
+                limit: pageSize,
                 sort: sortCriterion
             )
             mergeFetched(fetched)
-            // An empty fetch on a range above UID 1 means the server has no
-            // messages in that band — don't spin indefinitely decrementing
-            // `lowestUID` one at a time. Flag "no more" explicitly.
-            if fetched.isEmpty {
-                hasMore = false
-                self.lowestUID = lower
-            } else {
-                let newLowest = fetched.map(\.uid).min() ?? upper
-                self.lowestUID = newLowest
-                hasMore = newLowest > 1
-            }
+            // Done when the page comes back empty or the loaded count reaches
+            // the folder's STATUS total -- no more decrementing a UID cursor
+            // one band at a time, which dead-ended on sparse folders.
+            hasMore = !fetched.isEmpty && UInt32(envelopes.count) < totalMessages
             if let uidValidity, let uidNext = envelopes.map(\.uid).max() {
                 try await persistCache(uidValidity: uidValidity, uidNext: uidNext + 1)
             }
@@ -403,7 +401,8 @@ extension MessageListViewModel {
         if let snapshot = await client.envelopeCache.snapshot(for: folder.path) {
             uidValidity = snapshot.uidValidity
             envelopes = snapshot.envelopes.values.sorted(by: envelopeOrder)
-            lowestUID = envelopes.map(\.uid).min()
+            // `hasMore`/`totalMessages` stay at their defaults; the refresh
+            // that follows hydration sets the real count from STATUS.
         }
     }
 
