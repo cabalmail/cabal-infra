@@ -103,12 +103,17 @@ extension MessageListViewModel {
     ) async throws {
         let fetchedUIDs = Set(fetched.map(\.uid))
         let isDefaultSort = sortCriterion == .default
-        let keepingRange: ClosedRange<UInt32>? = isDefaultSort
+        // Only meaningful when we actually got a page back.
+        let keepingRange: ClosedRange<UInt32>? = isDefaultSort && !fetched.isEmpty
             ? fetched.map(\.uid).min().map { lower in lower...max(uidNext, lower) }
             : nil
+        // `disappeared` detects messages expunged/moved out from under us, but
+        // only against a real fetch. An empty top-page fetch (transient/blank)
+        // must NOT be read as "everything vanished" -- that wiped a deeply
+        // paginated list back to the top page on a routine background refresh.
         let disappeared: [UInt32] = keepingRange.map { range in
             envelopes.map(\.uid).filter { range.contains($0) && !fetchedUIDs.contains($0) }
-        } ?? (isDefaultSort ? envelopes.map(\.uid) : [])
+        } ?? []
         if !disappeared.isEmpty {
             envelopes.removeAll { disappeared.contains($0.uid) }
             for uid in disappeared {

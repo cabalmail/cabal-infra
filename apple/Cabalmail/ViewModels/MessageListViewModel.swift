@@ -204,13 +204,19 @@ final class MessageListViewModel {
             try await client.imapClient.connectAndAuthenticate()
             let status = try await client.imapClient.status(path: folder.path)
             let uidNext = status.uidNext ?? 1
-            let uidValidity = status.uidValidity ?? 0
-            if self.uidValidity != uidValidity {
-                try? await client.envelopeCache.invalidate(folder: folder.path)
-                try? await client.bodyCache.invalidate(folder: folder.path)
-                envelopes = []
+            // Only a concrete, *changed* UIDVALIDITY means "rebuild from
+            // scratch." A missing/zero reading from a flaky STATUS must not
+            // wipe a scrolled, paginated list back to the top page on a
+            // routine background refresh.
+            if let fresh = status.uidValidity, fresh != 0 {
+                if let known = self.uidValidity, known != fresh {
+                    try? await client.envelopeCache.invalidate(folder: folder.path)
+                    try? await client.bodyCache.invalidate(folder: folder.path)
+                    envelopes = []
+                }
+                self.uidValidity = fresh
             }
-            self.uidValidity = uidValidity
+            let uidValidity = self.uidValidity ?? 0
             // Top page uses sequence-number FETCH via `topEnvelopes` (robust on
             // sparse folders); `loadMoreIfNeeded` loads older pages positionally
             // by offset. `totalMessages` from STATUS gates pagination.
