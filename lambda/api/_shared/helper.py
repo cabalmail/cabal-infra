@@ -337,6 +337,33 @@ def validate_uid(value):
     return validate_uid_list([value])[0]
 
 
+def validate_pagination(offset, limit):
+    '''Validates the optional `offset`/`limit` list-pagination query params.
+
+    Returns (offset:int>=0, limit:int>0 or None). A missing or empty value
+    means "no bound": offset defaults to 0 and a missing limit returns None, so
+    the caller serves the full list and the pre-pagination contract is kept.
+    Raises ValueError on non-numeric or out-of-range input.
+    '''
+    parsed_offset = 0
+    if offset not in (None, ''):
+        try:
+            parsed_offset = int(offset)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f'invalid offset: {offset!r}') from exc
+        if parsed_offset < 0:
+            raise ValueError(f'offset out of range: {parsed_offset}')
+    parsed_limit = None
+    if limit not in (None, ''):
+        try:
+            parsed_limit = int(limit)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f'invalid limit: {limit!r}') from exc
+        if parsed_limit < 1:
+            raise ValueError(f'limit out of range: {parsed_limit}')
+    return parsed_offset, parsed_limit
+
+
 def apply_in_batches(ids, operation):
     '''Runs `operation(batch)` over MAX_IDS_PER_IMAP_CMD-sized slices of `ids`,
     returning (succeeded_ids, failed_ids).
