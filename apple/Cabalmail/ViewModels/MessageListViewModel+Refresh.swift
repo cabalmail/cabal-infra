@@ -34,6 +34,7 @@ extension MessageListViewModel {
     /// unrelated phantom never reached the fetch path far enough to
     /// land a body in it.
     func hardReload() async {
+        dbg("hardReload")
         try? await client.envelopeCache.invalidate(folder: folder.path)
         envelopes.removeAll()
         totalMessages = 0
@@ -79,6 +80,7 @@ extension MessageListViewModel {
     /// include these too." Shielded so an in-flight local write survives a
     /// concurrent refresh (see `shieldFetched`).
     func mergeFetched(_ fetched: [Envelope]) {
+        let before = envelopes.count
         var byUID: [UInt32: Envelope] = Dictionary(
             uniqueKeysWithValues: envelopes.map { ($0.uid, $0) }
         )
@@ -86,6 +88,7 @@ extension MessageListViewModel {
             byUID[envelope.uid] = envelope
         }
         envelopes = byUID.values.sorted(by: envelopeOrder)
+        dbg("merge in=\(fetched.count) before=\(before) after=\(envelopes.count)")
     }
 
     /// Merges a top-page fetch into in-memory state and the envelope cache.
@@ -114,6 +117,7 @@ extension MessageListViewModel {
         let disappeared: [UInt32] = keepingRange.map { range in
             envelopes.map(\.uid).filter { range.contains($0) && !fetchedUIDs.contains($0) }
         } ?? []
+        dbg("applyRefreshPage disappeared=\(disappeared.count) fetched=\(fetched.count)")
         if !disappeared.isEmpty {
             envelopes.removeAll { disappeared.contains($0.uid) }
             for uid in disappeared {

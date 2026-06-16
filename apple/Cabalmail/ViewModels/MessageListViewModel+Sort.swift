@@ -26,6 +26,7 @@ extension MessageListViewModel {
     /// doesn't change so UI repeat-clicks don't burn a refresh.
     func setSort(_ criterion: SortCriterion) async {
         guard sortCriterion != criterion else { return }
+        dbg("setSort \(criterion.field)")
         sortCriterion = criterion
         envelopes.removeAll()
         sourceFolderByUID = [:]

@@ -200,9 +200,11 @@ final class MessageListViewModel {
         }
         isLoading = true
         defer { isLoading = false }
+        dbg("refresh start sort=\(sortCriterion.field)")
         do {
             try await client.imapClient.connectAndAuthenticate()
             let status = try await client.imapClient.status(path: folder.path)
+            dbg("refresh uidv=\(status.uidValidity ?? 0)/\(self.uidValidity ?? 0) msgs=\(status.messages ?? -1)")
             let uidNext = status.uidNext ?? 1
             // Only a concrete, *changed* UIDVALIDITY means "rebuild from
             // scratch." A missing/zero reading from a flaky STATUS must not
@@ -210,6 +212,7 @@ final class MessageListViewModel {
             // routine background refresh.
             if let fresh = status.uidValidity, fresh != 0 {
                 if let known = self.uidValidity, known != fresh {
+                    dbg("refresh WIPE-uidValidity \(known) -> \(fresh)")
                     try? await client.envelopeCache.invalidate(folder: folder.path)
                     try? await client.bodyCache.invalidate(folder: folder.path)
                     envelopes = []
@@ -228,6 +231,7 @@ final class MessageListViewModel {
                 totalMessages: messages,
                 sort: sortCriterion
             )
+            dbg("refresh topFetched=\(fetched.count)")
             try await applyRefreshPage(fetched, uidNext: uidNext, uidValidity: uidValidity)
             errorMessage = nil
         } catch let error as CabalmailError {
@@ -261,9 +265,10 @@ final class MessageListViewModel {
             // Positional page: the next `pageSize` envelopes after what's
             // loaded, in the current sort order. `mergeFetched` dedups, so a
             // shifted offset (a concurrent removal) can't double-insert.
+            let offset = UInt32(envelopes.count)
             let fetched = try await client.imapClient.envelopes(
                 folder: folder.path,
-                offset: UInt32(envelopes.count),
+                offset: offset,
                 limit: pageSize,
                 sort: sortCriterion
             )
@@ -272,12 +277,14 @@ final class MessageListViewModel {
             // the folder's STATUS total -- no more decrementing a UID cursor
             // one band at a time, which dead-ended on sparse folders.
             hasMore = !fetched.isEmpty && UInt32(envelopes.count) < totalMessages
+            dbg("loadMore off=\(offset) fetched=\(fetched.count) hasMore=\(hasMore) total=\(totalMessages)")
             if let uidValidity, let uidNext = envelopes.map(\.uid).max() {
                 try await persistCache(uidValidity: uidValidity, uidNext: uidNext + 1)
             }
         } catch {
             // Best-effort pagination — don't surface an error unless we're
             // blocked entirely.
+            dbg("loadMore ERROR \(error)")
         }
     }
 
@@ -411,10 +418,19 @@ final class MessageListViewModel {
 // 250-line cap. Same-file extension — all helpers remain file-private to
 // the view model.
 extension MessageListViewModel {
+    // TEMP diagnostic (remove once the deep-scroll reset is pinned). Logs the
+    // event and the current envelope count: a list wipe shows up as a count
+    // drop here, while a scroll-only reset shows the count holding steady.
+    // Internal (not private) so the sibling-file extensions can call it.
+    func dbg(_ msg: String) {
+        print("CABALDBG [\(folder.path)] \(msg) | n=\(envelopes.count)")
+    }
+
     private func hydrateFromCache() async {
         if let snapshot = await client.envelopeCache.snapshot(for: folder.path) {
             uidValidity = snapshot.uidValidity
             envelopes = snapshot.envelopes.values.sorted(by: envelopeOrder)
+            dbg("hydrate loaded=\(snapshot.envelopes.count)")
             // `hasMore`/`totalMessages` stay at their defaults; the refresh
             // that follows hydration sets the real count from STATUS.
         }
