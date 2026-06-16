@@ -1,5 +1,5 @@
 - Dovecot now auto-creates the `Trash` mailbox (`auto = create` in
-  `15-mailboxes.conf`) so a fresh mailbox has it before its first delete.
-  Previously the `/move_messages` Lambda force-created `Trash` on every
-  delete to cover the gap; moving that to Dovecot lets the Lambda stop
-  paying that round trip once the behavior is confirmed in stage.
+  `15-mailboxes.conf`) at namespace init, so it always exists before a
+  mailbox's first delete. The `/move_messages` Lambda no longer force-creates
+  `Trash` on every delete to cover that gap, dropping a wasted IMAP round
+  trip from the delete path.
