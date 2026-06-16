@@ -1,5 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import Observer from './Observer';
+import React, { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { SwipeableList, Type } from 'react-swipeable-list';
 import 'react-swipeable-list/dist/styles.css';
 import Envelope from './Envelope';
@@ -10,6 +9,24 @@ import './Envelopes.css';
 // Pages fetched up front to fill the first viewport before scroll-driven lazy
 // loading takes over.
 const INITIAL_PAGES = 3;
+// Rows rendered above/below the viewport so a fast scroll doesn't flash blank.
+const OVERSCAN = 10;
+
+// Pure window math, exported for tests. Given the scroll offset, viewport and
+// row height, returns the [start, end) slice of `total` rows to render. When
+// height isn't known yet (first paint, or jsdom with no layout) it returns the
+// whole list so nothing is hidden -- virtualization only kicks in once we can
+// measure.
+export function computeWindow(scrollTop, viewportHeight, rowHeight, total, overscan = OVERSCAN) {
+  if (!(rowHeight > 0) || !(viewportHeight > 0) || total === 0) {
+    return { start: 0, end: total };
+  }
+  const first = Math.floor(scrollTop / rowHeight);
+  const visible = Math.ceil(viewportHeight / rowHeight);
+  const start = Math.max(0, first - overscan);
+  const end = Math.min(total, first + visible + overscan);
+  return { start, end };
+}
 
 function matchesFilter(envelope, filter) {
   if (!envelope) return false;
@@ -115,7 +132,65 @@ function Envelopes({
     return list;
   }, [message_ids, envelopes, filter, addressFilter]);
 
-  // Tell parent what's currently visible (for header "N of M" + pill counts)
+  // --- Virtualization --------------------------------------------------
+  // Render only the rows in (and near) the viewport. SwipeableList forwards
+  // `style` but its items don't, so we window by padding the list top/bottom
+  // for the off-screen rows rather than absolutely positioning each one.
+  const scrollRef = useRef(null);
+  const rafRef = useRef(0);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [rowHeight, setRowHeight] = useState(0);
+  const [viewportH, setViewportH] = useState(0);
+
+  // Measure a real row's height and the viewport once rows exist (and whenever
+  // the rendered count changes). Guarded sets keep this from looping.
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const vh = el.clientHeight;
+    if (vh > 0) setViewportH((prev) => (prev !== vh ? vh : prev));
+    const item = el.querySelector('.swipeable-list-item');
+    if (item && item.offsetHeight > 0) {
+      const h = item.offsetHeight;
+      setRowHeight((prev) => (prev !== h ? h : prev));
+    }
+  }, [shownIds.length]);
+
+  // Keep the viewport height current across pane resizes. Keyed to the row
+  // count so it (re)attaches once the scroll element actually exists -- the
+  // empty state renders no scroll container.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(() => {
+      if (el.clientHeight > 0) setViewportH(el.clientHeight);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [shownIds.length]);
+
+  const onScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = 0;
+      setScrollTop(el.scrollTop);
+      // Pull the next lazy page in as the bottom of the loaded list nears.
+      const slack = rowHeight > 0 ? rowHeight * 6 : 300;
+      if (el.scrollHeight - (el.scrollTop + el.clientHeight) < slack) loadMore();
+    });
+  }, [rowHeight, loadMore]);
+
+  useEffect(() => () => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+  }, []);
+
+  const { start, end } = computeWindow(scrollTop, viewportH, rowHeight, shownIds.length);
+  const padTop = rowHeight > 0 ? start * rowHeight : 0;
+  const padBottom = rowHeight > 0 ? (shownIds.length - end) * rowHeight : 0;
+
+  // Tell parent what's currently visible (for header "N of M")
   useEffect(() => {
     if (typeof onVisibleEnvelopesChange !== 'function') return;
     const loaded = [];
@@ -196,16 +271,8 @@ function Envelopes({
 
   const archive = useCallback((id) => archiveProp(id), [archiveProp]);
 
-  // Trigger the next lazy page when a row near the end of the loaded list
-  // scrolls into view.
-  const sentinelIdx = Math.max(0, shownIds.length - Math.ceil(PAGE_SIZE / 2));
-
-  const rows = shownIds.map((k, idx) => {
+  const rows = shownIds.slice(start, end).map((k) => {
     const e = envelopes[k.toString()];
-    const observer =
-      idx === sentinelIdx ? (
-        <Observer onVisible={loadMore} key={`load-${shownIds.length}`} />
-      ) : null;
     const id = Number(e.id);
     return (
       <Envelope
@@ -226,12 +293,11 @@ function Envelopes({
         dom_id={e.id}
         bulkMode={bulkMode}
         selected={false}
-        observer={observer}
       />
     );
   });
 
-  if (rows.length === 0) {
+  if (shownIds.length === 0) {
     return (
       <div className={`envelopes-empty ${bulkMode ? 'in-bulk' : ''}`} role="status">
         <span className="envelopes-empty-line">{emptyLabel || 'Inbox zero.'}</span>
@@ -243,9 +309,16 @@ function Envelopes({
   }
 
   return (
-    <SwipeableList fullSwipe={true} type={Type.IOS} className={`envelope-list ${bulkMode ? 'bulk-mode' : ''}`}>
-      {rows}
-    </SwipeableList>
+    <div className="envelope-scroll" ref={scrollRef} onScroll={onScroll}>
+      <SwipeableList
+        fullSwipe={true}
+        type={Type.IOS}
+        className={`envelope-list ${bulkMode ? 'bulk-mode' : ''}`}
+        style={{ paddingTop: padTop, paddingBottom: padBottom }}
+      >
+        {rows}
+      </SwipeableList>
+    </div>
   );
 }
 

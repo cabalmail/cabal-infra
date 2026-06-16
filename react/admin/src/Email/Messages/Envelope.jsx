@@ -27,7 +27,6 @@ function Envelope({
   dom_id,
   bulkMode,
   selected,
-  observer,
 }) {
   const flagStr = useMemo(() => flags.map((f) => f.replace('\\', '')).join(' '), [flags]);
   const unread = !flagStr.match(/Seen/);
@@ -100,7 +99,6 @@ function Envelope({
       leadingActions={leadingActions()}
       trailingActions={trailingActions()}
     >
-      {observer}
       <div
         className="envelope-content"
         role="button"
