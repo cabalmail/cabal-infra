@@ -187,8 +187,13 @@ function Envelopes({
   }, []);
 
   const { start, end } = computeWindow(scrollTop, viewportH, rowHeight, shownIds.length);
-  const padTop = rowHeight > 0 ? start * rowHeight : 0;
-  const padBottom = rowHeight > 0 ? (shownIds.length - end) * rowHeight : 0;
+  // Drive the scroll height from an explicit sizer and offset the visible rows
+  // with a transform. The sizer's height only grows (as more loads), never
+  // shrinks as the window moves -- so the browser never clamps scrollTop back
+  // mid-scroll, which a padding-based height would do and strand the rows.
+  const virtualized = rowHeight > 0;
+  const offsetY = virtualized ? start * rowHeight : 0;
+  const totalHeight = virtualized ? shownIds.length * rowHeight : undefined;
 
   // Tell parent what's currently visible (for header "N of M")
   useEffect(() => {
@@ -310,14 +315,20 @@ function Envelopes({
 
   return (
     <div className="envelope-scroll" ref={scrollRef} onScroll={onScroll}>
-      <SwipeableList
-        fullSwipe={true}
-        type={Type.IOS}
-        className={`envelope-list ${bulkMode ? 'bulk-mode' : ''}`}
-        style={{ paddingTop: padTop, paddingBottom: padBottom }}
-      >
-        {rows}
-      </SwipeableList>
+      <div className="envelope-sizer" style={virtualized ? { height: totalHeight } : undefined}>
+        <div
+          className="envelope-window"
+          style={virtualized ? { transform: `translateY(${offsetY}px)` } : undefined}
+        >
+          <SwipeableList
+            fullSwipe={true}
+            type={Type.IOS}
+            className={`envelope-list ${bulkMode ? 'bulk-mode' : ''}`}
+          >
+            {rows}
+          </SwipeableList>
+        </div>
+      </div>
     </div>
   );
 }
