@@ -24,6 +24,11 @@ final class MessageListViewModel {
     let preferences: Preferences
     let appState: AppState
     private let pageSize: UInt32 = 50
+    // Prefetch the next page once the user scrolls within this many rows of the
+    // end of the loaded list, so a moderate scroll keeps reading while the
+    // fetch is in flight instead of stalling at the bottom (the trigger used to
+    // be the last row only -- zero lookahead). Roughly half a page.
+    private let prefetchDistance = 25
 
     var envelopes: [Envelope] = []
     var isLoading = false
@@ -240,7 +245,8 @@ final class MessageListViewModel {
         guard hasMore, !isLoadingMore, !isLoading,
               !isSearchActive,
               pendingRemovedUIDs.isEmpty,
-              envelopes.last?.uid == currentItem.uid else { return }
+              envelopes.suffix(prefetchDistance).contains(where: { $0.uid == currentItem.uid })
+              else { return }
         isLoadingMore = true
         defer { isLoadingMore = false }
         do {
