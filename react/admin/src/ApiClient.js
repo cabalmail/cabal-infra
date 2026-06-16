@@ -1,6 +1,12 @@
 import axios from 'axios';
 import { ONE_SECOND, ADDRESS_LIST, FOLDER_LIST } from './constants';
 const TIMEOUT = ONE_SECOND * 10;
+// Bulk IMAP mutations (move / flag / purge / empty-trash) run server-side as
+// chunked, sequential IMAP commands and can take far longer than a normal
+// request -- up to the API's 29s ceiling. Wait just past that so the client
+// hears the server's real verdict instead of firing a false "failed" on a
+// slow-but-successful operation.
+const MUTATION_TIMEOUT = ONE_SECOND * 30;
 
 export default class ApiClient {
 
@@ -295,7 +301,7 @@ export default class ApiClient {
         headers: {
           'Authorization': this.token
         },
-        timeout: TIMEOUT
+        timeout: MUTATION_TIMEOUT
       }
     );
     return response;
@@ -313,7 +319,7 @@ export default class ApiClient {
         headers: {
           'Authorization': this.token
         },
-        timeout: TIMEOUT
+        timeout: MUTATION_TIMEOUT
       }
     );
     return response;
@@ -330,8 +336,8 @@ export default class ApiClient {
         headers: {
           'Authorization': this.token
         },
-        // Emptying a very full trash can exceed the default 10s.
-        timeout: ONE_SECOND * 30
+        // A full-trash purge runs server-side like the other bulk mutations.
+        timeout: MUTATION_TIMEOUT
       }
     );
     return response;
@@ -353,7 +359,7 @@ export default class ApiClient {
         headers: {
           'Authorization': this.token
         },
-        timeout: TIMEOUT
+        timeout: MUTATION_TIMEOUT
       }
     );
     return response;
