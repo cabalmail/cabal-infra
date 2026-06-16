@@ -101,76 +101,6 @@ public actor ApiBackedImapClient: ImapClient {
         )
     }
 
-    // MARK: - Envelopes
-
-    // Legacy UID-range fetch. The view model now paginates positionally via
-    // `envelopes(offset:limit:)`; this remains only to satisfy the protocol
-    // requirement shared with `LiveImapClient`. It still pulls the full UID
-    // list, so it is not on any hot path.
-    public func envelopes(
-        folder: String,
-        range: ClosedRange<UInt32>,
-        sort: SortCriterion
-    ) async throws -> [Envelope] {
-        let allIds = try await api.listMessageIds(
-            host: host,
-            folder: folder,
-            sortOrder: sort.direction.wireOrder,
-            sortField: sort.field.wireField
-        )
-        let windowed = allIds.filter { range.contains($0) }
-        guard !windowed.isEmpty else { return [] }
-        let raw = try await api.listEnvelopes(host: host, folder: folder, ids: windowed)
-        return raw.map { Self.makeEnvelope($0) }
-    }
-
-    public func envelopes(
-        folder: String,
-        offset: UInt32,
-        limit: UInt32,
-        sort: SortCriterion
-    ) async throws -> [Envelope] {
-        // Ask the Lambda for just this page of the sorted UID list, then fetch
-        // its envelopes. Trust the server slice (no client-side prefix): at a
-        // non-zero offset a defensive prefix would hand back the wrong window
-        // if the slice ever arrived larger than requested.
-        let ids = try await api.listMessageIds(
-            host: host,
-            folder: folder,
-            sortOrder: sort.direction.wireOrder,
-            sortField: sort.field.wireField,
-            offset: offset,
-            limit: limit
-        )
-        guard !ids.isEmpty else { return [] }
-        let raw = try await api.listEnvelopes(host: host, folder: folder, ids: ids)
-        return raw.map { Self.makeEnvelope($0) }
-    }
-
-    public func topEnvelopes(
-        folder: String,
-        limit: UInt32,
-        totalMessages: UInt32,
-        sort: SortCriterion
-    ) async throws -> [Envelope] {
-        if totalMessages == 0 { return [] }
-        let ids = try await api.listMessageIds(
-            host: host,
-            folder: folder,
-            sortOrder: sort.direction.wireOrder,
-            sortField: sort.field.wireField,
-            offset: 0,
-            limit: limit
-        )
-        // Offset 0 is the top of the sorted list, so a defensive prefix is
-        // always correct -- it also shields against an older Lambda that
-        // predates pagination and ignores the params, returning the full list.
-        let head = Array(ids.prefix(Int(limit)))
-        guard !head.isEmpty else { return [] }
-        let raw = try await api.listEnvelopes(host: host, folder: folder, ids: head)
-        return raw.map { Self.makeEnvelope($0) }
-    }
-
     // MARK: - Bodies and parts
 
     public func fetchBody(folder: String, uid: UInt32) async throws -> RawMessage {
@@ -457,5 +387,76 @@ extension ApiBackedImapClient {
             foldersSearched: raw.foldersSearched,
             truncated: raw.truncated
         )
+    }
+}
+
+// MARK: - Envelopes
+// In an extension (same file, so it still reaches the actor's private
+// `api`/`host`) to keep the main actor body under SwiftLint's type-body cap.
+extension ApiBackedImapClient {
+    // Legacy UID-range fetch. The view model now paginates positionally via
+    // `envelopes(offset:limit:)`; this remains only to satisfy the protocol
+    // requirement shared with `LiveImapClient`. It still pulls the full UID
+    // list, so it is not on any hot path.
+    public func envelopes(
+        folder: String,
+        range: ClosedRange<UInt32>,
+        sort: SortCriterion
+    ) async throws -> [Envelope] {
+        let allIds = try await api.listMessageIds(
+            host: host,
+            folder: folder,
+            sortOrder: sort.direction.wireOrder,
+            sortField: sort.field.wireField
+        )
+        let windowed = allIds.filter { range.contains($0) }
+        guard !windowed.isEmpty else { return [] }
+        let raw = try await api.listEnvelopes(host: host, folder: folder, ids: windowed)
+        return raw.map { Self.makeEnvelope($0) }
+    }
+
+    public func envelopes(
+        folder: String,
+        offset: UInt32,
+        limit: UInt32,
+        sort: SortCriterion
+    ) async throws -> [Envelope] {
+        // Ask the Lambda for just this page of the sorted UID list, then fetch
+        // its envelopes. Trust the server slice (no client-side prefix): at a
+        // non-zero offset a defensive prefix would hand back the wrong window
+        // if the slice ever arrived larger than requested.
+        let ids = try await api.listMessageIds(
+            host: host,
+            folder: folder,
+            sortOrder: sort.direction.wireOrder,
+            sortField: sort.field.wireField,
+            page: MessageIdPage(offset: offset, limit: limit)
+        )
+        guard !ids.isEmpty else { return [] }
+        let raw = try await api.listEnvelopes(host: host, folder: folder, ids: ids)
+        return raw.map { Self.makeEnvelope($0) }
+    }
+
+    public func topEnvelopes(
+        folder: String,
+        limit: UInt32,
+        totalMessages: UInt32,
+        sort: SortCriterion
+    ) async throws -> [Envelope] {
+        if totalMessages == 0 { return [] }
+        let ids = try await api.listMessageIds(
+            host: host,
+            folder: folder,
+            sortOrder: sort.direction.wireOrder,
+            sortField: sort.field.wireField,
+            page: MessageIdPage(offset: 0, limit: limit)
+        )
+        // Offset 0 is the top of the sorted list, so a defensive prefix is
+        // always correct -- it also shields against an older Lambda that
+        // predates pagination and ignores the params, returning the full list.
+        let head = Array(ids.prefix(Int(limit)))
+        guard !head.isEmpty else { return [] }
+        let raw = try await api.listEnvelopes(host: host, folder: folder, ids: head)
+        return raw.map { Self.makeEnvelope($0) }
     }
 }

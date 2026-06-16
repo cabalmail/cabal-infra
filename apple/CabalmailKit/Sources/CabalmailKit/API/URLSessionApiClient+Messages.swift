@@ -93,8 +93,7 @@ extension URLSessionApiClient {
         folder: String,
         sortOrder: String,
         sortField: String,
-        offset: UInt32?,
-        limit: UInt32?
+        page: MessageIdPage?
     ) async throws -> [UInt32] {
         var items = [
             URLQueryItem(name: "host", value: host),
@@ -104,8 +103,10 @@ extension URLSessionApiClient {
         ]
         // Only send the pagination params when set; omitting them asks the
         // Lambda for the full sorted list (its pre-pagination behavior).
-        if let offset { items.append(URLQueryItem(name: "offset", value: String(offset))) }
-        if let limit { items.append(URLQueryItem(name: "limit", value: String(limit))) }
+        if let page {
+            items.append(URLQueryItem(name: "offset", value: String(page.offset)))
+            items.append(URLQueryItem(name: "limit", value: String(page.limit)))
+        }
         let request = try await get("/list_messages", query: items)
         let data = try await send(request, expectedStatuses: 200..<300)
         return try JSONDecoder().decode(MessageIdsPayload.self, from: data).messageIds

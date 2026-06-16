@@ -48,16 +48,15 @@ public protocol ApiClient: Sendable {
 
     // MARK: Messages
     /// Sorted UID list for the folder. Sort defaults match the React
-    /// client's call site (REVERSE ARRIVAL — most recent first). `offset` and
-    /// `limit` request a server-sliced page of the sorted result (Phase 3 of
-    /// the large-mailbox plan); pass `nil` for both to get the full list.
+    /// client's call site (REVERSE ARRIVAL — most recent first). `page`
+    /// requests a server-sliced window of the sorted result (Phase 3 of the
+    /// large-mailbox plan); pass `nil` for the full list.
     func listMessageIds(
         host: String,
         folder: String,
         sortOrder: String,
         sortField: String,
-        offset: UInt32?,
-        limit: UInt32?
+        page: MessageIdPage?
     ) async throws -> [UInt32]
     func listEnvelopes(host: String, folder: String, ids: [UInt32]) async throws -> [ApiEnvelope]
 
@@ -159,11 +158,23 @@ public protocol ApiClient: Sendable {
     func fetchPresignedData(url: URL) async throws -> Data
 }
 
+/// A server-sliced page of the sorted message-id list: the `limit` UIDs
+/// starting at `offset`. Bundled into one parameter so `listMessageIds` stays
+/// within the parameter-count budget and the page reads as one concept.
+public struct MessageIdPage: Sendable, Hashable {
+    public let offset: UInt32
+    public let limit: UInt32
+    public init(offset: UInt32, limit: UInt32) {
+        self.offset = offset
+        self.limit = limit
+    }
+}
+
 public extension ApiClient {
     /// Convenience overload: the full, unpaginated sorted UID list. Lets
     /// callers that genuinely need every UID (e.g. the legacy UID-range
     /// `envelopes`) stay terse while the paginated requirement carries the
-    /// `offset`/`limit` slice.
+    /// `page` slice.
     func listMessageIds(
         host: String,
         folder: String,
@@ -175,8 +186,7 @@ public extension ApiClient {
             folder: folder,
             sortOrder: sortOrder,
             sortField: sortField,
-            offset: nil,
-            limit: nil
+            page: nil
         )
     }
 }
