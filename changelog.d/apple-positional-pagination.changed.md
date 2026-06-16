@@ -6,5 +6,5 @@
   assumed UID order tracked the sort order) and removes the sparse-folder
   dead-end -- the client now stops paging when the loaded count reaches the
   folder's STATUS message total rather than walking a UID cursor down to 1.
-  Older pages prefetch about half a page ahead of the scroll, so a moderate
-  scroll no longer stalls at the bottom waiting for the next fetch.
+  Older pages prefetch well ahead of the scroll, so scrolling no longer
+  stalls at the bottom waiting for the next fetch.

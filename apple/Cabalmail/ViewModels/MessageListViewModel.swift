@@ -25,10 +25,12 @@ final class MessageListViewModel {
     let appState: AppState
     private let pageSize: UInt32 = 50
     // Prefetch the next page once the user scrolls within this many rows of the
-    // end of the loaded list, so a moderate scroll keeps reading while the
-    // fetch is in flight instead of stalling at the bottom (the trigger used to
-    // be the last row only -- zero lookahead). Roughly half a page.
-    private let prefetchDistance = 25
+    // end of the loaded list, so scrolling never stalls at the bottom waiting
+    // for a fetch (the trigger used to be the last row only -- zero lookahead).
+    // Deliberately larger than `pageSize` and any reasonable viewport: on open
+    // this prefetches the second page immediately, then keeps ~two pages loaded
+    // ahead of the scroll. Cheap insurance for smoothness.
+    private let prefetchDistance = 100
 
     var envelopes: [Envelope] = []
     var isLoading = false
