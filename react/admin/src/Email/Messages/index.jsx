@@ -13,7 +13,7 @@ import FolderPicker from './Folders';
 import Icon from './icons';
 import ConfirmDialog from '../../ConfirmDialog';
 import useApi from '../../hooks/useApi';
-import { READ, UNREAD, FLAGGED, ASC, DESC, ARRIVAL, DATE, FROM, SUBJECT } from '../../constants';
+import { READ, UNREAD, FLAGGED, ASC, DESC, ARRIVAL, DATE, FROM, SUBJECT, MAX_BULK_IDS } from '../../constants';
 import { folderMeta } from '../../utils/folderMeta';
 import './Messages.css';
 
@@ -132,9 +132,23 @@ function Messages({
       });
   }, [api, folder, sortDir, sortKey]);
 
+  // Refuse a bulk action larger than the server's per-request cap up front,
+  // with a clear message, rather than firing a request the API answers 413.
+  const bulkLimitExceeded = useCallback((count) => {
+    if (count > MAX_BULK_IDS) {
+      setMessage(
+        `Select at most ${MAX_BULK_IDS.toLocaleString()} messages for one bulk action.`,
+        true,
+      );
+      return true;
+    }
+    return false;
+  }, [setMessage]);
+
   const runFlagOp = useCallback(
     (spec, ids) => {
       if (!ids.length) return;
+      if (bulkLimitExceeded(ids.length)) return;
       api
         .setFlag(folder, spec.imap, spec.op, ids, sortDir.imap, sortKey.imap)
         .then(refreshAfterMutation)
@@ -143,11 +157,12 @@ function Messages({
           console.error(err);
         });
     },
-    [api, folder, sortDir, sortKey, refreshAfterMutation, setMessage],
+    [api, folder, sortDir, sortKey, refreshAfterMutation, setMessage, bulkLimitExceeded],
   );
 
   const archiveSelected = useCallback(() => {
     if (!selectedCount) return;
+    if (bulkLimitExceeded(selectedCount)) return;
     api
       .moveMessages(folder, 'Archive', selectedIdsArray, sortDir.imap, sortKey.imap)
       .then(() => {
@@ -158,10 +173,11 @@ function Messages({
         setMessage('Unable to archive selected messages.', true);
         console.error(err);
       });
-  }, [api, folder, sortDir, sortKey, selectedIdsArray, selectedCount, refreshAfterMutation, exitBulk, setMessage]);
+  }, [api, folder, sortDir, sortKey, selectedIdsArray, selectedCount, refreshAfterMutation, exitBulk, setMessage, bulkLimitExceeded]);
 
   const deleteSelected = useCallback(() => {
     if (!selectedCount) return;
+    if (bulkLimitExceeded(selectedCount)) return;
     if (isTrash) {
       setConfirmPurge(true);
       return;
@@ -176,11 +192,12 @@ function Messages({
         setMessage('Unable to delete selected messages.', true);
         console.error(err);
       });
-  }, [api, folder, isTrash, sortDir, sortKey, selectedIdsArray, selectedCount, refreshAfterMutation, exitBulk, setMessage]);
+  }, [api, folder, isTrash, sortDir, sortKey, selectedIdsArray, selectedCount, refreshAfterMutation, exitBulk, setMessage, bulkLimitExceeded]);
 
   const purgeSelected = useCallback(() => {
     setConfirmPurge(false);
     if (!selectedCount) return;
+    if (bulkLimitExceeded(selectedCount)) return;
     api
       .purgeMessages(folder, selectedIdsArray)
       .then(() => {
@@ -191,7 +208,7 @@ function Messages({
         setMessage('Unable to permanently delete selected messages.', true);
         console.error(err);
       });
-  }, [api, folder, selectedIdsArray, selectedCount, refreshAfterMutation, exitBulk, setMessage]);
+  }, [api, folder, selectedIdsArray, selectedCount, refreshAfterMutation, exitBulk, setMessage, bulkLimitExceeded]);
 
   const cancelPurge = useCallback(() => setConfirmPurge(false), []);
 
@@ -199,6 +216,7 @@ function Messages({
     (destination) => {
       setShowMovePicker(false);
       if (!selectedCount || !destination || destination === folder) return;
+      if (bulkLimitExceeded(selectedCount)) return;
       api
         .moveMessages(folder, destination, selectedIdsArray, sortDir.imap, sortKey.imap)
         .then(() => {
@@ -210,7 +228,7 @@ function Messages({
           console.error(err);
         });
     },
-    [api, folder, sortDir, sortKey, selectedIdsArray, selectedCount, refreshAfterMutation, exitBulk, setMessage],
+    [api, folder, sortDir, sortKey, selectedIdsArray, selectedCount, refreshAfterMutation, exitBulk, setMessage, bulkLimitExceeded],
   );
 
   const markReadSelected = useCallback(() => runFlagOp(READ, selectedIdsArray), [runFlagOp, selectedIdsArray]);

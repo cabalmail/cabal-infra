@@ -44,6 +44,10 @@ export const TO = {
   description: "Recipient"
 };
 export const PAGE_SIZE = 30;
+// Largest selection a single bulk action (archive / move / delete / flag) may
+// submit. Matches the server's MAX_IDS_PER_REQUEST in lambda/api/_shared;
+// past this the API answers 413, so the client refuses up front with a message.
+export const MAX_BULK_IDS = 5000;
 export const READ = {
   imap: '\\Seen',
   css: "read",

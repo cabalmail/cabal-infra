@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import Messages from './index';
 import AuthContext from '../../contexts/AuthContext';
 import AppMessageContext from '../../contexts/AppMessageContext';
-import { DATE, DESC } from '../../constants';
+import { DATE, DESC, MAX_BULK_IDS } from '../../constants';
 
 const mockGetMessages = vi.fn();
 const mockSetFlag = vi.fn();
@@ -191,6 +191,31 @@ describe('Messages', () => {
       expect(container.querySelector('.msglist')?.classList.contains('select-mode')).toBe(true);
       // Bulk header replaces the regular one.
       expect(container.querySelector('.msglist-header.bulk')).toBeTruthy();
+    } finally {
+      unmount();
+    }
+  });
+
+  it('refuses a bulk action above the per-request cap and warns instead', async () => {
+    const tooMany = new Set(Array.from({ length: MAX_BULK_IDS + 1 }, (_, i) => i + 1));
+    const setMessage = vi.fn();
+    const { unmount } = render(
+      <Harness folder="INBOX" overrides={{ bulkMode: true, selected: tooMany, setMessage }} />,
+    );
+    try {
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /^delete$/i })).toBeInTheDocument();
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /^delete$/i }));
+      });
+      // No request is fired and no purge dialog opens; the user is told why.
+      expect(mockMoveMessages).not.toHaveBeenCalled();
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      expect(setMessage).toHaveBeenCalledWith(
+        expect.stringContaining(MAX_BULK_IDS.toLocaleString()),
+        true,
+      );
     } finally {
       unmount();
     }

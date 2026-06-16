@@ -236,6 +236,11 @@ def user_authorized_for_domain(user, domain):
 
 # Shared with the large-mailbox chunking work; one ceiling for both surfaces.
 MAX_IDS_PER_REQUEST = 5000
+# Per-command batch size for bulk UID MOVE / UID STORE. The whole request is
+# capped at MAX_IDS_PER_REQUEST; within that, the bulk endpoints issue IMAP
+# commands in slices of this size so no single command brushes the 29s API
+# Gateway ceiling on a large selection.
+MAX_IDS_PER_IMAP_CMD = 500
 MAX_FOLDER_NAME_BYTES = 255
 MAX_KEYWORD_LEN = 64
 MAX_CONTENT_ID_LEN = 128
@@ -330,6 +335,83 @@ def validate_uid_list(ids):
 def validate_uid(value):
     '''Validates a single IMAP UID, returning an int in [1, 2**32-1].'''
     return validate_uid_list([value])[0]
+
+
+def apply_in_batches(ids, operation):
+    '''Runs `operation(batch)` over MAX_IDS_PER_IMAP_CMD-sized slices of `ids`,
+    returning (succeeded_ids, failed_ids).
+
+    Bulk UID MOVE / UID STORE are issued in bounded batches so no single IMAP
+    command blocks the Lambda long enough to brush the 29s API Gateway ceiling
+    on a large selection. A batch whose operation raises is recorded as failed
+    and the run continues; the batches are independent UID sets, so the split
+    is accurate and a client can retry only the failed ids.
+    '''
+    succeeded = []
+    failed = []
+    for start in range(0, len(ids), MAX_IDS_PER_IMAP_CMD):
+        batch = ids[start:start + MAX_IDS_PER_IMAP_CMD]
+        try:
+            operation(batch)
+            succeeded.extend(batch)
+        except Exception:  # pylint: disable=broad-except
+            failed.extend(batch)
+    return succeeded, failed
+
+
+def too_many_ids_response():
+    '''413 the bulk endpoints return when an id list exceeds MAX_IDS_PER_REQUEST,
+    carrying the cap so a client can split the request and retry.'''
+    return {
+        "statusCode": 413,
+        "body": json.dumps({"max_ids": MAX_IDS_PER_REQUEST})
+    }
+
+
+def parse_bulk_request(event):
+    '''Parses a bulk-op request body and enforces the per-request id cap.
+
+    Returns (body, error). On success `error` is None; on a malformed body or an
+    oversized id list, `error` is a ready-to-return 400/413 response and `body`
+    is None. The caller still validates the folder/flag/uid contents.
+    '''
+    try:
+        body = json.loads(event['body'])
+    except (TypeError, json.JSONDecodeError):
+        return None, {
+            "statusCode": 400,
+            "body": json.dumps(
+                {"status": "Invalid input: request body is not valid JSON"})
+        }
+    raw_ids = body.get('ids')
+    if isinstance(raw_ids, (list, tuple)) and len(raw_ids) > MAX_IDS_PER_REQUEST:
+        return None, too_many_ids_response()
+    return body, None
+
+
+def batch_result_response(succeeded, failed, succeeded_key):
+    '''Builds the response for a batched bulk op: 500 when nothing succeeded,
+    200 "partial" with the succeeded/failed split when some batches failed, else
+    200 "submitted". `succeeded_key` names the success list in the partial body
+    (e.g. "moved_ids" / "flagged_ids").'''
+    if not succeeded:
+        return {
+            "statusCode": 500,
+            "body": json.dumps({"status": "unable"})
+        }
+    if failed:
+        return {
+            "statusCode": 200,
+            "body": json.dumps({
+                "status": "partial",
+                succeeded_key: succeeded,
+                "failed_ids": failed
+            })
+        }
+    return {
+        "statusCode": 200,
+        "body": json.dumps({"status": "submitted"})
+    }
 
 
 def validate_flag(flag):
