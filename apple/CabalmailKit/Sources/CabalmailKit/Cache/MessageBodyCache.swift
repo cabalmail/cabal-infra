@@ -52,6 +52,15 @@ public actor MessageBodyCache {
         try? fileManager.removeItem(at: url)
     }
 
+    /// Drops every cached body across all folders. Called on sign-out so the
+    /// next account to sign in on this device can't read the previous user's
+    /// message bodies from disk. The directory is recreated empty so the
+    /// actor stays usable (the cache lives in a shared, non-user-scoped path).
+    public func clearAll() throws {
+        try? fileManager.removeItem(at: directory)
+        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+    }
+
     // MARK: - Internals
 
     private func url(folder: String, uidValidity: UInt32, uid: UInt32) -> URL {

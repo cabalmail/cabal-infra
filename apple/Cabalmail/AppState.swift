@@ -286,6 +286,11 @@ final class AppState {
         stopInboxBadgePolling()
         guard let client else { status = .signedOut; return }
         await client.imapClient.disconnect()
+        // Wipe locally cached mail (envelopes, bodies, drafts, outbox) before
+        // dropping the session so the next account to sign in on this device
+        // can't read the previous user's messages from the shared on-disk
+        // cache.
+        await client.clearLocalData()
         try? await client.authService.signOut()
         self.client = nil
         self.status = .signedOut
@@ -412,9 +417,8 @@ final class AppState {
         do {
             try await client.imapClient.connectAndAuthenticate()
             let status = try await client.imapClient.status(path: "INBOX")
-            let count = max(0, status.unseen ?? 0)
-            inboxUnreadCount = count
-            try? await UNUserNotificationCenter.current().setBadgeCount(count)
+            inboxUnreadCount = max(0, status.unseen ?? 0)
+            try? await UNUserNotificationCenter.current().setBadgeCount(inboxUnreadCount)
         } catch {
             // Best-effort: if the STATUS call fails (transient network
             // blip, IMAP reconnection) the prior badge value stays put

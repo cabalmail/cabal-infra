@@ -53,6 +53,48 @@ final class EnvelopeCacheTests: XCTestCase {
         XCTAssertNil(snapshot)
     }
 
+    // MARK: - clearAll()
+
+    func testClearAllDropsEverySnapshot() async throws {
+        try await cache.merge(
+            envelopes: [envelope(uid: 1)],
+            uidValidity: 100,
+            uidNext: 2,
+            into: "INBOX"
+        )
+        try await cache.merge(
+            envelopes: [envelope(uid: 7)],
+            uidValidity: 100,
+            uidNext: 8,
+            into: "Archive"
+        )
+        try await cache.clearAll()
+        let inbox = await cache.snapshot(for: "INBOX")
+        let archive = await cache.snapshot(for: "Archive")
+        XCTAssertNil(inbox)
+        XCTAssertNil(archive)
+    }
+
+    /// The cache must stay usable after a clear: the next store should land
+    /// on disk rather than throw because the directory went missing.
+    func testClearAllLeavesCacheUsable() async throws {
+        try await cache.merge(
+            envelopes: [envelope(uid: 1)],
+            uidValidity: 100,
+            uidNext: 2,
+            into: "INBOX"
+        )
+        try await cache.clearAll()
+        try await cache.merge(
+            envelopes: [envelope(uid: 9)],
+            uidValidity: 100,
+            uidNext: 10,
+            into: "INBOX"
+        )
+        let snapshot = await cache.snapshot(for: "INBOX")
+        XCTAssertEqual(Array(snapshot?.envelopes.keys ?? [:].keys), [9])
+    }
+
     // MARK: - replace(..., keepingRange:)
 
     /// The core "pull-to-refresh prunes archived messages" behavior. The
