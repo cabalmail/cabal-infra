@@ -269,6 +269,13 @@ final class AppState {
                 cacheDirectory: cacheDirectory
             )
             try await newClient.authService.signIn(username: username, password: password)
+            // Defense in depth for the force-kill path: a clean sign-out wipes
+            // the shared on-disk cache, but a hard quit doesn't. If a different
+            // account just signed in on this device, clear the prior user's
+            // cached mail before the new session populates it.
+            if !lastUsername.isEmpty, lastUsername != username {
+                await newClient.clearLocalData()
+            }
             self.controlDomain = controlDomain
             self.lastUsername = username
             self.client = newClient
@@ -426,21 +433,6 @@ final class AppState {
         }
     }
 
-    /// Returns the application-support cache directory for this app, creating
-    /// it if needed. Per-folder subdirectories are created by the cache
-    /// actors themselves.
-    private func makeCacheDirectory() throws -> URL {
-        let base = try FileManager.default.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        )
-        let directory = base.appendingPathComponent("Cabalmail", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        return directory
-    }
-
     private func message(for error: CabalmailError) -> String {
         // Most cases fall through to a canned or "prefix: detail" format;
         // split into two switches so neither exceeds the cyclomatic cap.
@@ -470,6 +462,25 @@ final class AppState {
         case .maintenance(let message): return message
         default:                  return nil
         }
+    }
+}
+
+// MARK: - Cache directory
+
+extension AppState {
+    /// Returns the application-support cache directory for this app, creating
+    /// it if needed. Per-folder subdirectories are created by the cache
+    /// actors themselves.
+    private func makeCacheDirectory() throws -> URL {
+        let base = try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let directory = base.appendingPathComponent("Cabalmail", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
     }
 }
 
