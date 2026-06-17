@@ -10,5 +10,19 @@
     <true/>
     <key>com.apple.security.personal-information.addressbook</key>
     <true/>
+    <!--
+        Keychain Sharing. The credential store uses the data-protection
+        keychain (kSecUseDataProtectionKeychain), which on macOS needs an
+        explicit keychain-access-group: a sandboxed macOS app with only the
+        capabilities above isn't provisioned with one, so SecItemAdd fails
+        errSecMissingEntitlement (-34018). This grants the app's own group
+        (AppIdentifierPrefix = team prefix, filled in at signing) and makes
+        Xcode provision the target. iOS doesn't need it -- iOS apps always
+        carry a provisioning profile that injects the default group.
+    -->
+    <key>keychain-access-groups</key>
+    <array>
+        <string>$(AppIdentifierPrefix)com.cabalmail.CabalmailMac</string>
+    </array>
 </dict>
 </plist>
