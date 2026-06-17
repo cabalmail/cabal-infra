@@ -1,6 +1,13 @@
 import Foundation
 import Observation
+import os
 import CabalmailKit
+
+// TEMP diagnostic logger (remove with the dbg() calls). Routed through unified
+// logging so the output is visible from a Release / TestFlight build in
+// Console.app (filter subsystem "com.cabalmail.debug") -- print() stdout is
+// not. Values are logged .public so they aren't redacted in Release.
+private let mlvmDebugLog = Logger(subsystem: "com.cabalmail.debug", category: "messagelist")
 
 /// Backs `MessageListView`. Owns the paginated envelope window, envelope
 /// cache hydration, search results, and the per-row mark-as-read / dispose
@@ -421,9 +428,11 @@ extension MessageListViewModel {
     // TEMP diagnostic (remove once the deep-scroll reset is pinned). Logs the
     // event and the current envelope count: a list wipe shows up as a count
     // drop here, while a scroll-only reset shows the count holding steady.
-    // Internal (not private) so the sibling-file extensions can call it.
+    // Internal (not private) so the sibling-file extensions can call it. Uses
+    // os.Logger (not print) so it's visible from a Release / TestFlight build.
     func dbg(_ msg: String) {
-        print("CABALDBG [\(folder.path)] \(msg) | n=\(envelopes.count)")
+        let line = "CABALDBG [\(folder.path)] \(msg) | n=\(envelopes.count)"
+        mlvmDebugLog.notice("\(line, privacy: .public)")
     }
 
     private func hydrateFromCache() async {
