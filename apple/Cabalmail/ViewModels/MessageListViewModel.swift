@@ -106,6 +106,10 @@ final class MessageListViewModel {
     /// watcher for the main actor.
     private var watcher: MailboxWatcher?
     private var watcherTask: Task<Void, Never>?
+    /// In-flight pagination fetch, owned by the model so it survives the
+    /// triggering row's `.task` cancellation (see `loadMoreIfNeeded`).
+    /// Cancelled in `stopWatching()` when the list goes away.
+    private var loadMoreTask: Task<Void, Never>?
     /// Coalescing timestamp — if `.changed` fires in bursts (e.g. server
     /// delivers three messages in quick succession) we collapse them into
     /// one refresh by gating on elapsed time.
@@ -185,6 +189,8 @@ final class MessageListViewModel {
     func stopWatching() async {
         watcherTask?.cancel()
         watcherTask = nil
+        loadMoreTask?.cancel()
+        loadMoreTask = nil
         await watcher?.stop()
         watcher = nil
     }
@@ -269,7 +275,27 @@ final class MessageListViewModel {
               pendingRemovedUIDs.isEmpty,
               envelopes.suffix(prefetchDistance).contains(where: { $0.uid == currentItem.uid })
               else { return }
+        // Own the page fetch in a model task rather than running it inline.
+        // The call site is a per-row `.task` (MessageListView+Rows) that
+        // SwiftUI cancels the moment the row scrolls off-screen. Running the
+        // fetch there meant a fast scroll cancelled the in-flight page
+        // mid-flight (URLError.cancelled), wasting the round trip and
+        // stalling pagination until the user slowed down -- the
+        // "loadMore ERROR cancelled" storm. An unstructured Task does not
+        // inherit the view task's cancellation, so the page completes and
+        // merges even as the triggering row leaves the viewport. Same
+        // pattern MessageDetailView uses for its body fetch.
         isLoadingMore = true
+        loadMoreTask = Task { [weak self] in
+            await self?.performLoadMore()
+        }
+    }
+
+    /// Fetches and merges the next positional page. Always invoked from
+    /// `loadMoreTask` (see `loadMoreIfNeeded`) so it outlives the triggering
+    /// row's `.task` cancellation. Resets `isLoadingMore` on every exit,
+    /// including cancellation, via `defer`.
+    private func performLoadMore() async {
         defer { isLoadingMore = false }
         do {
             // Positional page: the next `pageSize` envelopes after what's
