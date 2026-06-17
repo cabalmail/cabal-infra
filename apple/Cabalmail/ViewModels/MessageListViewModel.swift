@@ -30,7 +30,10 @@ final class MessageListViewModel {
     let client: CabalmailClient
     let preferences: Preferences
     let appState: AppState
-    private let pageSize: UInt32 = 50
+    // Internal (not `private`) so `applyRefreshPage` in the `+Refresh`
+    // sibling file can use it as the "have we paginated past the top page?"
+    // threshold when deciding whether tail-pruning is safe.
+    let pageSize: UInt32 = 50
     // Prefetch the next page once the user scrolls within this many rows of the
     // end of the loaded list, so scrolling never stalls at the bottom waiting
     // for a fetch (the trigger used to be the last row only -- zero lookahead).

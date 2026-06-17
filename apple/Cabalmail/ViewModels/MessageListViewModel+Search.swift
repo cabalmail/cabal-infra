@@ -52,9 +52,9 @@ extension MessageListViewModel {
     /// The in-memory envelope list is wiped before refreshing. Search
     /// is cross-folder by default, so `envelopes` can hold UIDs from
     /// other folders (e.g. Archive UID 957). `applyRefreshPage`'s
-    /// disappear-detection only prunes UIDs that fall inside the
-    /// current folder's `keepingRange`, so foreign UIDs would otherwise
-    /// survive as phantom rows that 502 on tap (IMAP fetch can't find
+    /// disappear-detection only reconciles the current folder's top
+    /// page, so foreign UIDs would otherwise survive as phantom rows
+    /// that 502 on tap (IMAP fetch can't find
     /// them in this folder, helper.py raises `KeyError`). Same pattern
     /// as `setSort(_:)`.
     func clearSearch() async {

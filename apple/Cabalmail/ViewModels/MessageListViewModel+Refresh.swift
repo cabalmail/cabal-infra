@@ -23,12 +23,12 @@ extension MessageListViewModel {
     /// manual paths the user explicitly invokes.
     ///
     /// Invalidating the on-disk snapshot here matters because
-    /// `applyRefreshPage`'s `replace(... keepingRange:)` only prunes
-    /// UIDs *inside* the refresh window — UIDs outside it are treated
-    /// as "older pages" and retained. Foreign-folder UIDs that leaked
-    /// into the cache (historically through pagination during search)
-    /// sit below the inbox's current UID band, so without an explicit
-    /// invalidate they'd survive every subsequent refresh and re-
+    /// `applyRefreshPage` only reconciles the top page, and only while
+    /// the list still fits in it — once paginated it prunes nothing, and
+    /// even when it does prune it touches the top page alone. Foreign-
+    /// folder UIDs that leaked into the cache (historically through
+    /// pagination during search) sit in the paginated tail, so without an
+    /// explicit invalidate they'd survive every subsequent refresh and re-
     /// hydrate as phantoms on relaunch. The body cache is left alone:
     /// it's keyed per-UID, never blindly batch-written, and an
     /// unrelated phantom never reached the fetch path far enough to
@@ -91,35 +91,49 @@ extension MessageListViewModel {
         dbg("merge in=\(fetched.count) before=\(before) after=\(envelopes.count)")
     }
 
-    /// Merges a top-page fetch into in-memory state and the envelope cache.
-    /// For the default REVERSE ARRIVAL sort, `keepingRange` covers
-    /// `min(fetched.uid)...uidNext` and any in-memory envelope in that band
-    /// missing from the fetch was moved or expunged elsewhere. Non-default
-    /// sorts span the whole folder with their top page, so we suppress the
-    /// disappear-detection there — accepting that server-side deletes show
-    /// up later (on the next folder switch) is the right trade vs. mass-
-    /// pruning cached envelopes on every IDLE refresh.
+    /// Merges a top-page fetch into in-memory state and the envelope cache,
+    /// pruning rows the server no longer returns -- but only when that
+    /// pruning is actually safe.
+    ///
+    /// A top-page refresh is authoritative over the top page alone. The
+    /// earlier design bounded the prune by a UID band
+    /// (`min(fetched.uid)...uidNext`), which is only correct when the
+    /// display order matches UID order. It doesn't: the default sort wires
+    /// to `SORT (REVERSE ARRIVAL)` so the server pages by INTERNALDATE,
+    /// while the client comparator orders by the Date header. Those orders
+    /// diverge, so the top page can contain low-UID rows, the band spans
+    /// most of the folder, and a deeply paginated tail gets flagged
+    /// "disappeared" and wiped on every 60-second background refresh.
+    ///
+    /// Bounding the prune to the top page (by position) instead of by a UID
+    /// band fixes it without trusting the client/server sort to agree:
+    ///   * Not yet paginated (the whole list fits in the top page) ->
+    ///     reconcile against the fetch; a missing row was moved/expunged
+    ///     out from under us, so prune it and deletes reflect promptly.
+    ///   * Paginated past the top page -> suppress pruning entirely; the
+    ///     fetch can't see the tail and the client can't place tail rows
+    ///     against it, so a delete surfaces on the next hard reload /
+    ///     folder switch instead. Same trade the non-default sorts already
+    ///     took, and far better than collapsing a scrolled list to the top.
+    /// An empty fetch (transient/blank top page) is never read as
+    /// "everything vanished."
     func applyRefreshPage(
         _ fetched: [Envelope],
         uidNext: UInt32,
         uidValidity: UInt32
     ) async throws {
-        let fetchedUIDs = Set(fetched.map(\.uid))
-        let isDefaultSort = sortCriterion == .default
-        // Only meaningful when we actually got a page back.
-        let keepingRange: ClosedRange<UInt32>? = isDefaultSort && !fetched.isEmpty
-            ? fetched.map(\.uid).min().map { lower in lower...max(uidNext, lower) }
-            : nil
-        // `disappeared` detects messages expunged/moved out from under us, but
-        // only against a real fetch. An empty top-page fetch (transient/blank)
-        // must NOT be read as "everything vanished" -- that wiped a deeply
-        // paginated list back to the top page on a routine background refresh.
-        let disappeared: [UInt32] = keepingRange.map { range in
-            envelopes.map(\.uid).filter { range.contains($0) && !fetchedUIDs.contains($0) }
-        } ?? []
+        let paginatedBeyondTopPage = UInt32(envelopes.count) > pageSize
+        let disappeared: [UInt32]
+        if !paginatedBeyondTopPage, !fetched.isEmpty {
+            let fetchedUIDs = Set(fetched.map(\.uid))
+            disappeared = envelopes.map(\.uid).filter { !fetchedUIDs.contains($0) }
+        } else {
+            disappeared = []
+        }
         dbg("applyRefreshPage disappeared=\(disappeared.count) fetched=\(fetched.count)")
         if !disappeared.isEmpty {
-            envelopes.removeAll { disappeared.contains($0.uid) }
+            let gone = Set(disappeared)
+            envelopes.removeAll { gone.contains($0.uid) }
             for uid in disappeared {
                 await client.bodyCache.remove(
                     folder: folder.path,
@@ -127,22 +141,24 @@ extension MessageListViewModel {
                     uid: uid
                 )
             }
+            // Mirror the in-memory prune to disk by the same explicit UID
+            // list, so a confirmed-gone row can't re-hydrate on next launch.
+            try await client.envelopeCache.remove(uids: disappeared, folder: folder.path)
         }
         mergeFetched(fetched)
-        // Positional paging: more to load iff the top page is smaller than the
+        // Positional paging: more to load iff the loaded count is below the
         // folder's STATUS message count.
         hasMore = UInt32(envelopes.count) < totalMessages
-        // Persist the shielded view, not the raw fetch: a row we've
-        // optimistically removed must stay out of the snapshot (it's inside
-        // `keepingRange`, so `replace` prunes it) and a row with an in-flight
-        // flag write keeps its optimistic flags on disk too. Otherwise a
-        // refresh landing mid-write would re-seed the cache with pre-write
-        // state and re-hydrate it on next launch.
-        try await client.envelopeCache.replace(
+        // Upsert the shielded fresh page into the snapshot (the disappeared
+        // rows were pruned above): a row we've optimistically removed stays
+        // out of the snapshot, and a row with an in-flight flag write keeps
+        // its optimistic flags on disk. Otherwise a refresh landing mid-write
+        // would re-seed the cache with pre-write state and re-hydrate it on
+        // next launch.
+        try await client.envelopeCache.merge(
             envelopes: shieldFetched(fetched),
             uidValidity: uidValidity,
             uidNext: uidNext,
-            keepingRange: keepingRange,
             into: folder.path
         )
     }
