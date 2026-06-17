@@ -313,10 +313,12 @@ final class MessageListViewModel {
             // the folder's STATUS total -- no more decrementing a UID cursor
             // one band at a time, which dead-ended on sparse folders.
             hasMore = !fetched.isEmpty && UInt32(envelopes.count) < totalMessages
-            dbg("loadMore off=\(offset) fetched=\(fetched.count) hasMore=\(hasMore) total=\(totalMessages)")
+            let persistStart = nowMs()
             if let uidValidity, let uidNext = envelopes.map(\.uid).max() {
                 try await persistCache(uidValidity: uidValidity, uidNext: uidNext + 1)
             }
+            dbg("loadMore off=\(offset) fetched=\(fetched.count) hasMore=\(hasMore)"
+                + " total=\(totalMessages) persistMs=\(Int(nowMs() - persistStart))")
         } catch {
             // Best-effort pagination — don't surface an error unless we're
             // blocked entirely.
@@ -463,6 +465,11 @@ extension MessageListViewModel {
         let line = "CABALDBG [\(folder.path)] \(msg) | n=\(envelopes.count)"
         mlvmDebugLog.notice("\(line, privacy: .public)")
     }
+
+    // TEMP diagnostic (remove with the dbg() calls). Monotonic milliseconds
+    // for measuring per-page merge / persist cost as the loaded count grows
+    // -- the "smoothness gets worse as the list gets longer" complaint.
+    func nowMs() -> Double { Double(DispatchTime.now().uptimeNanoseconds) / 1_000_000 }
 
     private func hydrateFromCache() async {
         if let snapshot = await client.envelopeCache.snapshot(for: folder.path) {

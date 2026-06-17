@@ -87,8 +87,9 @@ extension MessageListViewModel {
         for envelope in shieldFetched(fetched) {
             byUID[envelope.uid] = envelope
         }
+        let mergeStart = nowMs()
         envelopes = byUID.values.sorted(by: envelopeOrder)
-        dbg("merge in=\(fetched.count) before=\(before) after=\(envelopes.count)")
+        dbg("merge in=\(fetched.count) before=\(before) after=\(envelopes.count) sortMs=\(Int(nowMs() - mergeStart))")
     }
 
     /// Merges a top-page fetch into in-memory state and the envelope cache,
