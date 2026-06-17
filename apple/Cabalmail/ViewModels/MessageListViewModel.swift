@@ -110,6 +110,10 @@ final class MessageListViewModel {
     /// triggering row's `.task` cancellation (see `loadMoreIfNeeded`).
     /// Cancelled in `stopWatching()` when the list goes away.
     private var loadMoreTask: Task<Void, Never>?
+    /// Debounced envelope-snapshot writer (see `schedulePersist`). Coalesces
+    /// the O(loaded count) snapshot rewrite so a continuous scroll persists
+    /// once when it settles, not on every page. Cancelled in `stopWatching()`.
+    private var persistTask: Task<Void, Never>?
     /// Coalescing timestamp — if `.changed` fires in bursts (e.g. server
     /// delivers three messages in quick succession) we collapse them into
     /// one refresh by gating on elapsed time.
@@ -191,6 +195,8 @@ final class MessageListViewModel {
         watcherTask = nil
         loadMoreTask?.cancel()
         loadMoreTask = nil
+        persistTask?.cancel()
+        persistTask = nil
         await watcher?.stop()
         watcher = nil
     }
@@ -313,12 +319,16 @@ final class MessageListViewModel {
             // the folder's STATUS total -- no more decrementing a UID cursor
             // one band at a time, which dead-ended on sparse folders.
             hasMore = !fetched.isEmpty && UInt32(envelopes.count) < totalMessages
-            let persistStart = nowMs()
-            if let uidValidity, let uidNext = envelopes.map(\.uid).max() {
-                try await persistCache(uidValidity: uidValidity, uidNext: uidNext + 1)
-            }
-            dbg("loadMore off=\(offset) fetched=\(fetched.count) hasMore=\(hasMore)"
-                + " total=\(totalMessages) persistMs=\(Int(nowMs() - persistStart))")
+            dbg("loadMore off=\(offset) fetched=\(fetched.count) hasMore=\(hasMore) total=\(totalMessages)")
+            // Persist is debounced: rewriting the whole on-disk snapshot is
+            // O(loaded count) and, awaited here on every page, put a growing
+            // write (~0.7s at 800 rows, ~1.5s at 1500) on the pagination
+            // critical path while `isLoadingMore` was held -- so deep
+            // scrolling fell further behind the longer it ran. The snapshot
+            // is a warm-reopen cache, not source of truth, so coalescing the
+            // writes to once the scroll settles is safe: a kill mid-scroll
+            // just re-paginates from the last flush.
+            schedulePersist()
         } catch {
             // Best-effort pagination — don't surface an error unless we're
             // blocked entirely.
@@ -488,5 +498,27 @@ extension MessageListViewModel {
             uidNext: uidNext,
             into: folder.path
         )
+    }
+
+    /// Coalesces envelope-snapshot writes during pagination. Each loaded page
+    /// reschedules the write ~1s out, so a continuous scroll persists once
+    /// when it settles rather than O(loaded count) on every page's critical
+    /// path. `stopWatching()` cancels a pending write when the list goes away.
+    private func schedulePersist() {
+        persistTask?.cancel()
+        persistTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled, let self else { return }
+            await self.persistLoadedPages()
+        }
+    }
+
+    /// Writes the current in-memory window to the on-disk snapshot. Invoked
+    /// only from the debounce, never on the per-page path.
+    private func persistLoadedPages() async {
+        guard let uidValidity, let uidNext = envelopes.map(\.uid).max() else { return }
+        let started = nowMs()
+        try? await persistCache(uidValidity: uidValidity, uidNext: uidNext + 1)
+        dbg("persist flush persistMs=\(Int(nowMs() - started))")
     }
 }
