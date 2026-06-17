@@ -246,6 +246,13 @@ MAX_KEYWORD_LEN = 64
 MAX_CONTENT_ID_LEN = 128
 MAX_SEARCH_TEXT_LEN = 1024
 MAX_UID = 0xFFFFFFFF
+# Upper bound on an explicit list-page `limit`. A client tunes page size to
+# trade round trips against per-page latency; this caps it "within reason" so
+# the follow-up /list_envelopes fetch for the page stays well under the 29s API
+# Gateway ceiling. An oversized limit is clamped here, not rejected. A missing
+# limit still means "no bound" -- the React client relies on that to pull the
+# whole sorted UID list for its client-side virtualized view.
+MAX_PAGE_SIZE = 250
 
 _FOLDER_NAME_RE = re.compile(r'^[A-Za-z0-9 _\-./]+$')
 _KEYWORD_RE = re.compile(r'^[A-Za-z0-9_\-]+$')
@@ -343,7 +350,9 @@ def validate_pagination(offset, limit):
     Returns (offset:int>=0, limit:int>0 or None). A missing or empty value
     means "no bound": offset defaults to 0 and a missing limit returns None, so
     the caller serves the full list and the pre-pagination contract is kept.
-    Raises ValueError on non-numeric or out-of-range input.
+    An explicit limit above MAX_PAGE_SIZE is clamped to it (the page stays
+    "within reason") rather than rejected. Raises ValueError on non-numeric or
+    out-of-range input.
     '''
     parsed_offset = 0
     if offset not in (None, ''):
@@ -361,6 +370,10 @@ def validate_pagination(offset, limit):
             raise ValueError(f'invalid limit: {limit!r}') from exc
         if parsed_limit < 1:
             raise ValueError(f'limit out of range: {parsed_limit}')
+        # Clamp rather than reject: offset pagination is transparent to a
+        # smaller-than-requested page, so a client asking for too much simply
+        # gets the maximum reasonable page instead of an error.
+        parsed_limit = min(parsed_limit, MAX_PAGE_SIZE)
     return parsed_offset, parsed_limit
 
 

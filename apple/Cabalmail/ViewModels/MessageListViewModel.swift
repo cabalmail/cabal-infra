@@ -30,10 +30,15 @@ final class MessageListViewModel {
     let client: CabalmailClient
     let preferences: Preferences
     let appState: AppState
-    // Internal (not `private`) so `applyRefreshPage` in the `+Refresh`
-    // sibling file can use it as the "have we paginated past the top page?"
-    // threshold when deciding whether tail-pruning is safe.
+    // Top-page size. Kept small for a fast first paint on a cold folder, and
+    // reused as the "have we paginated past the top page?" threshold in
+    // `applyRefreshPage` (+Refresh sibling file), so it's internal not private.
     let pageSize: UInt32 = 50
+    // Older pages fetched while scrolling use a larger size: each
+    // /list_envelopes round trip carries fixed IMAP connect/SELECT overhead,
+    // so bigger pages mean fewer trips and steadier deep scrolling. Capped
+    // server-side by helper.py MAX_PAGE_SIZE (250); 200 stays under it.
+    private let loadMorePageSize: UInt32 = 200
     // Prefetch the next page once the user scrolls within this many rows of the
     // end of the loaded list, so scrolling never stalls at the bottom waiting
     // for a fetch (the trigger used to be the last row only -- zero lookahead).
@@ -311,7 +316,7 @@ final class MessageListViewModel {
             let fetched = try await client.imapClient.envelopes(
                 folder: folder.path,
                 offset: offset,
-                limit: pageSize,
+                limit: loadMorePageSize,
                 sort: sortCriterion
             )
             mergeFetched(fetched)
