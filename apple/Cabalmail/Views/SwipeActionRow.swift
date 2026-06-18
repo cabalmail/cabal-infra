@@ -60,10 +60,10 @@ struct SwipeActionRow<Content: View>: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        // Zero the List's own vertical content insets so the row content sits
-        // flush in `height` instead of inside List padding (which, on top of
-        // the clip below, would waste/clip part of the row).
-        .contentMargins(.vertical, 0, for: .scrollContent)
+        // Zero the List's own content insets on both axes (they differ by
+        // platform) so the row's geometry is driven solely by `height` + the
+        // explicit row insets below, not by hidden List padding.
+        .contentMargins(.all, 0, for: .scrollContent)
         // NOT `.scrollDisabled(true)`: on macOS the swipe IS a two-finger
         // scroll gesture, and disabling scroll suppresses it. Instead the
         // single row exactly fills the frame, so there's no vertical overflow
@@ -81,7 +81,11 @@ struct SwipeActionRow<Content: View>: View {
             .frame(maxWidth: .infinity, minHeight: height, alignment: .topLeading)
             .contentShape(Rectangle())
             .onTapGesture(perform: onSelect)
-            .listRowInsets(EdgeInsets())
+            // Horizontal insets give the row its left/right breathing room
+            // (matching `placeholderRow`); vertical stays 0 so `height` alone
+            // sets the row height. The selection background fills the full
+            // width (it's a separate `listRowBackground`), content sits inset.
+            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
             .listRowSeparator(.hidden)
             .listRowBackground(rowBackground)
             .swipeActions(edge: .trailing) {
