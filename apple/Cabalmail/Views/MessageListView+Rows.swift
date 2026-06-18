@@ -166,18 +166,10 @@ extension MessageListView {
         model: MessageListViewModel,
         @ViewBuilder content: () -> some View
     ) -> some View {
-        // Drag-to-folder is macOS-only for now. On touch the row-level
-        // `.draggable` is the prime suspect for the iPad leading-swipe lag
-        // (a rightward swipe competing with the drag lift); macOS swipe is a
-        // separate two-finger trackpad gesture, so drag never conflicts there.
-        // Touch keeps "Move to folder..." in the row / selection menu. If iPad
-        // confirms this is the cause, restore touch drag via the native path:
-        // `.draggable` INSIDE the row's List, where the List arbitrates swipe
-        // vs drag (like Mail) rather than the drag wrapping the List from
-        // outside.
-        #if os(macOS)
+        // Drag is exonerated for the iPad leading-swipe lag (gating it off iOS
+        // didn't change the lag), so it's back on every wide layout.
         let items = dragItems(for: envelope, model: model)
-        if !items.isEmpty {
+        if isWideLayout, !items.isEmpty {
             content()
                 .contentShape(Rectangle())
                 .draggable(dragPayload(items)) {
@@ -187,9 +179,6 @@ extension MessageListView {
         } else {
             content()
         }
-        #else
-        content()
-        #endif
     }
 
     /// Builds the drag payload and flips the sidebar's drag flag. Called from
