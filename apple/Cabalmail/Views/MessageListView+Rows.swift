@@ -170,7 +170,14 @@ extension MessageListView {
         @ViewBuilder content: () -> some View
     ) -> some View {
         if isWideLayout, !items.isEmpty {
+            // Fill the row's full height + width and make it hit-test opaque so
+            // a drag can start anywhere on the row, not just on the rendered
+            // text: the empty space (right of the text, and below a short
+            // subject in the fixed-height virtualized row) must be draggable
+            // too. The outer `.frame(height:)` in `virtualizedList` bounds this.
             content()
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .contentShape(Rectangle())
                 .draggable(dragPayload(items)) {
                     MessageDragPreview(count: items.count, subject: subject)
                         .onAppear { appState.beginMessageDrag() }
