@@ -93,8 +93,6 @@ extension MessageListView {
                     .background(background)
             } else {
                 SwipeActionRow(
-                    rowUID: envelope.uid,
-                    openUID: $swipeOpenUID,
                     height: MessageListView.rowHeight,
                     rowBackground: background,
                     leading: toggleReadSwipe(for: envelope, model: model),

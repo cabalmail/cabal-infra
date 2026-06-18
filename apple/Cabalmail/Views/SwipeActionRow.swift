@@ -1,30 +1,27 @@
 import SwiftUI
-#if os(iOS)
-import UIKit
-#endif
 
-// Hand-rolled swipe actions for the virtualized message list.
+// Swipe actions for the virtualized message list, restored after the
+// ScrollView+LazyVStack rework (`project_apple_list_virtualization`)
+// dropped `List`-only `.swipeActions`.
 //
-// `.swipeActions` is `List`-only, and the list is now a `ScrollView` +
-// `LazyVStack` (see `project_apple_list_virtualization` / the
-// `virtualizedList` doc comment), so touch users lost swipe-to-archive
-// when the list was virtualized. This restores it: a trailing (right-to-
-// left) swipe disposes, a leading (left-to-right) swipe toggles read,
-// matching Mail and the pre-virtualization `.swipeActions(edge:)` wiring.
+// Rather than hand-roll the gesture (a SwiftUI `DragGesture` can't read the
+// macOS two-finger trackpad swipe -- that's a horizontal SCROLL gesture, not
+// a click-drag), each loaded row embeds a single-row `List` purely to borrow
+// its native `.swipeActions`. That gets the real system swipe on every
+// platform at once: macOS two-finger trackpad, iOS/iPadOS touch, visionOS --
+// identical to the pre-virtualization list and to system Mail.
 //
-// The hard part is coexisting with the vertical scroll. A plain SwiftUI
-// `DragGesture` recognizes vertical drags too and preempts the scroll
-// view, so it can't be used here. Instead `SwipePanGesture` bridges a
-// UIKit `UIPanGestureRecognizer` whose delegate only lets it BEGIN when
-// the pan is horizontal (`abs(vx) > abs(vy)`); vertical pans fall through
-// to the enclosing scroll view untouched. This mirrors the existing
-// `ModifierClickGesture` UIKit bridge.
-//
-// macOS / visionOS render the plain tappable row with no swipe -- those
-// platforms dispose via the context menu and (macOS) the keyboard.
+// The index-addressed virtualization REQUIRES every row to occupy exactly
+// `rowHeight` (the scroll extent is `rowCount * rowHeight` and placeholders
+// align to it -- see the `virtualizedList` doc comment). A `List` carries its
+// own insets / min-row-height / chrome, so the wrapper is pinned with
+// `.frame(height:).clipped()`: whatever the List does internally, the row's
+// footprint in the outer `LazyVStack` stays exactly `rowHeight`, matching the
+// placeholder rows. Inset/separator/background are zeroed so the content
+// fills that height rather than sitting inside List padding.
 
-/// One swipe action. `tint` is the revealed background; `perform` runs on
-/// full-swipe commit or on a tap of the rested-open button.
+/// One swipe action (leading or trailing). `tint` is the revealed
+/// background; `perform` runs on tap / full-swipe.
 struct SwipeActionSpec {
     let systemImage: String
     let title: String
@@ -47,13 +44,9 @@ struct SwipeActionSpec {
     }
 }
 
-/// A fixed-height list row that reveals a leading and/or trailing action
-/// on a horizontal swipe. A tap selects the row (`onSelect`) when closed,
-/// or closes the swipe when open. `openUID` is shared across the list so
-/// only one row rests open at a time.
+/// A fixed-height list row that reveals leading / trailing swipe actions
+/// via a borrowed single-row `List`. A tap selects the row (`onSelect`).
 struct SwipeActionRow<Content: View>: View {
-    let rowUID: UInt32
-    @Binding var openUID: UInt32?
     let height: CGFloat
     let rowBackground: Color
     let leading: SwipeActionSpec?
@@ -61,205 +54,45 @@ struct SwipeActionRow<Content: View>: View {
     let onSelect: () -> Void
     @ViewBuilder let content: () -> Content
 
-    // Rest-open width per action, and the full-swipe commit threshold as a
-    // fraction of the row width. Both are deliberately easy to tune -- the
-    // gesture feel is the thing that needs on-device iteration.
-    private static var actionWidth: CGFloat { 80 }
-    private static var commitFraction: CGFloat { 0.45 }
-
-    @State private var offset: CGFloat = 0
-    // The resting offset captured at the start of a pan, so the live
-    // translation is added to where the row already sat (closed or open).
-    @State private var dragStartOffset: CGFloat?
-    // Claim the shared open slot once per gesture rather than every frame.
-    @State private var claimedOpen = false
-
     var body: some View {
-        #if os(iOS)
-        GeometryReader { geo in
-            swipeStack(width: geo.size.width)
+        List {
+            rowContent
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        // NOT `.scrollDisabled(true)`: on macOS the swipe IS a two-finger
+        // scroll gesture, and disabling scroll suppresses it. Instead the
+        // single row exactly fills the frame, so there's no vertical overflow
+        // to scroll; `.basedOnSize` drops the bounce so a vertical two-finger
+        // pass-through reaches the outer ScrollView while the horizontal swipe
+        // stays live for `.swipeActions`.
+        .scrollBounceBehavior(.basedOnSize)
+        .environment(\.defaultMinListRowHeight, height)
         .frame(height: height)
-        .onChange(of: openUID) { _, newValue in
-            // Another row opened (or the list cleared the slot); fold closed.
-            if newValue != rowUID, offset != 0 { closeRow() }
-        }
-        #else
-        plainRow
-        #endif
+        .clipped()
     }
 
-    /// macOS / visionOS: just the tappable row, no swipe affordance.
-    private var plainRow: some View {
+    private var rowContent: some View {
         content()
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .frame(height: height)
-            .background(rowBackground)
+            .frame(maxWidth: .infinity, minHeight: height, alignment: .topLeading)
             .contentShape(Rectangle())
             .onTapGesture(perform: onSelect)
-    }
-
-    #if os(iOS)
-    private func swipeStack(width: CGFloat) -> some View {
-        let commitDistance = max(width * Self.commitFraction, Self.actionWidth + 40)
-        return ZStack {
-            actionLayer
-            content()
-                .frame(width: width, height: height, alignment: .topLeading)
-                .background(rowBackground)
-                .contentShape(Rectangle())
-                .offset(x: offset)
-                .gesture(panGesture(width: width, commitDistance: commitDistance))
-                .onTapGesture { offset == 0 ? onSelect() : closeRow() }
-        }
-        .frame(width: width, height: height)
-        .clipped()
-    }
-
-    /// The colored action regions behind the row. Each grows with the
-    /// row's displacement so it stretches out from the edge as you pull,
-    /// then rests at `actionWidth`. Anchored to the inner edge so the
-    /// icon/label stay put while the region widens.
-    private var actionLayer: some View {
-        HStack(spacing: 0) {
-            if let leading {
-                actionButton(leading, width: max(0, offset), alignment: .trailing)
+            .listRowInsets(EdgeInsets())
+            .listRowSeparator(.hidden)
+            .listRowBackground(rowBackground)
+            .swipeActions(edge: .trailing) {
+                if let trailing { swipeButton(trailing) }
             }
-            Spacer(minLength: 0)
-            if let trailing {
-                actionButton(trailing, width: max(0, -offset), alignment: .leading)
+            .swipeActions(edge: .leading) {
+                if let leading { swipeButton(leading) }
             }
+    }
+
+    @ViewBuilder
+    private func swipeButton(_ spec: SwipeActionSpec) -> some View {
+        Button(role: spec.role, action: spec.perform) {
+            Label(spec.title, systemImage: spec.systemImage)
         }
-    }
-
-    private func actionButton(
-        _ spec: SwipeActionSpec,
-        width: CGFloat,
-        alignment: Alignment
-    ) -> some View {
-        Button(role: spec.role) {
-            perform(spec)
-        } label: {
-            VStack(spacing: 3) {
-                Image(systemName: spec.systemImage)
-                Text(spec.title)
-                    .font(.caption2)
-                    .lineLimit(1)
-            }
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
-            .padding(.horizontal, 10)
-            .background(spec.tint)
-        }
-        .buttonStyle(.plain)
-        .frame(width: width)
-        .frame(height: height)
-        .clipped()
-        .allowsHitTesting(width > 0)
-    }
-
-    private func panGesture(width: CGFloat, commitDistance: CGFloat) -> SwipePanGesture {
-        SwipePanGesture { phase in
-            switch phase {
-            case .changed(let translation):
-                let start = dragStartOffset ?? offset
-                if dragStartOffset == nil { dragStartOffset = start }
-                offset = clamp(start + translation, width: width)
-                if !claimedOpen {
-                    openUID = rowUID
-                    claimedOpen = true
-                }
-            case .ended(let translation, let velocity):
-                let start = dragStartOffset ?? offset
-                dragStartOffset = nil
-                settle(
-                    landing: clamp(start + translation + velocity * 0.1, width: width),
-                    commitDistance: commitDistance
-                )
-            }
-        }
-    }
-
-    /// Clamp the row displacement to the side(s) that actually have an
-    /// action: no leading action means no rightward slide, and vice versa.
-    private func clamp(_ value: CGFloat, width: CGFloat) -> CGFloat {
-        let low = trailing == nil ? 0 : -width
-        let high = leading == nil ? 0 : width
-        return min(max(value, low), high)
-    }
-
-    private func settle(landing: CGFloat, commitDistance: CGFloat) {
-        let spec = landing < 0 ? trailing : leading
-        guard let spec else { closeRow(); return }
-        if abs(landing) >= commitDistance {
-            perform(spec)
-        } else if abs(offset) >= Self.actionWidth * 0.5 {
-            withAnimation(.snappy(duration: 0.22)) {
-                offset = landing < 0 ? -Self.actionWidth : Self.actionWidth
-            }
-        } else {
-            closeRow()
-        }
-    }
-
-    private func perform(_ spec: SwipeActionSpec) {
-        spec.perform()
-        // The row either vanishes (dispose prunes it) or stays put
-        // (toggle-read); either way drop the open state back to closed.
-        closeRow()
-    }
-
-    private func closeRow() {
-        withAnimation(.snappy(duration: 0.22)) { offset = 0 }
-        claimedOpen = false
-        if openUID == rowUID { openUID = nil }
-    }
-    #endif
-}
-
-#if os(iOS)
-/// UIKit-bridged horizontal pan. Only begins when the gesture is more
-/// horizontal than vertical, so vertical drags stay with the enclosing
-/// scroll view. Reports translation/velocity along x in points.
-struct SwipePanGesture: UIGestureRecognizerRepresentable {
-    enum Phase {
-        case changed(CGFloat)
-        case ended(translation: CGFloat, velocity: CGFloat)
-    }
-
-    let onPhase: (Phase) -> Void
-
-    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator() }
-
-    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
-        let pan = UIPanGestureRecognizer()
-        pan.delegate = context.coordinator
-        return pan
-    }
-
-    func updateUIGestureRecognizer(_ recognizer: UIPanGestureRecognizer, context: Context) {}
-
-    func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
-        let translation = recognizer.translation(in: recognizer.view).x
-        switch recognizer.state {
-        case .changed:
-            onPhase(.changed(translation))
-        case .ended, .cancelled, .failed:
-            let velocity = recognizer.velocity(in: recognizer.view).x
-            onPhase(.ended(translation: translation, velocity: velocity))
-        default:
-            break
-        }
-    }
-
-    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
-        // Begin only for predominantly-horizontal pans; let the scroll view
-        // own vertical drags so the list still scrolls normally.
-        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-            guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return true }
-            let velocity = pan.velocity(in: pan.view)
-            return abs(velocity.x) > abs(velocity.y)
-        }
+        .tint(spec.tint)
     }
 }
-#endif
