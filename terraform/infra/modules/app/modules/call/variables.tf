@@ -56,3 +56,9 @@ variable "user_pool_id" {
   type        = string
   description = "ID of the Cognito user pool."
 }
+
+variable "alarm_on_latency" {
+  type        = bool
+  default     = false
+  description = "Wire CloudWatch alarms on tail latency and errors for this endpoint. Set for the message-list endpoints whose latency tracks folder cardinality (large-mailbox hardening plan, Layer 4.3)."
+}
