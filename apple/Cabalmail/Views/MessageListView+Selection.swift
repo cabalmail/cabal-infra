@@ -32,23 +32,45 @@ extension MessageListView {
         // hydrate (which fills `envelopes` before `refresh` sets the total)
         // still shows its rows.
         let rowCount = max(Int(model.totalMessages), Int(model.windowStart) + model.envelopes.count)
-        ScrollView {
-            LazyVStack(spacing: 0) {
-                if let errorMessage = model.errorMessage {
-                    Label(errorMessage, systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(.red)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
-                }
-                if virtualize {
-                    ForEach(0..<rowCount, id: \.self) { index in
-                        indexedRow(index, model: model, visible: visible)
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    if let errorMessage = model.errorMessage {
+                        Label(errorMessage, systemImage: "exclamationmark.triangle")
+                            .foregroundStyle(.red)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding()
                     }
-                } else {
-                    ForEach(visible) { envelope in
-                        messageRow(envelope, model: model, visible: visible)
+                    if virtualize {
+                        ForEach(0..<rowCount, id: \.self) { index in
+                            indexedRow(index, model: model, visible: visible)
+                        }
+                    } else {
+                        ForEach(visible) { envelope in
+                            messageRow(envelope, model: model, visible: visible)
+                        }
                     }
                 }
+            }
+            // Keyboard navigation (hardware keyboard, wide layouts). The
+            // ScrollView is the focus target, so these keys are scoped to the
+            // list -- when the search field holds focus instead, they stay with
+            // it (Cmd-A selects its text, Esc cancels search). The focus ring is
+            // suppressed; the row highlight already marks the active row.
+            .focusable(isWideLayout)
+            .focusEffectDisabled()
+            .focused($listFocused)
+            .onKeyPress(.upArrow) {
+                moveSelection(by: -1, model: model, visible: visible, virtualize: virtualize, proxy: proxy)
+            }
+            .onKeyPress(.downArrow) {
+                moveSelection(by: 1, model: model, visible: visible, virtualize: virtualize, proxy: proxy)
+            }
+            .onKeyPress(.escape) { escapePressed(model: model) }
+            .onKeyPress(keys: ["a"]) { press in
+                guard press.modifiers.contains(.command) else { return .ignored }
+                model.selectAllVisible()
+                return .handled
             }
         }
         .overlay {
@@ -199,6 +221,8 @@ extension MessageListView {
     /// clicks come through `ModifierClickGesture` in `wideRow` instead.
     func selectRow(_ envelope: Envelope, model: MessageListViewModel, ordered: [Envelope]) {
         guard isWideLayout else { selection = envelope; return }
+        // Clicking a row focuses the list so keyboard nav takes over from here.
+        listFocused = true
         #if os(macOS)
         let flags = NSEvent.modifierFlags
         if flags.contains(.command) {
@@ -239,6 +263,44 @@ extension MessageListView {
     func applyToggleSelection(_ envelope: Envelope, model: MessageListViewModel) {
         model.toggleSelection(envelope)
         model.selectionAnchor = envelope.uid
+    }
+
+    /// Up/Down arrow navigation: moves the single selection to the previous /
+    /// next visible row and scrolls it into view (replace, no extend). Wide
+    /// layouts only; `.ignored` when there's nothing to move so the key falls
+    /// through. With no current selection, Down lands on the first row, Up the
+    /// last.
+    func moveSelection(
+        by delta: Int,
+        model: MessageListViewModel,
+        visible: [Envelope],
+        virtualize: Bool,
+        proxy: ScrollViewProxy
+    ) -> KeyPress.Result {
+        guard isWideLayout, !visible.isEmpty else { return .ignored }
+        let anchorUID = model.selectionAnchor ?? model.selectedUIDs.first
+        let current = anchorUID.flatMap { uid in visible.firstIndex { $0.uid == uid } }
+        let next: Int
+        if let current {
+            next = min(max(current + delta, 0), visible.count - 1)
+        } else {
+            next = delta > 0 ? 0 : visible.count - 1
+        }
+        let target = visible[next]
+        model.selectedUIDs = [target.uid]
+        model.selectionAnchor = target.uid
+        // The virtualized `ForEach` is keyed by absolute folder index (Int);
+        // the filtered fallback by envelope id. Scroll to whichever the active
+        // `ForEach` uses (in virtualize mode `visible` == `envelopes`, so the
+        // absolute index is `windowStart + next`).
+        withAnimation(.easeOut(duration: 0.12)) {
+            if virtualize {
+                proxy.scrollTo(Int(model.windowStart) + next, anchor: .center)
+            } else {
+                proxy.scrollTo(target.id, anchor: .center)
+            }
+        }
+        return .handled
     }
 
     /// Whether a row should render as selected. On wide layouts this is set

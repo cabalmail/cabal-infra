@@ -91,6 +91,12 @@ struct MessageListView: View {
     /// reads `\.isSearching` from the `.searchable` scope instead — see
     /// `SearchActiveScope` in `MessageListView+Filter.swift`.
     @FocusState var inlineSearchFocused: Bool
+    /// Focus state for the message list itself (wide/keyboard layouts). The
+    /// virtualized `ScrollView` binds this so Up/Down/Cmd-A/Esc are scoped to
+    /// the list -- they fire only while it holds focus, never stealing those
+    /// keys from the search field. Set true when a row is clicked. Non-private
+    /// so the `+Selection` extension can drive it.
+    @FocusState var listFocused: Bool
     #if !os(macOS)
     /// Drives the native multi-select edit mode on wide touch layouts (iPad,
     /// visionOS): the Select button toggles it, and while active the system

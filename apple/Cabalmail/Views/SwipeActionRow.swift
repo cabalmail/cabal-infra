@@ -72,6 +72,11 @@ struct SwipeActionRow<Content: View>: View {
         // stays live for `.swipeActions`.
         .scrollBounceBehavior(.basedOnSize)
         .environment(\.defaultMinListRowHeight, height)
+        // A List is focusable and arrow-navigable; left alone, each per-row
+        // List would compete with the outer ScrollView for keyboard focus and
+        // swallow Up/Down. Drop it from the focus chain so the outer list owns
+        // keyboard navigation.
+        .focusable(false)
         .frame(height: height)
         .clipped()
     }
