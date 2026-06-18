@@ -113,7 +113,16 @@ extension MessageListView {
                 }
             }
         }
-        .contextMenu { rowContextMenu(for: envelope, model: model) }
+        .contextMenu {
+            // Right-clicking a row that's part of a multi-selection acts on the
+            // whole selection (Finder / Mail semantics); otherwise it's the
+            // single right-clicked row.
+            if model.selectedUIDs.count > 1, model.selectedUIDs.contains(envelope.uid) {
+                selectionContextMenu(for: model.selectedUIDs, model: model)
+            } else {
+                rowContextMenu(for: envelope, model: model)
+            }
+        }
     }
 
     /// Skeleton row shown for an index whose envelope isn't loaded yet. Same
@@ -143,6 +152,19 @@ extension MessageListView {
     @ViewBuilder
     func wideList(model: MessageListViewModel, visible: [Envelope]) -> some View {
         virtualizedList(model: model, visible: visible)
+            .background {
+                // Window-scoped Cmd+Delete on the selection. A hidden button
+                // (not a menu item) so the chord fires regardless of which pane
+                // has focus without going app-wide -- a menu equivalent would
+                // also trigger from the compose window and steal the text
+                // system's delete-to-line-start. A single open message uses the
+                // detail toolbar's own Cmd+Delete; this drives a multi-selection
+                // (and no-ops when nothing is selected).
+                Button("") { disposeSelection(model: model) }
+                    .keyboardShortcut(.delete, modifiers: .command)
+                    .opacity(0)
+                    .accessibilityHidden(true)
+            }
             // Derive the reading-pane selection from the selection set: exactly
             // one selected -> show that message; zero or many -> the parent
             // shows the count placeholder. One-way, so the existing
