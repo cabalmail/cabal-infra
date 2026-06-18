@@ -157,13 +157,18 @@ extension MessageListView {
                 // (not a menu item) so the chord fires regardless of which pane
                 // has focus without going app-wide -- a menu equivalent would
                 // also trigger from the compose window and steal the text
-                // system's delete-to-line-start. A single open message uses the
-                // detail toolbar's own Cmd+Delete; this drives a multi-selection
-                // (and no-ops when nothing is selected).
-                Button("") { disposeSelection(model: model) }
-                    .keyboardShortcut(.delete, modifiers: .command)
-                    .opacity(0)
-                    .accessibilityHidden(true)
+                // system's delete-to-line-start. ONLY installed while 2+ rows
+                // are selected: a single selection is the reading pane's
+                // territory (its dispose button owns Cmd+Delete there), and
+                // installing both equivalents in one window at once leaves
+                // AppKit to pick a winner -- which is why an always-on button
+                // silently did nothing.
+                if model.selectedUIDs.count > 1 {
+                    Button("") { disposeSelection(model: model) }
+                        .keyboardShortcut(.delete, modifiers: .command)
+                        .opacity(0)
+                        .accessibilityHidden(true)
+                }
             }
             // Derive the reading-pane selection from the selection set: exactly
             // one selected -> show that message; zero or many -> the parent
