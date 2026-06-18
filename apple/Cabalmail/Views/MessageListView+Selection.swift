@@ -8,13 +8,6 @@ import CabalmailKit
 // SwiftLint's `type_body_length` / `file_length` caps, matching the pattern
 // used by `+Rows`, `+Bulk`, `+Filter`, and `+macOS`.
 extension MessageListView {
-    /// Native multiple-selection list for macOS, iPad regular width, and
-    /// visionOS. A plain click selects and opens one message, shift-click
-    /// extends a contiguous range, and command-click toggles an individual
-    /// row - all handled by SwiftUI's `Set`-bound selection. `selectedUIDs`
-    /// is the source of truth; the reading-pane `selection` is derived from it
-    /// in `content(for:)`'s `.onChange(of: selectedUIDs)`. iPad / visionOS also
-    /// bind EditMode so touch users can multi-select via the Select button.
     /// Virtualized message list -- Stage A of the ScrollView rewrite. A
     /// `ScrollView` + `LazyVStack` with two blank spacer views reserving the
     /// off-window rows, so the scroll extent matches the whole folder (a true-
@@ -26,6 +19,7 @@ extension MessageListView {
     /// and the context menu is attached here (the old List-level menu is gone).
     /// Swipe-to-dispose, native multi-select (shift/cmd-click), the selection-
     /// aware menu, and keyboard nav are re-added in Stage B.
+    @ViewBuilder
     func virtualizedList(model: MessageListViewModel, visible: [Envelope]) -> some View {
         // Spacer virtualization only when the visible rows map one-to-one onto
         // absolute folder positions: unfiltered, non-search folder mode.
@@ -105,20 +99,6 @@ extension MessageListView {
         } else {
             selection = envelope
         }
-    }
-
-    /// A single blank list cell standing in for `rows` unloaded messages, sized
-    /// to their exact height (`rows * rowHeight`). Carries no separator, no
-    /// insets, and is unselectable so List selection / keyboard navigation skip
-    /// it. The pair of these (above and below the window) is what makes the
-    /// scroll extent match the full folder without rendering every row.
-    private func spacerRow(rows: UInt32) -> some View {
-        Color.clear
-            .frame(height: CGFloat(rows) * MessageListView.rowHeight)
-            .listRowInsets(EdgeInsets())
-            .listRowSeparator(.hidden)
-            .selectionDisabled()
-            .accessibilityHidden(true)
     }
 
     /// Whether a row should render as selected. On wide layouts this is set
