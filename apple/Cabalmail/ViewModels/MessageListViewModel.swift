@@ -39,6 +39,13 @@ final class MessageListViewModel {
     // so bigger pages mean fewer trips and steadier deep scrolling. Capped
     // server-side by helper.py MAX_PAGE_SIZE (250); 200 stays under it.
     private let loadMorePageSize: UInt32 = 200
+    // Max rows kept in the loaded window. Trimming the scrolled-past front
+    // past this bound keeps SwiftUI's per-update cost (its O(n) ForEach diff
+    // and the O(n) `filteredEnvelopes` in the view) from growing without
+    // limit -- what made the list sluggish past ~800 loaded. Sized to hold
+    // the viewport, the prefetch runway below it, and a scroll-back buffer
+    // above, while staying under that point. Tunable.
+    private let windowCap = 600
     // Prefetch the next page once the user scrolls within this many rows of the
     // end of the loaded list, so scrolling doesn't stall at the bottom waiting
     // for a fetch. It has to exceed the number of rows the user scrolls past
@@ -107,6 +114,17 @@ final class MessageListViewModel {
     // extension can read it after a page merge to recompute `hasMore`.
     var totalMessages: UInt32 = 0
     var hasMore = true
+    // Sliding-window pagination state. `envelopes` holds a contiguous window
+    // [windowStart, windowStart + count) of the folder's sorted list;
+    // `windowStart` is the absolute sort-index of `envelopes[0]`, so page
+    // offsets are absolute, not `envelopes.count`. `hasTrimmedFront` records
+    // that the window no longer starts at the top, which gates the top-page
+    // refresh and the snapshot persist (both assume a top-anchored window).
+    // Reloading the front on scroll-up is a later step; for now scrolling
+    // above the window shows nothing until a hard reload. Reset via
+    // `resetWindow()` on every path that wipes `envelopes`.
+    private var windowStart: UInt32 = 0
+    private var hasTrimmedFront = false
 
     /// Foreground-only IDLE loop. Nil when the view is offscreen; started on
     /// `task`, stopped on `onDisappear`. Separated from the refresh path so
@@ -246,6 +264,7 @@ final class MessageListViewModel {
                     try? await client.envelopeCache.invalidate(folder: folder.path)
                     try? await client.bodyCache.invalidate(folder: folder.path)
                     envelopes = []
+                    resetWindow()
                 }
                 self.uidValidity = fresh
             }
@@ -255,6 +274,16 @@ final class MessageListViewModel {
             // by offset. `totalMessages` from STATUS gates pagination.
             let messages = UInt32(max(0, status.messages ?? 0))
             totalMessages = messages
+            // Once the window's front has been trimmed, the loaded rows no
+            // longer include the top of the folder, so folding in the newest
+            // page would splice a gap above them (and grow the window back).
+            // Skip it -- new top mail surfaces when the user returns to the
+            // top or hard-reloads. The deep window is static meanwhile, and
+            // disappear-detection is already suppressed once paginated.
+            if hasTrimmedFront {
+                errorMessage = nil
+                return
+            }
             let fetched = try await client.imapClient.topEnvelopes(
                 folder: folder.path,
                 limit: pageSize,
@@ -312,10 +341,13 @@ final class MessageListViewModel {
     private func performLoadMore() async {
         defer { isLoadingMore = false }
         do {
-            // Positional page: the next `pageSize` envelopes after what's
-            // loaded, in the current sort order. `mergeFetched` dedups, so a
-            // shifted offset (a concurrent removal) can't double-insert.
-            let offset = UInt32(envelopes.count)
+            // Positional page in the current sort order. `mergeFetched`
+            // dedups, so a shifted offset (a concurrent removal) can't
+            // double-insert. The offset is absolute: the window's front may
+            // have been trimmed, so the next page starts past everything ever
+            // loaded (`windowStart` + the rows still in memory), not at
+            // `envelopes.count`.
+            let offset = windowStart + UInt32(envelopes.count)
             let fetched = try await client.imapClient.envelopes(
                 folder: folder.path,
                 offset: offset,
@@ -323,10 +355,24 @@ final class MessageListViewModel {
                 sort: sortCriterion
             )
             mergeFetched(fetched)
-            // Done when the page comes back empty or the loaded count reaches
-            // the folder's STATUS total -- no more decrementing a UID cursor
-            // one band at a time, which dead-ended on sparse folders.
-            hasMore = !fetched.isEmpty && UInt32(envelopes.count) < totalMessages
+            // Trim the scrolled-past front so the loaded window stays bounded
+            // (see `windowCap`). loadMore only fires near the bottom (within
+            // `prefetchDistance`), so the last `windowCap` rows always cover
+            // the viewport, the runway below it, and a scroll-back buffer
+            // above; `removeFirst` drops the newest rows the user scrolled up
+            // and away from under the default newest-first sort. The list's
+            // `.scrollPosition(id:)` anchor keeps the visible row put across
+            // the removal.
+            if envelopes.count > windowCap {
+                let overflow = envelopes.count - windowCap
+                envelopes.removeFirst(overflow)
+                windowStart += UInt32(overflow)
+                hasTrimmedFront = true
+                dbg("trim removed=\(overflow) windowStart=\(windowStart)")
+            }
+            // Done when the page comes back empty or the absolute bottom of
+            // the window reaches the folder's STATUS total.
+            hasMore = !fetched.isEmpty && (windowStart + UInt32(envelopes.count)) < totalMessages
             dbg("loadMore off=\(offset) fetched=\(fetched.count) hasMore=\(hasMore) total=\(totalMessages)")
             // Persist is debounced: rewriting the whole on-disk snapshot is
             // O(loaded count) and, awaited here on every page, put a growing
@@ -522,11 +568,24 @@ extension MessageListViewModel {
     }
 
     /// Writes the current in-memory window to the on-disk snapshot. Invoked
-    /// only from the debounce, never on the per-page path.
+    /// only from the debounce, never on the per-page path. Skipped once the
+    /// front has been trimmed: the snapshot is a warm-reopen cache and must
+    /// stay top-anchored so a relaunch lands at the top of the folder, not
+    /// mid-scroll. The cache therefore holds up to the first `windowCap` rows.
     private func persistLoadedPages() async {
-        guard let uidValidity, let uidNext = envelopes.map(\.uid).max() else { return }
+        guard !hasTrimmedFront,
+              let uidValidity, let uidNext = envelopes.map(\.uid).max() else { return }
         let started = nowMs()
         try? await persistCache(uidValidity: uidValidity, uidNext: uidNext + 1)
         dbg("persist flush persistMs=\(Int(nowMs() - started))")
+    }
+
+    /// Resets the sliding-window cursor to a fresh top-anchored state. Called
+    /// by every path that wipes `envelopes` (hard reload, sort change, search
+    /// clear, UIDVALIDITY change) so the next load starts at the top of the
+    /// folder and the top-page refresh / persist resume.
+    func resetWindow() {
+        windowStart = 0
+        hasTrimmedFront = false
     }
 }

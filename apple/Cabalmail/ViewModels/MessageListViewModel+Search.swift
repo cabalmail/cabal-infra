@@ -69,6 +69,7 @@ extension MessageListViewModel {
         envelopes.removeAll()
         totalMessages = 0
         hasMore = true
+        resetWindow()
         await refresh()
     }
 

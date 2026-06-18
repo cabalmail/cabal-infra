@@ -21,6 +21,9 @@ extension MessageListView {
         List(selection: $model.selectedUIDs) {
             listContent(model: model, visible: visible)
         }
+        // Anchor the scroll position by row id so the window's front-trim
+        // (MessageListViewModel.windowCap) doesn't jump the viewport.
+        .scrollPosition(id: $scrolledID)
         #if !os(macOS)
         .environment(\.editMode, $editMode)
         #endif
@@ -83,6 +86,9 @@ extension MessageListView {
         List(selection: $selection) {
             listContent(model: model, visible: visible)
         }
+        // Anchor the scroll position by row id so the window's front-trim
+        // (MessageListViewModel.windowCap) doesn't jump the viewport.
+        .scrollPosition(id: $scrolledID)
     }
 
     /// List rows shared by both variants. Factored out so each `List` can carry

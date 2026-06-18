@@ -49,6 +49,13 @@ struct MessageListView: View {
     // can read them without round-tripping through accessors.
     @State var model: MessageListViewModel?
     @State private var composeSeed: Draft?
+    /// Anchors the list's scroll position by row id so trimming the
+    /// scrolled-past front of the loaded window (see
+    /// `MessageListViewModel.windowCap`) doesn't jump the viewport: SwiftUI
+    /// keeps the bound (top-visible) row in place across the removal. SwiftUI
+    /// maintains the binding as the user scrolls; we never read it ourselves.
+    /// Not private so the `+Selection` extension's two `List`s can bind it.
+    @State var scrolledID: UInt32?
     /// `true` while the filter sheet is presented over the message list.
     @State var filtersPresented = false
     /// Set by the row context menu's "Move to folder…" item; presents the

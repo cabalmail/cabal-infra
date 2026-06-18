@@ -30,6 +30,7 @@ extension MessageListViewModel {
         sortCriterion = criterion
         envelopes.removeAll()
         sourceFolderByUID = [:]
+        resetWindow()
         await refresh()
     }
 

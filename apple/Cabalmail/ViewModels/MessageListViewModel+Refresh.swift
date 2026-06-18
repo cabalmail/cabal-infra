@@ -40,6 +40,7 @@ extension MessageListViewModel {
         totalMessages = 0
         hasMore = true
         sourceFolderByUID = [:]
+        resetWindow()
         await refresh()
     }
 
