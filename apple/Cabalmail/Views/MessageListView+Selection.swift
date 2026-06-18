@@ -92,16 +92,22 @@ extension MessageListView {
                     .frame(height: MessageListView.rowHeight, alignment: .top)
                     .background(background)
             } else {
-                SwipeActionRow(
-                    height: MessageListView.rowHeight,
-                    rowBackground: background,
-                    leading: toggleReadSwipe(for: envelope, model: model),
-                    trailing: disposeSwipe(for: envelope, model: model),
-                    onSelect: { selectRow(envelope, model: model) },
-                    content: {
-                        row(for: envelope, model: model, isSelected: selected, orderedVisible: visible)
-                    }
-                )
+                // `draggableRow` (drag-to-folder) wraps OUTSIDE `SwipeActionRow`
+                // so the drag sits on the row container, not inside the embedded
+                // List that owns the swipe -- a `.draggable` within that List row
+                // is swallowed on macOS and never lifts.
+                draggableRow(for: envelope, model: model) {
+                    SwipeActionRow(
+                        height: MessageListView.rowHeight,
+                        rowBackground: background,
+                        leading: toggleReadSwipe(for: envelope, model: model),
+                        trailing: disposeSwipe(for: envelope, model: model),
+                        onSelect: { selectRow(envelope, model: model) },
+                        content: {
+                            row(for: envelope, model: model, isSelected: selected, orderedVisible: visible)
+                        }
+                    )
+                }
             }
         }
         .contextMenu { rowContextMenu(for: envelope, model: model) }

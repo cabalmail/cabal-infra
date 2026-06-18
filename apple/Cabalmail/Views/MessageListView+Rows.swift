@@ -35,45 +35,40 @@ extension MessageListView {
     ) -> some View {
         let bulkMode = model.bulkMode
         let isChecked = model.selectedUIDs.contains(envelope.uid)
-        let items = dragItems(for: envelope, model: model)
-        withMessageDrag(items: items, subject: envelope.subject) {
-            withRowContextMenu(for: envelope, model: model) {
-                Group {
-                    if isWideLayout {
-                        wideRow(
-                            for: envelope,
-                            isSelected: isSelected,
-                            model: model,
-                            orderedVisible: orderedVisible
-                        )
-                    } else if bulkMode {
-                        // No .tag() while in bulk mode — the list's selection
-                        // binding drives the detail pane, and we don't want a
-                        // checkbox tap to also pop the reader.
-                        Button {
-                            model.toggleSelection(envelope)
-                        } label: {
-                            MessageRow(envelope: envelope, isSelected: isChecked, isChecked: isChecked, bulkMode: true)
-                        }
-                        .buttonStyle(.plain)
-                    } else {
-                        MessageRow(envelope: envelope, isSelected: isSelected, isChecked: false, bulkMode: false)
-                            .tag(envelope)
+        withRowContextMenu(for: envelope, model: model) {
+            Group {
+                if isWideLayout {
+                    wideRow(
+                        for: envelope,
+                        isSelected: isSelected,
+                        model: model,
+                        orderedVisible: orderedVisible
+                    )
+                } else if bulkMode {
+                    // No .tag() while in bulk mode — the list's selection
+                    // binding drives the detail pane, and we don't want a
+                    // checkbox tap to also pop the reader.
+                    Button {
+                        model.toggleSelection(envelope)
+                    } label: {
+                        MessageRow(envelope: envelope, isSelected: isChecked, isChecked: isChecked, bulkMode: true)
                     }
+                    .buttonStyle(.plain)
+                } else {
+                    MessageRow(envelope: envelope, isSelected: isSelected, isChecked: false, bulkMode: false)
+                        .tag(envelope)
                 }
-                #if os(visionOS)
-                .contentShape(Rectangle())
-                .hoverEffect(.highlight)
-                #endif
-                // Swipe-to-dispose / toggle-read are hand-rolled in
-                // `SwipeActionRow` (the wrapper applied by `messageRow`),
-                // not here: `.swipeActions` is `List`-only and the list is
-                // now a `ScrollView`, so a modifier here would silently
-                // no-op.
             }
-            // Window loading is index-driven now (see `indexedRow` /
-            // `ensureLoaded(around:)`), so the row no longer carries a
-            // pagination `.task` keyed on the envelope.
+            #if os(visionOS)
+            .contentShape(Rectangle())
+            .hoverEffect(.highlight)
+            #endif
+            // Swipe-to-dispose / toggle-read are hand-rolled in
+            // `SwipeActionRow` (applied by `messageRow`), and drag-to-folder
+            // is applied OUTSIDE that wrapper by `draggableRow` -- both have
+            // to sit outside the per-row `List` that `SwipeActionRow` embeds
+            // for its native `.swipeActions`, or the embedded List swallows
+            // them (the drag never lifts; the swipe modifier no-ops).
         }
     }
 
@@ -143,36 +138,40 @@ extension MessageListView {
         return [MessageDragItem(uid: envelope.uid, sourceFolder: model.sourceFolder(for: envelope))]
     }
 
-    /// Wraps a row in `.draggable` on wide layouts so it can be dragged onto a
-    /// sidebar folder. On compact iPhone the modifier is skipped entirely
-    /// (see `isWideLayout`): there's nowhere to drop, and the long-press drag
-    /// would fight the row's context menu.
+    /// Wraps a virtualized row in `.draggable` on wide layouts so it can be
+    /// dragged onto a sidebar folder. On compact iPhone the modifier is
+    /// skipped entirely (see `isWideLayout`): there's nowhere to drop, and the
+    /// long-press drag would fight the row's context menu.
     ///
-    /// `.draggable` (not `.onDrag`) so a plain click still selects the row -
-    /// `.onDrag` on a `List(selection:)` row swallows clicks on the rendered
-    /// content on macOS. `.onDrag`'s drag-start closure was where the sidebar
-    /// got flipped to reveal folders; `.draggable` has no such hook, so the
-    /// flip rides two drag-start signals for robustness: the payload
-    /// autoclosure (evaluated when the drag lifts) and the preview's
-    /// `.onAppear` (fired when the drag image is built). `beginMessageDrag()`
-    /// is idempotent, so firing both is harmless.
+    /// Applied by `messageRow` OUTSIDE the per-row `SwipeActionRow` (i.e.
+    /// outside the single-row `List` that wrapper embeds for its native
+    /// `.swipeActions`). A `.draggable` placed inside that List row is
+    /// swallowed on macOS and never lifts, so the drag has to sit on the row
+    /// container instead. Because the wrapper already fills the fixed row
+    /// height, this only adds `.contentShape` (so a drag can start on the row's
+    /// empty space, not just the text) -- no frame expansion, unlike the old
+    /// inner version.
+    ///
+    /// `.draggable` (not `.onDrag`) so a plain click still selects the row.
+    /// `.onDrag`'s drag-start closure was where the sidebar got flipped to
+    /// reveal folders; `.draggable` has no such hook, so the flip rides two
+    /// drag-start signals for robustness: the payload autoclosure (evaluated
+    /// when the drag lifts) and the preview's `.onAppear` (fired when the drag
+    /// image is built). `beginMessageDrag()` is idempotent, so firing both is
+    /// harmless. Internal (not `private`) so `messageRow` in `+Selection` can
+    /// wrap the `SwipeActionRow` with it.
     @ViewBuilder
-    private func withMessageDrag(
-        items: [MessageDragItem],
-        subject: String?,
+    func draggableRow(
+        for envelope: Envelope,
+        model: MessageListViewModel,
         @ViewBuilder content: () -> some View
     ) -> some View {
+        let items = dragItems(for: envelope, model: model)
         if isWideLayout, !items.isEmpty {
-            // Fill the row's full height + width and make it hit-test opaque so
-            // a drag can start anywhere on the row, not just on the rendered
-            // text: the empty space (right of the text, and below a short
-            // subject in the fixed-height virtualized row) must be draggable
-            // too. The outer `.frame(height:)` in `virtualizedList` bounds this.
             content()
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .contentShape(Rectangle())
                 .draggable(dragPayload(items)) {
-                    MessageDragPreview(count: items.count, subject: subject)
+                    MessageDragPreview(count: items.count, subject: envelope.subject)
                         .onAppear { appState.beginMessageDrag() }
                 }
         } else {
