@@ -218,7 +218,7 @@ struct MessageListView: View {
             Task { await model.clearSearch() }
         }
         .refreshable {
-            await model.refresh()
+            await model.refreshFromPull()
         }
         .safeAreaInset(edge: .top, spacing: 0) { topInset(model: model) }
         .safeAreaInset(edge: .bottom, spacing: 0) {

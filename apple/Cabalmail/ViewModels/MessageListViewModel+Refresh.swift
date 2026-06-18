@@ -8,6 +8,17 @@ import CabalmailKit
 // (`hydrateFromCache`, `persistCache`) stays in the main file because
 // the cache scope is intentionally narrow.
 extension MessageListViewModel {
+    /// Pull-to-refresh entry point. Runs `refresh()` on an unstructured,
+    /// model-owned `Task` and awaits it, so a cancellation of SwiftUI's
+    /// `.refreshable` task doesn't propagate into the in-flight request and
+    /// surface as `network("cancelled")`. The embedded per-row swipe `List`s
+    /// inherit the outer `.refreshable`, and that scroll interaction was
+    /// cancelling the pull task mid-fetch; an unstructured task is detached
+    /// from that cancellation. Mirrors the pagination cancel-storm fix.
+    func refreshFromPull() async {
+        await Task { await self.refresh() }.value
+    }
+
     /// User-initiated "force reload." Wipes the in-memory envelope list
     /// (plus the cursor state `refresh()` uses to merge older pages) AND
     /// the on-disk envelope snapshot for this folder, then runs
