@@ -284,9 +284,6 @@ export default class ApiClient {
   // IMAP Messages
 
   moveMessages(source, destination, ids, order, field) {
-    if (source === "INBOX" || destination === "INBOX") {
-      localStorage.removeItem("INBOX");
-    }
     const response = axios.put('/move_messages',
       JSON.stringify({
         host: this.host,

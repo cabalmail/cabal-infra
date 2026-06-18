@@ -499,7 +499,6 @@ function App() {
     }
     localStorage.removeItem(ADDRESS_LIST);
     localStorage.removeItem(FOLDER_LIST);
-    localStorage.removeItem("INBOX");
     setIsAdmin(false);
     setState({ loggedIn: false, userName: null, password: null, view: "Login" });
   }, [setState]);
