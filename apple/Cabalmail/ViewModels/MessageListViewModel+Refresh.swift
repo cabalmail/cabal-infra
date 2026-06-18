@@ -93,6 +93,58 @@ extension MessageListViewModel {
         dbg("merge in=\(fetched.count) before=\(before) after=\(envelopes.count) sortMs=\(Int(nowMs() - mergeStart))")
     }
 
+    /// Upward counterpart of `loadMoreIfNeeded` (which stays in the main file).
+    /// Once the front has been trimmed (`windowStart > 0`), scrolling back
+    /// toward the top reloads the page just above the window so it stays
+    /// navigable in both directions. No-op while at the top of the folder.
+    /// Owned by a model task for the same `.task`-cancellation reason as the
+    /// downward path. Lives here, with `mergeFetched`, to keep the type body
+    /// under SwiftLint's length cap.
+    func loadPreviousIfNeeded(currentItem: Envelope) async {
+        guard windowStart > 0, !isLoadingMore, !isLoadingPrevious, !isLoading,
+              !isSearchActive,
+              pendingRemovedUIDs.isEmpty,
+              envelopes.prefix(prefetchDistance).contains(where: { $0.uid == currentItem.uid })
+              else { return }
+        isLoadingPrevious = true
+        loadPrevTask = Task { [weak self] in
+            await self?.performLoadPrevious()
+        }
+    }
+
+    /// Fetches the page immediately above the window and prepends it, then
+    /// trims the now-scrolled-away bottom back to `windowCap`. The
+    /// `.scrollPosition(id:)` anchor keeps the visible row put as the content
+    /// above it grows -- the mirror of the front-trim on the way down. When
+    /// the window reaches the top (`windowStart == 0`) `hasTrimmedFront`
+    /// clears, re-enabling the top-page refresh and the snapshot persist.
+    private func performLoadPrevious() async {
+        defer { isLoadingPrevious = false }
+        do {
+            let count = min(loadMorePageSize, windowStart)
+            let offset = windowStart - count
+            let fetched = try await client.imapClient.envelopes(
+                folder: folder.path,
+                offset: offset,
+                limit: count,
+                sort: sortCriterion
+            )
+            guard !fetched.isEmpty else { return }
+            windowStart = offset
+            mergeFetched(fetched)
+            // Trim the scrolled-away bottom; the next downward loadMore
+            // refetches it by absolute offset.
+            if envelopes.count > windowCap {
+                envelopes.removeLast(envelopes.count - windowCap)
+            }
+            hasTrimmedFront = windowStart > 0
+            hasMore = (windowStart + UInt32(envelopes.count)) < totalMessages
+            dbg("loadPrev off=\(offset) fetched=\(fetched.count) windowStart=\(windowStart) hasMore=\(hasMore)")
+        } catch {
+            dbg("loadPrev ERROR \(error)")
+        }
+    }
+
     /// Merges a top-page fetch into in-memory state and the envelope cache,
     /// pruning rows the server no longer returns -- but only when that
     /// pruning is actually safe.

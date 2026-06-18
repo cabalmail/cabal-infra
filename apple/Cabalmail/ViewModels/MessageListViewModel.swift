@@ -38,14 +38,14 @@ final class MessageListViewModel {
     // /list_envelopes round trip carries fixed IMAP connect/SELECT overhead,
     // so bigger pages mean fewer trips and steadier deep scrolling. Capped
     // server-side by helper.py MAX_PAGE_SIZE (250); 200 stays under it.
-    private let loadMorePageSize: UInt32 = 200
+    let loadMorePageSize: UInt32 = 200
     // Max rows kept in the loaded window. Trimming the scrolled-past front
     // past this bound keeps SwiftUI's per-update cost (its O(n) ForEach diff
     // and the O(n) `filteredEnvelopes` in the view) from growing without
     // limit -- what made the list sluggish past ~800 loaded. Sized to hold
     // the viewport, the prefetch runway below it, and a scroll-back buffer
     // above, while staying under that point. Tunable.
-    private let windowCap = 600
+    let windowCap = 600
     // Prefetch the next page once the user scrolls within this many rows of the
     // end of the loaded list, so scrolling doesn't stall at the bottom waiting
     // for a fetch. It has to exceed the number of rows the user scrolls past
@@ -55,11 +55,17 @@ final class MessageListViewModel {
     // reached the end before it arrived. A little over one page keeps a full
     // page of runway ahead -- on open it prefetches the first big page
     // immediately, then stays ~a page ahead of the scroll.
-    private let prefetchDistance = 250
+    let prefetchDistance = 250
 
     var envelopes: [Envelope] = []
     var isLoading = false
     var isLoadingMore = false
+    // Upward counterpart of `isLoadingMore`: a front-reload (loadPrevious) is
+    // in flight. No top spinner (a top ProgressView would itself shift the
+    // scroll); it only gates against overlapping a downward page with an
+    // upward one. Internal so the `+Refresh` sibling that owns loadPrevious
+    // can set it.
+    var isLoadingPrevious = false
     var errorMessage: String?
 
     /// Active sort key. Drives both the in-memory display order and the
@@ -120,11 +126,12 @@ final class MessageListViewModel {
     // offsets are absolute, not `envelopes.count`. `hasTrimmedFront` records
     // that the window no longer starts at the top, which gates the top-page
     // refresh and the snapshot persist (both assume a top-anchored window).
-    // Reloading the front on scroll-up is a later step; for now scrolling
-    // above the window shows nothing until a hard reload. Reset via
-    // `resetWindow()` on every path that wipes `envelopes`.
-    private var windowStart: UInt32 = 0
-    private var hasTrimmedFront = false
+    // `loadPreviousIfNeeded` reloads the front as the user scrolls back up,
+    // clearing `hasTrimmedFront` once the window reaches the top again. Reset
+    // via `resetWindow()` on every path that wipes `envelopes`. Internal so
+    // the `+Refresh` sibling (loadPrevious) can reach them.
+    var windowStart: UInt32 = 0
+    var hasTrimmedFront = false
 
     /// Foreground-only IDLE loop. Nil when the view is offscreen; started on
     /// `task`, stopped on `onDisappear`. Separated from the refresh path so
@@ -136,6 +143,10 @@ final class MessageListViewModel {
     /// triggering row's `.task` cancellation (see `loadMoreIfNeeded`).
     /// Cancelled in `stopWatching()` when the list goes away.
     private var loadMoreTask: Task<Void, Never>?
+    /// In-flight front reload (loadPrevious), owned by the model like
+    /// `loadMoreTask` so it survives the triggering row's `.task`
+    /// cancellation. Cancelled in `stopWatching()`.
+    var loadPrevTask: Task<Void, Never>?
     /// Debounced envelope-snapshot writer (see `schedulePersist`). Coalesces
     /// the O(loaded count) snapshot rewrite so a continuous scroll persists
     /// once when it settles, not on every page. Cancelled in `stopWatching()`.
@@ -221,6 +232,8 @@ final class MessageListViewModel {
         watcherTask = nil
         loadMoreTask?.cancel()
         loadMoreTask = nil
+        loadPrevTask?.cancel()
+        loadPrevTask = nil
         persistTask?.cancel()
         persistTask = nil
         await watcher?.stop()
@@ -313,7 +326,7 @@ final class MessageListViewModel {
         // Server-side search pagination is bounded by `searchTruncated`
         // / `searchTotalEstimate`; refining the query is the right
         // affordance for "show me more results," not infinite scroll.
-        guard hasMore, !isLoadingMore, !isLoading,
+        guard hasMore, !isLoadingMore, !isLoadingPrevious, !isLoading,
               !isSearchActive,
               pendingRemovedUIDs.isEmpty,
               envelopes.suffix(prefetchDistance).contains(where: { $0.uid == currentItem.uid })
@@ -389,6 +402,11 @@ final class MessageListViewModel {
             dbg("loadMore ERROR \(error)")
         }
     }
+
+    // `loadPreviousIfNeeded` / `performLoadPrevious` -- the upward counterpart
+    // of `loadMoreIfNeeded` that reloads the trimmed front as the user scrolls
+    // back up -- live in `MessageListViewModel+Refresh.swift` alongside
+    // `mergeFetched`, to keep this type body under SwiftLint's length cap.
 
     // Structured search (`runSearch`, `clearSearch`, `sourceFolder(for:)`,
     // and the query builder) lives in `MessageListViewModel+Search.swift`

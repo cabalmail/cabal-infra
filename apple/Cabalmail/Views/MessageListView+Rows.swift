@@ -79,6 +79,7 @@ extension MessageListView {
             }
             .task {
                 await model.loadMoreIfNeeded(currentItem: envelope)
+                await model.loadPreviousIfNeeded(currentItem: envelope)
             }
         }
     }
