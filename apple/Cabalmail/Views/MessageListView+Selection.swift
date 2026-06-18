@@ -128,8 +128,12 @@ extension MessageListView {
                     SwipeActionRow(
                         height: MessageListView.rowHeight,
                         rowBackground: background,
-                        leading: toggleReadSwipe(for: envelope, model: model),
-                        trailing: disposeSwipe(for: envelope, model: model),
+                        // DIAGNOSTIC (temporary): leading/trailing actions
+                        // swapped to locate the wide-layout swipe lag -- does it
+                        // follow the leading EDGE (now dispose) or the
+                        // toggle-read ACTION (now trailing)? Revert after.
+                        leading: disposeSwipe(for: envelope, model: model),
+                        trailing: toggleReadSwipe(for: envelope, model: model),
                         onSelect: { selectRow(envelope, model: model, ordered: visible) },
                         content: {
                             row(for: envelope, model: model, isSelected: selected, orderedVisible: visible)
