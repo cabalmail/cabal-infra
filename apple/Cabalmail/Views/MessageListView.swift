@@ -53,9 +53,14 @@ struct MessageListView: View {
     /// (`+Selection`'s `virtualizedList`) can reserve the off-window rows as
     /// exact blank space: the scroll extent then reflects the whole folder, the
     /// scrollbar is true-to-size, and each row keeps its absolute position.
-    /// Reserves two subject lines; a short subject keeps the height with
-    /// whitespace below. Tuned against the device.
-    static let rowHeight: CGFloat = 72
+    /// The index-addressed virtualization needs ONE uniform height, so this has
+    /// to clear the tallest row -- a sender line plus a two-line subject. A
+    /// one-line subject (the common case) keeps the height with a little
+    /// whitespace below; that slack is the price of uniform rows. Trimmed from
+    /// 72 (which left far more gap than the content needs) toward that 2-line
+    /// floor; lower it further only if two-line subjects still fit without
+    /// clipping.
+    static let rowHeight: CGFloat = 58
     /// `true` while the filter sheet is presented over the message list.
     @State var filtersPresented = false
     /// Set by the row context menu's "Move to folder…" item; presents the

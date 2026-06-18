@@ -60,6 +60,10 @@ struct SwipeActionRow<Content: View>: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        // Zero the List's own vertical content insets so the row content sits
+        // flush in `height` instead of inside List padding (which, on top of
+        // the clip below, would waste/clip part of the row).
+        .contentMargins(.vertical, 0, for: .scrollContent)
         // NOT `.scrollDisabled(true)`: on macOS the swipe IS a two-finger
         // scroll gesture, and disabling scroll suppresses it. Instead the
         // single row exactly fills the frame, so there's no vertical overflow
