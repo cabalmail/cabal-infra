@@ -77,17 +77,9 @@ extension MessageListView {
                     .tint(.blue)
                 }
             }
-            .task {
-                // Stage A loads downward only. loadPreviousIfNeeded is disabled
-                // here: a front-trim from loadMore re-instantiates the window's
-                // (off-screen) top row in the LazyVStack, whose .task then fires
-                // loadPrevious and yanks the window back to offset 0 -- the
-                // mid-list jump. The .task-on-appear trigger can't tell a real
-                // upward scroll from a trim re-layout. Stage B replaces both
-                // triggers with offset-driven loading (reads the actual scroll
-                // position), which restores upward reload without the thrash.
-                await model.loadMoreIfNeeded(currentItem: envelope)
-            }
+            // Window loading is index-driven now (see `indexedRow` /
+            // `ensureLoaded(around:)`), so the row no longer carries a
+            // pagination `.task` keyed on the envelope.
         }
     }
 

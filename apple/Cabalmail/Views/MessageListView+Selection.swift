@@ -8,26 +8,27 @@ import CabalmailKit
 // SwiftLint's `type_body_length` / `file_length` caps, matching the pattern
 // used by `+Rows`, `+Bulk`, `+Filter`, and `+macOS`.
 extension MessageListView {
-    /// Virtualized message list -- Stage A of the ScrollView rewrite. A
-    /// `ScrollView` + `LazyVStack` with two blank spacer views reserving the
-    /// off-window rows, so the scroll extent matches the whole folder (a true-
-    /// to-size scrollbar) and each row keeps its absolute position as the
-    /// window trims/reloads (no jump) -- what macOS `List` could not do with a
-    /// tall spacer cell. Rows are pinned to `MessageListView.rowHeight`.
-    /// Sliding-window loading still rides the per-row `.task` inside `row(...)`,
-    /// and the per-row drag comes from there too; a tap selects/opens the row
-    /// and the context menu is attached here (the old List-level menu is gone).
-    /// Swipe-to-dispose, native multi-select (shift/cmd-click), the selection-
-    /// aware menu, and keyboard nav are re-added in Stage B.
+    /// Virtualized message list -- index-addressed ScrollView rewrite. The
+    /// `ForEach` spans the full, stable `0..<rowCount` folder index range, so
+    /// scrolling never re-diffs or restructures the list (no jump) and
+    /// `LazyVStack` realizes only the ~visible rows. Each slot looks up its
+    /// envelope via `model.envelope(at:)` and renders a placeholder until the
+    /// loaded window covers it; `ensureLoaded(around:)` (on each row's `.task`)
+    /// slides/jumps the window to follow the scroll. All rows are pinned to
+    /// `MessageListView.rowHeight`, so the extent is exactly `rowCount * height`
+    /// -- a stable, true-to-size scrollbar with no spacer cells. A tap
+    /// selects/opens; the per-row context menu and drag come from `row(...)`.
+    /// Swipe-to-dispose, native multi-select, and keyboard nav are Stage B.
+    ///
+    /// Filtered / search mode (visible != all loaded) can't map rows onto
+    /// absolute folder slots, so it falls back to a plain `ForEach(visible)`.
     @ViewBuilder
     func virtualizedList(model: MessageListViewModel, visible: [Envelope]) -> some View {
-        // Spacer virtualization only when the visible rows map one-to-one onto
-        // absolute folder positions: unfiltered, non-search folder mode.
         let virtualize = !model.isSearchActive && visible.count == model.envelopes.count
-        let above = virtualize ? model.windowStart : 0
-        let loadedBottom = model.windowStart + UInt32(model.envelopes.count)
-        let below: UInt32 = virtualize && model.totalMessages > loadedBottom
-            ? model.totalMessages - loadedBottom : 0
+        // Use the larger of the STATUS total and the loaded extent so a cache
+        // hydrate (which fills `envelopes` before `refresh` sets the total)
+        // still shows its rows.
+        let rowCount = max(Int(model.totalMessages), Int(model.windowStart) + model.envelopes.count)
         ScrollView {
             LazyVStack(spacing: 0) {
                 if let errorMessage = model.errorMessage {
@@ -36,25 +37,14 @@ extension MessageListView {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding()
                 }
-                if above > 0 {
-                    Color.clear.frame(height: CGFloat(above) * MessageListView.rowHeight)
-                }
-                ForEach(visible) { envelope in
-                    let selected = rowIsSelected(envelope, model: model)
-                    row(
-                        for: envelope,
-                        model: model,
-                        isSelected: selected,
-                        orderedVisible: visible
-                    )
-                    .frame(height: MessageListView.rowHeight, alignment: .top)
-                    .background(selected ? Color.accentColor.opacity(0.15) : Color.clear)
-                    .contentShape(Rectangle())
-                    .onTapGesture { selectRow(envelope, model: model) }
-                    .contextMenu { rowContextMenu(for: envelope, model: model) }
-                }
-                if below > 0 {
-                    Color.clear.frame(height: CGFloat(below) * MessageListView.rowHeight)
+                if virtualize {
+                    ForEach(0..<rowCount, id: \.self) { index in
+                        indexedRow(index, model: model, visible: visible)
+                    }
+                } else {
+                    ForEach(visible) { envelope in
+                        messageRow(envelope, model: model, visible: visible)
+                    }
                 }
             }
         }
@@ -63,6 +53,54 @@ extension MessageListView {
                 ProgressView("Fetching messages…")
             }
         }
+    }
+
+    /// One virtualized slot: the real row when its envelope is loaded, a
+    /// placeholder otherwise. Either way its `.task` calls `ensureLoaded` so
+    /// scrolling (including a scrollbar jump onto placeholders) pulls the
+    /// window to cover this index.
+    @ViewBuilder
+    private func indexedRow(_ index: Int, model: MessageListViewModel, visible: [Envelope]) -> some View {
+        Group {
+            if let envelope = model.envelope(at: index) {
+                messageRow(envelope, model: model, visible: visible)
+            } else {
+                placeholderRow()
+            }
+        }
+        .task { model.ensureLoaded(around: index) }
+    }
+
+    /// A loaded message row at the fixed row height, with tap-to-select and
+    /// the per-row context menu. Shared by the virtualized and filtered paths.
+    @ViewBuilder
+    private func messageRow(_ envelope: Envelope, model: MessageListViewModel, visible: [Envelope]) -> some View {
+        let selected = rowIsSelected(envelope, model: model)
+        row(for: envelope, model: model, isSelected: selected, orderedVisible: visible)
+            .frame(height: MessageListView.rowHeight, alignment: .top)
+            .background(selected ? Color.accentColor.opacity(0.15) : Color.clear)
+            .contentShape(Rectangle())
+            .onTapGesture { selectRow(envelope, model: model) }
+            .contextMenu { rowContextMenu(for: envelope, model: model) }
+    }
+
+    /// Skeleton row shown for an index whose envelope isn't loaded yet. Same
+    /// fixed height as a real row so the scroll extent and every row's
+    /// absolute position are exact while the window catches up.
+    private func placeholderRow() -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Circle().fill(.quaternary).frame(width: 8, height: 8)
+            VStack(alignment: .leading, spacing: 6) {
+                RoundedRectangle(cornerRadius: 3).fill(.quaternary).frame(width: 150, height: 11)
+                RoundedRectangle(cornerRadius: 3).fill(.quaternary).frame(width: 230, height: 11)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+        .frame(height: MessageListView.rowHeight, alignment: .top)
+        .redacted(reason: .placeholder)
+        .accessibilityHidden(true)
     }
 
     /// Wide layouts (macOS, iPad regular width, visionOS). Stage A drives

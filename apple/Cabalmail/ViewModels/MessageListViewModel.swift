@@ -66,6 +66,10 @@ final class MessageListViewModel {
     // upward one. Internal so the `+Refresh` sibling that owns loadPrevious
     // can set it.
     var isLoadingPrevious = false
+    // A full-window reload (a scrollbar drag into an unloaded region) is in
+    // flight. Gates the incremental extends and other jumps against it.
+    // Internal so `performLoadWindow` in the `+Refresh` sibling can clear it.
+    var isLoadingWindow = false
     var errorMessage: String?
 
     /// Active sort key. Drives both the in-memory display order and the
@@ -147,6 +151,9 @@ final class MessageListViewModel {
     /// `loadMoreTask` so it survives the triggering row's `.task`
     /// cancellation. Cancelled in `stopWatching()`.
     var loadPrevTask: Task<Void, Never>?
+    /// In-flight full-window reload for a scrollbar jump. Model-owned for the
+    /// same reason; cancelled in `stopWatching()`.
+    private var loadWindowTask: Task<Void, Never>?
     /// Debounced envelope-snapshot writer (see `schedulePersist`). Coalesces
     /// the O(loaded count) snapshot rewrite so a continuous scroll persists
     /// once when it settles, not on every page. Cancelled in `stopWatching()`.
@@ -234,6 +241,8 @@ final class MessageListViewModel {
         loadMoreTask = nil
         loadPrevTask?.cancel()
         loadPrevTask = nil
+        loadWindowTask?.cancel()
+        loadWindowTask = nil
         persistTask?.cancel()
         persistTask = nil
         await watcher?.stop()
@@ -313,37 +322,38 @@ final class MessageListViewModel {
         }
     }
 
-    func loadMoreIfNeeded(currentItem: Envelope) async {
-        // No pagination while a search is active. The displayed envelopes
-        // are cross-folder search results, but this method fetches older
-        // UIDs from `folder.path` (the sidebar selection) — those would
-        // appear as a chunk of unrelated inbox messages tacked onto the
-        // bottom of the search results. Worse, the post-fetch
-        // `persistCache` writes ALL of in-memory `envelopes` into the
-        // current folder's snapshot via `EnvelopeCache.merge`, which has
-        // no UID-range filter; the foreign UIDs from search would land
-        // in the cache and re-hydrate as phantom rows on next launch.
-        // Server-side search pagination is bounded by `searchTruncated`
-        // / `searchTotalEstimate`; refining the query is the right
-        // affordance for "show me more results," not infinite scroll.
-        guard hasMore, !isLoadingMore, !isLoadingPrevious, !isLoading,
-              !isSearchActive,
-              pendingRemovedUIDs.isEmpty,
-              envelopes.suffix(prefetchDistance).contains(where: { $0.uid == currentItem.uid })
+    /// Index-driven window loader. A row (real or placeholder) at
+    /// `absoluteIndex` appeared, so ensure the loaded window covers it. Near
+    /// an edge it extends incrementally via `performLoadMore` /
+    /// `performLoadPrevious` (cheap: one page + a trim of the far side); a far
+    /// jump (the user dragged the scrollbar into an unloaded region) reloads a
+    /// fresh window centered there. Replaces the old envelope-keyed
+    /// loadMore/loadPrevious triggers: because the list's `ForEach` spans the
+    /// full stable index range, shifting/trimming the backing window only
+    /// changes which indices hold data -- it never restructures the list, so
+    /// there's no jump and no trim-retrigger thrash. The fetches run on
+    /// model-owned tasks so they outlive the row `.task`'s cancellation.
+    func ensureLoaded(around absoluteIndex: Int) {
+        guard !isSearchActive, pendingRemovedUIDs.isEmpty,
+              !isLoading, !isLoadingMore, !isLoadingPrevious, !isLoadingWindow
               else { return }
-        // Own the page fetch in a model task rather than running it inline.
-        // The call site is a per-row `.task` (MessageListView+Rows) that
-        // SwiftUI cancels the moment the row scrolls off-screen. Running the
-        // fetch there meant a fast scroll cancelled the in-flight page
-        // mid-flight (URLError.cancelled), wasting the round trip and
-        // stalling pagination until the user slowed down -- the
-        // "loadMore ERROR cancelled" storm. An unstructured Task does not
-        // inherit the view task's cancellation, so the page completes and
-        // merges even as the triggering row leaves the viewport. Same
-        // pattern MessageDetailView uses for its body fetch.
-        isLoadingMore = true
-        loadMoreTask = Task { [weak self] in
-            await self?.performLoadMore()
+        let windowLo = Int(windowStart)
+        let windowHi = windowLo + envelopes.count   // exclusive
+        let prefetch = Int(prefetchDistance)
+        let total = Int(totalMessages)
+        if absoluteIndex >= windowLo - prefetch && absoluteIndex <= windowHi + prefetch {
+            // Near or inside the window: extend toward the approached edge.
+            if absoluteIndex >= windowHi - prefetch, windowHi < total {
+                isLoadingMore = true
+                loadMoreTask = Task { [weak self] in await self?.performLoadMore() }
+            } else if absoluteIndex <= windowLo + prefetch, windowLo > 0 {
+                isLoadingPrevious = true
+                loadPrevTask = Task { [weak self] in await self?.performLoadPrevious() }
+            }
+        } else {
+            // Far jump: replace the window with one centered on the target.
+            isLoadingWindow = true
+            loadWindowTask = Task { [weak self] in await self?.performLoadWindow(around: absoluteIndex) }
         }
     }
 

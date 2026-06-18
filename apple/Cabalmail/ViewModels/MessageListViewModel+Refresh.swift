@@ -93,33 +93,15 @@ extension MessageListViewModel {
         dbg("merge in=\(fetched.count) before=\(before) after=\(envelopes.count) sortMs=\(Int(nowMs() - mergeStart))")
     }
 
-    /// Upward counterpart of `loadMoreIfNeeded` (which stays in the main file).
-    /// Once the front has been trimmed (`windowStart > 0`), scrolling back
-    /// toward the top reloads the page just above the window so it stays
-    /// navigable in both directions. No-op while at the top of the folder.
-    /// Owned by a model task for the same `.task`-cancellation reason as the
-    /// downward path. Lives here, with `mergeFetched`, to keep the type body
-    /// under SwiftLint's length cap.
-    func loadPreviousIfNeeded(currentItem: Envelope) async {
-        guard windowStart > 0, !isLoadingMore, !isLoadingPrevious, !isLoading,
-              !isSearchActive,
-              pendingRemovedUIDs.isEmpty,
-              envelopes.prefix(prefetchDistance).contains(where: { $0.uid == currentItem.uid })
-              else { return }
-        isLoadingPrevious = true
-        loadPrevTask = Task { [weak self] in
-            await self?.performLoadPrevious()
-        }
-    }
-
     /// Fetches the page immediately above the window and prepends it, then
-    /// trims the now-scrolled-away bottom back to `windowCap`. Spacer
-    /// virtualization keeps each loaded row at its absolute position, so
-    /// shrinking the top spacer as rows prepend leaves the viewport put -- the
-    /// mirror of the front-trim on the way down. When the window reaches the
-    /// top (`windowStart == 0`) `hasTrimmedFront` clears, re-enabling the
-    /// top-page refresh and the snapshot persist.
-    private func performLoadPrevious() async {
+    /// trims the now-scrolled-away bottom back to `windowCap`. Triggered by
+    /// `ensureLoaded(around:)` when a row near the top of the window appears.
+    /// Index-addressed rendering keeps each loaded row at its absolute slot,
+    /// so prepending rows above the viewport doesn't move it. When the window
+    /// reaches the top (`windowStart == 0`) `hasTrimmedFront` clears, re-
+    /// enabling the top-page refresh and the snapshot persist. Internal (not
+    /// `private`) so `ensureLoaded` in the main file can launch it.
+    func performLoadPrevious() async {
         defer { isLoadingPrevious = false }
         do {
             let count = min(loadMorePageSize, windowStart)
@@ -143,6 +125,45 @@ extension MessageListViewModel {
             dbg("loadPrev off=\(offset) fetched=\(fetched.count) windowStart=\(windowStart) hasMore=\(hasMore)")
         } catch {
             dbg("loadPrev ERROR \(error)")
+        }
+    }
+
+    /// Envelope at an absolute folder index, or nil when that index isn't in
+    /// the loaded window (the row then renders a placeholder). Backs the
+    /// index-addressed virtualized list: the view's `ForEach` spans the full
+    /// `0..<total` index range (stable, so scrolling never re-diffs or jumps),
+    /// and each row looks up its data here.
+    func envelope(at absoluteIndex: Int) -> Envelope? {
+        let local = absoluteIndex - Int(windowStart)
+        guard local >= 0, local < envelopes.count else { return nil }
+        return envelopes[local]
+    }
+
+    /// Replaces the loaded window with a fresh one centered on `absoluteIndex`
+    /// for a scrollbar drag into an unloaded region (see `ensureLoaded`).
+    /// Discontinuous, so it replaces rather than merges; `hasTrimmedFront` /
+    /// `hasMore` are recomputed from the new absolute bounds. Internal (not
+    /// `private`) so `ensureLoaded` in the main file can launch it.
+    func performLoadWindow(around absoluteIndex: Int) async {
+        defer { isLoadingWindow = false }
+        let total = Int(totalMessages)
+        let cap = Int(windowCap)
+        let start = max(0, min(absoluteIndex - cap / 2, max(0, total - cap)))
+        do {
+            let fetched = try await client.imapClient.envelopes(
+                folder: folder.path,
+                offset: UInt32(start),
+                limit: UInt32(cap),
+                sort: sortCriterion
+            )
+            guard !fetched.isEmpty else { return }
+            windowStart = UInt32(start)
+            envelopes = fetched.sorted(by: envelopeOrder)
+            hasTrimmedFront = start > 0
+            hasMore = (windowStart + UInt32(envelopes.count)) < totalMessages
+            dbg("loadWindow around=\(absoluteIndex) start=\(start) fetched=\(fetched.count)")
+        } catch {
+            dbg("loadWindow ERROR \(error)")
         }
     }
 
