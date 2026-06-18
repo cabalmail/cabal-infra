@@ -40,12 +40,15 @@ final class MessageListViewModel {
     // server-side by helper.py MAX_PAGE_SIZE (250); 200 stays under it.
     private let loadMorePageSize: UInt32 = 200
     // Prefetch the next page once the user scrolls within this many rows of the
-    // end of the loaded list, so scrolling never stalls at the bottom waiting
-    // for a fetch (the trigger used to be the last row only -- zero lookahead).
-    // Deliberately larger than `pageSize` and any reasonable viewport: on open
-    // this prefetches the second page immediately, then keeps ~two pages loaded
-    // ahead of the scroll. Cheap insurance for smoothness.
-    private let prefetchDistance = 100
+    // end of the loaded list, so scrolling doesn't stall at the bottom waiting
+    // for a fetch. It has to exceed the number of rows the user scrolls past
+    // during one page fetch, so it scales with `loadMorePageSize`: at 100 (set
+    // when pages were 50) the next 200-row page only began loading once the
+    // user was halfway through the page they were on, so a normal scroll
+    // reached the end before it arrived. A little over one page keeps a full
+    // page of runway ahead -- on open it prefetches the first big page
+    // immediately, then stays ~a page ahead of the scroll.
+    private let prefetchDistance = 250
 
     var envelopes: [Envelope] = []
     var isLoading = false
