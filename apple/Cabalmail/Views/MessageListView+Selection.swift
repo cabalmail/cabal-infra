@@ -71,17 +71,42 @@ extension MessageListView {
         .task { model.ensureLoaded(around: index) }
     }
 
-    /// A loaded message row at the fixed row height, with tap-to-select and
-    /// the per-row context menu. Shared by the virtualized and filtered paths.
+    /// A loaded message row at the fixed row height. The normal row wraps in
+    /// `SwipeActionRow` for swipe-to-dispose (trailing) / toggle-read
+    /// (leading) on touch -- `.swipeActions` is `List`-only, so the
+    /// virtualized `ScrollView` rows hand-roll it (see `SwipeActionRow.swift`).
+    /// `SwipeActionRow` also owns the row's height, background, and tap-to-
+    /// select (a tap closes an open swipe instead of selecting). Compact
+    /// edit mode (`bulkMode`) bypasses swipe: the row is a selection-toggle
+    /// button there, and swipe in a multi-select edit mode would fight it
+    /// (matching Mail, which disables swipe while editing). Shared by the
+    /// virtualized and filtered paths.
     @ViewBuilder
     private func messageRow(_ envelope: Envelope, model: MessageListViewModel, visible: [Envelope]) -> some View {
         let selected = rowIsSelected(envelope, model: model)
-        row(for: envelope, model: model, isSelected: selected, orderedVisible: visible)
-            .frame(height: MessageListView.rowHeight, alignment: .top)
-            .background(selected ? Color.accentColor.opacity(0.15) : Color.clear)
-            .contentShape(Rectangle())
-            .onTapGesture { selectRow(envelope, model: model) }
-            .contextMenu { rowContextMenu(for: envelope, model: model) }
+        let background = selected ? Color.accentColor.opacity(0.15) : Color.clear
+        Group {
+            if model.bulkMode {
+                row(for: envelope, model: model, isSelected: selected, orderedVisible: visible)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(height: MessageListView.rowHeight, alignment: .top)
+                    .background(background)
+            } else {
+                SwipeActionRow(
+                    rowUID: envelope.uid,
+                    openUID: $swipeOpenUID,
+                    height: MessageListView.rowHeight,
+                    rowBackground: background,
+                    leading: toggleReadSwipe(for: envelope, model: model),
+                    trailing: disposeSwipe(for: envelope, model: model),
+                    onSelect: { selectRow(envelope, model: model) },
+                    content: {
+                        row(for: envelope, model: model, isSelected: selected, orderedVisible: visible)
+                    }
+                )
+            }
+        }
+        .contextMenu { rowContextMenu(for: envelope, model: model) }
     }
 
     /// Skeleton row shown for an index whose envelope isn't loaded yet. Same

@@ -71,6 +71,12 @@ struct MessageListView: View {
     @State var purgeCandidate: PurgeCandidate?
     /// `true` while the bulk-move destination picker is presented.
     @State var bulkMoveSheetPresented = false
+    /// The UID of the row currently rested open on a swipe (iOS), so only
+    /// one row shows its action buttons at a time. Set by `SwipeActionRow`
+    /// (see `SwipeActionRow.swift`); non-private so the `+Selection`
+    /// extension that builds the rows can bind it. Unused on macOS /
+    /// visionOS, which render the plain non-swipe row.
+    @State var swipeOpenUID: UInt32?
     /// Set by the wide-layout selection context menu's "Move to folder…"
     /// item and the Cmd+M shortcut; presents the MoveToFolderSheet for
     /// the captured UID set (see `MessageListView+Actions.swift`).

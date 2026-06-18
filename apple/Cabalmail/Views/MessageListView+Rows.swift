@@ -4,10 +4,10 @@ import CabalmailKit
 // Row rendering and per-row affordances for `MessageListView`. Lives in
 // a same-module extension so the primary view body stays under
 // SwiftLint's `type_body_length` cap. Holds:
-//   - `row(for:model:isSelected:)` — list-row content + swipe actions
-//   - `rowContextMenu` — compact iPhone's long-press menu (wide layouts
-//     use the List-level selection menu in `+Actions.swift` instead)
-//   - `disposeActionLabel` / `markReadLabel` — shared icons for both
+//   - `row(for:model:isSelected:)` — list-row content (drag + tag)
+//   - `rowContextMenu` — the per-row long-press / right-click menu
+//   - `disposeSwipe` / `toggleReadSwipe` — `SwipeActionSpec`s the
+//     `SwipeActionRow` wrapper reveals on a trailing / leading swipe
 //   - `addressFilterChip` — the in-list banner when `addressFilter` is
 //     set (used by `Messages` view's address-tap surface)
 //   - `filteredEnvelopes` — case-insensitive `To`/`Cc` substring filter
@@ -65,17 +65,11 @@ extension MessageListView {
                 .contentShape(Rectangle())
                 .hoverEffect(.highlight)
                 #endif
-                .swipeActions(edge: .trailing) {
-                    disposeSwipeButton(for: envelope, model: model)
-                }
-                .swipeActions(edge: .leading) {
-                    Button {
-                        Task { await model.toggleSeen(envelope) }
-                    } label: {
-                        markReadLabel(for: envelope)
-                    }
-                    .tint(.blue)
-                }
+                // Swipe-to-dispose / toggle-read are hand-rolled in
+                // `SwipeActionRow` (the wrapper applied by `messageRow`),
+                // not here: `.swipeActions` is `List`-only and the list is
+                // now a `ScrollView`, so a modifier here would silently
+                // no-op.
             }
             // Window loading is index-driven now (see `indexedRow` /
             // `ensureLoaded(around:)`), so the row no longer carries a
@@ -246,49 +240,51 @@ extension MessageListView {
         }
     }
 
-    /// Trailing destructive swipe: dispose (Archive/Trash) everywhere
-    /// except inside Trash, where delete means gone forever and stages
-    /// the confirmation dialog instead of acting directly. Shared shape
-    /// with the context menu's destructive item.
-    @ViewBuilder
-    func disposeSwipeButton(for envelope: Envelope, model: MessageListViewModel) -> some View {
-        Button(role: .destructive) {
-            if model.isTrashFolder {
+    /// Trailing destructive swipe spec: dispose (Archive/Trash) everywhere
+    /// except inside Trash, where delete means gone forever and stages the
+    /// confirmation dialog instead of acting directly. Same decision as the
+    /// context menu's destructive item; consumed by `SwipeActionRow`.
+    func disposeSwipe(for envelope: Envelope, model: MessageListViewModel) -> SwipeActionSpec {
+        if model.isTrashFolder {
+            return SwipeActionSpec(
+                systemImage: "trash.slash",
+                title: "Delete Forever",
+                tint: .red,
+                role: .destructive
+            ) {
                 purgeCandidate = PurgeCandidate(uids: [envelope.uid])
-            } else {
-                Task { await model.dispose(envelope) }
             }
-        } label: {
-            if model.isTrashFolder {
-                purgeActionLabel
-            } else {
-                disposeActionLabel(for: model.disposeAction)
-            }
+        }
+        let action = model.disposeAction
+        return SwipeActionSpec(
+            systemImage: action == .archive ? "archivebox" : "trash",
+            title: action == .archive ? "Archive" : "Trash",
+            tint: .red,
+            role: .destructive
+        ) {
+            Task { await model.dispose(envelope) }
         }
     }
 
-    @ViewBuilder
-    func disposeActionLabel(for action: DisposeAction) -> some View {
-        switch action {
-        case .archive: Label("Archive", systemImage: "archivebox")
-        case .trash:   Label("Trash", systemImage: "trash")
+    /// Leading swipe spec: flip `\Seen`. Mirrors Mail's single read/unread
+    /// toggle gesture rather than offering two.
+    func toggleReadSwipe(for envelope: Envelope, model: MessageListViewModel) -> SwipeActionSpec {
+        let isSeen = envelope.flags.contains(.seen)
+        return SwipeActionSpec(
+            systemImage: isSeen ? "envelope.badge" : "envelope.open",
+            title: isSeen ? "Unread" : "Read",
+            tint: .blue
+        ) {
+            Task { await model.toggleSeen(envelope) }
         }
     }
 
     /// Delete affordance label inside the Trash folder, where the action
-    /// permanently deletes (after confirmation) instead of moving.
+    /// permanently deletes (after confirmation) instead of moving. Still
+    /// used by the row / selection context menus.
     @ViewBuilder
     var purgeActionLabel: some View {
         Label("Delete Forever", systemImage: "trash.slash")
-    }
-
-    @ViewBuilder
-    func markReadLabel(for envelope: Envelope) -> some View {
-        if envelope.flags.contains(.seen) {
-            Label("Unread", systemImage: "envelope.badge")
-        } else {
-            Label("Read", systemImage: "envelope.open")
-        }
     }
 
     @ViewBuilder
