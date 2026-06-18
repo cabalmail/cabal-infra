@@ -91,11 +91,16 @@ final class MessageListViewModel {
     /// already use.
     var selectedUIDs: Set<UInt32> = []
 
-    /// Anchor row for shift-click range selection: the last row plainly
-    /// selected or command-clicked. iOS drives this (see
-    /// `MessageListView+ModifierClick.swift`); macOS uses the native list's
-    /// own anchor and leaves it untouched.
+    /// Anchor row for range selection: the fixed pivot a shift-click or
+    /// shift-arrow extends from -- the last row plainly selected or
+    /// command-clicked.
     var selectionAnchor: UInt32?
+
+    /// The moving end of a keyboard range selection (the row a plain arrow
+    /// last landed on, or a shift-arrow last extended to). Distinct from the
+    /// anchor so shift-arrow grows/shrinks the range from the right end rather
+    /// than collapsing it. Plain selection sets cursor == anchor.
+    var selectionCursor: UInt32?
 
     /// Free-text term submitted from the search field. Filters live in
     /// `searchFilters`; the two are sent together when `runSearch()` runs.
