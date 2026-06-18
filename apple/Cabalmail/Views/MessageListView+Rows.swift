@@ -348,10 +348,15 @@ private struct MessageRow: View {
                 .padding(.top, 6)
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
-                    Text(senderLabel)
+                    // "source -> destination" on one line. `maxWidth: .infinity`
+                    // takes the place of the old Spacer (push the date right);
+                    // `.middle` truncation keeps both the sender start and the
+                    // destination-address end legible when the line overflows.
+                    routeText
                         .font(.subheadline)
-                        .fontWeight(envelope.flags.contains(.seen) ? .regular : .semibold)
-                    Spacer()
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     if envelope.hasAttachments {
                         Image(systemName: "paperclip")
                             .font(.caption)
@@ -393,20 +398,52 @@ private struct MessageRow: View {
         return isSelected ? .white : .blue
     }
 
-    /// Display priority: the envelope's own RFC 5322 phrase first
-    /// (sender's choice), then the user's own name from Contacts, then
-    /// the bare mailbox. Contacts hydration is `nil` until the async
-    /// lookup in `.task(id:)` resolves, so a fresh row paints with the
-    /// envelope or mailbox and updates in place when the contact match
-    /// arrives.
-    private var senderLabel: String {
+    /// The row's first line: `source -> destination`. The destination is the
+    /// address the message was delivered to -- the key triage signal in
+    /// Cabalmail, where a distinct address is handed to each vendor -- and is
+    /// dimmed so the sender stays the primary read. When there's no
+    /// resolvable destination (e.g. a draft) the arrow drops and only the
+    /// source shows.
+    private var routeText: Text {
+        let seen = envelope.flags.contains(.seen)
+        let source = Text(sourceText).fontWeight(seen ? .regular : .semibold)
+        guard let destinationText else { return source }
+        return source
+            + Text(" → ").foregroundStyle(.secondary)
+            + Text(destinationText).foregroundStyle(.secondary)
+    }
+
+    /// Sender side of the route. Display priority: the envelope's own RFC
+    /// 5322 phrase (sender's choice), then the user's Contacts match, then
+    /// the bare `mailbox@host`. Contacts hydration is `nil` until the async
+    /// `.task(id:)` lookup resolves, so a fresh row paints with the envelope
+    /// or address and updates in place when the contact match arrives.
+    private var sourceText: String {
         if let envelopeName = envelope.from.first?.displayName, !envelopeName.isEmpty {
             return envelopeName
         }
         if let contactName, !contactName.isEmpty {
             return contactName
         }
-        return envelope.from.first?.mailbox ?? "unknown"
+        guard let from = envelope.from.first else { return "unknown" }
+        return "\(from.mailbox)@\(from.host)"
+    }
+
+    /// Destination side of the route: the address this message was delivered
+    /// to. A message can carry several recipients, so prefer the one on one
+    /// of the deployment's own mail domains (the address that actually caught
+    /// it -- matched subdomain-aware, since Cabalmail addresses live on
+    /// subdomains); fall back to the first To/Cc. `nil` when there are no
+    /// recipients, which drops the arrow and shows the source alone.
+    private var destinationText: String? {
+        let recipients = envelope.to + envelope.cc
+        guard !recipients.isEmpty else { return nil }
+        let domains = appState.client?.configuration.domains.map(\.domain) ?? []
+        let owned = recipients.first { addr in
+            domains.contains { addr.host == $0 || addr.host.hasSuffix(".\($0)") }
+        }
+        guard let dest = owned ?? recipients.first else { return nil }
+        return "\(dest.mailbox)@\(dest.host)"
     }
 
     /// Cache-friendly identifier for `.task(id:)`. Empty when the
