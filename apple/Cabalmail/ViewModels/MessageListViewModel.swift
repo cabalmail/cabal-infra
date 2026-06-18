@@ -373,9 +373,10 @@ final class MessageListViewModel {
             // `prefetchDistance`), so the last `windowCap` rows always cover
             // the viewport, the runway below it, and a scroll-back buffer
             // above; `removeFirst` drops the newest rows the user scrolled up
-            // and away from under the default newest-first sort. The list's
-            // `.scrollPosition(id:)` anchor keeps the visible row put across
-            // the removal.
+            // and away from under the default newest-first sort. Spacer
+            // virtualization (the list reserves the off-window rows as blank
+            // cells) keeps each loaded row at its absolute position, so the
+            // viewport doesn't move across the removal.
             if envelopes.count > windowCap {
                 let overflow = envelopes.count - windowCap
                 envelopes.removeFirst(overflow)

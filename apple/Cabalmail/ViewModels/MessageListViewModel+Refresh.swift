@@ -113,11 +113,12 @@ extension MessageListViewModel {
     }
 
     /// Fetches the page immediately above the window and prepends it, then
-    /// trims the now-scrolled-away bottom back to `windowCap`. The
-    /// `.scrollPosition(id:)` anchor keeps the visible row put as the content
-    /// above it grows -- the mirror of the front-trim on the way down. When
-    /// the window reaches the top (`windowStart == 0`) `hasTrimmedFront`
-    /// clears, re-enabling the top-page refresh and the snapshot persist.
+    /// trims the now-scrolled-away bottom back to `windowCap`. Spacer
+    /// virtualization keeps each loaded row at its absolute position, so
+    /// shrinking the top spacer as rows prepend leaves the viewport put -- the
+    /// mirror of the front-trim on the way down. When the window reaches the
+    /// top (`windowStart == 0`) `hasTrimmedFront` clears, re-enabling the
+    /// top-page refresh and the snapshot persist.
     private func performLoadPrevious() async {
         defer { isLoadingPrevious = false }
         do {
