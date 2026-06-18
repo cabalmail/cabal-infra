@@ -43,6 +43,11 @@ function Messages({
   const api = useApi();
 
   const [messageIds, setMessageIds] = useState([]);
+  const [total, setTotal] = useState(0);
+  // Server-sourced folder counts (IMAP STATUS + SEARCH FLAGGED). null until the
+  // first /folder_status response, so the pills render without a count rather
+  // than a wrong one. unseen/flagged drive the Unread/Flagged pills.
+  const [status, setStatus] = useState({ messages: null, unseen: null, flagged: null });
   const [loading, setLoading] = useState(true);
   const [visible, setVisible] = useState({ loaded: [], totalIds: 0, shownIds: [] });
   const [showMovePicker, setShowMovePicker] = useState(false);
@@ -54,27 +59,74 @@ function Messages({
 
   const intervalRef = useRef(null);
   const lastSelectedRef = useRef(null);
+  // The "did the folder change" baseline for the poll. Refs, not closure
+  // variables, so refreshAfterMutation can advance them too -- otherwise the
+  // poll right after a bulk move/delete would see MESSAGES dropped against a
+  // stale baseline and fire a needless second UID-list pull.
+  const lastUidNextRef = useRef(null);
+  const lastMessagesRef = useRef(null);
 
-  // Polling: fetch message IDs on mount and whenever folder/sort changes.
+  // Pull the fresh STATUS and re-seed the change baseline. Shared by the poll
+  // and refreshAfterMutation so both keep the baseline in step.
+  const applyStatus = useCallback((data) => {
+    const s = data.data;
+    setStatus({ messages: s.messages, unseen: s.unseen, flagged: s.flagged });
+    lastUidNextRef.current = s.uid_next;
+    lastMessagesRef.current = s.messages;
+  }, []);
+
+  // Load the sorted UID list once on mount / folder / sort change, then poll
+  // /folder_status (O(1)) instead of /list_messages (O(folder)) every 10s. The
+  // UID list is only re-pulled when the folder actually changed -- UIDNEXT
+  // advanced (a message arrived) or MESSAGES dropped (an expunge) -- mirroring
+  // the Apple client's idle() heuristic. Reading/flagging shifts the pill
+  // counts but not those two, so steady state stays cheap; the pills still
+  // refresh every poll from STATUS.
   useEffect(() => {
     let cancelled = false;
 
-    function poll() {
-      api
+    function loadIds() {
+      return api
         .getMessages(folder, sortDir.imap, sortKey.imap)
         .then((data) => {
           if (cancelled) return;
           setMessageIds(data.data.message_ids);
+          setTotal(data.data.total ?? data.data.message_ids.length);
           setLoading(false);
-        })
-        .catch((e) => {
-          if (cancelled) return;
-          setMessage('Unable to get list of messages.', true);
-          console.log(e);
         });
     }
 
+    function poll() {
+      api
+        .getFolderStatus(folder)
+        .then((data) => {
+          if (cancelled) return;
+          const s = data.data;
+          const changed =
+            (lastUidNextRef.current !== null && s.uid_next > lastUidNextRef.current) ||
+            (lastMessagesRef.current !== null && s.messages < lastMessagesRef.current);
+          applyStatus(data);
+          if (changed) loadIds().catch((e) => console.log(e));
+        })
+        .catch((e) => {
+          if (!cancelled) console.log(e);
+        });
+    }
+
+    // Switching folders/sort: clear the previous folder's list and counts so
+    // the skeleton and bare pills show through the round trip instead of the
+    // old folder's numbers (which can linger for seconds on a large folder).
+    setMessageIds([]);
+    setTotal(0);
+    setStatus({ messages: null, unseen: null, flagged: null });
+    lastUidNextRef.current = null;
+    lastMessagesRef.current = null;
     setLoading(true);
+    loadIds().catch((e) => {
+      if (cancelled) return;
+      setMessage('Unable to get list of messages.', true);
+      console.log(e);
+    });
     poll();
     intervalRef.current = setInterval(poll, 10000);
 
@@ -82,7 +134,7 @@ function Messages({
       cancelled = true;
       clearInterval(intervalRef.current);
     };
-  }, [api, folder, sortDir, sortKey, setMessage]);
+  }, [api, folder, sortDir, sortKey, setMessage, applyStatus]);
 
   // Selection gets cleared when folder or filter changes.
   useEffect(() => {
@@ -90,11 +142,20 @@ function Messages({
     lastSelectedRef.current = null;
   }, [folder, addressFilter, setSelected]);
 
-  // Filter pills are plain toggles. Live Unread/Flagged counts can't be
-  // accurate now that the list loads lazily (we no longer hold every
-  // envelope in memory); the accurate folder total shows in the header
-  // "N of M", and per-flag counts return with server-side counts (folder
-  // STATUS) in a later phase.
+  // True only while the current folder's first list/STATUS round trip is in
+  // flight (the skeleton is showing). Also gates the pills so a folder switch
+  // doesn't flash an "All 0" before the real total lands.
+  const initialLoading = loading && messageIds.length === 0;
+
+  // Filter-pill counts come from the server, not loaded envelopes: All is the
+  // folder total from /list_messages; Unread/Flagged are STATUS UNSEEN and the
+  // SEARCH FLAGGED count from /folder_status. A null count (before the first
+  // reply) renders the pill without a number rather than a wrong/zero one.
+  const pillCounts = {
+    all: initialLoading ? null : total || messageIds.length,
+    unread: status.unseen,
+    flagged: status.flagged,
+  };
 
   const selectedIdsArray = useMemo(() => Array.from(selected), [selected]);
   const selectedCount = selected.size;
@@ -117,13 +178,22 @@ function Messages({
       .getMessages(folder, sortDir.imap, sortKey.imap)
       .then((data) => {
         setMessageIds(data.data.message_ids);
+        setTotal(data.data.total ?? data.data.message_ids.length);
         setLoading(false);
       })
       .catch((e) => {
         console.log(e);
         setLoading(false);
       });
-  }, [api, folder, sortDir, sortKey]);
+    // A bulk move/flag shifts the pill counts; pull fresh STATUS so they don't
+    // lag a poll cycle behind the list. applyStatus also re-seeds the poll's
+    // change baseline so the next tick doesn't re-pull the list off the now
+    // lower MESSAGES count.
+    api
+      .getFolderStatus(folder)
+      .then(applyStatus)
+      .catch((e) => console.log(e));
+  }, [api, folder, sortDir, sortKey, applyStatus]);
 
   // Refuse a bulk action larger than the server's per-request cap up front,
   // with a clear message, rather than firing a request the API answers 413.
@@ -282,7 +352,7 @@ function Messages({
 
   const title = addressFilter || folder;
   const totalShown = visible.shownIds ? visible.shownIds.length : 0;
-  const totalIds = visible.totalIds || messageIds.length;
+  const totalIds = total || visible.totalIds || messageIds.length;
 
   // --- Header -------------------------------------------------------------
   const renderHeader = () => {
@@ -381,18 +451,24 @@ function Messages({
           )}
         </div>
         <div className="msglist-tabs" role="tablist" aria-label="Message filter">
-          {['all', 'unread', 'flagged'].map((f) => (
-            <button
-              key={f}
-              type="button"
-              role="tab"
-              aria-selected={filter === f}
-              className={`msglist-tab ${filter === f ? 'active' : ''}`}
-              onClick={() => setFilter(f)}
-            >
-              <span className="msglist-tab-label">{f[0].toUpperCase() + f.slice(1)}</span>
-            </button>
-          ))}
+          {['all', 'unread', 'flagged'].map((f) => {
+            const count = pillCounts[f];
+            return (
+              <button
+                key={f}
+                type="button"
+                role="tab"
+                aria-selected={filter === f}
+                className={`msglist-tab ${filter === f ? 'active' : ''}`}
+                onClick={() => setFilter(f)}
+              >
+                <span className="msglist-tab-label">{f[0].toUpperCase() + f.slice(1)}</span>
+                {typeof count === 'number' && (
+                  <span className="msglist-tab-count">{count.toLocaleString()}</span>
+                )}
+              </button>
+            );
+          })}
         </div>
         <div className="msglist-sort">
           <label className="msglist-sort-label">
@@ -444,7 +520,7 @@ function Messages({
   return (
     <div className={`msglist ${bulkMode ? 'select-mode' : ''}`} data-host={host || undefined}>
       <div className="msglist-sticky">{renderHeader()}</div>
-      {loading && messageIds.length === 0 ? (
+      {initialLoading ? (
         <div className="msglist-loading" role="status" aria-label="Loading messages">
           <ul className="msglist-skel" aria-hidden="true">
             {[0, 1, 2, 3].map((i) => (

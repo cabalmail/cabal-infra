@@ -7,6 +7,7 @@ import AppMessageContext from '../../contexts/AppMessageContext';
 import { DATE, DESC, MAX_BULK_IDS } from '../../constants';
 
 const mockGetMessages = vi.fn();
+const mockGetFolderStatus = vi.fn();
 const mockSetFlag = vi.fn();
 const mockMoveMessages = vi.fn();
 const mockPurgeMessages = vi.fn();
@@ -15,12 +16,17 @@ const mockGetFolderList = vi.fn().mockResolvedValue({ data: { folders: [], sub_f
 
 const mockApi = {
   getMessages: mockGetMessages,
+  getFolderStatus: mockGetFolderStatus,
   setFlag: mockSetFlag,
   moveMessages: mockMoveMessages,
   purgeMessages: mockPurgeMessages,
   getEnvelopes: mockGetEnvelopes,
   getFolderList: mockGetFolderList,
 };
+
+// A STATUS reply with nothing pending: used as the default so the steady-state
+// poll never re-pulls the UID list unless a test says the folder changed.
+const STATUS_IDLE = { messages: 3, unseen: 1, flagged: 0, uid_validity: 1, uid_next: 10 };
 
 vi.mock('../../hooks/useApi', () => ({
   default: () => mockApi,
@@ -34,7 +40,10 @@ function Harness({ folder = 'INBOX', addressFilter = null, overrides = {} }) {
   const [sortDir, setSortDir] = React.useState(DESC);
   const [bulkMode, setBulkMode] = React.useState(false);
   const [selected, setSelected] = React.useState(() => new Set());
-  const setMessage = vi.fn();
+  // Stable across renders, like the real app's useCallback setMessage. The
+  // polling effect depends on it, so a fresh spy each render would tear the
+  // effect down and re-pull the UID list on every poll-driven re-render.
+  const [setMessage] = React.useState(() => vi.fn());
   return (
     <AuthContext.Provider value={authValue}>
       <AppMessageContext.Provider value={{ setMessage }}>
@@ -64,7 +73,8 @@ function Harness({ folder = 'INBOX', addressFilter = null, overrides = {} }) {
 
 describe('Messages', () => {
   beforeEach(() => {
-    mockGetMessages.mockResolvedValue({ data: { message_ids: [1, 2, 3] } });
+    mockGetMessages.mockResolvedValue({ data: { message_ids: [1, 2, 3], total: 3 } });
+    mockGetFolderStatus.mockResolvedValue({ data: STATUS_IDLE });
   });
 
   afterEach(() => {
@@ -220,11 +230,89 @@ describe('Messages', () => {
       unmount();
     }
   });
+
+  it('renders server-sourced counts in the filter pills', async () => {
+    mockGetMessages.mockResolvedValue({ data: { message_ids: [1, 2, 3], total: 1234 } });
+    mockGetFolderStatus.mockResolvedValue({
+      data: { ...STATUS_IDLE, unseen: 47, flagged: 9 },
+    });
+    const { container, unmount } = render(<Harness />);
+    try {
+      // All comes from /list_messages total; Unread/Flagged from STATUS.
+      await waitFor(() => {
+        expect(container.querySelectorAll('.msglist-tab-count').length).toBe(3);
+      });
+      const counts = Array.from(container.querySelectorAll('.msglist-tab-count')).map(
+        (c) => c.textContent,
+      );
+      expect(counts).toEqual(['1,234', '47', '9']);
+    } finally {
+      unmount();
+    }
+  });
+
+  it('polls folder_status and re-pulls the UID list only when it changes', async () => {
+    vi.useFakeTimers();
+    try {
+      mockGetFolderStatus
+        .mockResolvedValueOnce({ data: { ...STATUS_IDLE, uid_next: 10, messages: 3 } }) // seed
+        .mockResolvedValueOnce({ data: { ...STATUS_IDLE, uid_next: 10, messages: 3 } }) // unchanged
+        .mockResolvedValue({ data: { ...STATUS_IDLE, uid_next: 11, messages: 4 } }); // arrival
+
+      render(<Harness />);
+      // Mount: one UID-list pull + one STATUS seed.
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      expect(mockGetMessages).toHaveBeenCalledTimes(1);
+      expect(mockGetFolderStatus).toHaveBeenCalledTimes(1);
+
+      // A poll with unchanged UIDNEXT/MESSAGES must not re-pull the UID list.
+      await act(async () => { await vi.advanceTimersByTimeAsync(10000); });
+      expect(mockGetFolderStatus).toHaveBeenCalledTimes(2);
+      expect(mockGetMessages).toHaveBeenCalledTimes(1);
+
+      // A poll showing UIDNEXT advanced re-pulls the UID list.
+      await act(async () => { await vi.advanceTimersByTimeAsync(10000); });
+      expect(mockGetFolderStatus).toHaveBeenCalledTimes(3);
+      expect(mockGetMessages).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('clears the previous folder pill counts during a folder switch', async () => {
+    mockGetMessages.mockResolvedValue({ data: { message_ids: [1, 2, 3], total: 1234 } });
+    mockGetFolderStatus.mockResolvedValue({ data: { ...STATUS_IDLE, unseen: 47, flagged: 9 } });
+    const { container, rerender, unmount } = render(<Harness folder="INBOX" />);
+    try {
+      await waitFor(() => {
+        expect(
+          Array.from(container.querySelectorAll('.msglist-tab-count')).map((c) => c.textContent),
+        ).toEqual(['1,234', '47', '9']);
+      });
+
+      // The new folder's responses hang so we can observe the switch mid-flight.
+      let resolveStatus;
+      mockGetMessages.mockReturnValue(new Promise(() => {}));
+      mockGetFolderStatus.mockReturnValue(new Promise((res) => { resolveStatus = res; }));
+      rerender(<Harness folder="Archive" />);
+
+      // INBOX's 1,234 / 47 / 9 must be gone immediately, not linger through the
+      // (potentially seconds-long) round trip on the new folder.
+      await waitFor(() => {
+        expect(container.querySelectorAll('.msglist-tab-count').length).toBe(0);
+      });
+
+      resolveStatus({ data: { ...STATUS_IDLE, unseen: 2, flagged: 0 } });
+    } finally {
+      unmount();
+    }
+  });
 });
 
 describe('Messages - deleting from Trash', () => {
   beforeEach(() => {
-    mockGetMessages.mockResolvedValue({ data: { message_ids: [1, 2, 3] } });
+    mockGetMessages.mockResolvedValue({ data: { message_ids: [1, 2, 3], total: 3 } });
+    mockGetFolderStatus.mockResolvedValue({ data: STATUS_IDLE });
   });
 
   afterEach(() => {

@@ -381,6 +381,28 @@ export default class ApiClient {
     return response;
   }
 
+  // Folder STATUS poll. `flagged=1` asks the Lambda to add a SEARCH FLAGGED
+  // count (the message list's steady-state poll uses uid_next/messages to
+  // decide when to re-pull the UID list, and unseen/flagged for the pill
+  // counts). Cheap enough to keep on the 10s message-list cadence.
+  getFolderStatus(folder) {
+    const response = axios.get('/folder_status',
+      {
+        params: {
+          host: this.host,
+          folder: folder,
+          flagged: 1
+        },
+        baseURL: this.baseURL,
+        headers: {
+          'Authorization': this.token
+        },
+        timeout: TIMEOUT
+      }
+    );
+    return response;
+  }
+
   getEnvelopes(folder, ids) {
     const response = axios.get('/list_envelopes',
       {
