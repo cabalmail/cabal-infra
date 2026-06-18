@@ -1,5 +1,8 @@
 import SwiftUI
 import CabalmailKit
+#if canImport(AppKit)
+import AppKit
+#endif
 
 // Selection plumbing for `MessageListView`: the two `List` variants (native
 // multiple selection on wide/keyboard layouts, single selection on compact
@@ -102,7 +105,7 @@ extension MessageListView {
                         rowBackground: background,
                         leading: toggleReadSwipe(for: envelope, model: model),
                         trailing: disposeSwipe(for: envelope, model: model),
-                        onSelect: { selectRow(envelope, model: model) },
+                        onSelect: { selectRow(envelope, model: model, ordered: visible) },
                         content: {
                             row(for: envelope, model: model, isSelected: selected, orderedVisible: visible)
                         }
@@ -132,9 +135,11 @@ extension MessageListView {
         .accessibilityHidden(true)
     }
 
-    /// Wide layouts (macOS, iPad regular width, visionOS). Stage A drives
-    /// single selection through `selectedUIDs` so the reading-pane derivation
-    /// below keeps working; native multi-select returns in Stage B.
+    /// Wide layouts (macOS, iPad regular width, visionOS). Selection lives in
+    /// `selectedUIDs`: a plain click selects one, and on macOS command/shift
+    /// clicks build a multi-selection (see `selectRow`). The reading-pane
+    /// derivation below shows the single selected message, or hands the parent
+    /// a count placeholder for zero / many.
     @ViewBuilder
     func wideList(model: MessageListViewModel, visible: [Envelope]) -> some View {
         virtualizedList(model: model, visible: visible)
@@ -157,15 +162,56 @@ extension MessageListView {
         virtualizedList(model: model, visible: visible)
     }
 
-    /// Sets single selection from a tap. Wide layouts route through
-    /// `selectedUIDs` (the reading pane derives from it); compact sets the
-    /// navigation `selection` directly.
-    func selectRow(_ envelope: Envelope, model: MessageListViewModel) {
-        if isWideLayout {
-            model.selectedUIDs = [envelope.uid]
-        } else {
-            selection = envelope
+    /// Sets selection from a tap. Compact iPhone opens the reader directly.
+    /// Wide layouts route through `selectedUIDs` (the reading pane derives
+    /// from it). On macOS the tap is modifier-aware -- command toggles the
+    /// row, shift extends the range from the anchor, a plain click replaces
+    /// the selection -- read from `NSEvent.modifierFlags` at click time, the
+    /// AppKit equivalent of the iOS `ModifierClickGesture`. iPad-wide takes a
+    /// plain click as single-select here; its hardware-keyboard shift/command
+    /// clicks come through `ModifierClickGesture` in `wideRow` instead.
+    func selectRow(_ envelope: Envelope, model: MessageListViewModel, ordered: [Envelope]) {
+        guard isWideLayout else { selection = envelope; return }
+        #if os(macOS)
+        let flags = NSEvent.modifierFlags
+        if flags.contains(.command) {
+            applyToggleSelection(envelope, model: model)
+            return
         }
+        if flags.contains(.shift) {
+            applyRangeSelection(to: envelope, model: model, ordered: ordered)
+            return
+        }
+        #endif
+        model.selectedUIDs = [envelope.uid]
+        model.selectionAnchor = envelope.uid
+    }
+
+    /// Shift-click range selection over `ordered` (the visible rows in display
+    /// order), from the current anchor to `target`, inclusive. Falls back to
+    /// selecting just `target` if the anchor can't be located. Shared by the
+    /// macOS modifier-click path (`selectRow`) and the iOS `ModifierClickGesture`
+    /// (`wideRow`); the original anchor is kept so a following shift-click
+    /// re-pivots from it.
+    func applyRangeSelection(to target: Envelope, model: MessageListViewModel, ordered: [Envelope]) {
+        let anchorUID = model.selectionAnchor ?? model.selectedUIDs.first
+        guard let anchorUID,
+              let anchorIndex = ordered.firstIndex(where: { $0.uid == anchorUID }),
+              let targetIndex = ordered.firstIndex(where: { $0.uid == target.uid }) else {
+            model.selectedUIDs = [target.uid]
+            model.selectionAnchor = target.uid
+            return
+        }
+        let lower = min(anchorIndex, targetIndex)
+        let upper = max(anchorIndex, targetIndex)
+        model.selectedUIDs = Set(ordered[lower...upper].map(\.uid))
+    }
+
+    /// Command/control-click: flip the row's membership and make it the new
+    /// anchor for any following shift-click.
+    func applyToggleSelection(_ envelope: Envelope, model: MessageListViewModel) {
+        model.toggleSelection(envelope)
+        model.selectionAnchor = envelope.uid
     }
 
     /// Whether a row should render as selected. On wide layouts this is set
