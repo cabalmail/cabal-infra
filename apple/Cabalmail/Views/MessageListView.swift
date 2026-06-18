@@ -49,14 +49,12 @@ struct MessageListView: View {
     // can read them without round-tripping through accessors.
     @State var model: MessageListViewModel?
     @State private var composeSeed: Draft?
-    /// Fixed list-row height. Rows are pinned to this so spacer virtualization
-    /// (see `listContent` in `+Selection`) can reserve the off-window rows as
+    /// Fixed list-row height. Rows are pinned to this so the virtualized list
+    /// (`+Selection`'s `virtualizedList`) can reserve the off-window rows as
     /// exact blank space: the scroll extent then reflects the whole folder, the
-    /// scrollbar is true-to-size, and the viewport never jumps as the window
-    /// trims/reloads (each row sits at its absolute position). Reserves two
-    /// subject lines; a short subject keeps the height with whitespace below.
-    /// Must match the rendered row height -- a mismatch reintroduces drift, so
-    /// it's tuned against the device.
+    /// scrollbar is true-to-size, and each row keeps its absolute position.
+    /// Reserves two subject lines; a short subject keeps the height with
+    /// whitespace below. Tuned against the device.
     static let rowHeight: CGFloat = 72
     /// `true` while the filter sheet is presented over the message list.
     @State var filtersPresented = false

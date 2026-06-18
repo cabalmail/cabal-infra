@@ -15,116 +15,95 @@ extension MessageListView {
     /// is the source of truth; the reading-pane `selection` is derived from it
     /// in `content(for:)`'s `.onChange(of: selectedUIDs)`. iPad / visionOS also
     /// bind EditMode so touch users can multi-select via the Select button.
+    /// Virtualized message list -- Stage A of the ScrollView rewrite. A
+    /// `ScrollView` + `LazyVStack` with two blank spacer views reserving the
+    /// off-window rows, so the scroll extent matches the whole folder (a true-
+    /// to-size scrollbar) and each row keeps its absolute position as the
+    /// window trims/reloads (no jump) -- what macOS `List` could not do with a
+    /// tall spacer cell. Rows are pinned to `MessageListView.rowHeight`.
+    /// Sliding-window loading still rides the per-row `.task` inside `row(...)`,
+    /// and the per-row drag comes from there too; a tap selects/opens the row
+    /// and the context menu is attached here (the old List-level menu is gone).
+    /// Swipe-to-dispose, native multi-select (shift/cmd-click), the selection-
+    /// aware menu, and keyboard nav are re-added in Stage B.
+    func virtualizedList(model: MessageListViewModel, visible: [Envelope]) -> some View {
+        // Spacer virtualization only when the visible rows map one-to-one onto
+        // absolute folder positions: unfiltered, non-search folder mode.
+        let virtualize = !model.isSearchActive && visible.count == model.envelopes.count
+        let above = virtualize ? model.windowStart : 0
+        let loadedBottom = model.windowStart + UInt32(model.envelopes.count)
+        let below: UInt32 = virtualize && model.totalMessages > loadedBottom
+            ? model.totalMessages - loadedBottom : 0
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                if let errorMessage = model.errorMessage {
+                    Label(errorMessage, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.red)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding()
+                }
+                if above > 0 {
+                    Color.clear.frame(height: CGFloat(above) * MessageListView.rowHeight)
+                }
+                ForEach(visible) { envelope in
+                    let selected = rowIsSelected(envelope, model: model)
+                    row(
+                        for: envelope,
+                        model: model,
+                        isSelected: selected,
+                        orderedVisible: visible
+                    )
+                    .frame(height: MessageListView.rowHeight, alignment: .top)
+                    .background(selected ? Color.accentColor.opacity(0.15) : Color.clear)
+                    .contentShape(Rectangle())
+                    .onTapGesture { selectRow(envelope, model: model) }
+                    .contextMenu { rowContextMenu(for: envelope, model: model) }
+                }
+                if below > 0 {
+                    Color.clear.frame(height: CGFloat(below) * MessageListView.rowHeight)
+                }
+            }
+        }
+        .overlay {
+            if model.isLoading && model.envelopes.isEmpty {
+                ProgressView("Fetching messages…")
+            }
+        }
+    }
+
+    /// Wide layouts (macOS, iPad regular width, visionOS). Stage A drives
+    /// single selection through `selectedUIDs` so the reading-pane derivation
+    /// below keeps working; native multi-select returns in Stage B.
     @ViewBuilder
     func wideList(model: MessageListViewModel, visible: [Envelope]) -> some View {
-        @Bindable var model = model
-        List(selection: $model.selectedUIDs) {
-            listContent(model: model, visible: visible)
-        }
-        #if !os(macOS)
-        .environment(\.editMode, $editMode)
-        #endif
-        // Right-click / long-press menu at the List level so SwiftUI
-        // resolves the target set natively: the whole selection when the
-        // click lands on a selected row, just the clicked row when it
-        // doesn't. Replaces the per-row `.contextMenu`, which only ever
-        // saw the row under the pointer.
-        .contextMenu(forSelectionType: UInt32.self) { uids in
-            selectionContextMenu(for: uids, model: model)
-        }
-        // Cmd-A select-all and Esc clear, scoped to the list's focus so they
-        // never steal those keys from the search field.
-        .onKeyPress(.escape) { escapePressed(model: model) }
-        .onKeyPress(keys: ["a"], phases: .down) { keyPress in
-            guard keyPress.modifiers.contains(.command) else { return .ignored }
-            model.selectAllVisible()
-            return .handled
-        }
-        // Cmd+Delete for a multi-selection. Window-scoped (a key equivalent
-        // on an invisible button), NOT focus-scoped like Esc / Cmd-A above:
-        // the user can't easily tell whether the list or the reading pane
-        // holds focus, so the dispose chord must behave the same either way
-        // - exactly how the detail toolbar's own Cmd+Delete equivalent
-        // already works. Only installed while two or more rows are selected;
-        // a single selection is the reading pane's territory (its dispose
-        // button owns Cmd+Delete there and additionally advances to the next
-        // unread), and installing both at once would leave AppKit to pick a
-        // winner between two identical equivalents in one window.
-        .background {
-            if model.selectedUIDs.count > 1 {
-                Button("") { disposeSelection(model: model) }
-                    .keyboardShortcut(.delete, modifiers: .command)
-                    .opacity(0)
-                    .accessibilityHidden(true)
+        virtualizedList(model: model, visible: visible)
+            // Derive the reading-pane selection from the selection set: exactly
+            // one selected -> show that message; zero or many -> the parent
+            // shows the count placeholder. One-way, so the existing
+            // `.onChange(of: selection)` cross-folder routing is unchanged.
+            .onChange(of: model.selectedUIDs) { _, uids in
+                if uids.count == 1 { model.selectionAnchor = uids.first }
+                selection = uids.count == 1
+                    ? model.envelopes.first { $0.uid == uids.first }
+                    : nil
+                onSelectionCountChanged(uids.count)
             }
-        }
-        // Derive the reading-pane selection from the multi-select set: exactly
-        // one selected -> show that message; zero or many -> the parent shows
-        // "No message selected" / "N messages selected" via the reported count.
-        // One-way, so the existing `.onChange(of: selection)` cross-folder
-        // routing keeps working unchanged.
-        .onChange(of: model.selectedUIDs) { _, uids in
-            // A fresh single selection (plain click) becomes the anchor for a
-            // following shift-click range; range/toggle clicks set the anchor
-            // themselves. Harmless on macOS, which uses its own native anchor.
-            if uids.count == 1 { model.selectionAnchor = uids.first }
-            selection = uids.count == 1
-                ? model.envelopes.first { $0.uid == uids.first }
-                : nil
-            onSelectionCountChanged(uids.count)
-        }
     }
 
-    /// Single-selection list for compact iPhone: a tap opens the reader, and
-    /// the touch "Select" edit mode (driven by `bulkMode`) handles multi-
-    /// select. No keyboard, so no modifier-click idioms here.
+    /// Single-selection list for compact iPhone: a tap opens the reader.
     @ViewBuilder
     func compactList(model: MessageListViewModel, visible: [Envelope]) -> some View {
-        List(selection: $selection) {
-            listContent(model: model, visible: visible)
-        }
+        virtualizedList(model: model, visible: visible)
     }
 
-    /// List rows shared by both variants. Factored out so each `List` can carry
-    /// its own selection-binding generic without duplicating the row content.
-    @ViewBuilder
-    func listContent(model: MessageListViewModel, visible: [Envelope]) -> some View {
-        if let errorMessage = model.errorMessage {
-            Label(errorMessage, systemImage: "exclamationmark.triangle")
-                .foregroundStyle(.red)
-        }
-        if model.isLoading && model.envelopes.isEmpty {
-            ProgressView("Fetching messages…")
-        }
-        // Spacer virtualization: when showing the unfiltered folder, reserve
-        // the off-window rows as fixed-height blank cells so the scroll extent
-        // (and the scrollbar) reflect the whole folder and the viewport never
-        // jumps as the window trims/reloads -- each loaded row keeps its
-        // absolute position. Disabled under a filter or search, where the
-        // visible rows don't map one-to-one onto absolute folder positions.
-        let virtualize = !model.isSearchActive && visible.count == model.envelopes.count
-        if virtualize, model.windowStart > 0 {
-            spacerRow(rows: model.windowStart)
-        }
-        ForEach(visible) { envelope in
-            row(
-                for: envelope,
-                model: model,
-                isSelected: rowIsSelected(envelope, model: model),
-                orderedVisible: visible
-            )
-            .frame(height: MessageListView.rowHeight, alignment: .top)
-            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-            .listRowSeparator(.hidden)
-        }
-        if virtualize {
-            let loadedBottom = model.windowStart + UInt32(model.envelopes.count)
-            if model.totalMessages > loadedBottom {
-                spacerRow(rows: model.totalMessages - loadedBottom)
-            }
-        } else if model.isLoadingMore {
-            ProgressView()
-                .frame(maxWidth: .infinity)
+    /// Sets single selection from a tap. Wide layouts route through
+    /// `selectedUIDs` (the reading pane derives from it); compact sets the
+    /// navigation `selection` directly.
+    func selectRow(_ envelope: Envelope, model: MessageListViewModel) {
+        if isWideLayout {
+            model.selectedUIDs = [envelope.uid]
+        } else {
+            selection = envelope
         }
     }
 

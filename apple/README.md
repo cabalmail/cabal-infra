@@ -109,11 +109,11 @@ xcrun simctl launch booted com.cabalmail.Cabalmail
 
 `DEVELOPMENT_TEAM` is deliberately unset in `project.yml`. Three contexts:
 
-| Context | How the team ID is supplied |
-|---|---|
-| Local (Xcode or `xcodebuild`) | Copy `Local.xcconfig.example` → `Local.xcconfig` and fill in `DEVELOPMENT_TEAM`. Gitignored. `project.yml` references it via `configFiles`, so every target picks it up automatically. |
-| Headless `build` without a team ID | Pass `CODE_SIGNING_ALLOWED=NO` (see verification commands above) |
-| Headless `archive` (CI upload jobs) | `xcodebuild ... DEVELOPMENT_TEAM=$APPLE_TEAM_ID archive`, team ID sourced from a GitHub secret. Command-line overrides beat the xcconfig, so CI doesn't need the file. |
+| Context                             | How the team ID is supplied                                                                                                                                                            |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Local (Xcode or `xcodebuild`)       | Copy `Local.xcconfig.example` → `Local.xcconfig` and fill in `DEVELOPMENT_TEAM`. Gitignored. `project.yml` references it via `configFiles`, so every target picks it up automatically. |
+| Headless `build` without a team ID  | Pass `CODE_SIGNING_ALLOWED=NO` (see verification commands above)                                                                                                                       |
+| Headless `archive` (CI upload jobs) | `xcodebuild ... DEVELOPMENT_TEAM=$APPLE_TEAM_ID archive`, team ID sourced from a GitHub secret. Command-line overrides beat the xcconfig, so CI doesn't need the file.                 |
 
 Setup once:
 
