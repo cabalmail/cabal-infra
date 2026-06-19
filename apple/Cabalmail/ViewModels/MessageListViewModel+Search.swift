@@ -68,6 +68,8 @@ extension MessageListViewModel {
         searchFoldersSearched = []
         envelopes.removeAll()
         totalMessages = 0
+        unseen = 0
+        flagged = 0
         hasMore = true
         resetWindow()
         await refresh()

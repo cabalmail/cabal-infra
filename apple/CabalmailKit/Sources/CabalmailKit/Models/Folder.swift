@@ -36,6 +36,10 @@ public struct Folder: Sendable, Codable, Hashable, Identifiable {
 public struct FolderStatus: Sendable, Codable, Hashable {
     public let messages: Int?
     public let unseen: Int?
+    /// Flagged (and not-deleted) message count. Only populated when the status
+    /// request asked for it; nil on the cheap STATUS-only path. See
+    /// `ApiFolderStatus.flagged`.
+    public let flagged: Int?
     public let recent: Int?
     public let uidValidity: UInt32?
     public let uidNext: UInt32?
@@ -43,12 +47,14 @@ public struct FolderStatus: Sendable, Codable, Hashable {
     public init(
         messages: Int? = nil,
         unseen: Int? = nil,
+        flagged: Int? = nil,
         recent: Int? = nil,
         uidValidity: UInt32? = nil,
         uidNext: UInt32? = nil
     ) {
         self.messages = messages
         self.unseen = unseen
+        self.flagged = flagged
         self.recent = recent
         self.uidValidity = uidValidity
         self.uidNext = uidNext

@@ -156,11 +156,15 @@ extension URLSessionApiClient {
         _ = try await send(request, expectedStatuses: 200..<300)
     }
 
-    public func folderStatus(host: String, folder: String) async throws -> ApiFolderStatus {
-        let request = try await get("/folder_status", query: [
+    public func folderStatus(host: String, folder: String, flagged: Bool) async throws -> ApiFolderStatus {
+        var query = [
             URLQueryItem(name: "host", value: host),
             URLQueryItem(name: "folder", value: folder),
-        ])
+        ]
+        // Opt-in flagged count: the Lambda runs a SEARCH FLAGGED only when asked
+        // (`?flagged=1`), so the badge/idle polls keep the cheap STATUS path.
+        if flagged { query.append(URLQueryItem(name: "flagged", value: "1")) }
+        let request = try await get("/folder_status", query: query)
         let data = try await send(request, expectedStatuses: 200..<300)
         return try JSONDecoder().decode(ApiFolderStatus.self, from: data)
     }

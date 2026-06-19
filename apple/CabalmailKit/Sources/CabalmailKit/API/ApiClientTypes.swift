@@ -22,12 +22,18 @@ public struct ApiFolderList: Sendable, Codable, Hashable {
 public struct ApiFolderStatus: Sendable, Codable, Hashable {
     public let messages: Int?
     public let unseen: Int?
+    /// Count of flagged (and not-deleted) messages. Only present when the
+    /// request asked for it (`?flagged=1`); STATUS has no flagged attribute, so
+    /// the Lambda adds a SEARCH FLAGGED only on demand. Nil on the cheap
+    /// STATUS-only calls (the badge poller and idle).
+    public let flagged: Int?
     public let uidValidity: UInt32?
     public let uidNext: UInt32?
 
     private enum CodingKeys: String, CodingKey {
         case messages
         case unseen
+        case flagged
         case uidValidity = "uid_validity"
         case uidNext = "uid_next"
     }

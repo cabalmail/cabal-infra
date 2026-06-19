@@ -128,6 +128,12 @@ final class MessageListViewModel {
     // loaded envelope count reaches it. Internal so the +Refresh sibling
     // extension can read it after a page merge to recompute `hasMore`.
     var totalMessages: UInt32 = 0
+    // Server-sourced folder counts from the last STATUS (+ SEARCH FLAGGED),
+    // independent of how many envelopes are paged in. Drive the Unread/Flagged
+    // filter-pill counts, mirroring the React pills; `totalMessages` is the All
+    // count. Reset alongside `totalMessages` on folder/search change.
+    var unseen: Int = 0
+    var flagged: Int = 0
     var hasMore = true
     // Sliding-window pagination state. `envelopes` holds a contiguous window
     // [windowStart, windowStart + count) of the folder's sorted list;
@@ -278,7 +284,9 @@ final class MessageListViewModel {
         dbg("refresh start sort=\(sortCriterion.field)")
         do {
             try await client.imapClient.connectAndAuthenticate()
-            let status = try await client.imapClient.status(path: folder.path)
+            // flagged: true asks for the SEARCH FLAGGED count too -- this is the
+            // one status call that drives the filter-pill counts.
+            let status = try await client.imapClient.status(path: folder.path, flagged: true)
             dbg("refresh uidv=\(status.uidValidity ?? 0)/\(self.uidValidity ?? 0) msgs=\(status.messages ?? -1)")
             let uidNext = status.uidNext ?? 1
             // Only a concrete, *changed* UIDVALIDITY means "rebuild from
@@ -299,8 +307,9 @@ final class MessageListViewModel {
             // Top page uses sequence-number FETCH via `topEnvelopes` (robust on
             // sparse folders); `loadMoreIfNeeded` loads older pages positionally
             // by offset. `totalMessages` from STATUS gates pagination.
-            let messages = UInt32(max(0, status.messages ?? 0))
-            totalMessages = messages
+            // STATUS drives the All/Unread/Flagged pill counts and the
+            // pagination gate; helper lives in +Refresh to keep this body lean.
+            let messages = applyStatusCounts(status)
             // Once the window's front has been trimmed, the loaded rows no
             // longer include the top of the folder, so folding in the newest
             // page would splice a gap above them (and grow the window back).

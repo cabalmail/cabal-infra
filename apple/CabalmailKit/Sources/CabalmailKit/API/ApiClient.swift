@@ -43,8 +43,9 @@ public protocol ApiClient: Sendable {
 
     /// STATUS for a folder. Powers UIDVALIDITY-based cache invalidation and
     /// the inbox unread badge. Backed by the dedicated `/folder_status`
-    /// Lambda (see `lambda/api/folder_status/function.py`).
-    func folderStatus(host: String, folder: String) async throws -> ApiFolderStatus
+    /// Lambda (see `lambda/api/folder_status/function.py`). Pass
+    /// `flagged: true` to also request a SEARCH FLAGGED count.
+    func folderStatus(host: String, folder: String, flagged: Bool) async throws -> ApiFolderStatus
 
     // MARK: Messages
     /// Sorted UID list for the folder. Sort defaults match the React
@@ -171,6 +172,12 @@ public struct MessageIdPage: Sendable, Hashable {
 }
 
 public extension ApiClient {
+    /// Convenience overload — the cheap STATUS-only call (no flagged count),
+    /// for the badge/idle/sidebar paths that don't need it.
+    func folderStatus(host: String, folder: String) async throws -> ApiFolderStatus {
+        try await folderStatus(host: host, folder: folder, flagged: false)
+    }
+
     /// Convenience overload: the full, unpaginated sorted UID list. Lets
     /// callers that genuinely need every UID (e.g. the legacy UID-range
     /// `envelopes`) stay terse while the paginated requirement carries the

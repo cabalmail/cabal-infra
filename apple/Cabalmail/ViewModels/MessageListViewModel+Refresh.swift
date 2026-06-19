@@ -19,6 +19,20 @@ extension MessageListViewModel {
         await Task { await self.refresh() }.value
     }
 
+    /// Capture the server-sourced counts from a STATUS reply: `totalMessages`
+    /// (the All pill and the pagination gate) plus the Unread/Flagged pill
+    /// counts. Returns the message total so `refresh()` can reuse it for the
+    /// top-page fetch. `unseen`/`flagged` fall back to the prior value when a
+    /// transient STATUS drops them, rather than flashing 0. Lives here so the
+    /// main view-model body stays under SwiftLint's type-body cap.
+    func applyStatusCounts(_ status: FolderStatus) -> UInt32 {
+        let messages = UInt32(max(0, status.messages ?? 0))
+        totalMessages = messages
+        unseen = max(0, status.unseen ?? unseen)
+        flagged = max(0, status.flagged ?? flagged)
+        return messages
+    }
+
     /// User-initiated "force reload." Wipes the in-memory envelope list
     /// (plus the cursor state `refresh()` uses to merge older pages) AND
     /// the on-disk envelope snapshot for this folder, then runs
@@ -49,6 +63,8 @@ extension MessageListViewModel {
         try? await client.envelopeCache.invalidate(folder: folder.path)
         envelopes.removeAll()
         totalMessages = 0
+        unseen = 0
+        flagged = 0
         hasMore = true
         sourceFolderByUID = [:]
         resetWindow()

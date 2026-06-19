@@ -90,11 +90,12 @@ public actor ApiBackedImapClient: ImapClient {
         subscriptionCache?.remove(path)
     }
 
-    public func status(path: String) async throws -> FolderStatus {
-        let raw = try await api.folderStatus(host: host, folder: path)
+    public func status(path: String, flagged: Bool) async throws -> FolderStatus {
+        let raw = try await api.folderStatus(host: host, folder: path, flagged: flagged)
         return FolderStatus(
             messages: raw.messages,
             unseen: raw.unseen,
+            flagged: raw.flagged,
             recent: nil,
             uidValidity: raw.uidValidity,
             uidNext: raw.uidNext

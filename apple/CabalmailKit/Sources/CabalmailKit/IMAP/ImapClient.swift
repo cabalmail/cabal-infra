@@ -18,7 +18,10 @@ public protocol ImapClient: Sendable {
     func deleteFolder(path: String) async throws
     func subscribe(path: String) async throws
     func unsubscribe(path: String) async throws
-    func status(path: String) async throws -> FolderStatus
+    /// STATUS for a folder. Pass `flagged: true` to also get a flagged count
+    /// (an extra SEARCH FLAGGED); the cheap STATUS-only `status(path:)`
+    /// convenience leaves `FolderStatus.flagged` nil for badge/idle polls.
+    func status(path: String, flagged: Bool) async throws -> FolderStatus
     func envelopes(
         folder: String,
         range: ClosedRange<UInt32>,
@@ -105,6 +108,14 @@ public protocol ImapClient: Sendable {
 }
 
 public extension ImapClient {
+    /// Convenience overload — the cheap STATUS-only call (no flagged count).
+    /// Existing callers (the inbox badge poller, idle, the sidebar count
+    /// refresh) keep working unchanged; only the message-list refresh, which
+    /// drives the filter-pill counts, asks for `flagged: true`.
+    func status(path: String) async throws -> FolderStatus {
+        try await status(path: path, flagged: false)
+    }
+
     /// Convenience overload — delegates to the sorted variant with
     /// `SortCriterion.default` (REVERSE ARRIVAL). Lets existing callers
     /// and test doubles stay sort-agnostic when the conventional Inbox
