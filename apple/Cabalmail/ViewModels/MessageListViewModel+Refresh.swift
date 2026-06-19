@@ -27,6 +27,11 @@ extension MessageListViewModel {
     /// main view-model body stays under SwiftLint's type-body cap.
     func applyStatusCounts(_ status: FolderStatus) -> UInt32 {
         let messages = UInt32(max(0, status.messages ?? 0))
+        // A changed folder size shifts every absolute index, so a bottom window
+        // staged against the old total is no longer aligned -- drop it (the
+        // stamp check in `performLoadWindow` is the backstop for the window
+        // between a mutation and the STATUS that reflects it).
+        if messages != totalMessages { invalidateBottomPrefetch() }
         totalMessages = messages
         unseen = max(0, status.unseen ?? unseen)
         flagged = max(0, status.flagged ?? flagged)
@@ -216,6 +221,23 @@ extension MessageListViewModel {
     /// `private`) so `ensureLoaded` in the main file can launch it.
     func performLoadWindow(around absoluteIndex: Int) async {
         defer { isLoadingWindow = false }
+        // Adopt a staged bottom-prefetch window instantly when it still aligns
+        // with the live folder (same total) and covers the requested index --
+        // the first jump to the bottom then costs no round trip. Consumed on
+        // use: the live `envelopes` window now holds the bottom, and a later
+        // jump re-fetches (or re-stages) as normal.
+        if let staged = bottomPrefetch,
+           staged.total == totalMessages,
+           absoluteIndex >= Int(staged.start),
+           absoluteIndex < Int(staged.start) + staged.envelopes.count {
+            windowStart = staged.start
+            envelopes = staged.envelopes
+            hasTrimmedFront = staged.start > 0
+            hasMore = (windowStart + UInt32(envelopes.count)) < totalMessages
+            bottomPrefetch = nil
+            dbg("loadWindow adopt-prefetch around=\(absoluteIndex) start=\(staged.start)")
+            return
+        }
         let total = Int(totalMessages)
         let cap = Int(windowCap)
         let start = max(0, min(absoluteIndex - cap / 2, max(0, total - cap)))
@@ -234,6 +256,70 @@ extension MessageListViewModel {
             dbg("loadWindow around=\(absoluteIndex) start=\(start) fetched=\(fetched.count)")
         } catch {
             dbg("loadWindow ERROR \(error)")
+        }
+    }
+
+    /// A staged bottom window for the prefetch-on-open optimization. `start` is
+    /// the absolute index of `envelopes[0]`; `total` stamps the `totalMessages`
+    /// it was fetched against, so `performLoadWindow` only adopts it while the
+    /// folder size still matches (a struct, not a tuple, to stay under
+    /// SwiftLint's `large_tuple` cap).
+    struct BottomPrefetch {
+        let start: UInt32
+        let total: UInt32
+        let envelopes: [Envelope]
+    }
+
+    /// Drops any staged bottom-prefetch window and cancels an in-flight fill.
+    /// Called from `resetWindow()` (sort change, hard reload, UIDVALIDITY
+    /// change, search clear) and from `applyStatusCounts` when the folder size
+    /// changes, so an adopted window is always aligned with the live folder.
+    func invalidateBottomPrefetch() {
+        bottomPrefetchTask?.cancel()
+        bottomPrefetchTask = nil
+        bottomPrefetch = nil
+    }
+
+    /// Kicks off a low-priority background fetch of the folder's bottom window
+    /// into `bottomPrefetch`, so the first End / jump-to-bottom is instant. The
+    /// offset mirrors `performLoadWindow`'s math for the last index: a full
+    /// `windowCap` window ending at the folder's last message. Only worth it
+    /// when the bottom isn't already reachable from the top window (folders
+    /// larger than one window) and the window is still top-anchored. Re-kicked
+    /// after a sort change (the staged order would otherwise be stale); a no-op
+    /// while a search is showing or a fill is already staged or running.
+    func scheduleBottomPrefetch() {
+        guard !isSearchActive, !hasTrimmedFront, bottomPrefetch == nil,
+              Int(totalMessages) > windowCap else { return }
+        let total = totalMessages
+        let start = total - UInt32(windowCap)
+        bottomPrefetchTask?.cancel()
+        bottomPrefetchTask = Task(priority: .background) { [weak self] in
+            await self?.performBottomPrefetch(start: start, total: total)
+        }
+    }
+
+    /// Background body for `scheduleBottomPrefetch`. Fetches the bottom window
+    /// positionally and stages it, but only if it's still relevant on
+    /// completion: the sort the user is viewing hasn't changed and the folder
+    /// size still matches, otherwise the window would be mis-ordered or mis-
+    /// aligned. Best-effort -- a failed fetch just leaves End to take the
+    /// normal round trip.
+    func performBottomPrefetch(start: UInt32, total: UInt32) async {
+        let sortAtKickoff = sortCriterion
+        do {
+            let fetched = try await client.imapClient.envelopes(
+                folder: folder.path,
+                offset: start,
+                limit: UInt32(windowCap),
+                sort: sortAtKickoff
+            )
+            guard !Task.isCancelled, !fetched.isEmpty,
+                  sortAtKickoff == sortCriterion, total == totalMessages else { return }
+            bottomPrefetch = BottomPrefetch(start: start, total: total, envelopes: fetched.sorted(by: envelopeOrder))
+            dbg("bottomPrefetch staged start=\(start) n=\(fetched.count) total=\(total)")
+        } catch {
+            dbg("bottomPrefetch ERROR \(error)")
         }
     }
 
