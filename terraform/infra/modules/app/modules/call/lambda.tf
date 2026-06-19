@@ -208,6 +208,7 @@ resource "aws_lambda_function" "api_call" {
       USER_POOL_ID                = var.user_pool_id
       DMARC_TABLE_NAME            = "cabal-dmarc-reports"
       USER_PREFERENCES_TABLE_NAME = "cabal-user-preferences"
+      IMAP_POOL_ENABLED           = var.imap_pool_enabled ? "true" : "false"
     }
   }
   depends_on = [

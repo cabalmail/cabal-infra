@@ -123,3 +123,9 @@ variable "monitoring" {
   description = "Mirror of the top-level var.monitoring. When true, /config.js advertises the monitoring stack so the admin app's Nav can surface Uptime Kuma, Healthchecks, and Grafana entries (which target uptime/heartbeat/metrics.<control-domain>)."
   default     = false
 }
+
+variable "imap_pool_enabled" {
+  type        = bool
+  description = "Mirror of the top-level var.imap_pool_enabled. Reuse authenticated IMAP sessions across warm Lambda invocations (large-mailbox hardening plan, Layer 1.5). Off by default; enable per-environment once validated."
+  default     = false
+}

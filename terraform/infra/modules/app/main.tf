@@ -54,7 +54,8 @@ module "cabal_method" {
   user_pool_id              = var.user_pool_id
   # Alarm on tail latency/errors for the endpoints whose latency tracks folder
   # cardinality (large-mailbox hardening plan, Layer 4.3).
-  alarm_on_latency = contains(["list_messages", "list_envelopes"], each.key)
+  alarm_on_latency  = contains(["list_messages", "list_envelopes"], each.key)
+  imap_pool_enabled = var.imap_pool_enabled
 }
 
 resource "aws_api_gateway_deployment" "deployment" {

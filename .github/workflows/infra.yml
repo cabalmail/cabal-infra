@@ -289,6 +289,7 @@ jobs:
         echo "control_domain = \"${{ vars.TF_VAR_CONTROL_DOMAIN}}\"" >> terraform.tfvars
         echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
         echo "dnssec_enabled = ${{ vars.TF_VAR_DNSSEC_ENABLED || 'false' }}" >> terraform.tfvars
+        echo "imap_pool_enabled = ${{ vars.TF_VAR_IMAP_POOL_ENABLED || 'false' }}" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
     - name: plan-terraform
@@ -368,6 +369,7 @@ jobs:
         echo "control_domain = \"${{ vars.TF_VAR_CONTROL_DOMAIN}}\"" >> terraform.tfvars
         echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
         echo "dnssec_enabled = ${{ vars.TF_VAR_DNSSEC_ENABLED || 'false' }}" >> terraform.tfvars
+        echo "imap_pool_enabled = ${{ vars.TF_VAR_IMAP_POOL_ENABLED || 'false' }}" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
     - name: apply-terraform

@@ -192,6 +192,7 @@ module "admin" {
 
   invitation_required = module.pool.invitation_required
   monitoring          = var.monitoring
+  imap_pool_enabled   = var.imap_pool_enabled
 }
 
 # Creates a DynamoDB table for storing address data

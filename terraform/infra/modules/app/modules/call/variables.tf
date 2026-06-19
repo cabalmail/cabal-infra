@@ -62,3 +62,9 @@ variable "alarm_on_latency" {
   default     = false
   description = "Wire CloudWatch alarms on tail latency and errors for this endpoint. Set for the message-list endpoints whose latency tracks folder cardinality (large-mailbox hardening plan, Layer 4.3)."
 }
+
+variable "imap_pool_enabled" {
+  type        = bool
+  default     = false
+  description = "Reuse authenticated IMAP sessions across warm invocations of this Lambda (large-mailbox hardening plan, Layer 1.5). Off by default; enable per-environment once validated."
+}

@@ -113,6 +113,12 @@ variable "monitoring" {
   }
 }
 
+variable "imap_pool_enabled" {
+  type        = bool
+  description = "Reuse authenticated IMAP sessions across warm API-Lambda invocations instead of a fresh LOGIN/LOGOUT per request (large-mailbox hardening plan, Layer 1.5). Sets IMAP_POOL_ENABLED on the API Lambdas. Defaults to false; enable per-environment via TF_VAR_IMAP_POOL_ENABLED once validated."
+  default     = false
+}
+
 # Feature flag for the SMTP sinkhole test fixture. See
 # docs/0.9.x/sinkhole-test-harness-plan.md. The ECR repo is created
 # regardless so images can be pre-built; only the ECS tier (task def,
