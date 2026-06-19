@@ -61,8 +61,9 @@ fi
 # that only imports compose still needs helper.py in its zip.
 if grep -qE '^[[:space:]]*(from|import)[[:space:]]+helper' function.py ./build/compose.py 2>/dev/null; then
   cp ../_shared/helper.py ./build/helper.py
-  # helper.py imports imap_pool (the Lambda IMAP connection pool), so it ships
-  # in every zip that carries helper.py.
+  # helper.py imports imap_session, which imports imap_pool (the Lambda IMAP
+  # connection layer), so both ship in every zip that carries helper.py.
+  cp ../_shared/imap_session.py ./build/imap_session.py
   cp ../_shared/imap_pool.py ./build/imap_pool.py
 fi
 if grep -qE '^[[:space:]]*(from|import)[[:space:]]+admin_limits' function.py 2>/dev/null; then
