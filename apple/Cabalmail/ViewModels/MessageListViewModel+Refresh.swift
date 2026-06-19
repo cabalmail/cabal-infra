@@ -33,8 +33,16 @@ extension MessageListViewModel {
         return messages
     }
 
-    /// Row onAppear: the list is now rendering this absolute index.
-    func noteRowVisible(_ index: Int) { visibleRowIndices.insert(index) }
+    /// Row onAppear: the list is now rendering this absolute index. A row
+    /// appearing means the view scrolled, so (re)arm the settle backstop --
+    /// once scrolling stops we load the now-visible window. This covers a
+    /// scrollbar drag (or any jump) landing on placeholders while a stale page
+    /// load is still in flight, where the row `.task`'s `ensureLoaded` would
+    /// bail on the single-flight gate and leave the landing rows blank.
+    func noteRowVisible(_ index: Int) {
+        visibleRowIndices.insert(index)
+        scheduleEnsureLoaded()
+    }
 
     /// Row onDisappear: this absolute index left the rendered set.
     func noteRowHidden(_ index: Int) { visibleRowIndices.remove(index) }
@@ -44,13 +52,16 @@ extension MessageListViewModel {
     var firstVisibleRow: Int? { visibleRowIndices.min() }
     var lastVisibleRow: Int? { visibleRowIndices.max() }
 
-    /// Debounced "load where the list settled" after a keyboard page jump.
-    /// Resetting the task on each call collapses a fast run of PgUp/PgDown into
-    /// one load of wherever the user landed. It waits for any in-flight page
-    /// load to finish first -- rather than racing a second writer -- then
-    /// re-drives `ensureLoaded`, which the landing rows' `.task`s may have
-    /// skipped while a load was in flight, leaving them as placeholders.
-    func scheduleEnsureLoaded(around index: Int) {
+    /// Debounced "load the window the list settled on" after a scroll/key jump.
+    /// Resetting the task on each call (every row appear and every PgUp/PgDown)
+    /// collapses a burst of scrolling into one load once it stops. It waits for
+    /// any in-flight page load to finish first -- rather than racing a cancel
+    /// against a second writer (the load funcs mutate without a cancellation
+    /// guard) -- then drives `ensureLoaded` at the settled visible center, which
+    /// the landing rows' `.task`s may have skipped while a load was in flight.
+    /// loadWindow centers a full window there, so the visible rows plus a page
+    /// above and below are fetched.
+    func scheduleEnsureLoaded() {
         keyScrollTask?.cancel()
         keyScrollTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(175))
@@ -58,8 +69,10 @@ extension MessageListViewModel {
             await self.loadMoreTask?.value
             await self.loadPrevTask?.value
             await self.loadWindowTask?.value
-            guard !Task.isCancelled else { return }
-            self.ensureLoaded(around: index)
+            guard !Task.isCancelled,
+                  let first = self.firstVisibleRow,
+                  let last = self.lastVisibleRow else { return }
+            self.ensureLoaded(around: (first + last) / 2)
         }
     }
 

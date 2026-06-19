@@ -140,10 +140,9 @@ extension MessageListView {
         withAnimation(.easeOut(duration: 0.12)) {
             proxy.scrollTo(down ? last : first, anchor: down ? .top : .bottom)
         }
-        let page = max(1, last - first)
-        model.scheduleEnsureLoaded(around: down
-            ? min(rowCount - 1, last + page / 2)
-            : max(0, first - page / 2))
+        // The post-scroll row appears re-arm the settle backstop, which loads
+        // the window at the new visible center once it stops.
+        model.scheduleEnsureLoaded()
         return .handled
     }
 
