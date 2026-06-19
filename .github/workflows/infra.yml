@@ -289,7 +289,6 @@ jobs:
         echo "control_domain = \"${{ vars.TF_VAR_CONTROL_DOMAIN}}\"" >> terraform.tfvars
         echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
         echo "dnssec_enabled = ${{ vars.TF_VAR_DNSSEC_ENABLED || 'false' }}" >> terraform.tfvars
-        echo "imap_pool_enabled = ${{ vars.TF_VAR_IMAP_POOL_ENABLED || 'false' }}" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
     - name: plan-terraform
@@ -369,7 +368,6 @@ jobs:
         echo "control_domain = \"${{ vars.TF_VAR_CONTROL_DOMAIN}}\"" >> terraform.tfvars
         echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
         echo "dnssec_enabled = ${{ vars.TF_VAR_DNSSEC_ENABLED || 'false' }}" >> terraform.tfvars
-        echo "imap_pool_enabled = ${{ vars.TF_VAR_IMAP_POOL_ENABLED || 'false' }}" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
     - name: apply-terraform
@@ -661,6 +659,7 @@ jobs:
         echo "build_nat_ami = ${{ vars.TF_VAR_BUILD_NAT_AMI || 'true' }}" >> terraform.tfvars
         echo "dr_region = \"${{ vars.TF_VAR_DR_REGION || 'us-west-2' }}\"" >> terraform.tfvars
         echo "dnssec_enabled = ${{ vars.TF_VAR_DNSSEC_ENABLED || 'false' }}" >> terraform.tfvars
+        echo "imap_pool_enabled = ${{ vars.TF_VAR_IMAP_POOL_ENABLED || 'false' }}" >> terraform.tfvars
         # invitation_code is supplied via the TF_VAR_invitation_code env
         # var on this job (see env: block above) rather than echoed into
         # tfvars, so shell-special characters like `$` survive unmangled.
@@ -764,6 +763,7 @@ jobs:
         echo "build_nat_ami = ${{ vars.TF_VAR_BUILD_NAT_AMI || 'true' }}" >> terraform.tfvars
         echo "dr_region = \"${{ vars.TF_VAR_DR_REGION || 'us-west-2' }}\"" >> terraform.tfvars
         echo "dnssec_enabled = ${{ vars.TF_VAR_DNSSEC_ENABLED || 'false' }}" >> terraform.tfvars
+        echo "imap_pool_enabled = ${{ vars.TF_VAR_IMAP_POOL_ENABLED || 'false' }}" >> terraform.tfvars
         # invitation_code is supplied via the TF_VAR_invitation_code env
         # var on this job (see env: block above) rather than echoed into
         # tfvars, so shell-special characters like `$` survive unmangled.
