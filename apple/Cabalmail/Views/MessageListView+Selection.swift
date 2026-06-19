@@ -33,30 +33,52 @@ extension MessageListView {
         // still shows its rows.
         let rowCount = max(Int(model.totalMessages), Int(model.windowStart) + model.envelopes.count)
         ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    if let errorMessage = model.errorMessage {
-                        Label(errorMessage, systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(.red)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding()
-                    }
-                    if virtualize {
-                        ForEach(0..<rowCount, id: \.self) { index in
-                            indexedRow(index, model: model, visible: visible)
+            keyboardScoped(
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        if let errorMessage = model.errorMessage {
+                            Label(errorMessage, systemImage: "exclamationmark.triangle")
+                                .foregroundStyle(.red)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding()
                         }
-                    } else {
-                        ForEach(visible) { envelope in
-                            messageRow(envelope, model: model, visible: visible)
+                        if virtualize {
+                            ForEach(0..<rowCount, id: \.self) { index in
+                                indexedRow(index, model: model, visible: visible)
+                            }
+                        } else {
+                            ForEach(visible) { envelope in
+                                messageRow(envelope, model: model, visible: visible)
+                            }
                         }
                     }
-                }
+                },
+                model: model, visible: visible, proxy: proxy
+            )
+        }
+        .overlay {
+            if model.isLoading && model.envelopes.isEmpty {
+                ProgressView("Fetching messages…")
             }
-            // Keyboard navigation (hardware keyboard, wide layouts). The
-            // ScrollView is the focus target, so these keys are scoped to the
-            // list -- when the search field holds focus instead, they stay with
-            // it (Cmd-A selects its text, Esc cancels search). The focus ring is
-            // suppressed; the row highlight already marks the active row.
+        }
+    }
+
+    /// Focus-scopes the list and installs its hardware-keyboard handlers. The
+    /// ScrollView is the focus target, so these keys fire only while the list
+    /// holds focus -- when the search field has focus instead, they stay with
+    /// it (Cmd-A selects its text, Esc cancels search). The focus ring is
+    /// suppressed; the row highlight already marks the active row. Pulled out of
+    /// `virtualizedList` to stay under SwiftLint's function-body cap.
+    @ViewBuilder
+    private func keyboardScoped(
+        _ content: some View,
+        model: MessageListViewModel,
+        visible: [Envelope],
+        proxy: ScrollViewProxy
+    ) -> some View {
+        let virtualize = !model.isSearchActive && visible.count == model.envelopes.count
+        let rowCount = max(Int(model.totalMessages), Int(model.windowStart) + model.envelopes.count)
+        content
             .focusable(isWideLayout)
             .focusEffectDisabled()
             .focused($listFocused)
@@ -64,9 +86,7 @@ extension MessageListView {
                 moveSelection(
                     by: press.key == .downArrow ? 1 : -1,
                     extend: press.modifiers.contains(.shift),
-                    model: model,
-                    visible: visible,
-                    proxy: proxy
+                    model: model, visible: visible, proxy: proxy
                 )
             }
             .onKeyPress(.escape) { escapePressed(model: model) }
@@ -75,12 +95,25 @@ extension MessageListView {
                 model.selectAllVisible()
                 return .handled
             }
-        }
-        .overlay {
-            if model.isLoading && model.envelopes.isEmpty {
-                ProgressView("Fetching messages…")
+            // Home / End jump to the top / bottom of the folder. Selection is
+            // left where it is (a scroll, not a move). In the virtualized path
+            // we scroll to the absolute index; End lands on the last row, whose
+            // `.task` pulls the bottom window in if it isn't loaded. In the
+            // filtered / search path the rows are id-addressed, so scroll to the
+            // first/last loaded envelope instead.
+            .onKeyPress(keys: [.home, .end]) { press in
+                guard isWideLayout else { return .ignored }
+                let toEnd = press.key == .end
+                let anchor: UnitPoint = toEnd ? .bottom : .top
+                withAnimation(.easeOut(duration: 0.12)) {
+                    if virtualize, rowCount > 0 {
+                        proxy.scrollTo(toEnd ? rowCount - 1 : 0, anchor: anchor)
+                    } else if let edge = toEnd ? visible.last : visible.first {
+                        proxy.scrollTo(edge.id, anchor: anchor)
+                    }
+                }
+                return .handled
             }
-        }
     }
 
     /// One virtualized slot: the real row when its envelope is loaded, a
