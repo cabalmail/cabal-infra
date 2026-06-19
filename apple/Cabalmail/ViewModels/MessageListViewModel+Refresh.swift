@@ -33,6 +33,36 @@ extension MessageListViewModel {
         return messages
     }
 
+    /// Row onAppear: the list is now rendering this absolute index.
+    func noteRowVisible(_ index: Int) { visibleRowIndices.insert(index) }
+
+    /// Row onDisappear: this absolute index left the rendered set.
+    func noteRowHidden(_ index: Int) { visibleRowIndices.remove(index) }
+
+    /// Lowest / highest absolute index the list is currently rendering, or nil
+    /// before any row has reported in (empty folder, first paint).
+    var firstVisibleRow: Int? { visibleRowIndices.min() }
+    var lastVisibleRow: Int? { visibleRowIndices.max() }
+
+    /// Debounced "load where the list settled" after a keyboard page jump.
+    /// Resetting the task on each call collapses a fast run of PgUp/PgDown into
+    /// one load of wherever the user landed. It waits for any in-flight page
+    /// load to finish first -- rather than racing a second writer -- then
+    /// re-drives `ensureLoaded`, which the landing rows' `.task`s may have
+    /// skipped while a load was in flight, leaving them as placeholders.
+    func scheduleEnsureLoaded(around index: Int) {
+        keyScrollTask?.cancel()
+        keyScrollTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(175))
+            guard !Task.isCancelled, let self else { return }
+            await self.loadMoreTask?.value
+            await self.loadPrevTask?.value
+            await self.loadWindowTask?.value
+            guard !Task.isCancelled else { return }
+            self.ensureLoaded(around: index)
+        }
+    }
+
     /// User-initiated "force reload." Wipes the in-memory envelope list
     /// (plus the cursor state `refresh()` uses to merge older pages) AND
     /// the on-disk envelope snapshot for this folder, then runs

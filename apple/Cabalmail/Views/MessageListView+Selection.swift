@@ -114,6 +114,37 @@ extension MessageListView {
                 }
                 return .handled
             }
+            .onKeyPress(keys: [.pageUp, .pageDown]) { press in
+                pageScroll(down: press.key == .pageDown, model: model,
+                           proxy: proxy, rowCount: rowCount, virtualize: virtualize)
+            }
+    }
+
+    /// PgUp / PgDown scroll the list by ~one visible page, leaving the
+    /// selection where it is. We scroll so the row at the far edge of the
+    /// current view lands at the near edge -- one row of overlap for context --
+    /// derived from the index range the rows report via onAppear/onDisappear.
+    /// The page FETCH, if we land on unloaded rows, is debounced
+    /// (`scheduleEnsureLoaded`) so a fast run of presses loads only where it
+    /// settles. Folder mode only; the search/filter list isn't index-addressed.
+    private func pageScroll(
+        down: Bool,
+        model: MessageListViewModel,
+        proxy: ScrollViewProxy,
+        rowCount: Int,
+        virtualize: Bool
+    ) -> KeyPress.Result {
+        guard isWideLayout, virtualize, rowCount > 0,
+              let first = model.firstVisibleRow, let last = model.lastVisibleRow
+        else { return .ignored }
+        withAnimation(.easeOut(duration: 0.12)) {
+            proxy.scrollTo(down ? last : first, anchor: down ? .top : .bottom)
+        }
+        let page = max(1, last - first)
+        model.scheduleEnsureLoaded(around: down
+            ? min(rowCount - 1, last + page / 2)
+            : max(0, first - page / 2))
+        return .handled
     }
 
     /// One virtualized slot: the real row when its envelope is loaded, a
@@ -130,6 +161,10 @@ extension MessageListView {
             }
         }
         .task { model.ensureLoaded(around: index) }
+        // Track the rendered index range (main-actor callbacks) so PgUp/PgDown
+        // can page by the actual visible extent. Cheap, @ObservationIgnored.
+        .onAppear { model.noteRowVisible(index) }
+        .onDisappear { model.noteRowHidden(index) }
     }
 
     /// A loaded message row at the fixed row height. The normal row wraps in

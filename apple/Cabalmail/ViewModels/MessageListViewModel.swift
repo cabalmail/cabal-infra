@@ -157,18 +157,25 @@ final class MessageListViewModel {
     /// In-flight pagination fetch, owned by the model so it survives the
     /// triggering row's `.task` cancellation (see `loadMoreIfNeeded`).
     /// Cancelled in `stopWatching()` when the list goes away.
-    private var loadMoreTask: Task<Void, Never>?
+    var loadMoreTask: Task<Void, Never>?
     /// In-flight front reload (loadPrevious), owned by the model like
     /// `loadMoreTask` so it survives the triggering row's `.task`
     /// cancellation. Cancelled in `stopWatching()`.
     var loadPrevTask: Task<Void, Never>?
     /// In-flight full-window reload for a scrollbar jump. Model-owned for the
     /// same reason; cancelled in `stopWatching()`.
-    private var loadWindowTask: Task<Void, Never>?
+    var loadWindowTask: Task<Void, Never>?
     /// Debounced envelope-snapshot writer (see `schedulePersist`). Coalesces
     /// the O(loaded count) snapshot rewrite so a continuous scroll persists
     /// once when it settles, not on every page. Cancelled in `stopWatching()`.
     private var persistTask: Task<Void, Never>?
+    /// Debounced "load where the list settled" after a keyboard page jump.
+    /// Cancelled in `stopWatching()`.
+    var keyScrollTask: Task<Void, Never>?
+    /// Absolute indices of the rows the list is currently rendering, tracked via
+    /// row onAppear/onDisappear. `@ObservationIgnored` so the high-frequency
+    /// churn never invalidates the view; read only by the page-scroll handlers.
+    @ObservationIgnored var visibleRowIndices: Set<Int> = []
     /// Coalescing timestamp — if `.changed` fires in bursts (e.g. server
     /// delivers three messages in quick succession) we collapse them into
     /// one refresh by gating on elapsed time.
@@ -256,6 +263,8 @@ final class MessageListViewModel {
         loadWindowTask = nil
         persistTask?.cancel()
         persistTask = nil
+        keyScrollTask?.cancel()
+        keyScrollTask = nil
         await watcher?.stop()
         watcher = nil
     }
@@ -437,22 +446,8 @@ final class MessageListViewModel {
     // and the query builder) lives in `MessageListViewModel+Search.swift`
     // so the primary type body stays under SwiftLint's length cap.
 
-    func markRead(_ envelope: Envelope) async {
-        await setFlag(.seen, add: true, envelope: envelope)
-    }
-
-    /// Flip the `\Seen` flag — drives the leading (left-to-right) swipe
-    /// action. Mirrors the Mail.app convention that the same gesture
-    /// toggles between read and unread rather than having two.
-    func toggleSeen(_ envelope: Envelope) async {
-        let add = !envelope.flags.contains(.seen)
-        await setFlag(.seen, add: add, envelope: envelope)
-    }
-
-    func toggleFlag(_ envelope: Envelope) async {
-        let add = !envelope.flags.contains(.flagged)
-        await setFlag(.flagged, add: add, envelope: envelope)
-    }
+    // The per-row flag actions (`markRead`, `toggleSeen`, `toggleFlag`) live in
+    // `MessageListViewModel+Flags.swift` to keep this type body under the cap.
 
     /// Dispose target is the current `Preferences.disposeAction` — Archive
     /// or Trash. The preference is read on every invocation so a user who
