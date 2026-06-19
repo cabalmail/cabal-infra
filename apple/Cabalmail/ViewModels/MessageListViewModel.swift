@@ -285,7 +285,7 @@ final class MessageListViewModel {
         // search keeps the result set fresh against any concurrent
         // mailbox churn.
         if isSearchActive {
-            await runSearch()
+            await runSearch(resetFilterTab: false)
             return
         }
         isLoading = true

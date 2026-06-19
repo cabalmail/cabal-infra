@@ -36,11 +36,10 @@ public enum MessageFilter: String, CaseIterable, Identifiable {
 extension MessageListView {
     @ViewBuilder
     func filterTabsBar(model: MessageListViewModel, searchActive: Bool) -> some View {
-        @Bindable var bindable = model
         HStack(spacing: 6) {
             ForEach(MessageFilter.allCases) { filter in
                 Button {
-                    bindable.filterTab = filter
+                    Task { await model.selectFilter(filter) }
                 } label: {
                     HStack(spacing: 4) {
                         Text(filter.label)
@@ -85,7 +84,11 @@ extension MessageListView {
     /// search the rows are search results, not the folder, so the folder totals
     /// don't apply -- fall back to counting the loaded matches.
     private func pillCount(_ filter: MessageFilter, model: MessageListViewModel) -> Int {
-        if model.isSearchActive {
+        // A genuine text search (filterTab == .all while searching) counts its
+        // loaded results. Folder mode and a pill-driven filter keep the
+        // server-sourced folder totals, so e.g. tapping Flagged doesn't make
+        // the All pill collapse to the flagged-result count.
+        if model.isSearchActive, model.filterTab == .all {
             return model.envelopes.filter { filter.includes($0) }.count
         }
         switch filter {
@@ -104,7 +107,13 @@ extension MessageListView {
             #if os(macOS)
             inlineSearchField(model: model, focused: $inlineSearchFocused)
             #endif
-            if model.isSearchActive {
+            // A genuine text search always shows the results banner. A pill
+            // filter is marked by its highlighted pill, so it normally hides the
+            // banner -- but if the folder has more matches than the page we
+            // fetched, show it so the "N of M matches" gap (and its clear
+            // button) isn't silent.
+            if model.isSearchActive,
+               model.filterTab == .all || model.envelopes.count < model.searchTotalEstimate {
                 searchMetadataBanner(model: model)
             }
             if let addressFilter, !addressFilter.isEmpty {

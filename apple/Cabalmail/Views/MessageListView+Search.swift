@@ -49,7 +49,13 @@ extension MessageListView {
                 onApply: { snapshot in
                     bindable.searchFilters = snapshot
                     filtersPresented = false
-                    Task { await bindable.runSearch() }
+                    // The sheet defines a full structured search ("All" mode),
+                    // even when opened while a filter pill is active. Clear the
+                    // pill's filterTab and pass resetFilterTab: false so
+                    // runSearch keeps the snapshot we just applied instead of
+                    // mistaking this for a pill->text transition and wiping it.
+                    bindable.filterTab = .all
+                    Task { await bindable.runSearch(resetFilterTab: false) }
                 },
                 onCancel: {
                     filtersPresented = false
