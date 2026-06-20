@@ -32,6 +32,9 @@ extension MessageListViewModel {
         sourceFolderByUID = [:]
         resetWindow()
         await refresh()
+        // Re-stage the bottom window in the new order (resetWindow dropped the
+        // old one) so End stays instant after a re-sort.
+        scheduleBottomPrefetch()
     }
 
     /// Comparator used by `mergeFetched` / `hydrateFromCache`. The order

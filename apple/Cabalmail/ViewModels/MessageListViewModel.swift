@@ -176,6 +176,19 @@ final class MessageListViewModel {
     /// row onAppear/onDisappear. `@ObservationIgnored` so the high-frequency
     /// churn never invalidates the view; read only by the page-scroll handlers.
     @ObservationIgnored var visibleRowIndices: Set<Int> = []
+    /// Pre-fetched bottom window, staged off to the side so the first jump to
+    /// the bottom (End / scrollbar-to-bottom) is instant rather than a round
+    /// trip. The single contiguous `envelopes` window can't hold both the top
+    /// and the bottom at once, and the on-disk cache is UID-keyed + top-
+    /// anchored (no positional hydrate), so the bottom lives here (see
+    /// `BottomPrefetch`). `performLoadWindow` adopts it;
+    /// `invalidateBottomPrefetch()` drops it. `@ObservationIgnored` so the
+    /// background fill never invalidates the list view.
+    @ObservationIgnored var bottomPrefetch: BottomPrefetch?
+    /// In-flight bottom-prefetch fetch, model-owned (like `loadWindowTask`) so a
+    /// late fill can be cancelled on folder teardown / invalidation rather than
+    /// landing stale rows. Cancelled in `stopWatching()` and on every invalidate.
+    @ObservationIgnored var bottomPrefetchTask: Task<Void, Never>?
     /// Coalescing timestamp — if `.changed` fires in bursts (e.g. server
     /// delivers three messages in quick succession) we collapse them into
     /// one refresh by gating on elapsed time.
@@ -219,6 +232,7 @@ final class MessageListViewModel {
         guard envelopes.isEmpty else { return }
         await hydrateFromCache()
         await refresh()
+        scheduleBottomPrefetch()
     }
 
     /// Start the IDLE-backed auto-refresh loop. Called from the view's
@@ -265,6 +279,8 @@ final class MessageListViewModel {
         persistTask = nil
         keyScrollTask?.cancel()
         keyScrollTask = nil
+        bottomPrefetchTask?.cancel()
+        bottomPrefetchTask = nil
         await watcher?.stop()
         watcher = nil
     }
@@ -519,6 +535,11 @@ final class MessageListViewModel {
     /// we loop.
     func pruneCachesAfter(move folder: String, uids: [UInt32]) async {
         guard let uidValidity, !uids.isEmpty else { return }
+        // Messages just left this folder (a confirmed dispose / move / purge),
+        // so a bottom window staged at the old positions is misaligned -- drop
+        // it. The in-flight removal already blocks adoption via `ensureLoaded`'s
+        // `pendingRemovedUIDs` gate; this covers the window after it clears.
+        invalidateBottomPrefetch()
         try? await client.envelopeCache.remove(uids: uids, folder: folder)
         for uid in uids {
             await client.bodyCache.remove(
@@ -541,6 +562,9 @@ final class MessageListViewModel {
     /// without a server round trip.
     func pruneEnvelope(uid: UInt32) {
         envelopes.removeAll { $0.uid == uid }
+        // The folder lost a row (detail-view dispose, no cache-prune round
+        // trip), so a staged bottom window may no longer line up -- drop it.
+        invalidateBottomPrefetch()
     }
 
     /// Apply a flag toggle that originated outside the list (currently: the
@@ -625,5 +649,8 @@ extension MessageListViewModel {
     func resetWindow() {
         windowStart = 0
         hasTrimmedFront = false
+        // A wiped / re-anchored window (hard reload, sort change, search clear,
+        // UIDVALIDITY change) invalidates any staged bottom window with it.
+        invalidateBottomPrefetch()
     }
 }

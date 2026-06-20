@@ -95,24 +95,10 @@ extension MessageListView {
                 model.selectAllVisible()
                 return .handled
             }
-            // Home / End jump to the top / bottom of the folder. Selection is
-            // left where it is (a scroll, not a move). In the virtualized path
-            // we scroll to the absolute index; End lands on the last row, whose
-            // `.task` pulls the bottom window in if it isn't loaded. In the
-            // filtered / search path the rows are id-addressed, so scroll to the
-            // first/last loaded envelope instead.
+            // Home / End jump the list to the top / bottom of the folder,
+            // leaving the selection where it is (a scroll, not a move).
             .onKeyPress(keys: [.home, .end]) { press in
-                guard isWideLayout else { return .ignored }
-                let toEnd = press.key == .end
-                let anchor: UnitPoint = toEnd ? .bottom : .top
-                withAnimation(.easeOut(duration: 0.12)) {
-                    if virtualize, rowCount > 0 {
-                        proxy.scrollTo(toEnd ? rowCount - 1 : 0, anchor: anchor)
-                    } else if let edge = toEnd ? visible.last : visible.first {
-                        proxy.scrollTo(edge.id, anchor: anchor)
-                    }
-                }
-                return .handled
+                homeEndScroll(toEnd: press.key == .end, model: model, visible: visible, proxy: proxy)
             }
             .onKeyPress(keys: [.pageUp, .pageDown]) { press in
                 pageScroll(down: press.key == .pageDown, model: model,
@@ -143,6 +129,42 @@ extension MessageListView {
         // The post-scroll row appears re-arm the settle backstop, which loads
         // the window at the new visible center once it stops.
         model.scheduleEnsureLoaded()
+        return .handled
+    }
+
+    /// Home / End jump the list to the top / bottom of the folder, leaving the
+    /// selection where it is. The destination window load is driven EXPLICITLY
+    /// here, not left to the landing rows' `.task`: during the animated jump
+    /// the rows swept through fire `ensureLoaded` first and claim the single-
+    /// flight `isLoadingWindow` for a mid-list index, so the destination rows'
+    /// own `ensureLoaded` bails on that gate and the window never reaches them
+    /// -- the bottom stays on placeholders forever, no matter how long you
+    /// wait. Claiming the load here, for the real target and before any row
+    /// realizes, makes those interlopers bail instead. End is clamped to the
+    /// last STATUS-backed message: `rowCount` can run ahead of the folder total
+    /// (a stale cache window, or `windowStart + count` transiently past
+    /// `totalMessages`), and a row past `total - 1` can never be filled by a
+    /// positional fetch, so scrolling there would strand a permanent
+    /// placeholder. Filtered / search rows are id-addressed, so scroll to the
+    /// first / last loaded envelope instead.
+    private func homeEndScroll(
+        toEnd: Bool,
+        model: MessageListViewModel,
+        visible: [Envelope],
+        proxy: ScrollViewProxy
+    ) -> KeyPress.Result {
+        guard isWideLayout else { return .ignored }
+        let virtualize = !model.isSearchActive && visible.count == model.envelopes.count
+        let rowCount = max(Int(model.totalMessages), Int(model.windowStart) + model.envelopes.count)
+        let anchor: UnitPoint = toEnd ? .bottom : .top
+        if virtualize, rowCount > 0 {
+            let total = Int(model.totalMessages)
+            let target = toEnd ? (total > 0 ? min(rowCount - 1, total - 1) : rowCount - 1) : 0
+            model.ensureLoaded(around: target)
+            withAnimation(.easeOut(duration: 0.12)) { proxy.scrollTo(target, anchor: anchor) }
+        } else if let edge = toEnd ? visible.last : visible.first {
+            withAnimation(.easeOut(duration: 0.12)) { proxy.scrollTo(edge.id, anchor: anchor) }
+        }
         return .handled
     }
 
