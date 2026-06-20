@@ -239,13 +239,20 @@ extension MessageListViewModel {
             return
         }
         let total = Int(totalMessages)
-        let cap = Int(windowCap)
-        let start = max(0, min(absoluteIndex - cap / 2, max(0, total - cap)))
+        // Fetch ONE server-capped page centered on the target, not a whole
+        // `windowCap` chunk: the Lambda clamps a page to MAX_PAGE_SIZE (250),
+        // so a `windowCap` (600) request silently came back as ~250 rows while
+        // the centering math still assumed the full 600 -- the target landed
+        // ~`windowCap/2` rows past the loaded slice and stayed a placeholder
+        // forever. `windowCap` remains the in-memory bound that loadMore /
+        // loadPrevious grow this window toward as the user scrolls from here.
+        let page = Int(loadMorePageSize)
+        let start = max(0, min(absoluteIndex - page / 2, max(0, total - page)))
         do {
             let fetched = try await client.imapClient.envelopes(
                 folder: folder.path,
                 offset: UInt32(start),
-                limit: UInt32(cap),
+                limit: loadMorePageSize,
                 sort: sortCriterion
             )
             guard !fetched.isEmpty else { return }
@@ -281,18 +288,20 @@ extension MessageListViewModel {
     }
 
     /// Kicks off a low-priority background fetch of the folder's bottom window
-    /// into `bottomPrefetch`, so the first End / jump-to-bottom is instant. The
-    /// offset mirrors `performLoadWindow`'s math for the last index: a full
-    /// `windowCap` window ending at the folder's last message. Only worth it
-    /// when the bottom isn't already reachable from the top window (folders
-    /// larger than one window) and the window is still top-anchored. Re-kicked
-    /// after a sort change (the staged order would otherwise be stale); a no-op
-    /// while a search is showing or a fill is already staged or running.
+    /// into `bottomPrefetch`, so the first End / jump-to-bottom is instant. It
+    /// stages the LAST page (offset `total - loadMorePageSize`) so it actually
+    /// covers `total - 1` -- the same window `performLoadWindow` lands on for
+    /// the end, one server-capped page (not `windowCap`, which a single fetch
+    /// can't return). Only worth it when the bottom isn't already reachable
+    /// from the top window (folders larger than one window) and the window is
+    /// still top-anchored. Re-kicked after a sort change (the staged order
+    /// would otherwise be stale); a no-op while a search is showing or a fill
+    /// is already staged or running.
     func scheduleBottomPrefetch() {
         guard !isSearchActive, !hasTrimmedFront, bottomPrefetch == nil,
               Int(totalMessages) > windowCap else { return }
         let total = totalMessages
-        let start = total - UInt32(windowCap)
+        let start = total - loadMorePageSize
         bottomPrefetchTask?.cancel()
         bottomPrefetchTask = Task(priority: .background) { [weak self] in
             await self?.performBottomPrefetch(start: start, total: total)
@@ -311,7 +320,7 @@ extension MessageListViewModel {
             let fetched = try await client.imapClient.envelopes(
                 folder: folder.path,
                 offset: start,
-                limit: UInt32(windowCap),
+                limit: loadMorePageSize,
                 sort: sortAtKickoff
             )
             guard !Task.isCancelled, !fetched.isEmpty,
