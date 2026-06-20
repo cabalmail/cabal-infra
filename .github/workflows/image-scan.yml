@@ -52,7 +52,7 @@ jobs:
       AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: configure-aws-credentials
-      uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4.3.1
+      uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b  # v6.2.0
       with:
         role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         aws-region: ${{ secrets.AWS_REGION }}
@@ -126,14 +126,14 @@ jobs:
       # the artifact and job summary above stand on their own.
       if: steps.img.outputs.image != ''
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@dd903d2e4f5405488e5ef1422510ee31c8b32357  # v3.36.2
+      uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e  # v4.36.2
       with:
         sarif_file: "trivy-${{ matrix.tier }}.sarif"
         category: "trivy-image-${{ matrix.tier }}"
 
     - name: upload-artifact
       if: steps.img.outputs.image != ''
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
       with:
         name: "trivy-sarif-${{ matrix.tier }}"
         path: "trivy-${{ matrix.tier }}.sarif"

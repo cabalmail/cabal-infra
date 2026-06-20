@@ -103,7 +103,7 @@ jobs:
       front_door: ${{ steps.areas.outputs.front_door }}
     steps:
     - name: checkout
-      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
 
     # Guard against per-tier filter drift: if a Dockerfile gains a
     # COPY/ADD of a file under docker/ that its tier's changed-paths
@@ -454,10 +454,10 @@ jobs:
       AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
-      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
 
     - name: configure-aws-credentials
-      uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4.3.1
+      uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b  # v6.2.0
       with:
         role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         aws-region: ${{ secrets.AWS_REGION }}
@@ -556,10 +556,10 @@ jobs:
       AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
-      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
 
     - name: configure-aws-credentials
-      uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4.3.1
+      uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b  # v6.2.0
       with:
         role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         aws-region: ${{ secrets.AWS_REGION }}
@@ -612,10 +612,10 @@ jobs:
       AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
-      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
 
     - name: configure-aws-credentials
-      uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4.3.1
+      uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b  # v6.2.0
       with:
         role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         aws-region: ${{ secrets.AWS_REGION }}
@@ -692,10 +692,10 @@ jobs:
       AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
-      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
 
     - name: configure-aws-credentials
-      uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4.3.1
+      uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b  # v6.2.0
       with:
         role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         aws-region: ${{ secrets.AWS_REGION }}
@@ -726,10 +726,10 @@ jobs:
       AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
-      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
 
     - name: configure-aws-credentials
-      uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4.3.1
+      uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b  # v6.2.0
       with:
         role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         aws-region: ${{ secrets.AWS_REGION }}
@@ -768,10 +768,10 @@ jobs:
       AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
-      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
 
     - name: configure-aws-credentials
-      uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4.3.1
+      uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b  # v6.2.0
       with:
         role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         aws-region: ${{ secrets.AWS_REGION }}
