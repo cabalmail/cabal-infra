@@ -5,6 +5,410 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.24] - 2026-06-20
+
+### Added
+- The Apple clients sync compose drafts across devices through
+  `/save_draft`: close-without-send and a 60-second debounce push the
+  buffer to the IMAP Drafts folder, each save replaces the previous server
+  copy, send discards it, and a new "Edit Draft" action in the Drafts
+  folder resumes a draft where another device left off. Local `DraftStore`
+  autosave remains the editing buffer and crash-recovery story.
+- The Apple message list now prefetches the bottom of a large folder in the
+  background when it opens, so the first jump to the bottom (End, or dragging
+  the scrollbar down) lands instantly instead of waiting on a fetch. Because
+  the loaded window can't span both ends of a big folder at once, the bottom
+  is staged in a small side buffer and adopted when a jump lands in it. The
+  buffer is dropped whenever it could fall out of step with the folder -- a
+  sort change, a folder reload, or any message leaving the folder -- and is
+  only kept for folders larger than a single window.
+- The Apple message list (wide / hardware-keyboard layouts) now handles the
+  Home and End keys: Home scrolls to the top of the folder, End scrolls to
+  the bottom (pulling the bottom window in if it hasn't loaded yet). The
+  selection is left where it is. Like the existing arrow-key navigation,
+  the keys are scoped to the list and don't fire while the search field has
+  focus.
+- The Apple message list now handles PgUp / PgDown (wide / hardware-keyboard
+  layouts): they scroll the list by about one visible page, leaving the
+  selection where it is, with a row of overlap for context. If a page lands
+  on rows that aren't loaded yet, the fetch is debounced so a fast run of
+  presses loads only where you settle. The list tracks its visible row range
+  via lightweight onAppear/onDisappear callbacks to size the page.
+- The Apple message list now shows each message's delivery address inline:
+  the first row line reads `sender -> destination@address`, where the
+  destination is the Cabalmail address the message was sent to (the recipient
+  on one of your mail domains when several are listed, else the first To/Cc).
+  This surfaces the per-vendor address workflow at a glance -- you can see
+  which address caught a message without opening it. The sender stays the
+  primary read; the destination is dimmed, and the line truncates in the
+  middle so both the sender and the destination address stay legible.
+- Display name preference: users can set a "Name" that outgoing mail carries
+  in the From header (`"Chris Carr" <address>`). The name is stored in the
+  user-preferences table and applied server-side by the `/send` Lambda, so it
+  follows the user across the React and Apple clients; it is edited from the
+  React account menu and the Apple Settings Composing section.
+- DNSSEC signing is now available for the control-domain zone and every
+  mail-apex zone, opt-in per environment via `TF_VAR_DNSSEC_ENABLED`
+  (default off). Flipping the flag creates a us-east-1 ECC_NIST_P256
+  KMS key per stack, a per-zone KSK, and enables signing; the DS record
+  each registrar needs is surfaced as a Terraform output. The runbooks
+  (enable, disable, KSK rotation, apex retirement) are in
+  docs/dnssec.md - sign first, DS second. Mail zones also drop
+  `force_destroy`, so a destroy plan can no longer silently delete a
+  zone that still holds live address records.
+- `/list_envelopes` and `/search_envelopes` now emit `message_id`,
+  `in_reply_to`, and `references` per envelope as lists of angle-bracketed
+  ids (the `/fetch_message` wire shape), additively. References is capped
+  at the newest 20 ids; the data prerequisite for conversation threading.
+- A `force_tiers` input on the "Build and Deploy Application"
+  workflow: a manual run still builds every docker tier in scope (the
+  escape hatch for first deploys, base-image refreshes, and operator
+  catchups), and `force_tiers=imap,smtp-out` narrows it to a named
+  subset without needing a push that touches those tiers.
+- Optional IMAP connection pooling in the API Lambdas (off by default,
+  `IMAP_POOL_ENABLED` / `TF_VAR_IMAP_POOL_ENABLED`). When enabled, an
+  authenticated master-user session is reused across warm invocations of the
+  same execution environment instead of a fresh LOGIN/LOGOUT per request,
+  keyed by `(host, user)`. Connections expire after an idle window and the
+  mandatory re-SELECT on checkout doubles as a liveness probe (reconnect once
+  on failure), so a socket left dead by a freeze/thaw or NAT eviction is
+  discarded rather than reused. The flag-off path is unchanged. The pooling
+  bookkeeping lives in a dependency-free `_shared/imap_pool.py` with stdlib
+  unit tests.
+- `/list_messages` now accepts optional `?offset=N&limit=M` query params and
+  returns a `total` count alongside `message_ids`, so a client can fetch one
+  page of a large folder and show "N of total" instead of pulling every UID
+  (large-mailbox hardening, Layer 1.1). Dovecot `SORT` still orders the full
+  result; the slice is positional (sort order, not UID order). With neither
+  param set the response is the full sorted list as before, so existing clients
+  are unaffected.
+- CloudWatch alarms on the `list_messages` and `list_envelopes` Lambdas:
+  one on p99 `Duration` creeping toward the 29s timeout and one on the
+  `Errors` metric (which a timeout trips). They make a large-folder request
+  outrunning the integration timeout an observable signal. Like the existing
+  Cognito risk alarm they carry no `alarm_actions` (monitoring is disabled
+  project-wide, so there is no notification channel yet) - they are visible
+  via the console and `describe-alarms` and still enter ALARM state.
+- The mail NLB now writes access logs to a dedicated versioned S3
+  bucket (`cabal-nlb-access-logs-<account>`, 180-day expiry), so
+  incident response can correlate per-IP IMAPS connection behaviour
+  months back instead of relying on container logs. NLB access logs
+  cover TLS listeners only: that is the IMAPS listener (993); SMTP
+  (25/465/587) is TCP passthrough and still relies on CloudWatch
+  container logs. See docs/nlb-access-logs.md for the Athena query
+  setup.
+- New `/save_draft` Lambda gives drafts a server-side lifecycle: save
+  returns the new copy's UIDPLUS `(uid, uidvalidity)`, save can atomically
+  replace a prior copy (append-first, UIDVALIDITY-guarded, keeps both on a
+  guard miss), and `op: discard` removes one — all scoped to the Drafts
+  folder, mirroring the trash-scoping of the purge endpoints. `/send`
+  accepts `discard_draft_uid` so send-from-draft cleans up the server copy
+  after delivery; its `draft: true` branch is unchanged for React.
+
+### Changed
+- After a scrollbar drag (or any jump) to an unloaded part of a large folder,
+  the Apple message list now loads the now-visible window once scrolling
+  settles, prefetching a page above and below. Previously, if a page load was
+  already in flight when you landed, the new rows could sit as placeholders
+  until you nudged the list again. The load is debounced to where you stop, so
+  a fast drag fetches once at the destination rather than thrashing through the
+  windows it passed.
+- The Apple clients now paginate the message list positionally against the
+  paginated `/list_messages` (large-mailbox hardening, Layer 3.1/3.3): the
+  top page and every older page request a server-sliced `offset`/`limit`
+  window instead of pulling the entire sorted UID list on every page. This
+  also corrects paging under non-default sorts (the old UID-range window
+  assumed UID order tracked the sort order) and removes the sparse-folder
+  dead-end -- the client now stops paging when the loaded count reaches the
+  folder's STATUS message total rather than walking a UID cursor down to 1.
+  Older pages prefetch well ahead of the scroll, so scrolling no longer
+  stalls at the bottom waiting for the next fetch.
+- Bulk message operations are now chunked and bounded (large-mailbox
+  hardening, Layer 1.3). `/move_messages` and `/set_flag` split a selection
+  into 500-UID IMAP commands so one bulk action can't exceed the 29s API
+  Gateway ceiling, report a `moved_ids`/`flagged_ids` plus `failed_ids` split
+  when a batch fails partway instead of all-or-nothing, and answer `413` with
+  `{"max_ids": 5000}` past the per-request cap. The React client refuses a bulk
+  archive/move/delete/flag above 5,000 messages up front with a clear message
+  rather than firing a request the server would reject.
+- The web client's message list no longer fans out an envelope fetch for
+  every page of a folder up front (and again on every 10s poll). It now
+  lazily fetches the opening viewport and pulls further pages in as you
+  scroll, refreshing only the already-loaded pages on each poll
+  (large-mailbox hardening, Layer 2.1). Opening or polling a large folder
+  drops from hundreds of parallel `/list_envelopes` requests to a handful.
+  The Unread/Flagged filter pills become plain toggles (the accurate folder
+  total still shows in the header "N of M") since live per-flag counts can't
+  be computed without holding every envelope in memory; they return with
+  server-side counts in a later phase.
+- The web client's message list is now virtualized: it renders only the rows
+  in (and just around) the viewport instead of every loaded envelope, so
+  scroll smoothness and memory stay flat however deep into a large folder you
+  go (large-mailbox hardening, Layer 2.2). The list pads itself top and bottom
+  to stand in for the off-screen rows, and lazy page loading is now driven
+  directly by scroll position.
+- The EFS mailstore's `CKV2_AWS_18` scanner finding (Backup-plan
+  membership) moved from an opaque per-resource baseline grandfather to
+  a co-located inline `#checkov:skip` with rationale. The mailstore is
+  already in the AWS Backup selection when `var.backup` is set; the
+  graph check cannot trace that count-gated, cross-module reference, so
+  the finding is a false positive. The infra checkov baseline shrinks by
+  one entry. No infrastructure change.
+- On iPad and visionOS the Apple client no longer shows the adaptive
+  Mail / Addresses / Folders / Settings switcher that flipped between a
+  floating top bar and a second sidebar (and overlapped the mailbox list at
+  regular width). Those devices now render a single show/hide sidebar like
+  the Mac, with Addresses, Folders, and Settings reached through a modal
+  Settings sheet opened by a sidebar gear button or Cmd+, . iPhone keeps its
+  bottom tab bar.
+- Two server-side efficiency changes from the large-mailbox hardening plan:
+  the `/set_flag` Lambda no longer re-runs a full-folder IMAP `SORT` after
+  every flag change (both the web and Apple clients discarded that UID list
+  and re-polled for ordering anyway) and now acknowledges with
+  `{"status": "submitted"}` like `/move_messages`; and every API Lambda's
+  timeout drops from 30s to 29s to match API Gateway's integration ceiling,
+  so a Lambda stops at the same boundary the client sees the request fail
+  instead of billing on invisibly past it.
+- The `/list_messages` `limit` page-size parameter is now bounded server-side:
+  an explicit limit above 250 is clamped to 250 (a missing limit still returns
+  the full sorted list, so the React virtualized view is unaffected). The Apple
+  clients use this to fetch a larger page (200) while scrolling older mail --
+  keeping the top page small for a fast first paint but cutting the number of
+  `/list_envelopes` round trips on a deep scroll, where per-request IMAP
+  connect/SELECT overhead dominates.
+- A push now rebuilds and rolls only the docker tiers whose build
+  inputs changed, instead of every tier in scope. Each tier's filter
+  covers `docker/<tier>/**`; the core mail tiers also rebuild on
+  `docker/shared/**` and their own sendmail template. A change that
+  does not touch imap no longer causes an imap service roll (and its
+  client-facing gap), and single-tier changes stop paying for 3-12
+  sibling builds. To make the divergence safe, Terraform now tracks
+  image tags per tier: the plan job copies each `cabal-*` service's
+  running tag into `/cabal/deployed_image_tag/<tier>` and each task
+  definition reads its own tier's key, so a topology apply re-pins
+  every tier to the image that tier is actually running. The legacy
+  global key remains as the imap-tracking fallback for keys not yet
+  written, and a CI check (`check-docker-tier-filters.sh`) fails the
+  build if a Dockerfile's inputs drift from the filter map.
+- The React webmail message list now polls `/folder_status` (a cheap IMAP
+  STATUS round trip) every 10 seconds instead of re-pulling the entire
+  sorted UID list, and only re-fetches that list when the folder actually
+  changes - UIDNEXT advanced or the message count dropped - the same
+  heuristic the Apple client uses. Steady-state poll cost on a large folder
+  drops from proportional to the folder size to constant. The All / Unread /
+  Flagged filter pills now show server-sourced counts (folder total, STATUS
+  UNSEEN, and a new opt-in `?flagged=1` SEARCH count on `/folder_status`)
+  rather than counting only the envelopes loaded so far.
+- The signup form now requires an explicit, affirmative SMS consent
+  checkbox before the account can be created. The transactional-SMS
+  language (verification, password reset, and sign-in codes, plus the
+  STOP opt-out) moves out of the passive Terms paragraph and into its
+  own unchecked-by-default checkbox, so consent is a separate opt-in
+  rather than bundled into Terms acceptance. Create account stays
+  disabled until the box is checked.
+- Dovecot now auto-creates the `Trash` mailbox (`auto = create` in
+  `15-mailboxes.conf`) at namespace init, so it always exists before a
+  mailbox's first delete. The `/move_messages` Lambda no longer force-creates
+  `Trash` on every delete to cover that gap, dropping a wasted IMAP round
+  trip from the delete path.
+
+### Removed
+- Removed the completed Terraform `moved` blocks from the `ecr` module
+  (0.9.5 monitoring repository split) and the `user_pool` module
+  (`use_eum_sms` phone-number indexing); all environments have applied
+  the state migrations.
+
+### Fixed
+- Apple clients no longer wrap sender/recipient display names in
+  double-quotes when rendering received mail (detail-view From/To/Cc
+  lines, forwarded-message headers, reply attribution), matching the
+  React client's unquoted rendering.
+- The Apple message list's Unread / Flagged filter pills now show every
+  matching message in the folder, not just the ones already paged into
+  memory. Tapping a pill runs a folder-scoped server search (the same
+  `/search_envelopes` path the search bar uses) instead of filtering the
+  loaded window, so flagged or unread mail scattered deep in a large folder
+  surfaces immediately; All returns to the folder view. A pill is a fresh
+  filter -- it replaces any text search, while the richer text-plus-flag
+  combination stays available through the search filter sheet. The pill
+  counts stay server-sourced, and when a folder has more matches than the
+  fetched page the results banner discloses the "N of M" gap.
+- Pressing End, or dragging the scrollbar, to the bottom of a large Apple
+  folder now loads the bottom messages instead of leaving them as
+  placeholders forever. The window reload asked for a full in-memory-cap
+  (600-row) page, but the server clamps a page to 250 rows, and the reload
+  still centred the window as though it had all 600 -- so the rows that came
+  back landed hundreds of rows above the jump target, which was never
+  covered (only a jump to the very top happened to work). The reload now
+  fetches one server-sized page centred on the target, and the window grows
+  from there as you scroll. End additionally drives that load explicitly for
+  the real target and clamps to the last actual message, so a fast animated
+  jump can't strand the bottom on placeholders.
+- Scrolling deep into a very large folder in the Apple clients no longer gets
+  sluggish as more messages accumulate. The loaded message list is now a
+  sliding window (~600 rows): paging down trims the scrolled-past front, and
+  scrolling back up reloads it, so SwiftUI's per-update cost stays bounded no
+  matter how far you scroll instead of growing with the loaded count. The
+  scroll position is anchored by row id across each trim and reload so the
+  viewport doesn't jump, and the top-page refresh resumes once you return to
+  the top of the folder.
+- Deep-scrolling a large folder in the Apple clients is smoother and no longer
+  degrades the further you scroll. Two causes were addressed: pagination now
+  runs on a model-owned task instead of the scrolling row's SwiftUI `.task`, so
+  a page that has started loading completes and merges even when the row that
+  triggered it scrolls off-screen (rather than being cancelled as
+  URLError.cancelled and retried); and the on-disk envelope snapshot, which is
+  rewritten in full on each page (a write that grew with the loaded count), is
+  now debounced off the pagination critical path so it persists once the scroll
+  settles instead of stalling every page behind a growing write. The next page
+  is also prefetched further ahead (the lookahead scales with the page size) so
+  it is ready before the user reaches the end of the loaded rows.
+- The Apple message list no longer collapses a scrolled, deeply-paginated
+  folder back to the top page on a routine background refresh. A top-page
+  refresh now reconciles deletions only while the list still fits in one page;
+  once the user has scrolled past the first page it folds in new mail without
+  pruning the loaded tail. The previous design bounded that prune by a UID
+  band, which broke for the default arrival sort (the server pages by
+  INTERNALDATE while the client orders by the Date header, so the band spanned
+  most of the folder and flagged the paginated tail as expunged). A flaky
+  folder STATUS (missing or zero UIDVALIDITY) and an empty top-page fetch are
+  likewise no longer read as a mailbox rebuild or a mass expunge.
+- Replies from the Apple clients now carry In-Reply-To / References
+  headers. The detail view threads from the fetched message's headers,
+  envelopes decode the new threading fields, and `ReplyBuilder` prefers
+  the original's real References chain per RFC 5322; message-ids are
+  normalized to their angle-bracketed wire form at the submit seam.
+- The Apple clients' All / Unread / Flagged filter-pill counts now reflect
+  the whole folder, sourced from the server (IMAP STATUS `messages`/`unseen`
+  plus a new opt-in `?flagged=1` SEARCH FLAGGED count on `/folder_status`),
+  instead of counting only the envelopes paged into memory. This matches the
+  React webmail pills. During an active search the pills still count the
+  loaded matches, since the folder totals don't apply to a result set. The
+  flagged count is opt-in, so the inbox-badge and idle polls keep their
+  cheap STATUS-only round trip.
+- The admin web client no longer flashes a false "Unable to move/delete/flag"
+  error on a large bulk operation that actually succeeds. Bulk IMAP mutations
+  (move, set-flag, purge, empty-trash) now use a 30s request timeout that sits
+  just above the API's 29s ceiling, instead of the 10s default that could fire
+  before a chunked multi-thousand-message operation finished server-side.
+- iOS / visionOS message list now pins the folder name (e.g. "INBOX") to
+  the navigation bar at all times. The previous large-title default left
+  the title hidden on first appearance, only surfacing once the user
+  pulled down or scrolled up.
+- Pushes to `stage` and `development` now path-filter against the
+  commits actually pushed instead of the branch's full divergence from
+  `main`. `paths-filter`'s `base` defaults to the repository default
+  branch, so a push to a non-default deploy branch re-deployed every
+  area (and every docker tier) in which the branch differed from
+  `main` - e.g. a docker-only push also redeploying the React bundle.
+  Pushes to `main` were unaffected.
+- Restore the Terraform plan delta in the infra.yml plan annotation. It
+  had regressed to a "could not render the saved plan file" placeholder
+  because the `terraform plan` invocation lost its `-out` flag, so the
+  follow-up `terraform show` had no saved plan to render. The plan is
+  saved again, and when the delta is too long for a GitHub annotation it
+  is now truncated from the front so the `Plan: N to add...` summary line
+  always survives.
+
+### Security
+- Every third-party GitHub Action in the CI workflows is now pinned to a
+  full commit SHA with a trailing `# vX.Y.Z` comment, replacing the
+  floating `@vN` tags a publisher could silently re-point. A new
+  `github-actions` block in `.github/dependabot.yml` keeps those digests
+  current (the Docker base-image digests were already on Dependabot), so
+  the pins stay maintained without a separate Renovate app.
+- The Apple clients now wipe all locally cached mail when the user signs
+  out: the on-disk envelope snapshots and message bodies, the local draft
+  buffers, the outbox queue, and the in-memory address list are all cleared
+  before the session is dropped. The caches live in a shared, non-user-scoped
+  application-support directory, so previously a second account signing in on
+  the same device could read the prior user's mail straight from disk without
+  any re-fetch (and the outbox drain could even resubmit the prior user's
+  queued messages under the new session). As defense in depth for a hard
+  quit (which never reaches the sign-out path), sign-in also clears the
+  cache whenever the account differs from the last one used on the device.
+- CI now authenticates to AWS with GitHub OIDC instead of long-lived
+  access keys. Every AWS-touching workflow (infra, app, destroy, quiesce,
+  register-tfv, image-scan, nat_ami_build) requests an OIDC token
+  (`id-token: write`) and assumes a per-environment `cicd` IAM role via
+  `aws-actions/configure-aws-credentials`; the static
+  `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` secrets and the
+  `deploy_lambda` CLI profile are gone. Setup is by hand per account (an
+  OIDC provider + `cicd` role with a repo/environment-scoped trust
+  policy) and a per-environment `AWS_DEPLOY_ROLE_ARN` variable; see
+  `docs/aws.md`, `docs/github.md`, and `docs/terraform.md`.
+- The AWS Backup vault is now lock-protected (governance mode, 30-day
+  minimum retention) and every nightly recovery point is copied to a
+  second locked vault in `var.dr_region` (default `us-west-2`), so a
+  compromised admin or a regional event cannot erase the last 30 days
+  of backups. Recovery-point retention is now bounded at one year (30
+  days warm, then cold storage) instead of keep-forever. Cross-region
+  copy of DynamoDB recovery points requires a one-time, per-account
+  opt-in to advanced DynamoDB backup features; see
+  docs/disaster-recovery.md.
+- Mail-tier container images built in CI now publish buildx provenance
+  attestations (the SLSA build record, `mode=min`) to ECR alongside the
+  image; the `--provenance=false` flag that suppressed them is removed
+  from those builds. The certbot-renewal image keeps provenance off
+  because it is a Lambda container image and Lambda rejects the
+  multi-manifest index that an attached attestation produces.
+- The Claude automation workflow no longer runs with
+  `--permission-mode bypassPermissions`. Both jobs now use `acceptEdits`
+  plus an explicit `--allowed-tools` allowlist that omits destructive
+  shell verbs, and the untrusted issue/PR text embedded in the prompt is
+  fenced inside an `<untrusted-issue>` CDATA delimiter with an
+  instruction to treat it as data. The Dependabot remediation prompt
+  gets the same fencing. The allowlist-maintenance procedure is
+  documented in `docs/github.md`.
+- Both CloudFront distributions (admin app and front door) now use
+  origin access control (OAC) instead of the legacy origin access
+  identity, and the viewer TLS floor rises from `TLSv1.2_2021` to
+  `TLSv1.2_2025`. The bucket policies temporarily carry both the OAI
+  and OAC grants so the cutover is zero-downtime; the OAI resources
+  and grants are removed in a follow-on apply once verified.
+- The `cabal-counter` DynamoDB table (source of truth for OS user IDs)
+  now has point-in-time recovery, explicit server-side encryption, and
+  deletion protection. Every other identity- or data-bearing table
+  (`cabal-addresses`, `cabal-user-preferences`,
+  `cabal-user-domain-access`, `cabal-dmarc-reports`) gains deletion
+  protection too, so a destroy plan cannot drop them until the flag is
+  flipped off in a prior apply. The TTL-reaped `cabal-rate-limits`
+  table is deliberately left unprotected.
+- Each Lambda zip uploaded by CI now ships a `*.zip.manifest.json`
+  build-provenance sidecar (sha256, git commit, dirty flag, build
+  timestamp, builder identity, runner OS, and workflow-run URL) next to
+  the zip in S3. Terraform does not consume it yet; it records, per
+  artefact, exactly which commit and run produced the bytes so a later
+  step can cross-check the deployed `source_code_hash`.
+- Lambda dependency installs are now hash-pinned. Every per-function
+  `requirements.txt` carries `--hash` constraints for its packages and
+  their full transitive tree (imapclient now lists an explicit, pinned
+  `six`), and the api/counter build scripts install with
+  `pip --require-hashes`. A tampered or mirror-substituted wheel now
+  fails the build instead of being bundled into the function zip.
+- Every CI S3 upload target is now ownership-verified before the upload.
+  A `verify-bucket-owner.sh` preflight runs `aws s3api head-bucket
+  --expected-bucket-owner` (the high-level `aws s3 cp` / `aws s3 sync`
+  commands the deploy path uses do not accept that flag) ahead of the
+  React and front-door syncs, the Lambda zip/sidecar/manifest uploads in
+  `build-api-one.sh` and `build-counter.sh`, and the bootstrap stub
+  uploads in `upload-stub-lambdas.sh`. A leaked deploy credential can no
+  longer silently write to a same-named bucket in another account; the
+  run fails closed instead.
+- Terraform state can be encrypted at rest under a per-environment
+  customer-managed KMS key (SSE-KMS): set the `STATE_KMS_KEY_ID` GitHub
+  variable for an environment to a key ARN and `make-terraform.sh` emits a
+  backend with `encrypt` + `kms_key_id`, so reading that environment's
+  state then requires `kms:Decrypt` in addition to `s3:GetObject`. Leaving
+  the variable unset keeps the prior plaintext-SSE-S3 backend unchanged.
+  See `docs/terraform-state-encryption.md`.
+- The admin React app now builds with Vite 8 (up from Vite 6), which
+  bundles via rolldown rather than esbuild and drops the transitive
+  `esbuild` package from the dependency tree entirely, resolving Dependabot
+  alert #150 (esbuild `< 0.28.1` remote-code-execution advisory). No Vite
+  6.x or 7.x release could reach the patched esbuild line. `@vitejs/plugin-react`
+  was bumped to 6.x to match; the build now requires Node `^20.19 || >=22.12`.
+
 ## [0.10.23] - 2026-06-11
 
 ### Added
