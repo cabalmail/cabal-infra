@@ -3,6 +3,7 @@
 */
 
 resource "aws_efs_file_system" "mailstore" {
+  #checkov:skip=CKV2_AWS_18:mailstore is in the AWS Backup selection (module.backup aws_backup_selection.resources) when var.backup is set; the backup module is count-gated and the EFS ARN crosses the module boundary as a variable, which checkov graph checks cannot trace
   encrypted = true
   lifecycle_policy {
     transition_to_ia = "AFTER_30_DAYS"

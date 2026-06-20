@@ -202,7 +202,9 @@ public enum ReplyBuilder {
     }
 
     private static func attributionLine(envelope: Envelope) -> String {
-        let sender = envelope.from.first?.name
+        // displayName, not raw name: cached pre-strip envelopes may still
+        // carry RFC 5322 wrapping quotes in `name`.
+        let sender = envelope.from.first?.displayName
             ?? envelope.from.first.map { "\($0.mailbox)@\($0.host)" }
             ?? "someone"
         guard let date = envelope.date ?? envelope.internalDate else {
@@ -229,17 +231,25 @@ public enum ReplyBuilder {
     }
 
     /// Builds RFC 5322 §3.6.4 threading headers. `In-Reply-To` is the
-    /// original's `Message-ID`; `References` chains the original's existing
-    /// References plus its Message-ID. Forwards drop these on purpose — a
-    /// forward is a new conversation branch, not a continuation.
+    /// original's `Message-ID`; `References` is the original's References
+    /// chain plus its Message-ID. When the envelope carries no References
+    /// (older cache snapshots, pre-rollout payloads), the chain degrades to
+    /// `[In-Reply-To, Message-ID]` — one hop of ancestry instead of the
+    /// full thread. Forwards drop these on purpose — a forward is a new
+    /// conversation branch, not a continuation.
     private static func threadingHeaders(from envelope: Envelope, mode: ReplyMode) -> Threading {
         guard mode != .forward else {
             return Threading(inReplyTo: nil, references: [])
         }
         let angleBrackets = CharacterSet(charactersIn: "<>")
         let messageId = envelope.messageId?.trimmingCharacters(in: angleBrackets)
-        let prior = envelope.inReplyTo?.trimmingCharacters(in: angleBrackets)
-        var references = prior.map { [$0] } ?? []
+        var references: [String]
+        if envelope.references.isEmpty {
+            let prior = envelope.inReplyTo?.trimmingCharacters(in: angleBrackets)
+            references = prior.map { [$0] } ?? []
+        } else {
+            references = envelope.references.map { $0.trimmingCharacters(in: angleBrackets) }
+        }
         if let messageId, !references.contains(messageId) {
             references.append(messageId)
         }

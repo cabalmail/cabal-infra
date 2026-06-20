@@ -50,6 +50,15 @@ public actor EnvelopeCache {
         try? fileManager.removeItem(at: url)
     }
 
+    /// Drops every folder snapshot. Called on sign-out so the next account
+    /// to sign in on this device can't read the previous user's envelopes
+    /// from disk. The directory is recreated empty so the actor stays usable
+    /// (the cache lives in a shared, non-user-scoped path).
+    public func clearAll() throws {
+        try? fileManager.removeItem(at: directory)
+        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+    }
+
     public func merge(envelopes: [Envelope], uidValidity: UInt32, uidNext: UInt32, into folder: String) throws {
         let existing = snapshot(for: folder)
         var merged: [UInt32: Envelope]

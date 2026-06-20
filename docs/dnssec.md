@@ -1,0 +1,88 @@
+# DNSSEC
+
+DNSSEC signing is available for every zone Cabalmail manages: the control-domain zone (owned by the bootstrap `terraform/dns` stack) and each mail-apex zone (owned by `terraform/infra/modules/domains`). It is opt-in per environment via the `TF_VAR_DNSSEC_ENABLED` GitHub environment variable (Terraform `var.dnssec_enabled`, default `false`).
+
+When enabled, each stack creates one asymmetric KMS key (ECC_NIST_P256, in us-east-1 - a Route 53 requirement regardless of where the stack runs), a per-zone key-signing key (KSK), and turns on zone signing. KMS keys bill about $1/month each, so an enabled environment pays about $2/month (one key per stack).
+
+## The one rule that matters
+
+**Sign first. DS second.** A zone that is signed but has no DS record at the registrar is treated as insecure by resolvers - everything keeps working, nothing validates yet. A zone whose registrar publishes a DS record while the zone is *not* serving signed responses is **down** for every validating resolver (SERVFAIL). Every procedure below is ordered around this asymmetry: turning signing on is safe; publishing or removing DS records is the dangerous step and always happens against an already-consistent zone.
+
+The same rule inverted governs disablement: **remove DS first, stop signing second** - and wait out resolver caches in between.
+
+## Enabling DNSSEC for an environment
+
+Run this in development first, then stage, then prod. The DS step requires registrar access and at least one wait, so budget a day per environment.
+
+1. **Check the CI deploy policy.** The first apply needs `kms:*` and the Route 53 DNSSEC actions (`route53:CreateKeySigningKey`, `route53:EnableHostedZoneDNSSEC`, `route53:DisableHostedZoneDNSSEC`, plus `ActivateKeySigningKey`/`DeactivateKeySigningKey`/`DeleteKeySigningKey` for the disable path). Grant KMS as `kms:*`, not an enumerated list - in practice Terraform's key lifecycle surfaced new `kms:` actions one AccessDenied at a time until the enumeration was abandoned. The per-account CI policy is hand-managed; the reference policy in [the AWS setup guide](./aws.md) carries these grants, but an existing account's live policy may predate them.
+2. **Set the variable.** In the GitHub environment for the target account, set `TF_VAR_DNSSEC_ENABLED=true`.
+3. **Apply the bootstrap stack.** The dns stage only runs when `terraform/dns/**` changes, so dispatch `infra.yml` manually with the `bootstrap` input checked. This signs the control-domain zone and outputs `control_domain_ds_record`.
+4. **Apply the infra stack.** The same dispatch (or any infra push) signs every mail-apex zone and outputs `mail_domain_ds_records`.
+5. **Verify signing before touching the registrar.** For each apex:
+
+   ```sh
+   # RRSIG present in the answer once signing is live
+   dig +dnssec @8.8.8.8 mail-admin.<apex> TXT
+   # KSK visible
+   dig +dnssec @8.8.8.8 <apex> DNSKEY
+   ```
+
+   Wait until RRSIGs appear and the zone's old (unsigned) TTLs have expired - give it 24 hours after the apply.
+6. **Publish the chain of trust at each registrar.** The control domain and each mail apex are separate registrations; each needs this step (same console as the nameserver delegation, see [registrar.md](./registrar.md)). What the registrar asks for varies, and pasting the wrong shape silently produces a DS record that matches nothing - the outage case:
+
+   - Most registrars take the **DS record** directly. Paste the zone's `ds_record` output value, *without* the surrounding quotes Terraform prints.
+   - **Route 53 Registered Domains** (and a few other registrars) instead take the KSK's base64 **public key** plus key type and algorithm, and the registry derives the DS record itself. In Registered domains > the apex > DNSSEC keys > Add: key type `257 - KSK`, algorithm `13 - ECDSAP256SHA256`, and the public key - NOT the `ds_record` value, whose hex digest can pass the field's validation and then break resolution. Fetch the public key with:
+
+     ```sh
+     aws route53 get-dnssec --hosted-zone-id <zone-id> \
+       --query 'KeySigningKeys[?Status==`ACTIVE`].PublicKey' --output text
+     ```
+
+     Use the *public* zone's id: the control domain also has a VPC-private twin zone with the same name, so filter on `Config.PrivateZone == false` when looking the id up by name.
+
+   Do not be alarmed that every mail apex shows the same public key and key tag: the mail zones deliberately share one KMS key, so their KSKs are identical (the control zone's differs - its key belongs to the bootstrap stack). Only the DS digest is per-domain, because it hashes the owner name. Either way, once the registry has propagated, confirm each published DS matches Terraform's `ds_record` output for that apex: `dig <apex> DS +short`.
+7. **Verify the chain of trust.**
+
+   ```sh
+   # AD flag set = a validating resolver accepted the chain
+   dig +dnssec @8.8.8.8 mail-admin.<apex> TXT | grep flags
+   # whois shows the DS at the registry
+   whois <apex> | grep -i dnssec
+   ```
+
+   A missing AD flag in the first hours is usually resolver-side negative caching, not a problem: any lookup made before the registry published the DS (including this step's own test queries) caches an "insecure delegation" proof until the parent's DS TTL expires, and big anycast resolvers expire it per cache node, so results can differ between resolvers and even between repeated queries. To distinguish lag from a real fault, skip the caches: ask the TLD's own name servers for the DS (`dig @<tld-ns> <apex> DS +norecurse`, e.g. `a0.nic.io` for .io) and compare it byte-for-byte with the `ds_record` output, and cross-check a second resolver (`dig +dnssec @1.1.1.1 ...`). Registry DS matches and *any* validating resolver sets AD = the chain is correct, wait out the caches. A *mismatched* registry DS also looks like "not working yet" until caches expire and then becomes an outage - that is the case this check exists to catch early. [DNSViz](https://dnsviz.net/) gives a full-chain visualization if anything still looks off.
+8. **Watch mail flow.** DMARC/SPF/MX lookups now carry signatures. Watch the smtp tiers' CloudWatch logs and the DMARC dashboard for a day before promoting the change to the next environment.
+
+## Disabling DNSSEC (rollback)
+
+Strictly in this order:
+
+1. Delete the DS record at the registrar (every apex being disabled).
+2. Wait at least 24 hours - until the DS TTL plus the parent zone's TTL have expired everywhere. Validating resolvers must stop expecting signatures before the zone stops producing them.
+3. Set `TF_VAR_DNSSEC_ENABLED=false` and apply (bootstrap stage via manual dispatch, then infra). Terraform disables signing, deactivates and deletes the KSKs, and schedules the KMS keys for deletion (7-day window).
+
+Out-of-order rollback - turning off signing while a DS record is still published - takes the domain down for validating resolvers. There is no faster path; the wait is the rollback.
+
+## KSK rotation (yearly)
+
+AWS's guidance for KMS-backed KSKs is to rotate roughly yearly. Automatic KMS rotation does not exist for asymmetric keys, so rotation is a double-signature dance. Using the console or CLI against one zone at a time:
+
+1. Create a second KSK on the zone backed by a new KMS key (`aws route53 create-key-signing-key`). The zone now publishes both DNSKEYs and signs with both.
+2. Add the new KSK's DS record at the registrar *alongside* the old one.
+3. Wait 24+ hours (parent TTL).
+4. Remove the old DS record at the registrar.
+5. Wait 24+ hours again.
+6. Deactivate and delete the old KSK, then schedule its KMS key for deletion.
+7. Update the Terraform state to match (the KSK resource's `key_management_service_arn` now points at the new key): change the key resource, apply, and verify the plan is a no-op against the rotated zone.
+
+In practice, for a solo-operator system it is simpler to rotate by zone-rebuild during a maintenance window: disable DNSSEC entirely (procedure above), let caches drain, re-enable with a fresh key. Both paths are valid; the double-DS dance avoids the unsigned window.
+
+## Retiring a mail apex / environment teardown
+
+The mail zones no longer set `force_destroy`, so `terraform destroy` refuses to delete a zone that still contains records (address records are created out of band by the `new` Lambda). To retire an apex:
+
+1. If DNSSEC is enabled: remove the registrar DS record, wait 24h, disable signing for that zone.
+2. Revoke or delete the zone's address records (the admin app, or `aws route53 change-resource-record-sets`). Only the apex NS and SOA records may remain.
+3. Remove the apex from `TF_VAR_MAIL_DOMAINS` and apply; the empty zone deletes cleanly.
+
+An environment teardown (`destroy_terraform.yml`) with DNSSEC enabled fails at the zone-deletion step unless signing was disabled first - that is deliberate; follow steps 1-2 for every apex before tearing down.

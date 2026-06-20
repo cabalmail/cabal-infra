@@ -15,12 +15,27 @@ provider "aws" {
   }
 }
 
+# Route 53 requires the KMS key backing a DNSSEC key-signing key to
+# live in us-east-1, regardless of where the rest of the stack runs.
+# Only dnssec.tf uses this alias.
+provider "aws" {
+  alias  = "use1"
+  region = "us-east-1"
+  default_tags {
+    tags = {
+      environment          = var.prod ? "production" : "non-production"
+      managed_by_terraform = "y"
+      terraform_repo       = var.repo
+    }
+  }
+}
+
 # Create the zone for the control domain.
 resource "aws_route53_zone" "cabal_control_zone" {
   name          = var.control_domain
   comment       = "Control domain for cabal-mail infrastructure"
   force_destroy = true
-  tags          = {
+  tags = {
     Name = "cabal-control-zone"
   }
 }

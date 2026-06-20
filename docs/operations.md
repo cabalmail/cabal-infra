@@ -2,9 +2,9 @@
 
 Mail is stored in AWS Elastic File System, and address data is stored in DynamoDB. AWS EFS is designed to achieve [99.999999999% (eleven nines) durability](https://aws.amazon.com/efs/faq/#Data_protection_.26_availability). AWS does not publish a durability rating for DynamoDB, but they [do say](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Introduction.html#ddb_highavailability) that they replicate DynamoDB tables across multiple availability zones for "high durability". But however much you may trust AWS's assurances, they cannot protect you from users deliberately deleting mail and then changing their mind.
 
-If you want Cabalmail to establish backups for you, set the `backup` input variable to `true`. Doing this may prevent clean destruction of a Cabalmail stack. If you would prefer to roll your own backups, AWS publishes instructions for backing up [EFS](https://docs.aws.amazon.com/efs/latest/ug/efs-backup-solutions.html) and [DynamoDB](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Backup.Tutorial.html).
+If you want Cabalmail to establish backups for you, set the `backup` input variable to `true`. Nightly recovery points of the addresses table and the EFS mailstore land in a lock-protected vault, are copied to a second locked vault in `dr_region`, and are retained for a year. Cross-region copy of the DynamoDB recovery points requires a one-time account opt-in to advanced DynamoDB backup features. See [Disaster recovery](./disaster-recovery.md) for the opt-in, the verification commands, and the restore runbooks. If you would prefer to roll your own backups, AWS publishes instructions for backing up [EFS](https://docs.aws.amazon.com/efs/latest/ug/efs-backup-solutions.html) and [DynamoDB](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Backup.Tutorial.html).
 
-Cabalmail sets `prevent_destroy` on the backup vault, so enabling Cabalmail backups will prevent a complete clean up by `terraform destroy`.
+Cabalmail sets `prevent_destroy` and a governance-mode vault lock on the backup vaults, so enabling Cabalmail backups deliberately prevents a one-shot clean up by `terraform destroy`; the teardown procedure is in the disaster-recovery doc.
 
 # Everyday Use
 
@@ -18,6 +18,14 @@ You also _could_ create a single address on a Cabalmail system and just give tha
 
 Setting `TF_VAR_MONITORING` to `true` in a GitHub environment adds [monitoring](./monitoring.md) infrastructure. Setting up monitoring is not turn-key. There are many manual steps involved in establishing alert thresholds, communication, configuration, etc. Once established, there are some run books in [the operations/runbooks directory](./operations/runbooks) that you can use as the basis for incident response. These are provided as templates. You should modify them as appropriate for your use cases and requirements.
 
+# DNSSEC
+
+DNSSEC signing for the control-domain and mail-apex zones is opt-in per environment (`TF_VAR_DNSSEC_ENABLED`). Enabling, disabling, and KSK rotation all involve registrar DS-record steps whose ordering matters - a DS record published against an unsigned zone is an outage. See [DNSSEC](./dnssec.md) for the runbooks before touching any of it.
+
+# NLB access logs
+
+The mail NLB writes TLS-connection access logs (the IMAPS listener; SMTP listeners are TCP passthrough and produce none) to a dedicated, versioned, 180-day-lifecycled S3 bucket. See [NLB access logs](./nlb-access-logs.md) for what the logs do and do not cover and for the Athena setup to query them.
+
 # NAT and private-subnet egress
 
 Every private-subnet container reaches the internet and all AWS service APIs through the VPC's NAT, and the VPC has no VPC endpoints, so NAT health is load-bearing: if egress breaks, outbound mail stalls, the `/send` Lambda hangs, and the mail tiers stop shipping logs to CloudWatch even though the containers keep running. See [NAT and private-subnet egress](./nat.md) for the two NAT modes (EC2 instances or NAT Gateways), the gateway-based instance-mode bootstrap, and how to diagnose an egress outage.
@@ -25,6 +33,14 @@ Every private-subnet container reaches the internet and all AWS service APIs thr
 # Quiescing a non-prod environment
 
 The `quiesce` GitHub workflow scales a development or stage environment's running compute (ECS services, the ECS-instance ASG, NAT instances) to zero so it stops accruing hourly charges. Data is preserved. The workflow refuses to run against prod. See [Quiesce: scale a non-prod environment to zero](./quiesce.md) for the full list of what gets scaled, what is preserved, and how to make the quiesce durable across other Terraform runs.
+
+# Terraform state encryption
+
+By default the Terraform state bucket uses SSE-S3, so any principal with `s3:GetObject` reads state back decrypted. You can upgrade an environment to SSE-KMS under a per-environment customer-managed key, so that reading state also requires `kms:Decrypt`. It is opt-in per environment via the `STATE_KMS_KEY_ID` GitHub variable. See [Encrypting Terraform state with SSE-KMS](./terraform-state-encryption.md) for the key-creation, greenfield, and migration runbooks.
+
+# Draft sync and threading headers
+
+Envelope payloads from `/list_envelopes` and `/search_envelopes` carry the RFC 5322 threading identity (`message_id` / `in_reply_to` / `references`), and the `/save_draft` Lambda gives drafts a server-side lifecycle (save returns UIDPLUS coordinates, save can atomically replace a prior copy, discard removes one — all Drafts-scoped and UIDVALIDITY-guarded). The Apple clients sync compose drafts across devices through that path. See [Draft sync and threading headers](./draft-sync-and-threading.md) for the wire contract, the safety posture, and the client sync loop.
 
 # IMAP full-text search index
 

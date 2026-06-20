@@ -39,6 +39,12 @@ cd ./lambda/api
 
 JOBS="${BUILD_JOBS:-8}"
 
+# Verify the deploy bucket is owned by this account once, before fanning out
+# to the parallel uploads. The high-level `aws s3 cp` the children use cannot
+# take --expected-bucket-owner, so this head-bucket preflight is the gate
+# (see .github/scripts/verify-bucket-owner.sh).
+../../.github/scripts/verify-bucket-owner.sh "admin.${TF_VAR_CONTROL_DOMAIN}"
+
 funcs=()
 for FUNC in */ ; do
   FUNC="${FUNC%/}"

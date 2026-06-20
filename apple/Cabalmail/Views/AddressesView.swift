@@ -50,6 +50,7 @@ struct AddressesView: View {
             content
                 .navigationTitle("Addresses")
                 .toolbar { toolbarContent }
+                .settingsSheetDoneButton()
                 .refreshable { await model?.refresh(force: true) }
                 .task { await ensureModel() }
                 .sheet(isPresented: $showNewAddressSheet) { newAddressSheet }

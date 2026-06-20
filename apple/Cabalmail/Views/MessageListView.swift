@@ -49,6 +49,18 @@ struct MessageListView: View {
     // can read them without round-tripping through accessors.
     @State var model: MessageListViewModel?
     @State private var composeSeed: Draft?
+    /// Fixed list-row height. Rows are pinned to this so the virtualized list
+    /// (`+Selection`'s `virtualizedList`) can reserve the off-window rows as
+    /// exact blank space: the scroll extent then reflects the whole folder, the
+    /// scrollbar is true-to-size, and each row keeps its absolute position.
+    /// The index-addressed virtualization needs ONE uniform height, so this has
+    /// to clear the tallest row -- a sender line plus a two-line subject. A
+    /// one-line subject (the common case) keeps the height with a little
+    /// whitespace below; that slack is the price of uniform rows. Trimmed from
+    /// 72 (which left far more gap than the content needs) toward that 2-line
+    /// floor; lower it further only if two-line subjects still fit without
+    /// clipping.
+    static let rowHeight: CGFloat = 58
     /// `true` while the filter sheet is presented over the message list.
     @State var filtersPresented = false
     /// Set by the row context menu's "Move to folder…" item; presents the
@@ -79,6 +91,12 @@ struct MessageListView: View {
     /// reads `\.isSearching` from the `.searchable` scope instead — see
     /// `SearchActiveScope` in `MessageListView+Filter.swift`.
     @FocusState var inlineSearchFocused: Bool
+    /// Focus state for the message list itself (wide/keyboard layouts). The
+    /// virtualized `ScrollView` binds this so Up/Down/Cmd-A/Esc are scoped to
+    /// the list -- they fire only while it holds focus, never stealing those
+    /// keys from the search field. Set true when a row is clicked. Non-private
+    /// so the `+Selection` extension can drive it.
+    @FocusState var listFocused: Bool
     #if !os(macOS)
     /// Drives the native multi-select edit mode on wide touch layouts (iPad,
     /// visionOS): the Select button toggles it, and while active the system
@@ -206,7 +224,7 @@ struct MessageListView: View {
             Task { await model.clearSearch() }
         }
         .refreshable {
-            await model.refresh()
+            await model.refreshFromPull()
         }
         .safeAreaInset(edge: .top, spacing: 0) { topInset(model: model) }
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -242,6 +260,15 @@ extension MessageListView {
             }
         }
         .navigationTitle(folder.name)
+        #if os(iOS) || os(visionOS)
+        // Without this, `.searchable` + the `safeAreaInset(.top)` filter
+        // tabs leave the default large-title bar in a half-collapsed
+        // state on first appearance: the folder name (e.g. "INBOX") is
+        // hidden until the user pulls down or scrolls up. Inline keeps
+        // it pinned to the nav bar at all times, matching how the same
+        // platforms treat MessageDetailView.
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
         .toolbar {
             // Compose stays as a toolbar item — it's a primary action
             // pinned to the top edge in every Mac mail client. The list-

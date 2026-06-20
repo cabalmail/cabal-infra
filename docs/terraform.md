@@ -17,6 +17,8 @@ The backend configuration is not committed. At CI time, [`make-terraform.sh`](..
 
 One bucket serves every environment; each environment-stack pair gets its own key.
 
+By default state objects use SSE-S3, which any principal with `s3:GetObject` can read back decrypted. An environment can be upgraded to SSE-KMS under a per-environment customer-managed key -- so that reading state also requires `kms:Decrypt` -- by setting the `STATE_KMS_KEY_ID` GitHub variable for that environment. See [Encrypting Terraform state with SSE-KMS](./terraform-state-encryption.md).
+
 There is no DynamoDB lock table. Concurrent runs are prevented in the workflow instead: a GitHub Actions concurrency group serializes runs per branch and never cancels an in-flight apply.
 
 ### Creating the bucket
@@ -27,11 +29,11 @@ Create the bucket before the first workflow run, in the same region as `TF_VAR_A
 
 - Enable bucket versioning. State files are the one thing you will be glad to have old versions of.
 - Keep "Block all public access" on and leave Object Ownership at the default "bucket owner enforced".
-- Default encryption (SSE-S3) is sufficient.
+- Default encryption (SSE-S3) is sufficient to start; you can later upgrade any environment's state to SSE-KMS under a customer-managed key (see [Encrypting Terraform state with SSE-KMS](./terraform-state-encryption.md)).
 
 ### Cross-account access
 
-Each environment (prod, stage, development) runs in its own AWS account, but all of their state lives in this one bucket, which exists in exactly one of those accounts (or in a separate account altogether). The `cicd` user in each environment account already has the identity-side S3 permission (see [AWS setup](./aws.md) step 5), but identity-side permission alone does not cross account boundaries: for every environment account other than the one that owns the bucket, the bucket's policy must also grant access. In the bucket-owner account, attach a bucket policy like this, listing each foreign-account `cicd` user:
+Each environment (prod, stage, development) runs in its own AWS account, but all of their state lives in this one bucket, which exists in exactly one of those accounts (or in a separate account altogether). The `cicd` role in each environment account already has the identity-side S3 permission (see [AWS setup](./aws.md) step 5), but identity-side permission alone does not cross account boundaries: for every environment account other than the one that owns the bucket, the bucket's policy must also grant access. In the bucket-owner account, attach a bucket policy like this, listing each foreign-account `cicd` role:
 
 ```json
 {
@@ -42,8 +44,8 @@ Each environment (prod, stage, development) runs in its own AWS account, but all
             "Effect": "Allow",
             "Principal": {
                 "AWS": [
-                    "arn:aws:iam::222222222222:user/cicd",
-                    "arn:aws:iam::333333333333:user/cicd"
+                    "arn:aws:iam::222222222222:role/cicd",
+                    "arn:aws:iam::333333333333:role/cicd"
                 ]
             },
             "Action": [
@@ -61,13 +63,13 @@ Each environment (prod, stage, development) runs in its own AWS account, but all
 }
 ```
 
-The bucket-owner account's own `cicd` user needs no statement here.
+The bucket-owner account's own `cicd` role needs no statement here.
 
 ## How the workflow drives plan and apply
 
 The workflow runs on pushes to the three named branches -- `main` (prod), `stage` (stage), and `development` (development) -- that touch `terraform/dns/**`, `terraform/infra/**`, the workflow itself, or its helper scripts. It can also be run manually from the Actions tab (`workflow_dispatch`). Pushes from any other branch never deploy.
 
-The branch selects the GitHub Environment, and the environment supplies everything Terraform needs: AWS credentials come from the repository secrets, and `terraform.tfvars` is assembled at CI time from the environment's `TF_VAR_*` variables. There is no committed tfvars file; [GitHub setup](./github.md) documents every secret and variable. For each stack the sequence is:
+The branch selects the GitHub Environment, and the environment supplies everything Terraform needs: AWS access comes from assuming that environment's `cicd` role via GitHub OIDC (no static credentials), and `terraform.tfvars` is assembled at CI time from the environment's `TF_VAR_*` variables. There is no committed tfvars file; [GitHub setup](./github.md) documents every secret and variable. For each stack the sequence is:
 
 1. **Generate the backend.** `make-terraform.sh` writes `backend.tf` as described above.
 2. **Scan.** Checkov, tflint, and Trivy scan the stack. A finding that is not in the stack's checked-in baseline/ignore files fails the job and blocks the apply.
@@ -76,7 +78,7 @@ The branch selects the GitHub Environment, and the environment supplies everythi
 5. **Apply.** `terraform apply -auto-approve`.
 6. **Post-apply.** Any ECS service whose task-definition family advanced during the apply is rolled to the new revision.
 
-The plan and apply jobs also reconcile the deployed Docker image tag (SSM parameter `/cabal/deployed_image_tag`) and the deployed Lambda code hashes with what is actually running, so a topology-only Terraform change does not roll back an application deploy that happened out of band via the "Build and Deploy Application" workflow.
+The plan and apply jobs also reconcile the deployed Docker image tags and the deployed Lambda code hashes with what is actually running, so a topology-only Terraform change does not roll back an application deploy that happened out of band via the "Build and Deploy Application" workflow. Image tags are tracked per tier: each `cabal-*` ECS service's running tag is copied into the SSM parameter `/cabal/deployed_image_tag/<tier>` before plan, and each task definition reads its own tier's parameter, so tiers that deploy at different times keep their own tags. The legacy global parameter `/cabal/deployed_image_tag` remains as the fallback for any tier whose per-tier key has not been written yet, and as the bootstrap-sentinel carrier for brand-new environments.
 
 ## The dns bootstrap stage
 

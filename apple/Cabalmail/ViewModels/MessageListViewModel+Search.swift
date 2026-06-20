@@ -18,7 +18,18 @@ extension MessageListViewModel {
     /// returns envelopes plus per-row source folders in a single round
     /// trip. Cross-folder results populate `sourceFolderByUID` so
     /// dispose / flag operations route per-row to the correct mailbox.
-    func runSearch() async {
+    func runSearch(resetFilterTab: Bool = true) async {
+        // A text search is "All" mode -- its loaded results drive the pill
+        // counts. A pill-driven search (`selectFilter`) and the in-place
+        // refresh of an active search pass false to keep the pill's `filterTab`.
+        // Leaving a pill filter (the only thing that sets filterTab != .all) for
+        // a text search drops the flag/scope the pill imposed, so the text
+        // search isn't silently AND-ed with it; sheet-set filters (filterTab
+        // stays .all) are untouched.
+        if resetFilterTab {
+            if filterTab != .all { searchFilters = MessageSearchFilters() }
+            filterTab = .all
+        }
         let trimmed = searchQuery.trimmingCharacters(in: .whitespaces)
         if trimmed.isEmpty && searchFilters.isEmpty {
             await clearSearch()
@@ -44,6 +55,29 @@ extension MessageListViewModel {
         }
     }
 
+    /// Drive a filter pill. Unread / Flagged run a fresh folder-scoped server
+    /// search so every match in the folder shows -- not just the loaded rows --
+    /// while All returns to folder mode. A pill replaces any text search; the
+    /// richer text-plus-flag combination stays available through the filter
+    /// sheet. The pill stays highlighted via `filterTab`, and because
+    /// `filterTab` is non-`.all` the counts stay server-sourced (see
+    /// `pillCount`) rather than counting the loaded results.
+    func selectFilter(_ filter: MessageFilter) async {
+        guard filter != filterTab else { return }
+        filterTab = filter
+        guard filter != .all else {
+            await clearSearch()
+            return
+        }
+        searchQuery = ""
+        searchFilters = MessageSearchFilters(
+            unread: filter == .unread,
+            flagged: filter == .flagged,
+            thisFolderOnly: true
+        )
+        await runSearch(resetFilterTab: false)
+    }
+
     /// Drops the active search, restores folder-mode metadata, and
     /// re-runs `refresh()` so the user lands back on the folder view.
     /// Called by the search banner's clear button and by `runSearch()`
@@ -52,22 +86,30 @@ extension MessageListViewModel {
     /// The in-memory envelope list is wiped before refreshing. Search
     /// is cross-folder by default, so `envelopes` can hold UIDs from
     /// other folders (e.g. Archive UID 957). `applyRefreshPage`'s
-    /// disappear-detection only prunes UIDs that fall inside the
-    /// current folder's `keepingRange`, so foreign UIDs would otherwise
-    /// survive as phantom rows that 502 on tap (IMAP fetch can't find
+    /// disappear-detection only reconciles the current folder's top
+    /// page, so foreign UIDs would otherwise survive as phantom rows
+    /// that 502 on tap (IMAP fetch can't find
     /// them in this folder, helper.py raises `KeyError`). Same pattern
     /// as `setSort(_:)`.
     func clearSearch() async {
+        dbg("clearSearch")
         searchQuery = ""
         searchFilters = MessageSearchFilters()
+        // Folder mode is "All" mode: reset the pill too, so clearing a search
+        // (including the banner's clear button while a pill filter is active)
+        // can't strand a highlighted pill over a plain folder view.
+        filterTab = .all
         isSearchActive = false
         sourceFolderByUID = [:]
         searchTotalEstimate = 0
         searchTruncated = false
         searchFoldersSearched = []
         envelopes.removeAll()
-        lowestUID = nil
+        totalMessages = 0
+        unseen = 0
+        flagged = 0
         hasMore = true
+        resetWindow()
         await refresh()
     }
 
@@ -91,7 +133,12 @@ extension MessageListViewModel {
             before: filters.before,
             unread: filters.unread,
             flagged: filters.flagged,
-            hasAttachment: filters.hasAttachment
+            hasAttachment: filters.hasAttachment,
+            // A pill filter promises "all matches in the folder," so fetch the
+            // server's max page (MAX_LIMIT) rather than the 50-row text-search
+            // default; the count/disclosure banner covers the rare overflow.
+            // Derived from filterTab so a background refresh keeps the wide page.
+            limit: filterTab == .all ? nil : 200
         )
     }
 }

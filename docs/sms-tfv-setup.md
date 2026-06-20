@@ -16,7 +16,7 @@ Before you trigger the workflow:
    - **Commit it to the repo.** Save the file as `front-door/opt-in-screenshot.png`. The workflow picks it up automatically.
    - **Host it elsewhere.** Pass an HTTPS URL via the `opt_in_image_url` workflow input. The workflow fetches it at run time. This avoids committing a binary that may need to be regenerated whenever the signup screen changes.
 
-4. **IAM permissions on the `terraform` user.** The workflow re-uses the existing `terraform` IAM user's credentials (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`) from the `infra.yml` workflow. That user does not have `sms-voice:*` permissions by default; attach the inline policy below before triggering the workflow for the first time on each AWS account. The policy is intentionally action-scoped rather than wildcarded so future API additions are reviewable.
+4. **IAM permissions on the `cicd` role.** The workflow assumes the same `cicd` deploy role via GitHub OIDC that `infra.yml` uses (see [AWS setup](./aws.md) step 7). That role does not have `sms-voice:*` permissions by default; attach the inline policy below to the role before triggering the workflow for the first time on each AWS account. The policy is intentionally action-scoped rather than wildcarded so future API additions are reviewable.
 
    ```json
    {
@@ -50,7 +50,7 @@ Before you trigger the workflow:
 
 ## GitHub Environment configuration
 
-For each environment you want to enable TFV in (typically `stage` first, then `prod`), set the `TFV_*` variables and secrets under Settings -> Environments -> [environment name]. The full list of names, examples, and descriptions is in [docs/github.md](github.md#tfv-registration). The `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_REGION` repository secrets are reused from `infra.yml` and do not need to be duplicated.
+For each environment you want to enable TFV in (typically `stage` first, then `prod`), set the `TFV_*` variables and secrets under Settings -> Environments -> [environment name]. The full list of names, examples, and descriptions is in [docs/github.md](github.md#tfv-registration). The `AWS_REGION` repository secret and the per-environment `AWS_DEPLOY_ROLE_ARN` variable are reused from `infra.yml` and do not need to be duplicated.
 
 ## Triggering the workflow
 

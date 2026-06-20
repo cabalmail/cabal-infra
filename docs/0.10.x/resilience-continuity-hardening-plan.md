@@ -7,7 +7,7 @@ Cabalmail's backups, audit trails, and DNS-integrity story have grown additively
 Five themes:
 
 1. **Backup integrity.** The AWS Backup vault has no `aws_backup_vault_lock_configuration`. An admin who can call `aws backup delete-backup-vault` (which our deploy IAM principal can) can wipe the entire backup history. Backups are single-region and single-account: a regional outage or account compromise loses everything.
-2. **DynamoDB completeness.** The `cabal-counter` table has neither PITR nor SSE explicitly. It is the source of truth for OS user IDs — wiping it would break IMAP/SMTP auth for every existing user.
+2. **DynamoDB completeness.** The `cabal-counter` table has neither PITR nor SSE explicitly.
 3. **NLB and API audit trails.** No NLB access logs. API Gateway access logs exist but the per-tier mail traffic (993/587/465) has no equivalent. Incident investigation today is "read CloudWatch container logs, hope they captured what you need."
 4. **DNS integrity.** Neither the control zone (`terraform/dns`) nor the mail-domain zones (`terraform/infra/modules/domains`) have DNSSEC. Mail-flow hijack via DNS spoofing — including downgrade of DMARC, MX, or BIMI records — has no on-protocol detection beyond client-side TLS at the SMTP layer.
 5. **CloudFront posture.** Both CloudFront distributions (the admin app and the front-door) use legacy Origin Access Identity (OAI). The TLS policy is `TLSv1.2_2021`, two AWS-published policies behind current.

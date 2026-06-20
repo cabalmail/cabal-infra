@@ -217,8 +217,10 @@ resource "terraform_data" "sinkhole_cloud_map_lifecycle" {
 # -- Task definition -------------------------------------------
 #
 # Image is resolved via local.tier_image["sinkhole"] which falls
-# back to a public placeholder when /cabal/deployed_image_tag is
-# the bootstrap sentinel - same pattern as the other tiers.
+# back to a public placeholder when the tier's deployed-image-tag SSM
+# parameter (/cabal/deployed_image_tag/sinkhole, with the legacy global
+# key as fallback) is the bootstrap sentinel - same pattern as the
+# other tiers.
 
 resource "aws_ecs_task_definition" "sinkhole" {
   count                    = var.sinkhole ? 1 : 0

@@ -54,6 +54,37 @@ final class ApiBackedImapClientParserTests: XCTestCase {
         XCTAssertFalse(ApiBackedImapClient.makeEnvelope(normalPriority).isImportant)
     }
 
+    func testEnvelopeDecodesThreadingHeadersAndMakeEnvelopeCarriesThem() throws {
+        // Wire shape from the Phase 1 Lambda: lists of angle-bracketed ids,
+        // matching /fetch_message.
+        let json = """
+        {"id": 7, "date": null, "subject": "s", "from": [], "to": [], "cc": [],
+         "flags": [], "struct": null, "priority": [],
+         "message_id": ["<child@y.example>"],
+         "in_reply_to": ["<parent@x.example>"],
+         "references": ["<a@x.example>", "<parent@x.example>"]}
+        """
+        let raw = try JSONDecoder().decode(ApiEnvelope.self, from: Data(json.utf8))
+        let env = ApiBackedImapClient.makeEnvelope(raw)
+        XCTAssertEqual(env.messageId, "<child@y.example>")
+        XCTAssertEqual(env.inReplyTo, "<parent@x.example>")
+        XCTAssertEqual(env.references, ["<a@x.example>", "<parent@x.example>"])
+    }
+
+    func testEnvelopeWithoutThreadingFieldsStillDecodes() throws {
+        // Payload from a Lambda predating the threading fields: additive
+        // change, so the decoder must tolerate their absence.
+        let json = """
+        {"id": 7, "date": null, "subject": "s", "from": [], "to": [], "cc": [],
+         "flags": [], "struct": null, "priority": []}
+        """
+        let raw = try JSONDecoder().decode(ApiEnvelope.self, from: Data(json.utf8))
+        let env = ApiBackedImapClient.makeEnvelope(raw)
+        XCTAssertNil(env.messageId)
+        XCTAssertNil(env.inReplyTo)
+        XCTAssertEqual(env.references, [])
+    }
+
     func testParseLambdaDateHandlesPythonStrFormat() {
         let date = ApiBackedImapClient.parseLambdaDate("2024-01-15 10:30:45+00:00")
         XCTAssertNotNil(date)

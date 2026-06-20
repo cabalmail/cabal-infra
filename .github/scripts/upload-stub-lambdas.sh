@@ -33,6 +33,11 @@ set -euo pipefail
 
 BUCKET="${BUCKET:?BUCKET env var required (typically admin.\${TF_VAR_CONTROL_DOMAIN})}"
 
+# Verify BUCKET is owned by this account before any head/upload; the
+# high-level `aws s3 cp` below cannot take --expected-bucket-owner, so this
+# head-bucket preflight is the fail-closed gate (see verify-bucket-owner.sh).
+.github/scripts/verify-bucket-owner.sh "${BUCKET}"
+
 log() { echo "[upload-stub-lambdas] $*"; }
 
 if [ ! -d lambda/api ] || [ ! -d lambda/counter ]; then

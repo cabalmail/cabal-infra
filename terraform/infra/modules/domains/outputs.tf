@@ -27,3 +27,8 @@ output "domains" {
   value       = concat(local.created_domains, local.control_domain_entry)
   description = "List of maps with domains and their Route 53 zone IDs. Includes the control domain (reusing its bootstrap zone) when it is also a mail domain."
 }
+
+output "ds_records" {
+  value       = { for domain, ksk in aws_route53_key_signing_key.mail : domain => ksk.ds_record }
+  description = "Per-apex DS record values to publish at each domain registrar once signing is verified (sign first, DS second - see docs/dnssec.md). Empty until var.dnssec_enabled is true. Excludes the control domain, whose DS record is output by the bootstrap dns stack."
+}

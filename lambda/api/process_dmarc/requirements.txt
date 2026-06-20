@@ -1,2 +1,11 @@
-imapclient==2.3.1
-defusedxml==0.7.1
+imapclient==2.3.1 \
+    --hash=sha256:057f28025d2987c63e065afb0e4370b0b850b539b0e1494cea0427e88130108c \
+    --hash=sha256:26ea995664fae3a88b878ebce2aff7402931697b86658b7882043ddb01b0e6ba
+# six is imapclient's only runtime dependency; pinned and hashed so
+# pip --require-hashes can resolve the full tree.
+six==1.17.0 \
+    --hash=sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274 \
+    --hash=sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81
+defusedxml==0.7.1 \
+    --hash=sha256:a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61 \
+    --hash=sha256:1bb3032db185915b62d7c6209c5a8792be6a32ab2fedacc84e01b52c51aa3e69

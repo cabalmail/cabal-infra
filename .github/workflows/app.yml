@@ -10,6 +10,17 @@ name: Build and Deploy Application
 # resolve-areas step uses dorny/paths-filter to figure out which jobs
 # need to run for a given push; workflow_dispatch keeps the manual
 # `areas` input as an override.
+#
+# Within the docker area, pushes are filtered per TIER
+# (docs/0.10.x/per-tier-docker-deploy-plan.md): the docker job's
+# matrix fans out only over the tiers whose build inputs changed, so a
+# change that does not touch imap no longer causes an imap service
+# roll (and its client-facing gap). Each tier then deploys on its own
+# image tag; Terraform tracks them per tier in SSM
+# (/cabal/deployed_image_tag/<tier>). A workflow_dispatch run always
+# builds every tier in scope - that is the escape hatch for first
+# deploys, base-image refreshes, and operator catchups - and the
+# optional force_tiers input narrows it to a named subset.
 
 on:
   workflow_dispatch:
@@ -27,6 +38,11 @@ on:
           - lambda_certbot
           - react
           - front_door
+      force_tiers:
+        description: 'Comma-separated docker tiers to build and deploy (e.g. imap,smtp-out). Empty means every tier in scope. Only consulted when the docker area is selected.'
+        required: false
+        default: ''
+        type: string
   push:
     # Only the three named branches deploy. Pushes from feature branches
     # or tags do not trigger this workflow. See CLAUDE.md "Branches and
@@ -46,12 +62,18 @@ on:
       - '.github/scripts/build-counter.sh'
       - '.github/scripts/deploy-ecs-service.sh'
       - '.github/scripts/prepull-image.sh'
+      - '.github/scripts/ecr-scan-report.sh'
+      - '.github/scripts/check-docker-tier-filters.sh'
       - '.github/scripts/deploy-lambda-image.sh'
       - '.github/scripts/deploy-lambda-zip.sh'
       - '.github/scripts/render-front-door.py'
 
 permissions:
   contents: read
+  # AWS auth is via GitHub OIDC (aws-actions/configure-aws-credentials
+  # assumes vars.AWS_DEPLOY_ROLE_ARN); the runner needs to mint an OIDC
+  # token. See docs/aws.md / docs/github.md.
+  id-token: write
 
 # Serialize per-ref so back-to-back app deploys roll services in order
 # rather than racing each other. Phase 3 of
@@ -72,7 +94,7 @@ jobs:
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     outputs:
       image_tag: ${{ steps.tag.outputs.image_tag }}
-      tiers: ${{ steps.matrix.outputs.tiers }}
+      changed_tiers: ${{ steps.tiers.outputs.changed_tiers }}
       docker: ${{ steps.areas.outputs.docker }}
       lambda_api: ${{ steps.areas.outputs.lambda_api }}
       lambda_counter: ${{ steps.areas.outputs.lambda_counter }}
@@ -81,7 +103,16 @@ jobs:
       front_door: ${{ steps.areas.outputs.front_door }}
     steps:
     - name: checkout
-      uses: actions/checkout@v5
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
+
+    # Guard against per-tier filter drift: if a Dockerfile gains a
+    # COPY/ADD of a file under docker/ that its tier's changed-paths
+    # filter below does not cover, changes to that file would silently
+    # skip rebuilds of a tier that depends on it. Fails the run until
+    # the filter map is updated. Phase 1 of
+    # docs/0.10.x/per-tier-docker-deploy-plan.md.
+    - name: check-tier-filters
+      run: ./.github/scripts/check-docker-tier-filters.sh
 
     - name: compute-tag
       id: tag
@@ -95,6 +126,8 @@ jobs:
     # fixture, see docs/0.9.x/sinkhole-test-harness-plan.md) is gated
     # the same way on vars.TF_VAR_SINKHOLE; prod's value is hard-coded
     # false and Terraform's precondition belt-and-suspenders the gate.
+    # The output here is the IN-SCOPE matrix; resolve-tiers below
+    # narrows it to the tiers whose inputs actually changed.
     - name: compute-matrix
       id: matrix
       env:
@@ -125,16 +158,100 @@ jobs:
     # area, use workflow_dispatch with the right `areas` input - cheaper
     # than auto-rebuilding all six areas on every push that happens to
     # touch the workflow file.
+    #
+    # The docker area is additionally filtered per TIER (the docker_*
+    # keys; phase 1 of docs/0.10.x/per-tier-docker-deploy-plan.md).
+    # The dependency graph the filters encode:
+    #   - every tier owns docker/<tier>/**
+    #   - the three core mail tiers (imap, smtp-in, smtp-out) also
+    #     consume docker/shared/** and exactly one sendmail template
+    #     from docker/templates/ (imap-/in-/out-sendmail.mc)
+    #   - sinkhole and the monitoring tiers are self-contained
+    #   - deploy-ecs-service.sh and ecr-scan-report.sh run for every
+    #     tier; prepull-image.sh runs for imap only
+    # A new COPY in a Dockerfile needs a matching filter entry here;
+    # the check-tier-filters step above fails the run if they drift.
+    # Keep comments out of the docker_* filter lists - the checker's
+    # parser treats a non-list line as the end of a tier's block.
     - name: changed-paths
       id: filter
       if: github.event_name == 'push'
-      uses: dorny/paths-filter@v4
+      uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d  # v4.0.1
       with:
+        # base MUST be the pushed branch. paths-filter's base defaults
+        # to the repository default branch (main), which makes a push
+        # to stage / development diff the branch's ENTIRE divergence
+        # from main rather than the commits just pushed - so a stage
+        # push re-deployed every area (and every docker tier) in which
+        # stage differed from main. With base == the pushed branch,
+        # paths-filter switches to incremental event.before..after
+        # detection. Pushes to main behaved this way all along (base
+        # defaulted to main), so this only changes stage/development.
+        base: ${{ github.ref_name }}
         filters: |
           docker:
             - 'docker/**'
             - '.github/scripts/deploy-ecs-service.sh'
             - '.github/scripts/prepull-image.sh'
+            - '.github/scripts/ecr-scan-report.sh'
+          docker_imap:
+            - 'docker/imap/**'
+            - 'docker/shared/**'
+            - 'docker/templates/imap-sendmail.mc'
+            - '.github/scripts/deploy-ecs-service.sh'
+            - '.github/scripts/ecr-scan-report.sh'
+            - '.github/scripts/prepull-image.sh'
+          docker_smtp_in:
+            - 'docker/smtp-in/**'
+            - 'docker/shared/**'
+            - 'docker/templates/in-sendmail.mc'
+            - '.github/scripts/deploy-ecs-service.sh'
+            - '.github/scripts/ecr-scan-report.sh'
+          docker_smtp_out:
+            - 'docker/smtp-out/**'
+            - 'docker/shared/**'
+            - 'docker/templates/out-sendmail.mc'
+            - '.github/scripts/deploy-ecs-service.sh'
+            - '.github/scripts/ecr-scan-report.sh'
+          docker_sinkhole:
+            - 'docker/sinkhole/**'
+            - '.github/scripts/deploy-ecs-service.sh'
+            - '.github/scripts/ecr-scan-report.sh'
+          docker_uptime_kuma:
+            - 'docker/uptime-kuma/**'
+            - '.github/scripts/deploy-ecs-service.sh'
+            - '.github/scripts/ecr-scan-report.sh'
+          docker_ntfy:
+            - 'docker/ntfy/**'
+            - '.github/scripts/deploy-ecs-service.sh'
+            - '.github/scripts/ecr-scan-report.sh'
+          docker_healthchecks:
+            - 'docker/healthchecks/**'
+            - '.github/scripts/deploy-ecs-service.sh'
+            - '.github/scripts/ecr-scan-report.sh'
+          docker_prometheus:
+            - 'docker/prometheus/**'
+            - '.github/scripts/deploy-ecs-service.sh'
+            - '.github/scripts/ecr-scan-report.sh'
+          docker_alertmanager:
+            - 'docker/alertmanager/**'
+            - '.github/scripts/deploy-ecs-service.sh'
+            - '.github/scripts/ecr-scan-report.sh'
+          docker_grafana:
+            - 'docker/grafana/**'
+            - '.github/scripts/deploy-ecs-service.sh'
+            - '.github/scripts/ecr-scan-report.sh'
+          docker_cloudwatch_exporter:
+            - 'docker/cloudwatch-exporter/**'
+            - '.github/scripts/deploy-ecs-service.sh'
+            - '.github/scripts/ecr-scan-report.sh'
+          docker_blackbox_exporter:
+            - 'docker/blackbox-exporter/**'
+            - '.github/scripts/deploy-ecs-service.sh'
+            - '.github/scripts/ecr-scan-report.sh'
+          docker_node_exporter:
+            - 'docker/node-exporter/**'
+            - '.github/scripts/deploy-ecs-service.sh'
             - '.github/scripts/ecr-scan-report.sh'
           lambda_api:
             - 'lambda/api/**'
@@ -195,6 +312,60 @@ jobs:
           done
         fi
 
+    # Phase 1 of docs/0.10.x/per-tier-docker-deploy-plan.md: narrow the
+    # docker matrix to the tiers whose build inputs changed.
+    #   push:     intersect the in-scope matrix with the per-tier
+    #             docker_* filter results.
+    #   dispatch: every tier in scope (the filter step is push-only and
+    #             a manual run means "the whole docker area" - the
+    #             escape hatch for first deploys, base-image refreshes,
+    #             and catchups), optionally narrowed by force_tiers.
+    # Emits a JSON array; the docker job skips entirely when it is [].
+    - name: resolve-tiers
+      id: tiers
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        DOCKER_AREA: ${{ steps.areas.outputs.docker }}
+        IN_SCOPE: ${{ steps.matrix.outputs.tiers }}
+        FORCE_TIERS: ${{ inputs.force_tiers }}
+        CH_IMAP: ${{ steps.filter.outputs.docker_imap }}
+        CH_SMTP_IN: ${{ steps.filter.outputs.docker_smtp_in }}
+        CH_SMTP_OUT: ${{ steps.filter.outputs.docker_smtp_out }}
+        CH_SINKHOLE: ${{ steps.filter.outputs.docker_sinkhole }}
+        CH_UPTIME_KUMA: ${{ steps.filter.outputs.docker_uptime_kuma }}
+        CH_NTFY: ${{ steps.filter.outputs.docker_ntfy }}
+        CH_HEALTHCHECKS: ${{ steps.filter.outputs.docker_healthchecks }}
+        CH_PROMETHEUS: ${{ steps.filter.outputs.docker_prometheus }}
+        CH_ALERTMANAGER: ${{ steps.filter.outputs.docker_alertmanager }}
+        CH_GRAFANA: ${{ steps.filter.outputs.docker_grafana }}
+        CH_CLOUDWATCH_EXPORTER: ${{ steps.filter.outputs.docker_cloudwatch_exporter }}
+        CH_BLACKBOX_EXPORTER: ${{ steps.filter.outputs.docker_blackbox_exporter }}
+        CH_NODE_EXPORTER: ${{ steps.filter.outputs.docker_node_exporter }}
+      run: |
+        set -euo pipefail
+        changed='[]'
+        if [ "${DOCKER_AREA}" != "true" ]; then
+          : # docker area not flagged; no tiers to build
+        elif [ "${EVENT_NAME}" = "push" ]; then
+          for t in $(jq -r '.[]' <<<"${IN_SCOPE}"); do
+            key="CH_$(echo "${t}" | tr 'a-z-' 'A-Z_')"
+            if [ "${!key:-false}" = "true" ]; then
+              changed="$(jq -c --arg t "${t}" '. + [$t]' <<<"${changed}")"
+            fi
+          done
+        elif [ -z "${FORCE_TIERS}" ]; then
+          changed="${IN_SCOPE}"
+        else
+          requested="$(echo "${FORCE_TIERS}" | tr -d '[:space:]' | jq -cR 'split(",") | map(select(length > 0))')"
+          changed="$(jq -cn --argjson a "${IN_SCOPE}" --argjson b "${requested}" '$a - ($a - $b)')"
+          unknown="$(jq -cn --argjson a "${IN_SCOPE}" --argjson b "${requested}" '($b - $a) | join(", ")' -r)"
+          if [ -n "${unknown}" ]; then
+            echo "::warning::force_tiers entries not in the matrix for this environment (skipped): ${unknown}"
+          fi
+        fi
+        echo "changed_tiers=${changed}" >> "$GITHUB_OUTPUT"
+        echo "changed tiers: ${changed}"
+
     # Surface which area jobs are flagged for build/deploy so the gate
     # reviewer can see the blast radius BEFORE approving. This must live
     # in setup, not in the approval job: approval is gated on the
@@ -212,6 +383,7 @@ jobs:
         LAMBDA_CERTBOT: ${{ steps.areas.outputs.lambda_certbot }}
         REACT: ${{ steps.areas.outputs.react }}
         FRONT_DOOR: ${{ steps.areas.outputs.front_door }}
+        CHANGED_TIERS: ${{ steps.tiers.outputs.changed_tiers }}
       run: |
         set -euo pipefail
         FLAGGED=()
@@ -219,7 +391,14 @@ jobs:
           name="${pair%%:*}"
           val="${pair#*:}"
           if [ "${val}" = "true" ]; then
-            FLAGGED+=("${name}")
+            if [ "${name}" = "docker" ]; then
+              # Show the per-tier blast radius, not just the area: the
+              # docker matrix only builds the tiers listed here.
+              tier_list="$(jq -r 'join(", ")' <<<"${CHANGED_TIERS}")"
+              FLAGGED+=("docker (tiers: ${tier_list:-none})")
+            else
+              FLAGGED+=("${name}")
+            fi
           fi
         done
         echo "### Components flagged for build/deploy" >> "$GITHUB_STEP_SUMMARY"
@@ -247,31 +426,41 @@ jobs:
       run: echo "Approved"
 
   docker:
-    # The matrix below reads `fromJson(needs.setup.outputs.tiers)`, and a
-    # job's matrix can only resolve `needs.<job>.outputs` for jobs named
-    # directly in its own `needs` - `approval` (which needs setup) does not
-    # re-export setup's outputs. With only `approval` here the matrix got
-    # empty input and errored at strategy evaluation. `approval` provides
-    # the deployment gate; `setup` provides image_tag, tiers, and the
-    # per-area path-filter flags. (The other area jobs read needs.setup
-    # only from `if`, which resolved fine via the transitive dependency and
-    # was unaffected, but they list setup too for correctness/consistency.)
+    # The matrix below reads `fromJson(needs.setup.outputs.changed_tiers)`,
+    # and a job's matrix can only resolve `needs.<job>.outputs` for jobs
+    # named directly in its own `needs` - `approval` (which needs setup)
+    # does not re-export setup's outputs. With only `approval` here the
+    # matrix got empty input and errored at strategy evaluation. `approval`
+    # provides the deployment gate; `setup` provides image_tag,
+    # changed_tiers, and the per-area path-filter flags. (The other area
+    # jobs read needs.setup only from `if`, which resolved fine via the
+    # transitive dependency and was unaffected, but they list setup too
+    # for correctness/consistency.)
+    #
+    # changed_tiers is the per-tier subset of the in-scope matrix whose
+    # build inputs changed (resolve-tiers in setup); the != '[]' guard
+    # skips the job before the matrix would error on an empty array, e.g.
+    # a docker/** change that belongs to no tier filter.
     needs: [setup, approval]
-    if: needs.setup.outputs.docker == 'true'
+    if: needs.setup.outputs.docker == 'true' && needs.setup.outputs.changed_tiers != '[]'
     runs-on: ubuntu-24.04-arm
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     strategy:
       fail-fast: false
       matrix:
-        tier: ${{ fromJson(needs.setup.outputs.tiers) }}
+        tier: ${{ fromJson(needs.setup.outputs.changed_tiers) }}
     env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
-      uses: actions/checkout@v5
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
+
+    - name: configure-aws-credentials
+      uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4.3.1
+      with:
+        role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+        aws-region: ${{ secrets.AWS_REGION }}
 
     - name: login-to-ecr
       id: ecr
@@ -284,15 +473,18 @@ jobs:
         echo "registry=${REGISTRY}" >> "$GITHUB_OUTPUT"
 
     - name: set-up-buildx
-      uses: docker/setup-buildx-action@v4
+      uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
 
     - name: build-and-push
       run: |
         IMAGE="${{ steps.ecr.outputs.registry }}/cabal-${{ matrix.tier }}"
         TAG="${{ needs.setup.outputs.image_tag }}"
+        # Provenance attestations (buildx default, mode=min) are pushed to
+        # ECR alongside the image as the SLSA build record. Do not re-add
+        # --provenance=false: the manifest-list interop issue that once
+        # required it is resolved. See docs/0.10.x/supply-chain-hardening-plan.md.
         docker buildx build \
           --platform linux/arm64 \
-          --provenance=false \
           -f docker/${{ matrix.tier }}/Dockerfile \
           -t "${IMAGE}:${TAG}" \
           --push \
@@ -360,13 +552,17 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
-      uses: actions/checkout@v5
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
+
+    - name: configure-aws-credentials
+      uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4.3.1
+      with:
+        role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+        aws-region: ${{ secrets.AWS_REGION }}
 
     - name: login-to-ecr
       id: ecr
@@ -379,13 +575,19 @@ jobs:
         echo "registry=${REGISTRY}" >> "$GITHUB_OUTPUT"
 
     - name: set-up-buildx
-      uses: docker/setup-buildx-action@v4
+      uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
 
     - name: build-and-push
       id: image
       run: |
         IMAGE="${{ steps.ecr.outputs.registry }}/cabal/certbot-renewal"
         TAG="${{ needs.setup.outputs.image_tag }}"
+        # Provenance stays OFF for this image, unlike the mail tiers above.
+        # This is a Lambda container image (deploy-lambda-image.sh runs
+        # `aws lambda update-function-code --image-uri`), and Lambda rejects
+        # the multi-manifest OCI index that buildx produces when provenance
+        # is attached -- it requires a single image manifest. Keeping the
+        # SLSA attestation here would break the certbot deploy.
         docker buildx build \
           --platform linux/arm64 \
           --provenance=false \
@@ -406,25 +608,20 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
-      uses: actions/checkout@v5
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
+
+    - name: configure-aws-credentials
+      uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4.3.1
+      with:
+        role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+        aws-region: ${{ secrets.AWS_REGION }}
 
     - name: pylint
       run: pip install pylint && cd ./lambda/api && pylint --rcfile .pylintrc _shared/*.py */function.py
-
-    - name: configure-aws
-      run: |
-        aws configure --profile deploy_lambda <<-EOF > /dev/null 2>&1
-        ${{ secrets.AWS_ACCESS_KEY_ID }}
-        ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        ${{ secrets.AWS_REGION }}
-        json
-        EOF
 
     - name: build
       env:
@@ -491,25 +688,20 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
-      uses: actions/checkout@v5
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
+
+    - name: configure-aws-credentials
+      uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4.3.1
+      with:
+        role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+        aws-region: ${{ secrets.AWS_REGION }}
 
     - name: pylint
       run: pip install pylint && pylint --rcfile ./lambda/api/.pylintrc ./lambda/counter/*/function.py
-
-    - name: configure-aws
-      run: |
-        aws configure --profile deploy_lambda <<-EOF > /dev/null 2>&1
-        ${{ secrets.AWS_ACCESS_KEY_ID }}
-        ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        ${{ secrets.AWS_REGION }}
-        json
-        EOF
 
     - name: build
       env:
@@ -530,13 +722,17 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
-      uses: actions/checkout@v5
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
+
+    - name: configure-aws-credentials
+      uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4.3.1
+      with:
+        role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+        aws-region: ${{ secrets.AWS_REGION }}
 
     - name: build
       env:
@@ -546,7 +742,12 @@ jobs:
     - name: upload
       env:
         TF_VAR_CONTROL_DOMAIN: ${{ vars.TF_VAR_CONTROL_DOMAIN }}
-      run: aws s3 sync react/admin/dist "s3://admin.${TF_VAR_CONTROL_DOMAIN}" --no-progress
+      run: |
+        # Verify the bucket is owned by this account before syncing; the
+        # high-level `aws s3 sync` cannot take --expected-bucket-owner, so
+        # this head-bucket preflight is the fail-closed gate.
+        ./.github/scripts/verify-bucket-owner.sh "admin.${TF_VAR_CONTROL_DOMAIN}"
+        aws s3 sync react/admin/dist "s3://admin.${TF_VAR_CONTROL_DOMAIN}" --no-progress
 
     - name: invalidate-cache
       run: |
@@ -563,13 +764,17 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
-      uses: actions/checkout@v5
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
+
+    - name: configure-aws-credentials
+      uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4.3.1
+      with:
+        role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+        aws-region: ${{ secrets.AWS_REGION }}
 
     # Substitute {{VAR}} placeholders in front-door/* with values from
     # environment variables of the same name. Anything left as a
@@ -591,6 +796,10 @@ jobs:
       env:
         TF_VAR_CONTROL_DOMAIN: ${{ vars.TF_VAR_CONTROL_DOMAIN }}
       run: |
+        # Verify the bucket is owned by this account before syncing; the
+        # high-level `aws s3 sync` cannot take --expected-bucket-owner, so
+        # this head-bucket preflight is the fail-closed gate.
+        ./.github/scripts/verify-bucket-owner.sh "www.${TF_VAR_CONTROL_DOMAIN}"
         aws s3 sync front-door-rendered "s3://www.${TF_VAR_CONTROL_DOMAIN}" \
           --delete \
           --no-progress

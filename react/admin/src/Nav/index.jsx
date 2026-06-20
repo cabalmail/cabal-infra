@@ -39,6 +39,8 @@ function Nav({
   accent,
   onSelectAccent,
   accents,
+  displayName = '',
+  onChangeDisplayName,
   searchQuery = '',
   onSearchSubmit,
   controlDomain = null,
@@ -167,6 +169,24 @@ function Nav({
                       <div className="nav__menu-name">{userName}</div>
                     </div>
                   </div>
+                )}
+
+                {typeof onChangeDisplayName === 'function' && (
+                  <>
+                    <div className="nav__menu-section-label">Name</div>
+                    <div className="nav__menu-name-edit">
+                      <input
+                        type="text"
+                        className="nav__menu-name-input"
+                        placeholder="Your name"
+                        aria-label="Display name for outgoing mail"
+                        title="Shown as the display name on mail you send"
+                        value={displayName}
+                        maxLength={100}
+                        onChange={(e) => onChangeDisplayName(e.target.value)}
+                      />
+                    </div>
+                  </>
                 )}
 
                 <div className="nav__menu-section-label">Accent</div>

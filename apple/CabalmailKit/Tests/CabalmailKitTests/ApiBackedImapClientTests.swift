@@ -402,3 +402,46 @@ extension ApiBackedImapClientTests {
         )
     }
 }
+
+// Pagination coverage in an extension to keep the main test class under
+// SwiftLint's type-body cap (macOS XCTest still discovers extension tests).
+extension ApiBackedImapClientTests {
+    func testEnvelopesPagesByOffset() async throws {
+        // The Lambda returns the server-sliced page; the client trusts it and
+        // sends offset/limit on /list_messages.
+        let listMessagesBody = #"{"message_ids":[5,4,3]}"#
+        let listEnvelopesBody = """
+        {
+          "envelopes": {
+            "5": {"id": 5, "date": "2024-01-05 10:00:00+00:00", "subject": "five",
+                   "from": ["a@x.com"], "to": [], "cc": [], "flags": [], "struct": null},
+            "4": {"id": 4, "date": "2024-01-04 10:00:00+00:00", "subject": "four",
+                   "from": ["b@x.com"], "to": [], "cc": [], "flags": [], "struct": null},
+            "3": {"id": 3, "date": "2024-01-03 10:00:00+00:00", "subject": "three",
+                   "from": ["c@x.com"], "to": [], "cc": [], "flags": [], "struct": null}
+          }
+        }
+        """
+        let http = RecordingHTTPTransport(responses: [
+            (Data(listMessagesBody.utf8), 200),
+            (Data(listEnvelopesBody.utf8), 200),
+        ])
+        let api = URLSessionApiClient(
+            configuration: makeConfiguration(),
+            authService: StubAuthService(),
+            transport: http
+        )
+        let client = ApiBackedImapClient(api: api, host: "imap.example.com")
+        let envelopes = try await client.envelopes(folder: "INBOX", offset: 2, limit: 3)
+        XCTAssertEqual(envelopes.count, 3)
+        XCTAssertEqual(Set(envelopes.map(\.uid)), [5, 4, 3])
+
+        let requests = await http.requests
+        XCTAssertEqual(requests.count, 2)
+        let listURL = requests[0].url!.absoluteString
+        XCTAssertTrue(listURL.contains("/list_messages"))
+        XCTAssertTrue(listURL.contains("offset=2"))
+        XCTAssertTrue(listURL.contains("limit=3"))
+        XCTAssertTrue(requests[1].url!.absoluteString.contains("/list_envelopes"))
+    }
+}

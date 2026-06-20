@@ -4,10 +4,10 @@ import CabalmailKit
 // Row rendering and per-row affordances for `MessageListView`. Lives in
 // a same-module extension so the primary view body stays under
 // SwiftLint's `type_body_length` cap. Holds:
-//   - `row(for:model:isSelected:)` — list-row content + swipe actions
-//   - `rowContextMenu` — compact iPhone's long-press menu (wide layouts
-//     use the List-level selection menu in `+Actions.swift` instead)
-//   - `disposeActionLabel` / `markReadLabel` — shared icons for both
+//   - `row(for:model:isSelected:)` — list-row content (drag + tag)
+//   - `rowContextMenu` — the per-row long-press / right-click menu
+//   - `disposeSwipe` / `toggleReadSwipe` — `SwipeActionSpec`s the
+//     `SwipeActionRow` wrapper reveals on a trailing / leading swipe
 //   - `addressFilterChip` — the in-list banner when `addressFilter` is
 //     set (used by `Messages` view's address-tap surface)
 //   - `filteredEnvelopes` — case-insensitive `To`/`Cc` substring filter
@@ -35,51 +35,40 @@ extension MessageListView {
     ) -> some View {
         let bulkMode = model.bulkMode
         let isChecked = model.selectedUIDs.contains(envelope.uid)
-        let items = dragItems(for: envelope, model: model)
-        withMessageDrag(items: items, subject: envelope.subject) {
-            withRowContextMenu(for: envelope, model: model) {
-                Group {
-                    if isWideLayout {
-                        wideRow(
-                            for: envelope,
-                            isSelected: isSelected,
-                            model: model,
-                            orderedVisible: orderedVisible
-                        )
-                    } else if bulkMode {
-                        // No .tag() while in bulk mode — the list's selection
-                        // binding drives the detail pane, and we don't want a
-                        // checkbox tap to also pop the reader.
-                        Button {
-                            model.toggleSelection(envelope)
-                        } label: {
-                            MessageRow(envelope: envelope, isSelected: isChecked, isChecked: isChecked, bulkMode: true)
-                        }
-                        .buttonStyle(.plain)
-                    } else {
-                        MessageRow(envelope: envelope, isSelected: isSelected, isChecked: false, bulkMode: false)
-                            .tag(envelope)
-                    }
-                }
-                #if os(visionOS)
-                .contentShape(Rectangle())
-                .hoverEffect(.highlight)
-                #endif
-                .swipeActions(edge: .trailing) {
-                    disposeSwipeButton(for: envelope, model: model)
-                }
-                .swipeActions(edge: .leading) {
+        withRowContextMenu(for: envelope, model: model) {
+            Group {
+                if isWideLayout {
+                    wideRow(
+                        for: envelope,
+                        isSelected: isSelected,
+                        model: model,
+                        orderedVisible: orderedVisible
+                    )
+                } else if bulkMode {
+                    // No .tag() while in bulk mode — the list's selection
+                    // binding drives the detail pane, and we don't want a
+                    // checkbox tap to also pop the reader.
                     Button {
-                        Task { await model.toggleSeen(envelope) }
+                        model.toggleSelection(envelope)
                     } label: {
-                        markReadLabel(for: envelope)
+                        MessageRow(envelope: envelope, isSelected: isChecked, isChecked: isChecked, bulkMode: true)
                     }
-                    .tint(.blue)
+                    .buttonStyle(.plain)
+                } else {
+                    MessageRow(envelope: envelope, isSelected: isSelected, isChecked: false, bulkMode: false)
+                        .tag(envelope)
                 }
             }
-            .task {
-                await model.loadMoreIfNeeded(currentItem: envelope)
-            }
+            #if os(visionOS)
+            .contentShape(Rectangle())
+            .hoverEffect(.highlight)
+            #endif
+            // Swipe-to-dispose / toggle-read are hand-rolled in
+            // `SwipeActionRow` (applied by `messageRow`), and drag-to-folder
+            // is applied OUTSIDE that wrapper by `draggableRow` -- both have
+            // to sit outside the per-row `List` that `SwipeActionRow` embeds
+            // for its native `.swipeActions`, or the embedded List swallows
+            // them (the drag never lifts; the swipe modifier no-ops).
         }
     }
 
@@ -149,29 +138,42 @@ extension MessageListView {
         return [MessageDragItem(uid: envelope.uid, sourceFolder: model.sourceFolder(for: envelope))]
     }
 
-    /// Wraps a row in `.draggable` on wide layouts so it can be dragged onto a
-    /// sidebar folder. On compact iPhone the modifier is skipped entirely
-    /// (see `isWideLayout`): there's nowhere to drop, and the long-press drag
-    /// would fight the row's context menu.
+    /// Wraps a virtualized row in `.draggable` on wide layouts so it can be
+    /// dragged onto a sidebar folder. On compact iPhone the modifier is
+    /// skipped entirely (see `isWideLayout`): there's nowhere to drop, and the
+    /// long-press drag would fight the row's context menu.
     ///
-    /// `.draggable` (not `.onDrag`) so a plain click still selects the row -
-    /// `.onDrag` on a `List(selection:)` row swallows clicks on the rendered
-    /// content on macOS. `.onDrag`'s drag-start closure was where the sidebar
-    /// got flipped to reveal folders; `.draggable` has no such hook, so the
-    /// flip rides two drag-start signals for robustness: the payload
-    /// autoclosure (evaluated when the drag lifts) and the preview's
-    /// `.onAppear` (fired when the drag image is built). `beginMessageDrag()`
-    /// is idempotent, so firing both is harmless.
+    /// Applied by `messageRow` OUTSIDE the per-row `SwipeActionRow` (i.e.
+    /// outside the single-row `List` that wrapper embeds for its native
+    /// `.swipeActions`). A `.draggable` placed inside that List row is
+    /// swallowed on macOS and never lifts, so the drag has to sit on the row
+    /// container instead. Because the wrapper already fills the fixed row
+    /// height, this only adds `.contentShape` (so a drag can start on the row's
+    /// empty space, not just the text) -- no frame expansion, unlike the old
+    /// inner version.
+    ///
+    /// `.draggable` (not `.onDrag`) so a plain click still selects the row.
+    /// `.onDrag`'s drag-start closure was where the sidebar got flipped to
+    /// reveal folders; `.draggable` has no such hook, so the flip rides two
+    /// drag-start signals for robustness: the payload autoclosure (evaluated
+    /// when the drag lifts) and the preview's `.onAppear` (fired when the drag
+    /// image is built). `beginMessageDrag()` is idempotent, so firing both is
+    /// harmless. Internal (not `private`) so `messageRow` in `+Selection` can
+    /// wrap the `SwipeActionRow` with it.
     @ViewBuilder
-    private func withMessageDrag(
-        items: [MessageDragItem],
-        subject: String?,
+    func draggableRow(
+        for envelope: Envelope,
+        model: MessageListViewModel,
         @ViewBuilder content: () -> some View
     ) -> some View {
+        // Drag is exonerated for the iPad leading-swipe lag (gating it off iOS
+        // didn't change the lag), so it's back on every wide layout.
+        let items = dragItems(for: envelope, model: model)
         if isWideLayout, !items.isEmpty {
             content()
+                .contentShape(Rectangle())
                 .draggable(dragPayload(items)) {
-                    MessageDragPreview(count: items.count, subject: subject)
+                    MessageDragPreview(count: items.count, subject: envelope.subject)
                         .onAppear { appState.beginMessageDrag() }
                 }
         } else {
@@ -239,49 +241,51 @@ extension MessageListView {
         }
     }
 
-    /// Trailing destructive swipe: dispose (Archive/Trash) everywhere
-    /// except inside Trash, where delete means gone forever and stages
-    /// the confirmation dialog instead of acting directly. Shared shape
-    /// with the context menu's destructive item.
-    @ViewBuilder
-    func disposeSwipeButton(for envelope: Envelope, model: MessageListViewModel) -> some View {
-        Button(role: .destructive) {
-            if model.isTrashFolder {
+    /// Trailing destructive swipe spec: dispose (Archive/Trash) everywhere
+    /// except inside Trash, where delete means gone forever and stages the
+    /// confirmation dialog instead of acting directly. Same decision as the
+    /// context menu's destructive item; consumed by `SwipeActionRow`.
+    func disposeSwipe(for envelope: Envelope, model: MessageListViewModel) -> SwipeActionSpec {
+        if model.isTrashFolder {
+            return SwipeActionSpec(
+                systemImage: "trash.slash",
+                title: "Delete Forever",
+                tint: .red,
+                role: .destructive
+            ) {
                 purgeCandidate = PurgeCandidate(uids: [envelope.uid])
-            } else {
-                Task { await model.dispose(envelope) }
             }
-        } label: {
-            if model.isTrashFolder {
-                purgeActionLabel
-            } else {
-                disposeActionLabel(for: model.disposeAction)
-            }
+        }
+        let action = model.disposeAction
+        return SwipeActionSpec(
+            systemImage: action == .archive ? "archivebox" : "trash",
+            title: action == .archive ? "Archive" : "Trash",
+            tint: .red,
+            role: .destructive
+        ) {
+            Task { await model.dispose(envelope) }
         }
     }
 
-    @ViewBuilder
-    func disposeActionLabel(for action: DisposeAction) -> some View {
-        switch action {
-        case .archive: Label("Archive", systemImage: "archivebox")
-        case .trash:   Label("Trash", systemImage: "trash")
+    /// Leading swipe spec: flip `\Seen`. Mirrors Mail's single read/unread
+    /// toggle gesture rather than offering two.
+    func toggleReadSwipe(for envelope: Envelope, model: MessageListViewModel) -> SwipeActionSpec {
+        let isSeen = envelope.flags.contains(.seen)
+        return SwipeActionSpec(
+            systemImage: isSeen ? "envelope.badge" : "envelope.open",
+            title: isSeen ? "Unread" : "Read",
+            tint: .blue
+        ) {
+            Task { await model.toggleSeen(envelope) }
         }
     }
 
     /// Delete affordance label inside the Trash folder, where the action
-    /// permanently deletes (after confirmation) instead of moving.
+    /// permanently deletes (after confirmation) instead of moving. Still
+    /// used by the row / selection context menus.
     @ViewBuilder
     var purgeActionLabel: some View {
         Label("Delete Forever", systemImage: "trash.slash")
-    }
-
-    @ViewBuilder
-    func markReadLabel(for envelope: Envelope) -> some View {
-        if envelope.flags.contains(.seen) {
-            Label("Unread", systemImage: "envelope.badge")
-        } else {
-            Label("Read", systemImage: "envelope.open")
-        }
     }
 
     @ViewBuilder
@@ -346,10 +350,15 @@ private struct MessageRow: View {
                 .padding(.top, 6)
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
-                    Text(senderLabel)
+                    // "source -> destination" on one line. `maxWidth: .infinity`
+                    // takes the place of the old Spacer (push the date right);
+                    // `.middle` truncation keeps both the sender start and the
+                    // destination-address end legible when the line overflows.
+                    routeText
                         .font(.subheadline)
-                        .fontWeight(envelope.flags.contains(.seen) ? .regular : .semibold)
-                    Spacer()
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     if envelope.hasAttachments {
                         Image(systemName: "paperclip")
                             .font(.caption)
@@ -391,20 +400,52 @@ private struct MessageRow: View {
         return isSelected ? .white : .blue
     }
 
-    /// Display priority: the envelope's own RFC 5322 phrase first
-    /// (sender's choice), then the user's own name from Contacts, then
-    /// the bare mailbox. Contacts hydration is `nil` until the async
-    /// lookup in `.task(id:)` resolves, so a fresh row paints with the
-    /// envelope or mailbox and updates in place when the contact match
-    /// arrives.
-    private var senderLabel: String {
+    /// The row's first line: `source -> destination`. The destination is the
+    /// address the message was delivered to -- the key triage signal in
+    /// Cabalmail, where a distinct address is handed to each vendor -- and is
+    /// dimmed so the sender stays the primary read. When there's no
+    /// resolvable destination (e.g. a draft) the arrow drops and only the
+    /// source shows.
+    private var routeText: Text {
+        let seen = envelope.flags.contains(.seen)
+        let source = Text(sourceText).fontWeight(seen ? .regular : .semibold)
+        guard let destinationText else { return source }
+        return source
+            + Text(" → ").foregroundStyle(.secondary)
+            + Text(destinationText).foregroundStyle(.secondary)
+    }
+
+    /// Sender side of the route. Display priority: the envelope's own RFC
+    /// 5322 phrase (sender's choice), then the user's Contacts match, then
+    /// the bare `mailbox@host`. Contacts hydration is `nil` until the async
+    /// `.task(id:)` lookup resolves, so a fresh row paints with the envelope
+    /// or address and updates in place when the contact match arrives.
+    private var sourceText: String {
         if let envelopeName = envelope.from.first?.displayName, !envelopeName.isEmpty {
             return envelopeName
         }
         if let contactName, !contactName.isEmpty {
             return contactName
         }
-        return envelope.from.first?.mailbox ?? "unknown"
+        guard let from = envelope.from.first else { return "unknown" }
+        return "\(from.mailbox)@\(from.host)"
+    }
+
+    /// Destination side of the route: the address this message was delivered
+    /// to. A message can carry several recipients, so prefer the one on one
+    /// of the deployment's own mail domains (the address that actually caught
+    /// it -- matched subdomain-aware, since Cabalmail addresses live on
+    /// subdomains); fall back to the first To/Cc. `nil` when there are no
+    /// recipients, which drops the arrow and shows the source alone.
+    private var destinationText: String? {
+        let recipients = envelope.to + envelope.cc
+        guard !recipients.isEmpty else { return nil }
+        let domains = appState.client?.configuration.domains.map(\.domain) ?? []
+        let owned = recipients.first { addr in
+            domains.contains { addr.host == $0 || addr.host.hasSuffix(".\($0)") }
+        }
+        guard let dest = owned ?? recipients.first else { return nil }
+        return "\(dest.mailbox)@\(dest.host)"
     }
 
     /// Cache-friendly identifier for `.task(id:)`. Empty when the

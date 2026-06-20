@@ -22,25 +22,29 @@ locals {
   }
 
   # Phase 4 of docs/0.9.x/build-deploy-simplification-plan.md.
-  # When /cabal/deployed_image_tag is the bootstrap sentinel, the ECR
-  # repos are still empty (infra.yml is responsible for the very first
-  # apply, before app.yml has ever pushed an image), so the task defs
-  # point at a public-ECR placeholder so the cluster comes up cleanly.
-  # The phase 1 lifecycle clause keeps subsequent app.yml deploys from
-  # being clobbered.
+  # When a tier's deployed-image-tag SSM parameter resolves to the
+  # bootstrap sentinel, the ECR repos are still empty (infra.yml is
+  # responsible for the very first apply, before app.yml has ever
+  # pushed an image), so that tier's task def points at a public-ECR
+  # placeholder so the cluster comes up cleanly. The phase 1 lifecycle
+  # clause keeps subsequent app.yml deploys from being clobbered.
+  # Tags arrive per tier (var.image_tags, one SSM key per tier - see
+  # docs/0.10.x/per-tier-docker-deploy-plan.md) because app.yml only
+  # rebuilds the tiers whose inputs changed, so sibling tiers
+  # legitimately run different tags.
   placeholder_image_tag = "bootstrap-placeholder"
   placeholder_image     = "public.ecr.aws/nginx/nginx:stable"
 
   tier_image = merge(
     {
       for tier, _ in local.tiers :
-      tier => var.image_tag == local.placeholder_image_tag ? local.placeholder_image : "${var.ecr_repository_urls[tier]}:${var.image_tag}"
+      tier => var.image_tags[tier] == local.placeholder_image_tag ? local.placeholder_image : "${var.ecr_repository_urls[tier]}:${var.image_tags[tier]}"
     },
     # Sinkhole is not in local.tiers (different ingress/egress posture,
     # no SQS/SNS reconfigure path, no NLB), but it still resolves the
     # same way: placeholder during bootstrap, ECR-pinned tag thereafter.
     var.sinkhole ? {
-      sinkhole = var.image_tag == local.placeholder_image_tag ? local.placeholder_image : "${var.ecr_repository_urls["sinkhole"]}:${var.image_tag}"
+      sinkhole = var.image_tags["sinkhole"] == local.placeholder_image_tag ? local.placeholder_image : "${var.ecr_repository_urls["sinkhole"]}:${var.image_tags["sinkhole"]}"
     } : {},
   )
 

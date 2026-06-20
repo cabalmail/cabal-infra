@@ -53,6 +53,12 @@ The developers have striven to make provisioning as automated as possible. Howev
     4. Pull down the "Run workflow" menu.
     5. Leave the area input at `all` and click on the green "Run workflow" button.
 
+    A manual run is required here (not just convenient): pushes build only
+    the docker tiers whose files changed, and a fresh environment has no
+    deployed baseline. A manual run always builds and deploys every tier in
+    scope, which populates the ECR repositories and the per-tier image-tag
+    parameters in one pass.
+
 7. Perform the [post-automation tasks](#PostAutomation) below.
 
 # Reprovisioning
@@ -123,6 +129,14 @@ Until production access is granted, you can test SMS by adding destination phone
 
 Cabalmail ships with an optional monitoring stack (Uptime Kuma + self-hosted ntfy + an `alert_sink` Lambda that fans out to Pushover and ntfy push notifications) that is disabled by default. To turn it on, set `TF_VAR_MONITORING=true` in your GitHub Actions environment, then follow [the monitoring setup guide](./monitoring.md) to create your Pushover account, seed the SSM secrets, bootstrap the ntfy admin user, create the Kuma admin user, wire the webhook provider, and add the Phase 1 monitors. The guide also covers secret rotation and cleanly disabling the stack.
 
+## Backups (Optional)
+
+If you enabled backups (`TF_VAR_BACKUP=true`), one step cannot be automated: cross-region copy of DynamoDB recovery points requires a one-time, per-account opt-in to advanced DynamoDB backup features, run once from the CLI. Until it is set, the nightly DynamoDB copy jobs fail (EFS copies still succeed). The command, the verification checks, and the restore runbooks are in [Disaster recovery](./disaster-recovery.md).
+
+## DNSSEC (Optional)
+
+DNSSEC signing for your zones is off by default (`TF_VAR_DNSSEC_ENABLED`). Enabling it involves a registrar DS-record step whose ordering matters; read [DNSSEC](./dnssec.md) first. The cicd policy in [the AWS setup guide](./aws.md) marks which permissions DNSSEC needs.
+
 ## Port 25 Block (What to do with the `relay_ips` output)
 
 The output contains the IP address of each of your outgoing mail relays. (More specifically, it's the elastic IP addresses used for egress on the NAT instances.) In order to send mail reliably, you must get AWS to allow outbound traffic on port 25. There is no API for this, so the process cannot be automated. Instead, you must fill out [this form](https://console.aws.amazon.com/support/contacts?#/rdns-limits).
@@ -130,3 +144,7 @@ The output contains the IP address of each of your outgoing mail relays. (More s
 ## NAT
 
 All private-subnet egress (outbound mail and every AWS service call) flows through the VPC's NAT, and there are no VPC endpoints, so NAT health is load-bearing for the whole data plane. For the two NAT modes (EC2 instances or NAT Gateways), how to bring either up in a new environment, and how to diagnose an egress outage, see [NAT and private-subnet egress](./nat.md).
+
+## COMPATABILITY
+
+See our [Compatability Contract](./compatibility.md) for details of how we apply semantic versioning.

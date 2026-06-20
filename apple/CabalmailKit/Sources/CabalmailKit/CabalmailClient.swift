@@ -186,51 +186,10 @@ public actor CabalmailClient {
 
     // MARK: - Higher-level flows
 
-    /// Returns the signed-in user's address list, consulting the in-memory
-    /// cache first and invalidating on mutation. Views call this instead of
-    /// the raw `ApiClient` to match the React app's implicit cache behavior.
-    public func addresses(forceRefresh: Bool = false) async throws -> [Address] {
-        if !forceRefresh, let cached = await addressCache.get() {
-            return cached
-        }
-        let fresh = try await apiClient.listAddresses()
-        await addressCache.set(fresh)
-        return fresh
-    }
-
-    public func requestAddress(
-        username: String,
-        subdomain: String,
-        tld: String,
-        comment: String?,
-        address: String
-    ) async throws {
-        try await apiClient.newAddress(
-            username: username,
-            subdomain: subdomain,
-            tld: tld,
-            comment: comment,
-            address: address
-        )
-        await addressCache.invalidate()
-    }
-
-    public func revokeAddress(address: String, subdomain: String, tld: String, publicKey: String?) async throws {
-        try await apiClient.revokeAddress(
-            address: address,
-            subdomain: subdomain,
-            tld: tld,
-            publicKey: publicKey
-        )
-        await addressCache.invalidate()
-    }
-
-    /// Toggles the caller's favorite flag on an address. Invalidates the
-    /// address cache so the next `addresses(...)` call sees the new state.
-    public func setFavorite(address: String, favorite: Bool) async throws {
-        try await apiClient.setFavorite(address: address, favorite: favorite)
-        await addressCache.invalidate()
-    }
+    // Address and preference flows live in `CabalmailClient+Addresses.swift`
+    // so this actor's body stays under SwiftLint's type_body_length cap;
+    // the send/draft flows stay here because they reach the private
+    // `sendQueue`.
 
     /// Submits an outgoing message via the Cabalmail `/send` Lambda.
     ///
@@ -250,6 +209,12 @@ public actor CabalmailClient {
     /// hard-codes the `Sent` destination so the parameter is currently
     /// unused. Wiring it through requires a Lambda change.
     ///
+    /// `discardingDraft` names the server-side Drafts copy a
+    /// send-from-draft supersedes; the Lambda expunges it best-effort after
+    /// successful delivery. A send that falls through to the outbox drops
+    /// the ref — the queued retry can't know whether the coordinates are
+    /// still fresh, so the worst offline outcome is a stale draft copy.
+    ///
     /// When the Lambda call fails with a transport-class error, the
     /// message is persisted to the `Outbox` and `SendOutcome.queued(_)`
     /// is returned instead of thrown — `SendQueue` drains it when
@@ -257,7 +222,11 @@ public actor CabalmailClient {
     /// recipient refusal) still throw so the user can correct them
     /// immediately.
     @discardableResult
-    public func send(_ message: OutgoingMessage, sentFolder: String = "Sent") async throws -> SendOutcome {
+    public func send(
+        _ message: OutgoingMessage,
+        sentFolder: String = "Sent",
+        discardingDraft: DraftServerRef? = nil
+    ) async throws -> SendOutcome {
         let messageID = message.messageId ?? "<\(UUID().uuidString)@\(message.from.host)>"
         let stamped = OutgoingMessage(
             from: message.from,
@@ -278,7 +247,8 @@ public actor CabalmailClient {
                 stamped,
                 api: apiClient,
                 imapHost: configuration.imapHost,
-                smtpHost: configuration.smtpHost
+                smtpHost: configuration.smtpHost,
+                discardingDraft: discardingDraft
             )
         } catch let error as CabalmailError where Self.shouldQueue(error) {
             let entry = try await outbox.enqueue(stamped)
@@ -295,17 +265,27 @@ public actor CabalmailClient {
     }
 
     /// Pushes the current compose buffer to the user's IMAP `Drafts` folder
-    /// via the `/send` Lambda's `draft=true` branch. The Lambda APPENDs the
-    /// composed message with the `\Draft` flag and skips SMTP / Outbox /
-    /// Sent entirely, so a saved draft surfaces on every device that lists
-    /// `Drafts`.
+    /// via `/save_draft`, so a saved draft surfaces on every device that
+    /// lists `Drafts`. Passing `replacing` names the copy a previous save
+    /// produced; the Lambda appends the new copy first and only then
+    /// expunges the old one (UIDVALIDITY-guarded — a miss keeps both
+    /// copies, never loses one).
+    ///
+    /// Returns the new copy's server coordinates for the caller to thread
+    /// into its next save (and into `send(_:discardingDraft:)`). Nil means
+    /// the server couldn't report UIDPLUS coordinates; the draft saved,
+    /// but the next save will create a fresh copy instead of replacing.
     ///
     /// Errors propagate to the caller — the compose UI surfaces them as a
     /// banner rather than silently retrying, because losing draft text to a
     /// transient blip without telling the user is worse than asking them to
     /// retry. Local `DraftStore` autosave continues to feed the on-disk
     /// JSON copy so the draft survives a crash between Save Draft presses.
-    public func saveDraft(_ message: OutgoingMessage) async throws {
+    @discardableResult
+    public func saveDraft(
+        _ message: OutgoingMessage,
+        replacing prior: DraftServerRef? = nil
+    ) async throws -> DraftServerRef? {
         let messageID = message.messageId ?? "<\(UUID().uuidString)@\(message.from.host)>"
         let stamped = OutgoingMessage(
             from: message.from,
@@ -321,13 +301,44 @@ public actor CabalmailClient {
             extraHeaders: message.extraHeaders,
             messageId: messageID
         )
-        try await Self.submit(
+        let response = try await Self.submitDraft(
             stamped,
             api: apiClient,
             imapHost: configuration.imapHost,
-            smtpHost: configuration.smtpHost,
-            draft: true
+            replacing: prior
         )
+        guard let uid = response.uid, let uidValidity = response.uidValidity else { return nil }
+        return DraftServerRef(uid: uid, uidValidity: uidValidity)
+    }
+
+    /// Removes a server-side draft copy. Returns whether the copy was
+    /// actually expunged; false means the UIDVALIDITY guard declined
+    /// (stale coordinates), which callers treat as already-gone.
+    @discardableResult
+    public func discardDraft(_ ref: DraftServerRef) async throws -> Bool {
+        try await apiClient.discardDraft(
+            host: configuration.imapHost,
+            uid: ref.uid,
+            uidValidity: ref.uidValidity
+        )
+    }
+
+    /// Removes every piece of locally cached user data: the on-disk envelope
+    /// snapshots and message bodies, the local draft buffers, the outbox
+    /// queue, and the in-memory address list. Called on sign-out.
+    ///
+    /// The caches live in a shared, non-user-scoped application-support
+    /// directory, so without this a second account signing in on the same
+    /// device would read the previous user's mail straight from disk (and the
+    /// outbox drain would even resubmit the previous user's queued messages
+    /// under the new session). Best-effort: a failure to clear one cache
+    /// doesn't stop the rest.
+    public func clearLocalData() async {
+        await addressCache.invalidate()
+        try? await envelopeCache.clearAll()
+        try? await bodyCache.clearAll()
+        try? await draftStore.removeAll()
+        try? await outbox.removeAll()
     }
 
     /// Activate or deactivate MetricKit diagnostic collection. The Settings

@@ -17,11 +17,16 @@ locals {
   zone_domains = [for d in var.mail_domains : d if d != var.control_domain]
 }
 
+# force_destroy is off: address records in these zones are created out
+# of band by the `new` Lambda, and letting `terraform destroy` silently
+# nuke a zone full of live records cost-of-mistakes too much. Retiring
+# a mail apex (or tearing down an environment) now means deleting the
+# zone's non-apex records first; see docs/dnssec.md for the procedure.
 resource "aws_route53_zone" "mail_dns" {
   for_each      = toset(local.zone_domains)
   name          = each.key
   comment       = "Domain for ${each.value} mail"
-  force_destroy = true
+  force_destroy = false
 }
 
 # Look up the existing control-domain zone (managed by terraform/dns) so the

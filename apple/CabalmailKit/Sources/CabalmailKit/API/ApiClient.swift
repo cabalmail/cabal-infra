@@ -43,17 +43,21 @@ public protocol ApiClient: Sendable {
 
     /// STATUS for a folder. Powers UIDVALIDITY-based cache invalidation and
     /// the inbox unread badge. Backed by the dedicated `/folder_status`
-    /// Lambda (see `lambda/api/folder_status/function.py`).
-    func folderStatus(host: String, folder: String) async throws -> ApiFolderStatus
+    /// Lambda (see `lambda/api/folder_status/function.py`). Pass
+    /// `flagged: true` to also request a SEARCH FLAGGED count.
+    func folderStatus(host: String, folder: String, flagged: Bool) async throws -> ApiFolderStatus
 
     // MARK: Messages
     /// Sorted UID list for the folder. Sort defaults match the React
-    /// client's call site (REVERSE ARRIVAL — most recent first).
+    /// client's call site (REVERSE ARRIVAL — most recent first). `page`
+    /// requests a server-sliced window of the sorted result (Phase 3 of the
+    /// large-mailbox plan); pass `nil` for the full list.
     func listMessageIds(
         host: String,
         folder: String,
         sortOrder: String,
-        sortField: String
+        sortField: String,
+        page: MessageIdPage?
     ) async throws -> [UInt32]
     func listEnvelopes(host: String, folder: String, ids: [UInt32]) async throws -> [ApiEnvelope]
 
@@ -99,11 +103,39 @@ public protocol ApiClient: Sendable {
     /// `/empty_trash` Lambda (same trash-only restriction).
     func emptyTrash(host: String, folder: String) async throws
 
+    // MARK: Preferences
+    /// Fetches the caller's display-name preference from `/get_preferences`.
+    /// The Lambda returns the full preferences row; the other keys
+    /// (theme/accent/density) are web-client concerns, so only `name` is
+    /// surfaced here. Empty string means "no display name".
+    func fetchDisplayName() async throws -> String
+
+    /// Persists the display-name preference via `/set_preferences`. The
+    /// Lambda merges per-key, so sending only `name` never clobbers the web
+    /// client's theme preferences. The `/send` Lambda reads this value
+    /// server-side when composing the From header.
+    func updateDisplayName(_ name: String) async throws
+
     // MARK: Send
     /// Submits an outgoing message via the Lambda send pipeline (Outbox
     /// APPEND -> SMTP -> Sent move). Mirrors `react/admin/src/ApiClient.js
     /// sendMessage` byte-for-byte.
     func sendMessage(_ request: SendMessageRequest) async throws
+
+    // MARK: Drafts
+    /// Saves (or atomically replaces) a draft via the `/save_draft` Lambda
+    /// and returns the new copy's UIDPLUS coordinates. When the request
+    /// carries `replacesUid` / `replacesUidValidity`, the Lambda appends
+    /// the new copy first and only then expunges the old one, guarded by
+    /// UIDVALIDITY — a guard miss keeps both copies and reports
+    /// `replaced: false`, never a lost draft.
+    func saveDraft(_ request: SaveDraftRequest) async throws -> ApiSaveDraftResponse
+
+    /// Discards one server-side draft copy (`/save_draft` with
+    /// `op: discard`). Returns whether the copy was actually expunged;
+    /// false means the UIDVALIDITY guard declined (the coordinates are
+    /// stale), which callers treat as already-gone rather than an error.
+    func discardDraft(host: String, uid: UInt32, uidValidity: UInt32) async throws -> Bool
 
     /// Requests one presigned S3 PUT URL per outbound attachment. Used to
     /// bypass API Gateway's 10 MB request ceiling on /send — clients PUT
@@ -125,6 +157,45 @@ public protocol ApiClient: Sendable {
     /// string, and S3 rejects requests with both a Bearer header and a
     /// signed URL.
     func fetchPresignedData(url: URL) async throws -> Data
+}
+
+/// A server-sliced page of the sorted message-id list: the `limit` UIDs
+/// starting at `offset`. Bundled into one parameter so `listMessageIds` stays
+/// within the parameter-count budget and the page reads as one concept.
+public struct MessageIdPage: Sendable, Hashable {
+    public let offset: UInt32
+    public let limit: UInt32
+    public init(offset: UInt32, limit: UInt32) {
+        self.offset = offset
+        self.limit = limit
+    }
+}
+
+public extension ApiClient {
+    /// Convenience overload — the cheap STATUS-only call (no flagged count),
+    /// for the badge/idle/sidebar paths that don't need it.
+    func folderStatus(host: String, folder: String) async throws -> ApiFolderStatus {
+        try await folderStatus(host: host, folder: folder, flagged: false)
+    }
+
+    /// Convenience overload: the full, unpaginated sorted UID list. Lets
+    /// callers that genuinely need every UID (e.g. the legacy UID-range
+    /// `envelopes`) stay terse while the paginated requirement carries the
+    /// `page` slice.
+    func listMessageIds(
+        host: String,
+        folder: String,
+        sortOrder: String,
+        sortField: String
+    ) async throws -> [UInt32] {
+        try await listMessageIds(
+            host: host,
+            folder: folder,
+            sortOrder: sortOrder,
+            sortField: sortField,
+            page: nil
+        )
+    }
 }
 
 /// One entry in the `/upload_url` request. Carries only the metadata the
@@ -227,6 +298,11 @@ public struct SendMessageRequest: Sendable {
     public let textBody: String
     public let draft: Bool
     public let attachments: [ApiSendAttachment]
+    /// Send-from-draft cleanup: when set, the Lambda best-effort expunges
+    /// this Drafts-folder copy after successful SMTP delivery (guarded by
+    /// UIDVALIDITY, so stale coordinates simply leave the copy in place).
+    public let discardDraftUid: UInt32?
+    public let discardDraftUidValidity: UInt32?
 
     public init(
         host: String,
@@ -240,7 +316,9 @@ public struct SendMessageRequest: Sendable {
         htmlBody: String,
         textBody: String,
         draft: Bool,
-        attachments: [ApiSendAttachment] = []
+        attachments: [ApiSendAttachment] = [],
+        discardDraftUid: UInt32? = nil,
+        discardDraftUidValidity: UInt32? = nil
     ) {
         self.host = host
         self.smtpHost = smtpHost
@@ -254,6 +332,54 @@ public struct SendMessageRequest: Sendable {
         self.textBody = textBody
         self.draft = draft
         self.attachments = attachments
+        self.discardDraftUid = discardDraftUid
+        self.discardDraftUidValidity = discardDraftUidValidity
+    }
+}
+
+/// Parameters for `/save_draft` (op: save). The compose payload is the
+/// `/send` shape minus SMTP concerns; `replacesUid` / `replacesUidValidity`
+/// name the prior server copy this save supersedes (both or neither).
+public struct SaveDraftRequest: Sendable {
+    public let host: String
+    public let sender: String
+    public let toList: [String]
+    public let ccList: [String]
+    public let bccList: [String]
+    public let subject: String
+    public let otherHeaders: ApiSendOtherHeaders
+    public let htmlBody: String
+    public let textBody: String
+    public let attachments: [ApiSendAttachment]
+    public let replacesUid: UInt32?
+    public let replacesUidValidity: UInt32?
+
+    public init(
+        host: String,
+        sender: String,
+        toList: [String],
+        ccList: [String],
+        bccList: [String],
+        subject: String,
+        otherHeaders: ApiSendOtherHeaders,
+        htmlBody: String,
+        textBody: String,
+        attachments: [ApiSendAttachment] = [],
+        replacesUid: UInt32? = nil,
+        replacesUidValidity: UInt32? = nil
+    ) {
+        self.host = host
+        self.sender = sender
+        self.toList = toList
+        self.ccList = ccList
+        self.bccList = bccList
+        self.subject = subject
+        self.otherHeaders = otherHeaders
+        self.htmlBody = htmlBody
+        self.textBody = textBody
+        self.attachments = attachments
+        self.replacesUid = replacesUid
+        self.replacesUidValidity = replacesUidValidity
     }
 }
 

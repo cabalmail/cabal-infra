@@ -70,16 +70,6 @@ resource "aws_pinpointsmsvoicev2_phone_number" "sms" {
   }
 }
 
-# Migrate state from the pre-count resource address so an env that
-# already had a (pending or active) EUM phone number does not see a
-# destroy on the un-indexed address. Combined with
-# deletion_protection_enabled = true this means a TFV-approved
-# number cannot be lost by a flag flip alone.
-moved {
-  from = aws_pinpointsmsvoicev2_phone_number.sms
-  to   = aws_pinpointsmsvoicev2_phone_number.sms[0]
-}
-
 resource "aws_cognito_user_group" "admin" {
   name         = "admin"
   user_pool_id = aws_cognito_user_pool.users.id

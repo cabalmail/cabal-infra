@@ -21,10 +21,11 @@ import Foundation
 ///     pagination cursor in a single round trip. The raw-IMAP-syntax
 ///     `/search` Lambda was retired in 0.9.x (Phase 6 of
 ///     `docs/0.9.x/imap-search-plan.md`).
-///   * No APPEND — `/send` already handles the Outbox + Sent shuffle
-///     server-side, so `CabalmailClient.send(_:)` no longer needs a
-///     client-side APPEND. `append(_:_:_:)` here throws `protocolError`
-///     to make accidental callers obvious.
+///   * No raw APPEND — `/send` handles the Outbox + Sent shuffle
+///     server-side and `/save_draft` owns the Drafts-folder lifecycle
+///     (save / replace / discard with UIDPLUS coordinates), so no caller
+///     needs a byte-level APPEND. `append(_:_:_:)` here throws
+///     `protocolError` to make accidental callers obvious.
 ///   * Envelope addresses arrive in RFC 5322 mailbox form — the Lambda
 ///     emits `"Display Name" <mailbox@host>` when an addr-name is set
 ///     and bare `mailbox@host` otherwise. `parseAddress` splits the two
@@ -89,58 +90,16 @@ public actor ApiBackedImapClient: ImapClient {
         subscriptionCache?.remove(path)
     }
 
-    public func status(path: String) async throws -> FolderStatus {
-        let raw = try await api.folderStatus(host: host, folder: path)
+    public func status(path: String, flagged: Bool) async throws -> FolderStatus {
+        let raw = try await api.folderStatus(host: host, folder: path, flagged: flagged)
         return FolderStatus(
             messages: raw.messages,
             unseen: raw.unseen,
+            flagged: raw.flagged,
             recent: nil,
             uidValidity: raw.uidValidity,
             uidNext: raw.uidNext
         )
-    }
-
-    // MARK: - Envelopes
-
-    public func envelopes(
-        folder: String,
-        range: ClosedRange<UInt32>,
-        sort: SortCriterion
-    ) async throws -> [Envelope] {
-        // The Lambda has no UID-range endpoint. Pull the sorted UID list,
-        // filter to the requested window, then fetch envelopes for that
-        // subset. For typical folder sizes the filter is the cheap part.
-        let allIds = try await api.listMessageIds(
-            host: host,
-            folder: folder,
-            sortOrder: sort.direction.wireOrder,
-            sortField: sort.field.wireField
-        )
-        let windowed = allIds.filter { range.contains($0) }
-        guard !windowed.isEmpty else { return [] }
-        let raw = try await api.listEnvelopes(host: host, folder: folder, ids: windowed)
-        return raw.map { Self.makeEnvelope($0) }
-    }
-
-    public func topEnvelopes(
-        folder: String,
-        limit: UInt32,
-        totalMessages: UInt32,
-        sort: SortCriterion
-    ) async throws -> [Envelope] {
-        if totalMessages == 0 { return [] }
-        let allIds = try await api.listMessageIds(
-            host: host,
-            folder: folder,
-            sortOrder: sort.direction.wireOrder,
-            sortField: sort.field.wireField
-        )
-        // The Lambda already applies the requested sort, so the prefix is
-        // the top page. Trim to the requested page size.
-        let head = Array(allIds.prefix(Int(limit)))
-        guard !head.isEmpty else { return [] }
-        let raw = try await api.listEnvelopes(host: host, folder: folder, ids: head)
-        return raw.map { Self.makeEnvelope($0) }
     }
 
     // MARK: - Bodies and parts
@@ -222,7 +181,8 @@ public actor ApiBackedImapClient: ImapClient {
 
     public func append(folder: String, message: Data, flags: Set<Flag>) async throws {
         throw CabalmailError.protocolError(
-            "append is not supported by the API-backed client; /send already handles Outbox + Sent"
+            "append is not supported by the API-backed client; "
+                + "/send handles Outbox + Sent and /save_draft handles Drafts"
         )
     }
 
@@ -278,15 +238,18 @@ public actor ApiBackedImapClient: ImapClient {
     private var defaultSortOrder: String { "REVERSE " }
     private var defaultSortField: String { "ARRIVAL" }
 
-    /// Builds an `Envelope` from the Lambda payload. `messageId`,
-    /// `internalDate`, and `size` are omitted — the Lambda doesn't surface
-    /// them and the cache keys on UID + UIDVALIDITY, so no behavior depends.
+    /// Builds an `Envelope` from the Lambda payload. `internalDate` and
+    /// `size` are approximated/omitted — the Lambda doesn't surface them
+    /// and the cache keys on UID + UIDVALIDITY. The threading identity
+    /// (`messageId` / `inReplyTo` / `references`) is populated when the
+    /// payload carries it (Lambdas since the 0.10.x draft-sync work);
+    /// `ReplyBuilder` threads replies from these fields.
     static func makeEnvelope(_ raw: ApiEnvelope) -> Envelope {
         let date = parseLambdaDate(raw.date)
         let flags = Set(raw.flags.map { Flag(wireValue: $0) })
         return Envelope(
             uid: raw.id,
-            messageId: nil,
+            messageId: raw.messageId?.first,
             date: date,
             subject: raw.subject,
             from: raw.from.compactMap(parseAddress),
@@ -295,7 +258,8 @@ public actor ApiBackedImapClient: ImapClient {
             to: raw.to.compactMap(parseAddress),
             cc: raw.cc.compactMap(parseAddress),
             bcc: [],
-            inReplyTo: nil,
+            inReplyTo: raw.inReplyTo?.first,
+            references: raw.references ?? [],
             flags: flags,
             internalDate: date,
             size: nil,
@@ -410,7 +374,10 @@ extension ApiBackedImapClient {
                 cc: wire.cc,
                 flags: wire.flags,
                 structure: wire.structure,
-                priority: wire.priority
+                priority: wire.priority,
+                messageId: wire.messageId,
+                inReplyTo: wire.inReplyTo,
+                references: wire.references
             )
             return SearchedEnvelope(envelope: Self.makeEnvelope(inner), folder: wire.folder)
         }
@@ -421,5 +388,76 @@ extension ApiBackedImapClient {
             foldersSearched: raw.foldersSearched,
             truncated: raw.truncated
         )
+    }
+}
+
+// MARK: - Envelopes
+// In an extension (same file, so it still reaches the actor's private
+// `api`/`host`) to keep the main actor body under SwiftLint's type-body cap.
+extension ApiBackedImapClient {
+    // Legacy UID-range fetch. The view model now paginates positionally via
+    // `envelopes(offset:limit:)`; this remains only to satisfy the protocol
+    // requirement shared with `LiveImapClient`. It still pulls the full UID
+    // list, so it is not on any hot path.
+    public func envelopes(
+        folder: String,
+        range: ClosedRange<UInt32>,
+        sort: SortCriterion
+    ) async throws -> [Envelope] {
+        let allIds = try await api.listMessageIds(
+            host: host,
+            folder: folder,
+            sortOrder: sort.direction.wireOrder,
+            sortField: sort.field.wireField
+        )
+        let windowed = allIds.filter { range.contains($0) }
+        guard !windowed.isEmpty else { return [] }
+        let raw = try await api.listEnvelopes(host: host, folder: folder, ids: windowed)
+        return raw.map { Self.makeEnvelope($0) }
+    }
+
+    public func envelopes(
+        folder: String,
+        offset: UInt32,
+        limit: UInt32,
+        sort: SortCriterion
+    ) async throws -> [Envelope] {
+        // Ask the Lambda for just this page of the sorted UID list, then fetch
+        // its envelopes. Trust the server slice (no client-side prefix): at a
+        // non-zero offset a defensive prefix would hand back the wrong window
+        // if the slice ever arrived larger than requested.
+        let ids = try await api.listMessageIds(
+            host: host,
+            folder: folder,
+            sortOrder: sort.direction.wireOrder,
+            sortField: sort.field.wireField,
+            page: MessageIdPage(offset: offset, limit: limit)
+        )
+        guard !ids.isEmpty else { return [] }
+        let raw = try await api.listEnvelopes(host: host, folder: folder, ids: ids)
+        return raw.map { Self.makeEnvelope($0) }
+    }
+
+    public func topEnvelopes(
+        folder: String,
+        limit: UInt32,
+        totalMessages: UInt32,
+        sort: SortCriterion
+    ) async throws -> [Envelope] {
+        if totalMessages == 0 { return [] }
+        let ids = try await api.listMessageIds(
+            host: host,
+            folder: folder,
+            sortOrder: sort.direction.wireOrder,
+            sortField: sort.field.wireField,
+            page: MessageIdPage(offset: 0, limit: limit)
+        )
+        // Offset 0 is the top of the sorted list, so a defensive prefix is
+        // always correct -- it also shields against an older Lambda that
+        // predates pagination and ignores the params, returning the full list.
+        let head = Array(ids.prefix(Int(limit)))
+        guard !head.isEmpty else { return [] }
+        let raw = try await api.listEnvelopes(host: host, folder: folder, ids: head)
+        return raw.map { Self.makeEnvelope($0) }
     }
 }

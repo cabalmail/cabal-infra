@@ -10,10 +10,11 @@ import os
 import re
 import time
 from email.header import decode_header
+from email.parser import HeaderParser
 from email.policy import default as default_policy
 import boto3  # pylint: disable=import-error
 from botocore.exceptions import ClientError  # pylint: disable=import-error
-from imapclient import IMAPClient  # pylint: disable=import-error
+from imap_session import open_imap_client  # pylint: disable=import-error
 
 TABLE = 'cabal-addresses'
 region = os.environ['AWS_REGION']
@@ -185,12 +186,15 @@ def get_imap_client(host, user, folder, read_only=False):
     short-circuit to a friendly 503 (via maintenance_guard) instead of dialing a
     server that is mid-restart. Every IMAP-touching path flows through here, so
     this one check covers reads, folder ops, flags, moves, and cache-miss
-    fetches; cache hits never reach this function and keep working.'''
+    fetches; cache hits never reach this function and keep working.
+
+    Connection handling (including the optional warm-invocation pool) lives in
+    imap_session; this wrapper just applies the maintenance gate first, then
+    delegates. With pooling off (the default) the returned object is a bare
+    IMAPClient connected/authenticated/selected exactly as before.'''
     _raise_if_maintenance()
-    client = IMAPClient(host=host, use_uid=True, ssl=True)
-    client.login(f"{user}*admin", mpw)
-    client.select_folder(folder, read_only)
-    return client
+    return open_imap_client(host, user, folder, read_only, mpw)
+
 
 def user_authorized_for_sender(user, sender):
     """Checks whether the user is allowed to send from the specifed sender address"""
@@ -235,11 +239,23 @@ def user_authorized_for_domain(user, domain):
 
 # Shared with the large-mailbox chunking work; one ceiling for both surfaces.
 MAX_IDS_PER_REQUEST = 5000
+# Per-command batch size for bulk UID MOVE / UID STORE. The whole request is
+# capped at MAX_IDS_PER_REQUEST; within that, the bulk endpoints issue IMAP
+# commands in slices of this size so no single command brushes the 29s API
+# Gateway ceiling on a large selection.
+MAX_IDS_PER_IMAP_CMD = 500
 MAX_FOLDER_NAME_BYTES = 255
 MAX_KEYWORD_LEN = 64
 MAX_CONTENT_ID_LEN = 128
 MAX_SEARCH_TEXT_LEN = 1024
 MAX_UID = 0xFFFFFFFF
+# Upper bound on an explicit list-page `limit`. A client tunes page size to
+# trade round trips against per-page latency; this caps it "within reason" so
+# the follow-up /list_envelopes fetch for the page stays well under the 29s API
+# Gateway ceiling. An oversized limit is clamped here, not rejected. A missing
+# limit still means "no bound" -- the React client relies on that to pull the
+# whole sorted UID list for its client-side virtualized view.
+MAX_PAGE_SIZE = 250
 
 _FOLDER_NAME_RE = re.compile(r'^[A-Za-z0-9 _\-./]+$')
 _KEYWORD_RE = re.compile(r'^[A-Za-z0-9_\-]+$')
@@ -329,6 +345,116 @@ def validate_uid_list(ids):
 def validate_uid(value):
     '''Validates a single IMAP UID, returning an int in [1, 2**32-1].'''
     return validate_uid_list([value])[0]
+
+
+def validate_pagination(offset, limit):
+    '''Validates the optional `offset`/`limit` list-pagination query params.
+
+    Returns (offset:int>=0, limit:int>0 or None). A missing or empty value
+    means "no bound": offset defaults to 0 and a missing limit returns None, so
+    the caller serves the full list and the pre-pagination contract is kept.
+    An explicit limit above MAX_PAGE_SIZE is clamped to it (the page stays
+    "within reason") rather than rejected. Raises ValueError on non-numeric or
+    out-of-range input.
+    '''
+    parsed_offset = 0
+    if offset not in (None, ''):
+        try:
+            parsed_offset = int(offset)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f'invalid offset: {offset!r}') from exc
+        if parsed_offset < 0:
+            raise ValueError(f'offset out of range: {parsed_offset}')
+    parsed_limit = None
+    if limit not in (None, ''):
+        try:
+            parsed_limit = int(limit)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f'invalid limit: {limit!r}') from exc
+        if parsed_limit < 1:
+            raise ValueError(f'limit out of range: {parsed_limit}')
+        # Clamp rather than reject: offset pagination is transparent to a
+        # smaller-than-requested page, so a client asking for too much simply
+        # gets the maximum reasonable page instead of an error.
+        parsed_limit = min(parsed_limit, MAX_PAGE_SIZE)
+    return parsed_offset, parsed_limit
+
+
+def apply_in_batches(ids, operation):
+    '''Runs `operation(batch)` over MAX_IDS_PER_IMAP_CMD-sized slices of `ids`,
+    returning (succeeded_ids, failed_ids).
+
+    Bulk UID MOVE / UID STORE are issued in bounded batches so no single IMAP
+    command blocks the Lambda long enough to brush the 29s API Gateway ceiling
+    on a large selection. A batch whose operation raises is recorded as failed
+    and the run continues; the batches are independent UID sets, so the split
+    is accurate and a client can retry only the failed ids.
+    '''
+    succeeded = []
+    failed = []
+    for start in range(0, len(ids), MAX_IDS_PER_IMAP_CMD):
+        batch = ids[start:start + MAX_IDS_PER_IMAP_CMD]
+        try:
+            operation(batch)
+            succeeded.extend(batch)
+        except Exception:  # pylint: disable=broad-except
+            failed.extend(batch)
+    return succeeded, failed
+
+
+def too_many_ids_response():
+    '''413 the bulk endpoints return when an id list exceeds MAX_IDS_PER_REQUEST,
+    carrying the cap so a client can split the request and retry.'''
+    return {
+        "statusCode": 413,
+        "body": json.dumps({"max_ids": MAX_IDS_PER_REQUEST})
+    }
+
+
+def parse_bulk_request(event):
+    '''Parses a bulk-op request body and enforces the per-request id cap.
+
+    Returns (body, error). On success `error` is None; on a malformed body or an
+    oversized id list, `error` is a ready-to-return 400/413 response and `body`
+    is None. The caller still validates the folder/flag/uid contents.
+    '''
+    try:
+        body = json.loads(event['body'])
+    except (TypeError, json.JSONDecodeError):
+        return None, {
+            "statusCode": 400,
+            "body": json.dumps(
+                {"status": "Invalid input: request body is not valid JSON"})
+        }
+    raw_ids = body.get('ids')
+    if isinstance(raw_ids, (list, tuple)) and len(raw_ids) > MAX_IDS_PER_REQUEST:
+        return None, too_many_ids_response()
+    return body, None
+
+
+def batch_result_response(succeeded, failed, succeeded_key):
+    '''Builds the response for a batched bulk op: 500 when nothing succeeded,
+    200 "partial" with the succeeded/failed split when some batches failed, else
+    200 "submitted". `succeeded_key` names the success list in the partial body
+    (e.g. "moved_ids" / "flagged_ids").'''
+    if not succeeded:
+        return {
+            "statusCode": 500,
+            "body": json.dumps({"status": "unable"})
+        }
+    if failed:
+        return {
+            "statusCode": 200,
+            "body": json.dumps({
+                "status": "partial",
+                succeeded_key: succeeded,
+                "failed_ids": failed
+            })
+        }
+    return {
+        "statusCode": 200,
+        "body": json.dumps({"status": "submitted"})
+    }
 
 
 def validate_flag(flag):
@@ -660,9 +786,36 @@ def key_exists(bucket, key):
 # endpoints return the same per-envelope JSON shape; the helpers live here so
 # the wire format stays in sync and pylint's duplicate-code check stays quiet.
 
+# References is not part of the RFC 3501 ENVELOPE, so it rides the same
+# header fetch as X-PRIORITY. imapclient keys the response dict by the
+# requested atom, so the constant and the lookup in envelope_dict must stay
+# in lockstep — hence the single shared key.
+ENVELOPE_HEADER_FIELDS_KEY = 'BODY[HEADER.FIELDS (X-PRIORITY REFERENCES)]'
+
 ENVELOPE_FETCH_KEYS = [
-    'ENVELOPE', 'FLAGS', 'BODYSTRUCTURE', 'BODY[HEADER.FIELDS (X-PRIORITY)]'
+    'ENVELOPE', 'FLAGS', 'BODYSTRUCTURE', ENVELOPE_HEADER_FIELDS_KEY
 ]
+
+# Deep threads grow References without bound and envelopes are fetched ~50 at
+# a time, so emit only the newest ids. RFC 5322 itself sanctions trimming old
+# ids; reply threading only ever appends one id to what it received.
+MAX_REFERENCES_IDS = 20
+
+_MSGID_RE = re.compile(r'<[^<>]+>')
+
+
+def parse_message_ids(raw):
+    '''Extracts the angle-bracketed message-ids from a header value.
+
+    Accepts bytes or str (IMAP ENVELOPE fields arrive as bytes) and returns a
+    list of `<id>` strings — the same wire shape /fetch_message emits — so
+    client-side decoders are shared between the two payloads.
+    '''
+    if raw is None:
+        return []
+    if isinstance(raw, bytes):
+        raw = raw.decode(errors='replace')
+    return _MSGID_RE.findall(raw)
 
 
 def envelope_dict(msgid, data):
@@ -673,7 +826,12 @@ def envelope_dict(msgid, data):
     decoders, so changes here ripple to both clients.
     '''
     envelope = data[b'ENVELOPE']
-    priority_header = data[b'BODY[HEADER.FIELDS (X-PRIORITY)]'].decode()
+    # The header blob now carries two fields with possible RFC 5322 folding,
+    # so parse it properly instead of splitting on whitespace.
+    headers = HeaderParser().parsestr(
+        data.get(ENVELOPE_HEADER_FIELDS_KEY.encode(), b'').decode(errors='replace')
+    )
+    priority_header = headers.get('X-Priority') or ''
     return {
         "id": msgid,
         "date": str(envelope.date),
@@ -683,7 +841,10 @@ def envelope_dict(msgid, data):
         "cc": decode_address(envelope.cc),
         "flags": decode_flags(data[b'FLAGS']),
         "struct": decode_body_structure(data[b'BODYSTRUCTURE']),
-        "priority": [f"priority-{s}" for s in priority_header.split() if s.isdigit()]
+        "priority": [f"priority-{s}" for s in priority_header.split() if s.isdigit()],
+        "message_id": parse_message_ids(envelope.message_id),
+        "in_reply_to": parse_message_ids(envelope.in_reply_to),
+        "references": parse_message_ids(headers.get('References'))[-MAX_REFERENCES_IDS:]
     }
 
 
@@ -732,18 +893,22 @@ def decode_name(raw):
     return ''.join(pieces).strip()
 
 
-def format_address(fragment):
-    '''Renders one ENVELOPE address in RFC 5322 mailbox form, including display name when set'''
-    mailbox = fragment.mailbox.decode()
-    host = fragment.host.decode()
-    addr = f"{mailbox}@{host}"
-    name = decode_name(fragment.name)
+def format_mailbox(name, addr):
+    '''Renders an RFC 5322 mailbox string, quoting the display name when one is set'''
     if name:
         # Quote and escape the display name for safe RFC 5322 rendering. Existing
         # clients parse `"Name" <addr@host>` via a `<...>` regex.
         escaped = name.replace('\\', '\\\\').replace('"', '\\"')
         return f'"{escaped}" <{addr}>'
     return addr
+
+
+def format_address(fragment):
+    '''Renders one ENVELOPE address in RFC 5322 mailbox form, including display name when set'''
+    mailbox = fragment.mailbox.decode()
+    host = fragment.host.decode()
+    name = decode_name(fragment.name)
+    return format_mailbox(name, f"{mailbox}@{host}")
 
 
 def decode_address(data):

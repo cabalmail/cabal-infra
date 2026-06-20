@@ -8,6 +8,79 @@ import CabalmailKit
 // (`hydrateFromCache`, `persistCache`) stays in the main file because
 // the cache scope is intentionally narrow.
 extension MessageListViewModel {
+    /// Pull-to-refresh entry point. Runs `refresh()` on an unstructured,
+    /// model-owned `Task` and awaits it, so a cancellation of SwiftUI's
+    /// `.refreshable` task doesn't propagate into the in-flight request and
+    /// surface as `network("cancelled")`. The embedded per-row swipe `List`s
+    /// inherit the outer `.refreshable`, and that scroll interaction was
+    /// cancelling the pull task mid-fetch; an unstructured task is detached
+    /// from that cancellation. Mirrors the pagination cancel-storm fix.
+    func refreshFromPull() async {
+        await Task { await self.refresh() }.value
+    }
+
+    /// Capture the server-sourced counts from a STATUS reply: `totalMessages`
+    /// (the All pill and the pagination gate) plus the Unread/Flagged pill
+    /// counts. Returns the message total so `refresh()` can reuse it for the
+    /// top-page fetch. `unseen`/`flagged` fall back to the prior value when a
+    /// transient STATUS drops them, rather than flashing 0. Lives here so the
+    /// main view-model body stays under SwiftLint's type-body cap.
+    func applyStatusCounts(_ status: FolderStatus) -> UInt32 {
+        let messages = UInt32(max(0, status.messages ?? 0))
+        // A changed folder size shifts every absolute index, so a bottom window
+        // staged against the old total is no longer aligned -- drop it (the
+        // stamp check in `performLoadWindow` is the backstop for the window
+        // between a mutation and the STATUS that reflects it).
+        if messages != totalMessages { invalidateBottomPrefetch() }
+        totalMessages = messages
+        unseen = max(0, status.unseen ?? unseen)
+        flagged = max(0, status.flagged ?? flagged)
+        return messages
+    }
+
+    /// Row onAppear: the list is now rendering this absolute index. A row
+    /// appearing means the view scrolled, so (re)arm the settle backstop --
+    /// once scrolling stops we load the now-visible window. This covers a
+    /// scrollbar drag (or any jump) landing on placeholders while a stale page
+    /// load is still in flight, where the row `.task`'s `ensureLoaded` would
+    /// bail on the single-flight gate and leave the landing rows blank.
+    func noteRowVisible(_ index: Int) {
+        visibleRowIndices.insert(index)
+        scheduleEnsureLoaded()
+    }
+
+    /// Row onDisappear: this absolute index left the rendered set.
+    func noteRowHidden(_ index: Int) { visibleRowIndices.remove(index) }
+
+    /// Lowest / highest absolute index the list is currently rendering, or nil
+    /// before any row has reported in (empty folder, first paint).
+    var firstVisibleRow: Int? { visibleRowIndices.min() }
+    var lastVisibleRow: Int? { visibleRowIndices.max() }
+
+    /// Debounced "load the window the list settled on" after a scroll/key jump.
+    /// Resetting the task on each call (every row appear and every PgUp/PgDown)
+    /// collapses a burst of scrolling into one load once it stops. It waits for
+    /// any in-flight page load to finish first -- rather than racing a cancel
+    /// against a second writer (the load funcs mutate without a cancellation
+    /// guard) -- then drives `ensureLoaded` at the settled visible center, which
+    /// the landing rows' `.task`s may have skipped while a load was in flight.
+    /// loadWindow centers a full window there, so the visible rows plus a page
+    /// above and below are fetched.
+    func scheduleEnsureLoaded() {
+        keyScrollTask?.cancel()
+        keyScrollTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(175))
+            guard !Task.isCancelled, let self else { return }
+            await self.loadMoreTask?.value
+            await self.loadPrevTask?.value
+            await self.loadWindowTask?.value
+            guard !Task.isCancelled,
+                  let first = self.firstVisibleRow,
+                  let last = self.lastVisibleRow else { return }
+            self.ensureLoaded(around: (first + last) / 2)
+        }
+    }
+
     /// User-initiated "force reload." Wipes the in-memory envelope list
     /// (plus the cursor state `refresh()` uses to merge older pages) AND
     /// the on-disk envelope snapshot for this folder, then runs
@@ -23,22 +96,26 @@ extension MessageListViewModel {
     /// manual paths the user explicitly invokes.
     ///
     /// Invalidating the on-disk snapshot here matters because
-    /// `applyRefreshPage`'s `replace(... keepingRange:)` only prunes
-    /// UIDs *inside* the refresh window — UIDs outside it are treated
-    /// as "older pages" and retained. Foreign-folder UIDs that leaked
-    /// into the cache (historically through pagination during search)
-    /// sit below the inbox's current UID band, so without an explicit
-    /// invalidate they'd survive every subsequent refresh and re-
+    /// `applyRefreshPage` only reconciles the top page, and only while
+    /// the list still fits in it — once paginated it prunes nothing, and
+    /// even when it does prune it touches the top page alone. Foreign-
+    /// folder UIDs that leaked into the cache (historically through
+    /// pagination during search) sit in the paginated tail, so without an
+    /// explicit invalidate they'd survive every subsequent refresh and re-
     /// hydrate as phantoms on relaunch. The body cache is left alone:
     /// it's keyed per-UID, never blindly batch-written, and an
     /// unrelated phantom never reached the fetch path far enough to
     /// land a body in it.
     func hardReload() async {
+        dbg("hardReload")
         try? await client.envelopeCache.invalidate(folder: folder.path)
         envelopes.removeAll()
-        lowestUID = nil
+        totalMessages = 0
+        unseen = 0
+        flagged = 0
         hasMore = true
         sourceFolderByUID = [:]
+        resetWindow()
         await refresh()
     }
 
@@ -79,38 +156,225 @@ extension MessageListViewModel {
     /// include these too." Shielded so an in-flight local write survives a
     /// concurrent refresh (see `shieldFetched`).
     func mergeFetched(_ fetched: [Envelope]) {
+        let before = envelopes.count
         var byUID: [UInt32: Envelope] = Dictionary(
             uniqueKeysWithValues: envelopes.map { ($0.uid, $0) }
         )
         for envelope in shieldFetched(fetched) {
             byUID[envelope.uid] = envelope
         }
+        let mergeStart = nowMs()
         envelopes = byUID.values.sorted(by: envelopeOrder)
+        dbg("merge in=\(fetched.count) before=\(before) after=\(envelopes.count) sortMs=\(Int(nowMs() - mergeStart))")
     }
 
-    /// Merges a top-page fetch into in-memory state and the envelope cache.
-    /// For the default REVERSE ARRIVAL sort, `keepingRange` covers
-    /// `min(fetched.uid)...uidNext` and any in-memory envelope in that band
-    /// missing from the fetch was moved or expunged elsewhere. Non-default
-    /// sorts span the whole folder with their top page, so we suppress the
-    /// disappear-detection there — accepting that server-side deletes show
-    /// up later (on the next folder switch) is the right trade vs. mass-
-    /// pruning cached envelopes on every IDLE refresh.
+    /// Fetches the page immediately above the window and prepends it, then
+    /// trims the now-scrolled-away bottom back to `windowCap`. Triggered by
+    /// `ensureLoaded(around:)` when a row near the top of the window appears.
+    /// Index-addressed rendering keeps each loaded row at its absolute slot,
+    /// so prepending rows above the viewport doesn't move it. When the window
+    /// reaches the top (`windowStart == 0`) `hasTrimmedFront` clears, re-
+    /// enabling the top-page refresh and the snapshot persist. Internal (not
+    /// `private`) so `ensureLoaded` in the main file can launch it.
+    func performLoadPrevious() async {
+        defer { isLoadingPrevious = false }
+        do {
+            let count = min(loadMorePageSize, windowStart)
+            let offset = windowStart - count
+            let fetched = try await client.imapClient.envelopes(
+                folder: folder.path,
+                offset: offset,
+                limit: count,
+                sort: sortCriterion
+            )
+            guard !fetched.isEmpty else { return }
+            windowStart = offset
+            mergeFetched(fetched)
+            // Trim the scrolled-away bottom; the next downward loadMore
+            // refetches it by absolute offset.
+            if envelopes.count > windowCap {
+                envelopes.removeLast(envelopes.count - windowCap)
+            }
+            hasTrimmedFront = windowStart > 0
+            hasMore = (windowStart + UInt32(envelopes.count)) < totalMessages
+            dbg("loadPrev off=\(offset) fetched=\(fetched.count) windowStart=\(windowStart) hasMore=\(hasMore)")
+        } catch {
+            dbg("loadPrev ERROR \(error)")
+        }
+    }
+
+    /// Envelope at an absolute folder index, or nil when that index isn't in
+    /// the loaded window (the row then renders a placeholder). Backs the
+    /// index-addressed virtualized list: the view's `ForEach` spans the full
+    /// `0..<total` index range (stable, so scrolling never re-diffs or jumps),
+    /// and each row looks up its data here.
+    func envelope(at absoluteIndex: Int) -> Envelope? {
+        let local = absoluteIndex - Int(windowStart)
+        guard local >= 0, local < envelopes.count else { return nil }
+        return envelopes[local]
+    }
+
+    /// Replaces the loaded window with a fresh one centered on `absoluteIndex`
+    /// for a scrollbar drag into an unloaded region (see `ensureLoaded`).
+    /// Discontinuous, so it replaces rather than merges; `hasTrimmedFront` /
+    /// `hasMore` are recomputed from the new absolute bounds. Internal (not
+    /// `private`) so `ensureLoaded` in the main file can launch it.
+    func performLoadWindow(around absoluteIndex: Int) async {
+        defer { isLoadingWindow = false }
+        // Adopt a staged bottom-prefetch window instantly when it still aligns
+        // with the live folder (same total) and covers the requested index --
+        // the first jump to the bottom then costs no round trip. Consumed on
+        // use: the live `envelopes` window now holds the bottom, and a later
+        // jump re-fetches (or re-stages) as normal.
+        if let staged = bottomPrefetch,
+           staged.total == totalMessages,
+           absoluteIndex >= Int(staged.start),
+           absoluteIndex < Int(staged.start) + staged.envelopes.count {
+            windowStart = staged.start
+            envelopes = staged.envelopes
+            hasTrimmedFront = staged.start > 0
+            hasMore = (windowStart + UInt32(envelopes.count)) < totalMessages
+            bottomPrefetch = nil
+            dbg("loadWindow adopt-prefetch around=\(absoluteIndex) start=\(staged.start)")
+            return
+        }
+        let total = Int(totalMessages)
+        // Fetch ONE server-capped page centered on the target, not a whole
+        // `windowCap` chunk: the Lambda clamps a page to MAX_PAGE_SIZE (250),
+        // so a `windowCap` (600) request silently came back as ~250 rows while
+        // the centering math still assumed the full 600 -- the target landed
+        // ~`windowCap/2` rows past the loaded slice and stayed a placeholder
+        // forever. `windowCap` remains the in-memory bound that loadMore /
+        // loadPrevious grow this window toward as the user scrolls from here.
+        let page = Int(loadMorePageSize)
+        let start = max(0, min(absoluteIndex - page / 2, max(0, total - page)))
+        do {
+            let fetched = try await client.imapClient.envelopes(
+                folder: folder.path,
+                offset: UInt32(start),
+                limit: loadMorePageSize,
+                sort: sortCriterion
+            )
+            guard !fetched.isEmpty else { return }
+            windowStart = UInt32(start)
+            envelopes = fetched.sorted(by: envelopeOrder)
+            hasTrimmedFront = start > 0
+            hasMore = (windowStart + UInt32(envelopes.count)) < totalMessages
+            dbg("loadWindow around=\(absoluteIndex) start=\(start) fetched=\(fetched.count)")
+        } catch {
+            dbg("loadWindow ERROR \(error)")
+        }
+    }
+
+    /// A staged bottom window for the prefetch-on-open optimization. `start` is
+    /// the absolute index of `envelopes[0]`; `total` stamps the `totalMessages`
+    /// it was fetched against, so `performLoadWindow` only adopts it while the
+    /// folder size still matches (a struct, not a tuple, to stay under
+    /// SwiftLint's `large_tuple` cap).
+    struct BottomPrefetch {
+        let start: UInt32
+        let total: UInt32
+        let envelopes: [Envelope]
+    }
+
+    /// Drops any staged bottom-prefetch window and cancels an in-flight fill.
+    /// Called from `resetWindow()` (sort change, hard reload, UIDVALIDITY
+    /// change, search clear) and from `applyStatusCounts` when the folder size
+    /// changes, so an adopted window is always aligned with the live folder.
+    func invalidateBottomPrefetch() {
+        bottomPrefetchTask?.cancel()
+        bottomPrefetchTask = nil
+        bottomPrefetch = nil
+    }
+
+    /// Kicks off a low-priority background fetch of the folder's bottom window
+    /// into `bottomPrefetch`, so the first End / jump-to-bottom is instant. It
+    /// stages the LAST page (offset `total - loadMorePageSize`) so it actually
+    /// covers `total - 1` -- the same window `performLoadWindow` lands on for
+    /// the end, one server-capped page (not `windowCap`, which a single fetch
+    /// can't return). Only worth it when the bottom isn't already reachable
+    /// from the top window (folders larger than one window) and the window is
+    /// still top-anchored. Re-kicked after a sort change (the staged order
+    /// would otherwise be stale); a no-op while a search is showing or a fill
+    /// is already staged or running.
+    func scheduleBottomPrefetch() {
+        guard !isSearchActive, !hasTrimmedFront, bottomPrefetch == nil,
+              Int(totalMessages) > windowCap else { return }
+        let total = totalMessages
+        let start = total - loadMorePageSize
+        bottomPrefetchTask?.cancel()
+        bottomPrefetchTask = Task(priority: .background) { [weak self] in
+            await self?.performBottomPrefetch(start: start, total: total)
+        }
+    }
+
+    /// Background body for `scheduleBottomPrefetch`. Fetches the bottom window
+    /// positionally and stages it, but only if it's still relevant on
+    /// completion: the sort the user is viewing hasn't changed and the folder
+    /// size still matches, otherwise the window would be mis-ordered or mis-
+    /// aligned. Best-effort -- a failed fetch just leaves End to take the
+    /// normal round trip.
+    func performBottomPrefetch(start: UInt32, total: UInt32) async {
+        let sortAtKickoff = sortCriterion
+        do {
+            let fetched = try await client.imapClient.envelopes(
+                folder: folder.path,
+                offset: start,
+                limit: loadMorePageSize,
+                sort: sortAtKickoff
+            )
+            guard !Task.isCancelled, !fetched.isEmpty,
+                  sortAtKickoff == sortCriterion, total == totalMessages else { return }
+            bottomPrefetch = BottomPrefetch(start: start, total: total, envelopes: fetched.sorted(by: envelopeOrder))
+            dbg("bottomPrefetch staged start=\(start) n=\(fetched.count) total=\(total)")
+        } catch {
+            dbg("bottomPrefetch ERROR \(error)")
+        }
+    }
+
+    /// Merges a top-page fetch into in-memory state and the envelope cache,
+    /// pruning rows the server no longer returns -- but only when that
+    /// pruning is actually safe.
+    ///
+    /// A top-page refresh is authoritative over the top page alone. The
+    /// earlier design bounded the prune by a UID band
+    /// (`min(fetched.uid)...uidNext`), which is only correct when the
+    /// display order matches UID order. It doesn't: the default sort wires
+    /// to `SORT (REVERSE ARRIVAL)` so the server pages by INTERNALDATE,
+    /// while the client comparator orders by the Date header. Those orders
+    /// diverge, so the top page can contain low-UID rows, the band spans
+    /// most of the folder, and a deeply paginated tail gets flagged
+    /// "disappeared" and wiped on every 60-second background refresh.
+    ///
+    /// Bounding the prune to the top page (by position) instead of by a UID
+    /// band fixes it without trusting the client/server sort to agree:
+    ///   * Not yet paginated (the whole list fits in the top page) ->
+    ///     reconcile against the fetch; a missing row was moved/expunged
+    ///     out from under us, so prune it and deletes reflect promptly.
+    ///   * Paginated past the top page -> suppress pruning entirely; the
+    ///     fetch can't see the tail and the client can't place tail rows
+    ///     against it, so a delete surfaces on the next hard reload /
+    ///     folder switch instead. Same trade the non-default sorts already
+    ///     took, and far better than collapsing a scrolled list to the top.
+    /// An empty fetch (transient/blank top page) is never read as
+    /// "everything vanished."
     func applyRefreshPage(
         _ fetched: [Envelope],
         uidNext: UInt32,
         uidValidity: UInt32
     ) async throws {
-        let fetchedUIDs = Set(fetched.map(\.uid))
-        let isDefaultSort = sortCriterion == .default
-        let keepingRange: ClosedRange<UInt32>? = isDefaultSort
-            ? fetched.map(\.uid).min().map { lower in lower...max(uidNext, lower) }
-            : nil
-        let disappeared: [UInt32] = keepingRange.map { range in
-            envelopes.map(\.uid).filter { range.contains($0) && !fetchedUIDs.contains($0) }
-        } ?? (isDefaultSort ? envelopes.map(\.uid) : [])
+        let paginatedBeyondTopPage = UInt32(envelopes.count) > pageSize
+        let disappeared: [UInt32]
+        if !paginatedBeyondTopPage, !fetched.isEmpty {
+            let fetchedUIDs = Set(fetched.map(\.uid))
+            disappeared = envelopes.map(\.uid).filter { !fetchedUIDs.contains($0) }
+        } else {
+            disappeared = []
+        }
+        dbg("applyRefreshPage disappeared=\(disappeared.count) fetched=\(fetched.count)")
         if !disappeared.isEmpty {
-            envelopes.removeAll { disappeared.contains($0.uid) }
+            let gone = Set(disappeared)
+            envelopes.removeAll { gone.contains($0.uid) }
             for uid in disappeared {
                 await client.bodyCache.remove(
                     folder: folder.path,
@@ -118,21 +382,24 @@ extension MessageListViewModel {
                     uid: uid
                 )
             }
+            // Mirror the in-memory prune to disk by the same explicit UID
+            // list, so a confirmed-gone row can't re-hydrate on next launch.
+            try await client.envelopeCache.remove(uids: disappeared, folder: folder.path)
         }
         mergeFetched(fetched)
-        lowestUID = envelopes.map(\.uid).min() ?? lowestUID
-        hasMore = (lowestUID ?? 0) > 1
-        // Persist the shielded view, not the raw fetch: a row we've
-        // optimistically removed must stay out of the snapshot (it's inside
-        // `keepingRange`, so `replace` prunes it) and a row with an in-flight
-        // flag write keeps its optimistic flags on disk too. Otherwise a
-        // refresh landing mid-write would re-seed the cache with pre-write
-        // state and re-hydrate it on next launch.
-        try await client.envelopeCache.replace(
+        // Positional paging: more to load iff the loaded count is below the
+        // folder's STATUS message count.
+        hasMore = UInt32(envelopes.count) < totalMessages
+        // Upsert the shielded fresh page into the snapshot (the disappeared
+        // rows were pruned above): a row we've optimistically removed stays
+        // out of the snapshot, and a row with an in-flight flag write keeps
+        // its optimistic flags on disk. Otherwise a refresh landing mid-write
+        // would re-seed the cache with pre-write state and re-hydrate it on
+        // next launch.
+        try await client.envelopeCache.merge(
             envelopes: shieldFetched(fetched),
             uidValidity: uidValidity,
             uidNext: uidNext,
-            keepingRange: keepingRange,
             into: folder.path
         )
     }

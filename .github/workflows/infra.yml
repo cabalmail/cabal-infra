@@ -37,7 +37,7 @@ on:
         default: false
         type: boolean
       image_tag:
-        description: 'Docker image tag to pin in /cabal/deployed_image_tag (e.g. sha-abc12345). Leave empty to defer to refresh-ssm-from-running.sh.'
+        description: 'Docker image tag to pin for the mail tiers (e.g. sha-abc12345). Written to /cabal/deployed_image_tag and the per-tier imap/smtp-in/smtp-out keys; the tag must exist in each tier ECR repo. Leave empty to defer to refresh-ssm-from-running.sh.'
         required: false
         type: string
   push:
@@ -71,6 +71,10 @@ permissions:
   # scanning via github/codeql-action/upload-sarif. This repo is public,
   # so code scanning is available without GitHub Advanced Security.
   security-events: write
+  # AWS auth is via GitHub OIDC (aws-actions/configure-aws-credentials
+  # assumes vars.AWS_DEPLOY_ROLE_ARN); the AWS jobs need to mint an OIDC
+  # token. See docs/aws.md / docs/github.md.
+  id-token: write
 
 # Serialize Terraform applies per ref so back-to-back pushes do not
 # race for the state lock. cancel-in-progress: false because we never
@@ -88,10 +92,10 @@ jobs:
       infra: ${{ steps.filter.outputs.infra }}
     steps:
     - name: checkout
-      uses: actions/checkout@v5
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
     - name: filter
       id: filter
-      uses: dorny/paths-filter@v4
+      uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d  # v4.0.1
       with:
         filters: |
           dns:
@@ -116,11 +120,11 @@ jobs:
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     steps:
     - name: checkout
-      uses: actions/checkout@v5
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
     - name: generate-backend
-      run: env TF_MODULE=dns TF_ENVIRONMENT="${{ vars.TF_VAR_ENVIRONMENT }}" ./.github/scripts/make-terraform.sh
+      run: env TF_MODULE=dns TF_ENVIRONMENT="${{ vars.TF_VAR_ENVIRONMENT }}" STATE_KMS_KEY_ID="${{ vars.STATE_KMS_KEY_ID }}" ./.github/scripts/make-terraform.sh
     - name: store-artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6.0.0
       with:
         name: dns-backend.tf
         path: ./terraform/dns/backend.tf
@@ -140,13 +144,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: checkout
-      uses: actions/checkout@v5
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
     - name: check-suppression-justifications
       run: ./.github/scripts/check-suppression-justifications.sh terraform/dns
     - name: check-iam-resource-scope
       run: ./.github/scripts/check-iam-resource-scope.py terraform/dns
     - name: setup-python
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
       with:
         python-version: '3.12'
     - name: install-checkov
@@ -189,7 +193,7 @@ jobs:
       TFLINT_CONFIG_FILE: ${{ github.workspace }}/terraform/.tflint.hcl
     steps:
     - name: checkout
-      uses: actions/checkout@v5
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
     - name: install-tflint
       uses: terraform-linters/setup-tflint@b480b8fcdaa6f2c577f8e4fa799e89e756bb7c93  # v6.2.2
       with:
@@ -217,7 +221,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: checkout
-      uses: actions/checkout@v5
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
     - name: trivy
       uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
       with:
@@ -259,20 +263,23 @@ jobs:
         working-directory: ./terraform/dns
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
-      uses: actions/checkout@v5
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
+    - name: configure-aws-credentials
+      uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4.3.1
+      with:
+        role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+        aws-region: ${{ secrets.AWS_REGION }}
     - name: retrieve-artifact
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
       with:
         name: dns-backend.tf
     - name: move
       run: mv ../../backend.tf backend.tf
     - name: install-terraform
-      uses: hashicorp/setup-terraform@v4
+      uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e  # v4.0.1
       with:
         terraform_wrapper: false
     - name: tfvars-terraform
@@ -281,6 +288,7 @@ jobs:
         echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
         echo "control_domain = \"${{ vars.TF_VAR_CONTROL_DOMAIN}}\"" >> terraform.tfvars
         echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
+        echo "dnssec_enabled = ${{ vars.TF_VAR_DNSSEC_ENABLED || 'false' }}" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
     - name: plan-terraform
@@ -330,20 +338,23 @@ jobs:
         working-directory: ./terraform/dns
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
-      uses: actions/checkout@v5
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
+    - name: configure-aws-credentials
+      uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4.3.1
+      with:
+        role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+        aws-region: ${{ secrets.AWS_REGION }}
     - name: retrieve-artifact
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
       with:
         name: dns-backend.tf
     - name: move
       run: mv ../../backend.tf backend.tf
     - name: install-terraform
-      uses: hashicorp/setup-terraform@v4
+      uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e  # v4.0.1
       with:
         # The wrapper interleaves its own bookkeeping lines into
         # terraform's stdout, which would corrupt the command
@@ -356,6 +367,7 @@ jobs:
         echo "repo = \"${{ vars.TF_VAR_REPO }}\"" >> terraform.tfvars
         echo "control_domain = \"${{ vars.TF_VAR_CONTROL_DOMAIN}}\"" >> terraform.tfvars
         echo "prod = ${{ vars.TF_VAR_PROD }}" >> terraform.tfvars
+        echo "dnssec_enabled = ${{ vars.TF_VAR_DNSSEC_ENABLED || 'false' }}" >> terraform.tfvars
     - name: init-terraform
       run: terraform init
     - name: apply-terraform
@@ -379,11 +391,11 @@ jobs:
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     steps:
     - name: checkout
-      uses: actions/checkout@v5
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
     - name: generate-backend
-      run: env TF_MODULE=infra TF_ENVIRONMENT="${{ vars.TF_VAR_ENVIRONMENT }}" ./.github/scripts/make-terraform.sh
+      run: env TF_MODULE=infra TF_ENVIRONMENT="${{ vars.TF_VAR_ENVIRONMENT }}" STATE_KMS_KEY_ID="${{ vars.STATE_KMS_KEY_ID }}" ./.github/scripts/make-terraform.sh
     - name: store-artifact
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6.0.0
       with:
         name: infra-backend.tf
         path: ./terraform/infra/backend.tf
@@ -418,13 +430,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: checkout
-      uses: actions/checkout@v5
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
     - name: check-suppression-justifications
       run: ./.github/scripts/check-suppression-justifications.sh terraform/infra
     - name: check-iam-resource-scope
       run: ./.github/scripts/check-iam-resource-scope.py terraform/infra
     - name: setup-python
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
       with:
         python-version: '3.12'
     - name: install-checkov
@@ -480,7 +492,7 @@ jobs:
       TFLINT_CONFIG_FILE: ${{ github.workspace }}/terraform/.tflint.hcl
     steps:
     - name: checkout
-      uses: actions/checkout@v5
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
     - name: install-tflint
       uses: terraform-linters/setup-tflint@b480b8fcdaa6f2c577f8e4fa799e89e756bb7c93  # v6.2.2
       with:
@@ -509,7 +521,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: checkout
-      uses: actions/checkout@v5
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
     - name: trivy
       uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
       with:
@@ -552,8 +564,6 @@ jobs:
         working-directory: ./terraform/infra
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       # Passed via env (not echoed into tfvars) because TF_VAR_INVITATION_CODE
       # may contain shell-special characters - `$` in particular gets
@@ -564,15 +574,20 @@ jobs:
       TF_VAR_invitation_code: ${{ vars.TF_VAR_INVITATION_CODE }}
     steps:
     - name: checkout
-      uses: actions/checkout@v5
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
+    - name: configure-aws-credentials
+      uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4.3.1
+      with:
+        role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+        aws-region: ${{ secrets.AWS_REGION }}
     - name: retrieve-artifact
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
       with:
         name: infra-backend.tf
     - name: move
       run: mv ../../backend.tf backend.tf
     - name: install-terraform
-      uses: hashicorp/setup-terraform@v4
+      uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e  # v4.0.1
       with:
         terraform_wrapper: false
     - name: wait-for-app-deploy
@@ -589,21 +604,40 @@ jobs:
         GH_TOKEN: ${{ github.token }}
       run: ../../.github/scripts/wait-for-app-deploy.sh
     - name: refresh-ssm-from-running
-      # Phase 1: reconcile /cabal/deployed_image_tag with the image
-      # tag actually running on cabal-imap before plan, so a
-      # topology-only apply that regenerates container_definitions
-      # does not roll back an out-of-band app deploy. Waits for the
-      # imap rollout to settle first (see script header) so it never
-      # pins a mid-roll tag.
+      # Reconcile the per-tier /cabal/deployed_image_tag/<tier> keys
+      # (and the legacy global key, kept tracking imap) with the image
+      # tags actually running on the cabal-* services before plan, so a
+      # topology-only apply that regenerates a task definition re-pins
+      # each tier to its own running image rather than rolling back an
+      # out-of-band app deploy. Waits for the rollouts to settle first
+      # (see script header) so it never pins a mid-roll tag. Phase 2 of
+      # docs/0.10.x/per-tier-docker-deploy-plan.md.
       run: ../../.github/scripts/refresh-ssm-from-running.sh
     - name: update-image-tag-in-ssm
       if: inputs.image_tag != ''
+      # Operator pin for mail-tier rollbacks (see the lambda-5xx-spike
+      # runbook). Writes the legacy global key plus the per-tier keys
+      # for the core mail tiers - but only keys that already exist:
+      # creating one here would collide with the Terraform resource
+      # that seeds it, and a tier whose key is missing follows the
+      # legacy parameter anyway via the sentinel fallback in main.tf.
+      # Sinkhole and monitoring tiers are left alone; pin those by hand
+      # if an exotic rollback ever needs it.
       run: |
         aws ssm put-parameter \
           --name "/cabal/deployed_image_tag" \
           --value "${{ inputs.image_tag }}" \
           --type String \
           --overwrite
+        for tier in imap smtp-in smtp-out; do
+          if aws ssm get-parameter --name "/cabal/deployed_image_tag/${tier}" >/dev/null 2>&1; then
+            aws ssm put-parameter \
+              --name "/cabal/deployed_image_tag/${tier}" \
+              --value "${{ inputs.image_tag }}" \
+              --type String \
+              --overwrite
+          fi
+        done
     - name: tfvars-terraform
       run: |
         echo "availability_zones = ${{ vars.TF_VAR_AVAILABILITY_ZONES}}" > terraform.tfvars
@@ -623,6 +657,9 @@ jobs:
         echo "use_eum_sms = ${{ vars.TF_VAR_USE_EUM_SMS || 'false' }}" >> terraform.tfvars
         echo "use_nat_instance = ${{ vars.TF_VAR_USE_NAT_INSTANCE || 'true' }}" >> terraform.tfvars
         echo "build_nat_ami = ${{ vars.TF_VAR_BUILD_NAT_AMI || 'true' }}" >> terraform.tfvars
+        echo "dr_region = \"${{ vars.TF_VAR_DR_REGION || 'us-west-2' }}\"" >> terraform.tfvars
+        echo "dnssec_enabled = ${{ vars.TF_VAR_DNSSEC_ENABLED || 'false' }}" >> terraform.tfvars
+        echo "imap_pool_enabled = ${{ vars.TF_VAR_IMAP_POOL_ENABLED || 'false' }}" >> terraform.tfvars
         # invitation_code is supplied via the TF_VAR_invitation_code env
         # var on this job (see env: block above) rather than echoed into
         # tfvars, so shell-special characters like `$` survive unmangled.
@@ -675,8 +712,6 @@ jobs:
         working-directory: ./terraform/infra
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       # Passed via env (not echoed into tfvars) because TF_VAR_INVITATION_CODE
       # may contain shell-special characters - `$` in particular gets
@@ -687,15 +722,20 @@ jobs:
       TF_VAR_invitation_code: ${{ vars.TF_VAR_INVITATION_CODE }}
     steps:
     - name: checkout
-      uses: actions/checkout@v5
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
+    - name: configure-aws-credentials
+      uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4.3.1
+      with:
+        role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+        aws-region: ${{ secrets.AWS_REGION }}
     - name: retrieve-artifact
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
       with:
         name: infra-backend.tf
     - name: move
       run: mv ../../backend.tf backend.tf
     - name: install-terraform
-      uses: hashicorp/setup-terraform@v4
+      uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e  # v4.0.1
       with:
         # The wrapper interleaves its own bookkeeping lines into
         # terraform's stdout, which would corrupt the command
@@ -721,6 +761,9 @@ jobs:
         echo "use_eum_sms = ${{ vars.TF_VAR_USE_EUM_SMS || 'false' }}" >> terraform.tfvars
         echo "use_nat_instance = ${{ vars.TF_VAR_USE_NAT_INSTANCE || 'true' }}" >> terraform.tfvars
         echo "build_nat_ami = ${{ vars.TF_VAR_BUILD_NAT_AMI || 'true' }}" >> terraform.tfvars
+        echo "dr_region = \"${{ vars.TF_VAR_DR_REGION || 'us-west-2' }}\"" >> terraform.tfvars
+        echo "dnssec_enabled = ${{ vars.TF_VAR_DNSSEC_ENABLED || 'false' }}" >> terraform.tfvars
+        echo "imap_pool_enabled = ${{ vars.TF_VAR_IMAP_POOL_ENABLED || 'false' }}" >> terraform.tfvars
         # invitation_code is supplied via the TF_VAR_invitation_code env
         # var on this job (see env: block above) rather than echoed into
         # tfvars, so shell-special characters like `$` survive unmangled.
@@ -757,13 +800,16 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     steps:
     - name: checkout
-      uses: actions/checkout@v5
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
+    - name: configure-aws-credentials
+      uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4.3.1
+      with:
+        role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+        aws-region: ${{ secrets.AWS_REGION }}
     - name: roll-services-to-latest-task-def
       # Phase 5: services have ignore_changes = [task_definition], so a
       # topology-only apply that registered a new task-def revision

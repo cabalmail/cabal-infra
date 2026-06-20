@@ -55,6 +55,16 @@ struct CabalmailApp: App {
         // the Mac; iPhone carries them inertly.
         .commands {
             MessageMenuCommands(appState: appState)
+            // Settings sheet shortcut. iOS has no Settings scene (macOS owns
+            // Cmd+, through its `Settings {}` scene), so we claim the standard
+            // app-settings slot and route it to the same tick the sidebar gear
+            // bumps. Surfaces in the iPadOS hardware-keyboard menu.
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings...") {
+                    appState.requestSettings()
+                }
+                .keyboardShortcut(",", modifiers: .command)
+            }
         }
         // iPadOS and visionOS open compose as a real scene; iPhone
         // ignores the group because `composeOpensInWindow` keeps it on

@@ -92,14 +92,22 @@ extension URLSessionApiClient {
         host: String,
         folder: String,
         sortOrder: String,
-        sortField: String
+        sortField: String,
+        page: MessageIdPage?
     ) async throws -> [UInt32] {
-        let request = try await get("/list_messages", query: [
+        var items = [
             URLQueryItem(name: "host", value: host),
             URLQueryItem(name: "folder", value: folder),
             URLQueryItem(name: "sort_order", value: sortOrder),
             URLQueryItem(name: "sort_field", value: sortField),
-        ])
+        ]
+        // Only send the pagination params when set; omitting them asks the
+        // Lambda for the full sorted list (its pre-pagination behavior).
+        if let page {
+            items.append(URLQueryItem(name: "offset", value: String(page.offset)))
+            items.append(URLQueryItem(name: "limit", value: String(page.limit)))
+        }
+        let request = try await get("/list_messages", query: items)
         let data = try await send(request, expectedStatuses: 200..<300)
         return try JSONDecoder().decode(MessageIdsPayload.self, from: data).messageIds
     }
@@ -275,7 +283,7 @@ extension URLSessionApiClient {
                 "s3_key": attachment.s3Key,
             ]
         }
-        let httpRequest = try await put("/send", json: [
+        var json: [String: Any] = [
             "host": request.host,
             "smtp_host": request.smtpHost,
             "sender": request.sender,
@@ -288,7 +296,14 @@ extension URLSessionApiClient {
             "text": request.textBody,
             "draft": request.draft,
             "attachments": attachmentsJson,
-        ])
+        ]
+        // Send-from-draft cleanup; the pair only means anything together
+        // (the Lambda's expunge is UIDVALIDITY-guarded).
+        if let uid = request.discardDraftUid, let validity = request.discardDraftUidValidity {
+            json["discard_draft_uid"] = Int(uid)
+            json["discard_draft_uidvalidity"] = Int(validity)
+        }
+        let httpRequest = try await put("/send", json: json)
         _ = try await send(httpRequest, expectedStatuses: 200..<300)
     }
 

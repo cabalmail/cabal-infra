@@ -148,8 +148,13 @@ public actor LiveImapClient: ImapClient {
         }
     }
 
-    public func status(path: String) async throws -> FolderStatus {
-        try await withTransportRetry {
+    public func status(path: String, flagged: Bool) async throws -> FolderStatus {
+        // `flagged` is ignored here: this direct-IMAP client (non-production)
+        // issues a plain STATUS, which has no flagged attribute, so
+        // FolderStatus.flagged stays nil. The API-backed client is what the
+        // filter-pill flagged count uses.
+        _ = flagged
+        return try await withTransportRetry {
             let conn = try self.requireConnection()
             let responses = try await conn.sendCommand(
                 "STATUS \(self.quoteAstring(self.toServerPath(path))) (MESSAGES UNSEEN RECENT UIDVALIDITY UIDNEXT)"

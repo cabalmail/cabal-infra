@@ -4,9 +4,10 @@
 
 #tfsec:ignore:aws-dynamodb-table-customer-key
 resource "aws_dynamodb_table" "addresses" {
-  name         = "cabal-addresses"
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "address"
+  name                        = "cabal-addresses"
+  billing_mode                = "PAY_PER_REQUEST"
+  hash_key                    = "address"
+  deletion_protection_enabled = true
 
   attribute {
     name = "address"
@@ -28,9 +29,10 @@ resource "aws_dynamodb_table" "addresses" {
 
 #tfsec:ignore:aws-dynamodb-table-customer-key
 resource "aws_dynamodb_table" "user_preferences" {
-  name         = "cabal-user-preferences"
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "user"
+  name                        = "cabal-user-preferences"
+  billing_mode                = "PAY_PER_REQUEST"
+  hash_key                    = "user"
+  deletion_protection_enabled = true
 
   attribute {
     name = "user"
@@ -53,6 +55,9 @@ resource "aws_dynamodb_table" "user_preferences" {
 * a single hot key per active admin per minute.
 */
 
+# No deletion protection here, alone among the tables: every row is a
+# TTL-reaped 60-second rate-limit window, so there is no data worth
+# protecting and the flag would only add friction to a teardown.
 #tfsec:ignore:aws-dynamodb-table-customer-key
 resource "aws_dynamodb_table" "rate_limits" {
   name         = "cabal-rate-limits"
@@ -89,10 +94,11 @@ resource "aws_dynamodb_table" "rate_limits" {
 
 #tfsec:ignore:aws-dynamodb-table-customer-key
 resource "aws_dynamodb_table" "user_domain_access" {
-  name         = "cabal-user-domain-access"
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "user"
-  range_key    = "domain"
+  name                        = "cabal-user-domain-access"
+  billing_mode                = "PAY_PER_REQUEST"
+  hash_key                    = "user"
+  range_key                   = "domain"
+  deletion_protection_enabled = true
 
   attribute {
     name = "user"

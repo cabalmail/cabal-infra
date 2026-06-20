@@ -1,4 +1,4 @@
-'''Fetches the current user's webmail preferences (theme/accent/density).'''
+'''Fetches the current user's preferences (theme/accent/density/name).'''
 import json
 import os
 import boto3  # pylint: disable=import-error
@@ -11,6 +11,7 @@ DEFAULTS = {
     'theme': 'light',
     'accent': 'forest',
     'density': 'compact',
+    'name': '',
 }
 
 

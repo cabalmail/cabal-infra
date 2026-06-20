@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { render, act, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import Envelopes from './Envelopes';
+import Envelopes, { computeWindow } from './Envelopes';
 import AuthContext from '../../contexts/AuthContext';
 import AppMessageContext from '../../contexts/AppMessageContext';
 
@@ -63,6 +63,31 @@ function Harness({
   );
 }
 
+describe('computeWindow', () => {
+  it('renders everything when height is unknown (first paint / no layout)', () => {
+    expect(computeWindow(0, 0, 0, 500)).toEqual({ start: 0, end: 500 });
+    expect(computeWindow(0, 600, 0, 500)).toEqual({ start: 0, end: 500 });
+    expect(computeWindow(0, 0, 60, 500)).toEqual({ start: 0, end: 500 });
+  });
+
+  it('returns an empty range for an empty list', () => {
+    expect(computeWindow(0, 600, 60, 0)).toEqual({ start: 0, end: 0 });
+  });
+
+  it('windows around the viewport with overscan', () => {
+    // 600px viewport / 60px rows = 10 visible; overscan 10.
+    expect(computeWindow(0, 600, 60, 1000, 10)).toEqual({ start: 0, end: 20 });
+    // scrolled to row 100.
+    expect(computeWindow(6000, 600, 60, 1000, 10)).toEqual({ start: 90, end: 120 });
+  });
+
+  it('clamps to the list bounds', () => {
+    // At the very bottom, end can't exceed total and start can't go negative.
+    expect(computeWindow(59400, 600, 60, 1000, 10)).toEqual({ start: 980, end: 1000 });
+    expect(computeWindow(60, 600, 60, 1000, 10).start).toBe(0);
+  });
+});
+
 describe('Envelopes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -104,6 +129,19 @@ describe('Envelopes', () => {
     });
 
     expect(mockGetEnvelopes).toHaveBeenCalledTimes(2);
+  });
+
+  it('lazily fetches only the initial pages, not the whole folder', async () => {
+    // 300 ids = 10 pages. The old code fanned out all 10 on mount (and again
+    // on every poll); lazy loading fetches only the opening viewport.
+    const ids = Array.from({ length: 300 }, (_, i) => i + 1);
+    mockGetEnvelopes.mockResolvedValue({ data: { envelopes: {} } });
+
+    render(<Harness message_ids={ids} />);
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+
+    // INITIAL_PAGES (3) pages up front; the scroll sentinel is inert in jsdom.
+    expect(mockGetEnvelopes).toHaveBeenCalledTimes(3);
   });
 
   it('renders the empty-state hint when nothing matches the filter', async () => {

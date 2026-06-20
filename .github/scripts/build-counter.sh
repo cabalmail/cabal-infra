@@ -11,6 +11,11 @@ set -euo pipefail
 cd ./lambda/counter
 AWS_S3_BUCKET="admin.${TF_VAR_CONTROL_DOMAIN}"
 
+# Verify the deploy bucket is owned by this account before any upload; the
+# high-level `aws s3 cp` below cannot take --expected-bucket-owner, so this
+# head-bucket preflight is the gate (see verify-bucket-owner.sh).
+../../.github/scripts/verify-bucket-owner.sh "${AWS_S3_BUCKET}"
+
 export SOURCE_DATE_EPOCH=946684800
 export PYTHONDONTWRITEBYTECODE=1
 
@@ -19,7 +24,12 @@ for FUNC in */ ; do
   [ -d "${FUNC}" ] || continue
   pushd "${FUNC}" >/dev/null
   rm -rf ./python
-  pip install --no-compile -r requirements.txt -t ./python 2>/dev/null || true
+  # Only invoke pip when there is a real requirement; --require-hashes
+  # fails the build on any unpinned or hash-mismatched package rather than
+  # silently shipping a drifted wheel.
+  if grep -qE '^[[:space:]]*[^[:space:]#]' requirements.txt 2>/dev/null; then
+    pip install --no-compile --require-hashes -r requirements.txt -t ./python
+  fi
   find . -depth -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
   find . -name '*.pyc' -delete 2>/dev/null || true
   find . -name 'direct_url.json' -delete 2>/dev/null || true
@@ -29,6 +39,8 @@ for FUNC in */ ; do
   find . -type f -print | LC_ALL=C sort | zip -X -D -@ ../"${FUNC}.zip" >/dev/null
   popd >/dev/null
   openssl dgst -sha256 -binary "${FUNC}.zip" | openssl enc -base64 | tr -d "\n" > "${FUNC}.zip.base64sha256"
-  aws s3 cp "${FUNC}.zip.base64sha256" "s3://${AWS_S3_BUCKET}/lambda/${FUNC}.zip.base64sha256" --profile deploy_lambda --no-progress --acl private --content-type text/plain
-  aws s3 cp "${FUNC}.zip" "s3://${AWS_S3_BUCKET}/lambda/${FUNC}.zip" --profile deploy_lambda --no-progress --acl private
+  aws s3 cp "${FUNC}.zip.base64sha256" "s3://${AWS_S3_BUCKET}/lambda/${FUNC}.zip.base64sha256" --no-progress --acl private --content-type text/plain
+  aws s3 cp "${FUNC}.zip" "s3://${AWS_S3_BUCKET}/lambda/${FUNC}.zip" --no-progress --acl private
+  # Build-provenance manifest next to the zip in S3.
+  ../../.github/scripts/emit-lambda-manifest.sh "${FUNC}" "${FUNC}.zip" "${AWS_S3_BUCKET}"
 done

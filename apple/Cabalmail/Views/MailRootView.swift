@@ -38,6 +38,14 @@ struct MailRootView: View {
     /// selected" reading-pane placeholder when a multi-selection is active;
     /// stays 0 on compact iPhone (single-selection there).
     @State private var listSelectionCount = 0
+    /// Which column the collapsed (iPhone-compact) navigation shows. The
+    /// virtualized message list is a `ScrollView`, not a `List(selection:)`,
+    /// so NavigationSplitView no longer auto-pushes the reader when a row is
+    /// tapped on compact (it works on regular width / iPad, where all columns
+    /// are visible). Driving this binding restores the push: a selected
+    /// message shows `.detail`, a selected folder `.content`, and navigating
+    /// back drops the selection. Ignored on regular-width layouts.
+    @State private var compactColumn: NavigationSplitViewColumn = .sidebar
     @AppStorage("cabalmail.sidebar.tab") private var sidebarTabRaw: String = SidebarTab.folders.rawValue
     @Environment(AppState.self) private var appState
     /// Non-nil while a message drag temporarily overrides the visible sidebar
@@ -65,7 +73,7 @@ struct MailRootView: View {
     }
 
     var body: some View {
-        NavigationSplitView {
+        NavigationSplitView(preferredCompactColumn: $compactColumn) {
             sidebar
         } content: {
             if let selectedFolder {
@@ -128,11 +136,23 @@ struct MailRootView: View {
         // the folder changes keeps the detail column from briefly rendering
         // an old message against the new mailbox, and matches the plan's
         // "switching folders clears the filter" rule.
-        .onChange(of: selectedFolder) { _, _ in
+        .onChange(of: selectedFolder) { _, folder in
             selectedEnvelope = nil
             selectedAddress = nil
             crossFolderDetail = nil
             listSelectionCount = 0
+            // Picking a folder shows its list on compact (it's pushed natively
+            // from the sidebar List, but keep the binding in step).
+            compactColumn = folder == nil ? .sidebar : .content
+        }
+        // Compact navigation: a selected message pushes the reader; navigating
+        // back out (the binding falls off `.detail`) clears the selection so
+        // the same row can be reopened. No-ops on regular width / iPad.
+        .onChange(of: selectedEnvelope) { _, envelope in
+            if envelope != nil { compactColumn = .detail }
+        }
+        .onChange(of: compactColumn) { _, column in
+            if column != .detail, selectedEnvelope != nil { selectedEnvelope = nil }
         }
         // Reveal Folders as drop targets the moment a message drag starts on
         // the Addresses tab, and fall back to the persisted tab when it ends.

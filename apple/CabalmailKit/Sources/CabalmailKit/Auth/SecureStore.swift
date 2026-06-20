@@ -53,7 +53,10 @@ public final class InMemorySecureStore: SecureStore, @unchecked Sendable {
 
 #if canImport(Security)
 /// Production Keychain-backed implementation. Uses the data-protection
-/// keychain on every Apple platform so iOS and macOS behave identically.
+/// keychain on iOS and on Release macOS builds; macOS DEBUG builds fall back
+/// to the file-based login keychain, which needs no keychain-access-group
+/// entitlement -- so a locally-run (ad-hoc / unsigned) dev build can store
+/// credentials instead of failing with errSecMissingEntitlement (-34018).
 public struct KeychainSecureStore: SecureStore {
     public let service: String
     public let accessGroup: String?
@@ -68,8 +71,16 @@ public struct KeychainSecureStore: SecureStore {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: key,
-            kSecUseDataProtectionKeychain as String: true,
         ]
+        // iOS (all configs) and Release macOS use the data-protection keychain
+        // -- which on macOS needs the keychain-access-group entitlement the
+        // signed app declares. macOS DEBUG builds fall back to the file-based
+        // login keychain so a locally-run dev build (often ad-hoc / unsigned,
+        // hence without that entitlement) can still store credentials rather
+        // than failing SecItemAdd with errSecMissingEntitlement (-34018).
+        #if !(os(macOS) && DEBUG)
+        query[kSecUseDataProtectionKeychain as String] = true
+        #endif
         if let accessGroup {
             query[kSecAttrAccessGroup as String] = accessGroup
         }

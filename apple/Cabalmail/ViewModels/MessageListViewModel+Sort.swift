@@ -26,10 +26,15 @@ extension MessageListViewModel {
     /// doesn't change so UI repeat-clicks don't burn a refresh.
     func setSort(_ criterion: SortCriterion) async {
         guard sortCriterion != criterion else { return }
+        dbg("setSort \(criterion.field)")
         sortCriterion = criterion
         envelopes.removeAll()
         sourceFolderByUID = [:]
+        resetWindow()
         await refresh()
+        // Re-stage the bottom window in the new order (resetWindow dropped the
+        // old one) so End stays instant after a re-sort.
+        scheduleBottomPrefetch()
     }
 
     /// Comparator used by `mergeFetched` / `hydrateFromCache`. The order

@@ -18,7 +18,7 @@ Counts reflect **pip checkov** (what CI runs). See the [graph-check note](#graph
 
 | Tool | Total | CMK global-suppress | Baselined | Fixed / inline-suppressed (2.5) | Residual |
 | ---- | ----- | ------------------- | --------- | ------------------------------- | -------- |
-| Checkov | 242 | 76 (12 ids) | 153 (47 ids) | 13 (276, 51, 8, 341, 26, 27x3, 103, 74, 12 fixed; 111, 356 inline) | 0 |
+| Checkov | 243 | 76 (12 ids) | 153 (46 ids) | 14 (276, 51, 8, 341, 26, 27x3, 103, 74, 12 fixed; 111, 356, 2_18 inline) | 0 |
 | Trivy   | 50  | 26 (5 ids)  | 20 (10 ids) | 4 (AWS-0031, 0095, 0096, 0131 fixed) | 0 |
 | tflint  | 6   | 0           | 0 (never baselined) | 6 fixed (`tls` version + 5 unused decls) | 0 |
 
@@ -27,6 +27,22 @@ Verified (pip checkov): `checkov -d terraform/infra --config-file .checkov.yaml 
 ### Graph-check cohort (brew-to-pip fix)
 
 The baselines were first generated with **brew** checkov, which omits the graph (`CKV2_*`) checks. CI runs **pip** checkov, which runs them, so on the gate's first live run 42 infra + 2 dns graph findings appeared as "new" and failed CI. Fixed by regenerating both baselines with pip checkov (matching CI) and adding a `checkov-graph-guard` to the Makefile so a brew checkov is caught locally. The 42 are pre-existing, mostly design/decay (WAF off, no DNSSEC/query-logging, S3 versioning/replication/lifecycle, CloudFront response-headers, API-GW request-validation, EFS-in-backup, monitoring-tier LBs which are dormant) - grandfathered.
+
+### Resilience hardening clears (0.10.x)
+
+The resilience/continuity hardening work ([`docs/0.10.x/resilience-continuity-hardening-plan.md`](../../docs/0.10.x/resilience-continuity-hardening-plan.md)) fixed findings rather than baselining them:
+
+- **CKV_AWS_28 / AWS-0024** (DynamoDB PITR) - cleared: the `cabal-counter` table was the last table without `point_in_time_recovery`; it now has PITR, explicit SSE, and deletion protection. Baseline entry and `.trivyignore` id removed.
+- **CKV_AWS_91** on `module.load_balancer.aws_lb.elb` - cleared: the mail NLB now writes access logs to the `cabal-nlb-access-logs-<account>` bucket (TLS listeners only, i.e. IMAPS; SMTP is TCP passthrough). The id remains baselined for the dormant monitoring ALB. The new log bucket carries three inline, justified skips (CKV_AWS_18 self-logging recursion, CKV_AWS_144 replication, CKV2_AWS_62 event notifications).
+- **AWS-0025** (DynamoDB SSE/CMK, Trivy) - cleared from `.trivyignore`: the counter table was the only table without an explicit `server_side_encryption` block; with it in place no table trips the rule.
+- **CKV2_AWS_38** on `module.domains.aws_route53_zone.mail_dns` - cleared: DNSSEC signing exists behind `var.dnssec_enabled` (default false; see `docs/dnssec.md`). The graph check connects zone to `aws_route53_hosted_zone_dnssec` without evaluating the count gate, so it passes even while the flag is off; the entry had to come out to keep the drift check green. The real signing posture is per-environment (`TF_VAR_DNSSEC_ENABLED`). CKV2_AWS_39 (query logging) remains baselined.
+- **OAC migration (Phase 5)**: both CloudFront distributions moved from OAI to origin access control and the viewer TLS floor rose to `TLSv1.2_2025`. The admin bucket policy moved from the s3 module to the app module - Terraform tolerates the mutual module reference the OAC SourceArn would otherwise need (acyclic at the resource level), but checkov's graph renderer does not: it stops resolving unrelated variables and reports phantom findings on count-gated resources (observed on the sinkhole SG rule and log group). Keep cross-module references one-directional.
+
+### Decay clears (Phase 4)
+
+The weekly decay task walks the grandfathered findings down one at a time:
+
+- **CKV2_AWS_18** on `module.efs.aws_efs_file_system.mailstore` - cleared via inline skip (not a code change): the mailstore *is* in the AWS Backup selection (`module.backup` `aws_backup_selection.resources` includes `var.efs`), so the finding is a false positive. The backup module is count-gated on `var.backup` and the EFS ARN crosses the module boundary as a variable, neither of which the graph check can trace, so it reports the mailstore as unbacked even when backups are on. Replaced the opaque baseline entry with a co-located `#checkov:skip` carrying the rationale; baseline entry removed. Per-environment backup posture is still governed by `TF_VAR_BACKUP` (off in non-prod for cost, on in prod) - that gating is the design choice, documented in the `backup` module.
 
 ### NAT-mode refactor re-key (0.10.x)
 
@@ -93,6 +109,7 @@ Accepted as intentional architecture. Baselined **per resource** (not globally s
 | CKV_AWS_258, CKV_AWS_301 (x2) | - | Monitoring `alert_sink` Lambda URL - the monitoring tier is dormant (`TF_VAR_MONITORING=false` everywhere); revisit if it is ever enabled |
 | CKV_AWS_338 (x23) | - | CloudWatch retention - see decay (candidate to set an explicit retention rather than accept) |
 | CKV_AWS_330 | - | EFS access point user identity - mailstore needs specific uid/gid; revisit |
+| CKV2_AWS_34 (x4) | - | SSM parameters holding deploy metadata (per-tier image tags, CloudFront distribution ids, sinkhole mode) are plaintext String by design - they are not secrets |
 | CKV2_AWS_19 | - | NAT EIPs attach to whichever NAT mode is active (instance association or gateway allocation); kept unattached while quiesced for stable relay IPs |
 | - | AWS-0320 | S3 bucket names not DNS-compliant - names are stable identifiers; renaming is a data migration |
 | - | AWS-0178 | VPC flow logs off - deliberate cost choice |
@@ -106,11 +123,10 @@ Low-value hygiene. Each release should clear or re-justify entries whose target 
 | CKV_AWS_338 (x23) | - | Set explicit CloudWatch log retention (also caps cost vs. never-expire) | 0.11.x |
 | CKV_AWS_115 (x9) | - | Lambda reserved concurrency | 1.0.0 |
 | CKV_AWS_116 (x9) | - | Lambda DLQ (where a dropped invoke matters) | 1.0.0 |
-| CKV_AWS_86, CKV_AWS_91 | AWS-0089 | CloudFront / ELB / S3 access logging | 1.0.0 |
+| CKV_AWS_86, CKV_AWS_91 | AWS-0089 | CloudFront / S3 access logging (CKV_AWS_91 on the mail NLB cleared in 0.10.x - resilience plan Phase 3; the remaining CKV_AWS_91 is the dormant monitoring ALB) | 1.0.0 |
 | CKV_AWS_150 (x2) | - | Load balancer deletion protection | 0.11.x |
 | CKV_AWS_23 (x3) | AWS-0124 | Security group rule descriptions | 0.11.x |
 | CKV_AWS_300 | - | S3 lifecycle: abort incomplete multipart uploads | 0.11.x |
-| CKV_AWS_28 | AWS-0024 | DynamoDB PITR (note: `cabal-addresses` is also covered by AWS Backup when `backup=true`) | 1.0.0 |
 | CKV_AWS_135 | AWS-0090 | EC2 EBS-optimized / S3 versioning | 1.0.0 |
 | CKV_AWS_237 | - | API Gateway create-before-destroy lifecycle | 1.0.0 |
 

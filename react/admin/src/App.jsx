@@ -39,6 +39,7 @@ import AppMessageContext from './contexts/AppMessageContext';
 
 // Hooks
 import useTheme from './hooks/useTheme';
+import useDisplayName from './hooks/useDisplayName';
 import useKeyboardShortcuts from './hooks/useKeyboardShortcuts';
 import useResendThrottle from './hooks/useResendThrottle';
 
@@ -110,6 +111,8 @@ function App() {
       : null
   ), [state.loggedIn, state.api_url, state.imap_host]);
   const prefs = useTheme(prefsApi);
+  // Display name used by the /send Lambda as the From header's display name.
+  const displayNamePref = useDisplayName(prefsApi);
 
   // Message-list state bags per §4c / State Management. Lifted here so that
   // future phases (reader selection, keyboard shortcuts) can read the same
@@ -496,7 +499,6 @@ function App() {
     }
     localStorage.removeItem(ADDRESS_LIST);
     localStorage.removeItem(FOLDER_LIST);
-    localStorage.removeItem("INBOX");
     setIsAdmin(false);
     setState({ loggedIn: false, userName: null, password: null, view: "Login" });
   }, [setState]);
@@ -721,6 +723,8 @@ function App() {
               accent={prefs.accent}
               onSelectAccent={prefs.setAccent}
               accents={prefs.accents}
+              displayName={displayNamePref.name}
+              onChangeDisplayName={displayNamePref.setName}
               searchQuery={searchQuery}
               onSearchSubmit={setSearchQuery}
               controlDomain={state.control_domain}

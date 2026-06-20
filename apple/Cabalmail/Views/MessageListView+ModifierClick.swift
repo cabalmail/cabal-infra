@@ -56,30 +56,7 @@ struct ModifierClickGesture: UIGestureRecognizerRepresentable {
     }
 }
 
-extension MessageListView {
-    /// Apply a shift-click range selection over `ordered` (the visible rows in
-    /// display order), from the current anchor to `target`, inclusive. Falls
-    /// back to selecting just `target` if the anchor can't be located.
-    func applyRangeSelection(to target: Envelope, model: MessageListViewModel, ordered: [Envelope]) {
-        let anchorUID = model.selectionAnchor ?? model.selectedUIDs.first
-        guard let anchorUID,
-              let anchorIndex = ordered.firstIndex(where: { $0.uid == anchorUID }),
-              let targetIndex = ordered.firstIndex(where: { $0.uid == target.uid }) else {
-            model.selectedUIDs = [target.uid]
-            model.selectionAnchor = target.uid
-            return
-        }
-        let lower = min(anchorIndex, targetIndex)
-        let upper = max(anchorIndex, targetIndex)
-        model.selectedUIDs = Set(ordered[lower...upper].map(\.uid))
-        // Keep the original anchor so a subsequent shift-click re-pivots from it.
-    }
-
-    /// Apply a command/control-click: flip the row's membership and make it the
-    /// new anchor for any following shift-click.
-    func applyToggleSelection(_ envelope: Envelope, model: MessageListViewModel) {
-        model.toggleSelection(envelope)
-        model.selectionAnchor = envelope.uid
-    }
-}
+// `applyRangeSelection` / `applyToggleSelection` moved to
+// `MessageListView+Selection.swift` so macOS (`NSEvent.modifierFlags` in
+// `selectRow`) and iOS (this gesture) share one implementation.
 #endif

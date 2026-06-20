@@ -294,6 +294,35 @@
   letter-spacing: 0.08em;
 }
 
+.nav__menu-name-edit {
+  padding: 0 8px 8px;
+}
+
+.nav__menu-name-input {
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-family: var(--font-ui);
+}
+
+.nav__menu-name-input::placeholder {
+  color: var(--ink-quiet);
+  font-style: normal;
+}
+
+.nav__menu-name-input:focus,
+.nav__menu-name-input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
 .nav__menu-accents {
   display: flex;
   gap: 8px;

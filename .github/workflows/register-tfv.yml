@@ -31,14 +31,15 @@ on:
 
 permissions:
   contents: read
+  # OIDC token for AWS auth (configure-aws-credentials assumes
+  # vars.AWS_DEPLOY_ROLE_ARN). See docs/aws.md / docs/github.md.
+  id-token: write
 
 jobs:
   submit:
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     env:
-      AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION:            ${{ secrets.AWS_REGION }}
       # Identity (GitHub Environment variables - not secret)
       TFV_COMPANY_NAME:        ${{ vars.TFV_COMPANY_NAME }}
@@ -74,9 +75,14 @@ jobs:
       TFV_PHONE_NUMBER_ID:     ${{ vars.TFV_PHONE_NUMBER_ID }}
     steps:
       - name: checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
+      - name: configure-aws-credentials
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4.3.1
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
       - name: setup-python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: '3.13'
       - name: install-boto3

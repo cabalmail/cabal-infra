@@ -1,6 +1,12 @@
 import axios from 'axios';
 import { ONE_SECOND, ADDRESS_LIST, FOLDER_LIST } from './constants';
 const TIMEOUT = ONE_SECOND * 10;
+// Bulk IMAP mutations (move / flag / purge / empty-trash) run server-side as
+// chunked, sequential IMAP commands and can take far longer than a normal
+// request -- up to the API's 29s ceiling. Wait just past that so the client
+// hears the server's real verdict instead of firing a false "failed" on a
+// slow-but-successful operation.
+const MUTATION_TIMEOUT = ONE_SECOND * 30;
 
 export default class ApiClient {
 
@@ -278,9 +284,6 @@ export default class ApiClient {
   // IMAP Messages
 
   moveMessages(source, destination, ids, order, field) {
-    if (source === "INBOX" || destination === "INBOX") {
-      localStorage.removeItem("INBOX");
-    }
     const response = axios.put('/move_messages',
       JSON.stringify({
         host: this.host,
@@ -295,7 +298,7 @@ export default class ApiClient {
         headers: {
           'Authorization': this.token
         },
-        timeout: TIMEOUT
+        timeout: MUTATION_TIMEOUT
       }
     );
     return response;
@@ -313,7 +316,7 @@ export default class ApiClient {
         headers: {
           'Authorization': this.token
         },
-        timeout: TIMEOUT
+        timeout: MUTATION_TIMEOUT
       }
     );
     return response;
@@ -330,8 +333,8 @@ export default class ApiClient {
         headers: {
           'Authorization': this.token
         },
-        // Emptying a very full trash can exceed the default 10s.
-        timeout: ONE_SECOND * 30
+        // A full-trash purge runs server-side like the other bulk mutations.
+        timeout: MUTATION_TIMEOUT
       }
     );
     return response;
@@ -353,7 +356,7 @@ export default class ApiClient {
         headers: {
           'Authorization': this.token
         },
-        timeout: TIMEOUT
+        timeout: MUTATION_TIMEOUT
       }
     );
     return response;
@@ -367,6 +370,28 @@ export default class ApiClient {
           host: this.host,
           sort_order: order,
           sort_field: field
+        },
+        baseURL: this.baseURL,
+        headers: {
+          'Authorization': this.token
+        },
+        timeout: TIMEOUT
+      }
+    );
+    return response;
+  }
+
+  // Folder STATUS poll. `flagged=1` asks the Lambda to add a SEARCH FLAGGED
+  // count (the message list's steady-state poll uses uid_next/messages to
+  // decide when to re-pull the UID list, and unseen/flagged for the pill
+  // counts). Cheap enough to keep on the 10s message-list cadence.
+  getFolderStatus(folder) {
+    const response = axios.get('/folder_status',
+      {
+        params: {
+          host: this.host,
+          folder: folder,
+          flagged: 1
         },
         baseURL: this.baseURL,
         headers: {

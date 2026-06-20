@@ -36,16 +36,15 @@ public enum MessageFilter: String, CaseIterable, Identifiable {
 extension MessageListView {
     @ViewBuilder
     func filterTabsBar(model: MessageListViewModel, searchActive: Bool) -> some View {
-        @Bindable var bindable = model
         HStack(spacing: 6) {
             ForEach(MessageFilter.allCases) { filter in
                 Button {
-                    bindable.filterTab = filter
+                    Task { await model.selectFilter(filter) }
                 } label: {
                     HStack(spacing: 4) {
                         Text(filter.label)
                             .font(.subheadline.weight(filter == model.filterTab ? .semibold : .regular))
-                        Text("\(count(filter, in: model.envelopes))")
+                        Text("\(pillCount(filter, model: model))")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -59,7 +58,7 @@ extension MessageListView {
                     )
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("\(filter.label), \(count(filter, in: model.envelopes))")
+                .accessibilityLabel("\(filter.label), \(pillCount(filter, model: model))")
             }
             Spacer()
             // Right-side controls live with the filter tabs so list-
@@ -79,8 +78,24 @@ extension MessageListView {
         .background(.bar)
     }
 
-    private func count(_ filter: MessageFilter, in envelopes: [Envelope]) -> Int {
-        envelopes.filter { filter.includes($0) }.count
+    /// Filter-pill count. Mirrors the React pills: server-sourced folder totals
+    /// (STATUS messages/unseen plus the SEARCH FLAGGED count) so the number
+    /// reflects the whole folder, not how many envelopes have paged in. During
+    /// search the rows are search results, not the folder, so the folder totals
+    /// don't apply -- fall back to counting the loaded matches.
+    private func pillCount(_ filter: MessageFilter, model: MessageListViewModel) -> Int {
+        // A genuine text search (filterTab == .all while searching) counts its
+        // loaded results. Folder mode and a pill-driven filter keep the
+        // server-sourced folder totals, so e.g. tapping Flagged doesn't make
+        // the All pill collapse to the flagged-result count.
+        if model.isSearchActive, model.filterTab == .all {
+            return model.envelopes.filter { filter.includes($0) }.count
+        }
+        switch filter {
+        case .all:     return Int(model.totalMessages)
+        case .unread:  return model.unseen
+        case .flagged: return model.flagged
+        }
     }
 
     /// The list's top inset: the macOS inline search field, the search-result
@@ -92,7 +107,13 @@ extension MessageListView {
             #if os(macOS)
             inlineSearchField(model: model, focused: $inlineSearchFocused)
             #endif
-            if model.isSearchActive {
+            // A genuine text search always shows the results banner. A pill
+            // filter is marked by its highlighted pill, so it normally hides the
+            // banner -- but if the folder has more matches than the page we
+            // fetched, show it so the "N of M matches" gap (and its clear
+            // button) isn't silent.
+            if model.isSearchActive,
+               model.filterTab == .all || model.envelopes.count < model.searchTotalEstimate {
                 searchMetadataBanner(model: model)
             }
             if let addressFilter, !addressFilter.isEmpty {

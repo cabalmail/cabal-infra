@@ -1,11 +1,32 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import Observer from './Observer';
+import React, { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { SwipeableList, Type } from 'react-swipeable-list';
 import 'react-swipeable-list/dist/styles.css';
 import Envelope from './Envelope';
 import useApi from '../../hooks/useApi';
 import { PAGE_SIZE } from '../../constants';
 import './Envelopes.css';
+
+// Pages fetched up front to fill the first viewport before scroll-driven lazy
+// loading takes over.
+const INITIAL_PAGES = 3;
+// Rows rendered above/below the viewport so a fast scroll doesn't flash blank.
+const OVERSCAN = 10;
+
+// Pure window math, exported for tests. Given the scroll offset, viewport and
+// row height, returns the [start, end) slice of `total` rows to render. When
+// height isn't known yet (first paint, or jsdom with no layout) it returns the
+// whole list so nothing is hidden -- virtualization only kicks in once we can
+// measure.
+export function computeWindow(scrollTop, viewportHeight, rowHeight, total, overscan = OVERSCAN) {
+  if (!(rowHeight > 0) || !(viewportHeight > 0) || total === 0) {
+    return { start: 0, end: total };
+  }
+  const first = Math.floor(scrollTop / rowHeight);
+  const visible = Math.ceil(viewportHeight / rowHeight);
+  const start = Math.max(0, first - overscan);
+  const end = Math.min(total, first + visible + overscan);
+  return { start, end };
+}
 
 function matchesFilter(envelope, filter) {
   if (!envelope) return false;
@@ -41,62 +62,63 @@ function Envelopes({
   const api = useApi();
 
   const [envelopes, setEnvelopes] = useState({});
-  const [pages, setPages] = useState([]);
+  // Refs, not state: these gate fetches, they don't drive rendering.
+  // `fetchedPagesRef` dedupes requests; `frontierRef` is the highest page the
+  // lazy loader has reached so far.
+  const fetchedPagesRef = useRef(new Set());
+  const frontierRef = useRef(-1);
 
-  const loadPages = useCallback((pageNums) => {
-    setPages((currentPages) => {
-      setEnvelopes((prev) => {
-        let merged = { ...prev };
-        for (const p of pageNums) {
-          if (currentPages[p]) {
-            merged = { ...merged, ...currentPages[p] };
-          }
-        }
-        return merged;
-      });
-      return currentPages;
-    });
-  }, []);
-
-  // Fetch envelopes when message_ids change
-  useEffect(() => {
-    let cancelled = false;
-    const numIds = message_ids.length;
-
-    for (let i = 0; i < numIds; i += PAGE_SIZE) {
-      const ids = message_ids.slice(i, i + PAGE_SIZE);
-      const page = Math.floor(i / PAGE_SIZE);
-
-      api.getEnvelopes(folder, ids).then((data) => {
-        if (cancelled) return;
-
-        setPages((prev) => {
-          const next = prev.slice();
-          next[page] = data.data.envelopes;
-          return next;
+  const fetchPage = useCallback(
+    (pageNum, { refresh = false } = {}) => {
+      const start = pageNum * PAGE_SIZE;
+      if (pageNum < 0 || start >= message_ids.length) return;
+      if (!refresh && fetchedPagesRef.current.has(pageNum)) return;
+      fetchedPagesRef.current.add(pageNum);
+      const ids = message_ids.slice(start, start + PAGE_SIZE);
+      api
+        .getEnvelopes(folder, ids)
+        .then((data) => {
+          setEnvelopes((prev) => ({ ...prev, ...data.data.envelopes }));
+        })
+        .catch((e) => {
+          if (!refresh) fetchedPagesRef.current.delete(pageNum); // allow retry
+          console.log(e);
         });
+    },
+    [api, folder, message_ids],
+  );
 
-        if (page < 4) {
-          setEnvelopes((prev) => ({
-            ...prev,
-            ...data.data.envelopes,
-          }));
-        }
-      }).catch((e) => {
-        console.log(e);
-      });
-    }
-
-    return () => {
-      cancelled = true;
-    };
-  }, [api, folder, message_ids]);
-
-  // Clear envelopes and pages when folder changes so stale data doesn't leak.
+  // Clear caches when the folder changes so stale data doesn't leak.
   useEffect(() => {
     setEnvelopes({});
-    setPages([]);
+    fetchedPagesRef.current = new Set();
+    frontierRef.current = -1;
   }, [folder]);
+
+  // First pass fills the opening viewport; later passes (the parent re-polls
+  // /list_messages every 10s, handing down a fresh array) refresh only the
+  // pages already loaded -- to pick up flag changes and new top-of-folder
+  // messages -- instead of re-fanning out the entire folder every poll.
+  useEffect(() => {
+    if (message_ids.length === 0) return;
+    if (fetchedPagesRef.current.size === 0) {
+      const totalPages = Math.ceil(message_ids.length / PAGE_SIZE);
+      const last = Math.min(INITIAL_PAGES, totalPages) - 1;
+      for (let p = 0; p <= last; p++) fetchPage(p);
+      frontierRef.current = last;
+    } else {
+      for (const p of Array.from(fetchedPagesRef.current)) {
+        fetchPage(p, { refresh: true });
+      }
+    }
+  }, [message_ids, fetchPage]);
+
+  const loadMore = useCallback(() => {
+    const next = frontierRef.current + 1;
+    if (next * PAGE_SIZE >= message_ids.length) return;
+    frontierRef.current = next;
+    fetchPage(next);
+  }, [message_ids, fetchPage]);
 
   const shownIds = useMemo(() => {
     const list = [];
@@ -110,7 +132,70 @@ function Envelopes({
     return list;
   }, [message_ids, envelopes, filter, addressFilter]);
 
-  // Tell parent what's currently visible (for header "N of M" + pill counts)
+  // --- Virtualization --------------------------------------------------
+  // Render only the rows in (and near) the viewport. SwipeableList forwards
+  // `style` but its items don't, so we window by padding the list top/bottom
+  // for the off-screen rows rather than absolutely positioning each one.
+  const scrollRef = useRef(null);
+  const rafRef = useRef(0);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [rowHeight, setRowHeight] = useState(0);
+  const [viewportH, setViewportH] = useState(0);
+
+  // Measure a real row's height and the viewport once rows exist (and whenever
+  // the rendered count changes). Guarded sets keep this from looping.
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const vh = el.clientHeight;
+    if (vh > 0) setViewportH((prev) => (prev !== vh ? vh : prev));
+    const item = el.querySelector('.swipeable-list-item');
+    if (item && item.offsetHeight > 0) {
+      const h = item.offsetHeight;
+      setRowHeight((prev) => (prev !== h ? h : prev));
+    }
+  }, [shownIds.length]);
+
+  // Keep the viewport height current across pane resizes. Keyed to the row
+  // count so it (re)attaches once the scroll element actually exists -- the
+  // empty state renders no scroll container.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(() => {
+      if (el.clientHeight > 0) setViewportH(el.clientHeight);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [shownIds.length]);
+
+  const onScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = 0;
+      setScrollTop(el.scrollTop);
+      // Pull the next lazy page in as the bottom of the loaded list nears.
+      const slack = rowHeight > 0 ? rowHeight * 6 : 300;
+      if (el.scrollHeight - (el.scrollTop + el.clientHeight) < slack) loadMore();
+    });
+  }, [rowHeight, loadMore]);
+
+  useEffect(() => () => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+  }, []);
+
+  const { start, end } = computeWindow(scrollTop, viewportH, rowHeight, shownIds.length);
+  // Drive the scroll height from an explicit sizer and offset the visible rows
+  // with a transform. The sizer's height only grows (as more loads), never
+  // shrinks as the window moves -- so the browser never clamps scrollTop back
+  // mid-scroll, which a padding-based height would do and strand the rows.
+  const virtualized = rowHeight > 0;
+  const offsetY = virtualized ? start * rowHeight : 0;
+  const totalHeight = virtualized ? shownIds.length * rowHeight : undefined;
+
+  // Tell parent what's currently visible (for header "N of M")
   useEffect(() => {
     if (typeof onVisibleEnvelopesChange !== 'function') return;
     const loaded = [];
@@ -191,13 +276,8 @@ function Envelopes({
 
   const archive = useCallback((id) => archiveProp(id), [archiveProp]);
 
-  const rows = shownIds.map((k, idx) => {
+  const rows = shownIds.slice(start, end).map((k) => {
     const e = envelopes[k.toString()];
-    let observer = null;
-    const page = Math.floor(idx / PAGE_SIZE);
-    if (idx % PAGE_SIZE === 0) {
-      observer = <Observer pageLoader={loadPages} page={page + 2} key={page + 2} />;
-    }
     const id = Number(e.id);
     return (
       <Envelope
@@ -218,12 +298,11 @@ function Envelopes({
         dom_id={e.id}
         bulkMode={bulkMode}
         selected={false}
-        observer={observer}
       />
     );
   });
 
-  if (rows.length === 0) {
+  if (shownIds.length === 0) {
     return (
       <div className={`envelopes-empty ${bulkMode ? 'in-bulk' : ''}`} role="status">
         <span className="envelopes-empty-line">{emptyLabel || 'Inbox zero.'}</span>
@@ -235,9 +314,22 @@ function Envelopes({
   }
 
   return (
-    <SwipeableList fullSwipe={true} type={Type.IOS} className={`envelope-list ${bulkMode ? 'bulk-mode' : ''}`}>
-      {rows}
-    </SwipeableList>
+    <div className="envelope-scroll" ref={scrollRef} onScroll={onScroll}>
+      <div className="envelope-sizer" style={virtualized ? { height: totalHeight } : undefined}>
+        <div
+          className="envelope-window"
+          style={virtualized ? { transform: `translateY(${offsetY}px)` } : undefined}
+        >
+          <SwipeableList
+            fullSwipe={true}
+            type={Type.IOS}
+            className={`envelope-list ${bulkMode ? 'bulk-mode' : ''}`}
+          >
+            {rows}
+          </SwipeableList>
+        </div>
+      </div>
+    </div>
   );
 }
 

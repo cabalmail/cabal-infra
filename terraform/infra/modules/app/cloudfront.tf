@@ -1,13 +1,65 @@
+# Origin access control (OAC), successor to the legacy origin access
+# identity (OAI). The bucket policy below trusts the
+# cloudfront.amazonaws.com service principal scoped to this
+# distribution's ARN instead of the OAI canonical user. The OAI
+# resource in modules/s3 stays (with its grant below) until the OAC
+# cutover is verified; see the removal-order comment there.
+resource "aws_cloudfront_origin_access_control" "admin" {
+  name                              = "cabal-admin-oac"
+  description                       = "OAC for the admin app bucket"
+  origin_access_control_origin_type = "s3"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
+
+# The admin bucket's policy lives here, next to the distribution,
+# because the OAC grant needs the distribution ARN: housing it in the
+# s3 module would make the two modules reference each other, which
+# Terraform resolves fine (acyclic at the resource level) but
+# checkov's graph renderer does not.
+data "aws_iam_policy_document" "admin_bucket" {
+  # Legacy OAI grant - delete together with the OAI resource and
+  # oai_iam_arn output in modules/s3 once the OAC cutover is verified.
+  statement {
+    actions   = ["s3:GetObject"]
+    resources = ["${var.bucket_arn}/*"]
+
+    principals {
+      type        = "AWS"
+      identifiers = [var.oai_iam_arn]
+    }
+  }
+
+  # OAC grant: CloudFront signs origin requests as the service
+  # principal, scoped to exactly our distribution by SourceArn.
+  statement {
+    actions   = ["s3:GetObject"]
+    resources = ["${var.bucket_arn}/*"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["cloudfront.amazonaws.com"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "AWS:SourceArn"
+      values   = [aws_cloudfront_distribution.cdn.arn]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "admin_bucket" {
+  bucket = var.bucket
+  policy = data.aws_iam_policy_document.admin_bucket.json
+}
+
 #tfsec:ignore:aws-cloudfront-enable-logging
 #tfsec:ignore:aws-cloudfront-enable-waf
 resource "aws_cloudfront_distribution" "cdn" {
   origin {
-    domain_name = var.bucket_domain_name
-    origin_id   = "cabal_admin_s3"
-
-    s3_origin_config {
-      origin_access_identity = "origin-access-identity/cloudfront/${var.origin}"
-    }
+    domain_name              = var.bucket_domain_name
+    origin_id                = "cabal_admin_s3"
+    origin_access_control_id = aws_cloudfront_origin_access_control.admin.id
   }
   origin {
     domain_name = split("/", aws_api_gateway_stage.api_stage.invoke_url)[2]
@@ -73,7 +125,10 @@ resource "aws_cloudfront_distribution" "cdn" {
     cloudfront_default_certificate = false
     acm_certificate_arn            = var.cert_arn
     ssl_support_method             = "sni-only"
-    minimum_protocol_version       = "TLSv1.2_2021"
+    # Newest TLS 1.2 policy AWS publishes (the plan named TLSv1.2_2023,
+    # which does not exist). Still permits TLS 1.2 clients; a TLSv1.3
+    # floor is a separate decision.
+    minimum_protocol_version = "TLSv1.2_2025"
   }
 }
 

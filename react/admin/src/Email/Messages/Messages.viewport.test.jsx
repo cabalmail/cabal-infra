@@ -10,8 +10,12 @@ import { DATE, DESC } from '../../constants';
 import { setViewport, PHONE, TABLET, DESKTOP } from '../../test/viewport';
 
 const mockGetMessages = vi.fn();
+const mockGetFolderStatus = vi.fn().mockResolvedValue({
+  data: { messages: 0, unseen: 0, flagged: 0, uid_validity: 1, uid_next: 1 },
+});
 const mockApi = {
   getMessages: mockGetMessages,
+  getFolderStatus: mockGetFolderStatus,
   setFlag: vi.fn(),
   moveMessages: vi.fn(),
   getEnvelopes: vi.fn().mockResolvedValue({ data: { envelopes: {} } }),

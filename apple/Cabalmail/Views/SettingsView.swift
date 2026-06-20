@@ -20,6 +20,15 @@ struct SettingsView: View {
     @State private var isLoadingAddresses = false
     @State private var signOutInFlight = false
 
+    // Display name is a server-side preference (shared with the React app;
+    // the /send Lambda composes the From header from it), not a Preferences
+    // entry. The field stays disabled until the server value has loaded so
+    // a flaky network can't silently clobber an existing name with "".
+    @State private var displayName = ""
+    @State private var displayNameLoaded = false
+    @State private var lastSavedDisplayName: String?
+    @State private var displayNameSaveTask: Task<Void, Never>?
+
     var body: some View {
         #if os(macOS)
         // macOS hosts this view inside the Settings scene's TabView, which
@@ -28,14 +37,27 @@ struct SettingsView: View {
         // window is shorter than the content. Using `.formStyle(.grouped)`
         // gives the standard System-Settings-style padded card layout.
         form
-            .task { await loadAddresses() }
-            .refreshable { await loadAddresses(force: true) }
+            .task {
+                await loadAddresses()
+                await loadDisplayName()
+            }
+            .refreshable {
+                await loadAddresses(force: true)
+                await loadDisplayName()
+            }
         #else
         NavigationStack {
             form
                 .navigationTitle("Settings")
-                .task { await loadAddresses() }
-                .refreshable { await loadAddresses(force: true) }
+                .settingsSheetDoneButton()
+                .task {
+                    await loadAddresses()
+                    await loadDisplayName()
+                }
+                .refreshable {
+                    await loadAddresses(force: true)
+                    await loadDisplayName()
+                }
         }
         #endif
     }
@@ -120,7 +142,16 @@ struct SettingsView: View {
     @ViewBuilder
     private func composingSection(bindable preferences: Preferences) -> some View {
         @Bindable var preferences = preferences
-        Section("Composing") {
+        Section {
+            TextField("Name (optional)", text: $displayName)
+                .disabled(!displayNameLoaded)
+                .autocorrectionDisabled()
+                #if os(iOS) || os(visionOS)
+                .textInputAutocapitalization(.words)
+                #endif
+                .onChange(of: displayName) { _, newValue in
+                    scheduleDisplayNameSave(newValue)
+                }
             Picker("Default From", selection: defaultFromBinding(preferences: preferences)) {
                 Text("None").tag(Optional<String>.none)
                 if isLoadingAddresses && availableAddresses.isEmpty {
@@ -141,6 +172,10 @@ struct SettingsView: View {
             #if os(iOS) || os(visionOS)
             .textInputAutocapitalization(.sentences)
             #endif
+        } header: {
+            Text("Composing")
+        } footer: {
+            Text("Name appears as the display name on mail you send, e.g. \"Chris Carr <address>\".")
         }
     }
 
@@ -230,6 +265,33 @@ struct SettingsView: View {
         if let addresses = try? await client.addresses(forceRefresh: force) {
             availableAddresses = addresses
                 .sorted { $0.address.localizedCaseInsensitiveCompare($1.address) == .orderedAscending }
+        }
+    }
+
+    private func loadDisplayName() async {
+        guard let client = appState.client else { return }
+        if let name = try? await client.displayName() {
+            lastSavedDisplayName = name
+            displayName = name
+            displayNameLoaded = true
+        }
+    }
+
+    /// Debounced save mirroring the React app's 1s-after-last-keystroke
+    /// behavior. `lastSavedDisplayName` suppresses the echo when `.onChange`
+    /// fires for the value the load (or a completed save) just put in place.
+    private func scheduleDisplayNameSave(_ value: String) {
+        guard displayNameLoaded, value != lastSavedDisplayName else { return }
+        displayNameSaveTask?.cancel()
+        displayNameSaveTask = Task {
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled, let client = appState.client else { return }
+            do {
+                try await client.setDisplayName(value)
+                lastSavedDisplayName = value
+            } catch {
+                // Transient failure - the next edit (or settings visit) retries.
+            }
         }
     }
 

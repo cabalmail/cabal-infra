@@ -119,10 +119,11 @@ final class ImapParserTests: XCTestCase {
 
     func testEmailAddressDisplayNameStripsCachedQuotes() {
         // Defends rendering against pre-fix cached envelopes whose `name`
-        // field still contains the wrapping double-quotes.
+        // field still contains the wrapping double-quotes. `formatted` is a
+        // display rendering and stays quote-free to match the React client.
         let address = EmailAddress(name: "\"Alice Smith\"", mailbox: "alice", host: "example.com")
         XCTAssertEqual(address.displayName, "Alice Smith")
-        XCTAssertEqual(address.formatted, "\"Alice Smith\" <alice@example.com>")
+        XCTAssertEqual(address.formatted, "Alice Smith <alice@example.com>")
     }
 
     func testContinuationResponse() {

@@ -191,8 +191,11 @@ resource "aws_lambda_function" "api_call" {
   handler          = "function.handler"
   runtime          = var.runtime
   architectures    = ["arm64"]
-  timeout          = 30
-  memory_size      = var.memory
+  # 29s matches API Gateway's 29s integration timeout, so the Lambda stops
+  # at the same boundary the client sees the request fail instead of billing
+  # on invisibly past it (and a real timeout becomes an alarmable signal).
+  timeout     = 29
+  memory_size = var.memory
   logging_config {
     log_format = "Text"
     log_group  = aws_cloudwatch_log_group.lambda_log.name
@@ -205,6 +208,7 @@ resource "aws_lambda_function" "api_call" {
       USER_POOL_ID                = var.user_pool_id
       DMARC_TABLE_NAME            = "cabal-dmarc-reports"
       USER_PREFERENCES_TABLE_NAME = "cabal-user-preferences"
+      IMAP_POOL_ENABLED           = var.imap_pool_enabled ? "true" : "false"
     }
   }
   depends_on = [

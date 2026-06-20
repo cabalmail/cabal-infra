@@ -2,204 +2,162 @@
 
 ## Context
 
-Today, Cabalmail's Terraform state lives in the `cabal-tf-backend` S3 bucket. The bucket has SSE-S3 enabled at the bucket level (AWS default since 2023), so the state file is encrypted at rest — but any IAM principal with `s3:GetObject` on the bucket can read fully-decrypted state. This is the standard backend posture, and it has been adequate while the only secrets in state were resource ARNs and IDs.
+Today, Cabalmail's Terraform state lives in the `cabal-tf-backend` S3 bucket. The bucket has SSE-S3 enabled at the bucket level (AWS default since 2023), so the state file is encrypted at rest with an AWS-owned key the service manages transparently. The catch is that with SSE-S3, **any IAM principal that can call `s3:GetObject` on the bucket gets the fully decrypted state back** — the service decrypts on read with no separate authorization step. This is the standard backend posture, and it has been adequate while the only secrets in state were resource ARNs and IDs.
 
-The 0.7.x monitoring work surfaced a concrete case where this posture starts to chafe: the `alert_sink` Lambda needs Pushover credentials and an ntfy publisher token. The Phase 1 implementation works around the issue by writing placeholder values via Terraform and using `ignore_changes = [value]` so the operator can `aws ssm put-parameter` the real values out-of-band. That keeps secrets out of state, but at the cost of:
+The 0.7.x monitoring work surfaced a concrete case where this posture starts to chafe: the `alert_sink` Lambda needs Pushover credentials and an ntfy publisher token. The Phase 1 implementation works around the issue by writing placeholder values via Terraform and using `ignore_changes = [value]` so the operator can `aws ssm put-parameter` the real values out-of-band. That keeps secrets out of state, but at the cost of manual setup steps, drift between code and reality, and no in-band rotation.
 
-- Manual setup steps that are easy to skip and hard to reproduce across environments.
-- Drift between code and reality — `terraform.tfstate` claims a value the operator immediately overwrote.
-- No way to rotate the secret in the same flow as a normal apply.
+The fix is to re-key the state object under a **customer-managed KMS key (CMK)** using the S3 backend's `encrypt` + `kms_key_id` options (SSE-KMS). With SSE-KMS and a CMK, S3 calls KMS on the caller's behalf using the *caller's* permissions, so reading state requires **both** `s3:GetObject` **and** `kms:Decrypt` on the key. Grant `kms:Decrypt` to only the deploy principal and we get the property we want: S3 read access alone no longer reveals state. That changes the calculus enough that we can comfortably manage secrets through Terraform.
 
-Terraform 1.10 (Nov 2024) added first-class **state and plan file encryption** via a top-level `encryption` block. With KMS-backed encryption enabled, S3 read access alone is no longer sufficient to read secret values from state — the reader also needs `kms:Decrypt` on the configured key. That changes the calculus enough that we can comfortably manage secrets through Terraform.
+### What HashiCorp Terraform can and cannot do here
 
-This plan migrates both Terraform stacks (`terraform/dns`, `terraform/infra`) to encrypted state, then folds the Phase 1 monitoring secrets into the standard pattern.
+An earlier draft of this plan assumed Terraform 1.10's top-level `encryption { key_provider ... }` block, which encrypts the state and plan *payload* client-side. **That block is an OpenTofu feature (OpenTofu 1.7+), not HashiCorp Terraform.** In Terraform it is still an open proposal ([hashicorp/terraform#9556](https://github.com/hashicorp/terraform/issues/9556), [#31013](https://github.com/hashicorp/terraform/issues/31013)); the canonical docs for it live on [OpenTofu's site](https://opentofu.org/docs/language/state/encryption/). This repo runs HashiCorp Terraform (`hashicorp/setup-terraform`, the `terraform` CLI), so that block would not parse.
+
+Our lever is therefore **backend-level SSE-KMS**, not client-side encryption. The practical difference:
+
+- A principal that *does* hold `kms:Decrypt` (the deploy principal) still sees plaintext state JSON. That is acceptable — the deploy principal is trusted with state by definition.
+- Plan-file artifacts are not independently encrypted beyond the at-rest encryption GitHub Actions already applies to job artifacts.
+
+For our threat model — an IAM principal with broad S3 access but no business reading state secrets — SSE-KMS closes the gap. The `encrypt` + `kms_key_id` backend options are long-standing, so this needs **no Terraform version bump**. Full client-side payload encryption would require migrating the toolchain to OpenTofu, which is out of scope (see Non-goals).
+
+### Native state locking is a separate follow-up
+
+There is no state lock table today; concurrent runs are serialized by a per-branch GitHub Actions concurrency group (see `docs/terraform.md`). Terraform 1.11's `use_lockfile` (native S3 locking) would add a real lock object, but the state bucket policy grants the cross-account deploy users only `s3:GetObject`/`PutObject`/`PutObjectAcl` on their **exact** state keys and **no `s3:DeleteObject`**, so a `<key>.tflock` object could be neither written nor released without a bucket-policy change. That bucket-policy work (and the 1.11 floor it implies) is deferred to its own change; this plan does not enable `use_lockfile`.
 
 ## Goals
 
-- All Terraform state and plan files are encrypted client-side with a per-environment AWS KMS customer-managed key.
-- The deploy IAM principal is the only entity with `kms:Decrypt` on those keys.
-- Secrets that today are seeded out-of-band (Pushover user key, Pushover app token, ntfy publisher token, anything similar added later) become regular Terraform inputs sourced from GitHub Actions secrets.
-- Rotation is "update the GitHub secret and re-run apply" — no manual `aws ssm put-parameter`.
+- Every Terraform state object (both stacks, all environments) is encrypted at rest under a per-environment customer-managed KMS key (SSE-KMS), not the default AWS-owned SSE-S3 key.
+- Each environment's deploy principal is the only non-admin entity that can use its CMK, so `s3:GetObject` alone cannot read state.
+- Secrets seeded out-of-band today (Pushover user key, Pushover app token, ntfy publisher token, anything similar later) can become regular Terraform inputs sourced from GitHub Actions secrets, because state is now CMK-gated. (Gated on monitoring being enabled — see Phasing.)
+- Rotation of those secrets becomes "update the GitHub secret and re-run apply" — no manual `aws ssm put-parameter`.
 - The migration is reversible: each step has a rollback path, and the final state is recoverable from backup if a key is accidentally deleted.
 
 ## Non-goals
 
-- Re-keying historical state files. Once a state file is encrypted forward, the previous version in the S3 bucket remains SSE-S3 encrypted but unencrypted client-side; we do not attempt to retroactively encrypt prior versions. (S3 versioning retention will age them out per the bucket lifecycle policy.)
-- Encrypting `terraform.tfvars` files generated by CI. They are written to a runner's working directory, not persisted; the protection comes from masking the underlying GitHub secrets, not from file-level encryption.
-- Switching to OpenTofu. OpenTofu has had this feature since 1.7 and uses the same syntax; this plan is forward-compatible if we ever migrate.
+- **Client-side state/plan payload encryption.** OpenTofu-only; not available in HashiCorp Terraform. SSE-KMS is the chosen mechanism.
+- **Switching to OpenTofu.** A toolchain migration (swapping `terraform` -> `tofu` across every workflow, script, and doc, plus provider re-validation) is a far larger change than the marginal security gain justifies.
+- **Native state locking (`use_lockfile`).** Deferred to its own change; requires a cross-account bucket-policy update (add `s3:DeleteObject` and the `<key>.tflock` resources) and a Terraform 1.11 floor.
+- **Re-keying historical state versions.** Once the current object is re-written under the CMK, prior S3 object versions remain under their old SSE-S3 encryption; S3 versioning retention ages them out.
+- **Encrypting `terraform.tfvars` files generated by CI.** They are written to a runner's ephemeral working directory, not persisted; the protection comes from masking the underlying GitHub secrets.
 
 ## Current state (audit)
 
-- Backend: `cabal-tf-backend` S3 bucket. `make-terraform.sh` writes a backend block with `bucket`, `key`, `region` only — **no `encrypt`, no `kms_key_id`, no `dynamodb_table`** (state locking).
-- State keys: `dev-bootstrap`, `stage-bootstrap`, `prod-bootstrap` (DNS stack); `dev`, `stage`, `prod` (infra stack).
-- Bucket-level encryption: SSE-S3 (default-on). No bucket key, no CMK.
-- Terraform version: pinned at `>= 1.1.2` in module `versions.tf` files; CI uses `hashicorp/setup-terraform@v2` without a version, which resolves to latest stable. Both are compatible with the 1.10 `encryption` block once we bump the floor.
+- Backend: `cabal-tf-backend` S3 bucket, in the **state/management account `101246931230`**, region **us-east-1** (`get-bucket-location` returns `null`). `make-terraform.sh` writes a backend block with `bucket`, `key`, `region` only — no `encrypt`, no `kms_key_id`, no locking.
+- State keys: `development`, `staging`, `production` (infra stack); the same plus `-bootstrap` (DNS stack). The key is `TF_VAR_ENVIRONMENT` verbatim.
+- Bucket-level encryption: SSE-S3 (default-on), AWS-owned key. No CMK.
+- Terraform version floors: `>= 1.1.2` (most module `versions.tf`), `>= 1.9.0` (infra root `terraform.tf`). Unchanged by this plan.
+
+### Cross-account topology
+
+The state bucket and the deploy principals are in **different accounts**:
+
+| Environment | `TF_VAR_ENVIRONMENT` | Deploy principal (account) |
+| ----------- | -------------------- | -------------------------- |
+| development | `development`        | `arn:aws:iam::175059541256:user/terraform` |
+| staging     | `staging`            | `arn:aws:iam::715401949493:user/terraform` |
+| production  | `production`         | `arn:aws:iam::859381087471:user/terraform` |
+
+Each `user/terraform` reaches the state bucket (account `101246931230`) cross-account via the bucket policy, which grants `s3:GetObject`/`PutObject`/`PutObjectAcl` on that environment's exact state keys plus `s3:ListBucket`. CI authenticates as these users with static access keys (`secrets.AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`) set per GitHub Environment.
+
+Because the bucket lives in account `101246931230`, the CMK must live there too (and in the bucket's region, us-east-1). Cross-account KMS use then requires **both** sides: the CMK key policy must grant the environment's `user/terraform`, and that user's own IAM policy must allow the KMS actions on the CMK ARN. That CI IAM policy is hand-managed per account, so the grant is added there by hand.
 
 ## Target state
 
 ### KMS keys
 
-One CMK per environment, one alias per stack/environment combination:
+One CMK per environment, all in the state account `101246931230`, region us-east-1:
 
-| Environment | Key alias                           | Purpose                          |
-| ----------- | ----------------------------------- | -------------------------------- |
-| dev         | `alias/cabal-tf-state-dev`          | Encrypts dev `infra` + DNS state |
-| stage       | `alias/cabal-tf-state-stage`        | Encrypts stage state             |
-| prod        | `alias/cabal-tf-state-prod`         | Encrypts prod state              |
+| Environment | Key alias                            | Key policy grants (beyond root admin)        |
+| ----------- | ------------------------------------ | -------------------------------------------- |
+| development | `alias/cabal-tf-state-development`   | `175059541256:user/terraform`                |
+| staging     | `alias/cabal-tf-state-staging`       | `715401949493:user/terraform`                |
+| production  | `alias/cabal-tf-state-production`    | `859381087471:user/terraform`                |
 
-One key per environment (not per stack) keeps the surface small. `infra` and `dns` for the same environment share a key; cross-environment isolation is preserved.
-
-Key policy: deploy principal gets `Encrypt`, `Decrypt`, `GenerateDataKey`, `DescribeKey`. Account root keeps full admin (per AWS best practice — never lock yourself out of your own key). Deletion window: 30 days (max). Automatic rotation: on (annual). Multi-region: false (state lives in one region).
+One key per environment keeps cross-environment isolation even though the bucket is shared: compromise of one environment's `user/terraform` grants decrypt on only that environment's key. Key policy: account root keeps full admin; the environment's `user/terraform` gets `Encrypt`, `Decrypt`, `GenerateDataKey`, `DescribeKey`. Deletion window: 30 days. Automatic rotation: on (KMS retains prior backing keys, so historical ciphertext stays readable). Multi-region: false.
 
 ### Backend changes
 
-Update `make-terraform.sh` to emit:
+`make-terraform.sh` emits, when encryption is active:
 
 ```hcl
 terraform {
   backend "s3" {
-    bucket       = "cabal-tf-backend"
-    key          = "<env>"
-    region       = "<region>"
-    encrypt      = true
-    kms_key_id   = "alias/cabal-tf-state-<env>"
-    use_lockfile = true   # S3-native locking, GA in TF 1.10; no DynamoDB needed.
+    bucket     = "cabal-tf-backend"
+    key        = "<env-key>"
+    region     = "<region>"
+    encrypt    = true
+    kms_key_id = "<cmk-arn>"
   }
 }
 ```
 
-`encrypt = true` + `kms_key_id` is independent of the client-side `encryption` block — they protect different layers (transit/at-rest in the S3 store vs. the file payload itself). Both should be on.
+`kms_key_id` is the CMK's key ARN, supplied via the `STATE_KMS_KEY_ID` variable. We use the ARN rather than a bare `alias/...`, whose S3-backend support has regressed across Terraform versions.
 
-### Client-side encryption block
+### Generating the backend per environment
 
-A top-level `encryption` block per stack root (`terraform/dns/main.tf` and `terraform/infra/main.tf`):
+`make-terraform.sh` uses a single knob: a `STATE_KMS_KEY_ID` env var sourced from a per-GitHub-Environment variable, holding the CMK's key ARN.
 
-```hcl
-terraform {
-  encryption {
-    key_provider "aws_kms" "state" {
-      kms_key_id = "alias/cabal-tf-state-<env>"
-      region     = "<region>"
-      key_spec   = "AES_256"
-    }
+- **Set** (non-empty): the generator emits an encrypted backend (`encrypt` + `kms_key_id`).
+- **Unset/empty** (default): today's plaintext-SSE-S3 backend, byte-for-byte. Greenfield-safe and the rollback target.
 
-    method "aes_gcm" "state" {
-      keys = key_provider.aws_kms.state
-    }
+The presence of the key ARN *is* the on switch — there is no separate mode flag. Because all four callers (`infra.yml` dns + infra, `quiesce.yml`, `destroy_terraform.yml`) reference the same per-environment variable, every Terraform entry point for a given environment stays consistent automatically. An unset variable means the generator change can land dormant on all branches and be **activated per environment** once that environment's CMK and IAM grant exist.
 
-    state {
-      method   = method.aes_gcm.state
-      enforced = true
-    }
+## Phasing / migration sequence
 
-    plan {
-      method   = method.aes_gcm.state
-      enforced = true
-    }
-  }
-}
-```
+The generator knob and the CI wiring have shipped; what remains per environment is operational. The full operator runbook — greenfield and migration — lives at [docs/terraform-state-encryption.md](../terraform-state-encryption.md).
 
-`enforced = true` is a one-way door: once set, every operator who runs `terraform plan` or `terraform apply` against this stack must have `kms:Decrypt` on the key. For our CI-only apply model with a single deploy principal, that is fine — and is the whole point. The migration step below uses `enforced = false` exactly once per stack/env, then flips it on.
+Per environment (`development` -> `staging` -> `production`):
 
-The `<env>` and `<region>` placeholders mean the `encryption` block has to be templated like the backend block. Extend `make-terraform.sh` to write it alongside `backend.tf`, or inline both into a single generated `_generated.tf` file.
+1. **Create the CMK + alias** in the state account (`101246931230`), region us-east-1, with a key policy granting account root admin and the environment's `user/terraform`. Capture the key ARN.
+2. **Grant the environment's `user/terraform`** `kms:Encrypt`/`Decrypt`/`GenerateDataKey`/`DescribeKey` on the CMK ARN in that user's hand-managed IAM policy (the env account). Cross-account KMS needs the grant on both the key policy and the principal's policy.
+3. **Set the `STATE_KMS_KEY_ID` variable** for the environment to the CMK's key ARN and re-run the terraform workflow. On a fresh CI runner there is no local backend cache, so plain `terraform init` adopts the new backend with no `-reconfigure`/`-migrate-state` needed. From this point every state write is SSE-KMS. Re-key the *existing* object either by letting the next real apply rewrite it, or immediately with a server-side copy run by the state-account owner (`aws s3 cp s3://cabal-tf-backend/<key> s3://cabal-tf-backend/<key> --sse aws:kms --sse-kms-key-id <arn> --metadata-directive REPLACE`). Verify with `head-object` that `ServerSideEncryption` is `aws:kms` under the CMK.
+4. **(Deferred until monitoring is enabled.)** Fold the monitoring secrets into Terraform-managed inputs: drop `ignore_changes`/placeholders on `aws_ssm_parameter.pushover_user_key` / `pushover_app_token` / `ntfy_publisher_token`, add `sensitive` variables, source them from GitHub secrets, document rotation. While `TF_VAR_MONITORING=false` in every environment these resources are not deployed, so there is nothing to migrate yet.
 
-### Required Terraform version
+### Greenfield (new environment)
 
-Bump every `versions.tf`'s `required_version` to `>= 1.10`. Pin `setup-terraform` to `terraform_version: "~1.10"` in the workflows so a future TF 2.x release doesn't surprise us.
-
-## Migration sequence
-
-Per stack (`dns`, then `infra`) per environment (`dev` → `stage` → `prod`):
-
-1. **Bootstrap the KMS key.** A new tiny stack `terraform/state-keys/` (or a one-shot `aws kms create-key` via the console — fine for a one-time bootstrap) creates the three CMKs and aliases. Output the key ARNs to a non-secret file (`docs/0.10.x/key-arns.md`) for reference.
-2. **Bump TF version.** Update `versions.tf` floors and `setup-terraform` versions in CI. Confirm `terraform plan` still no-ops on every environment.
-3. **Add the backend encrypt + kms_key_id.** Update `make-terraform.sh`. The next `terraform init` migrates the state file (S3 PutObject with SSE-KMS). Test on dev first; this is reversible by stripping the lines and re-init'ing with `-migrate-state`.
-4. **Add the `encryption` block with `enforced = false` and a one-shot migration block.**
-
-   ```hcl
-   terraform {
-     encryption {
-       # ... key_provider, method as above ...
-
-       state {
-         method = method.aes_gcm.state
-         # No enforced flag yet.
-       }
-
-       state {
-         unencrypted = true
-       }
-     }
-   }
-   ```
-
-   On the next apply, TF reads the still-unencrypted state and writes encrypted. **One apply per stack per environment.** Confirm by downloading the state file from S3 and observing it is now an opaque blob with `"encryption": {...}` metadata at the top.
-5. **Remove the migration `state { unencrypted = true }` block; flip `enforced = true`.** From this point forward, anyone without `kms:Decrypt` cannot read state. Same for plan files.
-6. **Switch monitoring secrets to TF-managed.**
-   - Drop `ignore_changes = [value]` and the placeholder strings on `aws_ssm_parameter.pushover_user_key`, `aws_ssm_parameter.pushover_app_token`, `aws_ssm_parameter.ntfy_publisher_token`.
-   - Add `variable "pushover_user_key"`, `variable "pushover_app_token"`, `variable "ntfy_publisher_token"` to the monitoring module and the root, all `sensitive = true`.
-   - In CI, source these from GitHub **secrets** (`secrets.PUSHOVER_USER_KEY` etc.), not vars. Set them as `TF_VAR_*` env on the apply step rather than writing them to `terraform.tfvars` on disk.
-   - Document that rotation is "update the GitHub secret and re-run terraform apply" — no `aws ssm put-parameter`, no `terraform taint`.
-7. **(ntfy bootstrap caveat)** The ntfy publisher token is generated by the running ntfy container, so the very first deploy of a new environment is still: apply (with placeholder secrets) → ECS-Exec bootstrap → put GitHub secret → re-apply. From the second deploy onward, rotation lives in GitHub. Document this in [docs/monitoring.md](../monitoring.md).
+A brand-new environment does steps 1-2 (create key, grant principal) before the first infra apply, sets `STATE_KMS_KEY_ID` to the new key's ARN from the start, and the very first state write is SSE-KMS — no migration.
 
 ### Per-environment ordering
 
-`dev` first, end-to-end, with the migration steps spaced out by at least one CI run each so that any breakage shows up cheaply. Then `stage`, then `prod`. The whole sequence per stack should fit in one PR per environment if we want clean rollback boundaries; bundling all three is also acceptable once we've done dev.
+`development` first, end-to-end, so any breakage shows up cheaply; then `staging`, then `production`. Because activation is a per-environment variable, each environment migrates and verifies independently while the generator change sits inert on the other branches.
 
 ### Rollback
 
-| Step                                      | Rollback                                                                |
-| ----------------------------------------- | ----------------------------------------------------------------------- |
-| KMS bootstrap                             | Disable + schedule deletion (30-day window).                            |
-| TF version bump                           | Revert the workflow + `versions.tf` change; no state implications.      |
-| Backend `encrypt` + `kms_key_id`          | Remove the lines, run `terraform init -migrate-state`. New state writes drop SSE-KMS. |
-| Client-side encryption (migration apply)  | Restore the prior state version from S3 versioning + remove the encryption block. |
-| `enforced = true`                         | Revert to `enforced = false` and re-add `state { unencrypted = true }` migration block; one apply restores readability with the old toolchain. |
-| Secret-management switch                  | Revert the `ignore_changes` removal; re-add placeholders. The real values are still in SSM; nothing breaks at runtime. |
+| Step                             | Rollback                                                                                          |
+| -------------------------------- | ------------------------------------------------------------------------------------------------ |
+| CMK creation                     | Disable + schedule deletion (30-day window).                                                      |
+| Backend `encrypt` + `kms_key_id` | Clear the `STATE_KMS_KEY_ID` variable and re-run; the next apply rewrites state under SSE-S3. State is readable throughout as long as the deploy principal keeps `kms:Decrypt`. |
+| Secret-management switch (later) | Revert the `ignore_changes` removal; re-add placeholders. Real values remain in SSM; runtime unaffected. |
 
 ## CI changes
 
-Workflows (`terraform.yml`, `bootstrap.yml`):
-
-1. The deploy IAM principal needs `kms:Encrypt`, `kms:Decrypt`, `kms:GenerateDataKey`, `kms:DescribeKey` on the per-environment CMK. Either inline that into the existing deploy policy or add a `kms` policy attachment.
-2. Set GitHub Actions environment secrets `PUSHOVER_USER_KEY`, `PUSHOVER_APP_TOKEN`, `NTFY_PUBLISHER_TOKEN` (per environment).
-3. In the `apply` job (and `plan` if we want secret-aware diffs there), pass them through as env vars rather than writing to `terraform.tfvars`:
-
-   ```yaml
-   - name: apply-terraform
-     env:
-       TF_VAR_PUSHOVER_USER_KEY:    ${{ secrets.PUSHOVER_USER_KEY }}
-       TF_VAR_PUSHOVER_APP_TOKEN:   ${{ secrets.PUSHOVER_APP_TOKEN }}
-       TF_VAR_NTFY_PUBLISHER_TOKEN: ${{ secrets.NTFY_PUBLISHER_TOKEN }}
-     run: terraform apply ...
-   ```
-
-   GitHub auto-masks secret values in logs. They never touch the runner's filesystem.
+1. Each environment's `user/terraform` needs `kms:Encrypt`/`Decrypt`/`GenerateDataKey`/`DescribeKey` on that environment's CMK — granted on both the CMK key policy (state account) and the user's hand-managed IAM policy (env account). No S3 bucket-policy change is needed for encryption (the existing `GetObject`/`PutObject` grants suffice).
+2. **(Shipped)** `STATE_KMS_KEY_ID` (from the per-environment GitHub variable) is threaded into the `make-terraform.sh` invocations in `infra.yml` (dns + infra build steps), `quiesce.yml`, and `destroy_terraform.yml`.
+3. **(Deferred)** Set GitHub Actions environment secrets `PUSHOVER_USER_KEY`, `PUSHOVER_APP_TOKEN`, `NTFY_PUBLISHER_TOKEN` and pass them as `TF_VAR_*` env on apply — only once monitoring returns.
 
 ## Disaster recovery
 
-- **Lost KMS key (accidental deletion).** Within the 30-day deletion window: cancel the deletion. After the window: state is unrecoverable, but Cabalmail's Terraform state is reproducible — the resources it manages are recoverable from AWS Backup (DynamoDB + EFS) and re-applied from code. Total recovery cost: hours, not days. Practice once on dev.
-- **Lost deploy IAM credentials.** Standard rotation; no state-encryption-specific impact.
-- **Compromised deploy IAM credentials.** Same plus revoke the key grant for the compromised principal. The CMK rotation policy (annual) limits the window of useful stolen ciphertext.
-- **State file corruption.** S3 versioning is on the bucket today; we keep that. Restore to the previous version, run `terraform plan` to confirm it still reflects reality.
+- **Lost CMK (accidental deletion).** Within the 30-day window: cancel the deletion. After: the state object is unrecoverable, but Cabalmail's state is reproducible — the data plane recovers from AWS Backup (DynamoDB + EFS) and the rest re-applies from code. Hours, not days. Practice once on development.
+- **Key rotation.** Automatic annual rotation retains prior backing keys, so historical ciphertext stays readable; rotation is safe and needs no re-encrypt.
+- **Lost/compromised deploy credentials.** Standard rotation; for compromise, also revoke that principal's grant on the key (both the key policy and the principal's IAM policy).
+- **State file corruption.** S3 versioning stays on; restore the previous version and `terraform plan` to confirm.
 
 ## Acceptance
 
-- All three environments' state files are KMS-encrypted (visible as `aws:kms` `ServerSideEncryption` in S3 console) **and** opaque when downloaded directly (no readable JSON, no plaintext secrets).
-- A simulated read by an IAM principal with `s3:GetObject` but **without** `kms:Decrypt` returns access-denied on the underlying object.
-- `terraform plan` still produces no diff in steady state.
-- Rotating the Pushover app token consists of: update `PUSHOVER_APP_TOKEN` secret in the prod GitHub environment, re-run the terraform workflow, observe the SSM SecureString updated; trigger a Kuma test alert and confirm Pushover delivery still works.
-- The runbook in [docs/monitoring.md](../monitoring.md) is updated to reflect the new rotation flow; the manual `aws ssm put-parameter` instructions are reduced to the ntfy first-boot bootstrap only.
+- Each environment's state object reports `ServerSideEncryption = aws:kms` under the per-environment CMK (S3 console or `head-object`).
+- A principal with `s3:GetObject` but without `kms:Decrypt` on the CMK gets access-denied on the object.
+- `terraform plan` is a no-op in steady state.
+- **(When monitoring returns)** rotating a Pushover token is: update the GitHub secret, re-run the workflow, observe the SSM SecureString update.
+- The operator runbook (migration + greenfield) is published at `docs/terraform-state-encryption.md` and linked from the operations index.
 
 ## Open questions
 
-- **Single-region failover.** Today there's one region; if 0.9.x introduces multi-region, the per-environment CMK becomes a multi-region key with replicas. Out of scope here.
-- **Plan-file artifacts.** `plan-terraform.sh` produces a plan output; with `plan { enforced = true }`, the artifact uploaded between the `plan` and `apply` jobs is encrypted at rest (already true in GitHub Actions) and additionally encrypted client-side. The `apply` job needs `kms:Decrypt` to consume it — confirm the existing apply principal has it.
-- **OpenTofu migration.** If we ever switch, the `encryption` block syntax is identical, but the key provider names differ slightly (`aws_kms` is the same). One-day spike to confirm.
+- **Encrypt-by-default for new environments.** Activation is a per-environment variable, so greenfield bring-up must remember to set `STATE_KMS_KEY_ID` before the first apply. The greenfield runbook calls this out; consider a bring-up checklist guard so a new environment is never created unencrypted.
+- **Native locking follow-up.** Enabling `use_lockfile` later means updating the bucket policy (add `s3:DeleteObject` and `<key>.tflock` resources for each environment) and bumping the Terraform floor to 1.11. Worth doing once this lands, since `quiesce.yml` and `infra.yml` can apply the same stack from different workflows and the per-branch concurrency group does not serialize across them.
 
 ## Out of scope for 0.10.x
 
-- Application-level secrets management (e.g. moving the Cognito client secret out of state — separate posture decision).
+- Client-side state/plan payload encryption (OpenTofu).
+- Native state locking (`use_lockfile`) — separate follow-up.
+- Application-level secrets management (e.g. moving the Cognito client secret out of state).
 - Hardware-backed key custody (AWS CloudHSM, KMS XKS).
-- Per-secret keys vs. per-environment keys. The current per-environment design is a good default; revisit if a future compliance regime demands tighter blast radius.
+- Per-secret keys vs. per-environment keys.

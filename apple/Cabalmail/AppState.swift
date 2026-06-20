@@ -71,6 +71,11 @@ final class AppState {
     var toggleSeenRequestTick = 0
     var toggleFlaggedRequestTick = 0
     var moveSelectionRequestTick = 0
+    /// Intent to open the iOS / iPadOS / visionOS settings sheet (General /
+    /// Addresses / Folders). Bumped by the sidebar gear button and the ⌘,
+    /// app command; `SignedInRootView` observes it and presents the sheet.
+    /// macOS ignores it - settings there is the dedicated ⌘, scene.
+    var settingsRequestTick = 0
 
     /// Latest envelope disposed from the detail view. `MessageListView`
     /// observes this via `.onChange` and prunes the matching UID from its
@@ -149,6 +154,7 @@ final class AppState {
     func requestReply() { replyRequestTick += 1 }
     func requestReplyAll() { replyAllRequestTick += 1 }
     func requestForward() { forwardRequestTick += 1 }
+    func requestSettings() { settingsRequestTick += 1 }
     // The selection-scoped request bumpers live in the "Message-menu
     // selection intents" extension below (SwiftLint type-body budget).
 
@@ -263,6 +269,13 @@ final class AppState {
                 cacheDirectory: cacheDirectory
             )
             try await newClient.authService.signIn(username: username, password: password)
+            // Defense in depth for the force-kill path: a clean sign-out wipes
+            // the shared on-disk cache, but a hard quit doesn't. If a different
+            // account just signed in on this device, clear the prior user's
+            // cached mail before the new session populates it.
+            if !lastUsername.isEmpty, lastUsername != username {
+                await newClient.clearLocalData()
+            }
             self.controlDomain = controlDomain
             self.lastUsername = username
             self.client = newClient
@@ -280,6 +293,11 @@ final class AppState {
         stopInboxBadgePolling()
         guard let client else { status = .signedOut; return }
         await client.imapClient.disconnect()
+        // Wipe locally cached mail (envelopes, bodies, drafts, outbox) before
+        // dropping the session so the next account to sign in on this device
+        // can't read the previous user's messages from the shared on-disk
+        // cache.
+        await client.clearLocalData()
         try? await client.authService.signOut()
         self.client = nil
         self.status = .signedOut
@@ -406,29 +424,13 @@ final class AppState {
         do {
             try await client.imapClient.connectAndAuthenticate()
             let status = try await client.imapClient.status(path: "INBOX")
-            let count = max(0, status.unseen ?? 0)
-            inboxUnreadCount = count
-            try? await UNUserNotificationCenter.current().setBadgeCount(count)
+            inboxUnreadCount = max(0, status.unseen ?? 0)
+            try? await UNUserNotificationCenter.current().setBadgeCount(inboxUnreadCount)
         } catch {
             // Best-effort: if the STATUS call fails (transient network
             // blip, IMAP reconnection) the prior badge value stays put
             // until the next poll succeeds.
         }
-    }
-
-    /// Returns the application-support cache directory for this app, creating
-    /// it if needed. Per-folder subdirectories are created by the cache
-    /// actors themselves.
-    private func makeCacheDirectory() throws -> URL {
-        let base = try FileManager.default.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        )
-        let directory = base.appendingPathComponent("Cabalmail", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        return directory
     }
 
     private func message(for error: CabalmailError) -> String {
@@ -460,6 +462,25 @@ final class AppState {
         case .maintenance(let message): return message
         default:                  return nil
         }
+    }
+}
+
+// MARK: - Cache directory
+
+extension AppState {
+    /// Returns the application-support cache directory for this app, creating
+    /// it if needed. Per-folder subdirectories are created by the cache
+    /// actors themselves.
+    private func makeCacheDirectory() throws -> URL {
+        let base = try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let directory = base.appendingPathComponent("Cabalmail", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
     }
 }
 

@@ -75,7 +75,7 @@ Defined in [`docker/prometheus/rules/alerts.yml`](../../../../docker/prometheus/
 | `ecs_cluster_id`, `ecs_cluster_capacity_provider`, `efs_id` | yes | Cluster + EFS inputs. |
 | `tier_log_group_names` | yes | Map of mail-tier CloudWatch log group names from `module.ecs.tier_log_group_names`; metric filters target these. |
 | `*_ecr_repository_url` | yes | ECR URLs for every image the module deploys. |
-| `image_tag` | yes | Same image tag the mail tiers use; sourced from `/cabal/deployed_image_tag`. |
+| `image_tags` | yes | Map of monitoring tier name to image tag; sourced per tier from `/cabal/deployed_image_tag/<tier>`. |
 | `environment` | yes | Used as a Prometheus external label. |
 | `user_pool_id`, `user_pool_arn`, `user_pool_domain` | yes | Cognito inputs for the `authenticate-cognito` actions. |
 | `lambda_bucket` | yes | S3 bucket holding the Lambda zips built by `build-api.sh`. |
