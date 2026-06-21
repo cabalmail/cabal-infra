@@ -224,37 +224,13 @@ def user_authorized_for_domain(user, domain):
     return 'Item' in response
 
 
-# ---------------------------------------------------------------------------
-# Input validators (Phase 3 of docs/0.10.x/application-surface-hardening-plan).
-#
-# The IMAP-shaped handlers take folder names, UID lists, flags, sort keys, and
-# S3-key fragments from query strings and JSON bodies. The master-user model
-# already scopes every operation to the caller's own mailbox, so these are
-# defence-in-depth against a future shape change rather than live exploits --
-# but rejecting malformed input at the boundary (ValueError -> 400) beats
-# relaying it into Dovecot and surfacing a 500 traceback or an opaque IMAP
-# protocol error. Each validator raises ValueError with a sanitized message;
-# handlers translate that into a 400.
-# ---------------------------------------------------------------------------
-
-# Shared with the large-mailbox chunking work; one ceiling for both surfaces.
 MAX_IDS_PER_REQUEST = 5000
-# Per-command batch size for bulk UID MOVE / UID STORE. The whole request is
-# capped at MAX_IDS_PER_REQUEST; within that, the bulk endpoints issue IMAP
-# commands in slices of this size so no single command brushes the 29s API
-# Gateway ceiling on a large selection.
 MAX_IDS_PER_IMAP_CMD = 500
 MAX_FOLDER_NAME_BYTES = 255
 MAX_KEYWORD_LEN = 64
 MAX_CONTENT_ID_LEN = 128
 MAX_SEARCH_TEXT_LEN = 1024
 MAX_UID = 0xFFFFFFFF
-# Upper bound on an explicit list-page `limit`. A client tunes page size to
-# trade round trips against per-page latency; this caps it "within reason" so
-# the follow-up /list_envelopes fetch for the page stays well under the 29s API
-# Gateway ceiling. An oversized limit is clamped here, not rejected. A missing
-# limit still means "no bound" -- the React client relies on that to pull the
-# whole sorted UID list for its client-side virtualized view.
 MAX_PAGE_SIZE = 250
 
 _FOLDER_NAME_RE = re.compile(r'^[A-Za-z0-9 _\-./]+$')
