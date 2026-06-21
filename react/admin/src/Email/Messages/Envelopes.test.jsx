@@ -196,6 +196,32 @@ describe('Envelopes', () => {
     expect(container.querySelector('.envelope-list.bulk-mode')).toBeTruthy();
   });
 
+  it('applies a bulk flagPatch optimistically (mark read drops Unread rows)', async () => {
+    const ids = [1, 2, 3]; // stable ref so a rerender doesn't refetch + clobber
+    const envelopes = {};
+    ids.forEach((id) => { envelopes[id.toString()] = makeEnvelope(id, { flags: [] }); });
+    mockGetEnvelopes.mockResolvedValue({ data: { envelopes } });
+
+    const { container, rerender } = render(
+      <Harness message_ids={ids} filter="unread" />,
+    );
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    // All three are unread to start.
+    expect(container.querySelectorAll('.envelope-row').length).toBe(3);
+
+    // Parent marks 1 and 2 read in bulk; the patch flips them to \Seen and they
+    // fall out of the Unread filter, no list re-pull needed.
+    rerender(
+      <Harness
+        message_ids={ids}
+        filter="unread"
+        flagPatch={{ seq: 1, ids: [1, 2], flag: '\\Seen', op: 'set' }}
+      />,
+    );
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    expect(container.querySelectorAll('.envelope-row').length).toBe(1);
+  });
+
   it('shift-clicking range-selects contiguous rows', async () => {
     const ids = [1, 2, 3, 4, 5];
     const envelopes = {};

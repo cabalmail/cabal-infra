@@ -48,6 +48,12 @@ export const PAGE_SIZE = 30;
 // submit. Matches the server's MAX_IDS_PER_REQUEST in lambda/api/_shared;
 // past this the API answers 413, so the client refuses up front with a message.
 export const MAX_BULK_IDS = 5000;
+// Within that cap, a bulk action streams to the server as a series of requests
+// of this many ids each rather than one giant request. Keeps every request
+// well inside the API's 29s ceiling and lets the toolbar show "N of M"
+// progress as chunks land. The server chunks again internally
+// (MAX_IDS_PER_IMAP_CMD = 500); this is the client-side UX/responsiveness layer.
+export const BULK_CHUNK_SIZE = 250;
 export const READ = {
   imap: '\\Seen',
   css: "read",

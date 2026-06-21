@@ -208,12 +208,35 @@
 
 /* --- Bulk toolbar ------------------------------------------------------ */
 .msglist-header.bulk {
+  position: relative;
   flex-direction: row;
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
   min-height: 60px;
   background: color-mix(in oklch, var(--accent) 8%, var(--pane-bg));
+}
+
+/* Progress affordance shares the count slot so swapping in/out doesn't shift
+   the toolbar; the verb reads "Archiving 1,400 of 3,200". */
+.msglist-bulk-progress .msglist-bulk-label { text-transform: none; letter-spacing: 0.02em; }
+
+/* Determinate bar pinned to the toolbar's bottom edge -- absolutely positioned
+   so it can't push any control around as it fills. */
+.msglist-bulk-progressbar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: color-mix(in oklch, var(--accent) 20%, transparent);
+  overflow: hidden;
+}
+.msglist-bulk-progressbar-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 120ms ease;
 }
 
 .msglist-bulk-count {

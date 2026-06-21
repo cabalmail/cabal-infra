@@ -13,11 +13,35 @@ import FolderPicker from './Folders';
 import Icon from './icons';
 import ConfirmDialog from '../../ConfirmDialog';
 import useApi from '../../hooks/useApi';
-import { READ, UNREAD, FLAGGED, ASC, DESC, ARRIVAL, DATE, FROM, SUBJECT, MAX_BULK_IDS } from '../../constants';
+import { READ, UNREAD, FLAGGED, ASC, DESC, ARRIVAL, DATE, FROM, SUBJECT, MAX_BULK_IDS, BULK_CHUNK_SIZE } from '../../constants';
 import { folderMeta } from '../../utils/folderMeta';
 import './Messages.css';
 
 const SORT_OPTIONS = [DATE, ARRIVAL, FROM, SUBJECT];
+
+// Run `ids` through `doChunk` in BULK_CHUNK_SIZE-sized slices, one at a time,
+// calling `onProgress(doneCount)` after each slice lands. Sequential (not
+// parallel) so the server sees a steady stream rather than a burst, and so a
+// failure tells us exactly how many ids got through: on the first chunk that
+// throws, the rejection carries `.done` (the count that succeeded before it)
+// and `.cause` (the underlying error) so the caller can roll back the rest.
+async function runInChunks(ids, chunkSize, doChunk, onProgress) {
+  let done = 0;
+  for (let start = 0; start < ids.length; start += chunkSize) {
+    const chunk = ids.slice(start, start + chunkSize);
+    try {
+      await doChunk(chunk); // eslint-disable-line no-await-in-loop
+    } catch (cause) {
+      const err = new Error('bulk chunk failed');
+      err.done = done;
+      err.cause = cause;
+      throw err;
+    }
+    done += chunk.length;
+    if (typeof onProgress === 'function') onProgress(done);
+  }
+  return done;
+}
 
 function Messages({
   folder,
@@ -52,6 +76,15 @@ function Messages({
   const [visible, setVisible] = useState({ loaded: [], totalIds: 0, shownIds: [] });
   const [showMovePicker, setShowMovePicker] = useState(false);
   const [confirmPurge, setConfirmPurge] = useState(false);
+  // Non-null while a bulk action is streaming chunks to the server. Drives the
+  // "Verb N of M" affordance and disables the toolbar without changing its
+  // footprint. { verb, done, total }.
+  const [bulkProgress, setBulkProgress] = useState(null);
+  // Optimistic flag flip handed down to Envelopes for bulk mark-read/flag. A
+  // fresh object (new `seq`) each time so the child effect re-fires even when
+  // the same op repeats; the failure path sends the inverse to roll back.
+  const [flagPatch, setFlagPatch] = useState(null);
+  const flagSeqRef = useRef(0);
 
   // In Trash, "Delete" means gone forever (purge + expunge) instead of
   // another move into Trash, and always goes through a confirmation.
@@ -65,6 +98,18 @@ function Messages({
   // stale baseline and fire a needless second UID-list pull.
   const lastUidNextRef = useRef(null);
   const lastMessagesRef = useRef(null);
+  // True while a bulk op holds the list in an optimistic state. The poll skips
+  // its work until the op settles and re-seeds the baseline, so a mid-op tick
+  // can't see the dropped MESSAGES count and re-pull the rows we just removed.
+  const bulkBusyRef = useRef(false);
+  // Live mirrors of messageIds/total, read at the start of a bulk op to snapshot
+  // for rollback without threading them through every handler's deps.
+  const messageIdsRef = useRef([]);
+  const totalRef = useRef(0);
+
+  // Keep the rollback mirrors in step with the rendered state.
+  useEffect(() => { messageIdsRef.current = messageIds; }, [messageIds]);
+  useEffect(() => { totalRef.current = total; }, [total]);
 
   // Pull the fresh STATUS and re-seed the change baseline. Shared by the poll
   // and refreshAfterMutation so both keep the baseline in step.
@@ -97,6 +142,8 @@ function Messages({
     }
 
     function poll() {
+      // A bulk op owns the list optimistically; leave it alone until it settles.
+      if (bulkBusyRef.current) return;
       api
         .getFolderStatus(folder)
         .then((data) => {
@@ -208,35 +255,104 @@ function Messages({
     return false;
   }, [setMessage]);
 
-  const runFlagOp = useCallback(
-    (spec, ids) => {
-      if (!ids.length) return;
-      if (bulkLimitExceeded(ids.length)) return;
+  // Hand an optimistic flag flip down to Envelopes (new object per call so the
+  // child effect always re-fires).
+  const pushFlagPatch = useCallback((ids, flag, op) => {
+    flagSeqRef.current += 1;
+    setFlagPatch({ seq: flagSeqRef.current, ids, flag, op });
+  }, []);
+
+  // Close out a bulk op: drop the progress affordance, optionally leave bulk
+  // mode, then reconcile the pill counts off a fresh STATUS instead of
+  // re-pulling the UID list. applyStatus re-seeds the poll baseline; only then
+  // do we release the poll, so it can't re-pull off the optimistic count.
+  const settleBulk = useCallback(
+    (exit) => {
+      setBulkProgress(null);
+      if (exit) exitBulk();
       api
-        .setFlag(folder, spec.imap, spec.op, ids, sortDir.imap, sortKey.imap)
-        .then(refreshAfterMutation)
-        .catch((err) => {
-          setMessage('Unable to set flag on selected messages.', true);
-          console.error(err);
+        .getFolderStatus(folder)
+        .then(applyStatus)
+        .catch((e) => console.log(e))
+        .finally(() => {
+          bulkBusyRef.current = false;
         });
     },
-    [api, folder, sortDir, sortKey, refreshAfterMutation, setMessage, bulkLimitExceeded],
+    [api, folder, applyStatus, exitBulk],
+  );
+
+  // Bulk move/archive/delete/purge: drop the affected rows from the list now,
+  // stream the operation to the server in chunks (showing progress), then
+  // reconcile via STATUS. On a chunk failure, restore the rows past the point
+  // that landed and surface the error -- the rows that did move stay gone.
+  const runOptimisticRemoval = useCallback(
+    (ids, { verb, failMessage, doChunk }) => {
+      const numIds = ids.map(Number);
+      if (!numIds.length) return;
+      const removeSet = new Set(numIds);
+      const snapshotIds = messageIdsRef.current;
+      const snapshotTotal = totalRef.current;
+
+      bulkBusyRef.current = true;
+      setBulkProgress({ verb, done: 0, total: numIds.length });
+      setMessageIds((prev) => prev.filter((id) => !removeSet.has(Number(id))));
+      setTotal((t) => Math.max(0, t - numIds.length));
+
+      runInChunks(numIds, BULK_CHUNK_SIZE, doChunk, (done) =>
+        setBulkProgress({ verb, done, total: numIds.length }),
+      )
+        .then(() => settleBulk(true))
+        .catch((err) => {
+          const landed = err.done || 0;
+          const moved = new Set(numIds.slice(0, landed));
+          setMessageIds(snapshotIds.filter((id) => !moved.has(Number(id))));
+          setTotal(Math.max(0, snapshotTotal - landed));
+          setMessage(failMessage, true);
+          console.error(err.cause || err);
+          settleBulk(true);
+        });
+    },
+    [settleBulk, setMessage],
+  );
+
+  const runFlagOp = useCallback(
+    (spec, ids, verb) => {
+      if (!ids.length) return;
+      if (bulkLimitExceeded(ids.length)) return;
+      const numIds = ids.map(Number);
+
+      bulkBusyRef.current = true;
+      setBulkProgress({ verb, done: 0, total: numIds.length });
+      pushFlagPatch(numIds, spec.imap, spec.op);
+
+      runInChunks(
+        numIds,
+        BULK_CHUNK_SIZE,
+        (chunk) => api.setFlag(folder, spec.imap, spec.op, chunk, sortDir.imap, sortKey.imap),
+        (done) => setBulkProgress({ verb, done, total: numIds.length }),
+      )
+        .then(() => settleBulk(false))
+        .catch((err) => {
+          // Roll the flag back on the ids whose chunk never landed.
+          const reverted = numIds.slice(err.done || 0);
+          pushFlagPatch(reverted, spec.imap, spec.op === 'set' ? 'unset' : 'set');
+          setMessage('Unable to set flag on selected messages.', true);
+          console.error(err.cause || err);
+          settleBulk(false);
+        });
+    },
+    [api, folder, sortDir, sortKey, pushFlagPatch, settleBulk, setMessage, bulkLimitExceeded],
   );
 
   const archiveSelected = useCallback(() => {
     if (!selectedCount) return;
     if (bulkLimitExceeded(selectedCount)) return;
-    api
-      .moveMessages(folder, 'Archive', selectedIdsArray, sortDir.imap, sortKey.imap)
-      .then(() => {
-        refreshAfterMutation();
-        exitBulk();
-      })
-      .catch((err) => {
-        setMessage('Unable to archive selected messages.', true);
-        console.error(err);
-      });
-  }, [api, folder, sortDir, sortKey, selectedIdsArray, selectedCount, refreshAfterMutation, exitBulk, setMessage, bulkLimitExceeded]);
+    runOptimisticRemoval(selectedIdsArray, {
+      verb: 'Archiving',
+      failMessage: 'Unable to archive selected messages.',
+      doChunk: (chunk) => api.moveMessages(folder, 'Archive', chunk, sortDir.imap, sortKey.imap),
+    });
+  }, [api, folder, sortDir, sortKey, selectedIdsArray, selectedCount, runOptimisticRemoval, bulkLimitExceeded]);
 
   const deleteSelected = useCallback(() => {
     if (!selectedCount) return;
@@ -245,33 +361,23 @@ function Messages({
       setConfirmPurge(true);
       return;
     }
-    api
-      .moveMessages(folder, 'Trash', selectedIdsArray, sortDir.imap, sortKey.imap)
-      .then(() => {
-        refreshAfterMutation();
-        exitBulk();
-      })
-      .catch((err) => {
-        setMessage('Unable to delete selected messages.', true);
-        console.error(err);
-      });
-  }, [api, folder, isTrash, sortDir, sortKey, selectedIdsArray, selectedCount, refreshAfterMutation, exitBulk, setMessage, bulkLimitExceeded]);
+    runOptimisticRemoval(selectedIdsArray, {
+      verb: 'Deleting',
+      failMessage: 'Unable to delete selected messages.',
+      doChunk: (chunk) => api.moveMessages(folder, 'Trash', chunk, sortDir.imap, sortKey.imap),
+    });
+  }, [api, folder, isTrash, sortDir, sortKey, selectedIdsArray, selectedCount, runOptimisticRemoval, bulkLimitExceeded]);
 
   const purgeSelected = useCallback(() => {
     setConfirmPurge(false);
     if (!selectedCount) return;
     if (bulkLimitExceeded(selectedCount)) return;
-    api
-      .purgeMessages(folder, selectedIdsArray)
-      .then(() => {
-        refreshAfterMutation();
-        exitBulk();
-      })
-      .catch((err) => {
-        setMessage('Unable to permanently delete selected messages.', true);
-        console.error(err);
-      });
-  }, [api, folder, selectedIdsArray, selectedCount, refreshAfterMutation, exitBulk, setMessage, bulkLimitExceeded]);
+    runOptimisticRemoval(selectedIdsArray, {
+      verb: 'Deleting',
+      failMessage: 'Unable to permanently delete selected messages.',
+      doChunk: (chunk) => api.purgeMessages(folder, chunk),
+    });
+  }, [api, folder, selectedIdsArray, selectedCount, runOptimisticRemoval, bulkLimitExceeded]);
 
   const cancelPurge = useCallback(() => setConfirmPurge(false), []);
 
@@ -280,23 +386,18 @@ function Messages({
       setShowMovePicker(false);
       if (!selectedCount || !destination || destination === folder) return;
       if (bulkLimitExceeded(selectedCount)) return;
-      api
-        .moveMessages(folder, destination, selectedIdsArray, sortDir.imap, sortKey.imap)
-        .then(() => {
-          refreshAfterMutation();
-          exitBulk();
-        })
-        .catch((err) => {
-          setMessage('Unable to move selected messages.', true);
-          console.error(err);
-        });
+      runOptimisticRemoval(selectedIdsArray, {
+        verb: 'Moving',
+        failMessage: 'Unable to move selected messages.',
+        doChunk: (chunk) => api.moveMessages(folder, destination, chunk, sortDir.imap, sortKey.imap),
+      });
     },
-    [api, folder, sortDir, sortKey, selectedIdsArray, selectedCount, refreshAfterMutation, exitBulk, setMessage, bulkLimitExceeded],
+    [api, folder, sortDir, sortKey, selectedIdsArray, selectedCount, runOptimisticRemoval, bulkLimitExceeded],
   );
 
-  const markReadSelected = useCallback(() => runFlagOp(READ, selectedIdsArray), [runFlagOp, selectedIdsArray]);
-  const markUnreadSelected = useCallback(() => runFlagOp(UNREAD, selectedIdsArray), [runFlagOp, selectedIdsArray]);
-  const flagSelected = useCallback(() => runFlagOp(FLAGGED, selectedIdsArray), [runFlagOp, selectedIdsArray]);
+  const markReadSelected = useCallback(() => runFlagOp(READ, selectedIdsArray, 'Marking read'), [runFlagOp, selectedIdsArray]);
+  const markUnreadSelected = useCallback(() => runFlagOp(UNREAD, selectedIdsArray, 'Marking unread'), [runFlagOp, selectedIdsArray]);
+  const flagSelected = useCallback(() => runFlagOp(FLAGGED, selectedIdsArray, 'Flagging'), [runFlagOp, selectedIdsArray]);
 
   // Single-row ops (swipe actions on one envelope).
   const markReadOne = useCallback(
@@ -354,17 +455,33 @@ function Messages({
   const totalShown = visible.shownIds ? visible.shownIds.length : 0;
   const totalIds = total || visible.totalIds || messageIds.length;
 
+  // A bulk op is mid-flight: the toolbar shows progress and its buttons are
+  // disabled. Same DOM either way so the controls keep a stable footprint and
+  // nothing the user could aim at shifts while chunks stream.
+  const busy = bulkProgress !== null;
+  const bulkPct = busy && bulkProgress.total
+    ? Math.round((bulkProgress.done / bulkProgress.total) * 100)
+    : 0;
+
   // --- Header -------------------------------------------------------------
   const renderHeader = () => {
     if (bulkMode) {
       return (
         <div className="msglist-header bulk" role="toolbar" aria-label="Bulk message actions">
-          <div className="msglist-bulk-count">
-            <span className="msglist-bulk-num">{selectedCount}</span>
-            <span className="msglist-bulk-label">selected</span>
-          </div>
+          {busy ? (
+            <div className="msglist-bulk-count msglist-bulk-progress" role="status" aria-live="polite">
+              <span className="msglist-bulk-label">{bulkProgress.verb}</span>
+              <span className="msglist-bulk-num">{bulkProgress.done.toLocaleString()}</span>
+              <span className="msglist-bulk-label">of {bulkProgress.total.toLocaleString()}</span>
+            </div>
+          ) : (
+            <div className="msglist-bulk-count">
+              <span className="msglist-bulk-num">{selectedCount}</span>
+              <span className="msglist-bulk-label">selected</span>
+            </div>
+          )}
           <div className="msglist-bulk-actions">
-            <button type="button" className="tool-btn" onClick={archiveSelected} disabled={!selectedCount}>
+            <button type="button" className="tool-btn" onClick={archiveSelected} disabled={!selectedCount || busy}>
               <Icon name="archive" size={14} />
               <span className="tool-btn-label">Archive</span>
             </button>
@@ -373,7 +490,7 @@ function Messages({
                 type="button"
                 className="tool-btn"
                 onClick={() => setShowMovePicker((v) => !v)}
-                disabled={!selectedCount}
+                disabled={!selectedCount || busy}
                 aria-haspopup="true"
                 aria-expanded={showMovePicker}
               >
@@ -381,7 +498,7 @@ function Messages({
                 <span className="tool-btn-label">Move</span>
                 <Icon name="chevron-down" size={12} />
               </button>
-              {showMovePicker && (
+              {showMovePicker && !busy && (
                 <div className="msglist-move-picker">
                   <FolderPicker
                     folder={folder}
@@ -392,19 +509,19 @@ function Messages({
                 </div>
               )}
             </div>
-            <button type="button" className="tool-btn" onClick={markReadSelected} disabled={!selectedCount}>
+            <button type="button" className="tool-btn" onClick={markReadSelected} disabled={!selectedCount || busy}>
               <Icon name="mark-read" size={14} />
               <span className="tool-btn-label">Mark read</span>
             </button>
-            <button type="button" className="tool-btn" onClick={markUnreadSelected} disabled={!selectedCount}>
+            <button type="button" className="tool-btn" onClick={markUnreadSelected} disabled={!selectedCount || busy}>
               <Icon name="mark-unread" size={14} />
               <span className="tool-btn-label">Mark unread</span>
             </button>
-            <button type="button" className="tool-btn" onClick={flagSelected} disabled={!selectedCount}>
+            <button type="button" className="tool-btn" onClick={flagSelected} disabled={!selectedCount || busy}>
               <Icon name="flag" size={14} />
               <span className="tool-btn-label">Flag</span>
             </button>
-            <button type="button" className="tool-btn danger" onClick={deleteSelected} disabled={!selectedCount}>
+            <button type="button" className="tool-btn danger" onClick={deleteSelected} disabled={!selectedCount || busy}>
               <Icon name="trash" size={14} />
               <span className="tool-btn-label">{isTrash ? 'Delete forever' : 'Delete'}</span>
             </button>
@@ -413,11 +530,23 @@ function Messages({
             type="button"
             className="msglist-bulk-exit"
             onClick={exitBulk}
+            disabled={busy}
             title="Exit bulk selection"
             aria-label="Exit bulk selection"
           >
             <Icon name="close" size={13} />
           </button>
+          {busy && (
+            <div
+              className="msglist-bulk-progressbar"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={bulkProgress.total}
+              aria-valuenow={bulkProgress.done}
+            >
+              <span className="msglist-bulk-progressbar-fill" style={{ width: `${bulkPct}%` }} />
+            </div>
+          )}
         </div>
       );
     }
@@ -553,6 +682,7 @@ function Messages({
           markUnread={markUnreadOne}
           markRead={markReadOne}
           archive={archiveOne}
+          flagPatch={flagPatch}
         />
       )}
       <ConfirmDialog
