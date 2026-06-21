@@ -68,6 +68,14 @@ Note that quotation marks must be escaped with a single backslash. (If you're re
 | --- | --- | --- |
 | `STATE_KMS_KEY_ID` | `arn:aws:kms:us-east-1:111122223333:key/abcd-1234` | Optional. Key ARN of the environment's state CMK. When set, state objects are written with SSE-KMS under this key; reading state then also requires `kms:Decrypt`. Unset/empty keeps the default SSE-S3 backend. |
 
+### IMAP connection pooling
+
+`TF_VAR_IMAP_POOL_ENABLED` opts an environment into reuse of authenticated IMAP sessions across warm invocations of the API Lambdas, instead of a fresh login per request. It is off by default and opt-in per environment. See [IMAP connection pooling in the API Lambdas](./operations.md#imap-connection-pooling-in-the-api-lambdas) for what it does, the safety posture, and rollback.
+
+| Variable | Example | Notes |
+| --- | --- | --- |
+| `TF_VAR_IMAP_POOL_ENABLED` | `false` | Optional. When `true`, the API Lambdas reuse an authenticated master-user IMAP session across warm invocations (keyed by host and user) rather than reconnecting per request. Default `false`; the off path is the original connect/login/logout. Validate in `stage` before promoting to `prod`. |
+
 ### Monitoring
 
 These variables gate the optional monitoring stack. See [monitoring.md](./monitoring.md) for the full setup guide.
