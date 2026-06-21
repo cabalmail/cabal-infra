@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import Messages from './index';
 import AuthContext from '../../contexts/AuthContext';
 import AppMessageContext from '../../contexts/AppMessageContext';
-import { DATE, DESC, MAX_BULK_IDS } from '../../constants';
+import { DATE, DESC, MAX_BULK_IDS, BULK_CHUNK_SIZE } from '../../constants';
 
 const mockGetMessages = vi.fn();
 const mockGetFolderStatus = vi.fn();
@@ -394,6 +394,185 @@ describe('Messages - deleting from Trash', () => {
         'INBOX', 'Trash', [3], 'REVERSE ', 'DATE',
       );
       expect(mockPurgeMessages).not.toHaveBeenCalled();
+    } finally {
+      unmount();
+    }
+  });
+});
+
+// Drain micro- and macro-tasks so a chunked bulk op's sequential awaits and the
+// follow-on STATUS reconcile all settle inside act().
+const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+
+function makeEnvelope(id, overrides = {}) {
+  return {
+    id: id.toString(),
+    from: [`Sender ${id} <sender${id}@test.com>`],
+    to: ['recipient@test.com'],
+    cc: [],
+    subject: `Subject ${id}`,
+    date: new Date().toISOString(),
+    flags: [],
+    priority: '',
+    struct: ['alternative', 'alternative'],
+    ...overrides,
+  };
+}
+
+describe('Messages - optimistic bulk operations', () => {
+  beforeEach(() => {
+    mockGetMessages.mockResolvedValue({ data: { message_ids: [1, 2, 3], total: 3 } });
+    mockGetFolderStatus.mockResolvedValue({ data: STATUS_IDLE });
+    // Return whatever ids a page requests so rows actually render.
+    mockGetEnvelopes.mockImplementation((folder, ids) => {
+      const envelopes = {};
+      ids.forEach((id) => { envelopes[id.toString()] = makeEnvelope(id); });
+      return Promise.resolve({ data: { envelopes } });
+    });
+    mockMoveMessages.mockResolvedValue({ data: { status: 'submitted' } });
+    mockSetFlag.mockResolvedValue({ data: { status: 'submitted' } });
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    mockGetEnvelopes.mockResolvedValue({ data: { envelopes: {} } });
+  });
+
+  it('chunks a large bulk archive into BULK_CHUNK_SIZE-sized requests', async () => {
+    const all = Array.from({ length: 300 }, (_, i) => i + 1);
+    mockGetMessages.mockResolvedValue({ data: { message_ids: all, total: 300 } });
+    const { unmount } = render(
+      <Harness folder="INBOX" overrides={{ bulkMode: true, selected: new Set(all) }} />,
+    );
+    try {
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /archive/i })).toBeInTheDocument();
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /archive/i }));
+      });
+      await flush();
+
+      // 300 / 250 -> two requests: 250 then 50, every id exactly once, in order.
+      expect(mockMoveMessages).toHaveBeenCalledTimes(2);
+      const [, , firstChunk] = mockMoveMessages.mock.calls[0];
+      const [, , secondChunk] = mockMoveMessages.mock.calls[1];
+      expect(firstChunk.length).toBe(BULK_CHUNK_SIZE);
+      expect(secondChunk.length).toBe(300 - BULK_CHUNK_SIZE);
+      expect([...firstChunk, ...secondChunk]).toEqual(all);
+    } finally {
+      unmount();
+    }
+  });
+
+  it('removes rows immediately and reconciles via STATUS, never re-pulling the list', async () => {
+    const { container, unmount } = render(
+      <Harness folder="INBOX" overrides={{ bulkMode: true, selected: new Set([2]) }} />,
+    );
+    try {
+      await waitFor(() => {
+        expect(container.querySelectorAll('.envelope-row').length).toBe(3);
+      });
+      mockGetMessages.mockClear();
+      const statusCallsBefore = mockGetFolderStatus.mock.calls.length;
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /archive/i }));
+      });
+      await flush();
+
+      // The archived row is gone from the list...
+      expect(container.querySelectorAll('.envelope-row').length).toBe(2);
+      // ...the whole UID list was never re-pulled...
+      expect(mockGetMessages).not.toHaveBeenCalled();
+      // ...and counts were reconciled off a fresh STATUS instead.
+      expect(mockGetFolderStatus.mock.calls.length).toBeGreaterThan(statusCallsBefore);
+    } finally {
+      unmount();
+    }
+  });
+
+  it('rolls the rows back when a chunk fails', async () => {
+    mockMoveMessages.mockRejectedValueOnce(new Error('boom'));
+    const setMessage = vi.fn();
+    const { container, unmount } = render(
+      <Harness
+        folder="INBOX"
+        overrides={{ bulkMode: true, selected: new Set([2]), setMessage }}
+      />,
+    );
+    try {
+      await waitFor(() => {
+        expect(container.querySelectorAll('.envelope-row').length).toBe(3);
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /archive/i }));
+      });
+      await flush();
+
+      // The optimistic removal is undone and the user is told.
+      expect(container.querySelectorAll('.envelope-row').length).toBe(3);
+      expect(setMessage).toHaveBeenCalledWith('Unable to archive selected messages.', true);
+    } finally {
+      unmount();
+    }
+  });
+
+  it('shows progress and disables the toolbar while a chunk is in flight', async () => {
+    let resolveMove;
+    mockMoveMessages.mockImplementationOnce(
+      () => new Promise((res) => { resolveMove = res; }),
+    );
+    const { container, unmount } = render(
+      <Harness folder="INBOX" overrides={{ bulkMode: true, selected: new Set([1, 2]) }} />,
+    );
+    try {
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /archive/i })).toBeInTheDocument();
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /archive/i }));
+      });
+
+      // Mid-op: the count slot reads the progress, the bar is shown, and the
+      // action buttons are disabled (footprint unchanged, nothing to mis-click).
+      const progress = container.querySelector('.msglist-bulk-progress');
+      expect(progress).toBeTruthy();
+      expect(progress.textContent).toContain('Archiving');
+      expect(progress.textContent).toContain('of 2');
+      expect(container.querySelector('.msglist-bulk-progressbar')).toBeTruthy();
+      expect(screen.getByRole('button', { name: /archive/i })).toBeDisabled();
+
+      await act(async () => {
+        resolveMove({ data: { status: 'submitted' } });
+        await new Promise((r) => setTimeout(r, 0));
+      });
+      // The progress affordance clears once the op settles.
+      expect(container.querySelector('.msglist-bulk-progress')).toBeFalsy();
+    } finally {
+      unmount();
+    }
+  });
+
+  it('bulk mark-read chunks set_flag and reconciles without re-pulling the list', async () => {
+    const { unmount } = render(
+      <Harness folder="INBOX" overrides={{ bulkMode: true, selected: new Set([1, 2]) }} />,
+    );
+    try {
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /mark read/i })).toBeInTheDocument();
+      });
+      mockGetMessages.mockClear();
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /mark read/i }));
+      });
+      await flush();
+
+      expect(mockSetFlag).toHaveBeenCalledWith(
+        'INBOX', '\\Seen', 'set', [1, 2], 'REVERSE ', 'DATE',
+      );
+      expect(mockGetMessages).not.toHaveBeenCalled();
     } finally {
       unmount();
     }

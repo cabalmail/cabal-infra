@@ -58,6 +58,7 @@ function Envelopes({
   markUnread: markUnreadProp,
   markRead: markReadProp,
   archive: archiveProp,
+  flagPatch = null,
 }) {
   const api = useApi();
 
@@ -94,6 +95,35 @@ function Envelopes({
     fetchedPagesRef.current = new Set();
     frontierRef.current = -1;
   }, [folder]);
+
+  // Apply a bulk flag change from the parent optimistically, the same way the
+  // single-row markRead/markUnread paths do -- so a bulk "mark read" updates
+  // the read dots (and drops rows out of the Unread filter) instantly, without
+  // the parent re-pulling the whole UID list. Each patch carries a fresh `seq`
+  // so a repeat of the same op (mark read, then mark read again) still fires,
+  // and a failed op sends the inverse patch to roll the flags back.
+  useEffect(() => {
+    if (!flagPatch) return;
+    const { ids, flag, op } = flagPatch;
+    setEnvelopes((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const id of ids) {
+        const key = id.toString();
+        const env = next[key];
+        if (!env) continue;
+        const has = env.flags.includes(flag);
+        if (op === 'set' && !has) {
+          next[key] = { ...env, flags: [...env.flags, flag] };
+          changed = true;
+        } else if (op === 'unset' && has) {
+          next[key] = { ...env, flags: env.flags.filter((f) => f !== flag) };
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [flagPatch]);
 
   // First pass fills the opening viewport; later passes (the parent re-polls
   // /list_messages every 10s, handing down a fresh array) refresh only the
