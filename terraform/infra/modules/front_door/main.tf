@@ -44,6 +44,17 @@ resource "aws_s3_bucket_public_access_block" "this" {
   restrict_public_buckets = true
 }
 
+# Versioning lets an accidentally overwritten or deleted published
+# object (the privacy policy / terms of service referenced by carrier
+# registration) be recovered. The site is small and rarely changes, so
+# noncurrent versions are negligible.
+resource "aws_s3_bucket_versioning" "this" {
+  bucket = aws_s3_bucket.this.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
 # LEGACY origin access identity, superseded by the OAC below (Phase 5
 # of docs/0.10.x/resilience-continuity-hardening-plan.md). Kept,
 # together with its bucket-policy statement, so the distribution keeps

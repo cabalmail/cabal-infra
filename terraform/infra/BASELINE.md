@@ -18,7 +18,7 @@ Counts reflect **pip checkov** (what CI runs). See the [graph-check note](#graph
 
 | Tool | Total | CMK global-suppress | Baselined | Fixed / inline-suppressed (2.5) | Residual |
 | ---- | ----- | ------------------- | --------- | ------------------------------- | -------- |
-| Checkov | 243 | 76 (12 ids) | 153 (46 ids) | 14 (276, 51, 8, 341, 26, 27x3, 103, 74, 12 fixed; 111, 356, 2_18 inline) | 0 |
+| Checkov | 243 | 76 (12 ids) | 147 (44 ids) | 14 (276, 51, 8, 341, 26, 27x3, 103, 74, 12 fixed; 111, 356, 2_18, 21 inline) | 0 |
 | Trivy   | 50  | 26 (5 ids)  | 20 (10 ids) | 4 (AWS-0031, 0095, 0096, 0131 fixed) | 0 |
 | tflint  | 6   | 0           | 0 (never baselined) | 6 fixed (`tls` version + 5 unused decls) | 0 |
 
@@ -43,6 +43,8 @@ The resilience/continuity hardening work ([`docs/0.10.x/resilience-continuity-ha
 The weekly decay task walks the grandfathered findings down one at a time:
 
 - **CKV2_AWS_18** on `module.efs.aws_efs_file_system.mailstore` - cleared via inline skip (not a code change): the mailstore *is* in the AWS Backup selection (`module.backup` `aws_backup_selection.resources` includes `var.efs`), so the finding is a false positive. The backup module is count-gated on `var.backup` and the EFS ARN crosses the module boundary as a variable, neither of which the graph check can trace, so it reports the mailstore as unbacked even when backups are on. Replaced the opaque baseline entry with a co-located `#checkov:skip` carrying the rationale; baseline entry removed. Per-environment backup posture is still governed by `TF_VAR_BACKUP` (off in non-prod for cost, on in prod) - that gating is the design choice, documented in the `backup` module.
+- **CKV_AWS_21 / AWS-0090** (S3 bucket versioning) on the three flagged buckets - split into fix + reclassify. The two buckets holding durable, hard-to-regenerate content now enable versioning: `module.bucket` (`modules/s3`, the `admin.<control_domain>` bucket that stores the React bundle and the Lambda deploy zips Terraform reads for `source_code_hash`) and `module.front_door` (the public privacy-policy / terms-of-service site). Their CKV_AWS_21 baseline entries are removed. The third, `module.admin.aws_s3_bucket.cache` (`cache.<control_domain>`), is a genuinely transient cache: every object is a regenerable derivative and a lifecycle rule expires all of them after two days, so versioning would only retain throwaway data at cost. It carries a co-located `#checkov:skip=CKV_AWS_21` instead; the Trivy id `AWS-0090` stays in `.trivyignore` (Trivy ignores by id, not per resource) but moved from its decay section to the design-driven section, since it now corresponds solely to that transient cache.
+- **CKV_AWS_116** (Lambda dead-letter queue, x9) - reclassified to design-driven (no code change), moved from the decay table to section 3. The function `dead_letter_config` block only catches *asynchronous* (Event) invocations; none of the nine functions relies on that path in a way the block would help. Full per-function rationale is in the section 3 row; the baseline entries stay (per resource, so a new async Lambda is still caught).
 
 ### NAT-mode refactor re-key (0.10.x)
 
@@ -108,6 +110,7 @@ Accepted as intentional architecture. Baselined **per resource** (not globally s
 | CKV_AWS_126 | - | EC2 detailed monitoring off - cost |
 | CKV_AWS_258, CKV_AWS_301 (x2) | - | Monitoring `alert_sink` Lambda URL - the monitoring tier is dormant (`TF_VAR_MONITORING=false` everywhere); revisit if it is ever enabled |
 | CKV_AWS_338 (x23) | - | CloudWatch retention - see decay (candidate to set an explicit retention rather than accept) |
+| CKV_AWS_116 (x9) | - | Lambda dead-letter queue - the function `dead_letter_config` block fires only on *asynchronous* (Event) invocations, which is not how these nine functions fail in a way the block would catch. `append_sent` is an SQS event-source consumer already protected by its source queue's redrive policy to `cabal-append-sent-dlq` (the check cannot see source-queue DLQs, same blind spot as the `CKV2_AWS_18` EFS clear). `api_call` (API Gateway), `check_invite` (Cognito pre-sign-up), `assign_osid` (Cognito post-confirmation), `alert_sink` (Lambda Function URL), and `healthchecks_iac` (apply-time `aws_lambda_invocation`) are all synchronous - a failure returns to the caller, nothing is silently dropped. `process_dmarc` and `certbot` are idempotent EventBridge *Scheduler* jobs that self-heal on the next run (Scheduler carries its own target DLQ, distinct from the function block). `backup_heartbeat` is the lone async (EventBridge *Rule*) invoke, but it lives in the dormant monitoring tier (`TF_VAR_MONITORING=false` everywhere) and a *missing* heartbeat is itself the intended alarm. Revisit per function if any gains a fan-out async invoker. |
 | CKV_AWS_330 | - | EFS access point user identity - mailstore needs specific uid/gid; revisit |
 | CKV2_AWS_34 (x4) | - | SSM parameters holding deploy metadata (per-tier image tags, CloudFront distribution ids, sinkhole mode) are plaintext String by design - they are not secrets |
 | CKV2_AWS_19 | - | NAT EIPs attach to whichever NAT mode is active (instance association or gateway allocation); kept unattached while quiesced for stable relay IPs |
@@ -122,12 +125,11 @@ Low-value hygiene. Each release should clear or re-justify entries whose target 
 | ------- | ----- | ---- | ------ |
 | CKV_AWS_338 (x23) | - | Set explicit CloudWatch log retention (also caps cost vs. never-expire) | 0.11.x |
 | CKV_AWS_115 (x9) | - | Lambda reserved concurrency | 1.0.0 |
-| CKV_AWS_116 (x9) | - | Lambda DLQ (where a dropped invoke matters) | 1.0.0 |
 | CKV_AWS_86, CKV_AWS_91 | AWS-0089 | CloudFront / S3 access logging (CKV_AWS_91 on the mail NLB cleared in 0.10.x - resilience plan Phase 3; the remaining CKV_AWS_91 is the dormant monitoring ALB) | 1.0.0 |
 | CKV_AWS_150 (x2) | - | Load balancer deletion protection | 0.11.x |
 | CKV_AWS_23 (x3) | AWS-0124 | Security group rule descriptions | 0.11.x |
 | CKV_AWS_300 | - | S3 lifecycle: abort incomplete multipart uploads | 0.11.x |
-| CKV_AWS_135 | AWS-0090 | EC2 EBS-optimized / S3 versioning | 1.0.0 |
+| CKV_AWS_135 | - | EC2 EBS-optimized | 1.0.0 |
 | CKV_AWS_237 | - | API Gateway create-before-destroy lifecycle | 1.0.0 |
 
 ## Notes / known limitations
