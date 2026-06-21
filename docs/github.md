@@ -68,6 +68,14 @@ Note that quotation marks must be escaped with a single backslash. (If you're re
 | --- | --- | --- |
 | `STATE_KMS_KEY_ID` | `arn:aws:kms:us-east-1:111122223333:key/abcd-1234` | Optional. Key ARN of the environment's state CMK. When set, state objects are written with SSE-KMS under this key; reading state then also requires `kms:Decrypt`. Unset/empty keeps the default SSE-S3 backend. |
 
+### DNSSEC
+
+`TF_VAR_DNSSEC_ENABLED` opts an environment into DNSSEC signing of every zone Cabalmail manages -- the control-domain zone and each mail-apex zone. It is off by default and opt-in per environment. Enabling, disabling, and KSK rotation each involve a registrar DS-record step whose ordering matters: a DS record published against an unsigned zone is an outage. Read [DNSSEC](./dnssec.md) before touching it, and check the CI deploy policy in [the AWS setup guide](./aws.md) for the KMS and Route 53 grants the first apply needs.
+
+| Variable | Example | Notes |
+| --- | --- | --- |
+| `TF_VAR_DNSSEC_ENABLED` | `false` | Optional. When `true`, each stack creates a us-east-1 ECC_NIST_P256 KMS key (about $1/month per stack), a per-zone key-signing key, and turns on signing; the DS record each registrar needs is surfaced as a Terraform output. Default `false`. Signing is safe on its own -- the chain of trust forms only when you publish the DS record at the registrar afterwards (sign first, DS second). |
+
 ### IMAP connection pooling
 
 `TF_VAR_IMAP_POOL_ENABLED` opts an environment into reuse of authenticated IMAP sessions across warm invocations of the API Lambdas, instead of a fresh login per request. It is off by default and opt-in per environment. See [IMAP connection pooling in the API Lambdas](./operations.md#imap-connection-pooling-in-the-api-lambdas) for what it does, the safety posture, and rollback.
