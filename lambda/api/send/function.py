@@ -17,6 +17,7 @@ from compose import ( # pylint: disable=import-error
 from helper import delete_object # pylint: disable=import-error
 from helper import get_imap_client # pylint: disable=import-error
 from helper import get_mpw # pylint: disable=import-error
+from helper import parse_json_body # pylint: disable=import-error
 from helper import upload_object # pylint: disable=import-error
 from helper import validate_uid # pylint: disable=import-error
 from helper import MaintenanceError, maintenance_response # pylint: disable=import-error
@@ -41,10 +42,12 @@ ddb = boto3.resource('dynamodb')
 _dedupe_table = ddb.Table(DEDUPE_TABLE)
 _queue_url_cache = {}
 
-def handler(event, _context):
+def handler(event, _context):  # pylint: disable=too-many-return-statements
     '''Sends an email message'''
 
-    body = json.loads(event['body'])
+    body, error = parse_json_body(event)
+    if error:
+        return error
     user = event['requestContext']['authorizer']['claims']['cognito:username']
     # Pin the sender to the exact validated address and reuse that same string
     # as the SMTP MAIL FROM below, so a display-name game in the From header

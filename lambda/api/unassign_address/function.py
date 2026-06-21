@@ -1,5 +1,5 @@
 '''Removes a user from a multi-user email address (admin only)'''
-# pylint: disable=duplicate-code
+# pylint: disable=duplicate-code,too-many-return-statements
 import json
 import os
 from datetime import datetime, timezone
@@ -20,7 +20,15 @@ def handler(event, _context):
             'statusCode': 403,
             'body': json.dumps({'Error': 'Admin access required'})
         }
-    body = json.loads(event['body'])
+    try:
+        body = json.loads(event.get('body') or '')
+    except (TypeError, ValueError):
+        body = None
+    if not isinstance(body, dict):
+        return {
+            'statusCode': 400,
+            'body': json.dumps({'status': 'Invalid input: request body is not valid JSON'})
+        }
     address = body['address']
     target_user = body['username']
     try:

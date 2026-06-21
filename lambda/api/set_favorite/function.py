@@ -10,7 +10,15 @@ table = ddb.Table('cabal-addresses')
 def handler(event, _context):
     '''Adds or removes the caller from the address's favorites set'''
     user = event['requestContext']['authorizer']['claims']['cognito:username']
-    body = json.loads(event['body'])
+    try:
+        body = json.loads(event.get('body') or '')
+    except (TypeError, ValueError):
+        body = None
+    if not isinstance(body, dict):
+        return {
+            'statusCode': 400,
+            'body': json.dumps({'status': 'Invalid input: request body is not valid JSON'})
+        }
     address = body['address']
     favorite = bool(body['favorite'])
     try:

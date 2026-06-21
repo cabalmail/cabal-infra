@@ -16,7 +16,15 @@ def handler(event, _context):
             'body': json.dumps({'Error': 'Admin access required'})
         }
     try:
-        body = json.loads(event['body'])
+        body = json.loads(event.get('body') or '')
+    except (TypeError, ValueError):
+        body = None
+    if not isinstance(body, dict):
+        return {
+            'statusCode': 400,
+            'body': json.dumps({'status': 'Invalid input: request body is not valid JSON'})
+        }
+    try:
         username = body['username']
         cognito.admin_confirm_sign_up(
             UserPoolId=user_pool_id,

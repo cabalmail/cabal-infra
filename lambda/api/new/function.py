@@ -1,10 +1,11 @@
 '''Creates a new email address'''
-# pylint: disable=duplicate-code
+# pylint: disable=duplicate-code,too-many-return-statements
 import json
 import os
 from datetime import datetime, timezone
 import boto3  # pylint: disable=import-error
 from helper import assert_zone_owns_apex  # pylint: disable=import-error
+from helper import parse_json_body  # pylint: disable=import-error
 from helper import user_authorized_for_domain  # pylint: disable=import-error
 from helper import validate_dns_apex  # pylint: disable=import-error
 from helper import validate_dns_subdomain  # pylint: disable=import-error
@@ -35,7 +36,9 @@ sns = boto3.client('sns')
 
 def handler(event, _context):
     '''Creates a new email address'''
-    body = json.loads(event['body'])
+    body, error = parse_json_body(event)
+    if error:
+        return error
     user = event['requestContext']['authorizer']['claims']['cognito:username']
     if body['tld'] not in domains:
         return {
