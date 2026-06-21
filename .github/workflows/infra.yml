@@ -660,6 +660,11 @@ jobs:
         echo "dr_region = \"${{ vars.TF_VAR_DR_REGION || 'us-west-2' }}\"" >> terraform.tfvars
         echo "dnssec_enabled = ${{ vars.TF_VAR_DNSSEC_ENABLED || 'false' }}" >> terraform.tfvars
         echo "imap_pool_enabled = ${{ vars.TF_VAR_IMAP_POOL_ENABLED || 'false' }}" >> terraform.tfvars
+        # deploy_role_arn reuses the existing AWS_DEPLOY_ROLE_ARN variable
+        # (the OIDC role this job already assumes); it is granted ECR pull
+        # by the Phase 5 repository policies so deploys and the nightly
+        # image scan are not locked out.
+        echo "deploy_role_arn = \"${{ vars.AWS_DEPLOY_ROLE_ARN }}\"" >> terraform.tfvars
         # invitation_code is supplied via the TF_VAR_invitation_code env
         # var on this job (see env: block above) rather than echoed into
         # tfvars, so shell-special characters like `$` survive unmangled.
@@ -764,6 +769,11 @@ jobs:
         echo "dr_region = \"${{ vars.TF_VAR_DR_REGION || 'us-west-2' }}\"" >> terraform.tfvars
         echo "dnssec_enabled = ${{ vars.TF_VAR_DNSSEC_ENABLED || 'false' }}" >> terraform.tfvars
         echo "imap_pool_enabled = ${{ vars.TF_VAR_IMAP_POOL_ENABLED || 'false' }}" >> terraform.tfvars
+        # deploy_role_arn reuses the existing AWS_DEPLOY_ROLE_ARN variable
+        # (the OIDC role this job already assumes); it is granted ECR pull
+        # by the Phase 5 repository policies so deploys and the nightly
+        # image scan are not locked out.
+        echo "deploy_role_arn = \"${{ vars.AWS_DEPLOY_ROLE_ARN }}\"" >> terraform.tfvars
         # invitation_code is supplied via the TF_VAR_invitation_code env
         # var on this job (see env: block above) rather than echoed into
         # tfvars, so shell-special characters like `$` survive unmangled.
