@@ -86,21 +86,21 @@ locals {
 
 # Phase 5 ("ECR posture") of docs/0.10.x/identity-iam-hardening-plan.md.
 # Without a repository policy an ECR repo grants pull to any account
-# principal that holds ecr:* through an identity policy. Every repo here
-# is consumed only by the ECS agent - the imap/smtp tiers and the
-# sinkhole fixture pull under cabal-ecs-execution-role, each monitoring
-# tier under its own cabal-<tier>-execution role - and is pushed and
-# scanned by the CI deploy role. The caller supplies the exact allow list
-# per repo (see var.allowed_pull_principal_arns). The Deny statement is
-# what actually restricts pull: it fires for every principal whose ARN is
-# not in that repo's allow list. The Allow statement keeps the legitimate
-# pullers working (an allow-only policy would be a no-op, since
-# same-account access already unions identity and resource grants).
-# aws:PrincipalArn resolves to the role ARN for an assumed-role session,
-# so matching the role ARNs catches the ECS agent and the OIDC deploy
-# role regardless of session name. Repos with no entry in the map (a
-# future var.extra_repositories, say) get no policy rather than a
-# lockout.
+# principal that holds ecr:* through an identity policy. The caller
+# supplies the exact allow list per repo (see
+# var.allowed_pull_principal_arns); the mail tiers and the sinkhole
+# fixture pull under cabal-ecs-execution-role and are pushed and scanned
+# by the CI deploy role. The Deny statement is what actually restricts
+# pull: it fires for every principal whose ARN is not in that repo's
+# allow list. The Allow statement keeps the legitimate pullers working
+# (an allow-only policy would be a no-op, since same-account access
+# already unions identity and resource grants). aws:PrincipalArn resolves
+# to the role ARN for an assumed-role session, so matching the role ARNs
+# catches the ECS agent and the OIDC deploy role regardless of session
+# name. Any repo absent from the map gets no policy rather than a lockout
+# - notably the monitoring repos, whose per-tier execution roles only
+# exist when var.monitoring is true (see the caller in
+# terraform/infra/main.tf for the full rationale).
 resource "aws_ecr_repository_policy" "pull_restriction" {
   for_each = {
     for key, repo in local.all_repositories : key => repo
