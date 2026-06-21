@@ -20,9 +20,17 @@ def handler(event, _context):
     limited = rate_limit_response_or_none(caller, 'enable_user')
     if limited:
         return limited
+    try:
+        body = json.loads(event.get('body') or '')
+    except (TypeError, ValueError):
+        body = None
+    if not isinstance(body, dict):
+        return {
+            'statusCode': 400,
+            'body': json.dumps({'status': 'Invalid input: request body is not valid JSON'})
+        }
     username = ''
     try:
-        body = json.loads(event['body'])
         username = body['username']
         cognito.admin_enable_user(
             UserPoolId=user_pool_id,

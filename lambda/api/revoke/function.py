@@ -5,6 +5,7 @@ import os
 from datetime import datetime, timezone
 import boto3  # pylint: disable=import-error
 from helper import assert_zone_owns_apex  # pylint: disable=import-error
+from helper import parse_json_body  # pylint: disable=import-error
 from helper import user_authorized_for_sender  # pylint: disable=import-error
 from helper import validate_dns_apex  # pylint: disable=import-error
 from helper import validate_dns_subdomain  # pylint: disable=import-error
@@ -21,7 +22,9 @@ sns = boto3.client('sns')
 
 def handler(event, _context):
     '''Revokes an email address'''
-    body = json.loads(event['body'])
+    body, error = parse_json_body(event)
+    if error:
+        return error
     address = body['address']
     subdomain = body['subdomain']
     tld = body['tld']

@@ -411,6 +411,35 @@ def too_many_ids_response():
     }
 
 
+def parse_json_body(event):
+    '''Parses the request body as a JSON object, returning (body, error).
+
+    On success `error` is None and `body` is the decoded dict. On a missing,
+    empty, or non-JSON body -- or one that decodes to something other than a
+    JSON object -- `error` is a ready-to-return 400 response and `body` is None,
+    so a handler can `return error` instead of relaying an unhandled 500/502
+    with a Python traceback. Mirrors parse_bulk_request's contract and 400 shape
+    so every handler that needs a JSON object body rejects a bad one the same
+    way.
+    '''
+    raw = event.get('body')
+    if not raw:
+        message = 'request body is required'
+    else:
+        try:
+            body = json.loads(raw)
+        except (TypeError, json.JSONDecodeError):
+            message = 'request body is not valid JSON'
+        else:
+            if isinstance(body, dict):
+                return body, None
+            message = 'request body must be a JSON object'
+    return None, {
+        "statusCode": 400,
+        "body": json.dumps({"status": f"Invalid input: {message}"})
+    }
+
+
 def parse_bulk_request(event):
     '''Parses a bulk-op request body and enforces the per-request id cap.
 
