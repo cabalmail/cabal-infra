@@ -38,9 +38,11 @@ public actor CabalmailClient {
     #endif
 
     /// Opt-in crash / hang reporter. Starts disabled — the Settings toggle
-    /// calls `setCrashReportingEnabled(_:)` to flip it. Retained across
-    /// start/stop cycles so subscriber registration with `MXMetricManager`
-    /// is balanced.
+    /// calls `setCrashReportingEnabled(_:)` to flip it. This is the
+    /// process-wide `MetricKitCollector.shared`: MetricKit subscription is
+    /// global to the process and the subscriber must outlive the per-session
+    /// client, so it is *not* torn down when the client is released on
+    /// sign-out (doing so crashed the app — see `MetricKitCollector`).
     public nonisolated let metricKitCollector: MetricKitCollector
 
     public init(
@@ -65,7 +67,7 @@ public actor CabalmailClient {
         self.bodyCache = bodyCache
         self.draftStore = draftStore
         self.outbox = outbox
-        self.metricKitCollector = MetricKitCollector()
+        self.metricKitCollector = .shared
         #if canImport(Network)
         self.pathMonitor = nil
         self.reachability = nil
@@ -156,7 +158,7 @@ public actor CabalmailClient {
         self.bodyCache = bodyCache
         self.draftStore = draftStore
         self.outbox = outbox
-        self.metricKitCollector = MetricKitCollector()
+        self.metricKitCollector = .shared
         if monitorNetworkPath {
             let imap = imapClient
             self.pathMonitor = NetworkPathMonitor {
