@@ -40,7 +40,14 @@ extension MessageListViewModel {
         do {
             try await client.imapClient.connectAndAuthenticate()
             let query = buildSearchQuery(text: trimmed, filters: searchFilters)
-            let result = try await client.imapClient.searchEnvelopes(query)
+            // Fetch the match set in bounded `searchPageSize` chunks by
+            // walking the cursor, rather than asking for the whole set in one
+            // request (Layer 3.2 of the large-mailbox-hardening plan).
+            let result = try await client.imapClient.searchEnvelopesChunked(
+                query,
+                pageSize: Self.searchPageSize,
+                maxResults: searchResultCap
+            )
             envelopes = result.envelopes.map(\.envelope)
             sourceFolderByUID = Dictionary(uniqueKeysWithValues: result.envelopes.map {
                 ($0.envelope.uid, $0.folder)
@@ -122,6 +129,22 @@ extension MessageListViewModel {
         sourceFolderByUID[envelope.uid] ?? folder.path
     }
 
+    /// Per-request chunk size for `runSearch`'s envelope fetch. The match set
+    /// is gathered by walking the `/search_envelopes` cursor in batches of
+    /// this size (Layer 3.2 of the large-mailbox-hardening plan), so no single
+    /// request asks the Lambda for the whole set. Mirrors the folder view's
+    /// page size and the Lambda's DEFAULT_LIMIT.
+    static let searchPageSize = 50
+
+    /// Upper bound on the envelopes `runSearch` collects across all chunks. A
+    /// pill filter promises "all matches in the folder," so it pulls up to the
+    /// Lambda's MAX_LIMIT (200); a free-text search shows the first page and
+    /// leans on the count/disclosure banner for the rest. Derived from
+    /// `filterTab` so a background refresh keeps the wide cap.
+    private var searchResultCap: Int {
+        filterTab == .all ? Self.searchPageSize : 200
+    }
+
     private func buildSearchQuery(text: String, filters: MessageSearchFilters) -> SearchQuery {
         SearchQuery(
             folder: filters.thisFolderOnly ? folder.path : nil,
@@ -133,12 +156,9 @@ extension MessageListViewModel {
             before: filters.before,
             unread: filters.unread,
             flagged: filters.flagged,
-            hasAttachment: filters.hasAttachment,
-            // A pill filter promises "all matches in the folder," so fetch the
-            // server's max page (MAX_LIMIT) rather than the 50-row text-search
-            // default; the count/disclosure banner covers the rare overflow.
-            // Derived from filterTab so a background refresh keeps the wide page.
-            limit: filterTab == .all ? nil : 200
+            hasAttachment: filters.hasAttachment
+            // `limit` and `cursor` are owned by `searchEnvelopesChunked`, which
+            // pages the fetch into `searchPageSize` chunks up to `searchResultCap`.
         )
     }
 }

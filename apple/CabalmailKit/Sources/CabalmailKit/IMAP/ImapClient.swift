@@ -177,6 +177,59 @@ public extension ImapClient {
         )
     }
 
+    /// Fetches a search result set in bounded pages instead of one large
+    /// request. Issues `searchEnvelopes(_:)` with `limit == pageSize`, then
+    /// walks `nextCursor` until the accumulated count reaches `maxResults`
+    /// or the server runs dry. Every round trip asks for at most `pageSize`
+    /// envelopes, so a wide-but-sparse match set never produces a single
+    /// oversized request -- Layer 3.2 of
+    /// `docs/0.10.x/large-mailbox-hardening-plan.md`.
+    ///
+    /// `totalEstimate` and `foldersSearched` come from the first page (the
+    /// Lambda reports the same values on every page of one query).
+    /// `truncated` is the union of every page's flag -- i.e. the server's
+    /// "match count is a lower bound" signal, unchanged. The returned
+    /// `nextCursor` is the cursor the next unfetched page would use, or nil
+    /// once the set is exhausted; when it is non-nil the caller has fetched
+    /// fewer than `totalEstimate` rows and its banner reflects the gap.
+    func searchEnvelopesChunked(
+        _ query: SearchQuery,
+        pageSize: Int,
+        maxResults: Int
+    ) async throws -> SearchResult {
+        // Defensive: a non-positive page size would request limit 0 (which
+        // the Lambda clamps back up to 1) and spin. Clamp to at least one.
+        let pageSize = max(1, pageSize)
+        var collected: [SearchedEnvelope] = []
+        var cursor: String? = query.cursor
+        var totalEstimate = 0
+        var foldersSearched: [String] = []
+        var truncated = false
+        var isFirstPage = true
+        while collected.count < maxResults {
+            let pageLimit = min(pageSize, maxResults - collected.count)
+            let page = try await searchEnvelopes(query.page(limit: pageLimit, cursor: cursor))
+            if isFirstPage {
+                totalEstimate = page.totalEstimate
+                foldersSearched = page.foldersSearched
+                isFirstPage = false
+            }
+            collected.append(contentsOf: page.envelopes)
+            truncated = truncated || page.truncated
+            cursor = page.nextCursor
+            // Exhausted the match set, or a page came back empty while still
+            // handing back a cursor (would otherwise loop forever).
+            if cursor == nil || page.envelopes.isEmpty { break }
+        }
+        return SearchResult(
+            envelopes: collected,
+            totalEstimate: totalEstimate,
+            nextCursor: cursor,
+            foldersSearched: foldersSearched,
+            truncated: truncated
+        )
+    }
+
     /// Default implementation — same rationale as `searchEnvelopes`: the
     /// `/purge_messages` contract is API-only today and production never
     /// routes through `LiveImapClient`.

@@ -137,7 +137,10 @@ public actor ApiBackedImapClient: ImapClient {
     ) async throws {
         // The Lambda's `/set_flag` accepts a single flag and an op of
         // "set" / "unset" — see `lambda/api/set_flag/function.py`. Map the
-        // protocol's set-of-flags shape onto sequential calls.
+        // protocol's set-of-flags shape onto one call per flag. A multi-flag
+        // toggle (e.g. "mark read + unflag") is otherwise N serial round
+        // trips, each carrying the full UID set, so issue them concurrently
+        // (Layer 3.5 of `docs/0.10.x/large-mailbox-hardening-plan.md`).
         let wireOp: String
         switch operation {
         case .add:     wireOp = "set"
@@ -148,16 +151,27 @@ public actor ApiBackedImapClient: ImapClient {
             // for niche admin paths today.
             wireOp = "set"
         }
-        for flag in flags {
-            _ = try await api.setFlag(SetFlagRequest(
-                host: host,
-                folder: folder,
-                ids: uids,
-                flag: flag.wireValue,
-                operation: wireOp,
-                sortOrder: defaultSortOrder,
-                sortField: defaultSortField
-            ))
+        // Snapshot actor state before fanning out; the child tasks run
+        // outside this actor's isolation, so they must not touch `self`.
+        let api = self.api
+        let host = self.host
+        let sortOrder = defaultSortOrder
+        let sortField = defaultSortField
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for flag in flags {
+                group.addTask {
+                    _ = try await api.setFlag(SetFlagRequest(
+                        host: host,
+                        folder: folder,
+                        ids: uids,
+                        flag: flag.wireValue,
+                        operation: wireOp,
+                        sortOrder: sortOrder,
+                        sortField: sortField
+                    ))
+                }
+            }
+            try await group.waitForAll()
         }
     }
 

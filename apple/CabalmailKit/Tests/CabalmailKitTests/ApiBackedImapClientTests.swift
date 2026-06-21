@@ -98,6 +98,8 @@ final class ApiBackedImapClientTests: XCTestCase {
     }
 
     func testSetFlagsSendsOneRequestPerFlag() async throws {
+        // Each flag is still one `/set_flag` round trip; Layer 3.5 only made
+        // the per-flag calls concurrent, so a two-flag toggle is two PUTs.
         let body = #"{"message_ids":[]}"#
         let http = RecordingHTTPTransport(responses: [
             (Data(body.utf8), 200),
