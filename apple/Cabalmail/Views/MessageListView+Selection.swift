@@ -206,7 +206,7 @@ extension MessageListView {
             if model.bulkMode {
                 row(for: envelope, model: model, isSelected: selected, orderedVisible: visible)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .frame(height: MessageListView.rowHeight, alignment: .top)
+                    .frame(height: MessageListView.rowHeight, alignment: .center)
                     .background(background)
             } else {
                 // `draggableRow` (drag-to-folder) wraps OUTSIDE `SwipeActionRow`
@@ -252,8 +252,7 @@ extension MessageListView {
             Spacer()
         }
         .padding(.horizontal, 16)
-        .padding(.top, 10)
-        .frame(height: MessageListView.rowHeight, alignment: .top)
+        .frame(height: MessageListView.rowHeight, alignment: .center)
         .redacted(reason: .placeholder)
         .accessibilityHidden(true)
     }

@@ -381,7 +381,9 @@ private struct MessageRow: View {
                 }
                 Text(envelope.subject ?? "(no subject)")
                     .font(.subheadline)
-                    .lineLimit(2)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .foregroundStyle(.primary)
             }
         }
