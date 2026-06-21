@@ -17,6 +17,22 @@ import MetricKit
 /// Activated by `CabalmailClient.enableCrashReporting()` — off by default
 /// because the plan marks it opt-in.
 public final class MetricKitCollector: NSObject, @unchecked Sendable {
+    /// Process-lifetime singleton. MetricKit subscription is global to the
+    /// process (`MXMetricManager.shared`), so the subscriber object must
+    /// outlive any per-session object that toggles it.
+    ///
+    /// This used to be owned by `CabalmailClient`, which is created on sign-in
+    /// and released on sign-out. On sign-out the client (and this collector)
+    /// deallocated, and `deinit` called `MXMetricManager.shared.remove(self)`.
+    /// That removal is dispatched asynchronously onto
+    /// `com.apple.metrickit.manager.queue`; by the time the hash-table
+    /// mutation ran, the collector was already freed, so `removeSubscriber:`
+    /// sent `-hash` to a dangling pointer -- a use-after-free that crashed the
+    /// process with `EXC_BAD_ACCESS` in `-[MXMetricManager removeSubscriber:]`.
+    /// Holding the collector for the whole process lifetime removes the
+    /// dangling-pointer window entirely.
+    public static let shared = MetricKitCollector()
+
     private let store: DebugLogStore
     private var isActive = false
 
@@ -40,9 +56,11 @@ public final class MetricKitCollector: NSObject, @unchecked Sendable {
         #endif
     }
 
-    deinit {
-        stop()
-    }
+    // Deliberately no `deinit { stop() }`. `MXMetricManager.remove(_:)` defers
+    // the actual unsubscribe to a background queue, so removing from `deinit`
+    // touches freed memory once the object is gone. The singleton never
+    // deallocates, and `stop()` (on an explicit opt-out) always runs while the
+    // collector is still alive.
 }
 
 #if canImport(MetricKit) && !os(visionOS)
