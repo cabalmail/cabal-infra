@@ -7,3 +7,5 @@ data "terraform_remote_state" "zone" {
   }
 }
 
+data "aws_caller_identity" "current" {}
+

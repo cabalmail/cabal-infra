@@ -189,3 +189,9 @@ variable "invitation_code" {
   sensitive   = true
   default     = ""
 }
+
+variable "deploy_role_arn" {
+  type        = string
+  description = "ARN of the CI/CD deploy role (GitHub Actions OIDC, vars.AWS_DEPLOY_ROLE_ARN). It is granted pull on the ECR repositories so the deploy and nightly image-scan workflows are not locked out by the Phase 5 pull-restriction policy. Defaults to empty so terraform validate and destroy_terraform.yml (which omit it) still parse; a real apply sets it from CI, and an empty value only drops the CI grant from the ECR allow lists."
+  default     = ""
+}
