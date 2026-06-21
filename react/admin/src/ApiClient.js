@@ -7,6 +7,17 @@ const TIMEOUT = ONE_SECOND * 10;
 // hears the server's real verdict instead of firing a false "failed" on a
 // slow-but-successful operation.
 const MUTATION_TIMEOUT = ONE_SECOND * 30;
+// /list_envelopes fetches one IMAP ENVELOPE per requested UID, so its
+// server-side cost scales with the batch size. The flat 10s default is fine
+// for a single PAGE_SIZE page but times out spuriously on large windows (e.g.
+// a future bulk fetch). Budget a fixed slice per UID, then clamp between the
+// 10s floor -- so small fetches are unaffected -- and a 30s ceiling that sits
+// just past the API's 29s integration limit (same rationale as
+// MUTATION_TIMEOUT: a slow-but-successful fetch then reports the server's real
+// verdict instead of a false "failed").
+const ENVELOPE_TIMEOUT_PER_ID = 100;
+const ENVELOPE_TIMEOUT_FLOOR = TIMEOUT;
+const ENVELOPE_TIMEOUT_CEILING = ONE_SECOND * 30;
 
 export default class ApiClient {
 
@@ -404,6 +415,10 @@ export default class ApiClient {
   }
 
   getEnvelopes(folder, ids) {
+    const timeout = Math.min(
+      ENVELOPE_TIMEOUT_CEILING,
+      Math.max(ENVELOPE_TIMEOUT_FLOOR, ids.length * ENVELOPE_TIMEOUT_PER_ID)
+    );
     const response = axios.get('/list_envelopes',
       {
         params: {
@@ -415,7 +430,7 @@ export default class ApiClient {
         headers: {
           'Authorization': this.token
         },
-        timeout: TIMEOUT
+        timeout: timeout
       }
     );
     return response;
