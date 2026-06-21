@@ -93,8 +93,16 @@ jobs:
       # authenticates to ECR via the AWS credential chain (the AWS_* env
       # above). ignore-unfixed drops CVEs with no upstream fix so the
       # report stays actionable. No --exit-code: this run never fails.
+      #
+      # --platform linux/arm64 is required: the mail tiers run on a
+      # Graviton fleet and are built --platform linux/arm64 (see app.yml),
+      # and with provenance attestations the pushed artifact is an OCI
+      # index. This runner is amd64, so Trivy's default host-platform pick
+      # finds no linux/amd64 child in that index and aborts. Pin the arch
+      # to the one we actually ship and run.
       run: |
         trivy image \
+          --platform linux/arm64 \
           --severity HIGH,CRITICAL \
           --ignore-unfixed \
           --format json \
