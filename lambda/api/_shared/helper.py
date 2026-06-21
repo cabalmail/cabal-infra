@@ -638,6 +638,51 @@ def assert_zone_owns_apex(zone_id, apex):
         raise ZoneMismatchError(f'zone-mismatch: zone {zone_id} does not own {apex}')
 
 
+# Folder-size observability (Layer 4.1 of the large-mailbox hardening plan).
+# Each list handler emits one key=value log line tagging the request with a
+# coarse folder-size bucket so CloudWatch Logs Insights can correlate request
+# latency with mailbox cardinality -- no Terraform or custom metrics. The bucket
+# boundaries and the `folder_size_bucket` dimension name match the plan. Only
+# the folder name and bucket are logged, so no PII beyond the existing lines.
+
+# (exclusive upper bound, label); a count at or above the last bound is `>100k`.
+_FOLDER_SIZE_BUCKETS = ((1000, '<1k'), (10000, '1k-10k'), (100000, '10k-100k'))
+
+
+def folder_size_bucket(total):
+    '''Coarse size-bucket label for a folder message count. Returns `unknown`
+    when the count is missing (None/non-int/negative) so a missing total never
+    masks the rest of the log line.'''
+    if not isinstance(total, int) or isinstance(total, bool) or total < 0:
+        return 'unknown'
+    for upper, label in _FOLDER_SIZE_BUCKETS:
+        if total < upper:
+            return label
+    return '>100k'
+
+
+def folder_message_count(client, folder):
+    '''Best-effort STATUS read of a folder's message count, for size-bucket
+    logging only. Returns the count, or None on failure -- it feeds coarse
+    observability, so it must never disturb a request that already succeeded.'''
+    try:
+        return client.folder_status(folder, [b'MESSAGES']).get(b'MESSAGES')
+    except Exception:  # pylint: disable=broad-exception-caught
+        return None
+
+
+def log_folder_size_bucket(folder, total, endpoint, duration_ms):
+    '''Emits one key=value folder-size line for CloudWatch Insights
+    latency-vs-size correlation (Layer 4.1). Best-effort. The folder name is
+    quoted and last (it may contain spaces) so the leading pairs parse clean.'''
+    try:
+        print(f'[folder-size] endpoint={endpoint} '
+              f'folder_size_bucket={folder_size_bucket(total)} '
+              f'messages={total} duration_ms={duration_ms} folder={folder!r}')
+    except Exception:  # pylint: disable=broad-exception-caught
+        pass
+
+
 def get_folder_list(client):
     '''
     Retrieves IMAP folders returning separate lists for all folders

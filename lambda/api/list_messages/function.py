@@ -1,7 +1,9 @@
 '''Retrieves IMAP message ids for a user given a folder and sorting criteria'''
 import json
+import time
 from helper import ( # pylint: disable=import-error
     get_imap_client,
+    log_folder_size_bucket,
     validate_folder_name,
     validate_pagination,
     validate_sort_criterion,
@@ -13,6 +15,7 @@ from helper import maintenance_guard # pylint: disable=import-error
 @maintenance_guard
 def handler(event, _context):
     '''Retrieves IMAP message ids for a user given a folder and sorting criteria'''
+    start = time.monotonic()
     query_string = event.get('queryStringParameters') or {}
     user = event['requestContext']['authorizer']['claims']['cognito:username']
     try:
@@ -27,6 +30,7 @@ def handler(event, _context):
     flags = [b'NOT', b'DELETED']
     response = client.sort(sort_criterion, flags)
     client.logout()
+    duration_ms = int((time.monotonic() - start) * 1000)
     # Dovecot SORT stays the source of truth for ordering; offset/limit slice
     # the result server-side so a large folder returns one page instead of every
     # UID. Slicing is positional, not UID-based, because the sort key may be
@@ -35,6 +39,10 @@ def handler(event, _context):
     # neither param set this returns the full sorted list unchanged.
     total = len(response)
     message_ids = response[offset:offset + limit] if limit is not None else response[offset:]
+    # The SORT length is the folder's NOT-DELETED count -- log a coarse size
+    # bucket so CloudWatch Insights can correlate request latency with folder
+    # size (Layer 4.1 of the large-mailbox hardening plan).
+    log_folder_size_bucket(folder, total, 'list_messages', duration_ms)
     return {
         "statusCode": 200,
         "body": json.dumps({
