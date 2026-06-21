@@ -224,37 +224,13 @@ def user_authorized_for_domain(user, domain):
     return 'Item' in response
 
 
-# ---------------------------------------------------------------------------
-# Input validators (Phase 3 of docs/0.10.x/application-surface-hardening-plan).
-#
-# The IMAP-shaped handlers take folder names, UID lists, flags, sort keys, and
-# S3-key fragments from query strings and JSON bodies. The master-user model
-# already scopes every operation to the caller's own mailbox, so these are
-# defence-in-depth against a future shape change rather than live exploits --
-# but rejecting malformed input at the boundary (ValueError -> 400) beats
-# relaying it into Dovecot and surfacing a 500 traceback or an opaque IMAP
-# protocol error. Each validator raises ValueError with a sanitized message;
-# handlers translate that into a 400.
-# ---------------------------------------------------------------------------
-
-# Shared with the large-mailbox chunking work; one ceiling for both surfaces.
 MAX_IDS_PER_REQUEST = 5000
-# Per-command batch size for bulk UID MOVE / UID STORE. The whole request is
-# capped at MAX_IDS_PER_REQUEST; within that, the bulk endpoints issue IMAP
-# commands in slices of this size so no single command brushes the 29s API
-# Gateway ceiling on a large selection.
 MAX_IDS_PER_IMAP_CMD = 500
 MAX_FOLDER_NAME_BYTES = 255
 MAX_KEYWORD_LEN = 64
 MAX_CONTENT_ID_LEN = 128
 MAX_SEARCH_TEXT_LEN = 1024
 MAX_UID = 0xFFFFFFFF
-# Upper bound on an explicit list-page `limit`. A client tunes page size to
-# trade round trips against per-page latency; this caps it "within reason" so
-# the follow-up /list_envelopes fetch for the page stays well under the 29s API
-# Gateway ceiling. An oversized limit is clamped here, not rejected. A missing
-# limit still means "no bound" -- the React client relies on that to pull the
-# whole sorted UID list for its client-side virtualized view.
 MAX_PAGE_SIZE = 250
 
 _FOLDER_NAME_RE = re.compile(r'^[A-Za-z0-9 _\-./]+$')
@@ -408,6 +384,35 @@ def too_many_ids_response():
     return {
         "statusCode": 413,
         "body": json.dumps({"max_ids": MAX_IDS_PER_REQUEST})
+    }
+
+
+def parse_json_body(event):
+    '''Parses the request body as a JSON object, returning (body, error).
+
+    On success `error` is None and `body` is the decoded dict. On a missing,
+    empty, or non-JSON body -- or one that decodes to something other than a
+    JSON object -- `error` is a ready-to-return 400 response and `body` is None,
+    so a handler can `return error` instead of relaying an unhandled 500/502
+    with a Python traceback. Mirrors parse_bulk_request's contract and 400 shape
+    so every handler that needs a JSON object body rejects a bad one the same
+    way.
+    '''
+    raw = event.get('body')
+    if not raw:
+        message = 'request body is required'
+    else:
+        try:
+            body = json.loads(raw)
+        except (TypeError, json.JSONDecodeError):
+            message = 'request body is not valid JSON'
+        else:
+            if isinstance(body, dict):
+                return body, None
+            message = 'request body must be a JSON object'
+    return None, {
+        "statusCode": 400,
+        "body": json.dumps({"status": f"Invalid input: {message}"})
     }
 
 
@@ -636,6 +641,51 @@ def assert_zone_owns_apex(zone_id, apex):
         print(f'[zone-verify] WARN zone-mismatch: zone {zone_id!r} resolves to '
               f'{name!r}, expected {expected!r} (apex {apex!r})')
         raise ZoneMismatchError(f'zone-mismatch: zone {zone_id} does not own {apex}')
+
+
+# Folder-size observability (Layer 4.1 of the large-mailbox hardening plan).
+# Each list handler emits one key=value log line tagging the request with a
+# coarse folder-size bucket so CloudWatch Logs Insights can correlate request
+# latency with mailbox cardinality -- no Terraform or custom metrics. The bucket
+# boundaries and the `folder_size_bucket` dimension name match the plan. Only
+# the folder name and bucket are logged, so no PII beyond the existing lines.
+
+# (exclusive upper bound, label); a count at or above the last bound is `>100k`.
+_FOLDER_SIZE_BUCKETS = ((1000, '<1k'), (10000, '1k-10k'), (100000, '10k-100k'))
+
+
+def folder_size_bucket(total):
+    '''Coarse size-bucket label for a folder message count. Returns `unknown`
+    when the count is missing (None/non-int/negative) so a missing total never
+    masks the rest of the log line.'''
+    if not isinstance(total, int) or isinstance(total, bool) or total < 0:
+        return 'unknown'
+    for upper, label in _FOLDER_SIZE_BUCKETS:
+        if total < upper:
+            return label
+    return '>100k'
+
+
+def folder_message_count(client, folder):
+    '''Best-effort STATUS read of a folder's message count, for size-bucket
+    logging only. Returns the count, or None on failure -- it feeds coarse
+    observability, so it must never disturb a request that already succeeded.'''
+    try:
+        return client.folder_status(folder, [b'MESSAGES']).get(b'MESSAGES')
+    except Exception:  # pylint: disable=broad-exception-caught
+        return None
+
+
+def log_folder_size_bucket(folder, total, endpoint, duration_ms):
+    '''Emits one key=value folder-size line for CloudWatch Insights
+    latency-vs-size correlation (Layer 4.1). Best-effort. The folder name is
+    quoted and last (it may contain spaces) so the leading pairs parse clean.'''
+    try:
+        print(f'[folder-size] endpoint={endpoint} '
+              f'folder_size_bucket={folder_size_bucket(total)} '
+              f'messages={total} duration_ms={duration_ms} folder={folder!r}')
+    except Exception:  # pylint: disable=broad-exception-caught
+        pass
 
 
 def get_folder_list(client):

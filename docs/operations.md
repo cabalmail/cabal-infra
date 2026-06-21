@@ -84,6 +84,30 @@ The `.fts/` directories are derived data. If AWS Backup includes them, restores 
 
 Per the privacy goal in `docs/0.9.x/imap-search-plan.md`, the system does not log query terms, result UIDs, or result counts. Dovecot's `mail_debug = no` and `auth_debug = no` defaults keep SEARCH arguments out of syslog, and `docker/imap/configs/dovecot/10-logging.conf` does not flip either on. If you ever enable `mail_debug` for incident investigation, disable it again as soon as the investigation is done — leaving it on would route SEARCH arguments through the container's stderr into CloudWatch Logs, which is exactly what the privacy stance disallows. The same applies to `fts_flatcurve_debug` and any `log_debug` toggles: do not bake them into the image.
 
+# IMAP connection pooling in the API Lambdas
+
+Each API Lambda opens a fresh authenticated master-user IMAP session per request — `LOGIN`, `SELECT`, work, `LOGOUT` — and tears it down at the end. When a client opens a large folder and fans out a page of envelope fetches, that per-request login churn becomes the dominant cost and thrashes Dovecot's session pool. Setting `TF_VAR_IMAP_POOL_ENABLED` to `true` in a GitHub environment turns on connection pooling: an authenticated session is reused across warm invocations of the same Lambda execution environment, keyed by `(host, user)`, instead of being re-established each request. See the [large-mailbox hardening plan](./0.10.x/large-mailbox-hardening-plan.md) (Layer 1.5) for where this fits in the broader large-folder work.
+
+## Default and how to enable
+
+The flag is off by default. It is opt-in per environment via the `TF_VAR_IMAP_POOL_ENABLED` GitHub variable — the same mechanism as `TF_VAR_MONITORING` and the other optional toggles in [the GitHub variables reference](./github.md). Set it to `true` on the target GitHub Environment and run the `infra` workflow; Terraform reads it as the `imap_pool_enabled` input and sets `IMAP_POOL_ENABLED=true` on the API Lambdas. With the variable unset or `false`, Terraform sets `IMAP_POOL_ENABLED=false` and the request path is the original connect/login/logout, with no pooling code reached.
+
+Pooling touches the connection layer, which makes it the highest-risk change in the large-mailbox plan, so enable it in `stage` and exercise it under real folder-open load before promoting the variable to `prod`.
+
+## What "on" actually does
+
+- **Reuse keyed by `(host, user)`.** One execution environment serves one invocation at a time, so the module-scope pool needs no locking. Handlers still call `client.logout()` exactly as before; under the flag that call checks the connection back into the pool instead of tearing it down. An exception before `logout()` leaves the connection orphaned for garbage collection rather than returning a half-broken session to the pool.
+- **Idle expiry.** A pooled entry that goes unused for `IMAP_POOL_IDLE_SECONDS` (default 120) is closed and discarded — a held socket can be silently dead after a Lambda freeze/thaw or a NAT idle eviction, so the pool does not trust a long-idle connection.
+- **Liveness probe on checkout.** A reused connection must be re-`SELECT`ed anyway (the previous borrower may have left it on a different folder), and that mandatory re-`SELECT` doubles as a liveness probe: on failure the pool discards the entry and reconnects once.
+- **Bounded fail-fast.** Pooled sockets carry a read timeout (27s, just inside the 29s API Gateway integration ceiling) so a dead connection raises promptly instead of wedging the Lambda to the timeout. The off path keeps the original no-timeout client.
+- **Maintenance gate still applies.** `helper.get_imap_client` runs the planned-IMAP-roll maintenance gate before any connection attempt, pooled or not, so a deploy that is restarting the IMAP tier short-circuits before dialing.
+
+## Tuning and rollback
+
+Only the on/off flag is wired through Terraform. The pool size (`IMAP_POOL_MAX_SIZE`, default 8) and the idle window (`IMAP_POOL_IDLE_SECONDS`, default 120) read directly from the Lambda environment with safe defaults and are not surfaced as Terraform inputs; the defaults are the intended operating point.
+
+To roll back, set `TF_VAR_IMAP_POOL_ENABLED` back to `false` (or remove the variable) and re-run `infra`. The next deploy returns every API Lambda to the per-request login path; there is no state to drain, because pooled connections live only inside warm Lambda execution environments and are reaped on their own.
+
 # Test fixtures and pre-promotion verification
 
 Setting `TF_VAR_SINKHOLE` to `true` in a non-prod GitHub environment deploys the [SMTP sinkhole test fixture](./0.9.x/sinkhole-test-harness-plan.md), a tiny configurable SMTP listener fronted by Cloud Map. It exists so test sequences that need a deterministic 4xx response on demand (queue persistence, DSN handling, large-message timeouts, STARTTLS fallback) are reproducible. The flag is refused in prod by the Terraform variable's validation block.

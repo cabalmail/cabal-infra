@@ -83,7 +83,7 @@ struct SwipeActionRow<Content: View>: View {
 
     private var rowContent: some View {
         content()
-            .frame(maxWidth: .infinity, minHeight: height, alignment: .topLeading)
+            .frame(maxWidth: .infinity, minHeight: height, alignment: .leading)
             .contentShape(Rectangle())
             .onTapGesture(perform: onSelect)
             // Horizontal insets give the row its left/right breathing room

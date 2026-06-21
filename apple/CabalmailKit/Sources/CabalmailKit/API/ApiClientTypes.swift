@@ -238,6 +238,27 @@ public struct SearchQuery: Sendable, Hashable {
         self.limit = limit
         self.cursor = cursor
     }
+
+    /// Returns a copy of this query with the per-request `limit` and
+    /// pagination `cursor` overridden. Used by
+    /// `ImapClient.searchEnvelopesChunked(_:pageSize:maxResults:)` to turn a
+    /// single logical query into a sequence of bounded page requests.
+    public func page(limit: Int, cursor: String?) -> SearchQuery {
+        SearchQuery(
+            folder: folder,
+            text: text,
+            from: from,
+            to: to,
+            subject: subject,
+            since: since,
+            before: before,
+            unread: unread,
+            flagged: flagged,
+            hasAttachment: hasAttachment,
+            limit: limit,
+            cursor: cursor
+        )
+    }
 }
 
 /// `/search_envelopes` response. Each envelope is tagged with its source

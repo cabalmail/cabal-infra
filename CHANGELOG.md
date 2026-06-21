@@ -5,6 +5,82 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.26] - 2026-06-21
+
+### Added
+- The `docs/github.md` GitHub-variables reference now lists
+  `TF_VAR_DNSSEC_ENABLED`, the per-environment DNSSEC opt-in, with a
+  pointer to the [DNSSEC](docs/dnssec.md) runbooks and the CI grants the
+  first apply needs (previously documented only in `docs/operations.md`
+  and `docs/setup.md`).
+- `/list_messages` and `/list_envelopes` now emit a structured
+  `[folder-size]` log line at the end of each request, tagging it with a
+  coarse `folder_size_bucket` (`<1k` / `1k-10k` / `10k-100k` / `>100k`),
+  the folder's message count, and the request `duration_ms`, so
+  CloudWatch Logs Insights can correlate request latency with mailbox
+  size without any Terraform or custom-metric plumbing (Layer 4.1 of the
+  large-mailbox hardening plan). Only the folder name and bucket are
+  logged, never message contents.
+- Operator documentation for the `TF_VAR_IMAP_POOL_ENABLED` flag: an
+  "IMAP connection pooling in the API Lambdas" section in
+  `docs/operations.md` covering the default-off posture, how to enable it
+  per environment, what pooling does on the request path (reuse,
+  idle expiry, liveness probe, fail-fast, maintenance gate), and
+  rollback, plus a matching entry in the `docs/github.md` variables
+  reference.
+
+### Changed
+- Apple clients: message-list rows now truncate the subject to a single
+  line with a trailing ellipsis (instead of wrapping to two), and the row
+  content is vertically centered within the row.
+- Apple clients: search now fetches its result set in bounded 50-envelope
+  batches by walking the `/search_envelopes` cursor, instead of requesting
+  the whole match set in a single call -- keeping each request small on
+  wide, sparse searches. Multi-flag toggles also issue their per-flag
+  `/set_flag` calls concurrently rather than one after another.
+- React webmail: bulk actions (archive, move, delete, mark read/unread,
+  flag) now update the list optimistically -- the affected rows leave
+  immediately and the counts reconcile from a folder STATUS poll instead
+  of re-pulling the whole sorted UID list after every mutation; a failed
+  request rolls the rows back. Each action also streams to the server in
+  250-id chunks with an "Archiving N of M" progress affordance, so a
+  multi-thousand-message selection no longer freezes the toolbar on one
+  giant request.
+- Enabled S3 versioning on the two infra buckets holding durable
+  content - the admin bucket (React bundle plus Lambda deploy
+  artifacts) and the public front-door site - so an accidental
+  overwrite or delete can be rolled back. The transient cache bucket
+  (two-day object expiry) is intentionally left unversioned. Clears the
+  `CKV_AWS_21` / `AWS-0090` scanner findings.
+
+### Fixed
+- Every `lambda/api/` handler that reads a JSON request body now returns
+  400 instead of a 500/502 with a Python traceback when the body is
+  missing, malformed, or not a JSON object. A shared `parse_json_body`
+  helper backs the IMAP- and DNS-touching handlers (`new`, `revoke`,
+  `send`, `save_draft`, `new_address_admin`, and the folder/subscription
+  endpoints); the admin user-management and address-mutation handlers,
+  which deliberately avoid importing `helper.py`, apply the same guard
+  inline.
+- The admin app's `/list_envelopes` request timeout now scales with the
+  batch size (number of UIDs requested) instead of using the flat 10s
+  default, clamped to a 10s floor and a 30s ceiling. Large envelope
+  batches no longer report a spurious "failed" while the server is still
+  fetching.
+
+### Security
+- The mail-tier and sinkhole ECR repositories now carry a per-repo policy
+  that restricts image pull. They deny `ecr:GetDownloadUrlForLayer`,
+  `ecr:BatchGetImage`, and `ecr:BatchCheckLayerAvailability` to every
+  principal except the ECS task execution role, the shared
+  container-instance role, and the CI/CD deploy role; previously any
+  account principal holding ECR permissions could pull them. The
+  monitoring repos are left unrestricted (their per-tier execution roles
+  exist only when monitoring is enabled, and the repos sit empty while it
+  is the default-off warm spare), and the certbot-renewal repo is left to
+  its Lambda-service-managed policy. Advances the ECR posture work in the
+  0.10.x identity and IAM hardening plan.
+
 ## [0.10.25] - 2026-06-21
 
 ### Fixed
@@ -1256,7 +1332,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stage/prod. Net reduction vs. the Docker default capability set: `NET_RAW`,
   `MKNOD`, `AUDIT_WRITE`, `SETFCAP`, `SETPCAP`. `readOnlyRootFilesystem` on the
   mail tiers is deliberately deferred (they regenerate `/etc/mail` +
-  `/etc/opendkim` at runtime); the monitoring tier gets it separately.
+  `/etc/opendkim` at runtime); the monitoring tier, disabled in every
+  environment, is not hardened here and is owed the same posture whenever it
+  is enabled.
 - Tightened OpenDKIM's signing scope (phase 5 of the same plan): the generated
   `TrustedHosts` is now loopback only (`127.0.0.1`, `::1`, `localhost`) instead
   of `0.0.0.0/0`. opendkim signs only mail handed over by the local sendmail

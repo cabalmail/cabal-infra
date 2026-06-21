@@ -72,6 +72,64 @@ locals {
     aws_ecr_repository.monitoring,
     { sinkhole = aws_ecr_repository.sinkhole },
   )
+
+  # Repository (resource-level) ECR pull actions. ecr:GetAuthorizationToken
+  # is deliberately excluded: it is a registry-level action that cannot be
+  # scoped to a single repository, so it lives in identity policies, not
+  # here. See var.allowed_pull_principal_arns.
+  ecr_pull_actions = [
+    "ecr:GetDownloadUrlForLayer",
+    "ecr:BatchGetImage",
+    "ecr:BatchCheckLayerAvailability",
+  ]
+}
+
+# Phase 5 ("ECR posture") of docs/0.10.x/identity-iam-hardening-plan.md.
+# Without a repository policy an ECR repo grants pull to any account
+# principal that holds ecr:* through an identity policy. The caller
+# supplies the exact allow list per repo (see
+# var.allowed_pull_principal_arns); the mail tiers and the sinkhole
+# fixture pull under cabal-ecs-execution-role and are pushed and scanned
+# by the CI deploy role. The Deny statement is what actually restricts
+# pull: it fires for every principal whose ARN is not in that repo's
+# allow list. The Allow statement keeps the legitimate pullers working
+# (an allow-only policy would be a no-op, since same-account access
+# already unions identity and resource grants). aws:PrincipalArn resolves
+# to the role ARN for an assumed-role session, so matching the role ARNs
+# catches the ECS agent and the OIDC deploy role regardless of session
+# name. Any repo absent from the map gets no policy rather than a lockout
+# - notably the monitoring repos, whose per-tier execution roles only
+# exist when var.monitoring is true (see the caller in
+# terraform/infra/main.tf for the full rationale).
+resource "aws_ecr_repository_policy" "pull_restriction" {
+  for_each = {
+    for key, repo in local.all_repositories : key => repo
+    if contains(keys(var.allowed_pull_principal_arns), key)
+  }
+  repository = each.value.name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "AllowPullForCabalPrincipals"
+        Effect    = "Allow"
+        Principal = { AWS = var.allowed_pull_principal_arns[each.key] }
+        Action    = local.ecr_pull_actions
+      },
+      {
+        Sid       = "DenyPullForOtherPrincipals"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = local.ecr_pull_actions
+        Condition = {
+          ArnNotLike = {
+            "aws:PrincipalArn" = var.allowed_pull_principal_arns[each.key]
+          }
+        }
+      },
+    ]
+  })
 }
 
 resource "aws_ecr_lifecycle_policy" "tier" {

@@ -236,6 +236,46 @@ module "efs" {
   private_subnet_ids = module.vpc.private_subnets[*].id
 }
 
+# Per-repo allow lists for the Phase 5 ECR pull-restriction policies
+# (docs/0.10.x/identity-iam-hardening-plan.md). ARNs are reconstructed
+# from the account ID here rather than read off module.ecs to avoid an
+# ecr <-> ecs dependency cycle (the ecs module already consumes
+# module.ecr.repository_urls). The names mirror the literals in
+# modules/ecs/iam.tf: the mail tiers and sinkhole pull under the shared
+# cabal-ecs-execution-role, with cabal-ecs-instance-role added because on
+# the EC2 launch type the agent may authenticate the ECR pull with the
+# container-instance role rather than the task execution role. The CI
+# deploy role (var.deploy_role_arn) pushes images and runs the nightly
+# scan; it is empty only in validate/destroy contexts, where dropping it
+# is harmless.
+#
+# Monitoring repos are deliberately NOT covered here. Each one pulls
+# under its own cabal-<tier>-execution role, which the monitoring module
+# creates only when var.monitoring is true (off by default everywhere).
+# ECR's SetRepositoryPolicy validates that named principals exist, so
+# referencing those roles while monitoring is off fails the apply with
+# "Principal not found"; and module.ecr is evaluated before
+# module.monitoring, so the policy could not be ordered after the roles
+# even when monitoring is on. A restriction for the monitoring repos
+# therefore belongs in the monitoring module (where the per-tier roles
+# are defined and correctly ordered); it is deferred while monitoring is
+# a warm spare whose repos sit empty. The ecr module's repository-policy
+# resource skips any repo absent from this map.
+locals {
+  ecr_account_id         = data.aws_caller_identity.current.account_id
+  ecs_instance_role_arn  = "arn:aws:iam::${local.ecr_account_id}:role/cabal-ecs-instance-role"
+  ecs_execution_role_arn = "arn:aws:iam::${local.ecr_account_id}:role/cabal-ecs-execution-role"
+  ecr_deploy_pull_arns   = var.deploy_role_arn == "" ? [] : [var.deploy_role_arn]
+
+  ecr_pull_principals_by_repo = {
+    for tier in concat(local.core_mail_tiers, ["sinkhole"]) :
+    tier => concat(
+      [local.ecs_execution_role_arn, local.ecs_instance_role_arn],
+      local.ecr_deploy_pull_arns,
+    )
+  }
+}
+
 # Creates ECR repositories for containerized mail services. Monitoring
 # repos exist regardless of var.monitoring so the docker matrix can
 # push images unconditionally; only the ECS services that consume them
@@ -246,8 +286,9 @@ module "efs" {
 # (or trimming the docker matrix in app.yml) is now a no-op against
 # the ECR repos rather than a destroy.
 module "ecr" {
-  source                  = "./modules/ecr"
-  monitoring_repositories = local.monitoring_tiers
+  source                      = "./modules/ecr"
+  monitoring_repositories     = local.monitoring_tiers
+  allowed_pull_principal_arns = local.ecr_pull_principals_by_repo
 }
 
 # ECS cluster, services, and task definitions for containerized mail tiers.

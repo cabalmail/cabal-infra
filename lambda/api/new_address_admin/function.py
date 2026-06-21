@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import boto3  # pylint: disable=import-error
 from admin_limits import audit_log, rate_limit_response_or_none  # pylint: disable=import-error
 from helper import assert_zone_owns_apex  # pylint: disable=import-error
+from helper import parse_json_body  # pylint: disable=import-error
 from helper import user_authorized_for_domain  # pylint: disable=import-error
 from helper import validate_dns_apex  # pylint: disable=import-error
 from helper import validate_dns_subdomain  # pylint: disable=import-error
@@ -34,7 +35,9 @@ def handler(event, _context):
     limited = rate_limit_response_or_none(caller, 'new_address_admin')
     if limited:
         return limited
-    body = json.loads(event['body'])
+    body, error = parse_json_body(event)
+    if error:
+        return error
     usernames = body.get('usernames') or []
     if not usernames:
         return {

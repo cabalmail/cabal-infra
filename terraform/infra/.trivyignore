@@ -25,6 +25,7 @@ AWS-0104  # Unrestricted egress: ECS tasks and the NAT instance need broad outbo
 AWS-0320  # S3 bucket names not DNS-compliant: names are stable identifiers; renaming means a data migration
 AWS-0178  # VPC flow logs disabled: deliberate cost choice, consistent with monitoring being off in every environment
 AWS-0190  # API Gateway response caching disabled: caching is undesirable for this mailbox API
+AWS-0090  # S3 versioning: the durable buckets (modules/s3, modules/front_door) now version; this id remains only for cache.<control_domain>, a transient cache whose objects expire after two days (Trivy ignores by id, not per resource)
 
 # --- Must-fix in Phase 2.5 (all cleared) -------------------------------
 # AWS-0031 (ECR mutable) fixed in the safe batch; AWS-0095 (SNS unencrypted),
@@ -35,7 +36,9 @@ AWS-0190  # API Gateway response caching disabled: caching is undesirable for th
 # --- Decay: low/medium hygiene, walk down over time --------------------
 # AWS-0024 (DynamoDB PITR) cleared in 0.10.x: every table now enables
 # point_in_time_recovery (the counter table was the last holdout).
-AWS-0090  # S3 data versioning (transient cache/artifact buckets)
+# AWS-0090 (S3 versioning) reclassified in Phase 4: the durable buckets
+# now version; the residual is the transient cache, moved to the
+# design-driven section above.
 AWS-0089  # S3 bucket access logging
 AWS-0066  # Lambda X-Ray tracing
 AWS-0124  # Security group rule missing description

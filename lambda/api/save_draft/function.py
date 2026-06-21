@@ -27,6 +27,7 @@ from helper import ( # pylint: disable=import-error
     delete_object,
     get_imap_client,
     maintenance_guard,
+    parse_json_body,
     validate_uid,
 )
 
@@ -36,7 +37,9 @@ def handler(event, _context):
     '''Routes the request to save (default) or discard. Interactive and
     IMAP-only, so during a planned IMAP roll the maintenance guard returns
     the 503 signal and clients retry rather than failing.'''
-    body = json.loads(event['body'])
+    body, error = parse_json_body(event)
+    if error:
+        return error
     user = event['requestContext']['authorizer']['claims']['cognito:username']
     op = body.get('op', 'save')
     if op == 'discard':
