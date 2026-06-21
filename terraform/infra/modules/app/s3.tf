@@ -84,8 +84,16 @@ resource "aws_s3_object" "node_config" {
   )
 }
 
-# Bucket for app cache
+# Bucket for app cache.
+#
+# Versioning is intentionally off: every object here is a regenerable
+# derivative (cached .eml bodies, attachment staging, DMARC reports,
+# config.js) and the lifecycle rule below expires all of them after two
+# days, so retaining noncurrent versions would add cost with nothing to
+# recover. CKV_AWS_21 / AWS-0090 are suppressed for this bucket alone -
+# the durable buckets (modules/s3, modules/front_door) do version.
 resource "aws_s3_bucket" "cache" {
+  #checkov:skip=CKV_AWS_21:Transient cache - all objects expire after two days (lifecycle rule below); versioning would only retain regenerable derivatives.
   bucket = "cache.${var.control_domain}"
 }
 

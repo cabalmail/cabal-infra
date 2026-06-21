@@ -46,3 +46,17 @@ resource "aws_s3_bucket_public_access_block" "react_access" {
   ignore_public_acls      = true
   restrict_public_buckets = true
 }
+
+# Versioning protects the deploy artifacts this bucket holds - the
+# React bundle and the Lambda zips that Terraform reads for
+# source_code_hash and that `aws lambda update-function-code` ships
+# from - so an accidental overwrite or delete of a known-good artifact
+# can be rolled back. Churn is low (Vite emits hash-named assets as new
+# keys; only a handful of stable-named objects are ever overwritten),
+# so noncurrent versions do not meaningfully accumulate.
+resource "aws_s3_bucket_versioning" "react_app" {
+  bucket = local.bucket
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
