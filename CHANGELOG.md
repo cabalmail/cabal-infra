@@ -1256,7 +1256,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stage/prod. Net reduction vs. the Docker default capability set: `NET_RAW`,
   `MKNOD`, `AUDIT_WRITE`, `SETFCAP`, `SETPCAP`. `readOnlyRootFilesystem` on the
   mail tiers is deliberately deferred (they regenerate `/etc/mail` +
-  `/etc/opendkim` at runtime); the monitoring tier gets it separately.
+  `/etc/opendkim` at runtime); the monitoring tier, disabled in every
+  environment, is not hardened here and is owed the same posture whenever it
+  is enabled.
 - Tightened OpenDKIM's signing scope (phase 5 of the same plan): the generated
   `TrustedHosts` is now loopback only (`127.0.0.1`, `::1`, `localhost`) instead
   of `0.0.0.0/0`. opendkim signs only mail handed over by the local sendmail
