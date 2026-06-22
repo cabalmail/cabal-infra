@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.28] - 2026-06-22
+
+### Changed
+- The Apple message reader now shows the message subject in full at the top
+  of the detail pane (the list still truncates it). The header expands to
+  fit a wrapping subject and recipient list, capped at 15% of the pane
+  height; longer content scrolls within the header.
+- The Apple message list's All / Unread / Flagged filter pills now stack
+  vertically when the message-list column is too narrow to fit them in a
+  row, instead of wrapping each pill's label character-by-character.
+- The macOS message-list Reload button is now pinned alongside Compose
+  in the primary toolbar group so it stops getting sunk into the trailing
+  ">>" overflow chevron when the unified window toolbar is crowded.
+- The Apple message list now draws a thin separator line between rows,
+  using the platform's system separator color and hairline thickness. It
+  is a zero-height bottom overlay, so the index-addressed virtualization's
+  fixed row height (and scrollbar extent) is unchanged.
+
+### Deprecated
+- Direct access to IMAP and SMTP submission is being phased out and will be
+  removed in version 1.2. After this phase out, only native Cabalmail clients
+  will be able to access inboxes or send mail. Other mail clients will stop
+  working. Some access to IMAP under limited circumstances may be allowed
+  temporarily for migration to or from other providers.
+
 ## [0.10.27] - 2026-06-21
 
 ### Fixed
