@@ -237,6 +237,19 @@ extension MessageListView {
                 rowContextMenu(for: envelope, model: model)
             }
         }
+        .overlay(alignment: .bottom) { rowSeparator() }
+    }
+
+    /// Thin hairline between rows. Drawn as a bottom `.overlay` (not a stack
+    /// member) so it adds NO height: index-addressed virtualization pins every
+    /// row to `MessageListView.rowHeight` and the scroll extent is
+    /// `rowCount * rowHeight`, so a row that grew by a divider's height would
+    /// drift the placeholder rows out of alignment with their slots (see
+    /// `virtualizedList`). `Divider` carries the platform's system separator
+    /// color and thickness, for a thin, unobtrusive line; `allowsHitTesting`
+    /// is off so the line never steals the row's tap / swipe targets.
+    private func rowSeparator() -> some View {
+        Divider().allowsHitTesting(false)
     }
 
     /// Skeleton row shown for an index whose envelope isn't loaded yet. Same
@@ -255,6 +268,7 @@ extension MessageListView {
         .frame(height: MessageListView.rowHeight, alignment: .center)
         .redacted(reason: .placeholder)
         .accessibilityHidden(true)
+        .overlay(alignment: .bottom) { rowSeparator() }
     }
 
     /// Wide layouts (macOS, iPad regular width, visionOS). Selection lives in

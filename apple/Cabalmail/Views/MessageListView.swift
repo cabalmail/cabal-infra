@@ -277,6 +277,38 @@ extension MessageListView {
             // on wide screens the right-edge toolbar placement put them
             // visually farther from the list they affect than the
             // filter tabs that sat one row higher.
+            //
+            // macOS: Compose + Reload share a `.primaryAction` group so
+            // SwiftUI doesn't sink Reload into the trailing `>>` overflow
+            // chevron when the unified window toolbar (this column +
+            // MessageDetailView's seven buttons) gets crowded.
+            #if os(macOS)
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button {
+                    presentCompose(seed: ReplyBuilder.newDraft())
+                } label: {
+                    Image(systemName: "square.and.pencil")
+                        .accessibilityLabel("New Message")
+                }
+                .keyboardShortcut("n", modifiers: .command)
+                // Force-reload button. macOS only — iOS / iPadOS / visionOS
+                // users reach the cheap merge-refresh via pull-to-refresh,
+                // which is the gesture those platforms expect. Routed
+                // through `requestRefresh()` so the toolbar button and the
+                // Mailbox > Refresh menu item share one code path — both
+                // land on `MessageListViewModel.hardReload()`, which wipes
+                // in-memory state before the server fetch so the user has a
+                // reliable escape from any stale-state bug the merge path
+                // doesn't catch.
+                Button {
+                    appState.requestRefresh()
+                } label: {
+                    RefreshActivityIcon(isLoading: model?.isLoading == true)
+                        .accessibilityLabel("Refresh")
+                }
+                .disabled(model == nil || model?.isLoading == true)
+            }
+            #else
             ToolbarItem {
                 Button {
                     presentCompose(seed: ReplyBuilder.newDraft())
@@ -285,25 +317,6 @@ extension MessageListView {
                         .accessibilityLabel("New Message")
                 }
                 .keyboardShortcut("n", modifiers: .command)
-            }
-            #if os(macOS)
-            // Force-reload button. macOS only — iOS / iPadOS / visionOS
-            // users reach the cheap merge-refresh via pull-to-refresh,
-            // which is the gesture those platforms expect. Routed
-            // through `requestRefresh()` so the toolbar button and the
-            // Mailbox > Refresh menu item share one code path — both
-            // land on `MessageListViewModel.hardReload()`, which wipes
-            // in-memory state before the server fetch so the user has a
-            // reliable escape from any stale-state bug the merge path
-            // doesn't catch.
-            ToolbarItem {
-                Button {
-                    appState.requestRefresh()
-                } label: {
-                    RefreshActivityIcon(isLoading: model?.isLoading == true)
-                        .accessibilityLabel("Refresh")
-                }
-                .disabled(model == nil || model?.isLoading == true)
             }
             #endif
         }
