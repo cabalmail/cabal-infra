@@ -36,21 +36,31 @@ struct MessageDetailView: View {
     @State var purgeConfirmPresented = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            headerBlock
-                .padding(.horizontal)
-                .padding(.top)
-            if let attachments = model?.attachments, !attachments.isEmpty {
-                AttachmentStrip(attachments: attachments)
-                    .padding(.vertical, 8)
-            }
-            Divider()
-            if let model {
-                body(for: model)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                ProgressView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+        GeometryReader { proxy in
+            VStack(alignment: .leading, spacing: 0) {
+                // Subject is shown in full in the pane (the list truncates
+                // it) and the header is allowed to grow with a wrapping
+                // subject. Cap at 15% of the pane's height and let the
+                // header scroll when a very long subject or sprawling
+                // recipient list would otherwise eat the reading area.
+                ScrollView(.vertical) {
+                    headerBlock
+                        .padding(.horizontal)
+                        .padding(.vertical, 8)
+                }
+                .frame(maxHeight: proxy.size.height * 0.15)
+                if let attachments = model?.attachments, !attachments.isEmpty {
+                    AttachmentStrip(attachments: attachments)
+                        .padding(.vertical, 8)
+                }
+                Divider()
+                if let model {
+                    body(for: model)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ProgressView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             }
         }
         .navigationTitle(envelope.subject ?? "(no subject)")
@@ -169,35 +179,45 @@ struct MessageDetailView: View {
 
     @ViewBuilder
     private var headerBlock: some View {
-        HStack(alignment: .top, spacing: 12) {
-            if let apiClient = appState.client?.apiClient {
-                AvatarView(sender: envelope.from.first, apiClient: apiClient)
+        VStack(alignment: .leading, spacing: 8) {
+            // Subject appears in full here because the list truncates it;
+            // the surrounding ScrollView in `body` lets the header wrap
+            // freely and scroll when needed.
+            Text(envelope.subject ?? "(no subject)")
+                .font(.title3)
+                .fontWeight(.semibold)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(alignment: .top, spacing: 12) {
+                if let apiClient = appState.client?.apiClient {
+                    AvatarView(sender: envelope.from.first, apiClient: apiClient)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    if let from = envelope.from.first {
+                        Text(headerFromLabel(for: from))
+                            .font(.headline)
+                            .task(id: "\(from.mailbox.lowercased())@\(from.host.lowercased())") {
+                                await hydrateSenderContactName(for: from)
+                            }
+                    }
+                    if !envelope.to.isEmpty {
+                        Text("To: \(envelope.to.map(\.formatted).joined(separator: ", "))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    if !envelope.cc.isEmpty {
+                        Text("Cc: \(envelope.cc.map(\.formatted).joined(separator: ", "))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    if let date = envelope.date ?? envelope.internalDate {
+                        Text(date.formatted(date: .abbreviated, time: .shortened))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer(minLength: 0)
             }
-            VStack(alignment: .leading, spacing: 4) {
-                if let from = envelope.from.first {
-                    Text(headerFromLabel(for: from))
-                        .font(.headline)
-                        .task(id: "\(from.mailbox.lowercased())@\(from.host.lowercased())") {
-                            await hydrateSenderContactName(for: from)
-                        }
-                }
-                if !envelope.to.isEmpty {
-                    Text("To: \(envelope.to.map(\.formatted).joined(separator: ", "))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                if !envelope.cc.isEmpty {
-                    Text("Cc: \(envelope.cc.map(\.formatted).joined(separator: ", "))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                if let date = envelope.date ?? envelope.internalDate {
-                    Text(date.formatted(date: .abbreviated, time: .shortened))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            Spacer(minLength: 0)
         }
     }
 
