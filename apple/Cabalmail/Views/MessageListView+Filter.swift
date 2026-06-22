@@ -36,46 +36,75 @@ public enum MessageFilter: String, CaseIterable, Identifiable {
 extension MessageListView {
     @ViewBuilder
     func filterTabsBar(model: MessageListViewModel, searchActive: Bool) -> some View {
+        // Prefer pills laid out in a row; fall back to a vertical stack
+        // when the message-list column is too narrow to fit them. Without
+        // the fallback the pill labels wrap character-by-character once
+        // the bar is squeezed, which is unreadable.
+        ViewThatFits(in: .horizontal) {
+            filterTabsRow(model: model, searchActive: searchActive, pillsAxis: .horizontal)
+            filterTabsRow(model: model, searchActive: searchActive, pillsAxis: .vertical)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(.bar)
+    }
+
+    // Right-side controls live with the filter tabs so list-shaping
+    // actions sit one row above the list rather than at the far edge of
+    // the window toolbar. The search-refinement filter button only
+    // surfaces while the user is engaged with the search field — see
+    // `topInset` in MessageListView.swift for the cross-platform focus /
+    // `isSearching` routing.
+    @ViewBuilder
+    private func filterTabsRow(
+        model: MessageListViewModel,
+        searchActive: Bool,
+        pillsAxis: Axis
+    ) -> some View {
+        let pillLayout: AnyLayout = pillsAxis == .horizontal
+            ? AnyLayout(HStackLayout(spacing: 6))
+            : AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
         HStack(spacing: 6) {
-            ForEach(MessageFilter.allCases) { filter in
-                Button {
-                    Task { await model.selectFilter(filter) }
-                } label: {
-                    HStack(spacing: 4) {
-                        Text(filter.label)
-                            .font(.subheadline.weight(filter == model.filterTab ? .semibold : .regular))
-                        Text("\(pillCount(filter, model: model))")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(filter == model.filterTab
-                                  ? Color.accentColor.opacity(0.18)
-                                  : Color.clear)
-                    )
+            pillLayout {
+                ForEach(MessageFilter.allCases) { filter in
+                    filterPill(filter, model: model)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("\(filter.label), \(pillCount(filter, model: model))")
             }
             Spacer()
-            // Right-side controls live with the filter tabs so list-
-            // shaping actions sit one row above the list rather than at
-            // the far edge of the window toolbar. The search-refinement
-            // filter button only surfaces while the user is engaged with
-            // the search field — see `topInset` in MessageListView.swift
-            // for the cross-platform focus / `isSearching` routing.
             if searchActive {
                 filterButton
             }
             sortMenu
             selectButton
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(.bar)
+    }
+
+    @ViewBuilder
+    private func filterPill(_ filter: MessageFilter, model: MessageListViewModel) -> some View {
+        Button {
+            Task { await model.selectFilter(filter) }
+        } label: {
+            HStack(spacing: 4) {
+                Text(filter.label)
+                    .font(.subheadline.weight(filter == model.filterTab ? .semibold : .regular))
+                Text("\(pillCount(filter, model: model))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            // Keep the label on one line; ViewThatFits relies on this to
+            // detect when the row no longer fits and stack pills instead.
+            .fixedSize(horizontal: true, vertical: false)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(filter == model.filterTab
+                          ? Color.accentColor.opacity(0.18)
+                          : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(filter.label), \(pillCount(filter, model: model))")
     }
 
     /// Filter-pill count. Mirrors the React pills: server-sourced folder totals
