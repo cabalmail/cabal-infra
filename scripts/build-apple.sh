@@ -4,13 +4,17 @@
 # in .github/workflows/apple.yml so a local "does it build?" check matches CI
 # instead of being hand-assembled each time (and drifting).
 #
-# Usage:
-#   ./build.sh                 # generate + lint + build all platforms (default)
-#   ./build.sh lint            # swiftlint --strict only
-#   ./build.sh macos|ios|visionos
-#   ./build.sh kit-test        # xcodebuild test for CabalmailKit
-#   ./build.sh all             # lint + macos + ios + visionos
-#   ./build.sh generate        # xcodegen generate only
+# Lives in scripts/ (not apple/) on purpose: a script under apple/ would trip
+# apple.yml's `apple/**` path filter and kick off a full Apple CI build on
+# every edit. It operates on the apple/ tree by cd-ing there below.
+#
+# Usage (from the repo root):
+#   scripts/build-apple.sh              # generate + lint + build all platforms (default)
+#   scripts/build-apple.sh lint         # swiftlint --strict only
+#   scripts/build-apple.sh macos|ios|visionos
+#   scripts/build-apple.sh kit-test     # xcodebuild test for CabalmailKit
+#   scripts/build-apple.sh all          # lint + macos + ios + visionos
+#   scripts/build-apple.sh generate     # xcodegen generate only
 #
 # The .xcodeproj is generated (not committed), so every target runs
 # `xcodegen generate` first. swiftlint and xcodebuild both need full Xcode
@@ -27,7 +31,8 @@
 
 set -euo pipefail
 
-cd "$(dirname "$0")"
+# This script lives in scripts/; everything below runs against the apple/ tree.
+cd "$(dirname "$0")/../apple"
 
 readonly WORKSPACE="Cabalmail.xcworkspace"
 readonly DERIVED_DATA="${DERIVED_DATA:-$PWD/.derivedData}"
