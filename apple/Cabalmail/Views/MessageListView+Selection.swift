@@ -18,7 +18,7 @@ extension MessageListView {
     /// envelope via `model.envelope(at:)` and renders a placeholder until the
     /// loaded window covers it; `ensureLoaded(around:)` (on each row's `.task`)
     /// slides/jumps the window to follow the scroll. All rows are pinned to
-    /// `MessageListView.rowHeight`, so the extent is exactly `rowCount * height`
+    /// `rowHeight`, so the extent is exactly `rowCount * height`
     /// -- a stable, true-to-size scrollbar with no spacer cells. A tap
     /// selects/opens; the per-row context menu and drag come from `row(...)`.
     /// Swipe-to-dispose, native multi-select, and keyboard nav are Stage B.
@@ -206,7 +206,7 @@ extension MessageListView {
             if model.bulkMode {
                 row(for: envelope, model: model, isSelected: selected, orderedVisible: visible)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .frame(height: MessageListView.rowHeight, alignment: .center)
+                    .frame(height: rowHeight, alignment: .center)
                     .background(background)
             } else {
                 // `draggableRow` (drag-to-folder) wraps OUTSIDE `SwipeActionRow`
@@ -215,7 +215,7 @@ extension MessageListView {
                 // is swallowed on macOS and never lifts.
                 draggableRow(for: envelope, model: model) {
                     SwipeActionRow(
-                        height: MessageListView.rowHeight,
+                        height: rowHeight,
                         rowBackground: background,
                         leading: toggleReadSwipe(for: envelope, model: model),
                         trailing: disposeSwipe(for: envelope, model: model),
@@ -242,7 +242,7 @@ extension MessageListView {
 
     /// Thin hairline between rows. Drawn as a bottom `.overlay` (not a stack
     /// member) so it adds NO height: index-addressed virtualization pins every
-    /// row to `MessageListView.rowHeight` and the scroll extent is
+    /// row to `rowHeight` and the scroll extent is
     /// `rowCount * rowHeight`, so a row that grew by a divider's height would
     /// drift the placeholder rows out of alignment with their slots (see
     /// `virtualizedList`). `Divider` carries the platform's system separator
@@ -265,7 +265,7 @@ extension MessageListView {
             Spacer()
         }
         .padding(.horizontal, 16)
-        .frame(height: MessageListView.rowHeight, alignment: .center)
+        .frame(height: rowHeight, alignment: .center)
         .redacted(reason: .placeholder)
         .accessibilityHidden(true)
         .overlay(alignment: .bottom) { rowSeparator() }
