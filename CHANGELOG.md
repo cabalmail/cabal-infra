@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.29] - 2026-06-23
+
+### Changed
+- `make promote` now refuses to cut a release when the local `stage` branch is
+  behind `origin/stage`, so a stale checkout can no longer collate the changelog
+  and open the stage->main PR against the wrong base. An unreachable origin is
+  now fatal too, since the behind-origin check cannot run without a fresh fetch.
+  (The pre-existing guard that the release must be cut from `stage` is
+  unchanged.)
+
+### Fixed
+- Fixed the message list at large accessibility text sizes: row height now
+  scales with Dynamic Type, so message details no longer overflow the row
+  and dragging scrolls the whole list again instead of getting trapped
+  scrolling a single row's content.
+
 ## [0.10.28] - 2026-06-22
 
 ### Changed
