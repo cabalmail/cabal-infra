@@ -50,13 +50,22 @@ BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 git diff --quiet && git diff --cached --quiet \
   || die "working tree not clean; commit or stash before releasing"
 
-# Refresh tags from origin so the bump computation and the reuse guard below see
-# versions already released by CI: release.yml tags on origin (via gh), not
-# locally, so a stale checkout would otherwise miss them. Best-effort - a fetch
-# failure (offline, no origin) must not block a release; the guard then falls
-# back to local + gh state.
-git fetch --tags --quiet origin 2>/dev/null \
-  || log "WARNING: could not fetch tags from origin; reuse check uses local/gh state only"
+# Refresh tags and the stage remote-tracking ref from origin: the bump
+# computation and the reuse guard below need versions already released by CI
+# (release.yml tags on origin via gh, not locally), and the behind-origin guard
+# needs an up-to-date origin/stage. An unreachable origin is fatal: without a
+# fresh fetch we cannot tell whether this checkout is current, and cutting a
+# release from a stale tree is exactly what these guards exist to prevent.
+git fetch --tags --quiet origin \
+  || die "could not fetch from origin; releasing needs an up-to-date view of origin (check network/auth and retry)"
+
+# Refuse to release from a stale checkout: if origin/stage carries commits the
+# local stage branch lacks, the collated changelog and the stage->main PR would
+# be cut against the wrong base.
+if git rev-parse --verify --quiet refs/remotes/origin/stage >/dev/null; then
+  [ "$(git merge-base stage origin/stage)" = "$(git rev-parse origin/stage)" ] \
+    || die "stage is behind origin/stage; run 'git pull --ff-only origin stage' before releasing"
+fi
 
 # Resolve the version: explicit semver, or a bump from the latest semver tag.
 latest_tag() { git tag --sort=-v:refname | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | head -1; }
