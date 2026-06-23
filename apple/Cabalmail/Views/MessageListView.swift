@@ -49,18 +49,27 @@ struct MessageListView: View {
     // can read them without round-tripping through accessors.
     @State var model: MessageListViewModel?
     @State private var composeSeed: Draft?
-    /// Fixed list-row height. Rows are pinned to this so the virtualized list
+    /// List-row height. Rows are pinned to this so the virtualized list
     /// (`+Selection`'s `virtualizedList`) can reserve the off-window rows as
     /// exact blank space: the scroll extent then reflects the whole folder, the
     /// scrollbar is true-to-size, and each row keeps its absolute position.
-    /// The index-addressed virtualization needs ONE uniform height, so this has
-    /// to clear the tallest row -- a sender line plus a two-line subject. A
-    /// one-line subject (the common case) keeps the height with a little
-    /// whitespace below; that slack is the price of uniform rows. Trimmed from
-    /// 72 (which left far more gap than the content needs) toward that 2-line
-    /// floor; lower it further only if two-line subjects still fit without
-    /// clipping.
-    static let rowHeight: CGFloat = 58
+    ///
+    /// The index-addressed virtualization needs ONE *uniform* height -- but
+    /// uniform doesn't mean constant. `@ScaledMetric` scales the base value with
+    /// the user's Dynamic Type setting (relative to `.subheadline`, the text
+    /// style the row's two lines use), so every row and every placeholder reads
+    /// the same height at any given setting -- the invariant holds -- and they
+    /// all recompute together when the accessibility size changes. Without this,
+    /// larger accessibility fonts overflowed the fixed height and the per-row
+    /// `SwipeActionRow` List began scrolling its own clipped content, capturing
+    /// the drag meant to scroll the whole list.
+    ///
+    /// The base 58 clears the row's two `.subheadline` lines (sender route +
+    /// one-line subject) at the default size with a little slack; scaling
+    /// preserves that slack proportionally. Instance (not `static`) because
+    /// `@ScaledMetric` reads the environment; module-internal so the
+    /// `+Selection` extension can pin rows and placeholders to it.
+    @ScaledMetric(relativeTo: .subheadline) var rowHeight: CGFloat = 58
     /// `true` while the filter sheet is presented over the message list.
     @State var filtersPresented = false
     /// Set by the row context menu's "Move to folder…" item; presents the
