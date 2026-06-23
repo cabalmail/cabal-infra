@@ -53,17 +53,16 @@ git diff --quiet && git diff --cached --quiet \
 # Refresh tags and the stage remote-tracking ref from origin: the bump
 # computation and the reuse guard below need versions already released by CI
 # (release.yml tags on origin via gh, not locally), and the behind-origin guard
-# needs an up-to-date origin/stage. Best-effort - a fetch failure (offline, no
-# origin) must not block a release; the guards then fall back to local state.
-FETCHED=1
-git fetch --tags --quiet origin 2>/dev/null \
-  || { FETCHED=0; log "WARNING: could not fetch from origin; reuse and behind-origin checks use local state only"; }
+# needs an up-to-date origin/stage. An unreachable origin is fatal: without a
+# fresh fetch we cannot tell whether this checkout is current, and cutting a
+# release from a stale tree is exactly what these guards exist to prevent.
+git fetch --tags --quiet origin \
+  || die "could not fetch from origin; releasing needs an up-to-date view of origin (check network/auth and retry)"
 
 # Refuse to release from a stale checkout: if origin/stage carries commits the
 # local stage branch lacks, the collated changelog and the stage->main PR would
-# be cut against the wrong base. Only enforce when the fetch above reached origin
-# (so origin/stage is fresh); an offline release falls through with the warning.
-if [ "${FETCHED}" -eq 1 ] && git rev-parse --verify --quiet refs/remotes/origin/stage >/dev/null; then
+# be cut against the wrong base.
+if git rev-parse --verify --quiet refs/remotes/origin/stage >/dev/null; then
   [ "$(git merge-base stage origin/stage)" = "$(git rev-parse origin/stage)" ] \
     || die "stage is behind origin/stage; run 'git pull --ff-only origin stage' before releasing"
 fi
