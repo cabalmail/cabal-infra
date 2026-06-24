@@ -14,7 +14,7 @@ make promote VERSION=0.10.14
 # or a bump keyword computed from the latest tag:
 make promote VERSION=patch          # also: minor, major
 # or call the script directly:
-./.github/scripts/promote.sh 0.10.14
+./scripts/promote.sh 0.10.14
 ```
 
 This will:

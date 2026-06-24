@@ -78,8 +78,8 @@ drift: checkov-graph-guard
 
 changelog:
 	@test -n "$(VERSION)" || { echo "usage: make changelog VERSION=<x.y.z>"; exit 1; }
-	./.github/scripts/collate-changelog.sh "$(VERSION)"
+	./scripts/collate-changelog.sh "$(VERSION)"
 
 promote:
 	@test -n "$(VERSION)" || { echo "usage: make promote VERSION=<x.y.z|patch|minor|major>"; exit 1; }
-	./.github/scripts/promote.sh "$(VERSION)"
+	./scripts/promote.sh "$(VERSION)"

@@ -3,7 +3,7 @@ name: Release
 
 # When a release is promoted (a stage -> main merge), CHANGELOG.md gains a new
 # dated "## [X.Y.Z] - DATE" section at the top, written by
-# .github/scripts/promote.sh (via collate-changelog.sh). This workflow turns
+# scripts/promote.sh (via collate-changelog.sh). This workflow turns
 # that into a GitHub release: it reads the top version and, if no release for
 # it exists yet, tags the merge commit and publishes a release whose notes are
 # that version's changelog section (.github/scripts/changelog-section.sh).
