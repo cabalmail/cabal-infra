@@ -209,20 +209,14 @@ extension MessageListView {
                     .frame(height: rowHeight, alignment: .center)
                     .background(background)
             } else {
-                // `draggableRow` (drag-to-folder) wraps OUTSIDE `SwipeActionRow`
-                // so the drag sits on the row container, not inside the embedded
-                // List that owns the swipe -- a `.draggable` within that List row
-                // is swallowed on macOS and never lifts.
+                // `draggableRow` (drag-to-folder) wraps OUTSIDE the swipe row
+                // so the drag sits on the row container, not inside the swipe
+                // mechanism -- a `.draggable` within the embedded List the
+                // macOS path uses is swallowed and never lifts.
                 draggableRow(for: envelope, model: model) {
-                    SwipeActionRow(
-                        height: rowHeight,
-                        rowBackground: background,
-                        leading: toggleReadSwipe(for: envelope, model: model),
-                        trailing: disposeSwipe(for: envelope, model: model),
-                        onSelect: { selectRow(envelope, model: model, ordered: visible) },
-                        content: {
-                            row(for: envelope, model: model, isSelected: selected, orderedVisible: visible)
-                        }
+                    swipeRow(
+                        for: envelope, model: model,
+                        background: background, visible: visible, selected: selected
                     )
                 }
             }
@@ -238,6 +232,49 @@ extension MessageListView {
             }
         }
         .overlay(alignment: .bottom) { rowSeparator() }
+    }
+
+    /// The swipe-actions wrapper for a loaded row. Touch platforms (iOS /
+    /// iPadOS / visionOS) use the hand-rolled `SwipeRow` -- a `ZStack` +
+    /// `DragGesture`, no nested scroll view. The per-row embedded `List` that
+    /// borrowing native `.swipeActions` requires made a background scene-update
+    /// relayout exceed the 10-second watchdog (0x8BADF00D), killing the app a
+    /// second or two after an archive-then-background even on a folder of fewer
+    /// than 30 messages. macOS keeps the native `.swipeActions` via
+    /// `SwipeActionRow`: there the swipe is a two-finger trackpad scroll gesture
+    /// a `DragGesture` can't read, and the Mac has no scene-update watchdog.
+    @ViewBuilder
+    private func swipeRow(
+        for envelope: Envelope,
+        model: MessageListViewModel,
+        background: Color,
+        visible: [Envelope],
+        selected: Bool
+    ) -> some View {
+        #if os(macOS)
+        SwipeActionRow(
+            height: rowHeight,
+            rowBackground: background,
+            leading: toggleReadSwipe(for: envelope, model: model),
+            trailing: disposeSwipe(for: envelope, model: model),
+            onSelect: { selectRow(envelope, model: model, ordered: visible) },
+            content: {
+                row(for: envelope, model: model, isSelected: selected, orderedVisible: visible)
+            }
+        )
+        #else
+        SwipeRow(
+            height: rowHeight,
+            rowBackground: background,
+            leading: toggleReadSwipe(for: envelope, model: model),
+            trailing: disposeSwipe(for: envelope, model: model),
+            onSelect: { selectRow(envelope, model: model, ordered: visible) },
+            resetKey: envelope.uid,
+            content: {
+                row(for: envelope, model: model, isSelected: selected, orderedVisible: visible)
+            }
+        )
+        #endif
     }
 
     /// Thin hairline between rows. Drawn as a bottom `.overlay` (not a stack
