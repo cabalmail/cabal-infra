@@ -188,18 +188,45 @@ extension MessageListView {
         .onDisappear { model.noteRowHidden(index) }
     }
 
-    /// A loaded message row at the fixed row height. The normal row wraps in
-    /// `SwipeActionRow` for swipe-to-dispose (trailing) / toggle-read
-    /// (leading) on touch -- `.swipeActions` is `List`-only, so the
-    /// virtualized `ScrollView` rows hand-roll it (see `SwipeActionRow.swift`).
-    /// `SwipeActionRow` also owns the row's height, background, and tap-to-
-    /// select (a tap closes an open swipe instead of selecting). Compact
-    /// edit mode (`bulkMode`) bypasses swipe: the row is a selection-toggle
-    /// button there, and swipe in a multi-select edit mode would fight it
-    /// (matching Mail, which disables swipe while editing). Shared by the
-    /// virtualized and filtered paths.
+    /// One row slot, gated on scene phase. Once the app is actually
+    /// `.background` every row collapses to the cheap `placeholderRow`: iOS
+    /// renders a synchronous scene update in the background to snapshot the app
+    /// for the switcher, and with the live rows present that means laying out a
+    /// per-row `List` (the `SwipeActionRow` swipe mechanism) for every visible
+    /// message. That relayout -- kicked off by an archive and forced through in
+    /// a single pass on backgrounding -- could exceed the 10-second
+    /// scene-update watchdog (`0x8BADF00D`, which fired with
+    /// `WatchdogVisibility: Background`) even on a folder of fewer than 30
+    /// messages. Placeholders carry no `List`, so the background snapshot is
+    /// cheap; the real row rebuilds on the return to the foreground.
+    ///
+    /// Gated on `.background`, not merely `.inactive`, so an inactive-but-
+    /// visible scene -- iPad Split View / Stage Manager, or a transient
+    /// Control Center / notification-shade pull -- keeps its live content.
+    /// (When a background-privacy cover lands, that masking will key off the
+    /// earlier `.inactive` instead; this is purely the watchdog fix.) Shared by
+    /// the virtualized and filtered paths.
     @ViewBuilder
     private func messageRow(_ envelope: Envelope, model: MessageListViewModel, visible: [Envelope]) -> some View {
+        if scenePhase == .background {
+            placeholderRow()
+        } else {
+            activeMessageRow(envelope, model: model, visible: visible)
+        }
+    }
+
+    /// The live message row. The normal row wraps in `SwipeActionRow` for
+    /// native swipe-to-dispose (trailing) / toggle-read (leading) -- on every
+    /// platform, including the macOS two-finger trackpad swipe. Compact edit
+    /// mode (`bulkMode`) bypasses swipe: the row is a selection-toggle button
+    /// there, and swipe in a multi-select edit mode would fight it (matching
+    /// Mail, which disables swipe while editing).
+    @ViewBuilder
+    private func activeMessageRow(
+        _ envelope: Envelope,
+        model: MessageListViewModel,
+        visible: [Envelope]
+    ) -> some View {
         let selected = rowIsSelected(envelope, model: model)
         let background = selected ? Color.accentColor.opacity(0.15) : Color.clear
         Group {
@@ -209,14 +236,20 @@ extension MessageListView {
                     .frame(height: rowHeight, alignment: .center)
                     .background(background)
             } else {
-                // `draggableRow` (drag-to-folder) wraps OUTSIDE the swipe row
-                // so the drag sits on the row container, not inside the swipe
-                // mechanism -- a `.draggable` within the embedded List the
-                // macOS path uses is swallowed and never lifts.
+                // `draggableRow` (drag-to-folder) wraps OUTSIDE `SwipeActionRow`
+                // so the drag sits on the row container, not inside the embedded
+                // List that owns the swipe -- a `.draggable` within that List row
+                // is swallowed on macOS and never lifts.
                 draggableRow(for: envelope, model: model) {
-                    swipeRow(
-                        for: envelope, model: model,
-                        background: background, visible: visible, selected: selected
+                    SwipeActionRow(
+                        height: rowHeight,
+                        rowBackground: background,
+                        leading: toggleReadSwipe(for: envelope, model: model),
+                        trailing: disposeSwipe(for: envelope, model: model),
+                        onSelect: { selectRow(envelope, model: model, ordered: visible) },
+                        content: {
+                            row(for: envelope, model: model, isSelected: selected, orderedVisible: visible)
+                        }
                     )
                 }
             }
@@ -232,49 +265,6 @@ extension MessageListView {
             }
         }
         .overlay(alignment: .bottom) { rowSeparator() }
-    }
-
-    /// The swipe-actions wrapper for a loaded row. Touch platforms (iOS /
-    /// iPadOS / visionOS) use the hand-rolled `SwipeRow` -- a `ZStack` +
-    /// `DragGesture`, no nested scroll view. The per-row embedded `List` that
-    /// borrowing native `.swipeActions` requires made a background scene-update
-    /// relayout exceed the 10-second watchdog (0x8BADF00D), killing the app a
-    /// second or two after an archive-then-background even on a folder of fewer
-    /// than 30 messages. macOS keeps the native `.swipeActions` via
-    /// `SwipeActionRow`: there the swipe is a two-finger trackpad scroll gesture
-    /// a `DragGesture` can't read, and the Mac has no scene-update watchdog.
-    @ViewBuilder
-    private func swipeRow(
-        for envelope: Envelope,
-        model: MessageListViewModel,
-        background: Color,
-        visible: [Envelope],
-        selected: Bool
-    ) -> some View {
-        #if os(macOS)
-        SwipeActionRow(
-            height: rowHeight,
-            rowBackground: background,
-            leading: toggleReadSwipe(for: envelope, model: model),
-            trailing: disposeSwipe(for: envelope, model: model),
-            onSelect: { selectRow(envelope, model: model, ordered: visible) },
-            content: {
-                row(for: envelope, model: model, isSelected: selected, orderedVisible: visible)
-            }
-        )
-        #else
-        SwipeRow(
-            height: rowHeight,
-            rowBackground: background,
-            leading: toggleReadSwipe(for: envelope, model: model),
-            trailing: disposeSwipe(for: envelope, model: model),
-            onSelect: { selectRow(envelope, model: model, ordered: visible) },
-            resetKey: envelope.uid,
-            content: {
-                row(for: envelope, model: model, isSelected: selected, orderedVisible: visible)
-            }
-        )
-        #endif
     }
 
     /// Thin hairline between rows. Drawn as a bottom `.overlay` (not a stack
