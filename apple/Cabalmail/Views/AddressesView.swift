@@ -19,6 +19,10 @@ struct AddressesView: View {
     @State private var pendingRevoke: Address?
     @State private var filterQuery: String = ""
     @State private var isRefreshing = false
+    /// Local banner. On iPad-regular this view lives in the settings sheet
+    /// and on macOS in the settings window, so the root `AppState.toast`
+    /// overlay can't reach it — host copy / creation banners here.
+    @State private var toast: Toast?
 
     var body: some View {
         #if os(macOS)
@@ -45,6 +49,7 @@ struct AddressesView: View {
                 actions: revokeDialogActions,
                 message: revokeDialogMessage
             )
+            .toastOverlay($toast)
         #else
         NavigationStack {
             content
@@ -61,6 +66,7 @@ struct AddressesView: View {
                     actions: revokeDialogActions,
                     message: revokeDialogMessage
                 )
+                .toastOverlay($toast)
         }
         #endif
     }
@@ -204,6 +210,12 @@ struct AddressesView: View {
         }
         .contextMenu {
             Button {
+                copyToPasteboard(address.address)
+                toast = .addressCopied(address.address)
+            } label: {
+                Label("Copy Address", systemImage: "doc.on.doc")
+            }
+            Button {
                 Task { await model.toggleFavorite(address) }
             } label: {
                 Label(
@@ -244,7 +256,10 @@ struct AddressesView: View {
     private var newAddressSheet: some View {
         NewAddressSheet(
             domains: appState.client?.configuration.domains ?? [],
-            onCreate: { _ in await model?.onAddressCreated() }
+            onCreate: { address in
+                await model?.onAddressCreated()
+                toast = .addressCreated(address)
+            }
         )
         .environment(appState)
     }
@@ -283,9 +298,11 @@ struct AddressesView: View {
     private func revokeDialogMessage(for address: Address) -> some View {
         Text("Mail sent to \(address.address) will be rejected. This can't be undone.")
     }
+}
 
-    // MARK: - Lifecycle
+// MARK: - Lifecycle
 
+extension AddressesView {
     private func ensureModel() async {
         if model == nil, let client = appState.client {
             model = AddressesViewModel(client: client)
