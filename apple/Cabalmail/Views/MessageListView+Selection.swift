@@ -188,18 +188,45 @@ extension MessageListView {
         .onDisappear { model.noteRowHidden(index) }
     }
 
-    /// A loaded message row at the fixed row height. The normal row wraps in
-    /// `SwipeActionRow` for swipe-to-dispose (trailing) / toggle-read
-    /// (leading) on touch -- `.swipeActions` is `List`-only, so the
-    /// virtualized `ScrollView` rows hand-roll it (see `SwipeActionRow.swift`).
-    /// `SwipeActionRow` also owns the row's height, background, and tap-to-
-    /// select (a tap closes an open swipe instead of selecting). Compact
-    /// edit mode (`bulkMode`) bypasses swipe: the row is a selection-toggle
-    /// button there, and swipe in a multi-select edit mode would fight it
-    /// (matching Mail, which disables swipe while editing). Shared by the
-    /// virtualized and filtered paths.
+    /// One row slot, gated on scene phase. Once the app is actually
+    /// `.background` every row collapses to the cheap `placeholderRow`: iOS
+    /// renders a synchronous scene update in the background to snapshot the app
+    /// for the switcher, and with the live rows present that means laying out a
+    /// per-row `List` (the `SwipeActionRow` swipe mechanism) for every visible
+    /// message. That relayout -- kicked off by an archive and forced through in
+    /// a single pass on backgrounding -- could exceed the 10-second
+    /// scene-update watchdog (`0x8BADF00D`, which fired with
+    /// `WatchdogVisibility: Background`) even on a folder of fewer than 30
+    /// messages. Placeholders carry no `List`, so the background snapshot is
+    /// cheap; the real row rebuilds on the return to the foreground.
+    ///
+    /// Gated on `.background`, not merely `.inactive`, so an inactive-but-
+    /// visible scene -- iPad Split View / Stage Manager, or a transient
+    /// Control Center / notification-shade pull -- keeps its live content.
+    /// (When a background-privacy cover lands, that masking will key off the
+    /// earlier `.inactive` instead; this is purely the watchdog fix.) Shared by
+    /// the virtualized and filtered paths.
     @ViewBuilder
     private func messageRow(_ envelope: Envelope, model: MessageListViewModel, visible: [Envelope]) -> some View {
+        if scenePhase == .background {
+            placeholderRow()
+        } else {
+            activeMessageRow(envelope, model: model, visible: visible)
+        }
+    }
+
+    /// The live message row. The normal row wraps in `SwipeActionRow` for
+    /// native swipe-to-dispose (trailing) / toggle-read (leading) -- on every
+    /// platform, including the macOS two-finger trackpad swipe. Compact edit
+    /// mode (`bulkMode`) bypasses swipe: the row is a selection-toggle button
+    /// there, and swipe in a multi-select edit mode would fight it (matching
+    /// Mail, which disables swipe while editing).
+    @ViewBuilder
+    private func activeMessageRow(
+        _ envelope: Envelope,
+        model: MessageListViewModel,
+        visible: [Envelope]
+    ) -> some View {
         let selected = rowIsSelected(envelope, model: model)
         let background = selected ? Color.accentColor.opacity(0.15) : Color.clear
         Group {

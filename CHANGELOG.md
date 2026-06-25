@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.30] - 2026-06-25
+
+### Added
+- Added `make apple` targets that wrap `scripts/build-apple.sh`, so a local
+  Apple build/lint check is as discoverable as `make scan`. `make apple` runs
+  the full generate + lint + build sweep; `apple-lint`, `apple-macos`,
+  `apple-ios`, `apple-visionos`, and `apple-kit-test` select a single step.
+  macOS with full Xcode only.
+
+### Changed
+- Moved the operator-run release scripts (`promote.sh`, `collate-changelog.sh`)
+  from `.github/scripts/` to `scripts/`, alongside the other locally-run tools.
+  `.github/scripts/` is now reserved for scripts a workflow actually executes;
+  the release scripts are run by a human and only trigger CI via the resulting
+  push. `make promote` / `make changelog` are unchanged.
+
+### Fixed
+- Fixed an iOS crash that could kill the app a second or two after you
+  archived a message and sent the app to the background. The message list
+  now drops to lightweight placeholder rows while the app is backgrounded,
+  so the system's background snapshot no longer has to lay out every row's
+  swipe controls -- the work that could exceed the app's scene-update
+  watchdog. The swipe gestures themselves are unchanged.
+
 ## [0.10.29] - 2026-06-23
 
 ### Changed
