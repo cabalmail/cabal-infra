@@ -7,7 +7,20 @@ import AppKit
 /// Envelope list for a single folder. Selection is lifted to the parent so
 /// the split view can bind the detail pane to it.
 struct MessageListView: View {
-    let folder: Folder
+    /// What this list shows — a folder or the global search surface. Drives the
+    /// title, the top-inset chrome (filter pills vs. search-result banner), and
+    /// whether the folder lifecycle (initial load / IDLE / 60s poll) runs.
+    let scope: MessageListScope
+    /// Parent-owned view model for `.search` scope (so the search input —
+    /// `.searchable` on iPhone, the sidebar field on iPad/macOS — can bind the
+    /// same model). Nil in folder scope: the view self-creates the folder model
+    /// in `.task` and owns its full lifecycle.
+    var injectedSearchModel: MessageListViewModel?
+    /// Resolved anchor folder (a sentinel in `.search` scope). Computed so the
+    /// folder-keyed extensions read it unchanged.
+    var folder: Folder { scope.folder }
+    /// True for the global search surface.
+    var isSearchScope: Bool { scope.isSearch }
     @Binding var selection: Envelope?
     /// When set, narrows the visible envelopes to those whose `To` or `Cc`
     /// includes this address (case-insensitive substring match), matching
@@ -94,12 +107,6 @@ struct MessageListView: View {
     /// hoisting the flag here lets the `safeAreaInset` builder see it
     /// without a separate `@State` per inset.
     @State var unsubscribedRefreshInFlight = false
-    /// macOS focus state for the inline search field. Drives the
-    /// "show the search-refinement filter button only while the user
-    /// is engaged with search" rule. The iOS / iPadOS / visionOS path
-    /// reads `\.isSearching` from the `.searchable` scope instead — see
-    /// `SearchActiveScope` in `MessageListView+Filter.swift`.
-    @FocusState var inlineSearchFocused: Bool
     /// Focus state for the message list itself (wide/keyboard layouts). The
     /// virtualized `ScrollView` binds this so Up/Down/Cmd-A/Esc are scoped to
     /// the list -- they fire only while it holds focus, never stealing those
@@ -208,24 +215,15 @@ struct MessageListView: View {
                 compactList(model: model, visible: visible)
             }
         }
-        // iPadOS/iOS/visionOS — `.searchable` lands the search bar above
-        // the content column's list, exactly where we want it. macOS
-        // routes the same modifier to the window toolbar at the trailing
-        // edge, which visually parks the search box over the detail
-        // (message body) column. Rendering an inline search field via
-        // `.safeAreaInset` below keeps macOS looking like iPad.
-        #if !os(macOS)
-        .searchable(text: $model.searchQuery, prompt: "Search mailbox")
-        .onSubmit(of: .search) {
-            Task { await model.runSearch() }
-        }
-        #endif
-        // Drop search mode when the field is cleared. `.searchable`'s
-        // built-in × / Cancel buttons and the macOS inline field's clear
-        // button all just zero out the binding without firing
-        // `.onSubmit(of: .search)`, so without this the user would be
-        // stuck with stale search results and no path back to the
-        // folder view short of running a different query.
+        // Search input lives on the search *surface*, not the folder list:
+        // `.searchable` on the iPhone search tab (driving the iOS 26 tab-bar
+        // morph) and the sidebar field on iPad/macOS — both bind this model's
+        // `searchQuery`. The folder list no longer carries a search bar.
+        //
+        // Drop search mode when the query is cleared. The search field's
+        // built-in × / Cancel just zero out the binding without firing
+        // `.onSubmit(of: .search)`, so without this the user would be stuck
+        // with stale results and no path back short of a new query.
         .onChange(of: model.searchQuery) { _, newValue in
             guard model.isSearchActive,
                   newValue.trimmingCharacters(in: .whitespaces).isEmpty
@@ -238,7 +236,9 @@ struct MessageListView: View {
         .safeAreaInset(edge: .top, spacing: 0) { topInset(model: model) }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 0) {
-                if !folder.isSubscribed {
+                // The unsubscribed-folder banner is a folder-view concern; the
+                // global search surface has no single folder to subscribe to.
+                if !isSearchScope, !folder.isSubscribed {
                     unsubscribedFolderBanner(model: model)
                 }
                 if showsBulkActionBar(model: model) { bulkActionBar(model: model) }
@@ -268,7 +268,7 @@ extension MessageListView {
                 ProgressView()
             }
         }
-        .navigationTitle(folder.name)
+        .navigationTitle(isSearchScope ? "Search" : folder.name)
         #if os(iOS) || os(visionOS)
         // Without this, `.searchable` + the `safeAreaInset(.top)` filter
         // tabs leave the default large-title bar in a half-collapsed
@@ -381,14 +381,21 @@ extension MessageListView {
         presentationLayer
         .task {
             if model == nil, let client = appState.client {
-                model = MessageListViewModel(
-                    folder: folder,
-                    client: client,
-                    preferences: preferences,
-                    appState: appState
-                )
-                await model?.loadInitial()
-                await model?.startWatching()
+                if isSearchScope {
+                    // Parent owns the search model (its query is bound by the
+                    // external search input). No folder load / IDLE here — it
+                    // populates only when a search runs.
+                    model = injectedSearchModel
+                } else {
+                    model = MessageListViewModel(
+                        scope: scope,
+                        client: client,
+                        preferences: preferences,
+                        appState: appState
+                    )
+                    await model?.loadInitial()
+                    await model?.startWatching()
+                }
             }
             // Cold-launch mailto: arrives via `.onOpenURL` in the app
             // entry, which parks the seed on AppState before this
@@ -407,6 +414,9 @@ extension MessageListView {
         // new mail without pull-to-refresh. `.task` cancels automatically
         // on `.onDisappear`, so the timer stops with the watcher.
         .task {
+            // Folder-only fallback poll; the search surface has no folder to
+            // re-STATUS and re-running the active search on a timer isn't wanted.
+            guard !isSearchScope else { return }
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(60))
                 guard !Task.isCancelled else { break }
