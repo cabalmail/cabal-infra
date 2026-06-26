@@ -34,6 +34,14 @@ struct MessageDetailView: View {
     /// fires while the message lives in Trash. Non-private so the
     /// `+Toolbar` extension's dispose button can stage it.
     @State var purgeConfirmPresented = false
+    // Header address-menu state, populated by `loadAddressMenuContext()` and
+    // read by the `+AddressMenu` extension to gate the Contacts and "Compose
+    // From" items.
+    @State var contactsAuth: ContactsAuthorizationStatus = .notDetermined
+    @State var ownedAddresses: Set<String> = []
+    #if os(iOS) || os(visionOS)
+    @State var contactEditorRequest: ContactEditorRequest?
+    #endif
 
     var body: some View {
         GeometryReader { proxy in
@@ -84,6 +92,12 @@ struct MessageDetailView: View {
         .sheet(item: $sourceSheetTab) { tab in
             sourceSheet(initialTab: tab)
         }
+        #if os(iOS) || os(visionOS)
+        .sheet(item: $contactEditorRequest) { request in
+            ContactEditorView(request: request) { contactEditorRequest = nil }
+        }
+        #endif
+        .task { await loadAddressMenuContext() }
         .confirmationDialog(
             "Delete Forever?",
             isPresented: $purgeConfirmPresented,
@@ -199,16 +213,13 @@ struct MessageDetailView: View {
                             .task(id: "\(from.mailbox.lowercased())@\(from.host.lowercased())") {
                                 await hydrateSenderContactName(for: from)
                             }
+                            .contextMenu { addressMenu(for: from) }
                     }
                     if !envelope.to.isEmpty {
-                        Text("To: \(envelope.to.map(\.formatted).joined(separator: ", "))")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        recipientFlow(label: "To:", addresses: envelope.to)
                     }
                     if !envelope.cc.isEmpty {
-                        Text("Cc: \(envelope.cc.map(\.formatted).joined(separator: ", "))")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        recipientFlow(label: "Cc:", addresses: envelope.cc)
                     }
                     if let date = envelope.date ?? envelope.internalDate {
                         Text(date.formatted(date: .abbreviated, time: .shortened))
@@ -219,27 +230,6 @@ struct MessageDetailView: View {
                 Spacer(minLength: 0)
             }
         }
-    }
-
-    /// "Name <addr@host>" formatter that prefers the envelope's RFC 5322
-    /// phrase first, then the user's own name from Contacts. Mirrors
-    /// `EmailAddress.formatted` but with the contacts fallback wedged
-    /// in between.
-    private func headerFromLabel(for address: EmailAddress) -> String {
-        let addrPart = "\(address.mailbox)@\(address.host)"
-        if let name = address.displayName, !name.isEmpty {
-            return "\(name) <\(addrPart)>"
-        }
-        if let name = senderContactName, !name.isEmpty {
-            return "\(name) <\(addrPart)>"
-        }
-        return addrPart
-    }
-
-    private func hydrateSenderContactName(for address: EmailAddress) async {
-        senderContactName = nil
-        if let name = address.displayName, !name.isEmpty { return }
-        senderContactName = await appState.contactsStore.displayName(for: address)
     }
 
     @ViewBuilder
