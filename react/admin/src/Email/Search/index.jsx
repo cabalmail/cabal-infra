@@ -305,7 +305,7 @@ function Search({
   const shownIds = useMemo(() => envelopes.map((e) => Number(e.id)), [envelopes]);
 
   const toggleSelect = useCallback(
-    (id, { shift, meta } = {}) => {
+    (id, { shift } = {}) => {
       const next = new Set(selected);
       if (shift && lastSelectedRef.current != null && shownIds.length) {
         const a = shownIds.indexOf(Number(lastSelectedRef.current));

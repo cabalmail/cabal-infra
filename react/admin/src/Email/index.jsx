@@ -163,7 +163,6 @@ function Email({
   }, []);
 
   const openCompose = useCallback((composeState) => {
-    // eslint-disable-next-line no-plusplus
     const id = ++composeIdSeq;
     setComposeWindows(prev => [...prev, { id, ...composeState }]);
   }, []);
