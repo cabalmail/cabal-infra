@@ -10,9 +10,11 @@ client looks the record up at render time, fetches the SVG, and shows it
 in the message row. It is increasingly the default visual treatment in
 Gmail, Apple Mail, Yahoo, Fastmail, and others.
 
-This plan was originally written to fix four problems at once. Two are
-done and the other two are partly done; see **Already shipped** for what
-landed piecemeal during 0.9.x/0.10.x. What remains:
+This plan was originally written to fix four problems at once. Two had
+already landed piecemeal during 0.9.x/0.10.x (see **Already shipped**);
+the remaining three phases (A/B/C below) are now implemented on the
+feature branch and pending deploy + on-device/inspector verification.
+The three problems they address:
 
 1. **`fetch_bimi` is not spec-correct.** The Lambda at
    [`lambda/api/fetch_bimi/function.py`](../../lambda/api/fetch_bimi/function.py)
