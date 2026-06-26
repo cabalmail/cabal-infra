@@ -295,40 +295,43 @@ glyph SVGs; the unread dot stays.
 
 ### Phase C: publish BIMI for Cabalmail domains
 
-Goal: every domain in `TF_VAR_MAIL_DOMAINS` publishes a working
-`default._bimi` record pointing at the Cabalmail mark.
+Goal: mail Cabalmail sends publishes a working `default._bimi` record
+pointing at the Cabalmail mark, so receivers that support BIMI show our
+logo.
 
-- Adjust the handoff mark into SVG Tiny PS form:
+- Adjust the handoff mark into SVG Tiny PS form, saved at
+  [`front-door/assets/bimi/cabalmail.svg`](../../front-door/assets/bimi/cabalmail.svg)
+  (ships through the existing front_door pipeline):
   - Add `version="1.2"` and `baseProfile="tiny-ps"` on the root.
   - Add `<title>Cabalmail</title>` as the first child of the root.
   - Add an opaque background `<rect>` covering the viewBox in
-    `--cm-cream` (`#F4EBD6`).
-  - Strip any `&#xA;` whitespace artifacts from the path data.
-  - Save at `front-door/assets/bimi/cabalmail.svg`. Ships through the
-    existing front_door pipeline.
-- Add Terraform records. Pattern follows
-  [`terraform/infra/modules/app/dmarc_user.tf`](../../terraform/infra/modules/app/dmarc_user.tf).
-  Create them either in a new `bimi.tf` inside the `app` module or in a
-  small dedicated `bimi` module - whichever keeps the
-  `for_each = var.domains` iteration cleanest. Each record:
+    `--cm-cream` (`#F4EBD6`); render the mark in `--cm-forest`
+    (`#2E5235`). Replace the source's `fill="currentColor"` with that
+    explicit color - Tiny PS has no CSS context to resolve
+    `currentColor`.
+  - Strip the `&#xA;` whitespace artifacts from the path data.
 
-  ```hcl
-  resource "aws_route53_record" "bimi" {
-    for_each = { for d in var.domains : d.domain => d }
-    zone_id  = each.value.zone_id
-    name     = "default._bimi.*.${each.value.domain}"
-    type     = "TXT"
-    ttl      = 3600
-    records  = ["v=BIMI1; l=https://www.${var.control_domain}/assets/bimi/cabalmail.svg"]
-  }
-  ```
-
-- Wildcard TXT support varies by resolver. If field-testing with
-  `dig TXT default._bimi.<some-subdomain>.<domain>` from multiple
-  vantage points shows the wildcard not being honored, switch to an
-  explicit list driven by a new variable
-  `var.bimi_subdomains = ["mail-admin", ...]` and iterate. The wildcard
-  is the preferred starting point.
+- **Records are written per sending subdomain, not by a wildcard.** The
+  BIMI lookup name is `default._bimi.<subdomain>.<domain>`, with the
+  per-address subdomain in the *middle*; a DNS wildcard only matches a
+  *leftmost* label, so `default._bimi.*.<domain>` is a literal record
+  that matches nothing. This is the same constraint that makes the
+  `new`-address Lambda write `_dmarc` / `cabal._domainkey` /
+  `<subdomain>` records per address rather than wildcarding them. BIMI
+  follows that mechanism:
+  - **User addresses:** the
+    [`new`](../../lambda/api/new/function.py) Lambda's
+    `create_dns_records` adds a
+    `default._bimi.<subdomain>.<tld>` TXT
+    (`v=BIMI1; l=https://www.<control_domain>/assets/bimi/cabalmail.svg`)
+    alongside the existing per-address records, so every newly created
+    address publishes BIMI. (Addresses created before this ships do not
+    have the record; a one-off backfill over the `cabal-addresses`
+    table can add them if desired - tracked as follow-up, not blocking.)
+  - **System sender:** `mail-admin` is provisioned in Terraform, so its
+    record is added there too, in
+    [`dmarc_user.tf`](../../terraform/infra/modules/app/dmarc_user.tf)
+    (`aws_route53_record.dmarc_subdomain_bimi`).
 - After apply, validate with
   [bimigroup.org/bimi-inspector](https://bimigroup.org/bimi-inspector)
   for a known sender subdomain. Once verified, document the inspector
@@ -351,10 +354,12 @@ Each phase verifies end-to-end before merging.
 - **Phase B.** `cd react/admin && npm run test`. Manually load the
   admin app, confirm logos render for messages from known
   BIMI-publishing senders and initials avatars render for the rest.
-- **Phase C.** From outside the Cabalmail VPC,
-  `dig TXT default._bimi.<some-mail-subdomain>.<cabalmail-domain>`
-  returns the expected record. Send a test email from a Cabalmail
-  address to a Gmail account and a Fastmail account; confirm the
+- **Phase C.** Create a new address (exercises the `new` Lambda), then
+  from outside the Cabalmail VPC
+  `dig TXT default._bimi.<that-subdomain>.<cabalmail-domain>` returns the
+  expected record; likewise for `mail-admin` after the Terraform apply.
+  Send a test email from a Cabalmail address to a Gmail account and a
+  Fastmail account; confirm the
   Cabalmail mark renders (Gmail will require a VMC, so the mark appears
   in Fastmail but not Gmail - that is expected and matches the "VMC
   deferred" non-goal).
@@ -370,10 +375,11 @@ Each phase verifies end-to-end before merging.
 
 ## Rollout notes
 
-- Phase A (Lambda) and Phase C (Terraform TXT records plus front_door
-  SVG) are direct-to-prod-eligible per the "Direct-to-prod scaffolding"
-  rules in [`CLAUDE.md`](../../CLAUDE.md): no data plane impact, no
-  user-facing surface change in isolation, no IAM/security implications,
-  purely additive.
-- Phase B (React) is a user-facing UI change and routes via stage as
-  usual.
+- Phase A (`fetch_bimi` Lambda) is additive and self-contained: no data
+  plane impact, no user-facing surface change in isolation. The one
+  infra note is that it becomes the lone x86_64 Lambda (bundled resvg).
+- Phase B (React) is a user-facing UI change and routes via stage.
+- Phase C touches the `new`-address Lambda's DNS writes (the BIMI record
+  is added to the address-creation flow), so it is *not*
+  direct-to-prod-eligible - it routes via stage with the rest. The
+  front_door SVG and the `mail-admin` Terraform record are additive.

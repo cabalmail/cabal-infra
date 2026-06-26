@@ -85,3 +85,15 @@ resource "aws_route53_record" "dmarc_subdomain_dmarc" {
     ignore_changes = [records]
   }
 }
+
+# BIMI for the system sender subdomain. User subdomains get this record from
+# the new-address Lambda (the name has the subdomain in the middle, so a DNS
+# wildcard cannot serve it); mail-admin is created here in Terraform, so its
+# BIMI record is too. Points at the SVG; receivers rasterize it.
+resource "aws_route53_record" "dmarc_subdomain_bimi" {
+  zone_id = var.domains[0].zone_id
+  name    = "default._bimi.mail-admin.${var.domains[0].domain}"
+  type    = "TXT"
+  ttl     = 3600
+  records = ["v=BIMI1; l=https://www.${var.control_domain}/assets/bimi/cabalmail.svg"]
+}
