@@ -141,46 +141,73 @@ struct MailRootView: View {
         )
     }
 
+    /// Content column: global search results while the sidebar search field is
+    /// engaged, otherwise the selected folder's message list (or an empty-state
+    /// prompt). Extracted so `body` can hang the Settings gear on its toolbar.
+    @ViewBuilder
+    private var contentColumn: some View {
+        if isSearching, let searchModel {
+            // Global search owns the content column while the sidebar field
+            // is engaged. Stable `.id` so it isn't torn down per keystroke;
+            // the detail column still reads the selected message, against
+            // the result's true mailbox via `crossFolderDetail`.
+            MessageListView(
+                scope: .search,
+                injectedSearchModel: searchModel,
+                selection: $selectedEnvelope,
+                addressFilter: nil,
+                onClearAddressFilter: {},
+                onSearchResultSelected: { sourceFolderPath in
+                    crossFolderDetail = sourceFolderPath.map { Folder(path: $0) }
+                },
+                onSelectionCountChanged: { listSelectionCount = $0 }
+            )
+            .id("search")
+        } else if let selectedFolder {
+            MessageListView(
+                scope: .folder(selectedFolder),
+                selection: $selectedEnvelope,
+                addressFilter: selectedAddress?.address,
+                onClearAddressFilter: { selectedAddress = nil },
+                onSearchResultSelected: { sourceFolderPath in
+                    crossFolderDetail = sourceFolderPath.map { Folder(path: $0) }
+                },
+                onSelectionCountChanged: { listSelectionCount = $0 }
+            )
+            .id(selectedFolder.path)
+        } else {
+            ContentUnavailableView(
+                "Select a folder",
+                systemImage: "sidebar.left",
+                description: Text("Pick a mailbox from the sidebar to browse messages.")
+            )
+        }
+    }
+
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility, preferredCompactColumn: $compactColumn) {
             sidebar
         } content: {
-            if isSearching, let searchModel {
-                // Global search owns the content column while the sidebar field
-                // is engaged. Stable `.id` so it isn't torn down per keystroke;
-                // the detail column still reads the selected message, against
-                // the result's true mailbox via `crossFolderDetail`.
-                MessageListView(
-                    scope: .search,
-                    injectedSearchModel: searchModel,
-                    selection: $selectedEnvelope,
-                    addressFilter: nil,
-                    onClearAddressFilter: {},
-                    onSearchResultSelected: { sourceFolderPath in
-                        crossFolderDetail = sourceFolderPath.map { Folder(path: $0) }
-                    },
-                    onSelectionCountChanged: { listSelectionCount = $0 }
-                )
-                .id("search")
-            } else if let selectedFolder {
-                MessageListView(
-                    scope: .folder(selectedFolder),
-                    selection: $selectedEnvelope,
-                    addressFilter: selectedAddress?.address,
-                    onClearAddressFilter: { selectedAddress = nil },
-                    onSearchResultSelected: { sourceFolderPath in
-                        crossFolderDetail = sourceFolderPath.map { Folder(path: $0) }
-                    },
-                    onSelectionCountChanged: { listSelectionCount = $0 }
-                )
-                .id(selectedFolder.path)
-            } else {
-                ContentUnavailableView(
-                    "Select a folder",
-                    systemImage: "sidebar.left",
-                    description: Text("Pick a mailbox from the sidebar to browse messages.")
-                )
-            }
+            contentColumn
+                // App-level Settings gear, relocated next to the content column's
+                // sidebar toggle now that the sidebar — its former home — starts
+                // collapsed on iPad. Regular-width iPad only (compact keeps its
+                // Settings tab, macOS its Settings scene), matching where the gear
+                // appeared before.
+                #if !os(macOS)
+                .toolbar {
+                    if showsSettingsGear {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button {
+                                appState.requestSettings()
+                            } label: {
+                                Image(systemName: "gearshape")
+                                    .accessibilityLabel("Settings")
+                            }
+                        }
+                    }
+                }
+                #endif
         } detail: {
             if listSelectionCount >= 2 {
                 // Multi-selection: no single message to read, so mirror Mail's

@@ -14,14 +14,6 @@ struct FolderListView: View {
     // extensions in this directory.
     @Environment(AppState.self) var appState
     @Environment(Preferences.self) var preferences
-    #if !os(macOS)
-    // Drives whether the settings gear shows: true only on the regular-width
-    // single-rail layout, where the section tab bar is gone. Compact keeps its
-    // Settings tab instead. An environment flag, not a `horizontalSizeClass`
-    // check - this sidebar is a narrow split-view column and reports compact
-    // even on a regular-width iPad.
-    @Environment(\.showsSettingsGear) private var showsSettingsGear
-    #endif
     @State var model: FolderListViewModel?
     @State private var didNotifyLoad = false
     @State var filterQuery: String = ""
@@ -138,24 +130,6 @@ struct FolderListView: View {
         .navigationTitle("Mailboxes")
         .sidebarFilterSearchable(text: $filterQuery, enabled: externalFilter == nil, prompt: "Filter folders")
         .toolbar {
-            #if !os(macOS)
-            // Settings / Addresses / Folders admin live behind this gear as a
-            // modal sheet (`SettingsSheet`), mirroring the macOS ⌘, window.
-            // The Mailboxes sidebar is the natural app-level home for it at
-            // regular width, where the old section switcher is gone; compact
-            // width keeps a Settings tab and macOS its Settings scene, so the
-            // gear is regular-width-only to avoid a redundant entry point.
-            if showsSettingsGear {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        appState.requestSettings()
-                    } label: {
-                        Image(systemName: "gearshape")
-                            .accessibilityLabel("Settings")
-                    }
-                }
-            }
-            #endif
             // Compact keeps New / Reload in the toolbar; the wide sidebar moves
             // them into SidebarListHeaderRow beside the filter (externalFilter is
             // non-nil only on the wide layout).
