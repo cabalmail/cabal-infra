@@ -12,6 +12,33 @@ struct Toast: Equatable, Sendable {
     enum Kind: Sendable { case info, success, warning, error }
     let kind: Kind
     let message: String
+    /// When set, the banner renders a trailing "Copy" button that places this
+    /// string on the pasteboard. Modeled as data (not a closure) so `Toast`
+    /// stays `Equatable`/`Sendable` and the auto-dismiss equality check in
+    /// `AppState.showToast` keeps working.
+    var copyAddress: String?
+
+    init(kind: Kind, message: String, copyAddress: String? = nil) {
+        self.kind = kind
+        self.message = message
+        self.copyAddress = copyAddress
+    }
+
+    /// Banner shown after an address is minted, offering a one-tap copy of
+    /// the new address without re-finding it in a list.
+    static func addressCreated(_ address: String) -> Toast {
+        Toast(
+            kind: .success,
+            message: "Created \(address)",
+            copyAddress: address
+        )
+    }
+
+    /// Confirmation shown after an address lands on the pasteboard, whether
+    /// from a list's copy action or the post-creation banner's Copy button.
+    static func addressCopied(_ address: String) -> Toast {
+        Toast(kind: .success, message: "Address \(address) successfully copied")
+    }
 }
 
 /// Signal payload for a successful dispose action. Carries the folder path

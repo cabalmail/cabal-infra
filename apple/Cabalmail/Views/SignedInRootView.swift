@@ -84,6 +84,14 @@ struct SignedInRootView: View {
             Tab("Settings", systemImage: "gear") {
                 SettingsView()
             }
+            // The search role detaches to the bottom-right, next to the tab bar.
+            // On iOS 26 it adopts the morph (tab bar collapses to a dismiss
+            // button, the button expands into a focused field); on iOS 18–25
+            // it's a plain search tab. The morph itself comes from the
+            // `.searchable` inside `SearchView`.
+            Tab(role: .search) {
+                SearchView()
+            }
         }
     }
     #endif
@@ -99,33 +107,23 @@ struct SignedInRootView: View {
                 )
             }
             if let toast = appState.toast {
-                BannerView(
-                    icon: icon(for: toast.kind),
-                    text: toast.message,
-                    tint: tint(for: toast.kind)
-                )
-                .transition(.move(edge: .top).combined(with: .opacity))
+                ToastBanner(toast: toast, onCopy: copyHandler(for: toast))
+                    .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
         .padding(.top, 6)
         .padding(.horizontal, 12)
     }
 
-    private func icon(for kind: Toast.Kind) -> String {
-        switch kind {
-        case .success: return "checkmark.circle.fill"
-        case .info:    return "info.circle.fill"
-        case .warning: return "tray.and.arrow.up.fill"
-        case .error:   return "exclamationmark.triangle.fill"
-        }
-    }
-
-    private func tint(for kind: Toast.Kind) -> Color {
-        switch kind {
-        case .success: return .green
-        case .info:    return .blue
-        case .warning: return .orange
-        case .error:   return .red
+    /// Builds the banner's Copy action when the toast carries an address.
+    /// Tapping it copies the address and replaces the banner with the shared
+    /// "successfully copied" confirmation, so the post-creation Copy button
+    /// and a list's copy action give identical feedback.
+    private func copyHandler(for toast: Toast) -> (() -> Void)? {
+        guard let address = toast.copyAddress else { return nil }
+        return {
+            copyToPasteboard(address)
+            appState.showToast(.addressCopied(address), duration: 7)
         }
     }
 
@@ -140,29 +138,5 @@ struct SignedInRootView: View {
             isOffline = !reachable
         }
         #endif
-    }
-}
-
-private struct BannerView: View {
-    let icon: String
-    let text: String
-    let tint: Color
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon)
-                .foregroundStyle(tint)
-            Text(text)
-                .font(.footnote)
-                .foregroundStyle(.primary)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(.ultraThinMaterial, in: Capsule(style: .continuous))
-        .overlay(
-            Capsule(style: .continuous)
-                .stroke(tint.opacity(0.3), lineWidth: 1)
-        )
     }
 }

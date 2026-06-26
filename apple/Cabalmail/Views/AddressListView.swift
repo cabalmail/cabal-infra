@@ -15,6 +15,14 @@ struct AddressListView: View {
     @State private var filterQuery: String = ""
     @State private var isRefreshing = false
     @Binding var selection: Address?
+    /// When set, the parent (the wide macOS / iPad-regular sidebar) owns the
+    /// filter field — rendered below the section tabs — and this view filters by
+    /// it instead of showing its own top-of-sidebar `.searchable`. Nil keeps the
+    /// self-contained searchable (compact, standalone).
+    var externalFilter: Binding<String>?
+    /// The filter text actually in effect: the parent's when injected, else the
+    /// view's own `.searchable` query.
+    private var activeFilterText: String { externalFilter?.wrappedValue ?? filterQuery }
 
     var body: some View {
         List(selection: $selection) {
@@ -47,7 +55,7 @@ struct AddressListView: View {
             }
         }
         .navigationTitle("Addresses")
-        .searchable(text: $filterQuery, placement: .sidebar, prompt: "Filter addresses")
+        .sidebarFilterSearchable(text: $filterQuery, enabled: externalFilter == nil, prompt: "Filter addresses")
         .toolbar {
             ToolbarItem {
                 Button {
@@ -79,7 +87,7 @@ struct AddressListView: View {
     }
 
     private func filteredAddresses(_ addresses: [Address]) -> [Address] {
-        let needle = filterQuery.trimmingCharacters(in: .whitespaces).lowercased()
+        let needle = activeFilterText.trimmingCharacters(in: .whitespaces).lowercased()
         guard !needle.isEmpty else { return addresses }
         return addresses.filter { address in
             address.address.lowercased().contains(needle)
@@ -103,6 +111,12 @@ struct AddressListView: View {
                 .tint(address.favorite ? .gray : .yellow)
             }
             .contextMenu {
+                Button {
+                    copyToPasteboard(address.address)
+                    appState.showToast(.addressCopied(address.address), duration: 7)
+                } label: {
+                    Label("Copy Address", systemImage: "doc.on.doc")
+                }
                 Button {
                     Task { await model.toggleFavorite(address) }
                 } label: {

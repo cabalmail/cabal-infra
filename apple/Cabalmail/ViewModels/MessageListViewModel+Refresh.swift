@@ -108,6 +108,12 @@ extension MessageListViewModel {
     /// land a body in it.
     func hardReload() async {
         dbg("hardReload")
+        // Search scope has no folder cache to wipe; a force-reload just re-runs
+        // the active search (or no-ops when nothing is searched).
+        if isSearchScope {
+            if isSearchActive { await runSearch(resetFilterTab: false) }
+            return
+        }
         try? await client.envelopeCache.invalidate(folder: folder.path)
         envelopes.removeAll()
         totalMessages = 0

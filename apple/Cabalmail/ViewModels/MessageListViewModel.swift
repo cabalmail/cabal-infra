@@ -24,6 +24,12 @@ private let mlvmDebugLog = Logger(subsystem: "com.cabalmail.debug", category: "m
 @Observable
 @MainActor
 final class MessageListViewModel {
+    /// What this list is showing — a folder or the global search surface.
+    /// `.search` runs no folder lifecycle; see `MessageListScope`.
+    let scope: MessageListScope
+    /// Resolved anchor folder (a sentinel in `.search` scope). Folder-keyed
+    /// call sites read this unchanged; the search paths are gated off before
+    /// any of them issue an IMAP request against a `.search` sentinel.
     let folder: Folder
     // Internal (not `private`) so the view model's same-module extensions
     // in sibling files (`+Optimistic`, `+NextUnread`) can reach them.
@@ -221,8 +227,9 @@ final class MessageListViewModel {
     /// view model); `shieldFetched` consults both.
     var pendingFlagUIDs: Set<UInt32> = []
 
-    init(folder: Folder, client: CabalmailClient, preferences: Preferences, appState: AppState) {
-        self.folder = folder
+    init(scope: MessageListScope, client: CabalmailClient, preferences: Preferences, appState: AppState) {
+        self.scope = scope
+        self.folder = scope.folder
         self.client = client
         self.preferences = preferences
         self.appState = appState
@@ -242,7 +249,8 @@ final class MessageListViewModel {
     /// gating on elapsed time (IMAP doesn't promise deduped notifications
     /// and a 10-message import can fire EXISTS ten times in a second).
     func startWatching() async {
-        guard watcher == nil else { return }
+        // The global search surface has no anchor folder to IDLE on.
+        guard !isSearchScope, watcher == nil else { return }
         let client = self.client
         let watcher = MailboxWatcher(
             folder: folder.path,
@@ -304,6 +312,10 @@ final class MessageListViewModel {
             await runSearch(resetFilterTab: false)
             return
         }
+        // Search scope with no active search has nothing to refresh — and no
+        // real folder to STATUS. A background/pull refresh here would query the
+        // sentinel path; bail instead.
+        if isSearchScope { return }
         isLoading = true
         defer { isLoading = false }
         dbg("refresh start sort=\(sortCriterion.field)")
@@ -555,6 +567,23 @@ final class MessageListViewModel {
     /// the preferences environment itself.
     var disposeAction: DisposeAction { preferences.disposeAction }
 
+}
+
+// MARK: - Internals
+
+// Lifted into an extension so the primary type body stays under SwiftLint's
+// 250-line cap. Same-file extension — all helpers remain file-private to
+// the view model.
+extension MessageListViewModel {
+    /// True when this is the global search surface (no anchor folder).
+    var isSearchScope: Bool { scope.isSearch }
+
+    /// Convenience for the folder path — the overwhelming majority of call
+    /// sites. Equivalent to `init(scope: .folder(folder), ...)`.
+    convenience init(folder: Folder, client: CabalmailClient, preferences: Preferences, appState: AppState) {
+        self.init(scope: .folder(folder), client: client, preferences: preferences, appState: appState)
+    }
+
     /// Drop a UID from the in-memory envelope list after it was disposed
     /// elsewhere (currently: the detail-view archive button). The detail
     /// view model already pruned the envelope + body caches; this only
@@ -574,14 +603,7 @@ final class MessageListViewModel {
     func applyFlagChange(uid: UInt32, flag: Flag, added: Bool) {
         applyOptimisticFlag(uid: uid, flag: flag, add: added)
     }
-}
 
-// MARK: - Internals
-
-// Lifted into an extension so the primary type body stays under SwiftLint's
-// 250-line cap. Same-file extension — all helpers remain file-private to
-// the view model.
-extension MessageListViewModel {
     // TEMP diagnostic (remove once the deep-scroll reset is pinned). Logs the
     // event and the current envelope count: a list wipe shows up as a count
     // drop here, while a scroll-only reset shows the count holding steady.

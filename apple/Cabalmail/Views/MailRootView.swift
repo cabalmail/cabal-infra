@@ -48,6 +48,39 @@ struct MailRootView: View {
     @State private var compactColumn: NavigationSplitViewColumn = .sidebar
     @AppStorage("cabalmail.sidebar.tab") private var sidebarTabRaw: String = SidebarTab.folders.rawValue
     @Environment(AppState.self) private var appState
+    @Environment(Preferences.self) private var preferences
+    /// Global-search model for the wide (iPad-regular / macOS) layout, owned
+    /// here so the sidebar search field and the content column share one query
+    /// and result set. The compact-width analogue is `SearchView` (the iPhone
+    /// `Tab(role: .search)`); there's no bottom tab bar here, so search is
+    /// reached from the sidebar instead.
+    @State private var searchModel: MessageListViewModel?
+    /// Focus on the sidebar search field. Drives the content-column swap: while
+    /// the field is focused (or holds a query / active search) the content
+    /// column shows results instead of the selected folder.
+    @FocusState private var searchFieldFocused: Bool
+    /// Per-context list-filter text for the wide sidebar. On macOS / iPad-regular
+    /// this view renders the "Filter folders" / "Filter addresses" field itself
+    /// (below the section tabs) so it sits under the global search rather than
+    /// being hoisted above it by `.searchable(placement: .sidebar)`; the binding
+    /// is handed to the list view. Unused on compact, where the list keeps its
+    /// own searchable.
+    @State private var folderListFilter = ""
+    @State private var addressListFilter = ""
+    /// Whether this is the wide single-rail sidebar (macOS, iPad-regular) where
+    /// `.searchable(placement: .sidebar)` pins fields to the column top. Uses the
+    /// `showsSettingsGear` flag rather than `horizontalSizeClass` because the
+    /// sidebar column reports a compact size class even on a regular-width iPad.
+    #if !os(macOS)
+    @Environment(\.showsSettingsGear) private var showsSettingsGear
+    #endif
+    private var isWideSidebar: Bool {
+        #if os(macOS)
+        return true
+        #else
+        return showsSettingsGear
+        #endif
+    }
     /// Non-nil while a message drag temporarily overrides the visible sidebar
     /// tab. When the user starts dragging a message while viewing Addresses,
     /// this flips the sidebar to Folders so they have somewhere to drop;
@@ -72,13 +105,45 @@ struct MailRootView: View {
         crossFolderDetail ?? selectedFolder
     }
 
+    /// Whether the content column should show search results rather than the
+    /// selected folder: the sidebar field is focused, holds a query, or a
+    /// search is currently active.
+    private var isSearching: Bool {
+        guard let searchModel else { return false }
+        return searchFieldFocused || !searchModel.searchQuery.isEmpty || searchModel.isSearchActive
+    }
+
+    private var searchQueryBinding: Binding<String> {
+        Binding(
+            get: { searchModel?.searchQuery ?? "" },
+            set: { searchModel?.searchQuery = $0 }
+        )
+    }
+
     var body: some View {
         NavigationSplitView(preferredCompactColumn: $compactColumn) {
             sidebar
         } content: {
-            if let selectedFolder {
+            if isSearching, let searchModel {
+                // Global search owns the content column while the sidebar field
+                // is engaged. Stable `.id` so it isn't torn down per keystroke;
+                // the detail column still reads the selected message, against
+                // the result's true mailbox via `crossFolderDetail`.
                 MessageListView(
-                    folder: selectedFolder,
+                    scope: .search,
+                    injectedSearchModel: searchModel,
+                    selection: $selectedEnvelope,
+                    addressFilter: nil,
+                    onClearAddressFilter: {},
+                    onSearchResultSelected: { sourceFolderPath in
+                        crossFolderDetail = sourceFolderPath.map { Folder(path: $0) }
+                    },
+                    onSelectionCountChanged: { listSelectionCount = $0 }
+                )
+                .id("search")
+            } else if let selectedFolder {
+                MessageListView(
+                    scope: .folder(selectedFolder),
                     selection: $selectedEnvelope,
                     addressFilter: selectedAddress?.address,
                     onClearAddressFilter: { selectedAddress = nil },
@@ -177,6 +242,16 @@ struct MailRootView: View {
             appState.endMessageDrag()
             return false
         }
+        .task {
+            if searchModel == nil, let client = appState.client {
+                searchModel = MessageListViewModel(
+                    scope: .search,
+                    client: client,
+                    preferences: preferences,
+                    appState: appState
+                )
+            }
+        }
     }
 
     #if os(macOS)
@@ -206,9 +281,50 @@ struct MailRootView: View {
     }
     #endif
 
+    /// Sidebar search field — the wide-layout entry to global search. Engaging
+    /// it (focus, a query, or an active search) swaps the content column to
+    /// cross-folder results; clearing and unfocusing it returns to the folder.
+    @ViewBuilder
+    private var searchField: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+            TextField("Search all mail", text: searchQueryBinding)
+                .textFieldStyle(.plain)
+                .focused($searchFieldFocused)
+                .onSubmit {
+                    Task { await searchModel?.runSearch() }
+                }
+            if !(searchModel?.searchQuery.isEmpty ?? true) {
+                Button {
+                    // Zeroing the query lets the mounted search list's
+                    // `onChange(of: searchQuery)` drop search mode; dropping
+                    // focus then swaps the content column back to the folder.
+                    searchModel?.searchQuery = ""
+                    searchFieldFocused = false
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(
+            RoundedRectangle(cornerRadius: 7)
+                .fill(Color.secondary.opacity(0.12))
+        )
+        .padding(.horizontal)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
+    }
+
     @ViewBuilder
     private var sidebar: some View {
         VStack(spacing: 0) {
+            searchField
             Picker(
                 "Sidebar",
                 selection: Binding(
@@ -225,10 +341,18 @@ struct MailRootView: View {
             .padding(.top, 8)
             .padding(.bottom, 4)
 
+            // Wide layout renders the per-context filter here — below the tabs,
+            // above the list — so the order reads search → tabs → filter → list.
+            // Compact lets each list keep its own top-of-sidebar `.searchable`.
+            if isWideSidebar {
+                sidebarFilterField
+            }
+
             switch effectiveSidebarTab {
             case .folders:
                 FolderListView(
                     selection: $selectedFolder,
+                    externalFilter: isWideSidebar ? $folderListFilter : nil,
                     onFoldersLoaded: { folders in
                         // Default-select INBOX the first time the list arrives.
                         // The Compose button lives on the message-list toolbar,
@@ -242,8 +366,45 @@ struct MailRootView: View {
                     }
                 )
             case .addresses:
-                AddressListView(selection: $selectedAddress)
+                AddressListView(
+                    selection: $selectedAddress,
+                    externalFilter: isWideSidebar ? $addressListFilter : nil
+                )
             }
         }
+    }
+
+    /// Per-context list filter for the wide sidebar — the "Filter folders" /
+    /// "Filter addresses" field shown below the section tabs. A plain styled
+    /// field (not `.searchable`, which would hoist above the global search);
+    /// the bound text drives the active list view's `externalFilter`.
+    @ViewBuilder
+    private var sidebarFilterField: some View {
+        let isFolders = effectiveSidebarTab == .folders
+        let text = isFolders ? $folderListFilter : $addressListFilter
+        HStack(spacing: 6) {
+            Image(systemName: "line.3.horizontal.decrease")
+                .foregroundStyle(.secondary)
+            TextField(isFolders ? "Filter folders" : "Filter addresses", text: text)
+                .textFieldStyle(.plain)
+            if !text.wrappedValue.isEmpty {
+                Button {
+                    text.wrappedValue = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear filter")
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(
+            RoundedRectangle(cornerRadius: 7)
+                .fill(Color.secondary.opacity(0.12))
+        )
+        .padding(.horizontal)
+        .padding(.bottom, 4)
     }
 }

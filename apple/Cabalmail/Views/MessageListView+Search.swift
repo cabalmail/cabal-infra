@@ -46,6 +46,9 @@ extension MessageListView {
             SearchFiltersSheet(
                 filters: $bindable.searchFilters,
                 currentFolderName: folder.name,
+                // The global search surface has no anchor folder to scope to,
+                // so it hides the "This folder only" toggle.
+                allowFolderScope: !isSearchScope,
                 onApply: { snapshot in
                     bindable.searchFilters = snapshot
                     filtersPresented = false
