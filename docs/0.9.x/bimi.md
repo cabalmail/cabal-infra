@@ -221,29 +221,33 @@ in place; do not re-do them.)
   optional: SwiftUI `AsyncImage` cannot decode SVG, so an SVG URL never
   renders on the Apple clients. Rendering happens here so every client
   gets a format it can display and never touches third-party SVG.
-  - Rasterizer: prefer a pip-installed, hash-pinnable renderer that
-    needs no system libraries at runtime, so `fetch_bimi` stays a zip
-    Lambda and the build keeps using `--require-hashes`. `svglib` +
-    `reportlab` (`renderPM`) meets that bar; `reportlab` ships a
-    manylinux2014 wheel that runs on the AL2023 Lambda base. **Build
-    note:** `reportlab` is the first native-wheel dependency in
-    `lambda/api/`; the build must resolve the wheel for the Lambda
-    runtime (`python3.13`, x86_64), e.g. `pip` run under 3.13 or with
-    `--python-version 3.13 --only-binary=:all:`. If `svglib` fidelity on
-    real logos proves poor, the fallback is to move `fetch_bimi` to a
-    container-image Lambda (precedent: `certbot_renewal`) with
-    `cairosvg` + cairo from `dnf`; that is a larger change and is only
-    taken if needed.
+  - Rasterizer: a bundled static `resvg` binary, invoked via
+    `subprocess`. Python's SVG rasterizers (`cairosvg`, modern
+    `reportlab`/`renderPM`) all need cairo native libraries at runtime,
+    which a zip Lambda does not have; `resvg` is a single self-contained
+    binary (no system libs) that drops into the zip and keeps
+    `fetch_bimi` in the uniform zip-API build. It is fetched and
+    sha256-verified at build time by
+    [`.github/scripts/fetch-resvg.sh`](../../.github/scripts/fetch-resvg.sh)
+    (never committed), then placed at the zip root by `build-api-one.sh`
+    with `0755` preserved, so the handler execs `/var/task/resvg`.
+  - **Architecture:** `resvg` ships a prebuilt binary for linux-x86_64
+    only - no linux-aarch64 - so `fetch_bimi` overrides the call
+    module's default `arm64` to `x86_64` (a per-function `architecture`
+    variable). It is the one x86_64 function in an otherwise arm64 API
+    fleet. The bundled binary's arch and the Lambda's arch are coupled;
+    keep them in step.
 
 **Cache and return.**
 
-- Cache the rendered PNG to a new S3 bucket `bimi-cache.<control_domain>`
-  (or a prefix on the existing admin bucket, if simpler) keyed by the
-  resolved domain, with a 24 h TTL via S3 object metadata and a
-  Lambda-side timestamp check on each request. Return the public HTTPS
-  URL of the cached PNG. New bucket + the Lambda's `s3:GetObject` /
-  `s3:PutObject` on it are the only IAM/infra additions; size and gate
-  them like the existing message cache.
+- Cache the rendered PNG under the existing `cache.<control_domain>`
+  bucket at key `bimi/<sender_domain>.png` (the call module's Lambda
+  role already grants `s3:GetObject`/`s3:PutObject` there, so no new
+  bucket and no IAM change). Freshness: on each request `head_object`
+  the key and re-render only when it is missing or older than 24 h.
+  Return a 24 h presigned GET URL (`helper.sign_url`) - presigned URLs
+  hit S3 directly, so the admin CloudFront's US restriction does not
+  apply and the asset resolves worldwide.
 - Drop the favicon fallback entirely. The client decides what to render
   when the URL is `null` (both clients already draw an initials avatar).
 
@@ -338,8 +342,9 @@ Each phase verifies end-to-end before merging.
   the new tests. Smoke-test in stage by hitting
   `/fetch_bimi?sender_domain=chewy.com`, `/fetch_bimi?sender_domain=amazon.com`,
   and a domain known to have no BIMI; observe `url` is a non-null
-  `bimi-cache.<control_domain>` PNG URL in the first two cases (open it
-  and confirm a rendered logo, not an SVG) and `null` in the third.
+  presigned `cache.<control_domain>/bimi/...png` URL in the first two
+  cases (open it and confirm a rendered logo, not an SVG) and `null` in
+  the third.
   Then confirm the screenshot case end-to-end on a device: the Apple
   list rows that previously showed initials now show the rasterized
   logos.
