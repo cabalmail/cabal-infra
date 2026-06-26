@@ -15,7 +15,7 @@ extension FolderListView {
     }
 
     func filteredFolders(_ folders: [Folder]) -> [Folder] {
-        let needle = filterQuery.trimmingCharacters(in: .whitespaces).lowercased()
+        let needle = activeFilterText.trimmingCharacters(in: .whitespaces).lowercased()
         guard !needle.isEmpty else { return folders }
         return folders.filter { folder in
             folder.path.lowercased().contains(needle)

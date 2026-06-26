@@ -27,6 +27,14 @@ struct FolderListView: View {
     @State var filterQuery: String = ""
     @State var isRefreshing = false
     @Binding var selection: Folder?
+    /// When set, the parent (the wide macOS / iPad-regular sidebar) owns the
+    /// filter field — rendered below the section tabs — and this view filters by
+    /// it instead of showing its own top-of-sidebar `.searchable`. Nil keeps the
+    /// self-contained searchable (compact, standalone).
+    var externalFilter: Binding<String>?
+    /// The filter text actually in effect: the parent's when injected, else the
+    /// view's own `.searchable` query.
+    var activeFilterText: String { externalFilter?.wrappedValue ?? filterQuery }
     /// Called exactly once, the first time the folder list successfully
     /// loads. `MailRootView` uses it to seed a default `selection` so the
     /// signed-in user doesn't land on an empty "pick a mailbox" screen
@@ -107,7 +115,7 @@ struct FolderListView: View {
             }
         }
         .navigationTitle("Mailboxes")
-        .searchable(text: $filterQuery, placement: .sidebar, prompt: "Filter folders")
+        .sidebarFilterSearchable(text: $filterQuery, enabled: externalFilter == nil, prompt: "Filter folders")
         .toolbar {
             #if !os(macOS)
             // Settings / Addresses / Folders admin live behind this gear as a
