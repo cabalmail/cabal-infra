@@ -14,6 +14,23 @@ extension FolderListView {
         await model.refresh()
     }
 
+    /// Wide-sidebar header row (New / filter / Reload), shown below the
+    /// Folders/Addresses tabs on iPad-regular and macOS. Lifted here so the
+    /// main `FolderListView` body stays under the type-body-length cap.
+    func wideSidebarHeader(filter: Binding<String>) -> some View {
+        SidebarListHeaderRow(
+            newAction: { showNewFolderSheet = true },
+            newDisabled: model == nil,
+            newAccessibilityLabel: "New folder",
+            filterText: filter,
+            filterPrompt: "Filter folders",
+            isRefreshing: isRefreshing,
+            refreshDisabled: isRefreshing || model == nil,
+            refreshAccessibilityLabel: "Refresh folders",
+            refreshAction: { Task { await manualRefresh() } }
+        )
+    }
+
     func filteredFolders(_ folders: [Folder]) -> [Folder] {
         let needle = activeFilterText.trimmingCharacters(in: .whitespaces).lowercased()
         guard !needle.isEmpty else { return folders }

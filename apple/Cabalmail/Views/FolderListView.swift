@@ -64,8 +64,9 @@ struct FolderListView: View {
     // context-menu item. Non-private so `folderContextMenu` in the `+Helpers`
     // extension (another file) can stage it.
     @State var emptyTrashConfirmPresented = false
-    // Drives the "New folder" sheet from the toolbar `+` button.
-    @State private var showNewFolderSheet = false
+    // Drives the "New folder" sheet from the `+` button. Non-private so the
+    // `+Helpers` extension's `wideSidebarHeader` can raise it too.
+    @State var showNewFolderSheet = false
     // Folder staged for deletion by a row's swipe / context menu, presented
     // as a confirmation dialog. Non-private so the delete-dialog plumbing in
     // `FolderListView+Helpers.swift` can reach it (same discipline as
@@ -73,8 +74,20 @@ struct FolderListView: View {
     @State var pendingDelete: Folder?
 
     var body: some View {
+        VStack(spacing: 0) {
+            // Wide sidebar (iPad-regular / macOS): the New / Reload buttons live
+            // here, flanking the filter, below the Folders/Addresses tabs.
+            // Compact keeps them in the toolbar (no filter row exists there).
+            if let externalFilter {
+                wideSidebarHeader(filter: externalFilter)
+            }
+            folderList
+        }
+    }
+
+    private var folderList: some View {
         let collapsedSet = decodeCollapsed()
-        List(selection: $selection) {
+        return List(selection: $selection) {
             if let model {
                 if model.isLoading && model.folders.isEmpty {
                     ProgressView("Loading folders…")
@@ -143,25 +156,30 @@ struct FolderListView: View {
                 }
             }
             #endif
-            ToolbarItem {
-                Button {
-                    showNewFolderSheet = true
-                } label: {
-                    Image(systemName: "plus")
-                        .accessibilityLabel("New folder")
+            // Compact keeps New / Reload in the toolbar; the wide sidebar moves
+            // them into SidebarListHeaderRow beside the filter (externalFilter is
+            // non-nil only on the wide layout).
+            if externalFilter == nil {
+                ToolbarItem {
+                    Button {
+                        showNewFolderSheet = true
+                    } label: {
+                        Image(systemName: "plus")
+                            .accessibilityLabel("New folder")
+                    }
+                    // The parent picker is seeded from the loaded folder list, so
+                    // hold the button until the first list load lands.
+                    .disabled(model == nil)
                 }
-                // The parent picker is seeded from the loaded folder list, so
-                // hold the button until the first list load lands.
-                .disabled(model == nil)
-            }
-            ToolbarItem {
-                Button {
-                    Task { await manualRefresh() }
-                } label: {
-                    RefreshActivityIcon(isLoading: isRefreshing)
-                        .accessibilityLabel("Refresh folders")
+                ToolbarItem {
+                    Button {
+                        Task { await manualRefresh() }
+                    } label: {
+                        RefreshActivityIcon(isLoading: isRefreshing)
+                            .accessibilityLabel("Refresh folders")
+                    }
+                    .disabled(isRefreshing || model == nil)
                 }
-                .disabled(isRefreshing || model == nil)
             }
         }
         .refreshable {
