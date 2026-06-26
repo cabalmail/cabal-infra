@@ -175,6 +175,20 @@ class ValidateSvgTest(unittest.TestCase):
             b'<svg xmlns="http://www.w3.org/2000/svg">'
             b'<image href="https://evil/x.png"/></svg>'))
 
+    def test_in_document_use_allowed(self):
+        # In-document symbol reuse is legitimate and common; only external
+        # references are blocked.
+        self.assertTrue(function._validate_svg(
+            b'<svg xmlns="http://www.w3.org/2000/svg" '
+            b'xmlns:xlink="http://www.w3.org/1999/xlink">'
+            b'<defs><rect id="r" width="4" height="4"/></defs>'
+            b'<use xlink:href="#r"/></svg>'))
+
+    def test_external_use_rejected(self):
+        self.assertFalse(function._validate_svg(
+            b'<svg xmlns="http://www.w3.org/2000/svg">'
+            b'<use href="https://evil/x.svg#r"/></svg>'))
+
     def test_doctype_rejected(self):
         self.assertFalse(function._validate_svg(
             b'<!DOCTYPE svg><svg xmlns="http://www.w3.org/2000/svg"/>'))

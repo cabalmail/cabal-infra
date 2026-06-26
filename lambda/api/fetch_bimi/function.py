@@ -41,12 +41,13 @@ HTTP_TIMEOUT_SECONDS = 5
 RENDER_TIMEOUT_SECONDS = 10
 DNS_TOTAL_BUDGET_SECONDS = 5.0       # wall-clock cap across both scope queries
 
-# SVG elements never allowed in a BIMI logo (SVG Tiny PS element allowlist is
-# stricter than this, but these are the ones that carry script/active or
-# off-document content and therefore matter for safety). Compared on the XML
-# local name, so namespace prefixes do not matter.
-_FORBIDDEN_ELEMENTS = frozenset({"script", "foreignobject", "image", "use",
-                                 "a", "animate", "set", "iframe"})
+# SVG elements never allowed in a BIMI logo: these carry script or
+# off-document/foreign content. Everything else (paths, shapes, gradients,
+# in-document <use>/<image>) is allowed and left to resvg; the separate href
+# check below blocks any *external* reference, including an external <image>.
+# Keeping this set minimal maximizes how many real logos render. Compared on
+# the XML local name, so namespace prefixes do not matter.
+_FORBIDDEN_ELEMENTS = frozenset({"script", "foreignobject", "iframe"})
 _HREF_ATTRS = ("href", "{http://www.w3.org/1999/xlink}href")
 
 # Lazily built so importing the module (e.g. under test) costs nothing and
