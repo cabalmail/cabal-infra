@@ -30,6 +30,27 @@ struct AddressListView: View {
     private var activeFilterText: String { externalFilter?.wrappedValue ?? filterQuery }
 
     var body: some View {
+        VStack(spacing: 0) {
+            // Wide sidebar (iPad-regular / macOS): New / Reload flank the filter
+            // below the Folders/Addresses tabs. Compact keeps them in the toolbar.
+            if let externalFilter {
+                SidebarListHeaderRow(
+                    newAction: { showNewAddressSheet = true },
+                    newDisabled: false,
+                    newAccessibilityLabel: "Request new address",
+                    filterText: externalFilter,
+                    filterPrompt: "Filter addresses",
+                    isRefreshing: isRefreshing,
+                    refreshDisabled: isRefreshing || model == nil,
+                    refreshAccessibilityLabel: "Refresh addresses",
+                    refreshAction: { Task { await manualRefresh() } }
+                )
+            }
+            addressList
+        }
+    }
+
+    private var addressList: some View {
         List(selection: $selection) {
             if let model {
                 if model.isLoading && model.addresses.isEmpty {
@@ -62,22 +83,27 @@ struct AddressListView: View {
         .navigationTitle("Addresses")
         .sidebarFilterSearchable(text: $filterQuery, enabled: externalFilter == nil, prompt: "Filter addresses")
         .toolbar {
-            ToolbarItem {
-                Button {
-                    showNewAddressSheet = true
-                } label: {
-                    Image(systemName: "plus")
-                        .accessibilityLabel("Request new address")
+            // Compact keeps New / Reload in the toolbar; the wide sidebar moves
+            // them into SidebarListHeaderRow beside the filter (externalFilter is
+            // non-nil only on the wide layout).
+            if externalFilter == nil {
+                ToolbarItem {
+                    Button {
+                        showNewAddressSheet = true
+                    } label: {
+                        Image(systemName: "plus")
+                            .accessibilityLabel("Request new address")
+                    }
                 }
-            }
-            ToolbarItem {
-                Button {
-                    Task { await manualRefresh() }
-                } label: {
-                    RefreshActivityIcon(isLoading: isRefreshing)
-                        .accessibilityLabel("Refresh addresses")
+                ToolbarItem {
+                    Button {
+                        Task { await manualRefresh() }
+                    } label: {
+                        RefreshActivityIcon(isLoading: isRefreshing)
+                            .accessibilityLabel("Refresh addresses")
+                    }
+                    .disabled(isRefreshing || model == nil)
                 }
-                .disabled(isRefreshing || model == nil)
             }
         }
         .refreshable {
