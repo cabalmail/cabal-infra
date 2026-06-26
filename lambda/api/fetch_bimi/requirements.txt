@@ -1,3 +1,15 @@
+# helper.py imports imap_session -> imapclient at module load, so every
+# function that imports helper must bundle imapclient (and its sole runtime
+# dependency, six). fetch_bimi imports helper for validate_dns_apex and the
+# S3 helpers, so it needs them too.
+imapclient==2.3.1 \
+    --hash=sha256:057f28025d2987c63e065afb0e4370b0b850b539b0e1494cea0427e88130108c \
+    --hash=sha256:26ea995664fae3a88b878ebce2aff7402931697b86658b7882043ddb01b0e6ba
+# six is imapclient's only runtime dependency; pinned and hashed so
+# pip --require-hashes can resolve the full tree.
+six==1.17.0 \
+    --hash=sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274 \
+    --hash=sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81
 dnspython==2.3.0 \
     --hash=sha256:89141536394f909066cabd112e3e1a37e4e654db00a25308b0f130bc3152eb46 \
     --hash=sha256:224e32b03eb46be70e12ef6d64e0be123a64e621ab4c0822ff6d450d52a540b9
