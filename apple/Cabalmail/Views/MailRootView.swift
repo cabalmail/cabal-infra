@@ -59,6 +59,28 @@ struct MailRootView: View {
     /// the field is focused (or holds a query / active search) the content
     /// column shows results instead of the selected folder.
     @FocusState private var searchFieldFocused: Bool
+    /// Per-context list-filter text for the wide sidebar. On macOS / iPad-regular
+    /// this view renders the "Filter folders" / "Filter addresses" field itself
+    /// (below the section tabs) so it sits under the global search rather than
+    /// being hoisted above it by `.searchable(placement: .sidebar)`; the binding
+    /// is handed to the list view. Unused on compact, where the list keeps its
+    /// own searchable.
+    @State private var folderListFilter = ""
+    @State private var addressListFilter = ""
+    /// Whether this is the wide single-rail sidebar (macOS, iPad-regular) where
+    /// `.searchable(placement: .sidebar)` pins fields to the column top. Uses the
+    /// `showsSettingsGear` flag rather than `horizontalSizeClass` because the
+    /// sidebar column reports a compact size class even on a regular-width iPad.
+    #if !os(macOS)
+    @Environment(\.showsSettingsGear) private var showsSettingsGear
+    #endif
+    private var isWideSidebar: Bool {
+        #if os(macOS)
+        return true
+        #else
+        return showsSettingsGear
+        #endif
+    }
     /// Non-nil while a message drag temporarily overrides the visible sidebar
     /// tab. When the user starts dragging a message while viewing Addresses,
     /// this flips the sidebar to Folders so they have somewhere to drop;
@@ -319,10 +341,18 @@ struct MailRootView: View {
             .padding(.top, 8)
             .padding(.bottom, 4)
 
+            // Wide layout renders the per-context filter here — below the tabs,
+            // above the list — so the order reads search → tabs → filter → list.
+            // Compact lets each list keep its own top-of-sidebar `.searchable`.
+            if isWideSidebar {
+                sidebarFilterField
+            }
+
             switch effectiveSidebarTab {
             case .folders:
                 FolderListView(
                     selection: $selectedFolder,
+                    externalFilter: isWideSidebar ? $folderListFilter : nil,
                     onFoldersLoaded: { folders in
                         // Default-select INBOX the first time the list arrives.
                         // The Compose button lives on the message-list toolbar,
@@ -336,8 +366,45 @@ struct MailRootView: View {
                     }
                 )
             case .addresses:
-                AddressListView(selection: $selectedAddress)
+                AddressListView(
+                    selection: $selectedAddress,
+                    externalFilter: isWideSidebar ? $addressListFilter : nil
+                )
             }
         }
+    }
+
+    /// Per-context list filter for the wide sidebar — the "Filter folders" /
+    /// "Filter addresses" field shown below the section tabs. A plain styled
+    /// field (not `.searchable`, which would hoist above the global search);
+    /// the bound text drives the active list view's `externalFilter`.
+    @ViewBuilder
+    private var sidebarFilterField: some View {
+        let isFolders = effectiveSidebarTab == .folders
+        let text = isFolders ? $folderListFilter : $addressListFilter
+        HStack(spacing: 6) {
+            Image(systemName: "line.3.horizontal.decrease")
+                .foregroundStyle(.secondary)
+            TextField(isFolders ? "Filter folders" : "Filter addresses", text: text)
+                .textFieldStyle(.plain)
+            if !text.wrappedValue.isEmpty {
+                Button {
+                    text.wrappedValue = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear filter")
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(
+            RoundedRectangle(cornerRadius: 7)
+                .fill(Color.secondary.opacity(0.12))
+        )
+        .padding(.horizontal)
+        .padding(.bottom, 4)
     }
 }
