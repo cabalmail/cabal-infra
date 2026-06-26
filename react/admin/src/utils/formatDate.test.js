@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import formatDate, { extractName, extractEmail } from './formatDate';
+import formatDate, { extractName, extractEmail, domainFor } from './formatDate';
 
 describe('formatDate', () => {
   const now = new Date('2026-04-20T14:00:00');
@@ -71,5 +71,20 @@ describe('extractEmail', () => {
 
   it('returns the raw string when no brackets present', () => {
     expect(extractEmail('alice@example.com')).toBe('alice@example.com');
+  });
+});
+
+describe('domainFor', () => {
+  it('lowercases the domain from a bracketed address', () => {
+    expect(domainFor('Mary <x@Sub.Example.com>')).toBe('sub.example.com');
+  });
+
+  it('handles a bare address', () => {
+    expect(domainFor('news@chewy.com')).toBe('chewy.com');
+  });
+
+  it('returns empty string when there is no @', () => {
+    expect(domainFor('Mailer Daemon')).toBe('');
+    expect(domainFor('')).toBe('');
   });
 });

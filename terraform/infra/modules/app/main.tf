@@ -56,6 +56,9 @@ module "cabal_method" {
   # cardinality (large-mailbox hardening plan, Layer 4.3).
   alarm_on_latency  = contains(["list_messages", "list_envelopes"], each.key)
   imap_pool_enabled = var.imap_pool_enabled
+  # fetch_bimi bundles a static resvg binary that ships only for linux-x86_64,
+  # so it runs x86_64 while the rest of the API fleet stays arm64.
+  architecture = each.key == "fetch_bimi" ? "x86_64" : "arm64"
 }
 
 resource "aws_api_gateway_deployment" "deployment" {

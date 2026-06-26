@@ -124,6 +124,16 @@ def create_dns_records(zone_id, subdomain, tld):
                 change_item(
                     f'cabal._domainkey.{subdomain}.{tld}',
                     f'cabal._domainkey.{control_domain}', 'CNAME'),
+                # BIMI: publish the Cabalmail mark for mail sent from this
+                # subdomain. The lookup name (default._bimi.<subdomain>.<tld>)
+                # has the per-address subdomain in the middle, so it cannot be
+                # served by a DNS wildcard (a wildcard only matches a leftmost
+                # label) - same reason _dmarc/_domainkey are written per
+                # address here. Points at the SVG; receivers rasterize it.
+                change_item(
+                    f'default._bimi.{subdomain}.{tld}',
+                    f'"v=BIMI1; l=https://www.{control_domain}/assets/bimi/cabalmail.svg"',
+                    'TXT'),
             ]
         }
     }

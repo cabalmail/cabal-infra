@@ -3,6 +3,7 @@ import { SwipeableList, Type } from 'react-swipeable-list';
 import 'react-swipeable-list/dist/styles.css';
 import Envelope from './Envelope';
 import useApi from '../../hooks/useApi';
+import { fetchBimi } from '../../utils/bimiCache';
 import { PAGE_SIZE } from '../../constants';
 import './Envelopes.css';
 
@@ -61,6 +62,10 @@ function Envelopes({
   flagPatch = null,
 }) {
   const api = useApi();
+
+  // Stable per-domain BIMI resolver passed to each row; the session cache
+  // coalesces concurrent lookups and memoizes results across row recycling.
+  const getBimi = useCallback((domain) => fetchBimi(api, domain), [api]);
 
   const [envelopes, setEnvelopes] = useState({});
   // Refs, not state: these gate fetches, they don't drive rendering.
@@ -328,6 +333,7 @@ function Envelopes({
         dom_id={e.id}
         bulkMode={bulkMode}
         selected={false}
+        getBimi={getBimi}
       />
     );
   });

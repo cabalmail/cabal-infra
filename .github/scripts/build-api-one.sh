@@ -69,6 +69,14 @@ fi
 if grep -qE '^[[:space:]]*(from|import)[[:space:]]+admin_limits' function.py 2>/dev/null; then
   cp ../_shared/admin_limits.py ./build/admin_limits.py
 fi
+# fetch_bimi rasterizes BIMI SVG logos to PNG with a bundled static resvg
+# binary (fetched + sha256-verified at build time, not committed). It ships
+# at the zip root so the handler can exec /var/task/resvg. resvg only has a
+# linux-x86_64 build, so this Lambda is x86_64 (terraform .../call/lambda.tf).
+if [ "${FUNC}" = "fetch_bimi" ]; then
+  # cwd here is lambda/api/<FUNC>, so the repo root is three levels up.
+  ../../../.github/scripts/fetch-resvg.sh ./build/resvg
+fi
 
 pushd ./build >/dev/null
 find . -depth -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
@@ -76,6 +84,9 @@ find . -name '*.pyc' -delete 2>/dev/null || true
 find . -name 'direct_url.json' -delete 2>/dev/null || true
 find . -type d -exec chmod 0755 {} +
 find . -type f -exec chmod 0644 {} +
+# The bundled resvg binary must stay executable in the zip (Lambda preserves
+# the stored unix mode); the blanket 0644 above would otherwise strip it.
+[ -f resvg ] && chmod 0755 resvg
 find . -exec touch -h -d "@${SOURCE_DATE_EPOCH}" {} +
 find . -type f -print | LC_ALL=C sort | zip -X -D -@ ../../"${FUNC}.zip" >/dev/null
 popd >/dev/null
