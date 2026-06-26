@@ -84,6 +84,14 @@ struct SignedInRootView: View {
             Tab("Settings", systemImage: "gear") {
                 SettingsView()
             }
+            // The search role detaches to the bottom-right, next to the tab bar.
+            // On iOS 26 it adopts the morph (tab bar collapses to a dismiss
+            // button, the button expands into a focused field); on iOS 18–25
+            // it's a plain search tab. The morph itself comes from the
+            // `.searchable` inside `SearchView`.
+            Tab(role: .search) {
+                SearchView()
+            }
         }
     }
     #endif
