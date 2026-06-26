@@ -148,7 +148,7 @@ struct MessageListView: View {
     }
 
     /// Boolean projection of `purgeCandidate` for the confirmation
-    /// dialog. Mirrors `FoldersAdminView`'s delete-dialog binding.
+    /// dialog. Mirrors the sidebar lists' delete/revoke-dialog bindings.
     private var purgeDialogBinding: Binding<Bool> {
         Binding(
             get: { purgeCandidate != nil },

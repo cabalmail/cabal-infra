@@ -70,16 +70,23 @@ struct SignedInRootView: View {
     /// `.sidebarAdaptable` - at compact width there's no sidebar to adapt to,
     /// and the regular-width path never renders this, so the adaptive style's
     /// collision with the inner split view can't recur.
+    ///
+    /// The Addresses / Folders tabs host the same `AddressListView` /
+    /// `FolderListView` the Mail sidebar uses (wrapped in `AddressManagementTab`
+    /// / `FolderManagementTab` for their own `NavigationStack` + selection).
+    /// Those lists carry the full create/delete/request/revoke affordances, so
+    /// there's a single list implementation per data type - the old dedicated
+    /// management views were retired.
     private var compactTabs: some View {
         TabView {
             Tab("Mail", systemImage: "tray") {
                 MailRootView()
             }
             Tab("Addresses", systemImage: "at") {
-                AddressesView()
+                AddressManagementTab()
             }
             Tab("Folders", systemImage: "folder") {
-                FoldersAdminView()
+                FolderManagementTab()
             }
             Tab("Settings", systemImage: "gear") {
                 SettingsView()
@@ -140,3 +147,32 @@ struct SignedInRootView: View {
         #endif
     }
 }
+
+#if !os(macOS)
+/// Compact-iPhone Addresses tab: the shared `AddressListView` in its own
+/// `NavigationStack`. Selection is local and inert here (there's no adjacent
+/// message list to filter, as there is in the Mail sidebar) — the tab is a
+/// management surface, and request/revoke/favorite/copy live on the rows.
+private struct AddressManagementTab: View {
+    @State private var selection: Address?
+
+    var body: some View {
+        NavigationStack {
+            AddressListView(selection: $selection, externalFilter: nil)
+        }
+    }
+}
+
+/// Compact-iPhone Folders tab: the shared `FolderListView` in its own
+/// `NavigationStack`. As with addresses, selection is local and inert — folder
+/// browsing lives in the Mail tab; this tab owns create/delete/subscribe.
+private struct FolderManagementTab: View {
+    @State private var selection: Folder?
+
+    var body: some View {
+        NavigationStack {
+            FolderListView(selection: $selection, externalFilter: nil)
+        }
+    }
+}
+#endif

@@ -14,14 +14,6 @@ struct FolderListView: View {
     // extensions in this directory.
     @Environment(AppState.self) var appState
     @Environment(Preferences.self) var preferences
-    #if !os(macOS)
-    // Drives whether the settings gear shows: true only on the regular-width
-    // single-rail layout, where the section tab bar is gone. Compact keeps its
-    // Settings tab instead. An environment flag, not a `horizontalSizeClass`
-    // check - this sidebar is a narrow split-view column and reports compact
-    // even on a regular-width iPad.
-    @Environment(\.showsSettingsGear) private var showsSettingsGear
-    #endif
     @State var model: FolderListViewModel?
     @State private var didNotifyLoad = false
     @State var filterQuery: String = ""
@@ -61,12 +53,33 @@ struct FolderListView: View {
     // that builds the drop modifier and handler can reach it.
     @State var dropTargetPath: String?
     // Presents the "Empty Trash?" confirmation staged by the Trash row's
-    // context-menu item.
-    @State private var emptyTrashConfirmPresented = false
+    // context-menu item. Non-private so `folderContextMenu` in the `+Helpers`
+    // extension (another file) can stage it.
+    @State var emptyTrashConfirmPresented = false
+    // Drives the "New folder" sheet from the `+` button. Non-private so the
+    // `+Helpers` extension's `wideSidebarHeader` can raise it too.
+    @State var showNewFolderSheet = false
+    // Folder staged for deletion by a row's swipe / context menu, presented
+    // as a confirmation dialog. Non-private so the delete-dialog plumbing in
+    // `FolderListView+Helpers.swift` can reach it (same discipline as
+    // `dropTargetPath`); `private` would be file-scoped and unreachable there.
+    @State var pendingDelete: Folder?
 
     var body: some View {
+        VStack(spacing: 0) {
+            // Wide sidebar (iPad-regular / macOS): the New / Reload buttons live
+            // here, flanking the filter, below the Folders/Addresses tabs.
+            // Compact keeps them in the toolbar (no filter row exists there).
+            if let externalFilter {
+                wideSidebarHeader(filter: externalFilter)
+            }
+            folderList
+        }
+    }
+
+    private var folderList: some View {
         let collapsedSet = decodeCollapsed()
-        List(selection: $selection) {
+        return List(selection: $selection) {
             if let model {
                 if model.isLoading && model.folders.isEmpty {
                     ProgressView("Loading folders…")
@@ -117,37 +130,44 @@ struct FolderListView: View {
         .navigationTitle("Mailboxes")
         .sidebarFilterSearchable(text: $filterQuery, enabled: externalFilter == nil, prompt: "Filter folders")
         .toolbar {
-            #if !os(macOS)
-            // Settings / Addresses / Folders admin live behind this gear as a
-            // modal sheet (`SettingsSheet`), mirroring the macOS ⌘, window.
-            // The Mailboxes sidebar is the natural app-level home for it at
-            // regular width, where the old section switcher is gone; compact
-            // width keeps a Settings tab and macOS its Settings scene, so the
-            // gear is regular-width-only to avoid a redundant entry point.
-            if showsSettingsGear {
-                ToolbarItem(placement: .topBarLeading) {
+            // Compact keeps New / Reload in the toolbar; the wide sidebar moves
+            // them into SidebarListHeaderRow beside the filter (externalFilter is
+            // non-nil only on the wide layout).
+            if externalFilter == nil {
+                ToolbarItem {
                     Button {
-                        appState.requestSettings()
+                        showNewFolderSheet = true
                     } label: {
-                        Image(systemName: "gearshape")
-                            .accessibilityLabel("Settings")
+                        Image(systemName: "plus")
+                            .accessibilityLabel("New folder")
                     }
+                    // The parent picker is seeded from the loaded folder list, so
+                    // hold the button until the first list load lands.
+                    .disabled(model == nil)
                 }
-            }
-            #endif
-            ToolbarItem {
-                Button {
-                    Task { await manualRefresh() }
-                } label: {
-                    RefreshActivityIcon(isLoading: isRefreshing)
-                        .accessibilityLabel("Refresh folders")
+                ToolbarItem {
+                    Button {
+                        Task { await manualRefresh() }
+                    } label: {
+                        RefreshActivityIcon(isLoading: isRefreshing)
+                            .accessibilityLabel("Refresh folders")
+                    }
+                    .disabled(isRefreshing || model == nil)
                 }
-                .disabled(isRefreshing || model == nil)
             }
         }
         .refreshable {
             await model?.refresh()
         }
+        .sheet(isPresented: $showNewFolderSheet) { newFolderSheet }
+        .confirmationDialog(
+            deleteDialogTitle,
+            isPresented: deleteDialogBinding,
+            titleVisibility: .visible,
+            presenting: pendingDelete,
+            actions: deleteDialogActions,
+            message: deleteDialogMessage
+        )
         // Sign-out used to live here; Phase 6's Settings tab is the
         // canonical place for it now. Leaving a duplicate confused the UI —
         // the Mailboxes toolbar is about mailbox navigation, not account
@@ -222,32 +242,10 @@ struct FolderListView: View {
                 }
             }
             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                Button {
-                    Task { await model.toggleSubscription(folder) }
-                } label: {
-                    Label(
-                        folder.isSubscribed ? "Unsubscribe" : "Subscribe",
-                        systemImage: folder.isSubscribed ? "bell.slash" : "bell"
-                    )
-                }
-                .tint(folder.isSubscribed ? .orange : .accentColor)
+                folderSwipeActions(folder, model: model)
             }
             .contextMenu {
-                Button {
-                    Task { await model.toggleSubscription(folder) }
-                } label: {
-                    Label(
-                        folder.isSubscribed ? "Unsubscribe" : "Subscribe",
-                        systemImage: folder.isSubscribed ? "bell.slash" : "bell"
-                    )
-                }
-                if folder.path == FolderTree.trashPath {
-                    Button(role: .destructive) {
-                        emptyTrashConfirmPresented = true
-                    } label: {
-                        Label("Empty Trash", systemImage: "trash.slash")
-                    }
-                }
+                folderContextMenu(folder, model: model)
             }
         }
     }
