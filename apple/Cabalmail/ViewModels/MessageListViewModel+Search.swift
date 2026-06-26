@@ -117,6 +117,10 @@ extension MessageListViewModel {
         flagged = 0
         hasMore = true
         resetWindow()
+        // Folder scope drops back to the folder view; the global search
+        // surface has no folder to return to, so it just lands on the empty
+        // "type to search" state.
+        guard !isSearchScope else { return }
         await refresh()
     }
 

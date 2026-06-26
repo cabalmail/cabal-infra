@@ -45,6 +45,11 @@ struct ComposeView: View {
     @State private var photoSelection: [PhotosPickerItem] = []
     #endif
     @State private var showFileImporter = false
+    /// Compose-scoped banner. The compose surface is a separate window
+    /// (macOS / iPad regular) or a sheet (iPhone), so the root
+    /// `AppState.toast` overlay can't reach it — host the post-creation
+    /// "Created … / Copy" banner here instead.
+    @State private var composeToast: Toast?
     #if os(macOS)
     /// Intercepts the macOS window's red close button (and Cmd+W) so it
     /// routes through the same "Discard draft?" dialog as the toolbar
@@ -105,6 +110,7 @@ struct ComposeView: View {
                     domains: appState.client?.configuration.domains ?? [],
                     onCreate: { address in
                         await model.onAddressCreated(address)
+                        composeToast = .addressCreated(address)
                     }
                 )
                 .environment(appState)
@@ -160,6 +166,7 @@ struct ComposeView: View {
             } message: {
                 Text("Keep a copy of the draft for later, or discard it now.")
             }
+            .toastOverlay($composeToast)
         }
     }
 

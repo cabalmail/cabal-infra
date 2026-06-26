@@ -127,56 +127,50 @@ extension MessageListView {
         }
     }
 
-    /// The list's top inset: the macOS inline search field, the search-result
-    /// metadata banner, the address-filter chip, and the filter tabs bar.
-    /// Lives here alongside the filter UI it mostly renders.
+    /// The list's top inset. Folder scope shows the address-filter chip and the
+    /// All / Unread / Flagged pills bar; the global search surface shows the
+    /// search-result metadata banner and a controls row (refine filters, sort,
+    /// select). Lives here alongside the filter UI it mostly renders.
     @ViewBuilder
     func topInset(model: MessageListViewModel) -> some View {
         VStack(spacing: 0) {
-            #if os(macOS)
-            inlineSearchField(model: model, focused: $inlineSearchFocused)
-            #endif
-            // A genuine text search always shows the results banner. A pill
-            // filter is marked by its highlighted pill, so it normally hides the
-            // banner -- but if the folder has more matches than the page we
-            // fetched, show it so the "N of M matches" gap (and its clear
-            // button) isn't silent.
-            if model.isSearchActive,
-               model.filterTab == .all || model.envelopes.count < model.searchTotalEstimate {
-                searchMetadataBanner(model: model)
+            if isSearchScope {
+                // A genuine text search always shows the results banner; a pill
+                // filter (folder scope only) hides it unless the match set is
+                // truncated. On the search surface it's always a text/structured
+                // search, so show it whenever a search is active.
+                if model.isSearchActive {
+                    if model.filterTab == .all || model.envelopes.count < model.searchTotalEstimate {
+                        searchMetadataBanner(model: model)
+                    }
+                    searchControlsBar(model: model)
+                }
+            } else {
+                if let addressFilter, !addressFilter.isEmpty {
+                    addressFilterChip(addressFilter)
+                }
+                // Folder scope has no in-list search anymore, so the refinement
+                // filter button never surfaces here — pass `searchActive: false`.
+                filterTabsBar(model: model, searchActive: false)
             }
-            if let addressFilter, !addressFilter.isEmpty {
-                addressFilterChip(addressFilter)
-            }
-            // The filter button is search refinement, not list filtering,
-            // so it only surfaces once the user is engaged with the
-            // search field — preventing the conceptual collision with
-            // the All / Unread / Flagged pills next to it. macOS uses
-            // our own @FocusState on the inline TextField; everywhere
-            // else reads `\.isSearching` from the `.searchable` scope.
-            #if os(macOS)
-            filterTabsBar(
-                model: model,
-                searchActive: inlineSearchFocused || model.isSearchActive
-            )
-            #else
-            SearchActiveScope { isSearching in
-                filterTabsBar(model: model, searchActive: isSearching)
-            }
-            #endif
         }
     }
-}
 
-/// Thin wrapper that reads `\.isSearching` from inside the `.searchable`
-/// scope and hands it to a child view. `@Environment(\.isSearching)`
-/// returns a meaningful value only when read from a view rendered
-/// underneath the `.searchable` modifier; reading it on `MessageListView`
-/// itself (which is where the modifier is applied) always returns false.
-/// Used by `topInset` on every non-macOS platform to gate the search-
-/// refinement filter button.
-struct SearchActiveScope<Content: View>: View {
-    @Environment(\.isSearching) private var isSearching
-    @ViewBuilder let content: (Bool) -> Content
-    var body: some View { content(isSearching) }
+    /// Right-side controls for the global search surface: the structured-filter
+    /// button (always available here — refining the query is the surface's job),
+    /// the sort menu, and the multi-select toggle. No All / Unread / Flagged
+    /// pills: those are a folder concept, and the search filter sheet already
+    /// carries Unread / Flagged toggles.
+    @ViewBuilder
+    private func searchControlsBar(model: MessageListViewModel) -> some View {
+        HStack(spacing: 6) {
+            filterButton
+            Spacer()
+            sortMenu
+            selectButton
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(.bar)
+    }
 }
