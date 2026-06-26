@@ -78,6 +78,12 @@ struct MessageListView: View {
     /// `@ScaledMetric` reads the environment; module-internal so the
     /// `+Selection` extension can pin rows and placeholders to it.
     @ScaledMetric(relativeTo: .subheadline) var rowHeight: CGFloat = 58
+    /// Diameter of the per-row sender avatar. Fixed (not `@ScaledMetric`) so
+    /// it can't grow past `rowHeight`; 32 sits comfortably within the 58pt
+    /// row beside the two text lines. Shared by `MessageRow` and the
+    /// `+Selection` `placeholderRow` so the real and skeleton rows keep the
+    /// same leading inset.
+    static let avatarSize: CGFloat = 32
     /// `true` while the filter sheet is presented over the message list.
     @State var filtersPresented = false
     /// Set by the row context menu's "Move to folder…" item; presents the

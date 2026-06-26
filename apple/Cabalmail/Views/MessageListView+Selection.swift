@@ -285,6 +285,10 @@ extension MessageListView {
     private func placeholderRow() -> some View {
         HStack(alignment: .top, spacing: 8) {
             Circle().fill(.quaternary).frame(width: 8, height: 8)
+            // Mirrors the real row's avatar slot so the skeleton keeps the
+            // same leading inset (no horizontal shift as rows fill in).
+            Circle().fill(.quaternary)
+                .frame(width: MessageListView.avatarSize, height: MessageListView.avatarSize)
             VStack(alignment: .leading, spacing: 6) {
                 RoundedRectangle(cornerRadius: 3).fill(.quaternary).frame(width: 150, height: 11)
                 RoundedRectangle(cornerRadius: 3).fill(.quaternary).frame(width: 230, height: 11)

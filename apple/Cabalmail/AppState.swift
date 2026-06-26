@@ -258,6 +258,12 @@ final class AppState {
     /// `docs/0.9.x/apple-contacts-integration-plan.md`.
     let contactsStore: ContactsStore = LiveContactsStore()
 
+    /// Session memo for sender-domain BIMI logo lookups, shared by the
+    /// message list (an avatar per row, rows recycle on scroll) and the
+    /// detail view. Collapses each domain to one `/fetch_bimi` round-trip
+    /// per launch. One instance per app launch, like `contactsStore`.
+    let bimiCache = BimiUrlCache()
+
     func signIn(controlDomain: String, username: String, password: String) async {
         status = .signingIn
         do {
