@@ -83,8 +83,6 @@ private struct MobileHTMLView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: WKWebView, context: Context) {
-        context.coordinator.allowRemote = allowRemote
-        context.coordinator.apply(allowRemote: allowRemote, to: uiView)
         // In reader mode the injected stylesheet owns the palette and is
         // written against `prefers-color-scheme`, so let the system
         // appearance through. In original mode we still have to pin light —
@@ -92,12 +90,13 @@ private struct MobileHTMLView: UIViewRepresentable {
         // dark inherited palette.
         uiView.overrideUserInterfaceStyle = readerMode ? .unspecified : .light
         uiView.backgroundColor = readerMode ? nil : .white
-        let rewritten = rewrite(
+        context.coordinator.render(
             html: html,
             inlineImages: inlineImages,
-            readerMode: readerMode
+            allowRemote: allowRemote,
+            readerMode: readerMode,
+            on: uiView
         )
-        uiView.loadHTMLString(rewritten, baseURL: nil)
         context.coordinator.handlePrintTick(printRequestTick, for: uiView)
     }
 }
@@ -129,18 +128,17 @@ private struct MacHTMLView: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: WKWebView, context: Context) {
-        context.coordinator.allowRemote = allowRemote
-        context.coordinator.apply(allowRemote: allowRemote, to: nsView)
         // See the iOS equivalent for why original mode pins .aqua: author
         // CSS assumes a white page. Reader mode owns the palette via its
         // `prefers-color-scheme` stylesheet, so it tracks the system.
         nsView.appearance = readerMode ? nil : NSAppearance(named: .aqua)
-        let rewritten = rewrite(
+        context.coordinator.render(
             html: html,
             inlineImages: inlineImages,
-            readerMode: readerMode
+            allowRemote: allowRemote,
+            readerMode: readerMode,
+            on: nsView
         )
-        nsView.loadHTMLString(rewritten, baseURL: nil)
         context.coordinator.handlePrintTick(printRequestTick, for: nsView)
     }
 }
@@ -161,6 +159,11 @@ private struct MacHTMLView: NSViewRepresentable {
 final class HTMLBodyCoordinator: NSObject, WKNavigationDelegate {
     var allowRemote: Bool
     private var installedBlocker: WKContentRuleList?
+    /// Hash of the inputs behind the currently-loaded page (HTML, inline
+    /// images, remote policy, reader mode). `render` reloads only when this
+    /// changes — see its doc comment for why reloading on every `update*View`
+    /// breaks remote-image loading.
+    private var renderedSignature: Int?
     /// Last `printRequestTick` we acted on. `update*View` runs on every
     /// SwiftUI re-layout; comparing against this value ensures the system
     /// print sheet only opens when the parent's counter actually advances.
@@ -222,31 +225,99 @@ final class HTMLBodyCoordinator: NSObject, WKNavigationDelegate {
         return allowRemote ? .allow : .cancel
     }
 
-    /// Installs or removes the remote-blocker content rule list on the web
-    /// view's `userContentController`. Idempotent — repeat calls with the
-    /// same `allowRemote` value are no-ops, so the SwiftUI `updateUIView`
-    /// hot path doesn't churn the controller on every re-layout.
+    /// Renders `html` into `webView`, putting the remote-content blocker into
+    /// the correct state *before* issuing the load, and skipping the reload
+    /// entirely when nothing affecting the output changed.
+    ///
+    /// The skip is load-bearing. `MessageDetailViewModel` is `@Observable`, so
+    /// any observed-property change it reads (flag toggles, attachment loads,
+    /// folder-status polling) re-renders `MessageDetailView` and re-runs
+    /// `update*View`. The previous code called `loadHTMLString` on every such
+    /// call, restarting the page and cancelling every in-flight subresource
+    /// request. Fast images (a small logo) finished and survived; slow remote
+    /// images (e.g. USPS Informed Delivery mailpiece scans) never finished
+    /// before the next reload cancelled them, so they stayed stuck on alt text
+    /// no matter how often the user tapped "Show remote content".
     @MainActor
-    func apply(allowRemote: Bool, to webView: WKWebView) {
+    func render(
+        html: String,
+        inlineImages: [String: URL],
+        allowRemote: Bool,
+        readerMode: Bool,
+        on webView: WKWebView
+    ) {
+        self.allowRemote = allowRemote
+        let signature = Self.signature(
+            html: html,
+            inlineImages: inlineImages,
+            allowRemote: allowRemote,
+            readerMode: readerMode
+        )
+        guard signature != renderedSignature else { return }
+        renderedSignature = signature
+        let rewritten = rewrite(
+            html: html,
+            inlineImages: inlineImages,
+            readerMode: readerMode
+        )
         let controller = webView.configuration.userContentController
+
         if allowRemote {
+            // Remove the blocker synchronously, then load — no async window.
             if let installed = installedBlocker {
                 controller.remove(installed)
                 installedBlocker = nil
             }
+            webView.loadHTMLString(rewritten, baseURL: nil)
             return
         }
-        guard installedBlocker == nil else { return }
-        Task { [weak self] in
-            guard let list = await HTMLBodyCoordinator.sharedBlocker() else { return }
-            guard let self else { return }
-            // Between scheduling and resumption `allowRemote` may have
-            // flipped (the user tapped "Show remote content"); re-check
-            // before installing so we don't clobber a now-unblocked view.
-            guard !self.allowRemote else { return }
-            controller.add(list)
-            self.installedBlocker = list
+
+        // Remote blocked: the blocker must be installed before the first paint
+        // or tracker pixels leak. Install synchronously when the compiled list
+        // is already cached; otherwise compile first and only then load, so we
+        // never issue a load while the page is unguarded.
+        if installedBlocker == nil, let cached = Self.cachedBlocker {
+            controller.add(cached)
+            installedBlocker = cached
         }
+        if installedBlocker != nil {
+            webView.loadHTMLString(rewritten, baseURL: nil)
+            return
+        }
+        Task { [weak self, weak webView] in
+            let list = await HTMLBodyCoordinator.sharedBlocker()
+            guard let self, let webView else { return }
+            // Bail if a newer render superseded this one (e.g. the user tapped
+            // "Show remote content" while we compiled) — that render already
+            // issued its own load with the correct blocker state.
+            guard self.renderedSignature == signature else { return }
+            if let list, self.installedBlocker == nil {
+                webView.configuration.userContentController.add(list)
+                self.installedBlocker = list
+            }
+            webView.loadHTMLString(rewritten, baseURL: nil)
+        }
+    }
+
+    /// Order-independent hash of everything that affects the rendered page.
+    /// Seeded per-process (so values aren't stable across launches), which is
+    /// fine: `render` only ever compares it against a value from the same
+    /// process lifetime.
+    private static func signature(
+        html: String,
+        inlineImages: [String: URL],
+        allowRemote: Bool,
+        readerMode: Bool
+    ) -> Int {
+        var hasher = Hasher()
+        hasher.combine(html)
+        hasher.combine(allowRemote)
+        hasher.combine(readerMode)
+        for (cid, url) in inlineImages.sorted(by: { $0.key < $1.key }) {
+            hasher.combine(cid)
+            hasher.combine(url)
+        }
+        return hasher.finalize()
     }
 
     /// One-time compile of the block-everything-remote rule list. Compilation
