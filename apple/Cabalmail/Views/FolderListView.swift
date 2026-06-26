@@ -61,8 +61,16 @@ struct FolderListView: View {
     // that builds the drop modifier and handler can reach it.
     @State var dropTargetPath: String?
     // Presents the "Empty Trash?" confirmation staged by the Trash row's
-    // context-menu item.
-    @State private var emptyTrashConfirmPresented = false
+    // context-menu item. Non-private so `folderContextMenu` in the `+Helpers`
+    // extension (another file) can stage it.
+    @State var emptyTrashConfirmPresented = false
+    // Drives the "New folder" sheet from the toolbar `+` button.
+    @State private var showNewFolderSheet = false
+    // Folder staged for deletion by a row's swipe / context menu, presented
+    // as a confirmation dialog. Non-private so the delete-dialog plumbing in
+    // `FolderListView+Helpers.swift` can reach it (same discipline as
+    // `dropTargetPath`); `private` would be file-scoped and unreachable there.
+    @State var pendingDelete: Folder?
 
     var body: some View {
         let collapsedSet = decodeCollapsed()
@@ -137,6 +145,17 @@ struct FolderListView: View {
             #endif
             ToolbarItem {
                 Button {
+                    showNewFolderSheet = true
+                } label: {
+                    Image(systemName: "plus")
+                        .accessibilityLabel("New folder")
+                }
+                // The parent picker is seeded from the loaded folder list, so
+                // hold the button until the first list load lands.
+                .disabled(model == nil)
+            }
+            ToolbarItem {
+                Button {
                     Task { await manualRefresh() }
                 } label: {
                     RefreshActivityIcon(isLoading: isRefreshing)
@@ -148,6 +167,15 @@ struct FolderListView: View {
         .refreshable {
             await model?.refresh()
         }
+        .sheet(isPresented: $showNewFolderSheet) { newFolderSheet }
+        .confirmationDialog(
+            deleteDialogTitle,
+            isPresented: deleteDialogBinding,
+            titleVisibility: .visible,
+            presenting: pendingDelete,
+            actions: deleteDialogActions,
+            message: deleteDialogMessage
+        )
         // Sign-out used to live here; Phase 6's Settings tab is the
         // canonical place for it now. Leaving a duplicate confused the UI —
         // the Mailboxes toolbar is about mailbox navigation, not account
@@ -222,32 +250,10 @@ struct FolderListView: View {
                 }
             }
             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                Button {
-                    Task { await model.toggleSubscription(folder) }
-                } label: {
-                    Label(
-                        folder.isSubscribed ? "Unsubscribe" : "Subscribe",
-                        systemImage: folder.isSubscribed ? "bell.slash" : "bell"
-                    )
-                }
-                .tint(folder.isSubscribed ? .orange : .accentColor)
+                folderSwipeActions(folder, model: model)
             }
             .contextMenu {
-                Button {
-                    Task { await model.toggleSubscription(folder) }
-                } label: {
-                    Label(
-                        folder.isSubscribed ? "Unsubscribe" : "Subscribe",
-                        systemImage: folder.isSubscribed ? "bell.slash" : "bell"
-                    )
-                }
-                if folder.path == FolderTree.trashPath {
-                    Button(role: .destructive) {
-                        emptyTrashConfirmPresented = true
-                    } label: {
-                        Label("Empty Trash", systemImage: "trash.slash")
-                    }
-                }
+                folderContextMenu(folder, model: model)
             }
         }
     }

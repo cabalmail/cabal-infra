@@ -14,6 +14,11 @@ struct AddressListView: View {
     @State private var model: AddressesViewModel?
     @State private var filterQuery: String = ""
     @State private var isRefreshing = false
+    // Drives the "Request new address" sheet from the toolbar `+` button.
+    @State private var showNewAddressSheet = false
+    // Address staged for revocation by a row's swipe / context menu,
+    // confirmed before the (irreversible) API call.
+    @State private var pendingRevoke: Address?
     @Binding var selection: Address?
     /// When set, the parent (the wide macOS / iPad-regular sidebar) owns the
     /// filter field — rendered below the section tabs — and this view filters by
@@ -59,6 +64,14 @@ struct AddressListView: View {
         .toolbar {
             ToolbarItem {
                 Button {
+                    showNewAddressSheet = true
+                } label: {
+                    Image(systemName: "plus")
+                        .accessibilityLabel("Request new address")
+                }
+            }
+            ToolbarItem {
+                Button {
                     Task { await manualRefresh() }
                 } label: {
                     RefreshActivityIcon(isLoading: isRefreshing)
@@ -70,6 +83,15 @@ struct AddressListView: View {
         .refreshable {
             await model?.refresh(force: true)
         }
+        .sheet(isPresented: $showNewAddressSheet) { newAddressSheet }
+        .confirmationDialog(
+            revokeDialogTitle,
+            isPresented: revokeDialogBinding,
+            titleVisibility: .visible,
+            presenting: pendingRevoke,
+            actions: revokeDialogActions,
+            message: revokeDialogMessage
+        )
         .task {
             if model == nil, let client = appState.client {
                 let newModel = AddressesViewModel(client: client)
@@ -77,6 +99,53 @@ struct AddressListView: View {
                 await newModel.refresh()
             }
         }
+    }
+
+    @ViewBuilder
+    private var newAddressSheet: some View {
+        NewAddressSheet(
+            domains: appState.client?.configuration.domains ?? [],
+            onCreate: { address in
+                await model?.onAddressCreated()
+                appState.showToast(.addressCreated(address))
+            }
+        )
+        .environment(appState)
+    }
+
+    // MARK: - Revoke confirmation plumbing
+
+    private var revokeDialogTitle: String {
+        if let address = pendingRevoke {
+            return "Revoke \(address.address)?"
+        }
+        return "Revoke address?"
+    }
+
+    private var revokeDialogBinding: Binding<Bool> {
+        Binding(
+            get: { pendingRevoke != nil },
+            set: { isPresented in
+                if !isPresented { pendingRevoke = nil }
+            }
+        )
+    }
+
+    @ViewBuilder
+    private func revokeDialogActions(for address: Address) -> some View {
+        Button("Revoke", role: .destructive) {
+            let target = address
+            pendingRevoke = nil
+            Task { await model?.revoke(target) }
+        }
+        Button("Cancel", role: .cancel) {
+            pendingRevoke = nil
+        }
+    }
+
+    @ViewBuilder
+    private func revokeDialogMessage(for address: Address) -> some View {
+        Text("Mail sent to \(address.address) will be rejected. This can't be undone.")
     }
 
     private func manualRefresh() async {
@@ -100,6 +169,11 @@ struct AddressListView: View {
         row(for: address)
             .tag(address)
             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                Button(role: .destructive) {
+                    pendingRevoke = address
+                } label: {
+                    Label("Revoke", systemImage: "xmark.bin")
+                }
                 Button {
                     Task { await model.toggleFavorite(address) }
                 } label: {
@@ -124,6 +198,11 @@ struct AddressListView: View {
                         address.favorite ? "Unfavorite" : "Favorite",
                         systemImage: address.favorite ? "star.slash" : "star.fill"
                     )
+                }
+                Button(role: .destructive) {
+                    pendingRevoke = address
+                } label: {
+                    Label("Revoke", systemImage: "xmark.bin")
                 }
             }
     }

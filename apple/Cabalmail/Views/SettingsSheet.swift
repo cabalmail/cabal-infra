@@ -42,11 +42,11 @@ extension EnvironmentValues {
 
 /// Adds a Done button that dismisses the enclosing `SettingsSheet`, but only
 /// when the view is actually hosted in it. A no-op in the compact-width
-/// section tabs (which have no sheet) - so the same `SettingsView` /
-/// `AddressesView` / `FoldersAdminView` body serves both presentations.
+/// Settings tab (which has no sheet) - so the same `SettingsView` body serves
+/// both presentations.
 ///
-/// Lives here as a `View` extension rather than a per-view helper so the
-/// three section views stay under SwiftLint's `type_body_length` cap.
+/// Lives here as a `View` extension rather than a per-view helper so
+/// `SettingsView` stays under SwiftLint's `type_body_length` cap.
 private struct SettingsSheetDoneButton: ViewModifier {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.inSettingsSheet) private var inSettingsSheet
@@ -68,31 +68,22 @@ extension View {
     }
 }
 
-/// Regular-width iOS / iPadOS / visionOS settings + administration sheet.
+/// Regular-width iOS / iPadOS / visionOS settings sheet (General only).
 ///
-/// The mobile mirror of the macOS Settings window (`SettingsTabsView`, #385):
-/// General, Addresses, and Folders are configuration surfaces, so they live
-/// in a deliberate modal rather than competing for a column in the main mail
-/// window. Presented from `SignedInRootView` via `AppState.settingsRequestTick`
-/// (sidebar gear button / ⌘, command); only used at regular width, where the
-/// section tab bar is gone.
+/// Address and folder management used to live here as extra tabs, but they now
+/// belong to the always-visible mailbox sidebar (`AddressListView` /
+/// `FolderListView` carry the full request/revoke and create/delete
+/// affordances). So this sheet is just General preferences, presented from
+/// `SignedInRootView` via `AppState.settingsRequestTick` (sidebar gear button /
+/// ⌘, command) at regular width, where the section tab bar is gone.
 ///
-/// Each tab supplies its own `NavigationStack` on iOS (see the `#else`
-/// branches in `SettingsView`, `AddressesView`, `FoldersAdminView`), so
-/// titles, per-view toolbars, and the Done button render normally inside the
-/// tab. The sheet only opens while signed in, so the views' models always
-/// have a live client and the macOS `RequiresSignIn` guard isn't needed here.
+/// `SettingsView` supplies its own `NavigationStack` + Done button on iOS (its
+/// `#else` branch + `settingsSheetDoneButton()`), so it renders normally inside
+/// the sheet.
 struct SettingsSheet: View {
     var body: some View {
-        TabView {
-            SettingsView()
-                .tabItem { Label("General", systemImage: "gearshape") }
-            AddressesView()
-                .tabItem { Label("Addresses", systemImage: "at") }
-            FoldersAdminView()
-                .tabItem { Label("Folders", systemImage: "folder") }
-        }
-        .environment(\.inSettingsSheet, true)
+        SettingsView()
+            .environment(\.inSettingsSheet, true)
     }
 }
 #endif

@@ -2,8 +2,9 @@ import Foundation
 import Observation
 import CabalmailKit
 
-/// Backs `AddressesView`. Wraps `CabalmailClient.addresses` and
-/// `revokeAddress` with list state, loading indicators, and an error banner.
+/// Backs `AddressListView` (the mailbox sidebar's address rail). Wraps
+/// `CabalmailClient.addresses` and `revokeAddress` with list state, loading
+/// indicators, and an error banner.
 ///
 /// Mirrors the React app's `react/admin/src/Addresses/List.jsx` behavior:
 /// one round-trip on open, a force-refresh on pull-to-refresh, and an
