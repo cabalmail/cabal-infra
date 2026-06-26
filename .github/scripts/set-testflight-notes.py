@@ -238,10 +238,15 @@ def wait_for_build(app_id, build_number, token_factory, timeout, interval):
 
 def set_notes(build_id, locale, notes, token_factory):
     """Create or update the betaBuildLocalizations whatsNew for the build."""
-    query = urllib.parse.urlencode({"filter[locale]": locale, "limit": 1})
+    # The top-level collection supports filter[build]+filter[locale]; the
+    # build relationship endpoint (/v1/builds/{id}/betaBuildLocalizations)
+    # rejects filter[locale] with PARAMETER_ERROR.ILLEGAL.
+    query = urllib.parse.urlencode(
+        {"filter[build]": build_id, "filter[locale]": locale, "limit": 1}
+    )
     existing = api_request(
         "GET",
-        f"/v1/builds/{build_id}/betaBuildLocalizations?{query}",
+        f"/v1/betaBuildLocalizations?{query}",
         token_factory,
     )
     data = existing.get("data") or []
