@@ -148,6 +148,10 @@ struct AvatarView: View {
             return
         }
         guard !sender.host.isEmpty else { return }
-        bimiURL = try? await apiClient.fetchBimiURL(senderDomain: sender.host)
+        // Resolve through the shared session cache so the same domain isn't
+        // re-fetched as list rows recycle (the detail view benefits too).
+        bimiURL = await appState.bimiCache.url(forDomain: sender.host) { domain in
+            try? await apiClient.fetchBimiURL(senderDomain: domain)
+        }
     }
 }

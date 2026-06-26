@@ -348,6 +348,15 @@ private struct MessageRow: View {
                 .fill(unreadDotColor)
                 .frame(width: 8, height: 8)
                 .padding(.top, 6)
+            // Sender avatar: the user's Contacts photo for the sender, else
+            // the domain's BIMI logo, else a colored initials circle (same
+            // precedence as the detail header, reusing `AvatarView`). The
+            // slot is always present — the initials base layer keeps every
+            // row equally indented, so a photo resolving async never reflows
+            // the list. `avatarSize` keeps it in step with `placeholderRow`.
+            if let apiClient = appState.client?.apiClient {
+                AvatarView(sender: envelope.from.first, apiClient: apiClient, size: MessageListView.avatarSize)
+            }
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
                     // "source -> destination" on one line. `maxWidth: .infinity`
