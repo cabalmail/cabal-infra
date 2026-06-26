@@ -416,15 +416,19 @@ private extension MessageDetailViewModel {
         var attachmentList: [Attachment] = []
         var inlineMap: [String: URL] = [:]
         for leaf in root.leafParts where isAttachmentLike(leaf) {
+            // Inline `cid:` images are embedded as `data:` URIs, not temp
+            // files: the body web view loads with an opaque origin and can't
+            // fetch `file://` subresources, so a file URL would silently fail
+            // to render. See `MimePart.inlineImageDataURL`.
+            if let contentID = leaf.contentID,
+               let dataURL = leaf.inlineImageDataURL {
+                inlineMap[contentID] = dataURL
+                continue
+            }
             let filename = leaf.contentDisposition?.filename
                 ?? leaf.contentType.name
                 ?? "attachment-\(UUID().uuidString).bin"
             let url = try writeToTmp(data: leaf.decodedBody, filename: filename)
-            if let contentID = leaf.contentID,
-               leaf.contentType.type == "image" {
-                inlineMap[contentID] = url
-                continue
-            }
             attachmentList.append(Attachment(
                 id: leaf.contentID ?? url.lastPathComponent,
                 filename: filename,

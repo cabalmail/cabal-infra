@@ -157,6 +157,84 @@ final class MimeParserTests: XCTestCase {
         XCTAssertEqual(attachment?.contentDisposition?.filename, "report.xml.gz")
     }
 
+    func testCidInlineImageInNestedRelatedIsExtractable() {
+        // Mirrors a USPS Informed Delivery digest: multipart/alternative whose
+        // HTML alternative is itself a multipart/related carrying the inline
+        // mailpiece images by Content-ID. The HTML references them as
+        // `cid:1005412273-018.jpg` (quoted-printable encoded on the wire).
+        let outer = "OUTER"
+        let related = "INNER"
+        let jpeg = Data([0xFF, 0xD8, 0xFF, 0xE0]).base64EncodedString()  // JPEG magic
+        let message = """
+        Content-Type: multipart/alternative; boundary="\(outer)"\r
+        \r
+        --\(outer)\r
+        Content-Type: text/plain; charset="UTF-8"\r
+        \r
+        Plain digest\r
+        --\(outer)\r
+        Content-Type: multipart/related; boundary="\(related)"\r
+        \r
+        --\(related)\r
+        Content-Type: text/html; charset="UTF-8"\r
+        Content-Transfer-Encoding: quoted-printable\r
+        \r
+        <img src=3D"cid:1005412273-018.jpg" alt=3D"Mailpiece Image">\r
+        --\(related)\r
+        Content-Type: image/jpeg\r
+        Content-Transfer-Encoding: base64\r
+        Content-ID: <1005412273-018.jpg>\r
+        Content-Disposition: inline; filename="1005412273-018.jpg"\r
+        \r
+        \(jpeg)\r
+        --\(related)--\r
+        --\(outer)--
+        """
+        let part = MimeParser.parse(Data(message.utf8))
+
+        // The HTML, once transfer-decoded, references the cid.
+        let html = part.firstPart { $0.contentType.mimeType == "text/html" }
+        XCTAssertEqual(
+            html?.textContent(),
+            #"<img src="cid:1005412273-018.jpg" alt="Mailpiece Image">"#
+        )
+
+        // The image leaf must surface with its angle-bracket-stripped
+        // Content-ID so the view's cid→data rewrite can match the `src`.
+        let image = part.leafParts.first { $0.contentType.type == "image" }
+        XCTAssertNotNil(image, "inline image part should be a leaf")
+        XCTAssertEqual(image?.contentID, "1005412273-018.jpg")
+        XCTAssertEqual(image?.decodedBody, Data([0xFF, 0xD8, 0xFF, 0xE0]))
+
+        // It exposes a `data:` URI (not a file URL) so the WKWebView, whose
+        // opaque origin can't load file:// subresources, can render it.
+        let expectedBase64 = Data([0xFF, 0xD8, 0xFF, 0xE0]).base64EncodedString()
+        XCTAssertEqual(
+            image?.inlineImageDataURL?.absoluteString,
+            "data:image/jpeg;base64,\(expectedBase64)"
+        )
+    }
+
+    func testInlineImageDataURLNilForNonImageOrMissingContentID() {
+        // A part with a Content-ID but a non-image type → not inline.
+        let textWithCID = MimeParser.parse(Data("""
+        Content-Type: text/calendar\r
+        Content-ID: <evt@x>\r
+        \r
+        BEGIN:VCALENDAR
+        """.utf8))
+        XCTAssertNil(textWithCID.inlineImageDataURL)
+
+        // An image with no Content-ID → a regular attachment, not inline.
+        let imageNoCID = MimeParser.parse(Data("""
+        Content-Type: image/png\r
+        Content-Transfer-Encoding: base64\r
+        \r
+        \(Data([0x89, 0x50, 0x4E, 0x47]).base64EncodedString())
+        """.utf8))
+        XCTAssertNil(imageNoCID.inlineImageDataURL)
+    }
+
     func testFoldedHeadersUnfoldIntoSingleValue() {
         let message = """
         Subject: Hello\r
