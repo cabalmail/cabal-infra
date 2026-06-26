@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.31] - 2026-06-26
+
+### Added
+- The Apple clients can now copy an address to the clipboard. Long-press
+  (iOS) or right-click (macOS) any row in the address filter sidebar or the
+  management list for a **Copy Address** action, and the banner shown after
+  minting a new address — from the compose From picker or the management
+  list — carries a one-tap **Copy** button. Each copy confirms with an
+  unobtrusive, self-dismissing banner.
+- The Apple clients now offer a right-click / long-press menu on each
+  address in the message detail header (From, To, and Cc): **Copy Address**,
+  **Copy Name**, **Compose Message To**, and — for addresses you own —
+  **Compose Message From**. On iOS, iPadOS, and visionOS the menu also adds
+  **Add to Contact** and **New Contact**, which open the native system
+  contact editor (pre-filling first/middle/last names when the display name
+  parses unambiguously) so you review and confirm the save.
+- The Apple clients now show a sender avatar on every message-list row,
+  not just in the open message: the sender's Contacts photo when you have
+  one, otherwise the sender domain's BIMI logo, otherwise a colored
+  initials circle. BIMI lookups are cached per session so scrolling
+  doesn't re-fetch the same domains.
+- Prod TestFlight uploads now publish "What to Test" notes automatically. After
+  the iOS and macOS builds upload, the Apple workflow waits for App Store Connect
+  to finish processing the build and sets its beta release notes from the top
+  section of `CHANGELOG.md`, so testers see what changed in each release. Stage
+  uploads are unaffected.
+
+### Changed
+- Search in the Apple clients is now a global, cross-folder surface rather
+  than a bar inside each folder's message list. On iPhone it's a dedicated
+  search tab next to the tab bar (which collapses into the search field on
+  iOS 26); on iPad and macOS it's a search field in the sidebar that takes
+  over the message column. Results keep the full row actions — swipe,
+  multi-select, context menu, and move — and open against each message's
+  true mailbox.
+
 ## [0.10.30] - 2026-06-25
 
 ### Added
