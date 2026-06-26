@@ -69,11 +69,16 @@ landed piecemeal during 0.9.x/0.10.x. What remains:
 
 ## Goals
 
-- Make `fetch_bimi` a spec-correct, defensive proxy: extract the
-  organizational domain via the Public Suffix List, parse TXT tags
-  tolerantly, fetch and validate the SVG server-side against SVG Tiny
-  PS, cache it in S3, and return a URL on infrastructure we control (or
-  `null`).
+- Make `fetch_bimi` a spec-correct, defensive proxy: discover the logo
+  by querying `default._bimi` at the From domain and then the Public
+  Suffix List organizational domain, parse TXT tags tolerantly, fetch
+  and validate the SVG server-side against SVG Tiny PS, **rasterize it
+  to a PNG**, cache that in S3, and return a PNG URL on infrastructure
+  we control (or `null`). Server-side rasterization is load-bearing:
+  SwiftUI's `AsyncImage` cannot decode SVG, so the shipped Apple
+  `AvatarView` silently falls back to initials whenever the endpoint
+  returns an SVG URL. A PNG fixes Apple and React uniformly with no
+  client changes.
 - Bring the React admin app to parity with the shipped Apple display: a
   per-sender BIMI logo (or an initials fallback) to the left of each
   message-list row.
@@ -89,8 +94,10 @@ landed piecemeal during 0.9.x/0.10.x. What remains:
   is required by Gmail for BIMI rendering but not by Apple Mail,
   Fastmail, Yahoo, or most other clients. Out of scope; see "Future
   work" below.
-- **Non-SVG logo formats.** BIMI is SVG Tiny PS only; PNG/JPG fallbacks
-  are not part of the spec and are not supported here.
+- **Non-SVG logo *input*.** BIMI publishes SVG Tiny PS only; we never
+  accept a PNG/JPG published by a sender. (We do rasterize the validated
+  SVG to PNG server-side for delivery to clients — that is an output
+  detail, not a second accepted input format.)
 - **Letter-glyph fallback SVGs.** Superseded by the natively drawn
   initials fallback already shipped on Apple (and adopted for React, see
   Phase B). No static glyph assets are produced.
@@ -105,19 +112,28 @@ defects below. The favicon fallback path is the whole tail of the file.
 
 - **Wrong scope discovery.** Walks every superdomain suffix
   (`a.b.c.com` -> `b.c.com` -> `c.com` -> `com`), querying invalid
-  scopes including TLDs. BIMI requires computing the organizational
-  domain via the Public Suffix List and querying once at that scope
-  (and at most one fallback to the org domain when the message-from
-  subdomain has no record).
-- **Brittle TXT parsing.** `str(answer[0]).split(";")[1].split("=")[1]`
-  assumes a fixed tag order with `l=` second. A record of
+  scopes including TLDs. Real senders publish BIMI at the exact From
+  (sub)domain - e.g. USPS Informed Delivery's logo is at its From
+  subdomain, and `default._bimi.usps.com` is an unrelated SPF string,
+  not BIMI. The walk also has no `v=BIMI1` gate, so it stops on the
+  first TXT it finds at any scope. Correct discovery queries
+  `default._bimi` at the From domain first, then falls back to the PSL
+  organizational domain, accepting only a record that begins `v=BIMI1`.
+- **Brittle TXT parsing that crashes on non-BIMI records.**
+  `str(answer[0]).split(";")[1].split("=")[1]` assumes a fixed tag
+  order with `l=` second. A record of
   `v=BIMI1; a=https://example.com/vmc; l=https://example.com/logo.svg`
-  extracts the VMC URL instead of the logo. There is no validation
-  that `v=BIMI1` is present.
-- **No SVG fetch or validation.** Returns the third-party URL verbatim
-  to the client, which then loads attacker-controlled SVG directly.
-  BIMI requires SVG Tiny PS; the spec is restrictive about what
-  elements may appear, and a non-compliant SVG should not be rendered.
+  extracts the VMC URL instead of the logo, and a record with no `;`
+  at all (the SPF strings published at `default._bimi.usps.com` and
+  `default._bimi.etsy.com`) raises `IndexError` straight out of the
+  handler -> 500. There is no validation that `v=BIMI1` is present.
+- **No SVG fetch, validation, or rasterization.** Returns the
+  third-party URL verbatim to the client, which then loads
+  attacker-controlled SVG directly. BIMI requires SVG Tiny PS; the spec
+  is restrictive about what elements may appear, and a non-compliant
+  SVG should not be rendered. Separately, the URL is always an SVG,
+  which SwiftUI's `AsyncImage` cannot decode at all - so even a
+  correctly-extracted logo never appears on the Apple clients.
 - **Favicon fallback is a guess.** `https://www.<lasttwo>/favicon.ico`
   may or may not exist; the path concatenates the last two labels of
   the sender domain regardless of whether that is the org domain.
@@ -161,45 +177,92 @@ implications, purely additive).
 ### Phase A: spec-correct `fetch_bimi`
 
 Goal: turn the Lambda into a defensive proxy that returns either a
-validated SVG URL on infrastructure we control, or `null`. (DNS timeout
-bounding and broad exception handling are already in place; do not
-re-do them.)
+validated, **rasterized PNG** URL on infrastructure we control, or
+`null`. (DNS timeout bounding and broad exception handling are already
+in place; do not re-do them.)
+
+**Scope discovery (From domain, then org domain).**
 
 - Add `publicsuffixlist` (or `tldextract`) to
-  [`lambda/api/fetch_bimi/requirements.txt`](../../lambda/api/fetch_bimi/requirements.txt).
-  Extract the organizational domain from the sender domain before any
-  DNS query.
-- Query `default._bimi.<org_domain>` exactly once. If `NXDOMAIN` /
-  `NoAnswer`, return `{ "url": null }`. Do not walk superdomains.
-- Parse the TXT record by splitting on `;`, trimming, and tokenizing
-  each `key=value` pair. Require `v=BIMI1`. Extract `l=` by name.
-  Ignore unknown tags. Reject records missing `l=`.
-- Fetch the SVG with a 5 s timeout and a 32 KB response size cap.
-  Reject larger payloads.
-- Validate the SVG: parses as well-formed XML, root element is `<svg>`
-  with `baseProfile="tiny-ps"`, no `<script>` anywhere, no `xlink:href`
-  referring to anything off-document, no `<foreignObject>`, no
-  `<image>` with external `href`. Reject otherwise.
-- Cache validated SVGs to a new S3 bucket `bimi-cache.<control_domain>`
-  (or a prefix on the existing admin bucket, if simpler) keyed by org
-  domain, with a 24 h TTL set via S3 object metadata and a Lambda-side
-  timestamp check on each request. Return the public HTTPS URL of the
-  cached object.
-- Drop the favicon fallback entirely. The client decides what to render
-  when the URL is `null`.
+  [`lambda/api/fetch_bimi/requirements.txt`](../../lambda/api/fetch_bimi/requirements.txt),
+  hash-pinned to match the existing `--require-hashes` build.
+- Query `default._bimi.<from_domain>` first. If no usable record, derive
+  the PSL organizational domain and query `default._bimi.<org_domain>`
+  once more (skip the second query when the From domain already *is* the
+  org domain). Stop there - do not walk arbitrary superdomains, and
+  never query a public suffix / TLD. On `NXDOMAIN` / `NoAnswer` at both
+  scopes, return `{ "url": null }`.
+- A record counts as usable only if, after parsing, it begins `v=BIMI1`
+  and yields an `l=` logo URL. A non-BIMI TXT at the queried name (the
+  SPF strings at `default._bimi.usps.com` / `default._bimi.etsy.com`)
+  is treated as "no record here" and falls through to the next scope -
+  it must not crash or short-circuit discovery.
 
-Unit tests in `lambda/api/fetch_bimi/` cover:
+**Parsing.**
+
+- Parse the TXT record by splitting on `;`, trimming, and tokenizing
+  each `key=value` pair. Require `v=BIMI1`. Extract `l=` by name. Ignore
+  unknown tags (including `a=`). Reject (treat as no record) when
+  `v=BIMI1` or `l=` is absent. Never index a positional field.
+
+**Fetch, validate, rasterize.**
+
+- Fetch the SVG with a 5 s timeout and a 32 KB response size cap. Reject
+  larger payloads.
+- Validate the SVG: parses as well-formed XML, root element is `<svg>`,
+  no `<script>` anywhere, no `xlink:href`/`href` referring to anything
+  off-document, no `<foreignObject>`, no `<image>` with external `href`.
+  Reject otherwise. (Accept the SVG even if `baseProfile="tiny-ps"` is
+  absent - several real senders omit it - but enforce the element
+  allowlist that Tiny PS implies, which is the part that matters for
+  safety.)
+- **Rasterize the validated SVG to a square PNG** (e.g. 96x96, the
+  client display size at @3x) and serve *that*. This is required, not
+  optional: SwiftUI `AsyncImage` cannot decode SVG, so an SVG URL never
+  renders on the Apple clients. Rendering happens here so every client
+  gets a format it can display and never touches third-party SVG.
+  - Rasterizer: prefer a pip-installed, hash-pinnable renderer that
+    needs no system libraries at runtime, so `fetch_bimi` stays a zip
+    Lambda and the build keeps using `--require-hashes`. `svglib` +
+    `reportlab` (`renderPM`) meets that bar; `reportlab` ships a
+    manylinux2014 wheel that runs on the AL2023 Lambda base. **Build
+    note:** `reportlab` is the first native-wheel dependency in
+    `lambda/api/`; the build must resolve the wheel for the Lambda
+    runtime (`python3.13`, x86_64), e.g. `pip` run under 3.13 or with
+    `--python-version 3.13 --only-binary=:all:`. If `svglib` fidelity on
+    real logos proves poor, the fallback is to move `fetch_bimi` to a
+    container-image Lambda (precedent: `certbot_renewal`) with
+    `cairosvg` + cairo from `dnf`; that is a larger change and is only
+    taken if needed.
+
+**Cache and return.**
+
+- Cache the rendered PNG to a new S3 bucket `bimi-cache.<control_domain>`
+  (or a prefix on the existing admin bucket, if simpler) keyed by the
+  resolved domain, with a 24 h TTL via S3 object metadata and a
+  Lambda-side timestamp check on each request. Return the public HTTPS
+  URL of the cached PNG. New bucket + the Lambda's `s3:GetObject` /
+  `s3:PutObject` on it are the only IAM/infra additions; size and gate
+  them like the existing message cache.
+- Drop the favicon fallback entirely. The client decides what to render
+  when the URL is `null` (both clients already draw an initials avatar).
+
+Unit tests in `lambda/api/fetch_bimi/` cover (DNS, fetch, and S3 stubbed
+so the suite stays hermetic; the rasterizer runs on a tiny fixture SVG):
 
 - Valid record with `v=BIMI1; l=<url>`.
 - Reordered tags (`a=` before `l=`).
-- Missing `v=BIMI1`.
-- `NXDOMAIN`, `NoAnswer`.
-- Oversized SVG (33 KB).
-- SVG containing `<script>`.
-- Malformed XML.
-- Subdomain with no record, org domain with a record (should it fall
-  back to org? Spec says yes for *some* subdomains; document decision
-  in the test).
+- Missing `v=BIMI1`, and missing `l=`.
+- Non-BIMI TXT at the queried name (an SPF string) -> treated as no
+  record, not a crash.
+- From subdomain with no record but org domain with a record -> the
+  org-domain fallback resolves it (the USPS case).
+- `NXDOMAIN` / `NoAnswer` at both scopes -> `{ "url": null }`.
+- Oversized SVG (33 KB) -> rejected.
+- SVG containing `<script>` / external `<image>` href -> rejected.
+- Malformed XML -> rejected.
+- Happy path returns a PNG URL under `bimi-cache.<control_domain>`, and
+  a warm cache entry is served without re-fetching.
 
 ### Phase B: React client display
 
@@ -220,8 +283,9 @@ glyph SVGs; the unread dot stays.
 - In
   [`Envelope.jsx`](../../react/admin/src/Email/Messages/Envelope.jsx),
   render in the `envelope-leading` span: if `bimi.url` is a non-null
-  string, an `<img>` (~24 x 24 px) with `src={bimi.url}`; otherwise the
-  initials avatar. Keep the existing unread dot and selection checkbox.
+  string, an `<img>` (~24 x 24 px) with `src={bimi.url}` (a PNG from
+  Phase A); otherwise the initials avatar. Keep the existing unread dot
+  and selection checkbox.
 - Update `Envelope.test.jsx`, `Envelopes.test.jsx`, and the viewport
   tests in `Messages.viewport.test.jsx` to cover the new slot.
 
@@ -272,9 +336,13 @@ Each phase verifies end-to-end before merging.
 
 - **Phase A.** `cd lambda/api/fetch_bimi && python -m pytest` against
   the new tests. Smoke-test in stage by hitting
-  `/fetch_bimi?sender_domain=cnn.com`, `/fetch_bimi?sender_domain=google.com`,
+  `/fetch_bimi?sender_domain=chewy.com`, `/fetch_bimi?sender_domain=amazon.com`,
   and a domain known to have no BIMI; observe `url` is a non-null
-  S3-backed URL in the first two cases and `null` in the third.
+  `bimi-cache.<control_domain>` PNG URL in the first two cases (open it
+  and confirm a rendered logo, not an SVG) and `null` in the third.
+  Then confirm the screenshot case end-to-end on a device: the Apple
+  list rows that previously showed initials now show the rasterized
+  logos.
 - **Phase B.** `cd react/admin && npm run test`. Manually load the
   admin app, confirm logos render for messages from known
   BIMI-publishing senders and initials avatars render for the rest.
