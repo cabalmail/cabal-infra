@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.33] - 2026-06-26
+
+### Added
+- Added BIMI publishing for Cabalmail's own mail. New addresses now get a
+  `default._bimi` TXT record (and the `mail-admin` system sender gets one via
+  Terraform) pointing at an SVG Tiny PS rendering of the Cabalmail mark, so
+  receivers that support BIMI display our logo. Records are written per
+  sending subdomain because the lookup name puts the subdomain in the middle,
+  where a DNS wildcard cannot reach.
+- Added sender avatars to the web app message list: each row now shows the
+  sender domain's BIMI logo when one is published, falling back to an initials
+  plate. Lookups are memoized per session and coalesced across rows, mirroring
+  the Apple clients' avatar behavior.
+
+### Fixed
+- Apple clients: the message body web view no longer reloads on every
+  SwiftUI update (flag changes, attachment loads, folder polling); it
+  reloads only when the content or remote-content policy actually changes.
+  The prior churn could cancel in-flight remote image requests mid-load.
+- Apple clients: inline `cid:` images (e.g. USPS Informed Delivery
+  mailpiece scans) now render in the message body. They were rewritten to
+  temp `file://` URLs, which the body web view — loaded with an opaque
+  origin — is not allowed to fetch; they are now embedded as `data:` URIs.
+- Fixed sender BIMI logos never loading in the clients. The `fetch_bimi`
+  endpoint is now a spec-correct, defensive proxy: it discovers the logo at
+  the From domain and then the organizational domain, validates the SVG, and
+  rasterizes it to a PNG (cached and served as a presigned URL) so SwiftUI's
+  `AsyncImage`, which cannot decode SVG, can render it. It no longer crashes
+  on non-BIMI TXT records or returns a guessed `favicon.ico`.
+
 ## [0.10.32] - 2026-06-26
 
 ### Added
