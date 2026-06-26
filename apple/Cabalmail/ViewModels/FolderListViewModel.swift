@@ -112,6 +112,77 @@ final class FolderListViewModel {
         )
     }
 
+    // MARK: - Create / delete
+
+    /// Create a folder (optionally nested under `parent`) and auto-subscribe
+    /// it so it shows up in the sidebar without a second tap — Dovecot doesn't
+    /// subscribe on create for us. The auto-subscribe is best-effort: if the
+    /// server rejects the SUBSCRIBE the folder still exists and the reload
+    /// below surfaces it. Reloads the full list (rather than appending) so the
+    /// new folder slots into the sidebar tree sort, then back-fills counts.
+    /// Returns true on success so the presenting sheet can dismiss itself.
+    func createFolder(name: String, parent: String?) async -> Bool {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return false }
+        do {
+            try await client.imapClient.connectAndAuthenticate()
+            try await client.imapClient.createFolder(name: trimmed, parent: parent)
+            try? await client.imapClient.subscribe(
+                path: fullPath(for: trimmed, parent: parent)
+            )
+            await loadFolderList()
+            await refreshSubscribedCounts()
+            errorMessage = nil
+            return true
+        } catch let error as CabalmailError {
+            errorMessage = String(describing: error)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        return false
+    }
+
+    /// Delete a user folder. Gated by `canDelete` so system folders and
+    /// `\Noselect` containers stay protected; prunes the row on success.
+    func deleteFolder(_ folder: Folder) async {
+        guard canDelete(folder) else { return }
+        do {
+            try await client.imapClient.connectAndAuthenticate()
+            try await client.imapClient.deleteFolder(path: folder.path)
+            folders.removeAll { $0.path == folder.path }
+            errorMessage = nil
+        } catch let error as CabalmailError {
+            errorMessage = String(describing: error)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Folders the user can nest a new folder under. `\Noselect`
+    /// (container-only) folders are excluded because a child `CREATE` would
+    /// fail against them.
+    var possibleParents: [Folder] {
+        folders.filter { !$0.attributes.contains("\\Noselect") }
+    }
+
+    /// Folders the user is not allowed to delete: the system mailboxes and any
+    /// `\Noselect` container.
+    static let systemPaths: Set<String> = [
+        "INBOX", "Sent", "Drafts", "Trash", "Junk", "Archive"
+    ]
+
+    func canDelete(_ folder: Folder) -> Bool {
+        !Self.systemPaths.contains(folder.path)
+            && !folder.attributes.contains("\\Noselect")
+    }
+
+    private func fullPath(for name: String, parent: String?) -> String {
+        if let parent, !parent.isEmpty {
+            return "\(parent)/\(name)"
+        }
+        return name
+    }
+
     /// Permanently deletes everything in Trash. Called only after the
     /// sidebar's confirmation dialog. On success the cached envelope
     /// snapshot for Trash is dropped, the sidebar badge zeroes, and the

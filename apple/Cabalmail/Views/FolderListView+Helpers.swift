@@ -141,4 +141,101 @@ extension FolderListView {
         default:        return "folder"
         }
     }
+
+    // MARK: - Folder row affordances
+
+    /// Trailing swipe actions for a folder row: delete (user folders only) and
+    /// the subscribe/unsubscribe toggle. Split out of `folderRow` to keep that
+    /// function under the SwiftLint body-length cap.
+    @ViewBuilder
+    func folderSwipeActions(_ folder: Folder, model: FolderListViewModel) -> some View {
+        if model.canDelete(folder) {
+            Button(role: .destructive) {
+                pendingDelete = folder
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
+        Button {
+            Task { await model.toggleSubscription(folder) }
+        } label: {
+            Label(
+                folder.isSubscribed ? "Unsubscribe" : "Subscribe",
+                systemImage: folder.isSubscribed ? "bell.slash" : "bell"
+            )
+        }
+        .tint(folder.isSubscribed ? .orange : .accentColor)
+    }
+
+    /// Context menu for a folder row: subscribe toggle, Empty Trash (Trash
+    /// only), and delete (user folders only).
+    @ViewBuilder
+    func folderContextMenu(_ folder: Folder, model: FolderListViewModel) -> some View {
+        Button {
+            Task { await model.toggleSubscription(folder) }
+        } label: {
+            Label(
+                folder.isSubscribed ? "Unsubscribe" : "Subscribe",
+                systemImage: folder.isSubscribed ? "bell.slash" : "bell"
+            )
+        }
+        if folder.path == FolderTree.trashPath {
+            Button(role: .destructive) {
+                emptyTrashConfirmPresented = true
+            } label: {
+                Label("Empty Trash", systemImage: "trash.slash")
+            }
+        }
+        if model.canDelete(folder) {
+            Button(role: .destructive) {
+                pendingDelete = folder
+            } label: {
+                Label("Delete Folder", systemImage: "trash")
+            }
+        }
+    }
+
+    // MARK: - New-folder sheet / delete-dialog plumbing
+
+    @ViewBuilder
+    var newFolderSheet: some View {
+        if let model {
+            NewFolderSheet(parents: model.possibleParents) { name, parent in
+                await model.createFolder(name: name, parent: parent)
+            }
+        }
+    }
+
+    var deleteDialogTitle: String {
+        if let folder = pendingDelete {
+            return "Delete \(folder.path)?"
+        }
+        return "Delete folder?"
+    }
+
+    var deleteDialogBinding: Binding<Bool> {
+        Binding(
+            get: { pendingDelete != nil },
+            set: { isPresented in
+                if !isPresented { pendingDelete = nil }
+            }
+        )
+    }
+
+    @ViewBuilder
+    func deleteDialogActions(for folder: Folder) -> some View {
+        Button("Delete", role: .destructive) {
+            let target = folder
+            pendingDelete = nil
+            Task { await model?.deleteFolder(target) }
+        }
+        Button("Cancel", role: .cancel) {
+            pendingDelete = nil
+        }
+    }
+
+    @ViewBuilder
+    func deleteDialogMessage(for folder: Folder) -> some View {
+        Text("Messages inside \(folder.path) will be deleted by the server. This can't be undone.")
+    }
 }
