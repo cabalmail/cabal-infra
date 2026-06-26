@@ -41,10 +41,10 @@ the same unreleased cycle, or a latent bug fixed before exposure.
 
 ## Releasing
 
-`.github/scripts/promote.sh` (or `make promote VERSION=<x.y.z>`) runs the
+`scripts/promote.sh` (or `make promote VERSION=<x.y.z>`) runs the
 collation as part of cutting a release. To preview locally without releasing:
 
-    ./.github/scripts/collate-changelog.sh <version>
+    ./scripts/collate-changelog.sh <version>
 
 That folds the fragments into `CHANGELOG.md`, deletes them, and stages the
 result for inspection. See [`docs/releasing.md`](../docs/releasing.md) for the

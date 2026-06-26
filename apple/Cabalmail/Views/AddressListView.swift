@@ -104,6 +104,12 @@ struct AddressListView: View {
             }
             .contextMenu {
                 Button {
+                    copyToPasteboard(address.address)
+                    appState.showToast(.addressCopied(address.address), duration: 7)
+                } label: {
+                    Label("Copy Address", systemImage: "doc.on.doc")
+                }
+                Button {
                     Task { await model.toggleFavorite(address) }
                 } label: {
                     Label(

@@ -57,6 +57,14 @@ struct MessageListView: View {
     // and is always treated as wide (see `isWideLayout`).
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     #endif
+    // Drives the background-snapshot optimization: while the scene isn't
+    // `.active`, `messageRow` (in `+Selection`) renders cheap placeholder
+    // rows instead of the per-row `List` that backs the swipe actions, so
+    // the system's background snapshot has no `List`s to lay out -- that
+    // synchronous relayout is what could exceed the scene-update watchdog
+    // after an archive-then-background. Non-private so the cross-file
+    // extension can read it.
+    @Environment(\.scenePhase) var scenePhase
     // `model` and `filtersPresented` are module-internal (no access
     // modifier) so the same-module extensions in `+Search` and `+macOS`
     // can read them without round-tripping through accessors.
