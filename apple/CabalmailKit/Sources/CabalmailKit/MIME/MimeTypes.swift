@@ -119,6 +119,24 @@ public struct MimePart: Sendable, Hashable {
         return [self]
     }
 
+    /// For an inline image part — an `image/*` leaf carrying a `Content-ID` —
+    /// the `data:` URL that embeds its bytes for direct rendering. Nil for any
+    /// other part.
+    ///
+    /// Inline `cid:` images must be embedded as `data:` URIs rather than
+    /// rewritten to a temp `file://` URL: the message body is shown in a
+    /// `WKWebView` loaded via `loadHTMLString(_:baseURL: nil)`, which gives the
+    /// document an opaque origin that WebKit forbids from fetching `file://`
+    /// subresources. A `data:` URI carries no origin requirement and is left
+    /// alone by the remote-content blocker (which only matches `http(s)://`).
+    public var inlineImageDataURL: URL? {
+        guard let contentID, !contentID.isEmpty, contentType.type == "image" else {
+            return nil
+        }
+        let base64 = decodedBody.base64EncodedString()
+        return URL(string: "data:\(contentType.mimeType);base64,\(base64)")
+    }
+
     /// Returns `decodedBody` as a `String` using the charset declared in
     /// Content-Type, falling back to UTF-8 and then ISO-8859-1. Returns nil
     /// for non-text parts.

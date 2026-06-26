@@ -17,8 +17,11 @@ import AppKit
 ///   level and subframe navigations; subresource loads bypass it entirely,
 ///   which is why the earlier "deny non-file URLs in `decidePolicyFor`"
 ///   approach silently loaded tracker pixels despite the preference.
-/// - `cid:` inline image URLs are rewritten to local `file://` URLs from
-///   `inlineImages` before the HTML is handed to the web view.
+/// - `cid:` inline image URLs are rewritten to `data:` URIs from
+///   `inlineImages` before the HTML is handed to the web view. (A temp
+///   `file://` URL can't be used: the document's opaque origin — a side
+///   effect of `loadHTMLString(_:baseURL: nil)` — forbids `file://`
+///   subresource loads.)
 struct HTMLBodyView: View {
     let html: String
     let inlineImages: [String: URL]
@@ -359,8 +362,8 @@ final class HTMLBodyCoordinator: NSObject, WKNavigationDelegate {
     }
 }
 
-/// Walks the HTML and rewrites `cid:` URLs (case-insensitive) to local
-/// `file://` URLs pulled from the inline-image map. Purely string-level so
+/// Walks the HTML and rewrites `cid:` URLs (case-insensitive) to the
+/// `data:` URIs pulled from the inline-image map. Purely string-level so
 /// we never need to run a JS context. In `readerMode`, prepends a reset +
 /// typography stylesheet that overrides author CSS for a Safari Reader-
 /// style presentation.
