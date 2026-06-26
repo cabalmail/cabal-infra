@@ -376,6 +376,11 @@ jobs:
           BUILD_NUMBER="$(date -u +%s)"
           echo "Marketing version: $MARKETING_VERSION" >> "$GITHUB_STEP_SUMMARY"
           echo "Build number: $BUILD_NUMBER" >> "$GITHUB_STEP_SUMMARY"
+          # Export both for the TestFlight-notes step, which needs the build
+          # number to find this exact build in App Store Connect (BUILD_NUMBER
+          # is a per-run timestamp and can't be recomputed later).
+          echo "MARKETING_VERSION=$MARKETING_VERSION" >> "$GITHUB_ENV"
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
           # CODE_SIGN_STYLE / CODE_SIGN_IDENTITY / PROVISIONING_PROFILE_SPECIFIER
           # live on the Cabalmail target in project.yml's Release config and
           # are NOT passed here — top-level xcodebuild build settings
@@ -473,6 +478,24 @@ jobs:
             echo "- Environment: \`${{ github.ref_name == 'main' && 'prod' || 'stage' }}\`"
             echo "- Track: App Store Connect → Cabalmail → TestFlight"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Set TestFlight "What to Test" notes (prod only)
+        # Prod releases only - the stage track is the developer's own and
+        # ships no notes. Best-effort: the binary is already uploaded, so the
+        # script warns and exits 0 on any failure rather than failing release.
+        if: steps.check.outputs.enabled == 'true' && github.ref_name == 'main'
+        env:
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          BUNDLE_ID: com.cabalmail.Cabalmail
+          CHANGELOG_PATH: ${{ github.workspace }}/CHANGELOG.md
+        run: |
+          set -euo pipefail
+          # Isolated venv: the runner's Homebrew python is externally managed
+          # (PEP 668), so a bare `pip install` is refused.
+          python3 -m venv "$RUNNER_TEMP/ascvenv"
+          "$RUNNER_TEMP/ascvenv/bin/pip" install --quiet --disable-pip-version-check pyjwt cryptography
+          "$RUNNER_TEMP/ascvenv/bin/python" "$GITHUB_WORKSPACE/.github/scripts/set-testflight-notes.py"
 
       - name: Clean up keychain and API key
         if: always() && steps.check.outputs.enabled == 'true'
@@ -636,6 +659,9 @@ jobs:
           BUILD_NUMBER="$(date -u +%s)"
           echo "Marketing version: $MARKETING_VERSION" >> "$GITHUB_STEP_SUMMARY"
           echo "Build number: $BUILD_NUMBER" >> "$GITHUB_STEP_SUMMARY"
+          # Export both for the TestFlight-notes step. See the iOS archive step.
+          echo "MARKETING_VERSION=$MARKETING_VERSION" >> "$GITHUB_ENV"
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
           # See the iOS archive step for why the signing settings live on
           # the CabalmailMac target in project.yml instead of here. The
           # MAC_APP_STORE_PROFILE_UUID below is injected as a user-defined
@@ -831,6 +857,22 @@ jobs:
           name: CabalmailMac-notarized-${{ github.run_number }}
           path: ${{ env.NOTARIZED_ZIP }}
           retention-days: 30
+
+      # Best-effort, so it runs last - after the notarized artifact is produced
+      # - and never blocks it on the up-to-20-minute processing poll.
+      - name: Set TestFlight "What to Test" notes (prod only)
+        # Prod releases only. Best-effort - see the iOS job for rationale.
+        if: github.ref_name == 'main'
+        env:
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          BUNDLE_ID: com.cabalmail.CabalmailMac
+          CHANGELOG_PATH: ${{ github.workspace }}/CHANGELOG.md
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/ascvenv"
+          "$RUNNER_TEMP/ascvenv/bin/pip" install --quiet --disable-pip-version-check pyjwt cryptography
+          "$RUNNER_TEMP/ascvenv/bin/python" "$GITHUB_WORKSPACE/.github/scripts/set-testflight-notes.py"
 
       - name: Clean up keychain and API key
         if: always()

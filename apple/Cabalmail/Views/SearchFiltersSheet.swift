@@ -19,6 +19,10 @@ struct SearchFiltersSheet: View {
     /// Display name for the "This folder only" toggle's helper text so
     /// the user sees which folder they're scoping to.
     let currentFolderName: String
+    /// Whether to offer the "This folder only" toggle. The folder list scopes
+    /// to its folder; the global search surface has no anchor folder, so it
+    /// hides the toggle and always searches cross-folder.
+    let allowFolderScope: Bool
     /// Fires when the user taps Apply. The sheet hands the modified
     /// snapshot back to the caller, which assigns to the view-model's
     /// `searchFilters` and re-runs the search.
@@ -33,11 +37,13 @@ struct SearchFiltersSheet: View {
     init(
         filters: Binding<MessageSearchFilters>,
         currentFolderName: String,
+        allowFolderScope: Bool = true,
         onApply: @escaping (MessageSearchFilters) -> Void,
         onCancel: @escaping () -> Void
     ) {
         self._filters = filters
         self.currentFolderName = currentFolderName
+        self.allowFolderScope = allowFolderScope
         self.onApply = onApply
         self.onCancel = onCancel
         let initial = filters.wrappedValue
@@ -99,14 +105,16 @@ struct SearchFiltersSheet: View {
                     Toggle("Flagged", isOn: $draft.flagged)
                     Toggle("Has attachment", isOn: $draft.hasAttachment)
                 }
-                Section {
-                    Toggle("This folder only", isOn: $draft.thisFolderOnly)
-                } footer: {
-                    Text(
-                        draft.thisFolderOnly
-                            ? "Search restricted to \(currentFolderName)."
-                            : "Search every subscribed folder except Trash."
-                    )
+                if allowFolderScope {
+                    Section {
+                        Toggle("This folder only", isOn: $draft.thisFolderOnly)
+                    } footer: {
+                        Text(
+                            draft.thisFolderOnly
+                                ? "Search restricted to \(currentFolderName)."
+                                : "Search every subscribed folder except Trash."
+                        )
+                    }
                 }
             }
             .navigationTitle("Filters")
