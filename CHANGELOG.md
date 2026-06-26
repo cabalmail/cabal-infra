@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.32] - 2026-06-26
+
+### Added
+- A `Lint` workflow now runs the code linters on every pull request, so
+  failures surface at review time instead of after merge. It mirrors the
+  merge-time checks - Terraform (tflint, checkov, trivy on both stacks),
+  Python (pylint), Swift (swiftlint) - and adds ESLint for the React admin
+  app, each path-filtered to the areas a PR touches.
+
+### Fixed
+- Apple clients: fixed remote images failing to load after tapping "Show
+  remote content" — the message web view reloaded on every SwiftUI update,
+  cancelling slower in-flight image requests (e.g. USPS Informed Delivery
+  mailpiece scans), so only the fastest one or two ever appeared. It now
+  reloads only when the message content or remote-content policy actually
+  changes.
+- Fixed the prod TestFlight "What to Test" step failing to write notes with
+  `PARAMETER_ERROR.ILLEGAL` on `filter[locale]`. It now queries the top-level
+  `betaBuildLocalizations` collection, which accepts the locale filter, instead
+  of the build relationship endpoint, which does not.
+
 ## [0.10.31] - 2026-06-26
 
 ### Added
