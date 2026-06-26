@@ -117,11 +117,13 @@ export default class ApiClient {
 
   // BIMI
 
-  getBimiUrl(sender) {
-    const sender_domain = sender.split("@")[1];
+  // Resolve a sender domain's BIMI logo. The Lambda returns a rasterized PNG
+  // URL (or null) keyed by sender domain, identical for every caller, so the
+  // result is safe to memoize per session (see utils/bimiCache).
+  getBimiUrl(senderDomain) {
     const response = axios.get('/fetch_bimi', {
       params: {
-        sender_domain: sender_domain
+        sender_domain: senderDomain
       },
       baseURL: this.baseURL,
       headers: {

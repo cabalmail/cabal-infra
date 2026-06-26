@@ -23,7 +23,7 @@
 
 .envelope-content {
   display: grid;
-  grid-template-columns: 20px 1fr auto;
+  grid-template-columns: 20px 24px 1fr auto;
   gap: 10px;
   align-items: center;
   flex: 1;
@@ -108,6 +108,31 @@
 .envelope-list.bulk-mode .envelope-dot { opacity: 0; }
 .envelope-list.bulk-mode .envelope-checkbox { opacity: 1; transform: scale(1); }
 .envelope-leading:hover .envelope-checkbox { border-color: var(--ink-soft); }
+
+/* ---- Sender avatar: BIMI logo, else an initials plate ---- */
+.envelope-avatar {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  user-select: none;
+}
+.envelope-avatar-logo {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  display: block;
+}
 
 /* ---- Main content ---- */
 .envelope-main { min-width: 0; }
