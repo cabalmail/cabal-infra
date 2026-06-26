@@ -30,7 +30,7 @@ async function runInChunks(ids, chunkSize, doChunk, onProgress) {
   for (let start = 0; start < ids.length; start += chunkSize) {
     const chunk = ids.slice(start, start + chunkSize);
     try {
-      await doChunk(chunk); // eslint-disable-line no-await-in-loop
+      await doChunk(chunk);
     } catch (cause) {
       const err = new Error('bulk chunk failed');
       err.done = done;
@@ -47,7 +47,6 @@ function Messages({
   folder,
   host,
   showOverlay,
-  setFolder: setFolderProp,
   setMessage,
   addressFilter,
   filter,
@@ -425,14 +424,6 @@ function Messages({
         .catch((e) => console.error(e));
     },
     [api, folder, sortDir, sortKey, refreshAfterMutation],
-  );
-
-  const handleFolderChange = useCallback(
-    (nextFolder) => {
-      exitBulk();
-      setFolderProp(nextFolder);
-    },
-    [exitBulk, setFolderProp],
   );
 
   const handleSortKeyChange = useCallback(

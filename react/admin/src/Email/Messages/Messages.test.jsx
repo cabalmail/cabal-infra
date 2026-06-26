@@ -112,7 +112,7 @@ describe('Messages', () => {
   });
 
   it('fetches messages with the default sort and switches folders', async () => {
-    const { container, unmount, rerender } = render(<Harness folder="INBOX" />);
+    const { unmount, rerender } = render(<Harness folder="INBOX" />);
     try {
       await waitFor(() => {
         expect(mockGetMessages).toHaveBeenCalledWith('INBOX', 'REVERSE ', 'DATE');

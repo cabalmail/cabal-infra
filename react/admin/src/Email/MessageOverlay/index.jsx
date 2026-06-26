@@ -20,7 +20,7 @@ import ConfirmDialog from '../../ConfirmDialog';
 import useApi from '../../hooks/useApi';
 import { useAppMessage } from '../../contexts/AppMessageContext';
 import {
-  READ, UNREAD, FLAGGED, ARRIVAL,
+  UNREAD, FLAGGED, ARRIVAL,
 } from '../../constants';
 import {
   extractName, extractEmail, formatReaderTimestamp, initialsFor,
@@ -196,11 +196,6 @@ function MessageOverlay({
   const markUnread = useCallback(() => {
     if (!isSeen) return;
     runFlag(UNREAD);
-  }, [isSeen, runFlag]);
-
-  const markRead = useCallback(() => {
-    if (isSeen) return;
-    runFlag(READ);
   }, [isSeen, runFlag]);
 
   const createPayload = useCallback(() => [
