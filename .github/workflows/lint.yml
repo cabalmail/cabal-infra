@@ -1,0 +1,247 @@
+---
+name: Lint
+
+# Run the code linters/scanners on every pull request so failures surface at
+# review time instead of after merge. The deploy workflows (infra.yml,
+# app.yml, apple.yml) only fire on pushes to the three named branches, so
+# before this workflow a feature-branch or claude/* PR could pass review with
+# lint errors that only blew up once promoted to stage/main. This mirrors the
+# checks those deploy workflows run at merge time:
+#
+#   - Terraform: tflint + checkov + trivy, both the dns and infra stacks
+#                (from infra.yml), using the same pinned tool versions,
+#                shared tflint config, per-stack checkov/trivy configs, and
+#                baseline/ignore drift checks.
+#   - Python:    pylint over lambda/api and lambda/counter (from app.yml).
+#   - Swift:     swiftlint --strict (from apple.yml).
+#   - React:     eslint (new for the PR gate; the deploy path only builds).
+#
+# This is lint-only: no AWS credentials, no Terraform backend, no deploy. The
+# Terraform scanners read the committed source directly (exactly as the
+# infra.yml scanner jobs do), so they need neither a generated backend.tf nor
+# OIDC. Each area is path-filtered so a PR only runs the linters it can affect.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  # dorny/paths-filter lists the PR's changed files via the pulls API on
+  # pull_request events.
+  pull-requests: read
+
+# Supersede in-flight lint runs when a PR is updated; a stale lint result is
+# never worth finishing. Keyed on the PR number so concurrent PRs don't cancel
+# each other.
+concurrency:
+  group: lint-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      terraform: ${{ steps.filter.outputs.terraform }}
+      python: ${{ steps.filter.outputs.python }}
+      swift: ${{ steps.filter.outputs.swift }}
+      react: ${{ steps.filter.outputs.react }}
+    steps:
+    - name: checkout
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+    - name: filter
+      id: filter
+      # On pull_request, dorny/paths-filter diffs against the PR base branch
+      # automatically (no `base:` needed). Changing lint.yml itself runs every
+      # area so the workflow can be validated against real code in one PR.
+      uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d  # v4.0.1
+      with:
+        filters: |
+          terraform:
+            - 'terraform/**'
+            - '.github/scripts/check-suppression-justifications.sh'
+            - '.github/scripts/check-iam-resource-scope.py'
+            - '.github/scripts/baseline-diff.py'
+            - '.github/workflows/lint.yml'
+          python:
+            - 'lambda/**'
+            - '.github/workflows/lint.yml'
+          swift:
+            - 'apple/**'
+            - '.github/workflows/lint.yml'
+          react:
+            - 'react/admin/**'
+            - '.github/workflows/lint.yml'
+
+  # ---------------------------------------------------------------------------
+  # Terraform. One job per tool, fanned out over both stacks via the matrix.
+  # Mirrors the infra.yml scanner jobs step-for-step, minus the SARIF upload to
+  # GitHub code scanning: on a PR the gate is the failed check itself, so the
+  # code-scanning surfacing (and its fork-permission complications) is dropped.
+  # Both stacks are scanned whenever any terraform/** path changes; scanning an
+  # untouched stack is cheap and the shared tflint config couples them anyway.
+  # ---------------------------------------------------------------------------
+  checkov:
+    needs: changes
+    if: needs.changes.outputs.terraform == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        stack: [dns, infra]
+    steps:
+    - name: checkout
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+    - name: check-suppression-justifications
+      run: ./.github/scripts/check-suppression-justifications.sh terraform/${{ matrix.stack }}
+    - name: check-iam-resource-scope
+      run: ./.github/scripts/check-iam-resource-scope.py terraform/${{ matrix.stack }}
+    - name: setup-python
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+      with:
+        python-version: '3.12'
+    - name: install-checkov
+      run: pip install checkov==3.2.530
+    - name: checkov
+      # Same invocation as the infra.yml chekov / checkov_dns jobs and the
+      # local `make scan` runner: --config-file applies the CMK skip-check,
+      # --baseline grandfathers residual findings, so checkov exits non-zero
+      # (failing the PR check) only on a NEW finding not in the baseline.
+      run: >
+        checkov -d terraform/${{ matrix.stack }}
+        --config-file terraform/${{ matrix.stack }}/.checkov.yaml
+        --baseline terraform/${{ matrix.stack }}/.checkov.baseline
+        --compact
+        -o cli
+    - name: baseline-drift
+      # Fail if a .checkov.baseline entry no longer matches a finding (stale:
+      # the code was fixed but the grandfather entry was left behind).
+      run: |
+        checkov -d terraform/${{ matrix.stack }} --config-file terraform/${{ matrix.stack }}/.checkov.yaml \
+          --soft-fail --compact --quiet -o json > "$RUNNER_TEMP/checkov-all.json"
+        python3 .github/scripts/baseline-diff.py checkov "$RUNNER_TEMP/checkov-all.json" terraform/${{ matrix.stack }}/.checkov.baseline
+
+  tflint:
+    needs: changes
+    if: needs.changes.outputs.terraform == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        stack: [dns, infra]
+    env:
+      # tflint does not search parent dirs; point it at the shared config
+      # explicitly. Absolute path because --recursive lints each subdir.
+      TFLINT_CONFIG_FILE: ${{ github.workspace }}/terraform/.tflint.hcl
+    steps:
+    - name: checkout
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+    - name: install-tflint
+      uses: terraform-linters/setup-tflint@b480b8fcdaa6f2c577f8e4fa799e89e756bb7c93  # v6.2.2
+      with:
+        tflint_version: v0.63.1
+    - name: init-tflint
+      run: tflint --init
+    - name: run-linter
+      # tflint exits 2 on any finding, failing the PR check. The stacks are at
+      # zero findings; a new one fails CI. Mirrors infra.yml / `make scan`.
+      run: tflint --chdir=terraform/${{ matrix.stack }} --recursive
+
+  trivy:
+    needs: changes
+    if: needs.changes.outputs.terraform == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        stack: [dns, infra]
+    steps:
+    - name: checkout
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+    - name: trivy
+      uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+      with:
+        scan-type: config
+        scan-ref: terraform/${{ matrix.stack }}
+        format: table
+        # Pin the trivy binary so gate strictness only changes by a deliberate
+        # bump (the action SHA pins the wrapper, not the binary). Matches the
+        # version the baseline was verified against.
+        version: v0.71.0
+        trivyignores: terraform/${{ matrix.stack }}/.trivyignore
+        # Exit 1 on any finding not in the ignorefile, failing the PR check.
+        exit-code: '1'
+    - name: ignore-drift
+      # Fail if a .trivyignore id no longer matches a finding (stale). The
+      # trivy binary (pinned above) is on PATH from the action.
+      run: |
+        trivy config terraform/${{ matrix.stack }} --format json --quiet > "$RUNNER_TEMP/trivy-all.json"
+        python3 .github/scripts/baseline-diff.py trivy "$RUNNER_TEMP/trivy-all.json" terraform/${{ matrix.stack }}/.trivyignore
+
+  # ---------------------------------------------------------------------------
+  # Python. Same pylint invocations app.yml runs in the lambda-api and
+  # lambda-counter deploy jobs (counter borrows api's .pylintrc).
+  # ---------------------------------------------------------------------------
+  python:
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+    - name: setup-python
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+      with:
+        python-version: '3.12'
+    - name: install-pylint
+      run: pip install pylint
+    - name: pylint-api
+      run: cd ./lambda/api && pylint --rcfile .pylintrc _shared/*.py */function.py
+    - name: pylint-counter
+      run: pylint --rcfile ./lambda/api/.pylintrc ./lambda/counter/*/function.py
+
+  # ---------------------------------------------------------------------------
+  # Swift. swiftlint --strict, the same gate apple.yml runs on its macOS leg.
+  # SwiftLint parses the sources directly, so no xcodegen/project generation is
+  # needed here. macOS runner because that is where swiftlint is available.
+  # ---------------------------------------------------------------------------
+  swift:
+    needs: changes
+    if: needs.changes.outputs.swift == 'true'
+    runs-on: macos-15
+    steps:
+    - name: checkout
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+    - name: install-swiftlint
+      # The macos-15 image may preinstall swiftlint; only install when missing
+      # so the step stays quiet (and doesn't emit a brew "already installed"
+      # annotation). Same pattern as apple.yml.
+      run: brew list swiftlint >/dev/null 2>&1 || brew install swiftlint
+    - name: swiftlint
+      working-directory: apple
+      run: swiftlint lint --strict --quiet
+
+  # ---------------------------------------------------------------------------
+  # React. eslint over react/admin (flat config in react/admin/eslint.config.js).
+  # New for the PR gate: the app.yml react deploy job only builds, never lints.
+  # ---------------------------------------------------------------------------
+  react:
+    needs: changes
+    if: needs.changes.outputs.react == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: react/admin
+    steps:
+    - name: checkout
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+    - name: setup-node
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+      with:
+        node-version: '22'
+        cache: npm
+        cache-dependency-path: react/admin/package-lock.json
+    - name: install
+      run: npm ci
+    - name: eslint
+      run: npm run lint
