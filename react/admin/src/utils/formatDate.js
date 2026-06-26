@@ -55,6 +55,15 @@ export function extractEmail(fromStr) {
   return m ? m[1] : fromStr;
 }
 
+/* Sender domain (lowercased) for a From string, for BIMI lookups.
+   "Mary <x@Sub.Example.com>" → "sub.example.com"; "" when there is no @. */
+export function domainFor(fromStr) {
+  const email = extractEmail(fromStr);
+  const at = email.lastIndexOf('@');
+  if (at < 0) return '';
+  return email.slice(at + 1).replace(/[>\s]+$/, '').trim().toLowerCase();
+}
+
 /* Reader-pane timestamp, per §4d: "Friday, Apr 17 · 1:10 PM". */
 export function formatReaderTimestamp(iso) {
   if (!iso) return '';

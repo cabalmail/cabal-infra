@@ -68,3 +68,14 @@ variable "imap_pool_enabled" {
   default     = false
   description = "Reuse authenticated IMAP sessions across warm invocations of this Lambda (large-mailbox hardening plan, Layer 1.5). Off by default; enable per-environment once validated."
 }
+
+variable "architecture" {
+  type        = string
+  default     = "arm64"
+  description = "Lambda instruction set. The fleet is arm64; fetch_bimi overrides to x86_64 because its bundled resvg rasterizer has no prebuilt linux-aarch64 binary (see docs/0.9.x/bimi.md)."
+
+  validation {
+    condition     = contains(["arm64", "x86_64"], var.architecture)
+    error_message = "architecture must be arm64 or x86_64."
+  }
+}

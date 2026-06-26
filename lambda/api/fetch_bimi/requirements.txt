@@ -1,3 +1,11 @@
 dnspython==2.3.0 \
     --hash=sha256:89141536394f909066cabd112e3e1a37e4e654db00a25308b0f130bc3152eb46 \
     --hash=sha256:224e32b03eb46be70e12ef6d64e0be123a64e621ab4c0822ff6d450d52a540b9
+# Public Suffix List for organizational-domain derivation (pure-python,
+# universal wheel, bundles its own PSL snapshot - no mandatory deps, no
+# network at runtime). The SVG rasterizer is not a pip dependency: a
+# static `resvg` binary is fetched and sha256-verified at build time and
+# bundled into the zip (see .github/scripts/fetch-resvg.sh).
+publicsuffixlist==1.0.2.20260625 \
+    --hash=sha256:8123f244bb7f2163f2cc4ce42bad56218e6b65f23efffbab5dcd5b36fcc3ada1 \
+    --hash=sha256:4cb45166fcb328a2894dfed949534e698f3a00f27f08a8d083ff7e05e6baf110

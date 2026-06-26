@@ -7,6 +7,7 @@ import {
 } from 'react-swipeable-list';
 import 'react-swipeable-list/dist/styles.css';
 import Icon from './icons';
+import BimiAvatar from './BimiAvatar';
 import formatDate, { extractName } from '../../utils/formatDate';
 
 function Envelope({
@@ -27,6 +28,7 @@ function Envelope({
   dom_id,
   bulkMode,
   selected,
+  getBimi,
 }) {
   const flagStr = useMemo(() => flags.map((f) => f.replace('\\', '')).join(' '), [flags]);
   const unread = !flagStr.match(/Seen/);
@@ -121,6 +123,7 @@ function Envelope({
             {is_checked && <Icon name="check" size={10} />}
           </span>
         </span>
+        <BimiAvatar from={from && from[0]} getBimi={getBimi} />
         <div className="envelope-main">
           <div className="envelope-head">
             <span className="envelope-from" title={from && from[0]}>

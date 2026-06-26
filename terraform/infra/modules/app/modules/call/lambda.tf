@@ -190,7 +190,7 @@ resource "aws_lambda_function" "api_call" {
   role             = aws_iam_role.lambda.arn
   handler          = "function.handler"
   runtime          = var.runtime
-  architectures    = ["arm64"]
+  architectures    = [var.architecture]
   # 29s matches API Gateway's 29s integration timeout, so the Lambda stops
   # at the same boundary the client sees the request fail instead of billing
   # on invisibly past it (and a real timeout becomes an alarmable signal).
