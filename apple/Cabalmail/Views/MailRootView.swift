@@ -280,7 +280,14 @@ struct MailRootView: View {
         .disabled(true)
     }
     #endif
+}
 
+// MARK: - Sidebar chrome
+
+// Lifted into a same-file extension so the primary struct body stays under
+// SwiftLint's `type_body_length` cap, matching the pattern used by
+// `MessageListView` and its `+Filter` / `+Search` siblings.
+extension MailRootView {
     /// Sidebar search field — the wide-layout entry to global search. Engaging
     /// it (focus, a query, or an active search) swaps the content column to
     /// cross-folder results; clearing and unfocusing it returns to the folder.
