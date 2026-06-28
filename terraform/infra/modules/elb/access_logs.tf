@@ -23,6 +23,7 @@ data "aws_region" "current" {}
 # bucket for meta-logs is not worth it for operational TLS-connection
 # records; replication is likewise skipped because the logs expire in
 # 180 days and exist for incident response, not durability.
+#trivy:ignore:AVD-AWS-0089 # access-logging the access-log bucket recurses; meta-logs not worth a second bucket
 resource "aws_s3_bucket" "nlb_access_logs" {
   #checkov:skip=CKV_AWS_18:access-logging the access-log bucket recurses; meta-logs not worth a second bucket
   #checkov:skip=CKV_AWS_144:operational logs with 180-day expiry; cross-region replication buys nothing

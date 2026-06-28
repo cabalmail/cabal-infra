@@ -102,10 +102,19 @@ locals {
   hc_ping_ecs_reconfigure = var.monitoring ? "/cabal/healthcheck_ping_ecs_reconfigure" : ""
 }
 
+# Shared S3 server-access-log target for the content buckets (admin, www,
+# cache). Each of those modules attaches an aws_s3_bucket_logging that
+# writes here under its own prefix. See modules/s3_access_logs.
+module "s3_access_logs" {
+  source         = "./modules/s3_access_logs"
+  control_domain = var.control_domain
+}
+
 # Create S3 bucket for React App
 module "bucket" {
-  source         = "./modules/s3"
-  control_domain = var.control_domain
+  source             = "./modules/s3"
+  control_domain     = var.control_domain
+  access_logs_bucket = module.s3_access_logs.bucket
 }
 
 # Phase 5 of docs/0.10.x/resilience-continuity-hardening-plan.md moved
@@ -143,11 +152,12 @@ module "cert" {
 # and the privacy/terms pages referenced by carrier registrations.
 # See docs/front-door.md.
 module "front_door" {
-  source          = "./modules/front_door"
-  control_domain  = var.control_domain
-  zone_id         = data.terraform_remote_state.zone.outputs.control_domain_zone_id
-  private_zone_id = module.vpc.private_zone.zone_id
-  cert_arn        = module.cert.cert_arn
+  source             = "./modules/front_door"
+  control_domain     = var.control_domain
+  zone_id            = data.terraform_remote_state.zone.outputs.control_domain_zone_id
+  private_zone_id    = module.vpc.private_zone.zone_id
+  cert_arn           = module.cert.cert_arn
+  access_logs_bucket = module.s3_access_logs.bucket
 }
 
 # Sets up Route 53 hosted zones for mail domains. When the control domain is
@@ -193,6 +203,7 @@ module "admin" {
   invitation_required = module.pool.invitation_required
   monitoring          = var.monitoring
   imap_pool_enabled   = var.imap_pool_enabled
+  access_logs_bucket  = module.s3_access_logs.bucket
 }
 
 # Creates a DynamoDB table for storing address data

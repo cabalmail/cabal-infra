@@ -129,3 +129,8 @@ variable "imap_pool_enabled" {
   description = "Mirror of the top-level var.imap_pool_enabled. Reuse authenticated IMAP sessions across warm Lambda invocations (large-mailbox hardening plan, Layer 1.5). Off by default; enable per-environment once validated."
   default     = false
 }
+
+variable "access_logs_bucket" {
+  type        = string
+  description = "Name of the shared S3 server-access-log target bucket (modules/s3_access_logs) the cache bucket's access logs are delivered to."
+}
