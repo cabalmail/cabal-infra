@@ -25,18 +25,28 @@ struct ColumnResizeHandle: View {
         // A wide, transparent strip straddling the system divider gives a
         // forgiving grab target; the faint capsule marks where to grab without
         // drawing a second visible rule beside the divider SwiftUI already paints.
-        Color.clear
-            .frame(width: 16)
+        //
+        // The strip stays FULLY INSIDE the column (no negative inset). The
+        // `UISplitViewController` owns the exact column boundary, and an overlay
+        // nudged past the column's bounds gets clipped out of hit-testing by
+        // UIKit — so the visible grip looked present but ignored every touch
+        // because the half a user aims at was the clipped, dead half. Keeping
+        // the whole strip (and the capsule centred on it) inside the column
+        // puts the grab target where the eye lands.
+        //
+        // A near-zero-opacity fill rather than `Color.clear` guarantees the
+        // strip is hit-testable, and `highPriorityGesture` lets the drag win
+        // over the message list's scroll/tap underneath.
+        Rectangle()
+            .fill(Color.primary.opacity(0.001))
+            .frame(width: 22)
             .overlay {
                 Capsule()
                     .fill(.secondary.opacity(0.35))
                     .frame(width: 4, height: 36)
             }
             .contentShape(Rectangle())
-            // Shift the strip outward so it centres on the column's edge rather
-            // than sitting fully inside the column.
-            .padding(.trailing, -8)
-            .gesture(
+            .highPriorityGesture(
                 DragGesture(minimumDistance: 1)
                     .onChanged { value in
                         let anchor = dragAnchor ?? width
