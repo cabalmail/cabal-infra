@@ -46,8 +46,15 @@ struct ColumnResizeHandle: View {
                     .frame(width: 4, height: 36)
             }
             .contentShape(Rectangle())
+            // Measure in GLOBAL space, not the handle's local space. The handle
+            // is pinned to the column's trailing edge, so resizing moves it —
+            // and a local-space translation would be measured against that
+            // moving origin, under-reporting by the amount the column just grew
+            // and feeding back on itself (the divider tracked the finger at
+            // roughly half speed and jittered between frames). Global space is
+            // fixed to the screen, so the translation is the true finger delta.
             .highPriorityGesture(
-                DragGesture(minimumDistance: 1)
+                DragGesture(minimumDistance: 1, coordinateSpace: .global)
                     .onChanged { value in
                         let anchor = dragAnchor ?? width
                         if dragAnchor == nil { dragAnchor = anchor }
