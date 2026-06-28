@@ -60,3 +60,13 @@ resource "aws_s3_bucket_versioning" "react_app" {
     status = "Enabled"
   }
 }
+
+# Server access logs -> shared target bucket (modules/s3_access_logs), the
+# CKV_AWS_18 / AWS-0089 audit trail. Direct access here is OAC/CloudFront
+# only, so these records capture CloudFront origin fetches and the
+# deploy-time writes of the React bundle and Lambda zips.
+resource "aws_s3_bucket_logging" "this" {
+  bucket        = local.bucket
+  target_bucket = var.access_logs_bucket
+  target_prefix = "admin/"
+}
