@@ -21,3 +21,8 @@ variable "cert_arn" {
   type        = string
   description = "ACM certificate ARN covering www.<control_domain>. The infra cert module issues *.<control_domain>, which covers this site."
 }
+
+variable "access_logs_bucket" {
+  type        = string
+  description = "Name of the shared S3 server-access-log target bucket (modules/s3_access_logs) this site bucket's access logs are delivered to."
+}

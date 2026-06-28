@@ -153,8 +153,7 @@
                     "resource": "module.admin.aws_s3_bucket.cache",
                     "check_ids": [
                         "CKV2_AWS_62",
-                        "CKV_AWS_144",
-                        "CKV_AWS_18"
+                        "CKV_AWS_144"
                     ]
                 },
                 {
@@ -301,8 +300,7 @@
                     "check_ids": [
                         "CKV2_AWS_61",
                         "CKV2_AWS_62",
-                        "CKV_AWS_144",
-                        "CKV_AWS_18"
+                        "CKV_AWS_144"
                     ]
                 },
                 {
@@ -432,12 +430,6 @@
                 },
                 {
                     "resource": "module.monitoring.aws_ecs_task_definition.blackbox_exporter",
-                    "check_ids": [
-                        "CKV_AWS_336"
-                    ]
-                },
-                {
-                    "resource": "module.monitoring.aws_ecs_task_definition.cloudwatch_exporter",
                     "check_ids": [
                         "CKV_AWS_336"
                     ]
@@ -628,8 +620,7 @@
                     "check_ids": [
                         "CKV2_AWS_61",
                         "CKV2_AWS_62",
-                        "CKV_AWS_144",
-                        "CKV_AWS_18"
+                        "CKV_AWS_144"
                     ]
                 }
             ]
