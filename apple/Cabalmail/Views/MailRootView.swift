@@ -68,6 +68,17 @@ struct MailRootView: View {
     @State private var columnVisibility: NavigationSplitViewVisibility = .doubleColumn
     #endif
     @AppStorage("cabalmail.sidebar.tab") private var sidebarTabRaw: String = SidebarTab.folders.rawValue
+    /// Persisted width of the message-list (content) column in the wide
+    /// (regular-width iPad / visionOS) three-column layout. `NavigationSplitView`
+    /// doesn't report where a user drags the native list-reader divider, so the
+    /// column is pinned to this width and a `ColumnResizeHandle` on its trailing
+    /// edge drives it — letting the chosen split survive cold launches. macOS
+    /// keeps its native, self-persisting dividers. Stored as `Double` because
+    /// `@AppStorage` has no `CGFloat` overload.
+    @AppStorage("cabalmail.layout.listColumnWidth") private var listColumnWidthStored: Double = 360
+    /// Live width of the whole split view, read via `.onGeometryChange`, used to
+    /// clamp the list column so the reading pane always keeps a minimum width.
+    @State private var splitWidth: CGFloat = 0
     @Environment(AppState.self) private var appState
     @Environment(Preferences.self) private var preferences
     /// Global-search model for the wide (iPad-regular / macOS) layout, owned
@@ -188,26 +199,10 @@ struct MailRootView: View {
         NavigationSplitView(columnVisibility: $columnVisibility, preferredCompactColumn: $compactColumn) {
             sidebar
         } content: {
-            contentColumn
-                // App-level Settings gear, relocated next to the content column's
-                // sidebar toggle now that the sidebar — its former home — starts
-                // collapsed on iPad. Regular-width iPad only (compact keeps its
-                // Settings tab, macOS its Settings scene), matching where the gear
-                // appeared before.
-                #if !os(macOS)
-                .toolbar {
-                    if showsSettingsGear {
-                        ToolbarItem(placement: .topBarLeading) {
-                            Button {
-                                appState.requestSettings()
-                            } label: {
-                                Image(systemName: "gearshape")
-                                    .accessibilityLabel("Settings")
-                            }
-                        }
-                    }
-                }
-                #endif
+            // Pin the list column to its persisted width and hang the drag
+            // handle on its trailing edge (wide iPad/visionOS only); compact and
+            // macOS pass through untouched. See `resizableContentColumn`.
+            resizableContentColumn(decoratedContentColumn)
         } detail: {
             if listSelectionCount >= 2 {
                 // Multi-selection: no single message to read, so mirror Mail's
@@ -252,6 +247,13 @@ struct MailRootView: View {
         #if os(iOS)
         .background(SplitOverlayConfigurator())
         #endif
+        // Track the split view's overall width so the list column's max can be
+        // clamped to leave the reading pane a floor (see `listColumnMaxWidth`).
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.width
+        } action: { newWidth in
+            splitWidth = newWidth
+        }
         // Clearing the envelope selection AND any active address filter when
         // the folder changes keeps the detail column from briefly rendering
         // an old message against the new mailbox, and matches the plan's
@@ -479,3 +481,92 @@ private struct SplitOverlayConfigurator: UIViewControllerRepresentable {
     }
 }
 #endif
+
+// MARK: - Resizable list column
+
+/// Clamp bounds for the resizable message-list column on the wide iPad layout.
+private let listColumnMinWidth: CGFloat = 300
+/// Width reserved for the reading pane when clamping the list column's maximum.
+private let readerColumnMinWidth: CGFloat = 360
+
+extension MailRootView {
+    /// Whether the list column is pinned to a user-set width and shows the drag
+    /// handle. True only on the wide regular-width iPad / visionOS layout:
+    /// compact collapses to a stack (a fixed width would fight the collapse) and
+    /// macOS already resizes and persists its dividers natively.
+    private var resizableColumns: Bool {
+        #if os(macOS)
+        return false
+        #else
+        return showsSettingsGear
+        #endif
+    }
+
+    /// Upper bound for the list column: whatever leaves the reading pane its
+    /// floor. Falls back to a generous cap until the first geometry read lands.
+    private var listColumnMaxWidth: CGFloat {
+        guard splitWidth > 0 else { return 640 }
+        return max(listColumnMinWidth, splitWidth - readerColumnMinWidth)
+    }
+
+    /// The persisted list-column width, clamped to the current valid range.
+    private var listColumnWidth: CGFloat {
+        min(max(CGFloat(listColumnWidthStored), listColumnMinWidth), listColumnMaxWidth)
+    }
+
+    /// Binding the drag handle writes: clamps on read, persists on write.
+    private var listColumnWidthBinding: Binding<CGFloat> {
+        Binding(
+            get: { listColumnWidth },
+            set: { listColumnWidthStored = Double($0) }
+        )
+    }
+
+    /// The content column plus its iPad Settings gear, before any width pinning.
+    /// Extracted from `body` so the gear's `#if`-guarded toolbar can be wrapped
+    /// by `resizableContentColumn` as a single view.
+    @ViewBuilder
+    fileprivate var decoratedContentColumn: some View {
+        contentColumn
+            // App-level Settings gear, relocated next to the content column's
+            // sidebar toggle now that the sidebar — its former home — starts
+            // collapsed on iPad. Regular-width iPad only (compact keeps its
+            // Settings tab, macOS its Settings scene), matching where the gear
+            // appeared before.
+            #if !os(macOS)
+            .toolbar {
+                if showsSettingsGear {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button {
+                            appState.requestSettings()
+                        } label: {
+                            Image(systemName: "gearshape")
+                                .accessibilityLabel("Settings")
+                        }
+                    }
+                }
+            }
+            #endif
+    }
+
+    /// Pins the content column to the persisted width and overlays the drag
+    /// handle, but only on the wide iPad/visionOS layout. Compact (collapsed
+    /// stack) and macOS (native resizable dividers) pass the column through
+    /// untouched.
+    @ViewBuilder
+    fileprivate func resizableContentColumn(_ column: some View) -> some View {
+        if resizableColumns {
+            column
+                .navigationSplitViewColumnWidth(listColumnWidth)
+                .overlay(alignment: .trailing) {
+                    ColumnResizeHandle(
+                        width: listColumnWidthBinding,
+                        minWidth: listColumnMinWidth,
+                        maxWidth: listColumnMaxWidth
+                    )
+                }
+        } else {
+            column
+        }
+    }
+}
