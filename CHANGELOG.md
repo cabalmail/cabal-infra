@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.34] - 2026-06-26
+
+### Changed
+- Moved the iPad Settings gear from the (now collapsed-by-default) sidebar to
+  the message list's toolbar, adjacent to the sidebar toggle, so it stays
+  reachable without first revealing the sidebar.
+- Moved the New and Reload buttons for the Folders and Addresses lists out of
+  the wide sidebar's toolbar and down beside the filter field (New to its left,
+  Reload to its right), below the Folders/Addresses tabs, on iPad and macOS.
+  Compact iPhone keeps them in the toolbar.
+- Apple clients: folder and address management is now built into the mailbox
+  sidebar lists. Creating and deleting folders and requesting and revoking
+  addresses happen right where you browse them, and the separate management
+  screens have been removed.
+
+### Fixed
+- Apple clients: the message body web view no longer reloads on every
+  SwiftUI update (flag changes, attachment loads, folder polling); it
+  reloads only when the content or remote-content policy actually changes.
+  The prior churn could cancel in-flight remote image requests mid-load.
+- Apple clients: inline `cid:` images (e.g. USPS Informed Delivery
+  mailpiece scans) now render in the message body. They were rewritten to
+  temp `file://` URLs, which the body web view — loaded with an opaque
+  origin — is not allowed to fetch; they are now embedded as `data:` URIs.
+- Fixed the iPad message list's read/unread (leading) swipe needing an
+  unreasonably long drag before the action appeared. The folder/address
+  sidebar now starts collapsed on iPad and overlays the list when revealed,
+  so the message list is the leading column and its swipe actions reveal at a
+  normal distance. macOS keeps its sidebar visible.
+
 ## [0.10.33] - 2026-06-26
 
 ### Added

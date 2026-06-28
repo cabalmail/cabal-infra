@@ -5,11 +5,10 @@ import CabalmailKit
 ///
 /// Shares the same observable roots as the iOS/iPadOS/visionOS target
 /// (`AppState`, `Preferences`) so every scene binds the same backing
-/// state. macOS gets two scenes: the main mail window and a tabbed
-/// Settings window (⌘,) with General / Addresses / Folders. Treating
-/// addresses and folders as configuration matches the standard Mac
-/// idiom and avoids the broken column distribution that crowding
-/// everything into a single window produced (#385).
+/// state. macOS gets two scenes: the main mail window and a General-only
+/// Settings window (⌘,). Address and folder management lives in the main
+/// window's mailbox sidebar (`AddressListView` / `FolderListView`), which
+/// carries the full request/revoke and create/delete affordances.
 @main
 struct CabalmailMacApp: App {
     @State private var appState = AppState()

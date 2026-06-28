@@ -1,5 +1,8 @@
 import SwiftUI
 import CabalmailKit
+#if os(iOS)
+import UIKit
+#endif
 
 /// Root of the signed-in navigation.
 ///
@@ -46,6 +49,24 @@ struct MailRootView: View {
     /// message shows `.detail`, a selected folder `.content`, and navigating
     /// back drops the selection. Ignored on regular-width layouts.
     @State private var compactColumn: NavigationSplitViewColumn = .sidebar
+    /// Wide-layout (iPad-regular) sidebar visibility. Defaults to `.doubleColumn`
+    /// — the folder/address sidebar starts COLLAPSED — so the message list is the
+    /// leftmost tile of the split. That is the only configuration in which the
+    /// list rows' leading swipe (read/unread) reveals at a normal drag distance:
+    /// when the sidebar is tiled to the list's left (`twoBesideSecondary`), the
+    /// split view's interactive column gesture out-arbitrates the row's leading
+    /// swipe, so the blue action only appears after an unreasonably long drag.
+    /// Collapsing the sidebar and revealing it on demand as an overlay (see
+    /// `SplitOverlayConfigurator`) keeps both swipes live in the reading state.
+    /// macOS keeps the sidebar visible (`.all`): a NavigationSplitView there is
+    /// AppKit-backed with no UISplitViewController gesture conflict, and it's a
+    /// desktop multi-pane window. Ignored on compact iPhone (navigates via
+    /// `compactColumn`).
+    #if os(macOS)
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    #else
+    @State private var columnVisibility: NavigationSplitViewVisibility = .doubleColumn
+    #endif
     @AppStorage("cabalmail.sidebar.tab") private var sidebarTabRaw: String = SidebarTab.folders.rawValue
     @Environment(AppState.self) private var appState
     @Environment(Preferences.self) private var preferences
@@ -120,46 +141,73 @@ struct MailRootView: View {
         )
     }
 
+    /// Content column: global search results while the sidebar search field is
+    /// engaged, otherwise the selected folder's message list (or an empty-state
+    /// prompt). Extracted so `body` can hang the Settings gear on its toolbar.
+    @ViewBuilder
+    private var contentColumn: some View {
+        if isSearching, let searchModel {
+            // Global search owns the content column while the sidebar field
+            // is engaged. Stable `.id` so it isn't torn down per keystroke;
+            // the detail column still reads the selected message, against
+            // the result's true mailbox via `crossFolderDetail`.
+            MessageListView(
+                scope: .search,
+                injectedSearchModel: searchModel,
+                selection: $selectedEnvelope,
+                addressFilter: nil,
+                onClearAddressFilter: {},
+                onSearchResultSelected: { sourceFolderPath in
+                    crossFolderDetail = sourceFolderPath.map { Folder(path: $0) }
+                },
+                onSelectionCountChanged: { listSelectionCount = $0 }
+            )
+            .id("search")
+        } else if let selectedFolder {
+            MessageListView(
+                scope: .folder(selectedFolder),
+                selection: $selectedEnvelope,
+                addressFilter: selectedAddress?.address,
+                onClearAddressFilter: { selectedAddress = nil },
+                onSearchResultSelected: { sourceFolderPath in
+                    crossFolderDetail = sourceFolderPath.map { Folder(path: $0) }
+                },
+                onSelectionCountChanged: { listSelectionCount = $0 }
+            )
+            .id(selectedFolder.path)
+        } else {
+            ContentUnavailableView(
+                "Select a folder",
+                systemImage: "sidebar.left",
+                description: Text("Pick a mailbox from the sidebar to browse messages.")
+            )
+        }
+    }
+
     var body: some View {
-        NavigationSplitView(preferredCompactColumn: $compactColumn) {
+        NavigationSplitView(columnVisibility: $columnVisibility, preferredCompactColumn: $compactColumn) {
             sidebar
         } content: {
-            if isSearching, let searchModel {
-                // Global search owns the content column while the sidebar field
-                // is engaged. Stable `.id` so it isn't torn down per keystroke;
-                // the detail column still reads the selected message, against
-                // the result's true mailbox via `crossFolderDetail`.
-                MessageListView(
-                    scope: .search,
-                    injectedSearchModel: searchModel,
-                    selection: $selectedEnvelope,
-                    addressFilter: nil,
-                    onClearAddressFilter: {},
-                    onSearchResultSelected: { sourceFolderPath in
-                        crossFolderDetail = sourceFolderPath.map { Folder(path: $0) }
-                    },
-                    onSelectionCountChanged: { listSelectionCount = $0 }
-                )
-                .id("search")
-            } else if let selectedFolder {
-                MessageListView(
-                    scope: .folder(selectedFolder),
-                    selection: $selectedEnvelope,
-                    addressFilter: selectedAddress?.address,
-                    onClearAddressFilter: { selectedAddress = nil },
-                    onSearchResultSelected: { sourceFolderPath in
-                        crossFolderDetail = sourceFolderPath.map { Folder(path: $0) }
-                    },
-                    onSelectionCountChanged: { listSelectionCount = $0 }
-                )
-                .id(selectedFolder.path)
-            } else {
-                ContentUnavailableView(
-                    "Select a folder",
-                    systemImage: "sidebar.left",
-                    description: Text("Pick a mailbox from the sidebar to browse messages.")
-                )
-            }
+            contentColumn
+                // App-level Settings gear, relocated next to the content column's
+                // sidebar toggle now that the sidebar — its former home — starts
+                // collapsed on iPad. Regular-width iPad only (compact keeps its
+                // Settings tab, macOS its Settings scene), matching where the gear
+                // appeared before.
+                #if !os(macOS)
+                .toolbar {
+                    if showsSettingsGear {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button {
+                                appState.requestSettings()
+                            } label: {
+                                Image(systemName: "gearshape")
+                                    .accessibilityLabel("Settings")
+                            }
+                        }
+                    }
+                }
+                #endif
         } detail: {
             if listSelectionCount >= 2 {
                 // Multi-selection: no single message to read, so mirror Mail's
@@ -197,6 +245,13 @@ struct MailRootView: View {
                 #endif
             }
         }
+        // Force the iPad split view to OVERLAY the sidebar rather than tile it,
+        // so revealing folders floats over the message list instead of pushing
+        // the list off the leading edge (which would re-break the leading swipe).
+        // Best-effort and harmless if the split controller isn't found.
+        #if os(iOS)
+        .background(SplitOverlayConfigurator())
+        #endif
         // Clearing the envelope selection AND any active address filter when
         // the folder changes keeps the detail column from briefly rendering
         // an old message against the new mailbox, and matches the plan's
@@ -209,6 +264,13 @@ struct MailRootView: View {
             // Picking a folder shows its list on compact (it's pushed natively
             // from the sidebar List, but keep the binding in step).
             compactColumn = folder == nil ? .sidebar : .content
+            #if !os(macOS)
+            // On iPad-regular, re-collapse the overlaid sidebar after a folder
+            // pick so the message list is the leftmost tile again and its
+            // leading swipe stays live. No-op on compact (visibility ignored)
+            // and already-collapsed launches (INBOX auto-select).
+            if folder != nil { columnVisibility = .doubleColumn }
+            #endif
         }
         // Compact navigation: a selected message pushes the reader; navigating
         // back out (the binding falls off `.detail`) clears the selection so
@@ -348,13 +410,10 @@ extension MailRootView {
             .padding(.top, 8)
             .padding(.bottom, 4)
 
-            // Wide layout renders the per-context filter here — below the tabs,
-            // above the list — so the order reads search → tabs → filter → list.
-            // Compact lets each list keep its own top-of-sidebar `.searchable`.
-            if isWideSidebar {
-                sidebarFilterField
-            }
-
+            // The wide layout's per-context filter — and the New / Reload buttons
+            // that flank it — render inside the active list view's own header
+            // (`SidebarListHeaderRow`), below these tabs. Compact lets each list
+            // keep its own top-of-sidebar `.searchable` and toolbar buttons.
             switch effectiveSidebarTab {
             case .folders:
                 FolderListView(
@@ -381,37 +440,42 @@ extension MailRootView {
         }
     }
 
-    /// Per-context list filter for the wide sidebar — the "Filter folders" /
-    /// "Filter addresses" field shown below the section tabs. A plain styled
-    /// field (not `.searchable`, which would hoist above the global search);
-    /// the bound text drives the active list view's `externalFilter`.
-    @ViewBuilder
-    private var sidebarFilterField: some View {
-        let isFolders = effectiveSidebarTab == .folders
-        let text = isFolders ? $folderListFilter : $addressListFilter
-        HStack(spacing: 6) {
-            Image(systemName: "line.3.horizontal.decrease")
-                .foregroundStyle(.secondary)
-            TextField(isFolders ? "Filter folders" : "Filter addresses", text: text)
-                .textFieldStyle(.plain)
-            if !text.wrappedValue.isEmpty {
-                Button {
-                    text.wrappedValue = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
+}
+
+#if os(iOS)
+// MARK: - Split overlay behavior
+
+/// Forces the enclosing `UISplitViewController` to OVERLAY its sidebar instead
+/// of tiling it. SwiftUI's `NavigationSplitView` exposes no native knob for
+/// split behavior, and on a wide iPad it tiles by default — which, when the
+/// folder sidebar is revealed, pushes the message list off the leading edge and
+/// re-breaks the list's leading swipe. Overlaying floats the sidebar above the
+/// list, so revealing folders never disturbs the list's swipe geometry.
+///
+/// Best-effort: it walks the parent controller chain for the split controller
+/// and no-ops if none is found (the sidebar then re-tiles on reveal, which is
+/// still functional). Re-applied on every `updateUIViewController` so it
+/// survives the layout passes that can reset `preferredSplitBehavior`.
+private struct SplitOverlayConfigurator: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> Proxy { Proxy() }
+    func updateUIViewController(_ proxy: Proxy, context: Context) { proxy.applyOverlayBehavior() }
+
+    final class Proxy: UIViewController {
+        override func didMove(toParent parent: UIViewController?) {
+            super.didMove(toParent: parent)
+            applyOverlayBehavior()
+        }
+
+        func applyOverlayBehavior() {
+            var ancestor: UIViewController? = parent
+            while let current = ancestor {
+                if let split = current as? UISplitViewController {
+                    split.preferredSplitBehavior = .overlay
+                    return
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Clear filter")
+                ancestor = current.parent
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .background(
-            RoundedRectangle(cornerRadius: 7)
-                .fill(Color.secondary.opacity(0.12))
-        )
-        .padding(.horizontal)
-        .padding(.bottom, 4)
     }
 }
+#endif
