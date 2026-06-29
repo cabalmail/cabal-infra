@@ -139,19 +139,32 @@ struct AvatarView: View {
     /// per-sender state at entry so a row reused for a different sender
     /// can't paint the previous one's photo / BIMI while the new
     /// lookups are in flight.
+    ///
+    /// In the virtualized message list, row views are recycled by index as
+    /// the loaded window scrolls and as new mail arrives at the top. A row
+    /// can be reassigned to a different sender while a prior sender's async
+    /// lookup is still outstanding. SwiftUI cancels the superseded `.task`
+    /// when `senderKey` changes, but cooperative cancellation doesn't stop
+    /// the awaited cache/contacts calls from returning a value — so without
+    /// an explicit recheck the stale result would land in this row's
+    /// `@State` and paint the wrong sender's logo. After each await, bail if
+    /// the task was cancelled (i.e. the row has moved on to another sender).
     private func loadIfNeeded() async {
         contactPhotoData = nil
         bimiURL = nil
         guard let sender else { return }
         if let photo = await appState.contactsStore.photoData(for: sender) {
+            guard !Task.isCancelled else { return }
             contactPhotoData = photo
             return
         }
-        guard !sender.host.isEmpty else { return }
+        guard !Task.isCancelled, !sender.host.isEmpty else { return }
         // Resolve through the shared session cache so the same domain isn't
         // re-fetched as list rows recycle (the detail view benefits too).
-        bimiURL = await appState.bimiCache.url(forDomain: sender.host) { domain in
+        let url = await appState.bimiCache.url(forDomain: sender.host) { domain in
             try? await apiClient.fetchBimiURL(senderDomain: domain)
         }
+        guard !Task.isCancelled else { return }
+        bimiURL = url
     }
 }
