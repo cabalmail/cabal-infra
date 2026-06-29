@@ -251,6 +251,11 @@ final class AppState {
 
     private(set) var client: CabalmailClient?
 
+    /// Cross-client navigation cursor for the current session: remembers and
+    /// restores the last folder/message and offers the cross-device jump.
+    /// Wired alongside `client` on sign-in / restore, cleared on sign-out.
+    private(set) var navCoordinator: NavStateCoordinator?
+
     /// Local-only contacts lookup, used by message list / detail / avatar
     /// to enrich incoming mail with the user's own name and photo for the
     /// sender. One instance per app launch — the actor caches results for
@@ -285,6 +290,7 @@ final class AppState {
             self.controlDomain = controlDomain
             self.lastUsername = username
             self.client = newClient
+            self.navCoordinator = NavStateCoordinator(client: newClient)
             self.status = .signedIn
             startInboxBadgePolling()
             requestContactsAccessIfNeeded()
@@ -306,6 +312,7 @@ final class AppState {
         await client.clearLocalData()
         try? await client.authService.signOut()
         self.client = nil
+        self.navCoordinator = nil
         self.status = .signedOut
     }
 
@@ -366,6 +373,7 @@ final class AppState {
             // `.authExpired` (Cognito's `NotAuthorizedException`).
             _ = try await newClient.authService.currentIdToken()
             self.client = newClient
+            self.navCoordinator = NavStateCoordinator(client: newClient)
             self.status = .signedIn
             startInboxBadgePolling()
             requestContactsAccessIfNeeded()
