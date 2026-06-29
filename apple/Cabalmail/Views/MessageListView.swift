@@ -409,6 +409,10 @@ extension MessageListView {
                     )
                     await model?.loadInitial()
                     await model?.startWatching()
+                    // Cross-client restore: if this folder is the saved
+                    // cursor's target, select the remembered message now that
+                    // its envelope is loaded.
+                    if let model { applyPendingRestore(model: model) }
                 }
             }
             // Cold-launch mailto: arrives via `.onOpenURL` in the app
@@ -540,6 +544,38 @@ extension MessageListView {
         .onChange(of: appState.pendingMoveRequest) { _, request in
             guard let request, let model else { return }
             Task { await model.applyMoveRequest(request) }
+        }
+        // A cross-client restore / jump was scheduled. For an already-mounted
+        // list (a same-folder jump) the initial-load consume has long since
+        // run, so re-apply here; a folder-switch jump re-mounts the list and
+        // is handled by the `.task` consume instead. `consumePendingRestore`
+        // makes the two paths idempotent.
+        .onChange(of: appState.navCoordinator?.pendingRestore) { _, _ in
+            if let model { applyPendingRestore(model: model) }
+        }
+    }
+
+    /// Selects the message named by a pending cross-client restore, if it
+    /// targets this folder and is present in the loaded window. Matches by
+    /// Message-ID first (survives the message being moved by another client),
+    /// then by UID. A miss (deleted, or not in the loaded window) leaves the
+    /// list unselected — the graceful-degradation path.
+    private func applyPendingRestore(model: MessageListViewModel) {
+        guard !isSearchScope,
+              let restore = appState.navCoordinator?.consumePendingRestore(for: folder.path)
+        else { return }
+        let match = restore.messageID.flatMap { messageID in
+            model.envelopes.first { $0.messageId == messageID }
+        } ?? restore.uid.flatMap { uid in
+            model.envelopes.first { $0.uid == uid }
+        }
+        guard let match else { return }
+        if isWideLayout {
+            // Wide layouts drive the reading pane off `selectedUIDs`; the list's
+            // own `.onChange(of: selectedUIDs)` re-derives `selection`.
+            model.selectedUIDs = [match.uid]
+        } else {
+            selection = match
         }
     }
 }
