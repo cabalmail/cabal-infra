@@ -114,7 +114,7 @@ struct SignedInRootView: View {
                 )
             }
             if let toast = appState.toast {
-                ToastBanner(toast: toast, onCopy: copyHandler(for: toast))
+                ToastBanner(toast: toast, onAction: actionHandler(for: toast))
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
@@ -122,16 +122,25 @@ struct SignedInRootView: View {
         .padding(.horizontal, 12)
     }
 
-    /// Builds the banner's Copy action when the toast carries an address.
-    /// Tapping it copies the address and replaces the banner with the shared
-    /// "successfully copied" confirmation, so the post-creation Copy button
-    /// and a list's copy action give identical feedback.
-    private func copyHandler(for toast: Toast) -> (() -> Void)? {
-        guard let address = toast.copyAddress else { return nil }
-        return {
-            copyToPasteboard(address)
-            appState.showToast(.addressCopied(address), duration: 7)
+    /// Builds the banner's trailing action. A `copyAddress` toast copies and
+    /// swaps in the shared "successfully copied" confirmation; a `resumeCursor`
+    /// toast asks the nav coordinator to navigate to the cross-client cursor
+    /// and dismisses the banner. Returns nil for plain status toasts (no
+    /// trailing button).
+    private func actionHandler(for toast: Toast) -> (() -> Void)? {
+        if let address = toast.copyAddress {
+            return {
+                copyToPasteboard(address)
+                appState.showToast(.addressCopied(address), duration: 7)
+            }
         }
+        if let cursor = toast.resumeCursor {
+            return {
+                appState.navCoordinator?.navigateRequest = cursor
+                appState.toast = nil
+            }
+        }
+        return nil
     }
 
     /// Mirrors `Reachability.isReachable` into view state. The kit side only

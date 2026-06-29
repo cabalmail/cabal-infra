@@ -81,6 +81,11 @@ struct MailRootView: View {
     @State private var splitWidth: CGFloat = 0
     @Environment(AppState.self) private var appState
     @Environment(Preferences.self) private var preferences
+    /// Drives the cross-client cursor reconcile: returning to the foreground
+    /// re-reads the server cursor and, if another client moved it on, offers
+    /// the "pick up where you left off" toast. The initial launch transition
+    /// doesn't fire `.onChange`, so a cold launch restores silently instead.
+    @Environment(\.scenePhase) private var scenePhase
     /// Global-search model for the wide (iPad-regular / macOS) layout, owned
     /// here so the sidebar search field and the content column share one query
     /// and result set. The compact-width analogue is `SearchView` (the iPhone
@@ -273,12 +278,32 @@ struct MailRootView: View {
             // and already-collapsed launches (INBOX auto-select).
             if folder != nil { columnVisibility = .doubleColumn }
             #endif
+            // Record the folder move for the cross-client cursor (highest-
+            // priority field). Fires on user navigation and on restore alike;
+            // the coordinator debounces and de-dupes writes.
+            if let path = folder?.path {
+                appState.navCoordinator?.recordFolder(path)
+            }
         }
         // Compact navigation: a selected message pushes the reader; navigating
         // back out (the binding falls off `.detail`) clears the selection so
         // the same row can be reopened. No-ops on regular width / iPad.
         .onChange(of: selectedEnvelope) { _, envelope in
             if envelope != nil { compactColumn = .detail }
+            // Record the open message (or its absence) for the cursor. Skipped
+            // while searching — the search surface has no single folder to
+            // anchor the cursor to.
+            if !isSearching, let folderPath = selectedFolder?.path {
+                if let envelope {
+                    appState.navCoordinator?.recordMessage(
+                        folderPath: folderPath,
+                        uid: envelope.uid,
+                        messageID: envelope.messageId
+                    )
+                } else {
+                    appState.navCoordinator?.recordNoMessage(folderPath: folderPath)
+                }
+            }
         }
         .onChange(of: compactColumn) { _, column in
             if column != .detail, selectedEnvelope != nil { selectedEnvelope = nil }
@@ -305,6 +330,36 @@ struct MailRootView: View {
         .dropDestination(for: MessageDragPayload.self) { _, _ in
             appState.endMessageDrag()
             return false
+        }
+        // Returning to the foreground after the initial launch: if another
+        // client moved the cursor on, offer the jump. `hasLoadedInitial` gates
+        // out the cold-launch path (which restores silently via the sidebar's
+        // onFoldersLoaded), and `old != .active` ignores in-app interruptions
+        // that didn't actually background us.
+        .onChange(of: scenePhase) { old, new in
+            guard new == .active, old != .active,
+                  let coordinator = appState.navCoordinator,
+                  coordinator.hasLoadedInitial else { return }
+            Task {
+                if let cursor = await coordinator.foreignCursorOnForeground() {
+                    appState.showToast(
+                        .resumeNavigation(folderName: Folder(path: cursor.folder).name, cursor: cursor),
+                        duration: 10
+                    )
+                }
+            }
+        }
+        // The resume toast was tapped: navigate to the cross-client cursor.
+        // Selecting a new folder re-mounts its list (which consumes the
+        // scheduled restore); a same-folder jump relies on the list observing
+        // the new `pendingRestore`.
+        .onChange(of: appState.navCoordinator?.navigateRequest) { _, request in
+            guard let request, let coordinator = appState.navCoordinator else { return }
+            coordinator.navigateRequest = nil
+            coordinator.scheduleRestore(for: request)
+            if selectedFolder?.path != request.folder {
+                selectedFolder = Folder(path: request.folder)
+            }
         }
         .task {
             if searchModel == nil, let client = appState.client {
@@ -352,6 +407,27 @@ struct MailRootView: View {
 // SwiftLint's `type_body_length` cap, matching the pattern used by
 // `MessageListView` and its `+Filter` / `+Search` siblings.
 extension MailRootView {
+    /// First-load folder selection: restore the saved cross-client cursor's
+    /// folder if it still exists, otherwise default to INBOX. Graceful when the
+    /// remembered folder was deleted elsewhere — the lookup simply misses and
+    /// we fall back. The message restore (if any) rides along via the
+    /// coordinator's `pendingRestore`, which the folder's message list consumes
+    /// after it loads; a since-deleted message just leaves the list unselected.
+    private func restoreOrDefaultSelect(from folders: [Folder]) {
+        let inbox = folders.first { folder in
+            folder.path.caseInsensitiveCompare("INBOX") == .orderedSame
+        } ?? folders.first
+        Task {
+            if let cursor = await appState.navCoordinator?.initialCursor(),
+               let target = folders.first(where: { $0.path == cursor.folder }) {
+                selectedFolder = target
+                appState.navCoordinator?.scheduleRestore(for: cursor)
+            } else {
+                selectedFolder = inbox
+            }
+        }
+    }
+
     /// Sidebar search field — the wide-layout entry to global search. Engaging
     /// it (focus, a query, or an active search) swaps the content column to
     /// cross-folder results; clearing and unfocusing it returns to the folder.
@@ -422,15 +498,14 @@ extension MailRootView {
                     selection: $selectedFolder,
                     externalFilter: isWideSidebar ? $folderListFilter : nil,
                     onFoldersLoaded: { folders in
-                        // Default-select INBOX the first time the list arrives.
-                        // The Compose button lives on the message-list toolbar,
-                        // so a nil-selection state would leave the user no way
-                        // to start a new message. INBOX is always present
+                        // First load: restore the saved cursor's folder if it
+                        // still exists, otherwise default-select INBOX. The
+                        // Compose button lives on the message-list toolbar, so a
+                        // nil-selection state would leave the user no way to
+                        // start a new message; INBOX is always present
                         // (`FolderListViewModel.sortForSidebar` pins it first).
                         guard selectedFolder == nil else { return }
-                        selectedFolder = folders.first { inbox in
-                            inbox.path.caseInsensitiveCompare("INBOX") == .orderedSame
-                        } ?? folders.first
+                        restoreOrDefaultSelect(from: folders)
                     }
                 )
             case .addresses:
