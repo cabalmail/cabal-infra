@@ -55,6 +55,15 @@ resource "aws_s3_bucket_versioning" "this" {
   }
 }
 
+# Server access logs -> shared target bucket (modules/s3_access_logs), the
+# CKV_AWS_18 / AWS-0089 audit trail. This bucket is served via CloudFront
+# OAC, so the records capture origin fetches and deploy-time content syncs.
+resource "aws_s3_bucket_logging" "this" {
+  bucket        = aws_s3_bucket.this.id
+  target_bucket = var.access_logs_bucket
+  target_prefix = "front-door/"
+}
+
 # LEGACY origin access identity, superseded by the OAC below (Phase 5
 # of docs/0.10.x/resilience-continuity-hardening-plan.md). Kept,
 # together with its bucket-policy statement, so the distribution keeps

@@ -39,7 +39,10 @@ AWS-0090  # S3 versioning: the durable buckets (modules/s3, modules/front_door) 
 # AWS-0090 (S3 versioning) reclassified in Phase 4: the durable buckets
 # now version; the residual is the transient cache, moved to the
 # design-driven section above.
-AWS-0089  # S3 bucket access logging
+# AWS-0089 (S3 access logging) cleared in Phase 4: the three content
+# buckets (admin/www/cache.<control_domain>) now deliver server access
+# logs to the shared modules/s3_access_logs bucket; the two log buckets
+# that would self-recurse carry an inline #trivy:ignore:AVD-AWS-0089.
 AWS-0066  # Lambda X-Ray tracing
 AWS-0124  # Security group rule missing description
 AWS-0003  # API Gateway X-Ray tracing

@@ -122,6 +122,16 @@ resource "aws_s3_bucket_public_access_block" "this" {
   restrict_public_buckets = true
 }
 
+# Server access logs -> shared target bucket (modules/s3_access_logs), the
+# CKV_AWS_18 / AWS-0089 audit trail. This is the one content bucket reached
+# directly by clients (CORS presigned GET/PUT) and Lambdas, so its access
+# records have the most audit value despite the two-day object expiry.
+resource "aws_s3_bucket_logging" "cache" {
+  bucket        = aws_s3_bucket.cache.bucket
+  target_bucket = var.access_logs_bucket
+  target_prefix = "cache/"
+}
+
 # Allow the admin web client to XHR-fetch cached .eml bodies for the reader's
 # View-source modal (GET) and to PUT outbound-attachment bodies directly to
 # the staging prefix (issue #377). Apple clients bypass CORS entirely.
