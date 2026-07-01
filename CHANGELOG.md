@@ -33,11 +33,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   arrived. A row recycled to a different sender while its predecessor's
   logo lookup was still in flight could paint the stale logo; the avatar
   load now discards results once its row has moved on to another sender.
-- Fixed navigation-cursor restore on the Apple clients: `get_nav_state`
-  crashed with a `Decimal is not JSON serializable` error on every read, so
-  clients silently fell back to INBOX on launch instead of restoring the last
-  folder/message. Positions were being saved all along; only the read was
-  broken.
 
 ## [0.10.35] - 2026-06-28
 
