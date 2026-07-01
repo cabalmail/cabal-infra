@@ -17,11 +17,17 @@ struct Toast: Equatable, Sendable {
     /// stays `Equatable`/`Sendable` and the auto-dismiss equality check in
     /// `AppState.showToast` keeps working.
     var copyAddress: String?
+    /// When set, the banner renders a trailing "Resume" button that navigates
+    /// to this cross-client cursor (last folder/message saved on another
+    /// device). Data, not a closure, for the same `Equatable` reason as
+    /// `copyAddress`; the banner host maps it to the navigation action.
+    var resumeCursor: NavState?
 
-    init(kind: Kind, message: String, copyAddress: String? = nil) {
+    init(kind: Kind, message: String, copyAddress: String? = nil, resumeCursor: NavState? = nil) {
         self.kind = kind
         self.message = message
         self.copyAddress = copyAddress
+        self.resumeCursor = resumeCursor
     }
 
     /// Banner shown after an address is minted, offering a one-tap copy of
@@ -45,6 +51,17 @@ struct Toast: Equatable, Sendable {
     /// revoke dialog: mail to it will now be rejected.
     static func addressRevoked(_ address: String) -> Toast {
         Toast(kind: .success, message: "Revoked \(address)")
+    }
+
+    /// Cross-client prompt shown on foreground when another device has moved
+    /// the cursor on. Tapping Resume jumps to `cursor`'s folder/message;
+    /// ignoring it leaves this client where it is.
+    static func resumeNavigation(folderName: String, cursor: NavState) -> Toast {
+        Toast(
+            kind: .info,
+            message: "Pick up where you left off in \(folderName)?",
+            resumeCursor: cursor
+        )
     }
 }
 

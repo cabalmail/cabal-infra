@@ -15,15 +15,6 @@ import UIKit
 /// changes. Without it, the same view instance is reused with a new folder
 /// or envelope prop and its one-shot `.task` never re-fires — which is the
 /// bug that made "select a second folder" do nothing on the split layout.
-/// Which list the sidebar is showing — toggled by a segmented control
-/// pinned above the list itself. Persisted across launches via
-/// `@AppStorage` so the user lands on the tab they last used.
-enum SidebarTab: String, CaseIterable, Identifiable {
-    case folders
-    case addresses
-    var id: String { rawValue }
-}
-
 struct MailRootView: View {
     @State private var selectedFolder: Folder?
     @State private var selectedEnvelope: Envelope?
@@ -67,7 +58,11 @@ struct MailRootView: View {
     #else
     @State private var columnVisibility: NavigationSplitViewVisibility = .doubleColumn
     #endif
-    @AppStorage("cabalmail.sidebar.tab") private var sidebarTabRaw: String = SidebarTab.folders.rawValue
+    /// Whether the right-hand addresses inspector is showing. Hidden by default
+    /// (on every launch) — it's an occasional reference/management panel reached
+    /// from the toolbar, so it doesn't persist open. Wide layouts only; compact
+    /// iPhone reaches addresses through its own bottom tab, never this inspector.
+    @State private var addressInspectorPresented = false
     /// Persisted width of the message-list (content) column in the wide
     /// (regular-width iPad / visionOS) three-column layout. `NavigationSplitView`
     /// doesn't report where a user drags the native list-reader divider, so the
@@ -81,6 +76,12 @@ struct MailRootView: View {
     @State private var splitWidth: CGFloat = 0
     @Environment(AppState.self) private var appState
     @Environment(Preferences.self) private var preferences
+    /// Drives the cross-client cursor reconcile: returning to the foreground
+    /// re-reads the server cursor and, if another client moved it on, offers
+    /// the "pick up where you left off" toast. The initial launch transition
+    /// doesn't fire `.onChange`, so a cold launch offers its own resume toast
+    /// from the folder-load path (`landOnInboxAndOfferResume`) instead.
+    @Environment(\.scenePhase) private var scenePhase
     /// Global-search model for the wide (iPad-regular / macOS) layout, owned
     /// here so the sidebar search field and the content column share one query
     /// and result set. The compact-width analogue is `SearchView` (the iPhone
@@ -113,24 +114,6 @@ struct MailRootView: View {
         return showsSettingsGear
         #endif
     }
-    /// Non-nil while a message drag temporarily overrides the visible sidebar
-    /// tab. When the user starts dragging a message while viewing Addresses,
-    /// this flips the sidebar to Folders so they have somewhere to drop;
-    /// clearing it on drag end falls the display back to the persisted tab
-    /// (Addresses), satisfying "release flips back to addresses." Kept
-    /// separate from `sidebarTabRaw` so the override never persists.
-    @State private var sidebarDragOverride: SidebarTab?
-
-    private var sidebarTab: SidebarTab {
-        SidebarTab(rawValue: sidebarTabRaw) ?? .folders
-    }
-
-    /// The tab the sidebar actually shows: the drag override if one is
-    /// active, otherwise the user's persisted choice.
-    private var effectiveSidebarTab: SidebarTab {
-        sidebarDragOverride ?? sidebarTab
-    }
-
     /// Folder that drives `MessageDetailView`. Cross-folder search results
     /// override the sidebar selection; everything else uses it directly.
     private var detailFolder: Folder? {
@@ -273,28 +256,35 @@ struct MailRootView: View {
             // and already-collapsed launches (INBOX auto-select).
             if folder != nil { columnVisibility = .doubleColumn }
             #endif
+            // Record the folder move for the cross-client cursor (highest-
+            // priority field). Fires on user navigation and on restore alike;
+            // the coordinator debounces and de-dupes writes.
+            if let path = folder?.path {
+                appState.navCoordinator?.recordFolder(path)
+            }
         }
         // Compact navigation: a selected message pushes the reader; navigating
         // back out (the binding falls off `.detail`) clears the selection so
         // the same row can be reopened. No-ops on regular width / iPad.
         .onChange(of: selectedEnvelope) { _, envelope in
             if envelope != nil { compactColumn = .detail }
+            // Record the open message (or its absence) for the cursor. Skipped
+            // while searching — the search surface has no single folder to
+            // anchor the cursor to.
+            if !isSearching, let folderPath = selectedFolder?.path {
+                if let envelope {
+                    appState.navCoordinator?.recordMessage(
+                        folderPath: folderPath,
+                        uid: envelope.uid,
+                        messageID: envelope.messageId
+                    )
+                } else {
+                    appState.navCoordinator?.recordNoMessage(folderPath: folderPath)
+                }
+            }
         }
         .onChange(of: compactColumn) { _, column in
             if column != .detail, selectedEnvelope != nil { selectedEnvelope = nil }
-        }
-        // Reveal Folders as drop targets the moment a message drag starts on
-        // the Addresses tab, and fall back to the persisted tab when it ends.
-        // The drag flag is flipped by the row's `.onDrag` (start) and by the
-        // folder-row / catch-all drop handlers (end).
-        .onChange(of: appState.messageDragInProgress) { _, dragging in
-            if dragging {
-                if effectiveSidebarTab == .addresses {
-                    sidebarDragOverride = .folders
-                }
-            } else {
-                sidebarDragOverride = nil
-            }
         }
         // Catch-all drop target behind the whole split view: a message
         // released anywhere that isn't a folder row (the message list, the
@@ -306,6 +296,36 @@ struct MailRootView: View {
             appState.endMessageDrag()
             return false
         }
+        // Returning to the foreground after the initial launch: if another
+        // client moved the cursor on, offer the jump. `hasLoadedInitial` gates
+        // out the cold-launch path (which offers its own resume toast via the
+        // sidebar's onFoldersLoaded), and `old != .active` ignores in-app
+        // interruptions that didn't actually background us.
+        .onChange(of: scenePhase) { old, new in
+            guard new == .active, old != .active,
+                  let coordinator = appState.navCoordinator,
+                  coordinator.hasLoadedInitial else { return }
+            Task {
+                if let cursor = await coordinator.foreignCursorOnForeground() {
+                    appState.showToast(
+                        .resumeNavigation(folderName: Folder(path: cursor.folder).name, cursor: cursor),
+                        duration: 10
+                    )
+                }
+            }
+        }
+        // The resume toast was tapped: navigate to the cross-client cursor.
+        // Selecting a new folder re-mounts its list (which consumes the
+        // scheduled restore); a same-folder jump relies on the list observing
+        // the new `pendingRestore`.
+        .onChange(of: appState.navCoordinator?.navigateRequest) { _, request in
+            guard let request, let coordinator = appState.navCoordinator else { return }
+            coordinator.navigateRequest = nil
+            coordinator.scheduleRestore(for: request)
+            if selectedFolder?.path != request.folder {
+                selectedFolder = Folder(path: request.folder)
+            }
+        }
         .task {
             if searchModel == nil, let client = appState.client {
                 searchModel = MessageListViewModel(
@@ -316,6 +336,29 @@ struct MailRootView: View {
                 )
             }
         }
+        // Addresses live in a trailing panel rather than the left sidebar,
+        // keeping the sidebar free for folders (and, later, feeds). Hidden by
+        // default; the toolbar `at` button (wide layouts) toggles it. Selecting
+        // an address still filters the message list via `selectedAddress`.
+        // `.inspector` is the native trailing sidebar on iOS/macOS; visionOS
+        // lacks it, so the same toggle drives a sheet there instead.
+        #if os(visionOS)
+        .sheet(isPresented: $addressInspectorPresented) {
+            AddressListView(
+                selection: $selectedAddress,
+                externalFilter: $addressListFilter
+            )
+            .environment(appState)
+        }
+        #else
+        .inspector(isPresented: $addressInspectorPresented) {
+            AddressListView(
+                selection: $selectedAddress,
+                externalFilter: $addressListFilter
+            )
+            .inspectorColumnWidth(min: 260, ideal: 300, max: 420)
+        }
+        #endif
     }
 
     #if os(macOS)
@@ -352,6 +395,38 @@ struct MailRootView: View {
 // SwiftLint's `type_body_length` cap, matching the pattern used by
 // `MessageListView` and its `+Filter` / `+Search` siblings.
 extension MailRootView {
+    /// First-load folder selection: always land on INBOX, then — in the
+    /// background — check whether the saved cursor is still a usable resume
+    /// target (folder present, recorded message still in the folder's initial
+    /// window) and, if so, offer a "pick up where you left off" toast rather
+    /// than jumping there. Tapping it drives the same `navigateRequest` path as
+    /// the cross-client resume. The INBOX landing's own cursor write is held
+    /// back (`armProvisionalLanding`) so a still-valid saved position survives
+    /// until the user resumes or navigates on their own; if there's nothing to
+    /// resume, INBOX is recorded normally once the probe returns.
+    private func landOnInboxAndOfferResume(from folders: [Folder]) {
+        let inbox = folders.first { folder in
+            folder.path.caseInsensitiveCompare("INBOX") == .orderedSame
+        } ?? folders.first
+        appState.navCoordinator?.armProvisionalLanding()
+        selectedFolder = inbox
+        Task {
+            let candidate = await appState.navCoordinator?.launchResumeCandidate(folders: folders)
+            // If the user already navigated off INBOX while the probe ran, leave
+            // them be rather than surfacing a now-stale prompt.
+            guard selectedFolder?.path == inbox?.path else { return }
+            if let candidate {
+                appState.showToast(
+                    .resumeNavigation(folderName: Folder(path: candidate.folder).name, cursor: candidate),
+                    duration: 10
+                )
+            } else if let inbox {
+                // Nothing to resume: materialize the INBOX landing we suppressed.
+                appState.navCoordinator?.recordFolder(inbox.path)
+            }
+        }
+    }
+
     /// Sidebar search field — the wide-layout entry to global search. Engaging
     /// it (focus, a query, or an active search) swaps the content column to
     /// cross-folder results; clearing and unfocusing it returns to the folder.
@@ -396,49 +471,27 @@ extension MailRootView {
     private var sidebar: some View {
         VStack(spacing: 0) {
             searchField
-            Picker(
-                "Sidebar",
-                selection: Binding(
-                    get: { effectiveSidebarTab },
-                    set: { sidebarTabRaw = $0.rawValue }
-                )
-            ) {
-                Text("Folders").tag(SidebarTab.folders)
-                Text("Addresses").tag(SidebarTab.addresses)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .padding(.horizontal)
-            .padding(.top, 8)
-            .padding(.bottom, 4)
 
-            // The wide layout's per-context filter — and the New / Reload buttons
-            // that flank it — render inside the active list view's own header
-            // (`SidebarListHeaderRow`), below these tabs. Compact lets each list
+            // Folders own the sidebar; addresses moved to the trailing inspector
+            // (see `.inspector` in `body`). The wide layout's per-context filter —
+            // and the New / Reload buttons that flank it — render inside the list
+            // view's own header (`SidebarListHeaderRow`). Compact lets the list
             // keep its own top-of-sidebar `.searchable` and toolbar buttons.
-            switch effectiveSidebarTab {
-            case .folders:
-                FolderListView(
-                    selection: $selectedFolder,
-                    externalFilter: isWideSidebar ? $folderListFilter : nil,
-                    onFoldersLoaded: { folders in
-                        // Default-select INBOX the first time the list arrives.
-                        // The Compose button lives on the message-list toolbar,
-                        // so a nil-selection state would leave the user no way
-                        // to start a new message. INBOX is always present
-                        // (`FolderListViewModel.sortForSidebar` pins it first).
-                        guard selectedFolder == nil else { return }
-                        selectedFolder = folders.first { inbox in
-                            inbox.path.caseInsensitiveCompare("INBOX") == .orderedSame
-                        } ?? folders.first
-                    }
-                )
-            case .addresses:
-                AddressListView(
-                    selection: $selectedAddress,
-                    externalFilter: isWideSidebar ? $addressListFilter : nil
-                )
-            }
+            FolderListView(
+                selection: $selectedFolder,
+                externalFilter: isWideSidebar ? $folderListFilter : nil,
+                onFoldersLoaded: { folders in
+                    // First load: land on INBOX and, if a saved position is
+                    // still reachable, offer a resume toast (see
+                    // `landOnInboxAndOfferResume`). The Compose button lives
+                    // on the message-list toolbar, so a nil-selection state
+                    // would leave the user no way to start a new message;
+                    // INBOX is always present
+                    // (`FolderListViewModel.sortForSidebar` pins it first).
+                    guard selectedFolder == nil else { return }
+                    landOnInboxAndOfferResume(from: folders)
+                }
+            )
         }
     }
 
@@ -528,6 +581,21 @@ extension MailRootView {
     @ViewBuilder
     fileprivate var decoratedContentColumn: some View {
         contentColumn
+            // Toggle for the trailing addresses inspector. Wide layouts only
+            // (macOS always; regular-width iPad via `showsSettingsGear`); compact
+            // iPhone reaches addresses through its dedicated bottom tab instead.
+            .toolbar {
+                if isWideSidebar {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button {
+                            addressInspectorPresented.toggle()
+                        } label: {
+                            Image(systemName: "at")
+                                .accessibilityLabel("Addresses")
+                        }
+                    }
+                }
+            }
             // App-level Settings gear, relocated next to the content column's
             // sidebar toggle now that the sidebar — its former home — starts
             // collapsed on iPad. Regular-width iPad only (compact keeps its

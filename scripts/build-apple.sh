@@ -81,11 +81,19 @@ visionos() { build_scheme Cabalmail    'generic/platform=visionOS'; }
 
 kit_test() {
   log "test CabalmailKit (macOS)"
-  run_xcodebuild test \
-    -scheme CabalmailKit \
-    -destination 'platform=macOS' \
-    -derivedDataPath "$DERIVED_DATA" \
-    "${COMMON_FLAGS[@]}"
+  # Run from the SwiftPM package dir (apple/CabalmailKit) so xcodebuild
+  # resolves the package's auto-synthesized CabalmailKit scheme, which has
+  # a test action. Run from apple/ instead and the same scheme name resolves
+  # to the xcodegen-generated project's build-only CabalmailKit scheme,
+  # failing with "Scheme CabalmailKit is not currently configured for the
+  # test action". Mirrors apple.yml's macOS test leg (working-directory:
+  # apple/CabalmailKit), including -skipPackagePluginValidation.
+  ( cd CabalmailKit && run_xcodebuild test \
+      -scheme CabalmailKit \
+      -destination 'platform=macOS' \
+      -skipPackagePluginValidation \
+      -derivedDataPath "$DERIVED_DATA" \
+      "${COMMON_FLAGS[@]}" )
 }
 
 main() {
@@ -96,7 +104,7 @@ main() {
     macos)    generate; macos ;;
     ios)      generate; ios ;;
     visionos) generate; visionos ;;
-    kit-test) generate; kit_test ;;
+    kit-test) kit_test ;;
     all)      generate; lint; macos; ios; visionos ;;
     *) echo "usage: $0 [generate|lint|macos|ios|visionos|kit-test|all]" >&2; exit 2 ;;
   esac

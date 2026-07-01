@@ -2,7 +2,8 @@
    Email — Phase 8 responsive layout.
    Mobile-first: single pane, full-width msglist. The reader slides over the
    list on phones; on tablets the reader docks next to the list; on desktop
-   the left rail (Folders + Addresses) becomes in-flow.
+   the left rail (Folders) becomes in-flow. The Addresses rail is an optional
+   trailing column, hidden by default and toggled from the Nav.
    Breakpoints: 768px (tablet), 1200px (desktop).
    ========================================================================= */
 
@@ -75,51 +76,36 @@ div.email {
   to   { opacity: 1; }
 }
 
-/* Resizable split between Folders and Addresses ------------------------ */
+/* Right-hand addresses rail --------------------------------------------
+   Hidden by default, revealed from the Nav. In-flow trailing column on
+   desktop; a right-slide drawer (mirror of the folder drawer) on narrower
+   widths. */
 
-.email__rail-pane {
+.email__addr-rail {
   display: flex;
   flex-direction: column;
-  flex: 0 1 50%;
-  min-height: 0;
+  background: var(--bg);
+  color: var(--ink);
+  box-sizing: border-box;
   overflow: hidden;
+  z-index: 110;
 }
 
-.email__rail-splitter {
-  flex: 0 0 7px;
-  position: relative;
-  border-top: 1px solid var(--border);
-  border-bottom: 1px solid transparent;
-  background: transparent;
-  cursor: row-resize;
-  outline: none;
-  touch-action: none;
+.email__addr-rail--drawer {
+  position: fixed;
+  top: 56px;
+  bottom: 0;
+  right: 0;
+  width: 82%;
+  max-width: 320px;
+  border-left: 1px solid var(--border);
+  box-shadow: 0 20px 40px oklch(0 0 0 / 0.25);
+  animation: email-addr-drawer-in 180ms ease-out;
 }
 
-.email__rail-splitter:hover,
-.email__rail-splitter:focus-visible {
-  border-top-color: var(--accent);
-  border-bottom-color: var(--accent);
-  background: color-mix(in oklch, var(--accent) 12%, transparent);
-}
-
-.email__rail-splitter-grip {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: 24px;
-  height: 1px;
-  border-radius: 1px;
-  background: var(--ink-quiet);
-  opacity: 0;
-  transition: opacity 120ms ease;
-  pointer-events: none;
-}
-
-.email__rail-splitter:hover .email__rail-splitter-grip,
-.email__rail-splitter:focus-visible .email__rail-splitter-grip {
-  opacity: 1;
+@keyframes email-addr-drawer-in {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
 }
 
 /* Vertical splitter — between rail|middle and msglist|reader. Drag axis
@@ -223,6 +209,16 @@ div.reader {
   }
   .email__rail--drawer { display: none; }
   .email__scrim        { display: none; }
+
+  /* Addresses rail becomes an in-flow trailing column; basis is set inline
+     from the address col-splitter state (22% is the pre-hydration fallback). */
+  .email__addr-rail {
+    position: static;
+    flex: 0 0 22%;
+    box-shadow: none;
+    animation: none;
+  }
+  .email__addr-rail--drawer { display: none; }
 }
 
 /* Composer view is now a floating card rendered by Email/ComposeOverlay —

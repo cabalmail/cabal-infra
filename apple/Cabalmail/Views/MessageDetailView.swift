@@ -48,6 +48,16 @@ struct MessageDetailView: View {
     #if os(iOS) || os(visionOS)
     @State var contactEditorRequest: ContactEditorRequest?
     #endif
+    // In-message scroll restore/capture. Consumed once from the nav cursor
+    // after the body loads: `restoreScrollAnchor` feeds the HTML web view,
+    // `restoreScrollOffset` positions the plain-text scroll view. The reader
+    // reports the live position back so it survives across launches/devices.
+    // Helpers live in `MessageDetailView+Scroll.swift`; see there.
+    @State var restoreScrollAnchor: String?
+    @State var restoreScrollOffset: Int?
+    @State var didConsumeScrollRestore = false
+    @State var plainScrollPosition = ScrollPosition(edge: .top)
+    @State var lastReportedPlainOffset = Int.min
 
     var body: some View {
         GeometryReader { proxy in
@@ -120,6 +130,11 @@ struct MessageDetailView: View {
         .onChange(of: appState.replyRequestTick) { _, _ in beginCompose(.reply) }
         .onChange(of: appState.replyAllRequestTick) { _, _ in beginCompose(.replyAll) }
         .onChange(of: appState.forwardRequestTick) { _, _ in beginCompose(.forward) }
+        // Once a body is available, consume a pending scroll restore from the
+        // nav cursor (a no-op on a normal open). Both branches guard against
+        // re-consuming, so whichever body type lands first wins.
+        .onChange(of: model?.htmlBody) { _, _ in consumeScrollRestoreIfReady() }
+        .onChange(of: model?.plainText) { _, _ in consumeScrollRestoreIfReady() }
         .onAppear {
             BodyFetchLog.appear(uid: envelope.uid, modelExists: model != nil)
             // Drive the body fetch from `.onAppear` rather than SwiftUI's
@@ -236,57 +251,6 @@ struct MessageDetailView: View {
                 }
                 Spacer(minLength: 0)
             }
-        }
-    }
-
-    @ViewBuilder
-    private func body(for model: MessageDetailViewModel) -> some View {
-        // Spinner wins over the error/retry screen whenever a load is in
-        // flight, and whenever the view hasn't completed an attempt yet. A
-        // fast-failing fetch used to paint the red banner before the user
-        // saw any indication of work — issue #403.
-        if model.isLoading || !model.hasAttemptedLoad {
-            ProgressView("Fetching message…")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if let html = model.htmlBody, !model.forcePlainText {
-            // WKWebView manages its own scrolling; fill the available space
-            // and let it page through tall messages internally.
-            HTMLBodyView(
-                html: html,
-                inlineImages: model.inlineImages,
-                allowRemote: model.remoteContentAllowed,
-                readerMode: model.readerMode,
-                printRequestTick: model.printRequestTick
-            )
-        } else if let plain = model.plainText {
-            // `.primary` foreground adapts to light/dark mode and gives
-            // message text the same contrast as the surrounding chrome.
-            ScrollView {
-                Text(plain)
-                    .font(.body)
-                    .foregroundStyle(.primary)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding()
-            }
-        } else if let errorMessage = model.errorMessage {
-            VStack(spacing: 12) {
-                Label(errorMessage, systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.red)
-                Button {
-                    Task { await model.load() }
-                } label: {
-                    Label("Retry", systemImage: "arrow.clockwise")
-                }
-                .buttonStyle(.bordered)
-                .disabled(model.isLoading)
-            }
-            .padding()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
-            Text("No renderable body.")
-                .foregroundStyle(.secondary)
-                .padding()
         }
     }
 
