@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-export default function useSplit({ storageKey, defaultPct, min, max, axis }) {
+export default function useSplit({ storageKey, defaultPct, min, max, axis, anchor = 'start' }) {
   const [pct, setPct] = useState(() => {
     try {
       const raw = localStorage.getItem(storageKey);
@@ -28,10 +28,13 @@ export default function useSplit({ storageKey, defaultPct, min, max, axis }) {
     const rect = containerRef.current.getBoundingClientRect();
     const total = axis === 'y' ? rect.height : rect.width;
     if (total <= 0) return;
-    const offset = axis === 'y' ? e.clientY - rect.top : e.clientX - rect.left;
+    const pos = axis === 'y' ? e.clientY - rect.top : e.clientX - rect.left;
+    // `anchor: 'end'` panels (e.g. a right sidebar) measure their size from
+    // the container's trailing edge, so pct tracks the pane's own width.
+    const offset = anchor === 'end' ? total - pos : pos;
     const next = (offset / total) * 100;
     setPct(Math.min(max, Math.max(min, next)));
-  }, [axis, min, max]);
+  }, [axis, min, max, anchor]);
 
   const stop = useCallback(() => {
     if (!dragging.current) return;
@@ -57,8 +60,12 @@ export default function useSplit({ storageKey, defaultPct, min, max, axis }) {
   const reset = useCallback(() => setPct(defaultPct), [defaultPct]);
 
   const onKeyDown = useCallback((e) => {
-    const decKey = axis === 'y' ? 'ArrowUp' : 'ArrowLeft';
-    const incKey = axis === 'y' ? 'ArrowDown' : 'ArrowRight';
+    // For an `end`-anchored horizontal pane, ArrowLeft grows it (the divider
+    // moves left, the pane widens), so the inc/dec keys are swapped.
+    const horizDec = anchor === 'end' ? 'ArrowRight' : 'ArrowLeft';
+    const horizInc = anchor === 'end' ? 'ArrowLeft' : 'ArrowRight';
+    const decKey = axis === 'y' ? 'ArrowUp' : horizDec;
+    const incKey = axis === 'y' ? 'ArrowDown' : horizInc;
     if (e.key === decKey) {
       e.preventDefault();
       setPct((p) => Math.max(min, p - 2));
@@ -75,7 +82,7 @@ export default function useSplit({ storageKey, defaultPct, min, max, axis }) {
       e.preventDefault();
       reset();
     }
-  }, [axis, min, max, reset]);
+  }, [axis, min, max, reset, anchor]);
 
   return { pct, containerRef, onPointerDown, onKeyDown, reset, min, max };
 }
