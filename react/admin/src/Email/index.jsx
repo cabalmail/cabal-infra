@@ -17,18 +17,15 @@ const EMPTY_ENVELOPE = {
   subject: ""
 };
 
-function Splitter({ split, orientation, ariaLabel }) {
-  const className = orientation === 'horizontal'
-    ? 'email__rail-splitter'
-    : 'email__col-splitter';
-  const gripClassName = orientation === 'horizontal'
-    ? 'email__rail-splitter-grip'
-    : 'email__col-splitter-grip';
+// Vertical column splitter (drag axis horizontal). The remaining columns —
+// folders rail | middle | addresses rail — all resize this way; the former
+// horizontal folders/addresses splitter was retired when addresses moved out.
+function Splitter({ split, ariaLabel }) {
   return (
     <div
-      className={className}
+      className="email__col-splitter"
       role="separator"
-      aria-orientation={orientation}
+      aria-orientation="vertical"
       aria-valuemin={split.min}
       aria-valuemax={split.max}
       aria-valuenow={Math.round(split.pct)}
@@ -39,7 +36,7 @@ function Splitter({ split, orientation, ariaLabel }) {
       onDoubleClick={split.reset}
       title="Drag to resize (double-click to reset)"
     >
-      <span className={gripClassName} aria-hidden="true" />
+      <span className="email__col-splitter-grip" aria-hidden="true" />
     </div>
   );
 }
@@ -86,13 +83,15 @@ function Email({
   const isTabletUp = useMediaQuery('(min-width: 768px)');
   const layout = isDesktop ? 'desktop' : isTabletUp ? 'tablet' : 'phone';
 
-  const railSplit = useSplit({
-    storageKey: 'cabal-rail-split',
-    defaultPct: 50, min: 15, max: 85, axis: 'y',
-  });
   const colRailSplit = useSplit({
     storageKey: 'cabal-col-rail-split',
     defaultPct: 22, min: 15, max: 30, axis: 'x',
+  });
+  // Right-hand addresses sidebar width. `anchor: 'end'` so pct is the pane's
+  // own width, measured from the container's trailing edge.
+  const colAddrSplit = useSplit({
+    storageKey: 'cabal-col-addr-split',
+    defaultPct: 22, min: 16, max: 40, axis: 'x', anchor: 'end',
   });
   const colMiddleSplit = useSplit({
     storageKey: 'cabal-col-middle-split',
@@ -105,12 +104,25 @@ function Email({
   const [envelope, setEnvelope] = useState({});
   const [flags, setFlags] = useState([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // Right-hand addresses sidebar. Hidden by default; toggled from the Nav.
+  // On desktop it's an in-flow trailing column, on phone/tablet a right drawer.
+  const [addressSidebarOpen, setAddressSidebarOpen] = useState(false);
   // §4e: multiple compose windows coexist. Each entry carries its own
   // composeState so windows don't share recipients / subject / body.
   const [composeWindows, setComposeWindows] = useState([]);
 
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
   const openDrawer = useCallback(() => setDrawerOpen(true), []);
+  const closeAddressSidebar = useCallback(() => setAddressSidebarOpen(false), []);
+
+  // Both horizontal splitters (left rail, right addresses rail) size relative
+  // to the full `.email` width, so they share its container node.
+  const railContainerRef = colRailSplit.containerRef;
+  const addrContainerRef = colAddrSplit.containerRef;
+  const setEmailRef = useCallback((node) => {
+    railContainerRef.current = node;
+    addrContainerRef.current = node;
+  }, [railContainerRef, addrContainerRef]);
 
   // Close drawer when layout reaches desktop — rail becomes in-flow and the
   // drawer UI would otherwise stay stuck open underneath.
@@ -125,6 +137,14 @@ function Email({
     const toggle = () => setDrawerOpen((v) => !v);
     window.addEventListener('cabal:toggle-nav-drawer', toggle);
     return () => window.removeEventListener('cabal:toggle-nav-drawer', toggle);
+  }, []);
+
+  // The Nav's right-panel button toggles the addresses sidebar via the same
+  // window-event pattern, so its state doesn't have to live in App.
+  useEffect(() => {
+    const toggle = () => setAddressSidebarOpen((v) => !v);
+    window.addEventListener('cabal:toggle-address-sidebar', toggle);
+    return () => window.removeEventListener('cabal:toggle-address-sidebar', toggle);
   }, []);
 
   const selectFolder = useCallback((f) => {
@@ -239,47 +259,24 @@ function Email({
       className="email"
       data-layout={layout}
       data-middle={middleMode}
-      ref={colRailSplit.containerRef}
+      ref={setEmailRef}
     >
       {layout === 'desktop' ? (
         <>
           <aside
             className="email__rail"
-            aria-label="Folders and addresses"
-            ref={railSplit.containerRef}
+            aria-label="Folders"
             style={{ flexBasis: `${colRailSplit.pct}%` }}
           >
-            <div
-              className="email__rail-pane"
-              style={{ flexBasis: `${railSplit.pct}%` }}
-            >
-              <Folders
-                folder={folder}
-                setFolder={selectFolder}
-                setMessage={setMessage}
-                onNewMessage={newEmail}
-              />
-            </div>
-            <Splitter
-              split={railSplit}
-              orientation="horizontal"
-              ariaLabel="Resize folder list"
+            <Folders
+              folder={folder}
+              setFolder={selectFolder}
+              setMessage={setMessage}
+              onNewMessage={newEmail}
             />
-            <div
-              className="email__rail-pane"
-              style={{ flexBasis: `${100 - railSplit.pct}%` }}
-            >
-              <AddressesRail
-                domains={domains}
-                setMessage={setMessage}
-                selectedAddress={addressFilter}
-                onSelectAddress={selectAddress}
-              />
-            </div>
           </aside>
           <Splitter
             split={colRailSplit}
-            orientation="vertical"
             ariaLabel="Resize folders sidebar"
           />
         </>
@@ -293,38 +290,16 @@ function Email({
             />
             <aside
               className="email__rail email__rail--drawer"
-              aria-label="Folders and addresses"
-              ref={railSplit.containerRef}
+              aria-label="Folders"
             >
-              <div
-                className="email__rail-pane"
-                style={{ flexBasis: `${railSplit.pct}%` }}
-              >
-                <Folders
-                  folder={folder}
-                  setFolder={selectFolder}
-                  setMessage={setMessage}
-                  onNewMessage={() => { setDrawerOpen(false); newEmail(); }}
-                  asDrawer
-                  onClose={closeDrawer}
-                />
-              </div>
-              <Splitter
-                split={railSplit}
-                orientation="horizontal"
-                ariaLabel="Resize folder list"
+              <Folders
+                folder={folder}
+                setFolder={selectFolder}
+                setMessage={setMessage}
+                onNewMessage={() => { setDrawerOpen(false); newEmail(); }}
+                asDrawer
+                onClose={closeDrawer}
               />
-              <div
-                className="email__rail-pane"
-                style={{ flexBasis: `${100 - railSplit.pct}%` }}
-              >
-                <AddressesRail
-                  domains={domains}
-                  setMessage={setMessage}
-                  selectedAddress={addressFilter}
-                  onSelectAddress={(a) => { setAddressFilter(a); setDrawerOpen(false); }}
-                />
-              </div>
             </aside>
           </>
         )
@@ -378,7 +353,6 @@ function Email({
         {layout !== 'phone' && (
           <Splitter
             split={colMiddleSplit}
-            orientation="vertical"
             ariaLabel="Resize message list"
           />
         )}
@@ -401,6 +375,49 @@ function Email({
           layout={layout}
         />
       </div>
+
+      {addressSidebarOpen && (
+        layout === 'desktop' ? (
+          <>
+            <Splitter
+              split={colAddrSplit}
+              ariaLabel="Resize addresses sidebar"
+            />
+            <aside
+              className="email__addr-rail"
+              aria-label="Addresses"
+              style={{ flexBasis: `${colAddrSplit.pct}%` }}
+            >
+              <AddressesRail
+                domains={domains}
+                setMessage={setMessage}
+                selectedAddress={addressFilter}
+                onSelectAddress={selectAddress}
+              />
+            </aside>
+          </>
+        ) : (
+          <>
+            <div
+              className="email__scrim"
+              role="presentation"
+              onClick={closeAddressSidebar}
+            />
+            <aside
+              className="email__addr-rail email__addr-rail--drawer"
+              aria-label="Addresses"
+            >
+              <AddressesRail
+                domains={domains}
+                setMessage={setMessage}
+                selectedAddress={addressFilter}
+                onSelectAddress={(a) => { selectAddress(a); closeAddressSidebar(); }}
+              />
+            </aside>
+          </>
+        )
+      )}
+
       {composeWindows.length > 0 && (
         <div className="compose-stack" aria-label="Compose windows">
           {composeWindows.map((w, i) => (
