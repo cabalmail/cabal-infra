@@ -8,15 +8,30 @@ struct BannerView: View {
     let icon: String
     let text: String
     let tint: Color
-    /// When non-nil the banner shows a trailing "Copy" button (the
-    /// post-creation address banner); nil for plain status banners.
-    var onCopy: (() -> Void)?
+    /// Trailing-button label (e.g. "Copy", "Resume"); defaults to the original
+    /// address-copy banner's "Copy".
+    var actionTitle: String
+    /// Trailing-button SF Symbol, paired with `actionTitle`.
+    var actionIcon: String
+    /// When non-nil the banner shows a trailing action button (the
+    /// post-creation address banner's Copy, the cross-client Resume); nil for
+    /// plain status banners.
+    var onAction: (() -> Void)?
 
-    init(icon: String, text: String, tint: Color, onCopy: (() -> Void)? = nil) {
+    init(
+        icon: String,
+        text: String,
+        tint: Color,
+        actionTitle: String = "Copy",
+        actionIcon: String = "doc.on.doc",
+        onAction: (() -> Void)? = nil
+    ) {
         self.icon = icon
         self.text = text
         self.tint = tint
-        self.onCopy = onCopy
+        self.actionTitle = actionTitle
+        self.actionIcon = actionIcon
+        self.onAction = onAction
     }
 
     var body: some View {
@@ -27,9 +42,9 @@ struct BannerView: View {
                 .font(.footnote)
                 .foregroundStyle(.primary)
             Spacer(minLength: 0)
-            if let onCopy {
-                Button(action: onCopy) {
-                    Label("Copy", systemImage: "doc.on.doc")
+            if let onAction {
+                Button(action: onAction) {
+                    Label(actionTitle, systemImage: actionIcon)
                         .font(.footnote.weight(.semibold))
                         .labelStyle(.titleAndIcon)
                 }
@@ -48,14 +63,29 @@ struct BannerView: View {
 }
 
 /// Renders a `Toast` value as a `BannerView`, mapping `kind` to the standard
-/// icon and tint. `onCopy` is wired by the host when the toast carries a
-/// `copyAddress`.
+/// icon and tint and the toast's data (copyAddress / resumeCursor) to the
+/// trailing button's label. `onAction` is wired by the host to perform it.
 struct ToastBanner: View {
     let toast: Toast
-    var onCopy: (() -> Void)?
+    var onAction: (() -> Void)?
 
     var body: some View {
-        BannerView(icon: icon, text: toast.message, tint: tint, onCopy: onCopy)
+        BannerView(
+            icon: icon,
+            text: toast.message,
+            tint: tint,
+            actionTitle: actionTitle,
+            actionIcon: actionIcon,
+            onAction: onAction
+        )
+    }
+
+    private var actionTitle: String {
+        toast.resumeCursor != nil ? "Resume" : "Copy"
+    }
+
+    private var actionIcon: String {
+        toast.resumeCursor != nil ? "arrow.right.circle" : "doc.on.doc"
     }
 
     private var icon: String {
@@ -100,7 +130,7 @@ private struct ToastOverlayModifier: ViewModifier {
         content
             .overlay(alignment: .top) {
                 if let toast {
-                    ToastBanner(toast: toast, onCopy: copyHandler(for: toast))
+                    ToastBanner(toast: toast, onAction: copyHandler(for: toast))
                         .padding(.top, 6)
                         .padding(.horizontal, 12)
                         .transition(.move(edge: .top).combined(with: .opacity))

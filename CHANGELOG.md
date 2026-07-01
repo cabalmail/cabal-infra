@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.36] - 2026-07-01
+
+### Added
+- The Apple clients now remember where you were between launches — the folder
+  you were last in, the message you were reading, and roughly where you were
+  scrolled within it. On relaunch they open to your Inbox and, when that saved
+  folder and message are still reachable, show a banner offering to pick up
+  where you left off; tap it to jump back there, scroll position and all. The
+  position syncs across your devices, so the same banner appears when another
+  client has moved on. Everything degrades gracefully when a remembered folder
+  or message has since been deleted or moved (no banner).
+
+### Changed
+- Routine dependency bumps via Dependabot. The `mail-tier-base` group
+  advanced the `amazonlinux:2023` base-image digest across the imap,
+  sinkhole, smtp-in, and smtp-out images; the `monitoring-images` group
+  bumped `grafana/grafana` to 13.1.0, `binwiederhier/ntfy` to v2.25.0, and
+  the certbot-renewal Lambda's `lambda/python` base digest; and the
+  `github-actions` group bumped `aws-actions/configure-aws-credentials`,
+  `actions/cache`, `actions/setup-python`, `actions/setup-node`, and
+  `anthropics/claude-code-action` to their latest pinned versions.
+
+### Fixed
+- Fixed sender BIMI logos occasionally appearing on the wrong message
+  rows in the Apple clients' inbox, most often near the top as new mail
+  arrived. A row recycled to a different sender while its predecessor's
+  logo lookup was still in flight could paint the stale logo; the avatar
+  load now discards results once its row has moved on to another sender.
+
 ## [0.10.35] - 2026-06-28
 
 ### Added

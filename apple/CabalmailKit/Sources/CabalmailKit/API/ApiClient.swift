@@ -116,6 +116,16 @@ public protocol ApiClient: Sendable {
     /// server-side when composing the From header.
     func updateDisplayName(_ name: String) async throws
 
+    // MARK: Navigation cursor
+    /// Loads the cross-client navigation cursor from `/get_nav_state`, or nil
+    /// when none has been saved yet (the Lambda returns `{}`). See `NavState`.
+    func loadNavState() async throws -> NavState?
+
+    /// Persists the navigation cursor via `/set_nav_state`. The server stamps
+    /// `updatedAt` and stores the `clientID`, so a second client can detect a
+    /// cursor from elsewhere and offer to follow it.
+    func saveNavState(_ state: NavState) async throws
+
     // MARK: Send
     /// Submits an outgoing message via the Lambda send pipeline (Outbox
     /// APPEND -> SMTP -> Sent move). Mirrors `react/admin/src/ApiClient.js
