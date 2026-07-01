@@ -28,6 +28,7 @@ final class ApiClientNavStateTests: XCTestCase {
         let body = """
         {"folder":"Lists.Cabal","message_id":"<abc@x>","uid":4123,\
         "uid_validity":1690000000,"list_scroll":320,"msg_scroll":0,\
+        "msg_anchor":"i2.0.5|-12",\
         "client_id":"other-install","updated_at":1719600000000}
         """
         let http = RecordingHTTPTransport(responses: [(Data(body.utf8), 200)])
@@ -38,6 +39,7 @@ final class ApiClientNavStateTests: XCTestCase {
         XCTAssertEqual(cursor?.uidValidity, 1_690_000_000)
         XCTAssertEqual(cursor?.listScroll, 320)
         XCTAssertEqual(cursor?.messageScroll, 0)
+        XCTAssertEqual(cursor?.messageAnchor, "i2.0.5|-12")
         XCTAssertEqual(cursor?.clientID, "other-install")
         XCTAssertEqual(cursor?.updatedAt, 1_719_600_000_000)
 
@@ -64,6 +66,7 @@ final class ApiClientNavStateTests: XCTestCase {
             messageID: "<m@x>",
             uid: 99,
             listScroll: 12,
+            messageAnchor: "i3.1|40",
             clientID: "this-install",
             updatedAt: 1   // must be dropped from the body; server stamps it
         )
@@ -80,6 +83,7 @@ final class ApiClientNavStateTests: XCTestCase {
         XCTAssertEqual(payload?["message_id"] as? String, "<m@x>")
         XCTAssertEqual(payload?["uid"] as? Int, 99)
         XCTAssertEqual(payload?["list_scroll"] as? Int, 12)
+        XCTAssertEqual(payload?["msg_anchor"] as? String, "i3.1|40")
         XCTAssertEqual(payload?["client_id"] as? String, "this-install")
         // The client never sends recency; the server owns updated_at.
         XCTAssertNil(payload?["updated_at"])

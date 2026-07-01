@@ -20,7 +20,14 @@ public struct NavState: Sendable, Equatable {
     public var uid: UInt32?
     public var uidValidity: UInt32?
     public var listScroll: Int?
+    /// In-message scroll for a plain-text body — an exact content offset (no
+    /// reflow, so a pixel value round-trips faithfully). HTML bodies use
+    /// `messageAnchor` instead, which survives WebKit's post-load reflow.
     public var messageScroll: Int?
+    /// In-message scroll for an HTML body: a compact structural anchor the
+    /// Apple client resolves with `scrollIntoView` (a child-index path to the
+    /// top-most visible element plus a small pixel delta). Opaque end to end.
+    public var messageAnchor: String?
     /// Identifies the install that wrote this cursor. Set by the client on
     /// save; echoed back on load. See `InstallIdentity`.
     public var clientID: String
@@ -36,6 +43,7 @@ public struct NavState: Sendable, Equatable {
         uidValidity: UInt32? = nil,
         listScroll: Int? = nil,
         messageScroll: Int? = nil,
+        messageAnchor: String? = nil,
         clientID: String,
         updatedAt: Int64? = nil
     ) {
@@ -45,6 +53,7 @@ public struct NavState: Sendable, Equatable {
         self.uidValidity = uidValidity
         self.listScroll = listScroll
         self.messageScroll = messageScroll
+        self.messageAnchor = messageAnchor
         self.clientID = clientID
         self.updatedAt = updatedAt
     }
@@ -58,6 +67,7 @@ extension NavState: Decodable {
         case uidValidity = "uid_validity"
         case listScroll = "list_scroll"
         case messageScroll = "msg_scroll"
+        case messageAnchor = "msg_anchor"
         case clientID = "client_id"
         case updatedAt = "updated_at"
     }
@@ -73,6 +83,7 @@ extension NavState: Decodable {
         self.uidValidity = try container.decodeIfPresent(UInt32.self, forKey: .uidValidity)
         self.listScroll = try container.decodeIfPresent(Int.self, forKey: .listScroll)
         self.messageScroll = try container.decodeIfPresent(Int.self, forKey: .messageScroll)
+        self.messageAnchor = try container.decodeIfPresent(String.self, forKey: .messageAnchor)
         // Older rows (or a hand-written one) might omit client_id; treat it as
         // "unknown origin" rather than failing the whole decode.
         self.clientID = try container.decodeIfPresent(String.self, forKey: .clientID) ?? ""
@@ -92,6 +103,7 @@ extension NavState {
         if let uidValidity { body["uid_validity"] = Int(uidValidity) }
         if let listScroll { body["list_scroll"] = listScroll }
         if let messageScroll { body["msg_scroll"] = messageScroll }
+        if let messageAnchor { body["msg_anchor"] = messageAnchor }
         return body
     }
 

@@ -45,6 +45,24 @@ final class NavStateCoordinator {
     /// the matching `MessageListView`.
     private(set) var pendingRestore: PendingRestore?
 
+    /// An in-message scroll position to reapply once the reader opens the
+    /// restored message. Consumed by `MessageDetailView` (which owns the body
+    /// renderer), keyed by folder + message so it only lands on the intended
+    /// message. `offset` restores a plain-text body; `anchor` restores an HTML
+    /// body — a message renders as one or the other, so the reader applies
+    /// whichever matches.
+    struct PendingScrollRestore: Equatable, Sendable {
+        let folderPath: String
+        let messageID: String?
+        let uid: UInt32?
+        let offset: Int?
+        let anchor: String?
+    }
+
+    /// Set alongside `pendingRestore` when the restored cursor carried a scroll
+    /// position; consumed by the reader after the message loads.
+    private(set) var pendingScrollRestore: PendingScrollRestore?
+
     /// Set by the resume toast's action; observed by `MailRootView`, which
     /// selects the folder and schedules the message restore, then clears it.
     var navigateRequest: NavState?
@@ -63,6 +81,8 @@ final class NavStateCoordinator {
     private var uid: UInt32?
     private var uidValidity: UInt32?
     private var listScroll: Int?
+    private var messageScroll: Int?
+    private var messageAnchor: String?
 
     private var saveTask: Task<Void, Never>?
     /// The last body actually written, to skip redundant network writes.
@@ -168,6 +188,8 @@ final class NavStateCoordinator {
         uid = cursor.uid
         uidValidity = cursor.uidValidity
         listScroll = cursor.listScroll
+        messageScroll = cursor.messageScroll
+        messageAnchor = cursor.messageAnchor
         restoreTick += 1
         pendingRestore = PendingRestore(
             folderPath: cursor.folder,
@@ -176,6 +198,20 @@ final class NavStateCoordinator {
             listScroll: cursor.listScroll,
             tick: restoreTick
         )
+        // Only publish a scroll restore when the cursor actually carried one, so
+        // the reader doesn't force a message that was saved at the top back to
+        // the top redundantly.
+        if cursor.messageScroll != nil || cursor.messageAnchor != nil {
+            pendingScrollRestore = PendingScrollRestore(
+                folderPath: cursor.folder,
+                messageID: cursor.messageID,
+                uid: cursor.uid,
+                offset: cursor.messageScroll,
+                anchor: cursor.messageAnchor
+            )
+        } else {
+            pendingScrollRestore = nil
+        }
     }
 
     /// Returns and clears the pending restore for `folderPath`, if it targets
@@ -183,6 +219,25 @@ final class NavStateCoordinator {
     func consumePendingRestore(for folderPath: String) -> PendingRestore? {
         guard let restore = pendingRestore, restore.folderPath == folderPath else { return nil }
         pendingRestore = nil
+        return restore
+    }
+
+    /// Returns and clears the pending scroll restore if it targets the message
+    /// `MessageDetailView` just opened — matched by folder plus Message-ID
+    /// (durable across a move) or UID. The reader calls this once the body has
+    /// loaded and applies `offset` (plain text) or `anchor` (HTML).
+    func consumeScrollRestore(folderPath: String, uid: UInt32?, messageID: String?) -> PendingScrollRestore? {
+        guard let restore = pendingScrollRestore, restore.folderPath == folderPath else { return nil }
+        let messageMatches: Bool
+        if let wanted = restore.messageID, let have = messageID {
+            messageMatches = wanted == have
+        } else if let wanted = restore.uid, let have = uid {
+            messageMatches = wanted == have
+        } else {
+            messageMatches = false
+        }
+        guard messageMatches else { return nil }
+        pendingScrollRestore = nil
         return restore
     }
 
@@ -207,6 +262,8 @@ final class NavStateCoordinator {
         uid = nil
         uidValidity = nil
         listScroll = nil
+        messageScroll = nil
+        messageAnchor = nil
         if suppressNextFolderRecord {
             suppressNextFolderRecord = false
             return
@@ -214,11 +271,26 @@ final class NavStateCoordinator {
         scheduleSave()
     }
 
-    /// Records that the user opened a message in `folderPath`.
+    /// Records that the user opened a message in `folderPath`. A freshly-opened
+    /// message starts at the top, so any prior in-message scroll is cleared —
+    /// `recordMessageScroll` re-populates it as the user reads.
     func recordMessage(folderPath: String, uid: UInt32, messageID: String?) {
         folder = folderPath
         self.uid = uid
         self.messageID = messageID
+        messageScroll = nil
+        messageAnchor = nil
+        scheduleSave()
+    }
+
+    /// Records the current in-message scroll position for the open message —
+    /// an exact `offset` for a plain-text body, a structural `anchor` for an
+    /// HTML body. Ignored unless the working cursor is still on that message,
+    /// so a late capture from a message the user already left can't mis-attach.
+    func recordMessageScroll(folderPath: String, uid: UInt32, offset: Int?, anchor: String?) {
+        guard folder == folderPath, self.uid == uid else { return }
+        messageScroll = offset
+        messageAnchor = anchor
         scheduleSave()
     }
 
@@ -229,6 +301,8 @@ final class NavStateCoordinator {
         guard folder == folderPath, uid != nil || messageID != nil else { return }
         uid = nil
         messageID = nil
+        messageScroll = nil
+        messageAnchor = nil
         scheduleSave()
     }
 
@@ -240,6 +314,8 @@ final class NavStateCoordinator {
             uid: uid,
             uidValidity: uidValidity,
             listScroll: listScroll,
+            messageScroll: messageScroll,
+            messageAnchor: messageAnchor,
             clientID: clientID
         )
         saveTask?.cancel()
