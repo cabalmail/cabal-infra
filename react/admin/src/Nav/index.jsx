@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Search, Check, PanelLeft, ExternalLink } from 'lucide-react';
+import { Search, Check, PanelLeft, PanelRight, ExternalLink } from 'lucide-react';
 import logoMarkup from '../assets/logo.svg?raw';
 import './Nav.css';
 
@@ -106,6 +106,13 @@ function Nav({
     window.dispatchEvent(new CustomEvent('cabal:toggle-nav-drawer'));
   }, []);
 
+  const toggleAddresses = useCallback(() => {
+    // Email listens for this and toggles the right-hand addresses sidebar
+    // (in-flow on desktop, a drawer on narrower widths). Same window-event
+    // pattern as the folder drawer above.
+    window.dispatchEvent(new CustomEvent('cabal:toggle-address-sidebar'));
+  }, []);
+
   return (
     <header
       className={`nav logged-${loggedIn ? 'in' : 'out'}${isAdmin ? ' is-admin' : ''}`}
@@ -148,6 +155,17 @@ function Nav({
       )}
 
       <div className="nav__right">
+        {loggedIn && view === 'Email' && (
+          <button
+            type="button"
+            className="nav__address-toggle"
+            aria-label="Toggle addresses sidebar"
+            title="Addresses"
+            onClick={toggleAddresses}
+          >
+            <PanelRight size={18} aria-hidden="true" />
+          </button>
+        )}
         {loggedIn ? (
           <div className="nav__menu-wrap" ref={menuRef}>
             <button

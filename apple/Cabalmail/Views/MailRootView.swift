@@ -15,15 +15,6 @@ import UIKit
 /// changes. Without it, the same view instance is reused with a new folder
 /// or envelope prop and its one-shot `.task` never re-fires — which is the
 /// bug that made "select a second folder" do nothing on the split layout.
-/// Which list the sidebar is showing — toggled by a segmented control
-/// pinned above the list itself. Persisted across launches via
-/// `@AppStorage` so the user lands on the tab they last used.
-enum SidebarTab: String, CaseIterable, Identifiable {
-    case folders
-    case addresses
-    var id: String { rawValue }
-}
-
 struct MailRootView: View {
     @State private var selectedFolder: Folder?
     @State private var selectedEnvelope: Envelope?
@@ -67,7 +58,11 @@ struct MailRootView: View {
     #else
     @State private var columnVisibility: NavigationSplitViewVisibility = .doubleColumn
     #endif
-    @AppStorage("cabalmail.sidebar.tab") private var sidebarTabRaw: String = SidebarTab.folders.rawValue
+    /// Whether the right-hand addresses inspector is showing. Hidden by default
+    /// (on every launch) — it's an occasional reference/management panel reached
+    /// from the toolbar, so it doesn't persist open. Wide layouts only; compact
+    /// iPhone reaches addresses through its own bottom tab, never this inspector.
+    @State private var addressInspectorPresented = false
     /// Persisted width of the message-list (content) column in the wide
     /// (regular-width iPad / visionOS) three-column layout. `NavigationSplitView`
     /// doesn't report where a user drags the native list-reader divider, so the
@@ -119,24 +114,6 @@ struct MailRootView: View {
         return showsSettingsGear
         #endif
     }
-    /// Non-nil while a message drag temporarily overrides the visible sidebar
-    /// tab. When the user starts dragging a message while viewing Addresses,
-    /// this flips the sidebar to Folders so they have somewhere to drop;
-    /// clearing it on drag end falls the display back to the persisted tab
-    /// (Addresses), satisfying "release flips back to addresses." Kept
-    /// separate from `sidebarTabRaw` so the override never persists.
-    @State private var sidebarDragOverride: SidebarTab?
-
-    private var sidebarTab: SidebarTab {
-        SidebarTab(rawValue: sidebarTabRaw) ?? .folders
-    }
-
-    /// The tab the sidebar actually shows: the drag override if one is
-    /// active, otherwise the user's persisted choice.
-    private var effectiveSidebarTab: SidebarTab {
-        sidebarDragOverride ?? sidebarTab
-    }
-
     /// Folder that drives `MessageDetailView`. Cross-folder search results
     /// override the sidebar selection; everything else uses it directly.
     private var detailFolder: Folder? {
@@ -309,19 +286,6 @@ struct MailRootView: View {
         .onChange(of: compactColumn) { _, column in
             if column != .detail, selectedEnvelope != nil { selectedEnvelope = nil }
         }
-        // Reveal Folders as drop targets the moment a message drag starts on
-        // the Addresses tab, and fall back to the persisted tab when it ends.
-        // The drag flag is flipped by the row's `.onDrag` (start) and by the
-        // folder-row / catch-all drop handlers (end).
-        .onChange(of: appState.messageDragInProgress) { _, dragging in
-            if dragging {
-                if effectiveSidebarTab == .addresses {
-                    sidebarDragOverride = .folders
-                }
-            } else {
-                sidebarDragOverride = nil
-            }
-        }
         // Catch-all drop target behind the whole split view: a message
         // released anywhere that isn't a folder row (the message list, the
         // reading pane, sidebar chrome) ends the drag so the sidebar flips
@@ -372,6 +336,29 @@ struct MailRootView: View {
                 )
             }
         }
+        // Addresses live in a trailing panel rather than the left sidebar,
+        // keeping the sidebar free for folders (and, later, feeds). Hidden by
+        // default; the toolbar `at` button (wide layouts) toggles it. Selecting
+        // an address still filters the message list via `selectedAddress`.
+        // `.inspector` is the native trailing sidebar on iOS/macOS; visionOS
+        // lacks it, so the same toggle drives a sheet there instead.
+        #if os(visionOS)
+        .sheet(isPresented: $addressInspectorPresented) {
+            AddressListView(
+                selection: $selectedAddress,
+                externalFilter: $addressListFilter
+            )
+            .environment(appState)
+        }
+        #else
+        .inspector(isPresented: $addressInspectorPresented) {
+            AddressListView(
+                selection: $selectedAddress,
+                externalFilter: $addressListFilter
+            )
+            .inspectorColumnWidth(min: 260, ideal: 300, max: 420)
+        }
+        #endif
     }
 
     #if os(macOS)
@@ -484,49 +471,27 @@ extension MailRootView {
     private var sidebar: some View {
         VStack(spacing: 0) {
             searchField
-            Picker(
-                "Sidebar",
-                selection: Binding(
-                    get: { effectiveSidebarTab },
-                    set: { sidebarTabRaw = $0.rawValue }
-                )
-            ) {
-                Text("Folders").tag(SidebarTab.folders)
-                Text("Addresses").tag(SidebarTab.addresses)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .padding(.horizontal)
-            .padding(.top, 8)
-            .padding(.bottom, 4)
 
-            // The wide layout's per-context filter — and the New / Reload buttons
-            // that flank it — render inside the active list view's own header
-            // (`SidebarListHeaderRow`), below these tabs. Compact lets each list
+            // Folders own the sidebar; addresses moved to the trailing inspector
+            // (see `.inspector` in `body`). The wide layout's per-context filter —
+            // and the New / Reload buttons that flank it — render inside the list
+            // view's own header (`SidebarListHeaderRow`). Compact lets the list
             // keep its own top-of-sidebar `.searchable` and toolbar buttons.
-            switch effectiveSidebarTab {
-            case .folders:
-                FolderListView(
-                    selection: $selectedFolder,
-                    externalFilter: isWideSidebar ? $folderListFilter : nil,
-                    onFoldersLoaded: { folders in
-                        // First load: land on INBOX and, if a saved position is
-                        // still reachable, offer a resume toast (see
-                        // `landOnInboxAndOfferResume`). The Compose button lives
-                        // on the message-list toolbar, so a nil-selection state
-                        // would leave the user no way to start a new message;
-                        // INBOX is always present
-                        // (`FolderListViewModel.sortForSidebar` pins it first).
-                        guard selectedFolder == nil else { return }
-                        landOnInboxAndOfferResume(from: folders)
-                    }
-                )
-            case .addresses:
-                AddressListView(
-                    selection: $selectedAddress,
-                    externalFilter: isWideSidebar ? $addressListFilter : nil
-                )
-            }
+            FolderListView(
+                selection: $selectedFolder,
+                externalFilter: isWideSidebar ? $folderListFilter : nil,
+                onFoldersLoaded: { folders in
+                    // First load: land on INBOX and, if a saved position is
+                    // still reachable, offer a resume toast (see
+                    // `landOnInboxAndOfferResume`). The Compose button lives
+                    // on the message-list toolbar, so a nil-selection state
+                    // would leave the user no way to start a new message;
+                    // INBOX is always present
+                    // (`FolderListViewModel.sortForSidebar` pins it first).
+                    guard selectedFolder == nil else { return }
+                    landOnInboxAndOfferResume(from: folders)
+                }
+            )
         }
     }
 
@@ -616,6 +581,21 @@ extension MailRootView {
     @ViewBuilder
     fileprivate var decoratedContentColumn: some View {
         contentColumn
+            // Toggle for the trailing addresses inspector. Wide layouts only
+            // (macOS always; regular-width iPad via `showsSettingsGear`); compact
+            // iPhone reaches addresses through its dedicated bottom tab instead.
+            .toolbar {
+                if isWideSidebar {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button {
+                            addressInspectorPresented.toggle()
+                        } label: {
+                            Image(systemName: "at")
+                                .accessibilityLabel("Addresses")
+                        }
+                    }
+                }
+            }
             // App-level Settings gear, relocated next to the content column's
             // sidebar toggle now that the sidebar — its former home — starts
             // collapsed on iPad. Regular-width iPad only (compact keeps its

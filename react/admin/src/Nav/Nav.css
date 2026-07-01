@@ -64,6 +64,28 @@
   .nav__sidebar-toggle { display: none; }
 }
 
+/* Addresses sidebar toggle (right cluster, email view only) -------------- */
+
+.nav__address-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.nav__address-toggle:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+
 /* Brand ---------------------------------------------------------------- */
 
 .nav__brand {
