@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.37] - 2026-07-01
+
+### Changed
+- The address list moved out of the left sidebar into a right-hand sidebar
+  that is hidden by default, freeing the left sidebar for folders (and future
+  additions). Toggle it from the new panel button in the header (web) or the
+  `@` toolbar button (iPad / macOS); iPhone keeps its Addresses tab. Selecting
+  an address still filters the message list.
+
 ## [0.10.36] - 2026-07-01
 
 ### Added
