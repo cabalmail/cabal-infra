@@ -39,6 +39,13 @@ struct Toast: Equatable, Sendable {
     static func addressCopied(_ address: String) -> Toast {
         Toast(kind: .success, message: "Address \(address) successfully copied")
     }
+
+    /// Confirmation shown after an address is revoked (e.g. from the message
+    /// header's per-address menu). Mirrors the wording of the address list's
+    /// revoke dialog: mail to it will now be rejected.
+    static func addressRevoked(_ address: String) -> Toast {
+        Toast(kind: .success, message: "Revoked \(address)")
+    }
 }
 
 /// Signal payload for a successful dispose action. Carries the folder path
