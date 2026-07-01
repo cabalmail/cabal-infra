@@ -23,6 +23,10 @@ table = ddb.Table(TABLE_NAME)
 MAX_FOLDER_LENGTH = 1024
 MAX_MESSAGE_ID_LENGTH = 998   # RFC 5322 line-length ceiling for a Message-ID
 MAX_CLIENT_ID_LENGTH = 64
+# In-message scroll anchor: a compact structural pointer the Apple client
+# builds for HTML bodies (a child-index path plus a small pixel delta, e.g.
+# "i2.0.5|-12"). Opaque to the server; the cap just stops an unbounded blob.
+MAX_ANCHOR_LENGTH = 512
 # Whole-number ceiling shared by uid/uid_validity/scroll offsets - large enough
 # for any real IMAP UID or pixel offset, small enough to reject garbage.
 MAX_NUMBER = 2 ** 53
@@ -96,6 +100,16 @@ def handler(event, _context):  # pylint: disable=too-many-return-statements
                 'body': json.dumps({'Error': 'Invalid value for message_id.'})
             }
         nav_state['message_id'] = message_id
+
+    # Optional string field: the in-message scroll anchor (HTML bodies).
+    if body.get('msg_anchor') is not None:
+        msg_anchor = _clean_str(body.get('msg_anchor'), MAX_ANCHOR_LENGTH)
+        if msg_anchor is None:
+            return {
+                'statusCode': 400,
+                'body': json.dumps({'Error': 'Invalid value for msg_anchor.'})
+            }
+        nav_state['msg_anchor'] = msg_anchor
 
     # Optional whole-number fields: IMAP coordinates and scroll offsets.
     for key in ('uid', 'uid_validity', 'list_scroll', 'msg_scroll'):

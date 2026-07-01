@@ -37,6 +37,32 @@ struct HTMLBodyView: View {
     /// advances, so a SwiftUI re-layout (which re-runs `update*View` with
     /// the same tick) doesn't re-trigger printing.
     var printRequestTick: Int = 0
+    /// In-message scroll anchor to reapply once the body finishes loading (a
+    /// child-index path + delta produced by a prior `onScrollCaptured`, resumed
+    /// from the nav cursor). Nil for a normal open. See `NavStateCoordinator`.
+    var restoreAnchor: String?
+    /// Reports the current scroll anchor while the message is on screen (polled
+    /// off the SwiftUI render loop). The reader relays it to the nav cursor so
+    /// the position survives across launches and devices.
+    var onScrollCaptured: ((String) -> Void)?
+
+    init(
+        html: String,
+        inlineImages: [String: URL],
+        allowRemote: Bool,
+        readerMode: Bool,
+        printRequestTick: Int = 0,
+        restoreAnchor: String? = nil,
+        onScrollCaptured: ((String) -> Void)? = nil
+    ) {
+        self.html = html
+        self.inlineImages = inlineImages
+        self.allowRemote = allowRemote
+        self.readerMode = readerMode
+        self.printRequestTick = printRequestTick
+        self.restoreAnchor = restoreAnchor
+        self.onScrollCaptured = onScrollCaptured
+    }
 
     var body: some View {
         #if os(macOS)
@@ -45,7 +71,9 @@ struct HTMLBodyView: View {
             inlineImages: inlineImages,
             allowRemote: allowRemote,
             readerMode: readerMode,
-            printRequestTick: printRequestTick
+            printRequestTick: printRequestTick,
+            restoreAnchor: restoreAnchor,
+            onScrollCaptured: onScrollCaptured
         )
         #else
         MobileHTMLView(
@@ -53,7 +81,9 @@ struct HTMLBodyView: View {
             inlineImages: inlineImages,
             allowRemote: allowRemote,
             readerMode: readerMode,
-            printRequestTick: printRequestTick
+            printRequestTick: printRequestTick,
+            restoreAnchor: restoreAnchor,
+            onScrollCaptured: onScrollCaptured
         )
         #endif
     }
@@ -68,6 +98,8 @@ private struct MobileHTMLView: UIViewRepresentable {
     let allowRemote: Bool
     let readerMode: Bool
     let printRequestTick: Int
+    let restoreAnchor: String?
+    let onScrollCaptured: ((String) -> Void)?
 
     func makeCoordinator() -> HTMLBodyCoordinator {
         HTMLBodyCoordinator(allowRemote: allowRemote)
@@ -93,6 +125,7 @@ private struct MobileHTMLView: UIViewRepresentable {
         // dark inherited palette.
         uiView.overrideUserInterfaceStyle = readerMode ? .unspecified : .light
         uiView.backgroundColor = readerMode ? nil : .white
+        context.coordinator.onScrollCaptured = onScrollCaptured
         context.coordinator.render(
             html: html,
             inlineImages: inlineImages,
@@ -101,6 +134,7 @@ private struct MobileHTMLView: UIViewRepresentable {
             on: uiView
         )
         context.coordinator.handlePrintTick(printRequestTick, for: uiView)
+        context.coordinator.updateRestoreAnchor(restoreAnchor, on: uiView)
     }
 }
 #endif
@@ -114,6 +148,8 @@ private struct MacHTMLView: NSViewRepresentable {
     let allowRemote: Bool
     let readerMode: Bool
     let printRequestTick: Int
+    let restoreAnchor: String?
+    let onScrollCaptured: ((String) -> Void)?
 
     func makeCoordinator() -> HTMLBodyCoordinator {
         HTMLBodyCoordinator(allowRemote: allowRemote)
@@ -135,6 +171,7 @@ private struct MacHTMLView: NSViewRepresentable {
         // CSS assumes a white page. Reader mode owns the palette via its
         // `prefers-color-scheme` stylesheet, so it tracks the system.
         nsView.appearance = readerMode ? nil : NSAppearance(named: .aqua)
+        context.coordinator.onScrollCaptured = onScrollCaptured
         context.coordinator.render(
             html: html,
             inlineImages: inlineImages,
@@ -143,6 +180,7 @@ private struct MacHTMLView: NSViewRepresentable {
             on: nsView
         )
         context.coordinator.handlePrintTick(printRequestTick, for: nsView)
+        context.coordinator.updateRestoreAnchor(restoreAnchor, on: nsView)
     }
 }
 #endif
@@ -171,9 +209,26 @@ final class HTMLBodyCoordinator: NSObject, WKNavigationDelegate {
     /// SwiftUI re-layout; comparing against this value ensures the system
     /// print sheet only opens when the parent's counter actually advances.
     private var lastPrintTick: Int = 0
+    /// Reports the current in-message scroll anchor to the reader. Set from
+    /// `update*View`; invoked by the capture poll.
+    var onScrollCaptured: ((String) -> Void)?
+    /// Scroll anchor to reapply once the page has loaded, or nil for a normal
+    /// open. Applied exactly once (`didApplyRestore`).
+    private var restoreAnchor: String?
+    private var didApplyRestore = false
+    private var didFinishLoad = false
+    /// Polls the page for its scroll anchor while it's on screen. Scoped to the
+    /// web view's lifetime (cancelled on deinit) so it never touches the
+    /// SwiftUI render loop. Started after the first load so it can't capture the
+    /// pre-restore top-of-page position.
+    private var pollTask: Task<Void, Never>?
 
     init(allowRemote: Bool) {
         self.allowRemote = allowRemote
+    }
+
+    deinit {
+        pollTask?.cancel()
     }
 
     /// Called from `update*View` with the current tick. Triggers the
@@ -226,6 +281,138 @@ final class HTMLBodyCoordinator: NSObject, WKNavigationDelegate {
             return .allow
         }
         return allowRemote ? .allow : .cancel
+    }
+
+    // MARK: - In-message scroll capture / restore
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        didFinishLoad = true
+        applyRestoreIfNeeded(on: webView)
+        startPollingIfNeeded(on: webView)
+    }
+
+    /// Records the target anchor and, if the page has already finished loading
+    /// (the anchor can arrive after `didFinish` when the reader consumes it just
+    /// after the body appears), applies it immediately. A no-op once applied.
+    func updateRestoreAnchor(_ anchor: String?, on webView: WKWebView) {
+        restoreAnchor = anchor
+        if didFinishLoad {
+            applyRestoreIfNeeded(on: webView)
+        }
+    }
+
+    /// Runs our restore script once: it walks the child-index path to the
+    /// anchored element and `scrollIntoView`s it, then nudges by the saved
+    /// delta. Re-run once after a short delay because inline images decoding
+    /// after `didFinish` can still shift layout. `nil`/empty anchors no-op.
+    private func applyRestoreIfNeeded(on webView: WKWebView) {
+        guard !didApplyRestore, let anchor = restoreAnchor, !anchor.isEmpty else { return }
+        didApplyRestore = true
+        let script = Self.restoreScript(anchor: anchor)
+        webView.evaluateJavaScript(script, completionHandler: nil)
+        Task { [weak webView] in
+            try? await Task.sleep(for: .milliseconds(400))
+            webView?.evaluateJavaScript(script, completionHandler: nil)
+        }
+    }
+
+    private func startPollingIfNeeded(on webView: WKWebView) {
+        guard pollTask == nil else { return }
+        pollTask = Task { [weak self, weak webView] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled, let self, let webView else { return }
+                await self.captureAndReport(from: webView)
+            }
+        }
+    }
+
+    private func captureAndReport(from webView: WKWebView) async {
+        let result = try? await webView.evaluateJavaScript(Self.captureScript)
+        guard let anchor = result as? String, !anchor.isEmpty else { return }
+        onScrollCaptured?(anchor)
+    }
+
+    /// Reads the top-most visible element and returns a compact anchor:
+    /// `"i<child.index.path>|<delta>"`, or a `"f<fraction>"` fallback when the
+    /// top of the viewport isn't over a concrete element. App-initiated (runs
+    /// even though page-content JS is disabled); reads geometry only.
+    private static let captureScript = """
+    (function(){
+      var se=document.scrollingElement||document.documentElement;
+      if(!se){return "";}
+      var el=document.elementFromPoint(4,4);
+      if(!el||el===document.documentElement||el===document.body){
+        var h=se.scrollHeight-se.clientHeight;
+        return "f"+(h>0?(se.scrollTop/h).toFixed(4):"0");
+      }
+      var top=Math.round(el.getBoundingClientRect().top);
+      var path=[];
+      var n=el;
+      while(n&&n.parentElement&&n!==document.body){
+        var p=n.parentElement;
+        path.unshift(Array.prototype.indexOf.call(p.children,n));
+        n=p;
+      }
+      return "i"+path.join(".")+"|"+top;
+    })();
+    """
+
+    /// Escapes an arbitrary string into a safe JS double-quoted string literal.
+    /// The anchor normally comes from our own `captureScript`, but a cursor row
+    /// written by another client is only length/control-char validated
+    /// server-side, so escape defensively rather than interpolate raw.
+    private static func jsStringLiteral(_ value: String) -> String {
+        var out = "\""
+        for scalar in value.unicodeScalars {
+            switch scalar {
+            case "\"": out += "\\\""
+            case "\\": out += "\\\\"
+            case "\n": out += "\\n"
+            case "\r": out += "\\r"
+            default:
+                if scalar.value < 0x20 {
+                    out += String(format: "\\u%04x", scalar.value)
+                } else {
+                    out.unicodeScalars.append(scalar)
+                }
+            }
+        }
+        return out + "\""
+    }
+
+    /// Restore counterpart to `captureScript`. The anchor is passed as an
+    /// escaped string literal (never interpolated into code), and the index
+    /// path is walked as numbers, so no untrusted content ever enters the
+    /// evaluated program.
+    private static func restoreScript(anchor: String) -> String {
+        let literal = jsStringLiteral(anchor)
+        return """
+        (function(a){
+          var se=document.scrollingElement||document.documentElement;
+          if(!a||!se){return;}
+          if(a.charAt(0)==="f"){
+            var frac=parseFloat(a.slice(1))||0;
+            var h=se.scrollHeight-se.clientHeight;
+            window.scrollTo(0,frac*(h>0?h:0));
+            return;
+          }
+          if(a.charAt(0)!=="i"){return;}
+          var rest=a.slice(1);
+          var bar=rest.indexOf("|");
+          var idxPart=bar>=0?rest.slice(0,bar):rest;
+          var delta=bar>=0?(parseInt(rest.slice(bar+1),10)||0):0;
+          var idxs=idxPart.length?idxPart.split(".").map(Number):[];
+          var node=document.body;
+          for(var k=0;k<idxs.length;k++){
+            if(!node||!node.children||idxs[k]>=node.children.length){node=null;break;}
+            node=node.children[idxs[k]];
+          }
+          if(!node){return;}
+          node.scrollIntoView(true);
+          window.scrollBy(0,-delta);
+        })(\(literal));
+        """
     }
 
     /// Renders `html` into `webView`, putting the remote-content blocker into
