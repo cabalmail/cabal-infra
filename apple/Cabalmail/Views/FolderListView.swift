@@ -127,7 +127,7 @@ struct FolderListView: View {
                 }
             }
         }
-        .navigationTitle("Mailboxes")
+        .navigationTitle("")
         .sidebarFilterSearchable(text: $filterQuery, enabled: externalFilter == nil, prompt: "Filter folders")
         .toolbar {
             // Compact keeps New / Reload in the toolbar; the wide sidebar moves
