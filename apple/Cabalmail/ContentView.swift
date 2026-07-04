@@ -29,15 +29,20 @@ struct ContentView: View {
 }
 
 /// Neutral splash shown while `AppState.restoreIfPossible()` is validating
-/// the stored Cognito tokens. Kept deliberately minimal — mirrors the bundle
-/// name so a resumed user sees the same chrome as at launch rather than a
-/// generic spinner that looks like a hang.
+/// the stored Cognito tokens. Kept deliberately minimal — pairs the Cabalmail
+/// mark with the bundle name so a resumed user sees the same chrome as at
+/// launch rather than a generic spinner that looks like a hang. Reuses the
+/// sidebar's `CabalmailMark` asset and `LogoTint` colorset (see
+/// `SidebarBranding`) so the launch mark matches the one above the folder list.
 private struct RestoringSplash: View {
     var body: some View {
         VStack(spacing: 16) {
-            Image(systemName: "tray")
-                .font(.system(size: 48, weight: .semibold))
-                .foregroundStyle(.tint)
+            Image("CabalmailMark")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 132, height: 132)
+                .foregroundStyle(Color("LogoTint"))
+                .accessibilityHidden(true)
             Text("Cabalmail")
                 .font(.title)
             ProgressView()
