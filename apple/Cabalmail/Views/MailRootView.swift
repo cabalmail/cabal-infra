@@ -173,7 +173,7 @@ struct MailRootView: View {
             ContentUnavailableView(
                 "Select a folder",
                 systemImage: "sidebar.left",
-                description: Text("Pick a mailbox from the sidebar to browse messages.")
+                description: Text("Pick a folder from the sidebar to browse messages.")
             )
         }
     }
@@ -470,6 +470,19 @@ extension MailRootView {
     @ViewBuilder
     private var sidebar: some View {
         VStack(spacing: 0) {
+            #if os(macOS)
+            // Brand mark at the top of the sidebar, below the traffic-light /
+            // toolbar row and above the search field. macOS never displaced a
+            // title here (the sidebar column never showed one); the mark is
+            // purely additive. iOS/iPadOS host theirs in the toolbar below.
+            HStack {
+                CabalmailMark(size: 30)
+                Spacer()
+            }
+            .padding(.leading, 16)
+            .padding(.top, 12)
+            #endif
+
             searchField
 
             // Folders own the sidebar; addresses moved to the trailing inspector
@@ -493,6 +506,43 @@ extension MailRootView {
                 }
             )
         }
+        // Sidebar branding (see `SidebarBranding.swift`): the wash paints this
+        // column only — the entire folder screen on compact iPhone, where
+        // this column IS the screen; the floating sidebar on iPad; the sidebar
+        // material on macOS. Hiding the list's scroll background (inherited by
+        // the folder `List` below) lets the wash show through the native
+        // material instead of being painted over by the system background.
+        .scrollContentBackground(.hidden)
+        .background { SidebarWash().ignoresSafeArea() }
+        #if !os(macOS)
+        // The Cabalmail mark stands in for the sidebar's "Folders" title:
+        // inline display mode suppresses the large title, the clear principal
+        // item suppresses the inline text, and `FolderListView`'s
+        // `.navigationTitle("Folders")` string stays for VoiceOver and the
+        // back button. The mark itself rides the leading toolbar slot — the
+        // system sidebar toggle and the compact New / Reload buttons keep
+        // their own slots.
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Color.clear.frame(width: 1, height: 1)
+            }
+            // On OS 26's liquid glass, a bare toolbar item gets wrapped in a
+            // glass capsule, which makes the decorative mark read as a button.
+            // Detach it from the shared glass background where the API exists;
+            // earlier systems render toolbar images plain anyway.
+            if #available(iOS 26.0, visionOS 26.0, *) {
+                ToolbarItem(placement: .topBarLeading) {
+                    CabalmailMark(size: isWideSidebar ? 34 : 44)
+                }
+                .sharedBackgroundVisibility(.hidden)
+            } else {
+                ToolbarItem(placement: .topBarLeading) {
+                    CabalmailMark(size: isWideSidebar ? 34 : 44)
+                }
+            }
+        }
+        #endif
     }
 
 }
