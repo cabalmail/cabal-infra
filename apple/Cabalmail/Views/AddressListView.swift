@@ -237,7 +237,11 @@ struct AddressListView: View {
     private func row(for address: Address) -> some View {
         HStack {
             Image(systemName: address.favorite ? "star.fill" : "at")
-                .foregroundStyle(address.favorite ? Color.yellow : Color.accentColor)
+                // The asset-catalog accent, pinned like the folder icons
+                // (see `iconForeground` in FolderListView+Helpers.swift):
+                // `Color.accentColor` follows the macOS system accent when
+                // that isn't "multicolor", leaving the icons off-brand.
+                .foregroundStyle(address.favorite ? Color.yellow : Color("AccentColor"))
             VStack(alignment: .leading, spacing: 2) {
                 Text(address.address)
                 if let comment = address.comment, !comment.isEmpty {

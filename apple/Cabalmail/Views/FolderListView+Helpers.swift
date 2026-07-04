@@ -66,10 +66,17 @@ extension FolderListView {
     }
 
     func iconForeground(isSelected: Bool) -> AnyShapeStyle {
+        // Folder icons carry the brand accent from the asset catalog,
+        // pinned explicitly rather than ridden through `.tint`: macOS
+        // repaints environment tints with the user's system accent
+        // (System Settings > Appearance) whenever that isn't
+        // "multicolor", which left the wide layouts' icons off-brand.
+        // The pinned color resolves the same light/dark variants on
+        // every platform, so compact renders identically to before.
         #if os(macOS)
-        return AnyShapeStyle(.tint)
+        return AnyShapeStyle(Color("AccentColor"))
         #else
-        return isSelected ? AnyShapeStyle(Color.white) : AnyShapeStyle(.tint)
+        return isSelected ? AnyShapeStyle(Color.white) : AnyShapeStyle(Color("AccentColor"))
         #endif
     }
 
