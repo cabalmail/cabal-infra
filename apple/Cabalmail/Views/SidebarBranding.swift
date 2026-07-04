@@ -119,10 +119,11 @@ private extension Color {
 
 /// The Cabalmail mark (mark only, never the wordmark), tinted per theme
 /// via the `LogoTint` colorset. The size is the mark's square bounding
-/// box (the handoff's 44 pt iPhone / 34 pt iPad / 30 pt macOS values);
-/// the ink itself carries the asset's built-in padding. Decorative — it
-/// stands in for the sidebar's "Folders" title, so it carries that
-/// accessibility label rather than being hidden.
+/// box — 132 pt iPhone / 102 pt iPad / 90 pt macOS, three times the
+/// handoff's original values (the asset's built-in padding left the ink
+/// too small at the handoff sizes). Decorative — it stands in for the
+/// sidebar's "Folders" title, so it carries that accessibility label
+/// rather than being hidden.
 struct CabalmailMark: View {
     let size: CGFloat
 
