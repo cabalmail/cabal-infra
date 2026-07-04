@@ -29,7 +29,7 @@ struct FolderListView: View {
     var activeFilterText: String { externalFilter?.wrappedValue ?? filterQuery }
     /// Called exactly once, the first time the folder list successfully
     /// loads. `MailRootView` uses it to seed a default `selection` so the
-    /// signed-in user doesn't land on an empty "pick a mailbox" screen
+    /// signed-in user doesn't land on an empty "select a folder" screen
     /// (which would also hide the compose entry point on the message list).
     var onFoldersLoaded: ([Folder]) -> Void = { _ in }
 
@@ -127,7 +127,12 @@ struct FolderListView: View {
                 }
             }
         }
-        .navigationTitle("")
+        // "Folders" (not "Mailboxes" — the mailbox is the per-user singleton;
+        // this list is its folders). In the Mail sidebar the visible text is
+        // suppressed and the Cabalmail mark stands in (see `MailRootView`);
+        // the string stays for VoiceOver and the back button. The compact
+        // Folders management tab shows it as a regular title.
+        .navigationTitle("Folders")
         .sidebarFilterSearchable(text: $filterQuery, enabled: externalFilter == nil, prompt: "Filter folders")
         .toolbar {
             // Compact keeps New / Reload in the toolbar; the wide sidebar moves
@@ -170,7 +175,7 @@ struct FolderListView: View {
         )
         // Sign-out used to live here; Phase 6's Settings tab is the
         // canonical place for it now. Leaving a duplicate confused the UI —
-        // the Mailboxes toolbar is about mailbox navigation, not account
+        // the folder-list toolbar is about folder navigation, not account
         // state.
         .task {
             if model == nil, let client = appState.client {
