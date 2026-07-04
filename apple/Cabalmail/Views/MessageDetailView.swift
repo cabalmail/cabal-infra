@@ -38,7 +38,13 @@ struct MessageDetailView: View {
     // read by the `+AddressMenu` extension to gate the Contacts and "Compose
     // From" items.
     @State var contactsAuth: ContactsAuthorizationStatus = .notDetermined
-    @State var ownedAddresses: Set<String> = []
+    // The user's own addresses, kept as full `Address` values (not just the
+    // string) so the menu's "Revoke" item has the subdomain / tld / public key
+    // the `/revoke` API needs.
+    @State var ownedAddresses: [Address] = []
+    // Address staged for revocation by the header menu's "Revoke" item,
+    // confirmed before the (irreversible) API call.
+    @State var pendingRevoke: Address?
     #if os(iOS) || os(visionOS)
     @State var contactEditorRequest: ContactEditorRequest?
     #endif
@@ -120,6 +126,7 @@ struct MessageDetailView: View {
         } message: {
             Text("This message will be permanently deleted. This can't be undone.")
         }
+        .modifier(RevokeAddressConfirmation(pending: $pendingRevoke, perform: revoke))
         .onChange(of: appState.replyRequestTick) { _, _ in beginCompose(.reply) }
         .onChange(of: appState.replyAllRequestTick) { _, _ in beginCompose(.replyAll) }
         .onChange(of: appState.forwardRequestTick) { _, _ in beginCompose(.forward) }

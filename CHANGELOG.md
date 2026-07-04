@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.38] - 2026-07-02
+
+### Added
+- The Apple clients' per-address menu in the message header now offers a
+  "Revoke" action for addresses you manage — the same gate as "Compose
+  Message From" — with a confirmation dialog before the irreversible call.
+
 ## [0.10.37] - 2026-07-01
 
 ### Changed

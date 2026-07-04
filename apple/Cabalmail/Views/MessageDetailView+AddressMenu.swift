@@ -76,9 +76,17 @@ extension MessageDetailView {
         }
         if let owned = ownedMatch(for: address) {
             Button {
-                composeFrom(owned)
+                composeFrom(owned.address)
             } label: {
                 Label("Compose Message From", systemImage: "paperplane")
+            }
+            // Revoke is offered only for addresses we manage — the same gate as
+            // "Compose Message From" — since those are the only ones the
+            // `/revoke` API will accept.
+            Button(role: .destructive) {
+                pendingRevoke = owned
+            } label: {
+                Label("Revoke", systemImage: "xmark.bin")
             }
         }
 
@@ -108,7 +116,7 @@ extension MessageDetailView {
     func loadAddressMenuContext() async {
         contactsAuth = await appState.contactsStore.authorizationStatus
         if let client = appState.client, let list = try? await client.addresses() {
-            ownedAddresses = Set(list.map(\.address))
+            ownedAddresses = list
         }
     }
 
@@ -116,11 +124,12 @@ extension MessageDetailView {
         "\(address.mailbox)@\(address.host)"
     }
 
-    /// The user's own address string matching this header address
-    /// (case-insensitive), or nil when it isn't one they own.
-    private func ownedMatch(for address: EmailAddress) -> String? {
+    /// The user's own address matching this header address (case-insensitive),
+    /// or nil when it isn't one they own. Returns the full `Address` so callers
+    /// can both compose from it and revoke it.
+    private func ownedMatch(for address: EmailAddress) -> Address? {
         let target = canonicalEmail(for: address).lowercased()
-        return ownedAddresses.first { $0.lowercased() == target }
+        return ownedAddresses.first { $0.address.lowercased() == target }
     }
 
     private func copyName(for address: EmailAddress) {
@@ -150,6 +159,32 @@ extension MessageDetailView {
         presentCompose(seed: Draft(fromAddress: ownedAddress, composeIntent: .new))
     }
 
+    // MARK: - Revoke confirmation
+
+    /// Non-async entry point handed to `RevokeAddressConfirmation` (the dialog
+    /// runs its Button actions synchronously). Kicks the API call onto a Task.
+    func revoke(_ address: Address) {
+        Task { await revokeAddress(address) }
+    }
+
+    private func revokeAddress(_ address: Address) async {
+        guard let client = appState.client else { return }
+        do {
+            try await client.revokeAddress(
+                address: address.address,
+                subdomain: address.subdomain,
+                tld: address.tld,
+                publicKey: address.publicKey
+            )
+            // Drop it from the owned set so the menu's "Compose From" / "Revoke"
+            // items disappear on the next open without a full re-fetch.
+            ownedAddresses.removeAll { $0.address == address.address }
+            appState.showToast(.addressRevoked(address.address))
+        } catch {
+            appState.showToast(Toast(kind: .error, message: "Couldn't revoke \(address.address)"))
+        }
+    }
+
     #if os(iOS) || os(visionOS)
     private func requestContactEditor(_ mode: ContactEditorMode, for address: EmailAddress) {
         let email = canonicalEmail(for: address)
@@ -169,4 +204,34 @@ extension MessageDetailView {
         }
     }
     #endif
+}
+
+/// The header menu's "Revoke" confirmation dialog, extracted as a modifier so
+/// its title / actions / message live outside `MessageDetailView` and don't
+/// count against its SwiftLint type_body_length budget. Applied as a single
+/// `.modifier(...)` line in `body`. Mirrors the wording of the address list's
+/// own revoke dialog (`AddressListView`).
+struct RevokeAddressConfirmation: ViewModifier {
+    @Binding var pending: Address?
+    let perform: (Address) -> Void
+
+    func body(content: Content) -> some View {
+        content.confirmationDialog(
+            pending.map { "Revoke \($0.address)?" } ?? "Revoke address?",
+            isPresented: Binding(
+                get: { pending != nil },
+                set: { if !$0 { pending = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pending
+        ) { address in
+            Button("Revoke", role: .destructive) {
+                pending = nil
+                perform(address)
+            }
+            Button("Cancel", role: .cancel) { pending = nil }
+        } message: { address in
+            Text("Mail sent to \(address.address) will be rejected. This can't be undone.")
+        }
+    }
 }
