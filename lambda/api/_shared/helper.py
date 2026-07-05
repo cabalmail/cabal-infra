@@ -1,6 +1,11 @@
 '''Shared helpers for the Cabalmail Lambda API: IMAP client/auth, DynamoDB
 address lookups, S3 message caching and presigned URLs, envelope decoding, and
 the request-input validators used across the handlers.'''
+# This is a deliberately broad shared module; it sits just over pylint's
+# 1000-line max-module-lines heuristic. Splitting it into topical modules is
+# worthwhile but out of scope here, and would mean teaching build-api-one.sh a
+# new per-module bundling rule for every consumer zip.
+# pylint: disable=too-many-lines
 import email
 import functools
 import io
@@ -598,6 +603,20 @@ def validate_dns_subdomain(subdomain):
     revoke working for any pre-existing address. Returns the value unchanged.
     '''
     return _validate_dns_name(subdomain, 1, 'subdomain')
+
+
+def validate_local_part(local):
+    '''Validates an address local part (the text before the @): rejects an empty
+    value or any embedded whitespace, then returns it unchanged. Whitespace is
+    the guard that matters -- the local part is written verbatim into the
+    sendmail virtusertable, where makemap rejects a leading space and treats a
+    tab as the key/value separator, so either wedges the map rebuild for a whole
+    tier and crash-loops the reconfigure sidecar (see generate-config.sh).'''
+    if not isinstance(local, str) or not local:
+        raise ValueError('username is required')
+    if any(ch.isspace() for ch in local):
+        raise ValueError(f'username must not contain whitespace: {local!r}')
+    return local
 
 
 class ZoneMismatchError(Exception):
