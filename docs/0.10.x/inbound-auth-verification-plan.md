@@ -289,11 +289,14 @@ as optional, so reverting any one layer strands nothing.
 
 ## Open questions
 
-- **Is `opendmarc` packaged for AL2023?** `opendkim` is (smtp-out installs
-  it from dnf today); AL2023 has no EPEL, and opendmarc may be absent. If
-  so: build from a pinned release tarball in a Dockerfile build stage
-  (small autotools project; pin by tag + checksum, consistent with the
-  supply-chain plan) rather than vendoring a foreign RPM.
+- ~~Is `opendmarc` packaged for AL2023?~~ **Resolved (2026-07-05): it is
+  not** (confirmed against the AL2023 core repo metadata; `opendkim`,
+  `sendmail-milter-devel`, and the autotools chain are packaged; `libspf2`
+  is not). The smtp-in image builds OpenDMARC from the pinned
+  `rel-opendmarc-1-4-2` tag archive (checksum-verified; the project
+  publishes no dist tarballs) in a Dockerfile builder stage, configured
+  `--with-spf` for the internal SPF implementation, and copies the binary
+  and library into the runtime image.
 - Exact AR-stripping knob (`RemoveARFrom` scope semantics) on the packaged
   OpenDKIM version — verify before relying on it; fallbacks listed above.
 - Whether the envelope-row indicator should also appear for the

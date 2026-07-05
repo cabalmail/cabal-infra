@@ -187,7 +187,23 @@ if [ "$TIER" = "smtp-in" ]; then
     || echo "[entrypoint] WARN hosts-pin init returned non-zero; daemon will converge the pin"
 fi
 
-# ── Step 8: Sendmail preparation (smtp tiers only) ────────────
+# ── Step 8: Render inbound-auth milter configs (smtp-in only) ─
+# opendkim (verify mode) and opendmarc (monitor mode) stamp
+# Authentication-Results on inbound mail under the control-domain
+# authserv-id (phase 1 of docs/0.10.x/inbound-auth-verification-plan.md).
+# The config templates carry __CERT_DOMAIN__ placeholders; render them
+# the same way prepare-sendmail.sh renders sendmail.mc. Render only, no
+# chown: smtp-in's task definition drops CHOWN, so all ownership is set
+# at image build time (see docker/smtp-in/Dockerfile).
+if [ "$TIER" = "smtp-in" ]; then
+  echo "[entrypoint] Rendering inbound-auth milter configs..."
+  for _milter in opendkim opendmarc; do
+    sed "s/__CERT_DOMAIN__/${CERT_DOMAIN}/g" \
+      "/etc/${_milter}.conf.template" > "/etc/${_milter}.conf"
+  done
+fi
+
+# ── Step 9: Sendmail preparation (smtp tiers only) ────────────
 # Render sendmail.mc, generate maps from DynamoDB, compile sendmail.cf,
 # and (on imap) assemble aliases. On the smtp tiers sendmail is the
 # front-line listener, so this stays synchronous. On imap it is deferred
@@ -199,7 +215,7 @@ if [ "$TIER" != "imap" ]; then
   /usr/local/bin/prepare-sendmail.sh once
 fi
 
-# ── Step 9: Pre-flight mode (deploy validation) ───────────────
+# ── Step 10: Pre-flight mode (deploy validation) ──────────────
 # PREFLIGHT=1 is overlaid by the deploy pipeline's one-shot RunTask
 # (deploy-ecs-service.sh) to exercise this entrypoint - secrets, EFS
 # mount, Cognito, DynamoDB, sendmail compile - against a new image
@@ -216,6 +232,6 @@ if [ "${PREFLIGHT:-0}" = "1" ]; then
   exit 0
 fi
 
-# ── Step 10: Start services via supervisord ───────────────────
+# ── Step 11: Start services via supervisord ───────────────────
 echo "[entrypoint] Starting services via supervisord..."
 exec /usr/local/bin/supervisord -c /etc/supervisord.conf
