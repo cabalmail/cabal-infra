@@ -288,21 +288,54 @@ struct SettingsView: View {
 /// `SettingsView` so that view's body stays within the type-body-length
 /// budget; it holds no state of its own.
 private struct AboutSettingsSection: View {
+    #if os(macOS)
+    // The macOS Settings scene hosts this form without a NavigationStack (by
+    // design — see SettingsView's top comment; one there breaks Form
+    // scrolling and duplicates window chrome), so a NavigationLink renders
+    // permanently disabled. Present Acknowledgements as a sheet on macOS;
+    // iOS/visionOS push it onto their Settings NavigationStack.
+    @State private var showingAcknowledgements = false
+    #endif
+
     var body: some View {
         Section("About") {
             LabeledContent("Version", value: Self.marketingVersion)
             LabeledContent("Build", value: Self.buildNumber)
-            NavigationLink {
-                AcknowledgementsView()
-            } label: {
-                Label("Acknowledgements", systemImage: "doc.text")
-            }
+            acknowledgementsRow
             Link(
                 destination: URL(string: "https://github.com/cabalmail/cabal-infra/issues")!
             ) {
                 Label("Report an issue", systemImage: "arrow.up.right.square")
             }
         }
+    }
+
+    @ViewBuilder
+    private var acknowledgementsRow: some View {
+        #if os(macOS)
+        Button {
+            showingAcknowledgements = true
+        } label: {
+            Label("Acknowledgements", systemImage: "doc.text")
+        }
+        .sheet(isPresented: $showingAcknowledgements) {
+            NavigationStack {
+                AcknowledgementsView()
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { showingAcknowledgements = false }
+                        }
+                    }
+            }
+            .frame(minWidth: 480, minHeight: 420)
+        }
+        #else
+        NavigationLink {
+            AcknowledgementsView()
+        } label: {
+            Label("Acknowledgements", systemImage: "doc.text")
+        }
+        #endif
     }
 
     private static var marketingVersion: String {
