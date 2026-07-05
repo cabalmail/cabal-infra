@@ -9,6 +9,7 @@ from helper import parse_json_body  # pylint: disable=import-error
 from helper import user_authorized_for_domain  # pylint: disable=import-error
 from helper import validate_dns_apex  # pylint: disable=import-error
 from helper import validate_dns_subdomain  # pylint: disable=import-error
+from helper import validate_local_part  # pylint: disable=import-error
 
 domains = json.loads(os.environ['DOMAINS'])
 control_domain = os.environ['CONTROL_DOMAIN']
@@ -48,6 +49,7 @@ def handler(event, _context):
     try:
         validate_dns_apex(body['tld'])
         validate_dns_subdomain(body['subdomain'])
+        validate_local_part(body['username'])
     except ValueError as err:
         return {
             'statusCode': 400,
