@@ -57,7 +57,9 @@ struct MessageDetailView: View {
     @State var restoreScrollOffset: Int?
     @State var didConsumeScrollRestore = false
     @State var plainScrollPosition = ScrollPosition(edge: .top)
-    @State var lastReportedPlainOffset = Int.min
+    // `nil` until the first scroll report — a sentinel `Int.min` would overflow
+    // the `offset - lastReportedPlainOffset` delta on the first callback.
+    @State var lastReportedPlainOffset: Int?
 
     var body: some View {
         GeometryReader { proxy in
