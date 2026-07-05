@@ -7,10 +7,8 @@
     "node": "^20.19.0 || >=22.12.0"
   },
   "dependencies": {
-    "@tiptap/extension-color": "^3.22.3",
     "@tiptap/extension-link": "^3.22.3",
     "@tiptap/extension-text-align": "^3.22.3",
-    "@tiptap/extension-text-style": "^3.22.3",
     "@tiptap/extension-underline": "^3.22.3",
     "@tiptap/pm": "^3.22.3",
     "@tiptap/react": "^3.22.3",
@@ -24,8 +22,7 @@
     "react-dom": "^18.3.1",
     "react-intersection-observer": "^9.15.0",
     "react-swipeable-list": "^1.10.0",
-    "turndown": "^7.2.4",
-    "web-vitals": "^2.1.0"
+    "turndown": "^7.2.4"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
