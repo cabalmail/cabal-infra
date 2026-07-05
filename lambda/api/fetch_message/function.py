@@ -3,6 +3,7 @@ import json
 import re
 from helper import get_message # pylint: disable=import-error
 from helper import sign_url # pylint: disable=import-error
+from helper import CACHE_BUCKET # pylint: disable=import-error
 
 from helper import maintenance_guard # pylint: disable=import-error
 
@@ -55,7 +56,7 @@ def handler(event, _context):
         "statusCode": 200,
         "body": json.dumps({
             "message_raw": sign_url(
-                                    query_string['host'].replace("imap", "cache"),
+                                    CACHE_BUCKET,
                                     f"{user}/{query_string['folder']}/{query_string['id']}/raw"),
             "message_body_plain": body_plain_decoded,
             "message_body_html": body_html_decoded,

@@ -10,6 +10,7 @@ from helper import parse_json_body  # pylint: disable=import-error
 from helper import user_authorized_for_domain  # pylint: disable=import-error
 from helper import validate_dns_apex  # pylint: disable=import-error
 from helper import validate_dns_subdomain  # pylint: disable=import-error
+from helper import validate_local_part  # pylint: disable=import-error
 
 domains = json.loads(os.environ['DOMAINS'])
 control_domain = os.environ['CONTROL_DOMAIN']
@@ -26,7 +27,7 @@ cognito = boto3.client('cognito-idp')
 def handler(event, _context):
     '''Creates a new email address assigned to one or more users'''
     groups = event['requestContext']['authorizer']['claims'].get('cognito:groups', '')
-    if 'admin' not in groups:
+    if 'admin' not in groups.strip('[]').replace(',', ' ').split():
         return {
             'statusCode': 403,
             'body': json.dumps({'Error': 'Admin access required'})
@@ -52,11 +53,17 @@ def handler(event, _context):
     try:
         validate_dns_apex(body['tld'])
         validate_dns_subdomain(body['subdomain'])
+        validate_local_part(body['username'])
     except ValueError as err:
         return {
             'statusCode': 400,
             'body': json.dumps({'Error': f'Invalid input: {err}'})
         }
+    # Derive the address server-side rather than trusting body['address']: it is
+    # the DynamoDB primary key and the value user_authorized_for_sender matches
+    # on, so it must equal the real routing identity. username/subdomain/tld are
+    # all validated above.
+    address = f"{body['username']}@{body['subdomain']}.{body['tld']}"
     try:
         for username in usernames:
             if not cognito_user_exists(username):
@@ -75,23 +82,23 @@ def handler(event, _context):
                     })
                 }
         create_dns_records(domains[body['tld']], body['subdomain'], body['tld'])
-        record_address(usernames, body)
+        record_address(usernames, body, address)
         notify_containers()
     except Exception as err:  # pylint: disable=broad-exception-caught
-        print(f"Error creating address {body['address']}: {err}")
-        audit_log(caller, 'new_address_admin', body.get('address', ''), 'failure')
+        print(f"Error creating address {address}: {err}")
+        audit_log(caller, 'new_address_admin', address, 'failure')
         return {
             'statusCode': 500,
             'body': json.dumps({
-                'address': body['address'],
+                'address': address,
                 'error': str(err)
             })
         }
-    audit_log(caller, 'new_address_admin', body.get('address', ''), 'success')
+    audit_log(caller, 'new_address_admin', address, 'success')
     return {
         'statusCode': 201,
         'body': json.dumps({
-            'address': body['address'],
+            'address': address,
             'user': '/'.join(usernames)
         })
     }
@@ -144,10 +151,10 @@ def create_dns_records(zone_id, subdomain, tld):
     r53.change_resource_record_sets(**params)
 
 
-def record_address(usernames, body):
+def record_address(usernames, body, address):
     '''Records the new address in DynamoDB'''
     table.put_item(Item={
-        'address': body['address'],
+        'address': address,
         'tld': body['tld'],
         'user': '/'.join(usernames),
         'username': body['username'],

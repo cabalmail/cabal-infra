@@ -62,5 +62,16 @@ FEATURE(`greet_pause', 5000)dnl
 FEATURE(`blacklist_recipients')dnl
 FEATURE(`no_default_msa')dnl
 DAEMON_OPTIONS(`Name=MTA')dnl
+dnl Observe-only inbound authentication (phase 1 of
+dnl docs/0.10.x/inbound-auth-verification-plan.md): opendkim (verify
+dnl mode) then opendmarc (monitor mode) stamp Authentication-Results
+dnl under the control-domain authserv-id. Declaration order matters -
+dnl opendmarc reads the dkim= verdict opendkim stamped. Neither milter
+dnl rejects (opendmarc runs RejectFailures false, so every disposition
+dnl is accept). F=T tempfails inbound mail while a milter is down -
+dnl real MTAs queue and retry for days - rather than delivering
+dnl unstamped mail that would render as "not verified" in the clients.
+INPUT_MAIL_FILTER(`opendkim', `S=inet:8891@localhost, F=T, T=R:2m')dnl
+INPUT_MAIL_FILTER(`opendmarc', `S=inet:8893@localhost, F=T, T=R:2m')dnl
 MAILER(procmail)dnl
 MAILER(smtp)dnl

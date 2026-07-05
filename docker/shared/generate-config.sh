@@ -57,6 +57,18 @@ for item in items:
     subdomain = item.get("subdomain", {}).get("S", "") if "subdomain" in item else None
     private_key = item.get("private_key", {}).get("S", "") if "private_key" in item else None
 
+    # Skip rows whose username carries whitespace. Such a value is written
+    # verbatim into virtusertable, where makemap rejects a leading space and
+    # treats a tab as the key/value separator -- either wedges the map rebuild
+    # for the whole tier and crash-loops the reconfigure sidecar. The API now
+    # rejects these at creation (helper.validate_local_part), but a legacy row
+    # or any other write path must not be able to freeze reconfiguration.
+    if not username or any(c.isspace() for c in username):
+        print(f"  WARNING: skipping address with invalid username "
+              f"{username!r} (tld={tld!r}, subdomain={subdomain!r})",
+              file=sys.stderr)
+        continue
+
     if tld not in domains:
         domains[tld] = {
             "zone-id": zone_id,

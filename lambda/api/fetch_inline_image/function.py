@@ -8,6 +8,7 @@ from helper import get_message # pylint: disable=import-error
 from helper import validate_content_id # pylint: disable=import-error
 from helper import validate_folder_name # pylint: disable=import-error
 from helper import validate_uid # pylint: disable=import-error
+from helper import CACHE_BUCKET # pylint: disable=import-error
 
 from helper import maintenance_guard # pylint: disable=import-error
 
@@ -27,10 +28,10 @@ def handler(event, _context):
             "statusCode": 400,
             "body": json.dumps({"status": f"Invalid input: {err}"})
         }
-    bucket = query_string['host'].replace("imap", "cache")
+    bucket = CACHE_BUCKET
     key_prefix = f"{user}/{folder}/{msg_id}/{index}"
     key = ""
-    message = get_message(query_string['host'], user,
+    message = get_message(None, user,
                           folder.replace("/", "."), msg_id)
     for part in message.walk():
         content_type = part.get_content_type()

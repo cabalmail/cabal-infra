@@ -89,6 +89,16 @@ jobs:
           echo "stripping prevent_destroy from $f"
           sed -i 's/prevent_destroy = true/prevent_destroy = false/' "$f"
         done
+        # enable_deletion_protection on the load balancers is an AWS-API
+        # guard (not a lifecycle meta-arg), so the ELB API refuses to
+        # delete while it is set and terraform destroy errors out. Flip it
+        # off in this throwaway working copy so a deliberate teardown can
+        # proceed; nothing is committed. terraform fmt aligns the '=', so
+        # match a run of spaces rather than a single one.
+        grep -rlE "enable_deletion_protection[[:space:]]*=[[:space:]]*true" . | while read -r f; do
+          echo "stripping enable_deletion_protection from $f"
+          sed -i -E 's/(enable_deletion_protection[[:space:]]*=[[:space:]]*)true/\1false/' "$f"
+        done
     - name: install-terraform
       uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e  # v4.0.1
     - name: tfvars-terraform

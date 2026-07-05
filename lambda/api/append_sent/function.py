@@ -31,7 +31,6 @@ def _process(job):
     bucket = job['bucket']
     key = job['key']
     user = job['user']
-    host = job['host']
     message_id = job.get('message_id') or ''
 
     try:
@@ -48,7 +47,7 @@ def _process(job):
     # mailbox without a Sent folder still works. get_imap_client raises during a
     # planned IMAP roll, which is exactly when we WANT the job to retry, so it is
     # deliberately not guarded here.
-    client = get_imap_client(host, user, 'INBOX')
+    client = get_imap_client(None, user, 'INBOX')
     try:
         try:
             client.create_folder('Sent')
