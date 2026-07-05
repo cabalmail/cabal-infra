@@ -40,6 +40,36 @@ def get_mpw():
     return mpw
 
 
+# Canonical mail-tier endpoints and cache bucket, derived server-side from the
+# environment's control domain -- NEVER from a request field.
+#
+# The IMAP/SMTP host and the S3 cache bucket used to be taken from a client
+# `host`/`smtp_host` parameter (bucket = host.replace("imap","cache")). Because
+# get_imap_client logs in with the shared master password ({user}*admin / SMTP
+# `master`), a client-chosen host let any authenticated user point the
+# connection at a server they control and capture that master credential -- a
+# full multi-tenant compromise. These values are fixed per environment (the ELB
+# publishes imap.<domain>/smtp-out.<domain>; the bucket is cache.<domain>), so
+# we derive them here and ignore whatever the client sends. `.get` with a blank
+# default keeps helper importable in any function that lacks CONTROL_DOMAIN;
+# such functions never touch these paths.
+CONTROL_DOMAIN = os.environ.get('CONTROL_DOMAIN', '')
+IMAP_HOST = f'imap.{CONTROL_DOMAIN}'
+SMTP_HOST = f'smtp-out.{CONTROL_DOMAIN}'
+CACHE_BUCKET = f'cache.{CONTROL_DOMAIN}'
+
+
+def is_admin(groups_claim):
+    '''True when the caller's `cognito:groups` claim contains the exact `admin`
+    group. The claim is a serialized list -- API Gateway may render it as
+    "admin", "admin,users", or "[admin users]" -- so we split on commas and
+    whitespace and match a whole element. A substring test (`'admin' in claim`)
+    would wrongly admit any group whose name merely contains "admin"
+    (e.g. "admin-readonly", "nonadmin").'''
+    members = (groups_claim or '').strip('[]').replace(',', ' ').split()
+    return 'admin' in members
+
+
 # ---------------------------------------------------------------------------
 # Planned-maintenance signal.
 #
@@ -163,7 +193,7 @@ def maintenance_guard(handler):
 def admin_response_or_none(event):
     """Returns a 403 response when the caller lacks the admin group, else None"""
     groups = event['requestContext']['authorizer']['claims'].get('cognito:groups', '')
-    if 'admin' not in groups:
+    if not is_admin(groups):
         return {
             'statusCode': 403,
             'body': json.dumps({'Error': 'Admin access required'})
@@ -184,8 +214,8 @@ def find_managed_apex(domains_map, domain):
                 best_zone = zone_id
     return (best_apex, best_zone)
 
-def get_imap_client(host, user, folder, read_only=False):
-    '''Returns an IMAP client for host/user with folder selected.
+def get_imap_client(_host, user, folder, read_only=False):
+    '''Returns an IMAP client for the current user with folder selected.
 
     Raises MaintenanceError when a planned IMAP roll is in progress, so callers
     short-circuit to a friendly 503 (via maintenance_guard) instead of dialing a
@@ -196,9 +226,15 @@ def get_imap_client(host, user, folder, read_only=False):
     Connection handling (including the optional warm-invocation pool) lives in
     imap_session; this wrapper just applies the maintenance gate first, then
     delegates. With pooling off (the default) the returned object is a bare
-    IMAPClient connected/authenticated/selected exactly as before.'''
+    IMAPClient connected/authenticated/selected exactly as before.
+
+    The `_host` argument is accepted for call-site compatibility but
+    deliberately IGNORED: every IMAP connection authenticates with the shared
+    master password, so honoring a client-supplied host would let any
+    authenticated caller exfiltrate that credential to a server they control. We
+    always dial the environment's canonical IMAP_HOST instead.'''
     _raise_if_maintenance()
-    return open_imap_client(host, user, folder, read_only, mpw)
+    return open_imap_client(IMAP_HOST, user, folder, read_only, mpw)
 
 
 def user_authorized_for_sender(user, sender):
@@ -746,15 +782,18 @@ def unsubscribe_folder(folder, host, user):
     client.logout()
     return return_value
 
-def get_message(host, user, folder, msg_id):
-    '''Gets a message from cache on s3 or from imap server'''
-    bucket = host.replace("imap", "cache")
+def get_message(_host, user, folder, msg_id):
+    '''Gets a message from cache on s3 or from imap server.
+
+    `_host` is ignored (see get_imap_client); the cache bucket and IMAP target
+    are derived from the environment, never from the request.'''
+    bucket = CACHE_BUCKET
     email_body_raw = b''
     key = f"{user}/{folder}/{msg_id}/raw"
     if key_exists(bucket, key):
         email_body_raw = get_object(bucket, key)
     else:
-        client = get_imap_client(host, user, folder, True)
+        client = get_imap_client(IMAP_HOST, user, folder, True)
         message = client.fetch([msg_id],['RFC822'])
         email_body_raw = message[msg_id][b'RFC822']
         client.logout()

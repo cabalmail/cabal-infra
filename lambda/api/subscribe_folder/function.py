@@ -1,7 +1,9 @@
 '''Marks the specified folder as subscribed'''
+# pylint: disable=duplicate-code
 import json
 from helper import subscribe_folder # pylint: disable=import-error
 from helper import parse_json_body # pylint: disable=import-error
+from helper import validate_folder_name # pylint: disable=import-error
 
 from helper import maintenance_guard # pylint: disable=import-error
 
@@ -13,7 +15,14 @@ def handler(event, _context):
     if error:
         return error
     user = event['requestContext']['authorizer']['claims']['cognito:username']
-    status = subscribe_folder(body['folder'].replace("/","."), body['host'], user)
+    try:
+        folder = validate_folder_name(body.get('folder')).replace("/", ".")
+    except ValueError as err:
+        return {
+            "statusCode": 400,
+            "body": json.dumps({"status": f"Invalid input: {err}"})
+        }
+    status = subscribe_folder(folder, None, user)
     return {
         "statusCode": 200,
         "body": json.dumps({

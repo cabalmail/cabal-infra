@@ -25,7 +25,7 @@ cognito = boto3.client('cognito-idp')
 def handler(event, _context):
     '''Add or remove a (user, domain) deny entry.'''
     groups = event['requestContext']['authorizer']['claims'].get('cognito:groups', '')
-    if 'admin' not in groups:
+    if 'admin' not in groups.strip('[]').replace(',', ' ').split():
         return {
             'statusCode': 403,
             'body': json.dumps({'Error': 'Admin access required'})

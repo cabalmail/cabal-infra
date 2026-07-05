@@ -7,8 +7,6 @@ import boto3  # pylint: disable=import-error
 from helper import assert_zone_owns_apex  # pylint: disable=import-error
 from helper import parse_json_body  # pylint: disable=import-error
 from helper import user_authorized_for_sender  # pylint: disable=import-error
-from helper import validate_dns_apex  # pylint: disable=import-error
-from helper import validate_dns_subdomain  # pylint: disable=import-error
 
 domains = json.loads(os.environ['DOMAINS'])
 control_domain = os.environ['CONTROL_DOMAIN']
@@ -26,23 +24,7 @@ def handler(event, _context):
     if error:
         return error
     address = body['address']
-    subdomain = body['subdomain']
-    tld = body['tld']
     user = event['requestContext']['authorizer']['claims']['cognito:username']
-    if tld not in domains:
-        return {
-            'statusCode': 400,
-            'body': json.dumps({'Error': f'Unknown domain "{tld}"'})
-        }
-    try:
-        validate_dns_apex(tld)
-        validate_dns_subdomain(subdomain)
-    except ValueError as err:
-        return {
-            'statusCode': 400,
-            'body': json.dumps({'Error': f'Invalid input: {err}'})
-        }
-    zone_id = domains[tld]
     if not user_authorized_for_sender(user, address):
         return {
             'statusCode': 403,
@@ -50,8 +32,20 @@ def handler(event, _context):
                 'Error': 'Address not associated with authenticated user'
             })
         }
+    # Take subdomain/tld/zone from the STORED row for `address`, never from the
+    # request body. Authorization above is on `address` only, so honoring a
+    # client-supplied subdomain/tld would let a caller who owns any one address
+    # delete another user's DNS records: delete_dns_records targets
+    # `{subdomain}.{tld}`, and the co-tenant guard (other_addresses_on_subdomain)
+    # returns False for a single-tenant victim subdomain, so the DELETE would
+    # proceed. The caller owns `address`, so its row is the authoritative source.
+    item = table.get_item(Key={'address': address}).get('Item') or {}
+    subdomain = item.get('subdomain')
+    tld = item.get('tld')
+    zone_id = item.get('zone-id') or domains.get(tld)
     try:
-        if not other_addresses_on_subdomain(subdomain, tld, address):
+        if subdomain and tld and zone_id and \
+                not other_addresses_on_subdomain(subdomain, tld, address):
             delete_dns_records(zone_id, subdomain, tld)
         revoke_address(address)
         notify_containers()
