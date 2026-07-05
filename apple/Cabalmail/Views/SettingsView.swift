@@ -72,7 +72,7 @@ struct SettingsView: View {
             actionsSection(bindable: preferences)
             appearanceSection(bindable: preferences)
             diagnosticsSection(bindable: preferences)
-            aboutSection
+            AboutSettingsSection()
         }
         #if os(macOS)
         .formStyle(.grouped)
@@ -226,19 +226,6 @@ struct SettingsView: View {
         }
     }
 
-    @ViewBuilder
-    private var aboutSection: some View {
-        Section("About") {
-            LabeledContent("Version", value: Self.marketingVersion)
-            LabeledContent("Build", value: Self.buildNumber)
-            Link(
-                destination: URL(string: "https://github.com/cabalmail/cabal-infra/issues")!
-            ) {
-                Label("Report an issue", systemImage: "arrow.up.right.square")
-            }
-        }
-    }
-
     // MARK: - Bindings
 
     /// Wraps the `defaultFromAddress` preference for the picker, with a
@@ -294,8 +281,29 @@ struct SettingsView: View {
             }
         }
     }
+}
 
-    // MARK: - About values
+/// About block for the Settings form: app version/build, the third-party
+/// Acknowledgements screen, and an issue-report link. Extracted from
+/// `SettingsView` so that view's body stays within the type-body-length
+/// budget; it holds no state of its own.
+private struct AboutSettingsSection: View {
+    var body: some View {
+        Section("About") {
+            LabeledContent("Version", value: Self.marketingVersion)
+            LabeledContent("Build", value: Self.buildNumber)
+            NavigationLink {
+                AcknowledgementsView()
+            } label: {
+                Label("Acknowledgements", systemImage: "doc.text")
+            }
+            Link(
+                destination: URL(string: "https://github.com/cabalmail/cabal-infra/issues")!
+            ) {
+                Label("Report an issue", systemImage: "arrow.up.right.square")
+            }
+        }
+    }
 
     private static var marketingVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
