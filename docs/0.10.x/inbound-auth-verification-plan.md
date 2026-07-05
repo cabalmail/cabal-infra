@@ -245,6 +245,27 @@ with a forged `Authentication-Results` header claiming the control domain;
 confirm it is stripped. Confirm delivery latency is unchanged to within
 milter noise and no message is rejected.
 
+#### Phase 1 stage finding (2026-07-05) — NLB client IP preservation
+
+First stage test (known-good prod sender): `dkim=pass`, `dmarc=pass` (via
+DKIM alignment), but `spf=fail` on every message. The `Received:` line
+smtp-in wrote named the peer as an ip-10-64-x address — the stage NLB's
+own ENI. NLB client IP preservation is **disabled by default for ip-type
+TCP target groups**, so sendmail's peer was the load balancer, and
+opendmarc evaluated the sender's SPF record against the NLB's private
+address. The sending side was verified correct (prod's SPF publishes
+exactly its NAT EIPs).
+
+Fix: `preserve_client_ip = "true"` on the **relay target group only**
+(`terraform/infra/modules/ecs/locals.tf`). No SG change rides along —
+smtp-in already allows 25 from `0.0.0.0/0`. The imap TG must keep the
+default: the NLB terminates TLS (993→143) and Dovecot's
+`login_trusted_networks` treats the NLB forwarding path as the secured
+one, so preserving real client IPs there would break forwarded plain-auth
+logins. Side benefit on relay: `confCONNECTION_RATE_THROTTLE`,
+`greet_pause`, and `access_db` now key on real client IPs instead of
+treating the entire internet as one NLB-shaped client.
+
 ## Phase 2 — Lambda envelope surface
 
 - helper.py: extend `ENVELOPE_HEADER_FIELDS_KEY`, add the trusted-parse
