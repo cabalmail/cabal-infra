@@ -5,6 +5,7 @@ from helper import upload_object # pylint: disable=import-error
 from helper import sign_url # pylint: disable=import-error
 from helper import key_exists # pylint: disable=import-error
 from helper import get_message # pylint: disable=import-error
+from helper import CACHE_BUCKET # pylint: disable=import-error
 
 from helper import maintenance_guard # pylint: disable=import-error
 
@@ -15,7 +16,7 @@ def handler(event, _context):
     and attachment serial number'''
     query_string = event['queryStringParameters']
     user = event['requestContext']['authorizer']['claims']['cognito:username']
-    bucket = query_string['host'].replace("imap", "cache")
+    bucket = CACHE_BUCKET
     key = f"{user}/{query_string['folder']}/{query_string['id']}/{query_string['filename']}"
     index = int(query_string['index'])
     message = get_message(query_string['host'], user,

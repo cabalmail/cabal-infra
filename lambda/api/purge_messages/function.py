@@ -5,6 +5,7 @@ from helper import ( # pylint: disable=import-error
     get_imap_client,
     validate_trash_folder,
     validate_uid_list,
+    CACHE_BUCKET,
 )
 
 from helper import maintenance_guard # pylint: disable=import-error
@@ -25,9 +26,8 @@ def handler(event, _context):
         return _invalid(err)
     if not ids:
         return _invalid('ids is empty')
-    host = body['host']
     imap_folder = folder.replace("/", ".")
-    client = get_imap_client(host, user, imap_folder)
+    client = get_imap_client(None, user, imap_folder)
     try:
         client.delete_messages(ids)
         # UID EXPUNGE (Dovecot supports UIDPLUS), so only the requested
@@ -44,9 +44,8 @@ def handler(event, _context):
     client.logout()
     # Best effort: drop cached raw bodies so a purged message is not
     # retrievable from the cache bucket afterwards.
-    bucket = host.replace("imap", "cache")
     for msg_id in ids:
-        delete_object(bucket, f"{user}/{imap_folder}/{msg_id}/raw")
+        delete_object(CACHE_BUCKET, f"{user}/{imap_folder}/{msg_id}/raw")
     return {
         "statusCode": 200,
         "body": json.dumps({

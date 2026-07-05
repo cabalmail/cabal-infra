@@ -3,6 +3,7 @@ import json
 from helper import get_imap_client # pylint: disable=import-error
 from helper import get_folder_list # pylint: disable=import-error
 from helper import parse_json_body # pylint: disable=import-error
+from helper import validate_folder_name # pylint: disable=import-error
 
 from helper import maintenance_guard # pylint: disable=import-error
 
@@ -14,8 +15,14 @@ def handler(event, _context):
     if error:
         return error
     user = event['requestContext']['authorizer']['claims']['cognito:username']
-    client = get_imap_client(body['host'], user, 'INBOX')
-    name = body['name'].replace("/",".")
+    try:
+        name = validate_folder_name(body.get('name')).replace("/", ".")
+    except ValueError as err:
+        return {
+            "statusCode": 400,
+            "body": json.dumps({"status": f"Invalid input: {err}"})
+        }
+    client = get_imap_client(None, user, 'INBOX')
     client.delete_folder(name)
     response = get_folder_list(client)
     client.logout()

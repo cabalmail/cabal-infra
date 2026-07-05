@@ -10,7 +10,7 @@ user_pool_id = os.environ['USER_POOL_ID']
 def handler(event, _context):
     '''Confirms a pending user signup'''
     groups = event['requestContext']['authorizer']['claims'].get('cognito:groups', '')
-    if 'admin' not in groups:
+    if 'admin' not in groups.strip('[]').replace(',', ' ').split():
         return {
             'statusCode': 403,
             'body': json.dumps({'Error': 'Admin access required'})
