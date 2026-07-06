@@ -8,9 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.10.39] - 2026-07-04
 
 ### Changed
-- Removed the "Mailboxes" title from the top of the folder list in the
-  Apple clients.
-- Apple clients: sidebar branding. A subtle four-color wash (the admin
+- **Folder list no longer shows a "Mailboxes" title** in the Apple
+  clients.
+- **Apple clients: sidebar branding.** A subtle four-color wash (the admin
   app's address swatches) sits behind the folder sidebar — the whole
   folder screen on iPhone, the sidebar column on iPad and macOS — and
   the app accent changes from system blue to forest green. The Cabalmail
@@ -46,7 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or message has since been deleted or moved (no banner).
 
 ### Changed
-- Routine dependency bumps via Dependabot. The `mail-tier-base` group
+- **Routine dependency bumps via Dependabot.** The `mail-tier-base` group
   advanced the `amazonlinux:2023` base-image digest across the imap,
   sinkhole, smtp-in, and smtp-out images; the `monitoring-images` group
   bumped `grafana/grafana` to 13.1.0, `binwiederhier/ntfy` to v2.25.0, and
@@ -56,8 +56,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `anthropics/claude-code-action` to their latest pinned versions.
 
 ### Fixed
-- Fixed sender BIMI logos occasionally appearing on the wrong message
-  rows in the Apple clients' inbox, most often near the top as new mail
+- **Sender BIMI logos occasionally appeared on the wrong message rows**
+  in the Apple clients' inbox, most often near the top as new mail
   arrived. A row recycled to a different sender while its predecessor's
   logo lookup was still in flight could paint the stale logo; the avatar
   load now discards results once its row has moved on to another sender.
@@ -98,8 +98,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mailpiece scans) now render in the message body. They were rewritten to
   temp `file://` URLs, which the body web view — loaded with an opaque
   origin — is not allowed to fetch; they are now embedded as `data:` URIs.
-- Fixed the iPad message list's read/unread (leading) swipe needing an
-  unreasonably long drag before the action appeared. The folder/address
+- **The iPad message list's read/unread (leading) swipe needed an
+  unreasonably long drag** before the action appeared. The folder/address
   sidebar now starts collapsed on iPad and overlays the list when revealed,
   so the message list is the leading column and its swipe actions reveal at a
   normal distance. macOS keeps its sidebar visible.
@@ -107,13 +107,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.10.33] - 2026-06-26
 
 ### Added
-- Added BIMI publishing for Cabalmail's own mail. New addresses now get a
+- **BIMI publishing for Cabalmail's own mail.** New addresses now get a
   `default._bimi` TXT record (and the `mail-admin` system sender gets one via
   Terraform) pointing at an SVG Tiny PS rendering of the Cabalmail mark, so
   receivers that support BIMI display our logo. Records are written per
   sending subdomain because the lookup name puts the subdomain in the middle,
   where a DNS wildcard cannot reach.
-- Added sender avatars to the web app message list: each row now shows the
+- **Sender avatars in the web app message list.** Each row now shows the
   sender domain's BIMI logo when one is published, falling back to an initials
   plate. Lookups are memoized per session and coalesced across rows, mirroring
   the Apple clients' avatar behavior.
@@ -127,7 +127,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mailpiece scans) now render in the message body. They were rewritten to
   temp `file://` URLs, which the body web view — loaded with an opaque
   origin — is not allowed to fetch; they are now embedded as `data:` URIs.
-- Fixed sender BIMI logos never loading in the clients. The `fetch_bimi`
+- **Sender BIMI logos never loaded in the clients.** The `fetch_bimi`
   endpoint is now a spec-correct, defensive proxy: it discovers the logo at
   the From domain and then the organizational domain, validates the SVG, and
   rasterizes it to a PNG (cached and served as a presigned URL) so SwiftUI's
@@ -144,14 +144,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   app, each path-filtered to the areas a PR touches.
 
 ### Fixed
-- Apple clients: fixed remote images failing to load after tapping "Show
-  remote content" — the message web view reloaded on every SwiftUI update,
+- **Apple clients: remote images failed to load after tapping "Show
+  remote content."** The message web view reloaded on every SwiftUI update,
   cancelling slower in-flight image requests (e.g. USPS Informed Delivery
   mailpiece scans), so only the fastest one or two ever appeared. It now
   reloads only when the message content or remote-content policy actually
   changes.
-- Fixed the prod TestFlight "What to Test" step failing to write notes with
-  `PARAMETER_ERROR.ILLEGAL` on `filter[locale]`. It now queries the top-level
+- **The prod TestFlight "What to Test" step failed to write notes with
+  `PARAMETER_ERROR.ILLEGAL` on `filter[locale]`.** It now queries the top-level
   `betaBuildLocalizations` collection, which accepts the locale filter, instead
   of the build relationship endpoint, which does not.
 
@@ -194,7 +194,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.10.30] - 2026-06-25
 
 ### Added
-- Added `make apple` targets that wrap `scripts/build-apple.sh`, so a local
+- **`make apple` targets that wrap `scripts/build-apple.sh`**, so a local
   Apple build/lint check is as discoverable as `make scan`. `make apple` runs
   the full generate + lint + build sweep; `apple-lint`, `apple-macos`,
   `apple-ios`, `apple-visionos`, and `apple-kit-test` select a single step.
@@ -208,9 +208,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   push. `make promote` / `make changelog` are unchanged.
 
 ### Fixed
-- Fixed an iOS crash that could kill the app a second or two after you
-  archived a message and sent the app to the background. The message list
-  now drops to lightweight placeholder rows while the app is backgrounded,
+- **An iOS crash could kill the app a second or two after you archived a
+  message and sent the app to the background.** The message list now drops
+  to lightweight placeholder rows while the app is backgrounded,
   so the system's background snapshot no longer has to lay out every row's
   swipe controls -- the work that could exceed the app's scene-update
   watchdog. The swipe gestures themselves are unchanged.
@@ -226,7 +226,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unchanged.)
 
 ### Fixed
-- Fixed the message list at large accessibility text sizes: row height now
+- **The message list at large accessibility text sizes.** Row height now
   scales with Dynamic Type, so message details no longer overflow the row
   and dragging scrolls the whole list again instead of getting trapped
   scrolling a single row's content.
@@ -259,8 +259,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.10.27] - 2026-06-21
 
 ### Fixed
-- Fixed a crash in the Apple clients when signing out with crash reporting
-  enabled. The MetricKit collector was owned by the per-session client and
+- **A crash in the Apple clients when signing out with crash reporting
+  enabled.** The MetricKit collector was owned by the per-session client and
   unsubscribed from `MXMetricManager` in `deinit`; because that unsubscribe
   is dispatched asynchronously, it ran after the collector had been freed,
   faulting on the next user interaction. The collector is now a
@@ -282,7 +282,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   size without any Terraform or custom-metric plumbing (Layer 4.1 of the
   large-mailbox hardening plan). Only the folder name and bucket are
   logged, never message contents.
-- Operator documentation for the `TF_VAR_IMAP_POOL_ENABLED` flag: an
+- **Operator documentation for the `TF_VAR_IMAP_POOL_ENABLED` flag.** An
   "IMAP connection pooling in the API Lambdas" section in
   `docs/operations.md` covering the default-off posture, how to enable it
   per environment, what pooling does on the request path (reuse,
@@ -388,10 +388,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   which address caught a message without opening it. The sender stays the
   primary read; the destination is dimmed, and the line truncates in the
   middle so both the sender and the destination address stay legible.
-- Display name preference: users can set a "Name" that outgoing mail carries
-  in the From header (`"Chris Carr" <address>`). The name is stored in the
-  user-preferences table and applied server-side by the `/send` Lambda, so it
-  follows the user across the React and Apple clients; it is edited from the
+- **Display name preference.** Users can set a "Name" that outgoing mail
+  carries in the From header (`"Chris Carr" <address>`). The name is stored in
+  the user-preferences table and applied server-side by the `/send` Lambda, so
+  it follows the user across the React and Apple clients; it is edited from the
   React account menu and the Apple Settings Composing section.
 - DNSSEC signing is now available for the control-domain zone and every
   mail-apex zone, opt-in per environment via `TF_VAR_DNSSEC_ENABLED`
@@ -406,12 +406,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `in_reply_to`, and `references` per envelope as lists of angle-bracketed
   ids (the `/fetch_message` wire shape), additively. References is capped
   at the newest 20 ids; the data prerequisite for conversation threading.
-- A `force_tiers` input on the "Build and Deploy Application"
-  workflow: a manual run still builds every docker tier in scope (the
+- **A `force_tiers` input on the "Build and Deploy Application"
+  workflow.** A manual run still builds every docker tier in scope (the
   escape hatch for first deploys, base-image refreshes, and operator
   catchups), and `force_tiers=imap,smtp-out` narrows it to a named
   subset without needing a push that touches those tiers.
-- Optional IMAP connection pooling in the API Lambdas (off by default,
+- **Optional IMAP connection pooling in the API Lambdas** (off by default,
   `IMAP_POOL_ENABLED` / `TF_VAR_IMAP_POOL_ENABLED`). When enabled, an
   authenticated master-user session is reused across warm invocations of the
   same execution environment instead of a fresh LOGIN/LOGOUT per request,
@@ -428,8 +428,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   result; the slice is positional (sort order, not UID order). With neither
   param set the response is the full sorted list as before, so existing clients
   are unaffected.
-- CloudWatch alarms on the `list_messages` and `list_envelopes` Lambdas:
-  one on p99 `Duration` creeping toward the 29s timeout and one on the
+- **CloudWatch alarms on the `list_messages` and `list_envelopes` Lambdas.**
+  One on p99 `Duration` creeping toward the 29s timeout and one on the
   `Errors` metric (which a timeout trips). They make a large-folder request
   outrunning the integration timeout an observable signal. Like the existing
   Cognito risk alarm they carry no `alarm_actions` (monitoring is disabled
@@ -443,7 +443,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (25/465/587) is TCP passthrough and still relies on CloudWatch
   container logs. See docs/nlb-access-logs.md for the Athena query
   setup.
-- New `/save_draft` Lambda gives drafts a server-side lifecycle: save
+- **New `/save_draft` Lambda gives drafts a server-side lifecycle.** Save
   returns the new copy's UIDPLUS `(uid, uidvalidity)`, save can atomically
   replace a prior copy (append-first, UIDVALIDITY-guarded, keeps both on a
   guard miss), and `op: discard` removes one — all scoped to the Drafts
@@ -507,8 +507,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the Mac, with Addresses, Folders, and Settings reached through a modal
   Settings sheet opened by a sidebar gear button or Cmd+, . iPhone keeps its
   bottom tab bar.
-- Two server-side efficiency changes from the large-mailbox hardening plan:
-  the `/set_flag` Lambda no longer re-runs a full-folder IMAP `SORT` after
+- **Two server-side efficiency changes from the large-mailbox hardening plan.**
+  The `/set_flag` Lambda no longer re-runs a full-folder IMAP `SORT` after
   every flag change (both the web and Apple clients discarded that UID list
   and re-polled for ordering anyway) and now acknowledges with
   `{"status": "submitted"}` like `/move_messages`; and every API Lambda's
@@ -559,7 +559,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   trip from the delete path.
 
 ### Removed
-- Removed the completed Terraform `moved` blocks from the `ecr` module
+- **Completed Terraform `moved` blocks from the `ecr` module**
   (0.9.5 monitoring repository split) and the `user_pool` module
   (`use_eum_sms` phone-number indexing); all environments have applied
   the state migrations.
@@ -758,7 +758,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.10.23] - 2026-06-11
 
 ### Added
-- A "Build NAT AMI" workflow (`nat_ami_build.yml`): triggers the
+- **A "Build NAT AMI" workflow (`nat_ami_build.yml`).** Triggers the
   `cabal-nat-al2023` Image Builder pipeline for the selected environment
   and waits for the image, so the instance-mode bootstrap and
   off-schedule rebuilds can be driven entirely from GitHub, without
@@ -776,7 +776,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   by the mode choice. See `docs/nat.md`.
 
 ### Removed
-- The stock Amazon Linux 2 NAT bootstrap path: the AL2 AMI lookup, its
+- **The stock Amazon Linux 2 NAT bootstrap path**: the AL2 AMI lookup, its
   iptables `user_data`, the `use_custom_nat_ami` toggle, and the module's
   `ROLLBACK.md` (superseded by the mode-switch section of `docs/nat.md`).
   Instance-mode NAT always launches from the Image Builder-baked AL2023
@@ -822,8 +822,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.10.22] - 2026-06-11
 
 ### Added
-- IMAP deploys now pre-flight the new image before touching the running
-  service: deploy-ecs-service.sh runs the freshly registered revision as
+- **IMAP deploys now pre-flight the new image before touching the running
+  service**: deploy-ecs-service.sh runs the freshly registered revision as
   a one-shot task with PREFLIGHT=1 (the entrypoint exercises secrets,
   EFS, Cognito, DynamoDB, and the sendmail compile, then exits without
   starting services) and aborts the deploy while the old task is still
@@ -840,7 +840,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   path. Phase 4 of docs/0.10.x/imap-deploy-downtime-plan.md.
 
 ### Changed
-- Bad IMAP deploys now fail fast and roll back: the IMAP service's
+- **Bad IMAP deploys now fail fast and roll back**: the IMAP service's
   health-check grace period drops from 600s to 120s and a deployment
   circuit breaker returns the service to the last working revision
   instead of letting a broken task thrash the single-task service.
@@ -863,7 +863,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   probe. Phase 1 of docs/0.10.x/imap-deploy-downtime-plan.md.
 
 ### Removed
-- Removed the Docker HEALTHCHECK from the three mail-tier images (imap,
+- **The Docker HEALTHCHECK from the three mail-tier images** (imap,
   smtp-in, smtp-out). It could never pass: the check ran supervisorctl, but no
   tier's supervisord.conf configures an RPC endpoint for it to reach, so the
   Docker daemon marked every container "unhealthy" on the host - and ECS
@@ -927,7 +927,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the tree (ssmmessages session channels, route53 List*, cloudwatch metric
   reads, runtime-generated log-stream and S3 object-key segments) now carries
   an `# iam-wildcard-ok:` rationale comment.
-- Apple clients: message-list keyboard shortcuts on macOS and iPadOS.
+- **Apple clients: message-list keyboard shortcuts on macOS and iPadOS.**
   Cmd+T toggles read/unread, Cmd+Shift+8 (Cmd+*) toggles the flag, Cmd+M
   opens Move to Folder (shadowing Window > Minimize), and Cmd+Delete
   archives or trashes the selection per the dispose preference, working
@@ -951,7 +951,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   toolbar's dispose button doesn't already cover.
 
 ### Removed
-- The last Terraform Cloud leftovers: infra.yml, quiesce.yml, and
+- **The last Terraform Cloud leftovers**: infra.yml, quiesce.yml, and
   destroy_terraform.yml no longer plumb the unused TF_TOKEN secret
   (TF_API_TOKEN env entries and setup-terraform
   cli_config_credentials_token inputs - nothing contacts app.terraform.io
@@ -1115,7 +1115,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.10.14] - 2026-06-08
 
 ### Added
-- Changelog fragments and a release-promotion script. Unreleased entries are
+- **Changelog fragments and a release-promotion script.** Unreleased entries are
   now added as individual files under `changelog.d/` (named
   `<slug>.<category>.md`) instead of editing `CHANGELOG.md` directly, so
   concurrent branches and Claude Code sessions no longer collide on a shared
@@ -1125,7 +1125,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `make promote VERSION=<x.y.z>`) collates, commits on `stage`, pushes, and
   opens the `stage -> main` PR, leaving the merge to prod as a manual step. See
   `changelog.d/README.md` and `docs/releasing.md`.
-- GitHub releases are now created automatically on merge to `main`. The new
+- **GitHub releases are now created automatically on merge to `main`.** The new
   `release.yml` workflow reads the freshly promoted top section of
   `CHANGELOG.md`, tags the merge commit, and publishes a release whose notes are
   that version's changelog section (via `.github/scripts/changelog-section.sh`),
@@ -1133,8 +1133,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   idempotent and runs only when `CHANGELOG.md` changes.
 
 ### Fixed
-- Reload buttons in the Apple clients no longer grow when they start
-  refreshing. The message-list, folder-list, and address-list reload controls
+- **Reload buttons in the Apple clients no longer grow when they start
+  refreshing.** The message-list, folder-list, and address-list reload controls
   swap their `arrow.clockwise` glyph for a `ProgressView` spinner while the list
   updates, but the default spinner is larger than the glyph, so the button
   enlarged and shoved its neighbors aside - most visibly the message-list reload
@@ -1150,7 +1150,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.10.13] - 2026-06-08
 
 ### Added
-- Planned-maintenance signal for IMAP redeploys. The IMAP ECS service is
+- **Planned-maintenance signal for IMAP redeploys.** The IMAP ECS service is
   hard-capped at one task (Dovecot has Maildir-over-EFS concurrency issues), so
   every IMAP image roll stops the old container before starting the new one - a
   true zero-task window during which the IMAP-backed Lambdas previously relayed a
@@ -1170,7 +1170,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`docker/shared/clear-maintenance.sh`, a supervisord daemon) since the
   fire-and-forget deploy does not wait for the roll; an `until` epoch written
   with the flag is a backstop so a failed deploy cannot wedge it on.
-- Outbound sending no longer blocks on IMAP. `/send` now delivers over SMTP
+- **Outbound sending no longer blocks on IMAP.** `/send` now delivers over SMTP
   first, then stages the Bcc-free Sent copy to S3 (`sent-pending/<user>/<uuid>`
   in the cache bucket) and enqueues it on a new `cabal-append-sent` SQS queue; a
   new `append_sent` consumer Lambda writes the copy to the user's Sent folder
@@ -1181,7 +1181,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Outbox staging folder and the Outbox->Sent move are retired. Saving a draft is
   interactive and IMAP-only, so it returns the maintenance `503` during a roll
   instead of queueing.
-- `/send` is now idempotent against client retries. SMTP-first means a lost
+- **`/send` is now idempotent against client retries.** SMTP-first means a lost
   `/send` response that the React client or the Apple `SendQueue` retries could
   otherwise deliver twice; `/send` claims the Message-Id in `cabal-rate-limits`
   (conditional write, TTL-expiring) before SMTP and releases it if SMTP fails,
@@ -1189,7 +1189,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   retry of a failed send still goes through.
 
 ### Changed
-- IaC quality gates, Phase 1 (`docs/0.10.x/iac-quality-gates-plan.md`). The
+- **IaC quality gates, Phase 1 (`docs/0.10.x/iac-quality-gates-plan.md`).** The
   three Terraform scanners in `infra.yml` were drifting into noise; this
   rebuilds them on maintained, pinned tooling without yet changing what blocks
   a deploy. tfsec (merged into Trivy and in maintenance mode, and already
@@ -1213,7 +1213,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   findings are surfaced, not gated; the gate flips in a later phase once
   baselines are established. Phase 0's finding inventory is recorded in
   `docs/0.10.x/iac-baseline-snapshot.md`.
-- IaC quality gates, Phase 2 (baselines). Per-stack suppression and baseline
+- **IaC quality gates, Phase 2 (baselines).** Per-stack suppression and baseline
   files are now checked in (`terraform/{infra,dns}/.checkov.yaml`,
   `.checkov.baseline`, `.trivyignore`) with a reviewed `BASELINE.md` per stack
   recording a rationale for every accepted finding and a target version for the
@@ -1236,8 +1236,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   changes to apply (exit code 2); an unchanged-dns or no-op push skips it. The
   dns scanners (`checkov_dns`/`tflint_dns`/`trivy_dns`) now gate through this
   approval job rather than directly blocking `bootstrap_apply`.
-- IaC quality gates, Phase 2.5 safe batch (the low-risk, in-place fixes from the
-  baseline's must-fix set). API Gateway `data_trace_enabled` is now `false` - it
+- **IaC quality gates, Phase 2.5 safe batch (the low-risk, in-place fixes from the
+  baseline's must-fix set).** API Gateway `data_trace_enabled` is now `false` - it
   had been logging full request/response bodies (addresses, message content,
   tokens) to CloudWatch. The certbot-renewal ECR repo is now `IMMUTABLE`,
   matching every other cabal repo (deploys push unique `sha-*` tags). The `tls`
@@ -1251,7 +1251,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CKV_AWS_341 was reclassified to stage-validate after it turned out to be the
   ECS mail-tier launch template (where IMDS `hop_limit=2` may be required for
   containers), not the NAT.
-- Removed dead Terraform declarations flagged by tflint: `local.zip_file` and
+- **Dead Terraform declarations flagged by tflint**: `local.zip_file` and
   the unused `relay_ips`/`repo` variables in the API-call submodule, `repo` in
   the app module, `master_password` in the ecs module (the IMAP master password
   reaches containers via the SSM `valueFrom`, never the variable), and `vpc_id`
@@ -1309,7 +1309,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   than closed. For smtp-out submission (587/465) the NLB passes TCP straight
   through and Dovecot terminates TLS itself, so the flag just enforces
   STARTTLS-before-AUTH on 587 and TLS on 465.
-- Added Dovecot login throttling: `auth_failure_delay = 2 secs` on both tiers
+- **Dovecot login throttling**: `auth_failure_delay = 2 secs` on both tiers
   to slow credential stuffing, plus high-security login services
   (`client_limit = 1`, one connection per login process) with `process_limit`
   caps (1024 for imap-login, 512 for submission-login) and `service auth`
@@ -1372,7 +1372,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.10.8] - 2026-06-07
 
 ### Security
-- Tightened the smtp-in (inbound relay) Linux capability set: dropped
+- **Tightened the smtp-in (inbound relay) Linux capability set**: dropped
   `CHOWN`, `FOWNER`, and `DAC_OVERRIDE`, leaving `KILL`, `NET_BIND_SERVICE`,
   `SETUID`, `SETGID` (phase 2a of
   `docs/0.10.x/container-runtime-hardening-plan.md`). smtp-in is a pure
@@ -1393,7 +1393,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.10.7] - 2026-06-07
 
 ### Security
-- Enabled EFS transit encryption on the IMAP mailstore mount
+- **Enabled EFS transit encryption on the IMAP mailstore mount**
   (`transit_encryption = "ENABLED"` on the imap task definition's mailstore
   volume; Phase 6 of `docs/0.10.x/container-runtime-hardening-plan.md`). The
   NFS traffic between the imap task and EFS is now TLS-wrapped in transit; it
@@ -1433,8 +1433,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.10.6] - 2026-06-06
 
 ### Security
-- Digest-pinned every container image `FROM` line to its tag + SHA256
-  digest (Phase 3 of `docs/0.10.x/container-runtime-hardening-plan.md`):
+- **Digest-pinned every container image `FROM` line to its tag + SHA256
+  digest** (Phase 3 of `docs/0.10.x/container-runtime-hardening-plan.md`):
   the three mail tiers and the sinkhole fixture on `amazonlinux:2023`, the
   certbot-renewal Lambda base on `public.ecr.aws/lambda/python`, and the
   (dormant) monitoring images on their upstreams. A pinned digest means a
@@ -1446,7 +1446,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `cabal-<tier>:sha-<8>` tags - since ECR `image_tag_mutability` is
   `IMMUTABLE`, each tag already binds one digest apiece, so a digest
   reference there was dropped as zero-gain (rationale in the plan doc).
-- Added a nightly image vulnerability scan
+- **A nightly image vulnerability scan**
   (`.github/workflows/image-scan.yml`): Trivy scans the image each prod
   mail-tier ECS service is actually running - resolved from the live task
   definition, so it follows out-of-band deploys - uploads SARIF to the
@@ -1461,14 +1461,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   findings.
 
 ### Added
-- `.github/dependabot.yml`. The repo previously had no Dependabot
+- **`.github/dependabot.yml`.** The repo previously had no Dependabot
   version-update config (only the high/critical alert-monitor workflow).
   Scoped to the Docker ecosystem across every Dockerfile directory and
   targeting `stage`, it opens weekly PRs to advance the pinned base-image
   digests, grouped so the mail-tier bases (amazonlinux + the Lambda Python
   base) land separately from the dormant monitoring images.
 
-- Conventional message-selection idioms in the keyboard-optimized Apple clients
+- **Conventional message-selection idioms in the keyboard-optimized Apple clients**
   (iPad regular width and macOS). The message list now uses native multiple
   selection: a plain click selects and opens one message, shift-click extends a
   contiguous range, command-click toggles an individual message, Cmd-A selects
@@ -1538,8 +1538,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.10.5] - 2026-06-05
 
 ### Fixed
-- Mail-tier ECS tasks could fail to start after monitoring was turned off in an
-  environment. Turning monitoring off deletes the
+- **Mail-tier ECS tasks could fail to start after monitoring was turned off in an
+  environment.** Turning monitoring off deletes the
   `/cabal/healthcheck_ping_*` SSM parameters, but the `imap` and `smtp-in` task
   definitions still referenced `/cabal/healthcheck_ping_ecs_reconfigure` as the
   `HEALTHCHECK_PING_URL` secret. Because the mail task definitions carry
@@ -1559,8 +1559,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.10.4] - 2026-06-05
 
 ### Added
-- Drag-and-drop of messages onto sidebar folders in the wide-screen Apple
-  clients (iPad regular width, macOS, visionOS). A message row can be dragged
+- **Drag-and-drop of messages onto sidebar folders in the wide-screen Apple
+  clients** (iPad regular width, macOS, visionOS). A message row can be dragged
   straight onto any selectable folder in the sidebar to move it there; the
   targeted folder shows an accent border while the drag hovers it. Multi-select
   is supported - dragging any selected row carries the whole selection, while
@@ -1576,13 +1576,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   body).
 
 ### Security
-- Dropped the unused `NET_ADMIN` Linux capability from all three mail-tier ECS
-  task definitions (imap, smtp-in, smtp-out). The capability existed only so
+- **Dropped the unused `NET_ADMIN` Linux capability from all three mail-tier ECS
+  task definitions** (imap, smtp-in, smtp-out). The capability existed only so
   fail2ban could manipulate iptables; fail2ban has been disabled since 0.7.0
   and nothing else used it, so this shrinks the container escape surface with
   no behaviour change. Phase 1 of
   `docs/0.10.x/container-runtime-hardening-plan.md`.
-- Hardened the runtime posture of all three mail-tier containers (phase 2 of
+- **Hardened the runtime posture of all three mail-tier containers** (phase 2 of
   the same plan): `cap_drop: ALL` with a minimal analyzed add-back set
   (`NET_BIND_SERVICE`, `SETUID`, `SETGID`, `CHOWN`, `DAC_OVERRIDE`, `FOWNER`,
   `KILL`, plus `SYS_CHROOT` on the dovecot tiers imap and smtp-out),
@@ -1596,19 +1596,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/etc/opendkim` at runtime); the monitoring tier, disabled in every
   environment, is not hardened here and is owed the same posture whenever it
   is enabled.
-- Tightened OpenDKIM's signing scope (phase 5 of the same plan): the generated
+- **Tightened OpenDKIM's signing scope** (phase 5 of the same plan): the generated
   `TrustedHosts` is now loopback only (`127.0.0.1`, `::1`, `localhost`) instead
   of `0.0.0.0/0`. opendkim signs only mail handed over by the local sendmail
   through the loopback milter socket, so a signature now requires both the
   network position (loopback) and a From-domain match in the SigningTable - not
   either one alone.
-- Removed SMTP AUTH from the smtp-in inbound relay (the whole
+- **Removed SMTP AUTH from the smtp-in inbound relay** (the whole
   `confAUTH_OPTIONS` / `TRUST_AUTH_MECH` / `confAUTH_MECHANISMS` stanza,
   including the legacy DIGEST-MD5 and CRAM-MD5 mechanisms that RFC 6331
   obsoleted). The inbound relay accepts mail for hosted domains and never
   authenticates senders - submission auth is on smtp-out via Dovecot - so AUTH
   was dead, weak surface. STARTTLS is unaffected.
-- Added sendmail resource and rate limits to all three mail tiers: a 50 MB
+- **Added sendmail resource and rate limits to all three mail tiers**: a 50 MB
   message-size cap (`confMAX_MESSAGE_SIZE`, the user-visible outbound limit,
   kept in step across tiers so a relayed message is not accepted upstream then
   bounced downstream for size), a daemon-children cap
@@ -1617,7 +1617,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `confPRIVACY_FLAGS` so non-trusted users can no longer inspect the mail queue.
 
 ### Removed
-- fail2ban is gone from the mail-tier images entirely: the `dnf install`
+- **fail2ban is gone from the mail-tier images entirely**: the `dnf install`
   package on all three tiers, the commented-out `[program:fail2ban]`
   supervisord blocks, and the entrypoint `/etc/fail2ban/jail.local` stanza. It
   had been commented out of supervisord (and thus never actually running) since
@@ -1635,13 +1635,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the Dovecot vsz_limit bump but never deployed under the prior ignore.
 
 ### Fixed
-- `generate-config.sh` now writes every generated sendmail/OpenDKIM map
-  atomically (stage to a temp file in the same directory, `fsync`,
+- **`generate-config.sh` now writes every generated sendmail/OpenDKIM map
+  atomically** (stage to a temp file in the same directory, `fsync`,
   `os.replace`). A SIGHUP, restart, or a sendmail `makemap` that lands mid-write
   no longer reads a partially written map. Phase 5 of
   `docs/0.10.x/container-runtime-hardening-plan.md`.
-- `app.yml`'s `docker` job again lists `setup` in `needs`, not just the
-  `approval` gate introduced in 0.10.3. The job's matrix reads
+- **`app.yml`'s `docker` job again lists `setup` in `needs`, not just the
+  `approval` gate introduced in 0.10.3.** The job's matrix reads
   `fromJson(needs.setup.outputs.tiers)`, and a job's `strategy.matrix` can only
   resolve `needs.<job>.outputs` for jobs named directly in its own `needs` -
   `approval` (which needs setup) does not re-export setup's outputs - so the
@@ -1660,8 +1660,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and less redundant approval steps.
 
 ### Added
-- EC2 Image Builder pipeline that bakes a custom AL2023 NAT AMI with nftables
-  pre-installed (`terraform/infra/modules/vpc/nat_ami.tf` +
+- **EC2 Image Builder pipeline that bakes a custom AL2023 NAT AMI with nftables
+  pre-installed** (`terraform/infra/modules/vpc/nat_ami.tf` +
   `nat-nftables-component.yaml`). This is the permanent path back to AL2023
   after 0.10.2 rolled the NAT instances to AL2: the masquerade ruleset,
   `ip_forward`, and an enabled `nftables.service` are baked into the image, so
@@ -1676,14 +1676,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Bootstrap: apply once with the toggle `false` (creates the pipeline), let it
   produce one AMI, then set `use_custom_nat_ami = true`. The toggle also doubles
   as a rollback lever back to the stock AL2 NAT.
-- Operator documentation for NAT (`docs/nat.md`, linked from `docs/setup.md` and
+- **Operator documentation for NAT** (`docs/nat.md`, linked from `docs/setup.md` and
   `docs/operations.md`): how NAT is wired, the no-VPC-endpoints dependency, the
   stock-AL2 vs. custom-AL2023-AMI choice, the two-phase bootstrap for a new
   environment, egress verification, and egress-outage troubleshooting.
 
 ### Fixed
-- Disabling monitoring (`TF_VAR_MONITORING=false`) no longer hangs the apply on
-  the `cabal-healthchecks-iac` Lambda. The `aws_lambda_invocation` resource used
+- **Disabling monitoring (`TF_VAR_MONITORING=false`) no longer hangs the apply on
+  the `cabal-healthchecks-iac` Lambda.** The `aws_lambda_invocation` resource used
   `lifecycle_scope = "CRUD"`, whose destroy-time invoke fired a final Lambda call
   as the monitoring module was torn down (`count = 0`); with the Healthchecks
   task gone - and, in a quiesced env, NAT scaled to zero so SSM was unreachable -
@@ -1692,8 +1692,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   re-invokes when `config.py` changes (via `triggers.source_code_hash`) but never
   invokes on destroy. The handler also now no-ops defensively on a Terraform
   `delete` action in case the scope is ever changed back.
-- `destroy_terraform.yml` now passes `TF_MODULE=infra` to `make-terraform.sh` in
-  its `generate-versions` step. The script became module-aware and started
+- **`destroy_terraform.yml` now passes `TF_MODULE=infra` to `make-terraform.sh` in
+  its `generate-versions` step.** The script became module-aware and started
   requiring `TF_MODULE` when the dns S3 backend was added, but the destroy
   workflow was never updated, so every run failed at backend generation with
   "TF_MODULE is not set".
@@ -1701,8 +1701,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.10.2] - 2026-05-31
 
 ### Changed
-- Rolled the NAT instances back to Amazon Linux 2, reverting the 0.10.1 AL2023
-  migration (`terraform/infra/modules/vpc/nat.tf`). The AL2023 switch broke all
+- **Rolled the NAT instances back to Amazon Linux 2, reverting the 0.10.1 AL2023
+  migration** (`terraform/infra/modules/vpc/nat.tf`). The AL2023 switch broke all
   private-subnet egress: the standard AL2023 AMI ships no firewall tool (neither
   nftables nor iptables), so the nftables bootstrap never loaded a masquerade
   rule and the NAT instances dropped every forwarded packet. With no VPC
@@ -1715,7 +1715,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.10.1] - 2026-05-31
 
 ### Changed
-- NAT instances now run on Amazon Linux 2023 instead of Amazon Linux 2
+- **NAT instances now run on Amazon Linux 2023 instead of Amazon Linux 2**
   (`terraform/infra/modules/vpc/nat.tf`), aligning them with the AL2023 ECS
   fleet. The AMI data source filter moves from `amzn2-ami-hvm-2.0.*-x86_64-gp2`
   to `al2023-ami-2023.*-x86_64` (standard AMI; the `-2023.` infix excludes the
@@ -1734,8 +1734,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.10.0] - 2026-05-30
 
 ### Security
-- Hardened DMARC aggregate-report ingestion (`/process_dmarc`), Phase 1 of
-  `docs/0.10.x/application-surface-hardening-plan.md`. The handler parses
+- **Hardened DMARC aggregate-report ingestion (`/process_dmarc`), Phase 1 of
+  `docs/0.10.x/application-surface-hardening-plan.md`.** The handler parses
   attacker-controlled XML/zip/gzip emailed from arbitrary senders, so:
   - XML is now parsed with `defusedxml` instead of stdlib
     `xml.etree.ElementTree`, blocking XXE, external-DTD, and
@@ -1761,7 +1761,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   New dependency `defusedxml==0.7.1`; new env vars `DMARC_REPORT_SENDERS`,
   `MAX_DMARC_PAYLOAD_BYTES`, and `MAX_DMARC_MESSAGES_PER_RUN` wired through
   `terraform/infra/modules/app/dmarc.tf`.
-- Hardened outbound message integrity on `/send`, Phase 2 of the same plan:
+- **Hardened outbound message integrity on `/send`, Phase 2 of the same plan**:
   - The Sent-folder copy no longer retains a `Bcc:` header. A Bcc-free copy
     is appended to Outbox (and moved to Sent); SMTP still delivers to the
     blind recipients because the full recipient list is passed to the relay
@@ -1778,8 +1778,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     to the existing 25 MiB total-bytes ceiling.
   - The `/upload_url` presigned PUT lifetime is shortened from 600 s to 120 s,
     tightening the window if a URL leaks.
-- Hardened input validation on the IMAP-shaped endpoints, Phase 3 of the same
-  plan. A shared validator set in `lambda/api/_shared/helper.py`
+- **Hardened input validation on the IMAP-shaped endpoints, Phase 3 of the same
+  plan.** A shared validator set in `lambda/api/_shared/helper.py`
   (`validate_folder_name`, `validate_uid_list` / `validate_uid`,
   `validate_flag`, `validate_sort_criterion`, `validate_content_id`,
   `validate_search_text`) rejects malformed folder names, UID lists, flag
@@ -1790,7 +1790,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/search_envelopes`. `/set_flag` and `/move_messages` also return 400 (not a
   500) on a non-JSON body, and a `/move_messages` whose `destination` carries
   CR/LF or a `..` path segment is rejected before any IMAP session is opened.
-- Hardened the DNS-touching endpoints, Phase 4 of the same plan. New shared
+- **Hardened the DNS-touching endpoints, Phase 4 of the same plan.** New shared
   validators in `lambda/api/_shared/helper.py` (`validate_dns_label`,
   `validate_dns_apex`, `validate_dns_subdomain`) reject malformed subdomains
   and apexes (HTTP 400) before they can deform a Route 53 change batch or a
@@ -1805,8 +1805,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   5-second budget so a slow or hostile authoritative nameserver cannot pin the
   Lambda. `/revoke` with an unknown `tld` now returns 400 instead of a 500.
   Adds `route53:GetHostedZone` to the API Lambda role so the zone check can run.
-- Added per-caller abuse limits and audit logging for admin mutations, Phase 5
-  of the same plan. A new lightweight shared module
+- **Added per-caller abuse limits and audit logging for admin mutations, Phase 5
+  of the same plan.** A new lightweight shared module
   `lambda/api/_shared/admin_limits.py` (boto3 + stdlib only, so the admin
   handlers need not pull in helper.py's IMAP/DNS imports or master-password
   fetch) provides a fixed-window per-caller rate limiter (30 mutations/minute,
@@ -1833,7 +1833,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.46] - 2026-05-29
 
 ### Fixed
-- macOS contact picker came up blank. The "Choose Contacts" sheet
+- **macOS contact picker came up blank.** The "Choose Contacts" sheet
   (`ContactPickerSheet`) had no explicit frame, so macOS sized it to
   its `List`'s near-zero ideal height and the content band collapsed:
   neither the contact rows nor the empty state rendered, making the
@@ -1846,8 +1846,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.45] - 2026-05-28
 
 ### Added
-- Apple Contacts integration, all five phases of the plan in
-  `docs/0.9.x/apple-contacts-integration-plan.md`. CabalmailKit gains
+- **Apple Contacts integration, all five phases of the plan in
+  `docs/0.9.x/apple-contacts-integration-plan.md`.** CabalmailKit gains
   a `ContactsStore` protocol with a `CNContactStore`-backed actor and
   an in-memory cache keyed by lowercased `mailbox@host`;
   `NSContactsUsageDescription` ships in both targets' Info.plists and
@@ -1869,8 +1869,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   intentionally not a source, since hashing the sender's email
   against gravatar.com would opt the recipient into a third-party
   lookup on the sender's say-so.
-- Both Apple targets register as `mailto:` handlers via
-  `CFBundleURLTypes`. On macOS this is enough — Cabalmail appears in
+- **Both Apple targets register as `mailto:` handlers via
+  `CFBundleURLTypes`.** On macOS this is enough — Cabalmail appears in
   System Settings → Desktop & Dock → Default mail reader, and clicks
   on `mailto:` links anywhere on the system route here once the user
   selects it. On iOS, Apple gates default-mail-app candidacy behind
@@ -1884,8 +1884,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `subject`, and `body` fields per RFC 6068; cold launches park the
   seed on `AppState` so the compose surface opens on first appear.
   Other RFC 6068 hfields are dropped.
-- New "Folder counts" preference in the Apple Settings >
-  Reading section: Unread (current default and historical
+- **New "Folder counts" preference in the Apple Settings >
+  Reading section**: Unread (current default and historical
   behavior), Total, or Unread / total. The setting syncs through
   iCloud's key-value store alongside the other reading
   preferences, so picking it on one device applies to all.
@@ -1902,8 +1902,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   group now defaults to collapsed for fresh installs, matching the
   new contract that unsubscribed folders are an explicit-pull
   surface rather than something the app keeps current.
-- Selecting an unsubscribed folder now pins a banner to the bottom
-  of the message list: "This unsubscribed folder is not kept up-to-
+- **Selecting an unsubscribed folder now pins a banner to the bottom
+  of the message list**: "This unsubscribed folder is not kept up-to-
   date automatically." The banner includes a counter-clockwise
   refresh button that re-fetches the envelope list and the folder's
   STATUS counts in one gesture. The banner uses
@@ -1947,8 +1947,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   API-backed IMAP path (`ApiBackedImapClient.makeEnvelope` hardcodes
   `messageId: nil` because the Lambda doesn't surface it), so every
   reply was silently treated like a forward / new compose.
-- The macOS app gains a manual refresh affordance on the message
-  list. An arrow.clockwise toolbar button sits next to Compose and
+- **The macOS app gains a manual refresh affordance on the message
+  list.** An arrow.clockwise toolbar button sits next to Compose and
   routes through the same `requestRefresh()` tick the Mailbox >
   Refresh menu item uses, so the IDLE watcher, the 60-second timer,
   the menu item, and the new button all converge on one code path.
@@ -1956,16 +1956,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   iOS / iPadOS / visionOS keep pull-to-refresh as the only reload
   gesture; the platform expectation there is the swipe, not a
   toolbar button.
-- Cmd+R in the macOS app is now Reply, and Cmd+Shift+R is Reply
-  All. Cmd+R previously routed both to the detail view's Reply
+- **Cmd+R in the macOS app is now Reply, and Cmd+Shift+R is Reply
+  All.** Cmd+R previously routed both to the detail view's Reply
   button and to Mailbox > Refresh, which made dispatch dependent on
   the focused scene and gave the user no clean way to type the
   chord they expected to mean Reply. Reply All moved off the
   ad-hoc Cmd+Shift+D it was sitting on. Mailbox > Refresh keeps
   the menu item but loses its keyboard shortcut; the toolbar
   button and pull-to-refresh cover the discovery surface.
-- Reply / Reply All / Forward now have a proper Message menu in
-  the macOS menu bar that hosts the keyboard shortcuts. The
+- **Reply / Reply All / Forward now have a proper Message menu in
+  the macOS menu bar that hosts the keyboard shortcuts.** The
   previous binding lived on Buttons inside the detail view's
   Reply Menu, which AppKit only invokes while the detail scene
   holds first-responder focus — so the second Cmd+R after a
@@ -1992,8 +1992,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Draft, removing the local draft entry on success and keeping the
   window open with an error banner on failure so the user can
   retry instead of losing the buffer silently.
-- The macOS compose window's red close button (and Cmd+W) no
-  longer bypass the "Discard draft?" confirmation. The toolbar
+- **The macOS compose window's red close button (and Cmd+W) no
+  longer bypass the "Discard draft?" confirmation.** The toolbar
   Cancel button has always routed through the dialog, but clicking
   the standard close button dismissed the window directly — taking
   the buffer with it on the way out. A small `NSWindowDelegate`
@@ -2015,8 +2015,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   layout is stable across selection state. macOS only; iOS /
   iPadOS / visionOS route the detail actions to a bottom bar and
   don't have the same drift.
-- The Apple compose window's rich-text body is no longer rendered
-  in a dark, invisible Times serif on dark-mode systems. The
+- **The Apple compose window's rich-text body is no longer rendered
+  in a dark, invisible Times serif on dark-mode systems.** The
   WebKit-backed editor's CSS was using `color: -apple-system-label,
   CanvasText` and `font: -apple-system-body, ...` — both invalid
   declarations (CSS `color` doesn't take comma fallbacks, and the
@@ -2028,8 +2028,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   typed text inherit the system label color in both light and dark
   appearances. The message HTML still embeds no color information,
   so the recipient's mail client picks the palette.
-- Clearing a search in the iOS/macOS apps no longer leaves phantom
-  rows from other folders behind. Search is cross-folder by default,
+- **Clearing a search in the iOS/macOS apps no longer leaves phantom
+  rows from other folders behind.** Search is cross-folder by default,
   so `runSearch` populated the in-memory envelope list with UIDs from
   folders other than the one being viewed (Archive, Sent, etc.).
   `clearSearch` only reset the search-banner metadata and called
@@ -2058,7 +2058,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   immediately backgrounding the app — the `/move_messages` POST
   now completes in the background or surfaces a readable error if
   it doesn't.
-- Scroll-pagination is now a no-op while a search is active.
+- **Scroll-pagination is now a no-op while a search is active.**
   `loadMoreIfNeeded` previously fired whenever the user scrolled the
   search result list to its bottom edge, which had two bad effects:
   it fetched older UIDs from the sidebar-selected folder (so a chunk
@@ -2092,8 +2092,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.42] - 2026-05-26
 
 ### Fixed
-- `/search_envelopes` cleanup no longer masks search results or
-  real errors. The handler's `finally` called `client.logout()`
+- **`/search_envelopes` cleanup no longer masks search results or
+  real errors.** The handler's `finally` called `client.logout()`
   directly; when the IMAP socket had been closed server-side
   (idle reap on the NLB after a long search, a Dovecot-side
   restart, a server-side connection limit), the LOGOUT command
@@ -2107,8 +2107,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.41] - 2026-05-26
 
 ### Fixed
-- `/search_envelopes` no longer 502s the whole cross-folder query
-  when one of the user's subscribed folders is missing on disk.
+- **`/search_envelopes` no longer 502s the whole cross-folder query
+  when one of the user's subscribed folders is missing on disk.**
   `enumerate_cross_folder` pulls folders via `LSUB`, which returns
   subscription state independently of whether the underlying
   mailbox still exists; a stale subscription (folder renamed or
@@ -2129,7 +2129,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.40] - 2026-05-26
 
 ### Fixed
-- IMAP full-text search initialization. `90-fts.conf` was missing
+- **IMAP full-text search initialization.** `90-fts.conf` was missing
   `fts_languages`, which the `fts_flatcurve` plugin requires to
   initialize — without it, `doveadm fts rescan -u <user>` errored
   out with "fts_languages setting is missing" and FTS was non-
@@ -2148,7 +2148,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.39] - 2026-05-26
 
 ### Added
-- Move to arbitrary folder on the Apple clients. The reader's new
+- **Move to arbitrary folder on the Apple clients.** The reader's new
   overflow menu carries a "Move to folder…" item that presents a
   searchable, hierarchically-indented picker of subscribed folders
   (excluding the current one), and the message-list row context
@@ -2160,7 +2160,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   read bit would surprise users who file unread messages on
   purpose). Closes the parity gap with the React webmail, which
   has had arbitrary-folder move since 0.2.0.
-- View Source on the Apple clients. A new reader-overflow item
+- **View Source on the Apple clients.** A new reader-overflow item
   ("View source", Cmd+U on macOS) opens a sheet with segmented
   Full / Headers / Body tabs over the raw RFC 5322 source. Bytes
   come through the same body cache as the in-pane render, so
@@ -2168,7 +2168,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exposes Copy and Share .eml actions and is selectable for direct
   copy/paste of individual headers. A separate "View headers" item
   opens the same sheet pre-set to the Headers tab.
-- Sort selection on the Apple message list. A menu in the inline
+- **Sort selection on the Apple message list.** A menu in the inline
   action bar above the list picks the sort field (Date Received,
   Date Sent, From, Subject) and toggles direction; the chosen
   sort is sent to the Lambda's IMAP SORT call so the top page
@@ -2177,11 +2177,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   page works best on the default sort; other sorts retain the
   visible top page and integrate older messages into the sort as
   they load.
-- Filter tabs (All / Unread / Flagged) above the Apple message
-  list. Pure client-side narrowing of the loaded envelopes with
+- **Filter tabs (All / Unread / Flagged) above the Apple message
+  list.** Pure client-side narrowing of the loaded envelopes with
   per-tab counts, mirroring the React webmail's pill row. Resets
   to "All" on folder switch.
-- Multi-select and bulk actions on the Apple message list. A
+- **Multi-select and bulk actions on the Apple message list.** A
   Select button in the inline action bar above the list enters
   edit mode; rows render a leading checkbox and a bottom action
   bar appears with Archive, Move…, Mark Read/Unread, and Flag /
@@ -2190,28 +2190,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   by source mailbox before the wire call so each operation lands
   in the right folder. Optimistic prune + revert-on-failure
   matches the per-row flows.
-- Sender avatar in the Apple reader header. Shows the sender
+- **Sender avatar in the Apple reader header.** Shows the sender
   domain's BIMI logo when one is published (fetched through our
   Lambda's `/fetch_bimi`, which resolves the BIMI DNS record and
   caches the signed asset in S3) and falls back to a deterministic
   colored circle with initials otherwise. No tracking-pixel risk:
   the avatar comes from our own backend, not the sender's domain.
-- Importance badge in the Apple message list. Senders who set
+- **Importance badge in the Apple message list.** Senders who set
   X-Priority / Importance / Priority headers to a high value
   (`priority-1` or `priority-2`, matching React's interpretation)
   get a red badge next to the existing attachment / flag icons.
   Pure visual surface — no automatic filtering or sorting.
-- Plain-text alternative toggle in the Apple reader. New overflow-
+- **Plain-text alternative toggle in the Apple reader.** New overflow-
   menu item that flips the body view to the message's text/plain
   alternative when one exists, for users who prefer plain text or
   are debugging an HTML rendering issue. No-op when the message
   has no plain part.
-- Print menu item (Cmd+P) in the Apple reader. macOS routes through
+- **Print menu item (Cmd+P) in the Apple reader.** macOS routes through
   WKWebView's `printOperation(with:)` against the system print
   panel; iOS / visionOS use `UIPrintInteractionController` against
   the web view's print formatter. Disabled until the message body
   has loaded.
-- Reader keyboard shortcuts on Apple — Cmd+Shift+U toggles read /
+- **Reader keyboard shortcuts on Apple** — Cmd+Shift+U toggles read /
   unread, Cmd+Shift+L toggles flagged, Cmd+Shift+I toggles remote
   content, and Cmd+Delete archives or trashes (per the user's
   dispose preference). Mirrors Mail.app conventions.
@@ -2243,8 +2243,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in sync so probe-failure pushes still carry a runbook link.
 
 ### Removed
-- "Mark as spam" item from the React webmail reader's overflow
-  menu. Marking spam was a thin wrapper around a move-to-Junk that
+- **"Mark as spam" item from the React webmail reader's overflow
+  menu.** Marking spam was a thin wrapper around a move-to-Junk that
   doesn't train any filter, and the action was never carried over
   to the Apple clients during the parity push. Dropping it from
   React keeps the two clients consistent and removes UI that
@@ -2253,7 +2253,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   move messages there via the general move-to-folder UI.
 
 ### Fixed
-- API Lambda log writes. The `call` Terraform module pointed each
+- **API Lambda log writes.** The `call` Terraform module pointed each
   function's `logging_config` at `/cabal/lambda/<name>` but kept
   the IAM policy's `logs:CreateLogStream` / `logs:PutLogEvents`
   resource scoped to `/aws/lambda/<name>:*` (a leftover from before
@@ -2267,8 +2267,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.38] - 2026-05-26
 
 ### Added
-- Monitoring entries in the admin app's Nav (Uptime Kuma,
-  Healthchecks, Grafana) opening each subdomain in a new tab.
+- **Monitoring entries in the admin app's Nav (Uptime Kuma,
+  Healthchecks, Grafana) opening each subdomain in a new tab.**
   Visible only to admins, and only when the environment has
   `var.monitoring = true`. The new `monitoring` field on
   `/config.js` (and `/config.json` for the Apple client) carries
@@ -2277,7 +2277,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.37] - 2026-05-26
 
 ### Changed
-- Grafana cert-expiry monitoring: Both TLS-days stat panels now
+- **Grafana cert-expiry monitoring**: Both TLS-days stat panels now
   carry explicit thresholds aligned with the alert pair (red <7d,
   orange 7-21d, green >=21d) so the tile color matches the
   operational severity instead of Grafana's default
@@ -2345,8 +2345,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.35] - 2026-05-25
 
 ### Changed
-- Apple clients' reader-view stylesheet now forces white-ish text on
-  every element in dark mode, not just `html, body`. Author-supplied
+- **Apple clients' reader-view stylesheet now forces white-ish text on
+  every element in dark mode, not just `html, body`.** Author-supplied
   inline `color` declarations (`<font color="#000">`, inline styles)
   were inheriting through descendants and rendering as dark-on-dark.
   A universal `color: #f2f2f7 !important` rule inside the dark-mode
@@ -2356,8 +2356,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.34] - 2026-05-25
 
 ### Added
-- Apple clients (iOS + macOS) now ship a dual-mode compose body with
-  parity to the React composer: a WKWebView-hosted contenteditable
+- **Apple clients (iOS + macOS) now ship a dual-mode compose body with
+  parity to the React composer**: a WKWebView-hosted contenteditable
   rich-text surface with a SwiftUI toolbar (bold/italic/underline/
   strikethrough, H1-H4, bullet/numbered lists, alignment, links,
   horizontal rule, undo/redo) sitting next to a Markdown source pane
@@ -2367,8 +2367,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   libraries the React composer uses (vendored into CabalmailKit so
   the bytes match — flattenParagraphs, the ZWSP-trick paragraph and
   line-break turndown rules, styleParagraphs all reproduced).
-- macOS / iOS compose now populates *both* MIME parts on every send,
-  matching the React composer's rules: rich-only composes derive the
+- **macOS / iOS compose now populates *both* MIME parts on every send,
+  matching the React composer's rules**: rich-only composes derive the
   `text/plain` body from `htmlToMarkdown(html)`; Markdown-only
   composes derive the `text/html` body from
   `styleParagraphs(markdownToHtml(md))`. Recipients on mail clients
@@ -2376,8 +2376,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   messages from the Apple clients.
 
 ### Fixed
-- Grafana "EFS PercentIOLimit" panel still blank after the 0.9.33
-  exporter-abort fix surfaced the underlying CloudWatch series.
+- **Grafana "EFS PercentIOLimit" panel still blank after the 0.9.33
+  exporter-abort fix surfaced the underlying CloudWatch series.**
   Same `toSnakeCase` gotcha as the `5XXError` -> `5_xxerror` fix in
   0.9.32: cloudwatch_exporter's `([a-z0-9])([A-Z])` regex doesn't
   split between consecutive uppercase letters, so `PercentIOLimit`
@@ -2385,8 +2385,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   run), not `percent_io_limit`. The dashboard query was looking at
   a series that doesn't exist. Renamed to
   `aws_efs_percent_iolimit_average`.
-- Grafana "ACM days to expiry (min)" panel still blank after the
-  0.9.33 fix because ACM publishes `DaysToExpiry` once per day
+- **Grafana "ACM days to expiry (min)" panel still blank after the
+  0.9.33 fix** because ACM publishes `DaysToExpiry` once per day
   (timestamp tied to each cert's issuance time), but the exporter's
   global `range_seconds: 600` window catches that emission only
   about 0.7% of the time. Override the ACM scrape block with
@@ -2417,8 +2417,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (which compares running vs desired task counts) and noted in a
   comment on the rule so the next reader doesn't re-introduce the
   `aws_` prefix.
-- Mail Tiers dashboard's "TLS days to expiry - IMAP 993" panel and
-  the `BlackboxTLSCertExpiringSoon` alert blank because
+- **Mail Tiers dashboard's "TLS days to expiry - IMAP 993" panel and
+  the `BlackboxTLSCertExpiringSoon` alert blank** because
   `imap.<control_domain>` resolved inside the VPC to a stale
   private-zone A record (`10.0.0.175`, a since-decommissioned
   container IP no longer attached to any ENI). The blackbox-exporter
@@ -2438,8 +2438,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.33] - 2026-05-25
 
 ### Fixed
-- Grafana monitoring panels blank since the monitoring stack shipped
-  despite real activity in CloudWatch. Three root causes layered on
+- **Grafana monitoring panels blank since the monitoring stack shipped
+  despite real activity in CloudWatch.** Three root causes layered on
   top of each other, the deepest one suppressing nearly every panel
   on the "AWS Services" dashboard plus several on "API Gateway &
   Lambda":
@@ -2550,8 +2550,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.31] - 2026-05-25
 
 ### Added
-- Dovecot full-text search index via `fts_flatcurve` (Phase 4 of
-  `docs/0.9.x/imap-search-plan.md`). The `imap` container's
+- **Dovecot full-text search index via `fts_flatcurve` (Phase 4 of
+  `docs/0.9.x/imap-search-plan.md`).** The `imap` container's
   Dockerfile gains a multi-stage builder that compiles
   `dovecot-fts-flatcurve` (pinned to upstream tag `v1.0.5`,
   commit `cdfdb18a`) against the same `amazonlinux:2023`
@@ -2574,8 +2574,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   header searches now hit an inverted index instead of reading
   every `Maildir` message file off EFS; attachments are still
   not decoded.
-- Apple clients pick up the same structured filter panel as the
-  React webmail. A new filter toolbar button next to the New
+- **Apple clients pick up the same structured filter panel as the
+  React webmail.** A new filter toolbar button next to the New
   Message button opens a sheet (iPhone) or popover (iPad / macOS)
   with From / To / Subject text inputs, Since / Before date
   pickers, Unread / Flagged / Has attachment toggles, and a
@@ -2596,8 +2596,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a different query.
 
 ### Changed
-- Apple clients now hit the structured `/search_envelopes` endpoint
-  (Phase 5 of `docs/0.9.x/imap-search-plan.md`). `ImapClient` gains a
+- **Apple clients now hit the structured `/search_envelopes` endpoint
+  (Phase 5 of `docs/0.9.x/imap-search-plan.md`).** `ImapClient` gains a
   `searchEnvelopes(_:)` method that takes a `SearchQuery` struct
   (`folder`, `text`, `from`, `to`, `subject`, `since`, `before`,
   `unread`, `flagged`, `hasAttachment`, `limit`, `cursor`) and
@@ -2629,7 +2629,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the "Cabalmail Mac" name. `CFBundleDisplayName` was already
   "Cabalmail" so Finder labels were correct; this rounds out
   the remaining surfaces.
-- Selected folder icon is now legible on iPadOS. The sidebar's
+- **Selected folder icon is now legible on iPadOS.** The sidebar's
   selection highlight is the accent color, and the folder icon
   uses the same `.tint`, so the icon used to disappear into the
   highlight. The icon now flips to white when its row is
@@ -2639,8 +2639,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tinted icon, so it stays on the regular tint there.
 
 ### Removed
-- Raw-IMAP-syntax `/search` Lambda and its API Gateway / SSM
-  registration (Phase 6 of `docs/0.9.x/imap-search-plan.md`).
+- **Raw-IMAP-syntax `/search` Lambda and its API Gateway / SSM
+  registration (Phase 6 of `docs/0.9.x/imap-search-plan.md`).**
   `lambda/api/search/function.py` is deleted, the `search` entry
   is gone from `terraform/infra/modules/app/locals.tf`'s
   `supported_lambdas` map, and the Apple client's
@@ -2656,7 +2656,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.30] - 2026-05-24
 
 ### Added
-- React admin can create folders as children of existing folders. Each
+- **React admin can create folders as children of existing folders.** Each
   row in the All folders list now has a hover-revealed `+` action that
   opens an inline rename-style input directly under that row, indented
   one level deeper. The input commits on Enter (or blur) and cancels on
@@ -2674,8 +2674,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.29] - 2026-05-24
 
 ### Added
-- React webmail picks up message search (Phases 2 + 3 of
-  `docs/0.9.x/imap-search-plan.md`). The Nav search bar — previously
+- **React webmail picks up message search (Phases 2 + 3 of
+  `docs/0.9.x/imap-search-plan.md`).** The Nav search bar — previously
   decorative — now commits its text on Enter and Cmd+K, and Escape
   clears it; an empty value reverts to the folder view. When a query
   is active the Email middle pane swaps in a search results pane that
@@ -2697,8 +2697,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   envelope's source folder so its archive/delete/flag operations
   target the correct mailbox. Any mutation re-runs the search to drop
   stale matches.
-- New `/search_envelopes` Lambda landing Phases 1 + 3 of
-  `docs/0.9.x/imap-search-plan.md`. Accepts a structured query
+- **New `/search_envelopes` Lambda landing Phases 1 + 3 of
+  `docs/0.9.x/imap-search-plan.md`.** Accepts a structured query
   (`text`, `from`, `to`, `subject`, `since`, `before`, `unread`,
   `flagged`, `has_attachment`, `limit`, `cursor`), translates it to
   an IMAP SEARCH criteria list server-side with `CHARSET UTF-8`,
@@ -2714,8 +2714,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from BODYSTRUCTURE (the heuristic tightens once FTS lands in
   Phase 4). The existing raw-syntax `/search` endpoint is unchanged
   and continues to power the Apple client until Phase 5 cuts it over.
-- Collapsible folder list on the React admin app and the Apple
-  (iOS/iPadOS/macOS/visionOS) clients. The Subscribed and All
+- **Collapsible folder list on the React admin app and the Apple
+  (iOS/iPadOS/macOS/visionOS) clients.** The Subscribed and All
   folders section headers collapse and expand, and within All
   folders any parent that has child folders gets a chevron that
   hides or shows its descendants. All collapse state is persisted
@@ -2737,7 +2737,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.28] - 2026-05-24
 
 ### Removed
-- Twilio SMS integration. The planned migration away from AWS End
+- **Twilio SMS integration.** The planned migration away from AWS End
   User Messaging is abandoned; AWS EUM remains the SMS path for
   Cognito (signup verification, password reset, MFA). Deleted: the
   `sms_sender` Terraform module (KMS key, SSM SecureString
@@ -2764,7 +2764,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.27] - 2026-05-21
 
 ### Added
-- Feature-flagged `sinkhole` ECS tier (`var.sinkhole`, gated off in
+- **Feature-flagged `sinkhole` ECS tier** (`var.sinkhole`, gated off in
   prod by a Terraform variable validation block and a task-definition
   precondition): a tiny asyncio Python SMTP listener registered in
   Cloud Map (`sinkhole.cabal.internal`) whose response shape is
@@ -2778,8 +2778,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   generalises to DSN, large-message, and STARTTLS-fallback scenarios.
   Design in `docs/0.9.x/sinkhole-test-harness-plan.md`; operator
   runbook for the first use case in `docs/testing/queue-persistence.md`.
-- New EFS access point `cabal-smtp-queue` on the existing `mailstore`
-  filesystem, scoped to `/smtp-queue` and owned `root:mail` (mode 0700)
+- **New EFS access point `cabal-smtp-queue` on the existing `mailstore`
+  filesystem**, scoped to `/smtp-queue` and owned `root:mail` (mode 0700)
   to match the AL2023 sendmail rpm default for `/var/spool/mqueue`.
   The access point id is exported from the `efs` module as
   `smtp_queue_access_point_id`.
@@ -2790,8 +2790,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   smtp-out tasks coordinate via sendmail's classic shared-NFS pattern
   (per-`qf` `fcntl` locks). Tracked in
   `docs/0.9.x/smtp-out-queue-persistence-plan.md`.
-- Per-user, per-apex-domain access control for address creation,
-  default-deny. Administrators grant specific users access to
+- **Per-user, per-apex-domain access control for address creation,
+  default-deny.** Administrators grant specific users access to
   individual mail apexes from the `Users` admin view, which shows a
   checkbox chip per configured mail apex on each user's row.
   Checking a chip writes an allow row to a new
@@ -2835,8 +2835,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stay rendered (disabled and dimmed) for plain-text messages instead of
   vanishing, so the archive button no longer shifts position when the
   selection moves between HTML and plain-text mail.
-- Cleaned up stale `docs/0.9.0/` references across CHANGELOG, Terraform,
-  CI scripts, workflows, CLAUDE.md, and cross-version planning docs.
+- **Cleaned up stale `docs/0.9.0/` references across CHANGELOG, Terraform,
+  CI scripts, workflows, CLAUDE.md, and cross-version planning docs.**
   The build/deploy simplification and lambda-layer-removal plans now
   live under `docs/0.9.x/`, and the state-encryption plan lives under
   `docs/0.10.x/`. Docs-only; no behaviour change.
@@ -2852,8 +2852,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   flag — matching the sidebar address list.
 
 ### Changed
-- `docs/github.md` is now the single reference for all GitHub
-  Actions variables and secrets. Variables previously scattered across
+- **`docs/github.md` is now the single reference for all GitHub
+  Actions variables and secrets.** Variables previously scattered across
   `docs/twilio.md`, `docs/sms-tfv-setup.md`, `docs/monitoring.md`,
   and `docs/quiesce.md` are consolidated there; those files now
   cross-reference `docs/github.md` instead of repeating the tables.
@@ -2887,9 +2887,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the 30-day window and the actual logged fields ("masked phone
   number" rather than "originator", matching what
   `_mask_phone_number()` in `lambda/sms-sender/function.py` writes).
-- `.github/workflows/register-tfv.yml` uses
+- **`.github/workflows/register-tfv.yml` uses
   `actions/setup-python@v6` (Node.js 24) instead of `@v5` (Node.js
-  20). Clears the GitHub deprecation warning ahead of the 2 June
+  20).** Clears the GitHub deprecation warning ahead of the 2 June
   2026 forced switchover; Node.js 20 is removed from runners on 16
   September 2026.
 
@@ -2925,15 +2925,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `website_config_json` in `terraform/infra/modules/app/s3.tf`) and
   is honored by CloudFront over its default TTL. `no-cache` (not
   `no-store`) means ETag-matched requests still return 304.
-- React admin app now surfaces a blocking error screen when the
-  `/config.js` fetch fails on a first visit. Previously the Login
+- **React admin app now surfaces a blocking error screen when the
+  `/config.js` fetch fails on a first visit.** Previously the Login
   form rendered with a null Cognito UserPool and silently swallowed
   submits. Returning visits with cached `poolData` in `localStorage`
   are unaffected: a transient refresh failure leaves the app usable
   against the saved snapshot.
 
 ### Added
-- Shared-secret invitation code gating new signups. A new
+- **Shared-secret invitation code gating new signups.** A new
   `check_invite` Cognito pre-signup Lambda (under `lambda/counter/`)
   rejects signups whose `invitationCode` validation-data value does
   not match the `INVITATION_CODE` env var. The value is configured
@@ -2968,8 +2968,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `service_registries.registry_arn` has been updated to the new ARN -
   without it, the force-new-deployment could fire against the stale
   ARN and the new task would fail to register.
-- Cloud Map orphan reconciliation in
-  `.github/scripts/post-apply-update-services.sh`. Runs after the
+- **Cloud Map orphan reconciliation in
+  `.github/scripts/post-apply-update-services.sh`.** Runs after the
   existing task-def-family roll. For each ECS service whose
   `serviceRegistries[0].registryArn` points at a Cloud Map service
   with zero registered instances - despite the ECS service having
@@ -3055,8 +3055,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/terms.html`), and the consent paragraph spells out the SMS opt-in
   scope (signup verification, password reset, sign-in codes) with
   STOP/HELP and message-and-data-rates language required by carriers.
-- `TF_VAR_USE_EUM_SMS` feature flag gates provisioning of the AWS End
-  User Messaging toll-free phone number (`aws_pinpointsmsvoicev2_phone_number.sms`).
+- **`TF_VAR_USE_EUM_SMS` feature flag gates provisioning of the AWS End
+  User Messaging toll-free phone number (`aws_pinpointsmsvoicev2_phone_number.sms`).**
   Defaults to `false`. Mirrors `TF_VAR_USE_TWILIO_SMS` so the two SMS
   delivery paths can be toggled independently per environment. See
   `docs/twilio.md` for the four-state matrix and rollback semantics.
@@ -3065,15 +3065,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is preserved.
 
 ### Changed
-- The `sms_sender` module (KMS key, SSM SecureString parameters for
+- **The `sms_sender` module (KMS key, SSM SecureString parameters for
   Twilio credentials, Lambda, IAM role) is now gated on
-  `TF_VAR_USE_TWILIO_SMS`. Previously the module was always
+  `TF_VAR_USE_TWILIO_SMS`.** Previously the module was always
   provisioned regardless of the flag, which forced every environment
   to set non-empty `TWILIO_*` secrets even when the Twilio path
   wasn't being used. Existing state is migrated via a `moved {}`
   block so envs already running with `USE_TWILIO_SMS=true` are
   unaffected.
-- Cleared Terraform deprecation warnings against AWS provider v6:
+- **Cleared Terraform deprecation warnings against AWS provider v6**:
   switched `data.aws_region.current.name` to `.region` in the `app`,
   `user_pool`, and `sms_sender` modules; dropped the deprecated
   `health_check_custom_config { failure_threshold = 1 }` block (AWS
@@ -3122,8 +3122,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `apple.yml` skips `brew install` for packages already present on the
   macos-15 runner image, suppressing the "Warning: foo is already
   installed..." annotations that GitHub was surfacing on every run.
-- Bumped GitHub Actions to Node 24 runtimes ahead of the June 2026
-  cutoff: `dorny/paths-filter` v3 -> v4, `docker/setup-buildx-action`
+- **Bumped GitHub Actions to Node 24 runtimes ahead of the June 2026
+  cutoff**: `dorny/paths-filter` v3 -> v4, `docker/setup-buildx-action`
   v3 -> v4, `hashicorp/setup-terraform` v2 -> v4,
   `actions/upload-artifact` v5 -> v6, `actions/download-artifact`
   v5 -> v7, and the two remaining `actions/checkout@v4` pins in
@@ -3139,12 +3139,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Settings tabs) alongside the existing pull-to-refresh.
 
 ### Changed
-- Web and Apple clients' sidebar "All folders" list now arranges folders
-  as a `/`-delimited tree: peers sort alphabetically (case-insensitive)
+- **Web and Apple clients' sidebar "All folders" list now arranges folders
+  as a `/`-delimited tree**: peers sort alphabetically (case-insensitive)
   and children are indented directly under their parent. The Subscribed
   list stays flat (web client shows full path there so context isn't
   lost when a child is subscribed without its parent).
-- Apple clients' sidebar folder unread badges now update optimistically.
+- **Apple clients' sidebar folder unread badges now update optimistically.**
   Marking a message read or unread (from the swipe action, context menu,
   or the detail-view toolbar) and archiving / trashing an unread message
   shift the source folder's badge before the server round trip; the
@@ -3156,8 +3156,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.18] - 2026-05-13
 
 ### Changed
-- Web client sidebar address rail and the compose-window From picker now
-  render addresses as two sections: **Favorites** on top, then **All
+- **Web client sidebar address rail and the compose-window From picker now
+  render addresses as two sections**: **Favorites** on top, then **All
   addresses** (inclusive of favorites) below. Each address row carries a
   star toggle that calls `/set_favorite`; favorites sync across
   browsers/devices because the source of truth is the server-side
@@ -3165,15 +3165,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   localStorage-only favorites (`cabalmail.compose.favorites.v1`) are
   replaced by the server-side state; orphaned localStorage entries are
   harmless and can be ignored.
-- Web client folder rail now renders folders as two sections:
+- **Web client folder rail now renders folders as two sections**:
   **Subscribed** on top (only when at least one folder is subscribed)
   and **All folders** below (inclusive of subscribed). The per-row
   toggle aria-label changed from "Favorite/Unfavorite" to
   "Subscribe to/Unsubscribe from" to disambiguate from address
   favorites.
-- Replaced the responsive nav's hamburger icon with a sidebar-panel icon
+- **Replaced the responsive nav's hamburger icon with a sidebar-panel icon
   (lucide-react `PanelLeft`), matching the idiom used by Claude Desktop
-  and similar apps. The control now sits to the right of the brand and
+  and similar apps.** The control now sits to the right of the brand and
   is hidden via `visibility: hidden` outside the Email view so the logo
   no longer shifts horizontally when navigating between Email, Users,
   Addresses, and DMARC.
@@ -3192,20 +3192,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `react/admin/src/Email/Messages/Envelopes.jsx`). The active filter
   shows as a chip pinned above the message list; switching folders
   or tapping the chip clears it.
-- Apple clients' sidebar (`FolderListView`) now renders folders as two
-  sections: **Subscribed** on top (when at least one folder is
+- **Apple clients' sidebar (`FolderListView`) now renders folders as two
+  sections**: **Subscribed** on top (when at least one folder is
   subscribed) and **All folders** below, inclusive of subscribed. Each
   row gets a trailing-edge swipe action and a context-menu entry to
   subscribe or unsubscribe. The toggle is optimistic and reverts on
   failure, mirroring the React rail's behavior. Subscribed folders
   appear in both sections; tapping either selects the same folder.
-- `CabalmailKit` data-layer support for address favorites: the
+- **`CabalmailKit` data-layer support for address favorites**: the
   `Address` model carries a `favorite` boolean (defaults to false when
   the `/list` response omits the field), and `ApiClient.setFavorite`
   hits the new `/set_favorite` Lambda. Folder subscribe/unsubscribe
   was already wired through `ImapClient` end-to-end, so no protocol
   changes were needed for that side of the work. No native UI yet.
-- Server-side support for marking an email address as a favorite. A new
+- **Server-side support for marking an email address as a favorite.** A new
   `/set_favorite` Lambda toggles the caller's membership in the address
   row's `favorites` string set on the `cabal-addresses` DynamoDB table;
   the existing `/list` response now carries a per-caller `favorite`
@@ -3213,8 +3213,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   addresses can be favorited independently by each assigned user. This
   is the backend foundation for sectioned (Favorites / All) address
   lists in the web and native clients.
-- "Resend code" control on the signup verification and password-reset
-  screens. The button stays clickable until Cognito itself refuses
+- **"Resend code" control on the signup verification and password-reset
+  screens.** The button stays clickable until Cognito itself refuses
   with `LimitExceededException` (which it does after ~5 resends per
   user per hour); at that point the UI swaps to "Too many resend
   attempts. Try again in about an hour." and disables the control
@@ -3228,7 +3228,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.17] - 2026-05-11
 
 ### Fixed
-- Compose window on iPadOS native client.
+- **Compose window on iPadOS native client.**
   `UIApplicationSupportsMultipleScenes: true` was being emitted at the
   top level of `Cabalmail/Info.plist`, but per Apple's docs that key has
   to be nested inside `UIApplicationSceneManifest`. Nested the key in
@@ -3237,7 +3237,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.16] - 2026-05-11
 
 ### Added
-- Outgoing messages can now carry attachments end-to-end. A new
+- **Outgoing messages can now carry attachments end-to-end.** A new
   `/upload_url` Lambda hands the client one presigned S3 PUT URL per
   attachment so bodies are uploaded directly to the existing
   `cache.<control_domain>` staging bucket (under
@@ -3255,8 +3255,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   compose sheet. Closes #377.
 
 ### Changed
-- Apple clients on macOS, iPadOS, and visionOS now open compose as a
-  real window scene rather than a modal sheet. New Message, Reply,
+- **Apple clients on macOS, iPadOS, and visionOS now open compose as a
+  real window scene rather than a modal sheet.** New Message, Reply,
   Reply All, and Forward all hand the seed draft to
   `openWindow(id: "compose", value: …)`, so the user can keep the
   mailbox they were reading visible behind the draft and run several
@@ -3297,7 +3297,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.13] - 2026-05-10
 
 ### Added
-- DMARC report dashboard now exposes investigation affordances per row.
+- **DMARC report dashboard now exposes investigation affordances per row.**
   Source IP cells link to the corresponding ARIN RDAP record so the
   reporting party can be looked up in one click. Date cells link to a
   modal that streams the original DMARC aggregate XML (the
@@ -3317,8 +3317,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   by design.
 
 ### Changed
-- macOS client navigation: the Mail / Addresses / Folders chooser is
-  now a top tab bar instead of a left sidebar. Stacking that sidebar
+- **macOS client navigation: the Mail / Addresses / Folders chooser is
+  now a top tab bar instead of a left sidebar.** Stacking that sidebar
   next to `MailRootView`'s folder sidebar made SwiftUI's column
   distribution leave the message list with too little room and a
   reserved-but-empty band, so message rows wrapped one character at
@@ -3345,8 +3345,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   themselves stay centered as the user moves between them. iPhone,
   iPad, and visionOS continue to show every section in one
   `TabView` with `.sidebarAdaptable`.
-- Apple clients (iOS, iPadOS, visionOS, macOS) now apply mailbox
-  affordances optimistically. Swipe-to-mark-read/unread, swipe-to-
+- **Apple clients (iOS, iPadOS, visionOS, macOS) now apply mailbox
+  affordances optimistically.** Swipe-to-mark-read/unread, swipe-to-
   archive/delete, the message-detail mark-as-read/unread toolbar
   button, and the message-detail archive/delete toolbar button all
   flip the in-memory state (and the row's bold styling and unread
@@ -3355,19 +3355,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   detail view a toast surfaces the failure since the row has already
   been pruned. Mark-read changes from the detail view propagate to
   the message list so the row updates without waiting for a refresh.
-- Apple clients now select the Inbox immediately on sign-in, as soon
-  as the folder list arrives. The per-folder unread-count walk runs
+- **Apple clients now select the Inbox immediately on sign-in, as soon
+  as the folder list arrives.** The per-folder unread-count walk runs
   afterwards in the background, so sidebar badges fill in without
   blocking the message list from loading.
 
 ### Fixed
-- macOS client message list: rows now claim the full width of the
-  message-list column. Previously, when the folder sidebar was
+- **macOS client message list: rows now claim the full width of the
+  message-list column.** Previously, when the folder sidebar was
   showing, the row content rendered at intrinsic width and the date
   hugged the sender, leaving roughly half the column empty; hiding
   the sidebar happened to trigger a relayout that masked the
   problem (#385).
-- `apple.yml` push trigger: pushes to `main` or `stage` that touch
+- **`apple.yml` push trigger**: pushes to `main` or `stage` that touch
   `apple/**` build again. The earlier `tags-ignore: ['**']` was added
   without a matching `branches` filter, and GitHub treats the
   undefined ref type as excluded, so every branch push silently
@@ -3402,8 +3402,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `WatchEvent` stream.
 - `terraform/infra` `required_version` raised from `>= 1.1.2` to
   `>= 1.9.0` to support cross-variable validation references.
-- The `list_envelopes` Lambda now preserves the display name from each
-  RFC 3501 ENVELOPE address. `from`, `to`, and `cc` entries are emitted
+- **The `list_envelopes` Lambda now preserves the display name from each
+  RFC 3501 ENVELOPE address.** `from`, `to`, and `cc` entries are emitted
   in RFC 5322 mailbox form (`"Display Name" <user@host>`) when a name is
   set, and as bare `user@host` when it is not. The React admin client
   already understands both forms; reply-all self-removal was tightened
@@ -3414,12 +3414,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   return/enter key.
 
 ### Added
-- New `/folder_status` Lambda exposing IMAP STATUS attributes
-  (`MESSAGES`, `UNSEEN`, `UIDVALIDITY`, `UIDNEXT`) for a folder. Used
+- **New `/folder_status` Lambda exposing IMAP STATUS attributes
+  (`MESSAGES`, `UNSEEN`, `UIDVALIDITY`, `UIDNEXT`) for a folder.** Used
   by the Apple client to drive cache invalidation and the inbox
   unread badge; React doesn't currently consume it.
-- New `/search` Lambda that runs an IMAP SEARCH against a folder and
-  returns the matching UIDs. The Apple client's
+- **New `/search` Lambda that runs an IMAP SEARCH against a folder and
+  returns the matching UIDs.** The Apple client's
   `ApiBackedImapClient.search(folder:query:)` now hits this endpoint
   instead of returning an empty list, restoring mailbox search on
   the API path (#375).
@@ -3447,8 +3447,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.9] - 2026-05-04
 
 ### Changed
-- The Apple client build workflow (`apple.yml`) no longer fires on tag
-  pushes. It still runs on pushes to any branch when paths under
+- **The Apple client build workflow (`apple.yml`) no longer fires on tag
+  pushes.** It still runs on pushes to any branch when paths under
   `apple/**` or `.github/workflows/apple.yml` change, and on
   `workflow_dispatch`.
 - Apple client archive steps (iOS and macOS) now derive
@@ -3475,7 +3475,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   also copies the repo-root `LICENSE.md` into `dist/` so both files
   ship as static assets and the admin app's deploy step (`s3 sync`
   + CloudFront invalidation) picks them up automatically.
-- New "About" view in the React admin app, lazy-loaded, displaying the
+- **New "About" view in the React admin app**, lazy-loaded, displaying the
   Cabalmail license summary, the full LICENSE text, and the bundled-
   dependency notices. Reachable from the account-menu in the top nav
   (not admin-gated) and from a small footer link on the Login / SignUp
@@ -3503,8 +3503,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.7] - 2026-05-03
 
 ### Changed
-- CI/CD deploy workflows (`app.yml`, `infra.yml`) now only fire on the
-  three named branches: `main` (prod), `stage` (stage), and
+- **CI/CD deploy workflows (`app.yml`, `infra.yml`) now only fire on the
+  three named branches**: `main` (prod), `stage` (stage), and
   `development` (development). Pushes from feature branches or tags no
   longer trigger an automatic deploy to development. The manual
   `destroy_terraform.yml` and `quiesce.yml` workflows refuse to run
@@ -3514,8 +3514,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   deliberate second step.
 
 ### Fixed
-- Grafana panels that had been "no data" since the monitoring stack
-  shipped now populate. Five separate bugs:
+- **Grafana panels that had been "no data" since the monitoring stack
+  shipped now populate.** Five separate bugs:
   - **API Gateway alerts and per-API-name aggregation**: the `apiname`
     label filter in `Lambda5xxSpike` and the API Gateway dashboard
     didn't match anything. cloudwatch_exporter v0.16.0 snake_cases
@@ -3555,7 +3555,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     while a new `blackbox-tls` job using the existing `tcp_tls`
     blackbox module covers the implicit-TLS ports 993 (IMAP) and 465
     (SMTP submission), populating the cert-expiry metric.
-- Updated `docs/monitoring.md` accordingly: the "What populates when"
+- **Updated `docs/monitoring.md` accordingly**: the "What populates when"
   section no longer marks CloudFront panels as permanently empty, the
   scrape-target inventory in step 18 reflects the second
   cloudwatch-exporter and the split blackbox jobs, and a new
@@ -3584,8 +3584,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.6] - 2026-05-01
 
 ### Fixed
-- Restored the shared Lambda layer's first-party module (`helper.py`)
-  in CI builds. The 0.9.5 lambda-api parallelisation extracted the
+- **Restored the shared Lambda layer's first-party module (`helper.py`)
+  in CI builds.** The 0.9.5 lambda-api parallelisation extracted the
   per-function build into `build-api-one.sh` but only carried over the
   `rm -rf ./python` + `pip install -t ./python` steps; the `./src/.`
   -> `./python/` copy that 0.9.4 added (so the wipe couldn't delete
@@ -3602,8 +3602,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Updated CLAUDE.md to reflect 0.9.x as in progress.
-- Phase 7 of the build/deploy simplification plan
-  (`docs/0.9.x/build-deploy-simplification-plan.md`): operator-facing
+- **Phase 7 of the build/deploy simplification plan
+  (`docs/0.9.x/build-deploy-simplification-plan.md`)**: operator-facing
   documentation that referenced the deleted workflows now points at
   the new pipeline. `docs/quiesce.md`, `docs/monitoring.md`, the
   `lambda-errors` and `container-restart-loop` runbooks under
@@ -3620,8 +3620,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.5] - 2026-05-01
 
 ### Changed
-- Phase 6 of the build/deploy simplification plan
-  (`docs/0.9.x/build-deploy-simplification-plan.md`): cutover. The
+- **Phase 6 of the build/deploy simplification plan
+  (`docs/0.9.x/build-deploy-simplification-plan.md`)**: cutover. The
   legacy `docker.yml`, `lambda_api_python.yml`, `lambda_counter.yml`,
   `react.yml`, and `bootstrap.yml` workflows are deleted. Pushes to
   `docker/**`, `lambda/**`, and `react/admin/**` now drive `app.yml`
@@ -3659,8 +3659,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.4] - 2026-04-30
 
 ### Added
-- Phase 4 of the build/deploy simplification plan
-  (`docs/0.9.x/build-deploy-simplification-plan.md`): bootstrap
+- **Phase 4 of the build/deploy simplification plan
+  (`docs/0.9.x/build-deploy-simplification-plan.md`)**: bootstrap
   placeholders so a brand-new environment can apply
   `terraform/infra` end-to-end without `app.yml` having ever pushed
   an image or zip. Every `aws_ecs_task_definition` (the three mail
@@ -3688,8 +3688,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is a no-op: every function's pair is already in S3, every
   `head-object` is a hit, nothing is uploaded. The script is laid
   down here for phase 5's `infra.yml` to call as a pre-apply step.
-- Phase 5 of the build/deploy simplification plan
-  (`docs/0.9.x/build-deploy-simplification-plan.md`): new
+- **Phase 5 of the build/deploy simplification plan
+  (`docs/0.9.x/build-deploy-simplification-plan.md`)**: new
   `.github/workflows/infra.yml` replaces `terraform.yml` +
   `bootstrap.yml` as the canonical infrastructure pipeline. It owns
   both the bootstrap (`terraform/dns`) stage and the main
@@ -3705,8 +3705,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unchanged. Adds `concurrency: { group: infra-${{ github.ref }},
   cancel-in-progress: false }` so back-to-back applies serialise on
   the state lock instead of racing.
-- `.github/scripts/post-apply-update-services.sh` and a `post_apply`
-  job in `infra.yml` that runs it. Phase 1 (shipped in 0.9.3) added
+- **`.github/scripts/post-apply-update-services.sh` and a `post_apply`
+  job in `infra.yml` that runs it.** Phase 1 (shipped in 0.9.3) added
   `lifecycle { ignore_changes = [task_definition] }` to every
   `aws_ecs_service` so out-of-band app deploys are not rolled back by
   topology-only Terraform applies; the trade-off was that a Terraform
@@ -3728,8 +3728,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to just the three core docker tiers - so prod runs were quietly
   skipping all nine monitoring tier builds even with monitoring
   enabled.
-- Webmail message list (and every other IMAP-backed endpoint) was
-  failing because the deterministic-build follow-up to phase 2
+- **Webmail message list (and every other IMAP-backed endpoint) was
+  failing** because the deterministic-build follow-up to phase 2
   (`bff24dcf`) added `rm -rf ./python` before each `pip install` in
   `.github/scripts/build-api.sh`. For the shared Lambda layer at
   `lambda/api/python/`, that wipe also deleted the layer's only
@@ -3746,7 +3746,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   third-party deps and `helper.py`. Issue #346.
 
 ### Changed
-- `lambda-api` build and deploy are now parallel. `build-api.sh` was
+- **`lambda-api` build and deploy are now parallel.** `build-api.sh` was
   refactored into a thin driver that enumerates `lambda/api/*` dirs
   and dispatches a new `build-api-one.sh` per dir under `xargs -P
   ${BUILD_JOBS:-8}`; `app.yml`'s deploy step does the same with
@@ -3761,8 +3761,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   single `wait function-updated` rather than their sum. Drops the
   `lambda-api` job from ~15 min to roughly the slowest function's
   build-and-deploy time.
-- `.github/workflows/terraform.yml` renamed to
-  `.github/workflows/terraform-legacy.yml`. The `push` trigger is
+- **`.github/workflows/terraform.yml` renamed to
+  `.github/workflows/terraform-legacy.yml`.** The `push` trigger is
   stripped so a push to `terraform/infra/**` now drives `infra.yml`
   rather than re-entering Terraform via the legacy file.
   `workflow_dispatch` and `repository_dispatch` are kept as manual
@@ -3792,7 +3792,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.3] - 2026-04-30
 
 ### Changed
-- Phase 1 follow-up: every `aws_ecs_service` (3 mail-tier services in
+- **Phase 1 follow-up**: every `aws_ecs_service` (3 mail-tier services in
   `terraform/infra/modules/ecs/services.tf` plus 9 monitoring
   services across `modules/monitoring/`) now has `lifecycle {
   ignore_changes = [task_definition] }`. Phase 1 ignored
@@ -3806,8 +3806,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   revision will not auto-roll the service either; phase 5's
   `infra.yml` will add a post-apply `update-service` step keyed off
   the freshly-registered revision.
-- `build-api.sh` and `build-counter.sh` now produce byte-stable zips
-  for the same source tree across runs. The python Lambda layer
+- **`build-api.sh` and `build-counter.sh` now produce byte-stable zips
+  for the same source tree across runs.** The python Lambda layer
   (`lambda/api/python/`) was the chokepoint: a non-deterministic
   zip meant the layer's `source_code_hash` changed on every CI run,
   forcing a new `aws_lambda_layer_version` and a 30+ Lambda
@@ -3819,8 +3819,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   source-and-pinned-deps now yields the same zip bytes.
 
 ### Added
-- Phase 3 of the build/deploy simplification plan
-  (`docs/0.9.x/build-deploy-simplification-plan.md`): new
+- **Phase 3 of the build/deploy simplification plan
+  (`docs/0.9.x/build-deploy-simplification-plan.md`)**: new
   `.github/workflows/app.yml` builds every application artifact in
   parallel and deploys directly to running infrastructure via the AWS
   CLI - no Terraform on the deploy path. Triggered on
@@ -3836,8 +3836,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nothing deploys. `concurrency: { group: app-${{ github.ref }},
   cancel-in-progress: false }` serialises overlapping app deploys per
   ref so back-to-back runs roll services in order rather than racing.
-- `.github/scripts/deploy-ecs-service.sh` is the ECS half of the
-  out-of-band deploy path. Given a tier and an image tag it clones
+- **`.github/scripts/deploy-ecs-service.sh` is the ECS half of the
+  out-of-band deploy path.** Given a tier and an image tag it clones
   the running task definition for `cabal-<tier>` on the `cabal-mail`
   cluster, rewrites every container whose ECR repo basename is
   `cabal-<tier>` to point at the new tag, registers a new revision
@@ -3847,8 +3847,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Terraform apply from clobbering the new revision; phase 1's
   `refresh-ssm-from-running.sh` keeps `/cabal/deployed_image_tag` in
   lockstep with whatever the script just deployed.
-- `.github/scripts/deploy-lambda-zip.sh` and
-  `.github/scripts/deploy-lambda-image.sh` are the Lambda half. The
+- **`.github/scripts/deploy-lambda-zip.sh` and
+  `.github/scripts/deploy-lambda-image.sh` are the Lambda half.** The
   zip helper assumes `build-api.sh` / `build-counter.sh` has
   uploaded `<func>.zip` and `<func>.zip.base64sha256` to
   `s3://admin.${TF_VAR_CONTROL_DOMAIN}/lambda/`, then calls
@@ -3864,8 +3864,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.2] - 2026-04-29
 
 ### Changed
-- Phase 2 of the build/deploy simplification plan
-  (`docs/0.9.x/build-deploy-simplification-plan.md`): every S3-source
+- **Phase 2 of the build/deploy simplification plan
+  (`docs/0.9.x/build-deploy-simplification-plan.md`)**: every S3-source
   `aws_lambda_function` resource (the api `cabal_method` calls, the
   `process_dmarc` ingester, the `assign_osid` Cognito post-confirmation
   trigger, and the `alert_sink` and `backup_heartbeat` monitoring
@@ -3896,7 +3896,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on the legacy pipeline.
 
 ### Fixed
-- NAT-instance Terraform plan is now idempotent. `aws_instance.nat` in
+- **NAT-instance Terraform plan is now idempotent.** `aws_instance.nat` in
   `terraform/infra/modules/vpc/nat.tf` ignores changes to its computed
   `public_ip` / `public_dns`, which the EIP association overwrites
   out-of-band and the AWS provider reported as drift on every plan.
@@ -3908,8 +3908,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.1] - 2026-04-29
 
 ### Changed
-- Phase 1 of the build/deploy simplification plan
-  (`docs/0.9.x/build-deploy-simplification-plan.md`): every
+- **Phase 1 of the build/deploy simplification plan
+  (`docs/0.9.x/build-deploy-simplification-plan.md`)**: every
   `aws_ecs_task_definition` resource in `terraform/infra/modules/ecs`
   and `terraform/infra/modules/monitoring` (12 task defs across the
   three mail tiers and nine monitoring tiers) now has
@@ -3932,7 +3932,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.0] - 2026-04-29
 
 ### Added
-- `quiesce` GitHub workflow (`.github/workflows/quiesce.yml`)
+- **`quiesce` GitHub workflow (`.github/workflows/quiesce.yml`)**
   scales a non-prod environment's running compute to zero to save
   cost, or restores it. `workflow_dispatch` only, with `environment`
   (development | stage) and `action` (down | up) inputs. Refuses to
@@ -3956,7 +3956,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.8.2] - 2026-04-29
 
 ### Added
-- Confirmation modal before address revocation in the React app. The
+- **Confirmation modal before address revocation in the React app.** The
   Addresses rail (email client sidebar) previously revoked immediately
   on click; it now opens an `alertdialog` modal with a destructive
   "Revoke" button. The admin "All Addresses" view replaces its
@@ -4148,7 +4148,7 @@ The full design rationale lives in [`docs/0.7.0/monitoring-plan.md`](docs/0.7.0/
 
 ### Removed
 
-- `TF_VAR_ON_CALL_PHONE_NUMBERS` and the SMS-via-SNS alerting path. AWS toll-free SMS provisioning was slow and opaque, and SES email can't alert on our own mail outage. Replaced with the Pushover + ntfy push fan-out described above.
+- **`TF_VAR_ON_CALL_PHONE_NUMBERS` and the SMS-via-SNS alerting path.** AWS toll-free SMS provisioning was slow and opaque, and SES email can't alert on our own mail outage. Replaced with the Pushover + ntfy push fan-out described above.
 
 ### Operational notes
 
@@ -4173,7 +4173,7 @@ The full design rationale lives in [`docs/0.7.0/monitoring-plan.md`](docs/0.7.0/
 ## [0.6.4] - 2026-04-23
 
 ### Added
-- Reader view for HTML message bodies in the Apple clients. A new toolbar toggle in the message detail view swaps between the original author formatting and a reader presentation that overrides CSS with system typography, a capped reading column, and dark-mode support. A new "Default view" picker in Settings → Reading chooses which side of the toggle the detail view opens on; the choice syncs across devices via iCloud alongside the other reading preferences.
+- **Reader view for HTML message bodies in the Apple clients.** A new toolbar toggle in the message detail view swaps between the original author formatting and a reader presentation that overrides CSS with system typography, a capped reading column, and dark-mode support. A new "Default view" picker in Settings → Reading chooses which side of the toggle the detail view opens on; the choice syncs across devices via iCloud alongside the other reading preferences.
 - Apple client: the folder message list now refreshes on a 60-second wall-clock timer while it is on screen, in addition to the existing IMAP IDLE push. IDLE usually delivers new mail within seconds, but long-lived IDLE sockets can stall silently — iOS suspends idle connections while the app is foregrounded but network-idle, cellular ↔ WiFi handoffs drop the stream without surfacing an error, and some middleboxes time out TCP idle after a few minutes. The net effect was that users had to pull-to-refresh to see new messages even with the app in the foreground. A second SwiftUI `.task` on `MessageListView` sleeps 60 s and calls `MessageListViewModel.refresh()`; `.task` auto-cancels on `.onDisappear` so the timer starts and stops together with the IDLE watcher and doesn't hold a connection open for a mailbox the user isn't looking at.
 - Apple client: the app icon now shows a badge with the Inbox unread count on iOS / iPadOS / visionOS (home-screen icon) and macOS (dock tile). `AppState` owns an independent poller that runs while signed in, requests `.badge` authorization via `UNUserNotificationCenter` on first start (silently no-ops on denial or repeat calls), polls `STATUS (UNSEEN)` on `INBOX` every 60 seconds, and pushes the count through `UNUserNotificationCenter.setBadgeCount(_:)`. The poll is independent of which folder the user is viewing, so the badge stays current even while Drafts/Sent are on screen. Started at the `.signedIn` transition of both `signIn()` and `restoreIfPossible()`; stopped (and the badge cleared) at the start of `signOut()` so the icon doesn't keep showing the previous user's count. Transient network failures leave the prior badge value in place until the next successful poll. The authoritative count is also exposed as an `AppState.inboxUnreadCount` observable for future in-app indicators.
 
@@ -4181,11 +4181,11 @@ The full design rationale lives in [`docs/0.7.0/monitoring-plan.md`](docs/0.7.0/
 
 ### Added
 
-- Apple client: archive/trash button in the message detail toolbar. Matches the list view's swipe action — sets `\Seen` before the `UID MOVE`, prunes the envelope and body caches so a relaunch can't re-hydrate the moved message, and (for users whose dispose preference is Trash) renders as a destructive delete button instead of the archive box. After a successful move the split view advances the envelope selection to the next unread message in the same folder (preferring the next envelope below the disposed one in UID-descending order, falling back to the nearest unread above) and signals the message list to drop the row from its in-memory copy immediately, so the user can keep triaging without bouncing back to the list and doesn't see the archived message linger until the next IDLE refresh. When no other unread messages remain in the folder the selection clears and the detail column falls back to the "No message selected" placeholder. `MessageDetailViewModel.dispose(onSuccess:)` mirrors `MessageListViewModel.dispose(_:)`; `AppState.signalDisposed(folderPath:uid:)` + a new `DisposedEnvelope` payload carry the signal from the detail view's toolbar back to the list view's `.onChange`, which consults `MessageListViewModel.nextUnreadEnvelope(after:)` to pick the advancement target and `MessageListViewModel.pruneEnvelope(uid:)` to drop the disposed row.
+- **Apple client: archive/trash button in the message detail toolbar.** Matches the list view's swipe action — sets `\Seen` before the `UID MOVE`, prunes the envelope and body caches so a relaunch can't re-hydrate the moved message, and (for users whose dispose preference is Trash) renders as a destructive delete button instead of the archive box. After a successful move the split view advances the envelope selection to the next unread message in the same folder (preferring the next envelope below the disposed one in UID-descending order, falling back to the nearest unread above) and signals the message list to drop the row from its in-memory copy immediately, so the user can keep triaging without bouncing back to the list and doesn't see the archived message linger until the next IDLE refresh. When no other unread messages remain in the folder the selection clears and the detail column falls back to the "No message selected" placeholder. `MessageDetailViewModel.dispose(onSuccess:)` mirrors `MessageListViewModel.dispose(_:)`; `AppState.signalDisposed(folderPath:uid:)` + a new `DisposedEnvelope` payload carry the signal from the detail view's toolbar back to the list view's `.onChange`, which consults `MessageListViewModel.nextUnreadEnvelope(after:)` to pick the advancement target and `MessageListViewModel.pruneEnvelope(uid:)` to drop the disposed row.
 
 ### Fixed
 
-- Apple client: `MimeParser.findBlankLine` no longer traps on empty input. The recursive `MimeParser.parse` can be handed an empty `Data` when `splitMultipart` trims a sub-part down to nothing — most reliably reproduced by Microsoft-originated DMARC aggregate reports, whose `multipart/alternative` tree begins with a body-less sub-part. Before the fix, `0..<(bytes.count - 1)` became `0..<-1` and tripped Swift's `Range requires lowerBound <= upperBound` runtime check (`EXC_BREAKPOINT` / `SIGTRAP`), crashing the detail view the moment a DMARC report was opened on both iOS and macOS. Now guarded with `bytes.count >= 2`; regression coverage in `MimeParserTests.testMultipartWithEmptyLeadingSubPartDoesNotCrash`.
+- **Apple client: `MimeParser.findBlankLine` no longer traps on empty input.** The recursive `MimeParser.parse` can be handed an empty `Data` when `splitMultipart` trims a sub-part down to nothing — most reliably reproduced by Microsoft-originated DMARC aggregate reports, whose `multipart/alternative` tree begins with a body-less sub-part. Before the fix, `0..<(bytes.count - 1)` became `0..<-1` and tripped Swift's `Range requires lowerBound <= upperBound` runtime check (`EXC_BREAKPOINT` / `SIGTRAP`), crashing the detail view the moment a DMARC report was opened on both iOS and macOS. Now guarded with `bytes.count >= 2`; regression coverage in `MimeParserTests.testMultipartWithEmptyLeadingSubPartDoesNotCrash`.
 - Apple client: remote content in HTML messages is now genuinely blocked when the `Load remote content` preference is Off or Ask, fixing the regression where tracker pixels and remote images were fetching despite the toolbar "eye" icon showing the closed state. `HTMLBodyView`'s `WKNavigationDelegate.webView(_:decidePolicyFor:)` only intercepts top-level and subframe navigations; subresource loads (images, CSS, fonts, iframes — the tracker-pixel vector) bypass the delegate entirely, so the "deny non-file URLs in `decidePolicyFor`" approach never actually blocked them. The renderer now installs a `WKContentRuleList` that blocks every `http`/`https` request on the web view's `userContentController` when `allowRemote` is false, and removes it when the user flips the toolbar toggle. The rule list is compiled once per process and cached. The navigation-delegate check stays in place as a secondary guard against top-level navigations (meta-refresh, document.location=…) the user didn't ask for.
 - Bump `actions/checkout`, `actions/cache`, `actions/upload-artifact`, and `actions/download-artifact` to v5 across all workflows, ahead of GitHub's Node.js 20 deprecation (forced to Node 24 on 2026-06-02, removed 2026-09-16). Also pins the two lambda workflows that were tracking `actions/checkout@main` to a fixed tag.
 
@@ -4407,11 +4407,13 @@ The full design rationale lives in [`docs/0.7.0/monitoring-plan.md`](docs/0.7.0/
 - `address_changed_topic_arn` to all API Lambda functions
 - `sns:Publish` IAM permissions to Lambda execution roles
 - `nlb_arn` output
-- `terraform/infra/modules/vpc/ROLLBACK.md`** — NAT instance migration rollback instructions
+- `terraform/infra/modules/vpc/ROLLBACK.md` — NAT instance migration rollback instructions
 - DNS module — `locals.tf` with CI/CD build workflow metadata
 - Workflow: `docker_build_push.yml` for building and pushing Docker images
 - Terraform workflow: `image_tag` input and SSM update step for Docker image deployments
 - Counter workflow: pylint step for Python linting
+- S3 pre-flight checks that gate layer/function creation on zip existence
+- Private DNS records for Cloud Map service discovery
 
 ### Fixed
 
@@ -4428,12 +4430,9 @@ The full design rationale lives in [`docs/0.7.0/monitoring-plan.md`](docs/0.7.0/
     - **Added `lambda/api/new_address/function.py`** — new function with DKIM key generation
 - Directory restructuring: Python Lambda functions moved from `lambda/api/python/` to `lambda/api/` (cleaner layout now that Node.js versions are removed).
 - Python Lambda layer runtime upgraded from `python3.9` to `python3.13`
-- Removed Node.js Lambda layer (no longer needed)
 - Lambda functions no longer carry a `type` field — all are Python with a unified layer and handler
-- Added S3 pre-flight checks that gate layer/function creation on zip existence
 - SSM Parameter Store replaced with remote state — the `infra` stack now reads zone data via `terraform_remote_state` from the `dns` stack instead of SSM parameters (`/cabal/control_domain_zone_id`, `/cabal/control_domain_zone_name`)
 - All four NLB listeners (IMAP/143, relay/25, submission/465, STARTTLS/587) now include ECS cutover conditionals, allowing gradual traffic migration from ASG to ECS target groups
-- Added private DNS records for Cloud Map service discovery
 - S3 bucket hardening — explicit `acl = "private"` on cache and React app buckets
 - Backup vault — `prevent_destroy` changed from `true` to `false` (flexibility during active development)
 - Counter build script: converted from Node.js npm to Python pip packaging
@@ -4444,6 +4443,7 @@ The full design rationale lives in [`docs/0.7.0/monitoring-plan.md`](docs/0.7.0/
 - `ssm:SendCommand` and `ssm:StartSession` permissions (no longer targeting EC2 directly)
 - `lambda_api_node.yml` and `build-api-node.sh` (Node.js Lambda no longer needed)
 - `build-api-python.sh` → `build-api.sh` (Python is now the sole Lambda runtime)
+- Node.js Lambda layer (no longer needed)
 
 ### Deprecated
 
