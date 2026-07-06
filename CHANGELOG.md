@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.41] - 2026-07-06
+
+### Added
+- Envelope payloads from `/list_envelopes` and `/search_envelopes` now
+  carry an `auth_results` field with the SPF/DKIM/DMARC verdicts the
+  smtp-in milters stamped, parsed only from `Authentication-Results`
+  headers bearing the control-domain authserv-id. `null` means no
+  trusted header (pre-feature or internally-routed mail) and must render
+  as "not verified", never as pass.
+
+### Fixed
+- Apple clients: pull-to-refresh (and the background refresh) now clear
+  stale rows after a folder shrinks below the loaded window - e.g. a bulk
+  archive/move performed on another device. When the top-page fetch spans
+  the whole (now-smaller) folder, any still-loaded message absent from it
+  is pruned, so the list count reconciles with the filter-pill counts
+  instead of stranding phantom rows until a hard reload.
+
 ## [0.10.40] - 2026-07-06
 
 ### Added
