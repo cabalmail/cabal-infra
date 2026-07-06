@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.42] - 2026-07-06
+
+### Added
+- Apple clients now display inbound SPF/DKIM/DMARC authentication verdicts:
+  a warning icon in the message list for mail that could not be
+  authenticated as coming from its claimed sender, and per-method verdict
+  chips (with an honest muted "Not verified" state) in the message detail
+  header on both iOS and macOS.
+- Webmail now displays the SPF/DKIM/DMARC authentication verdicts stamped
+  on inbound mail: messages that could not be authenticated as coming from
+  their claimed sender get a warning indicator in the message list, and
+  the reading view shows a per-method chip line (muted "Not verified" for
+  mail that predates the feature or bypassed the inbound relay).
+
 ## [0.10.41] - 2026-07-06
 
 ### Added

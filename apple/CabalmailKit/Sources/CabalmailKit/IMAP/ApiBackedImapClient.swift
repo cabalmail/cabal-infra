@@ -278,7 +278,8 @@ public actor ApiBackedImapClient: ImapClient {
             internalDate: date,
             size: nil,
             hasAttachments: raw.structure?.hasAttachments ?? false,
-            isImportant: Self.isImportant(priority: raw.priority)
+            isImportant: Self.isImportant(priority: raw.priority),
+            authResults: raw.authResults
         )
     }
 
@@ -391,7 +392,8 @@ extension ApiBackedImapClient {
                 priority: wire.priority,
                 messageId: wire.messageId,
                 inReplyTo: wire.inReplyTo,
-                references: wire.references
+                references: wire.references,
+                authResults: wire.authResults
             )
             return SearchedEnvelope(envelope: Self.makeEnvelope(inner), folder: wire.folder)
         }

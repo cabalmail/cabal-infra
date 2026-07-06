@@ -74,7 +74,20 @@ public struct Envelope: Sendable, Codable, Hashable, Identifiable {
     /// snapshot.
     public let isImportant: Bool
 
+    /// SPF/DKIM/DMARC verdicts stamped by smtp-in and parsed by the
+    /// Lambda. Nil for pre-feature mail, internally-routed mail, and
+    /// envelopes cached before the field existed — all of which must
+    /// render as "not verified", never as pass (see `AuthResults`).
+    public let authResults: AuthResults?
+
     public var id: UInt32 { uid }
+
+    /// Display bucket for `authResults` — the list row shows a warning
+    /// icon only for `.warning`; the detail view chips render in all
+    /// three states.
+    public var authVerification: AuthVerificationState {
+        AuthVerificationState(authResults)
+    }
 
     public init(
         uid: UInt32,
@@ -93,7 +106,8 @@ public struct Envelope: Sendable, Codable, Hashable, Identifiable {
         internalDate: Date? = nil,
         size: UInt32? = nil,
         hasAttachments: Bool = false,
-        isImportant: Bool = false
+        isImportant: Bool = false,
+        authResults: AuthResults? = nil
     ) {
         self.uid = uid
         self.messageId = messageId
@@ -112,6 +126,7 @@ public struct Envelope: Sendable, Codable, Hashable, Identifiable {
         self.size = size
         self.hasAttachments = hasAttachments
         self.isImportant = isImportant
+        self.authResults = authResults
     }
 
     public init(from decoder: Decoder) throws {
@@ -140,6 +155,9 @@ public struct Envelope: Sendable, Codable, Hashable, Identifiable {
         // snapshot decode failure followed by a refetch) is correct but
         // costs the user a wait on every first launch after the upgrade.
         self.isImportant = try container.decodeIfPresent(Bool.self, forKey: .isImportant) ?? false
+        // Nil (not-verified) for cache snapshots predating the field —
+        // absent auth data must never decode into anything pass-shaped.
+        self.authResults = try container.decodeIfPresent(AuthResults.self, forKey: .authResults)
     }
 }
 
@@ -172,7 +190,8 @@ extension Envelope {
             internalDate: internalDate,
             size: size,
             hasAttachments: hasAttachments,
-            isImportant: isImportant
+            isImportant: isImportant,
+            authResults: authResults
         )
     }
 }

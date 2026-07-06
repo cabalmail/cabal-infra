@@ -222,6 +222,35 @@ describe('Envelopes', () => {
     expect(container.querySelectorAll('.envelope-row').length).toBe(1);
   });
 
+  it('shows the auth warning indicator only for the warning state', async () => {
+    const envelopes = {
+      // Warning: hard DMARC failure.
+      '1': makeEnvelope(1, { auth_results: { spf: 'pass', dkim: 'pass', dmarc: 'fail' } }),
+      // Warning: no DMARC verdict, but SPF and DKIM both fail.
+      '2': makeEnvelope(2, { auth_results: { spf: 'fail', dkim: 'fail' } }),
+      // Verified-ok: nothing in the list.
+      '3': makeEnvelope(3, { auth_results: { spf: 'pass', dkim: 'pass', dmarc: 'pass' } }),
+      // Not verified (pre-feature / cached envelope): nothing in the list.
+      '4': makeEnvelope(4),
+      '5': makeEnvelope(5, { auth_results: null }),
+    };
+    mockGetEnvelopes.mockResolvedValue({ data: { envelopes } });
+
+    const { container } = render(<Harness message_ids={[1, 2, 3, 4, 5]} />);
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+
+    const rows = container.querySelectorAll('.envelope-row');
+    expect(rows.length).toBe(5);
+    expect(rows[0].querySelector('.indicator-auth')).toBeTruthy();
+    expect(rows[1].querySelector('.indicator-auth')).toBeTruthy();
+    expect(rows[2].querySelector('.indicator-auth')).toBeNull();
+    expect(rows[3].querySelector('.indicator-auth')).toBeNull();
+    expect(rows[4].querySelector('.indicator-auth')).toBeNull();
+    // The warning copy avoids "dangerous"/"phishing" framing.
+    expect(rows[0].querySelector('.indicator-auth title').textContent)
+      .toContain('could not be authenticated as coming from its claimed sender');
+  });
+
   it('shift-clicking range-selects contiguous rows', async () => {
     const ids = [1, 2, 3, 4, 5];
     const envelopes = {};

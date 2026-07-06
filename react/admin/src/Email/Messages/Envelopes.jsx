@@ -329,6 +329,7 @@ function Envelopes({
         from={e.from}
         flags={e.flags}
         struct={e.struct}
+        auth_results={e.auth_results}
         is_checked={selected.has(id)}
         dom_id={e.id}
         bulkMode={bulkMode}
