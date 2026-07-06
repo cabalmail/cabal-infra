@@ -895,10 +895,13 @@ def key_exists(bucket, key):
 # the wire format stays in sync and pylint's duplicate-code check stays quiet.
 
 # References is not part of the RFC 3501 ENVELOPE, so it rides the same
-# header fetch as X-PRIORITY. imapclient keys the response dict by the
-# requested atom, so the constant and the lookup in envelope_dict must stay
-# in lockstep — hence the single shared key.
-ENVELOPE_HEADER_FIELDS_KEY = 'BODY[HEADER.FIELDS (X-PRIORITY REFERENCES)]'
+# header fetch as X-PRIORITY, as does Authentication-Results (stamped by
+# the smtp-in verification milters — phase 2 of
+# docs/0.10.x/inbound-auth-verification-plan.md). imapclient keys the
+# response dict by the requested atom, so the constant and the lookup in
+# envelope_dict must stay in lockstep — hence the single shared key.
+ENVELOPE_HEADER_FIELDS_KEY = \
+    'BODY[HEADER.FIELDS (X-PRIORITY REFERENCES AUTHENTICATION-RESULTS)]'
 
 ENVELOPE_FETCH_KEYS = [
     'ENVELOPE', 'FLAGS', 'BODYSTRUCTURE', ENVELOPE_HEADER_FIELDS_KEY
@@ -910,6 +913,43 @@ ENVELOPE_FETCH_KEYS = [
 MAX_REFERENCES_IDS = 20
 
 _MSGID_RE = re.compile(r'<[^<>]+>')
+
+# RFC 8601 method=result at the start of one ;-separated resinfo segment.
+# Only the verdict token is surfaced; comments and properties (header.d,
+# smtp.mailfrom, ...) stay in the raw header for the view-source modal.
+_AUTH_RESULT_RE = re.compile(r'^\s*(spf|dkim|dmarc)\s*=\s*([A-Za-z0-9]+)')
+
+
+def parse_auth_results(headers):
+    '''Extracts SPF/DKIM/DMARC verdicts from Authentication-Results headers.
+
+    Only headers whose authserv-id is exactly the environment's control
+    domain are trusted: the smtp-in milters stamp under that identity and
+    strip inbound headers claiming it (phase 1 of
+    docs/0.10.x/inbound-auth-verification-plan.md), so this check is
+    defense in depth against a forged header arriving by any other path.
+    The milters emit one header per method, most recent first; the first
+    verdict seen for a method wins.
+
+    Returns e.g. {"spf": "pass", "dkim": "pass", "dmarc": "fail"} with a
+    key per method found, or None when no trusted header exists
+    (pre-feature mail, internally-routed mail that bypassed smtp-in).
+    Clients must render None as "not verified", never as pass.
+    '''
+    if not CONTROL_DOMAIN:
+        return None
+    results = {}
+    for raw in headers.get_all('Authentication-Results') or []:
+        authserv, _, resinfo = str(raw).partition(';')
+        # authserv-id may carry an RFC 8601 version token ("example.com 1").
+        authserv_words = authserv.split()
+        if not authserv_words or authserv_words[0].lower() != CONTROL_DOMAIN.lower():
+            continue
+        for segment in resinfo.split(';'):
+            match = _AUTH_RESULT_RE.match(segment)
+            if match and match.group(1) not in results:
+                results[match.group(1)] = match.group(2).lower()
+    return results or None
 
 
 def parse_message_ids(raw):
@@ -952,7 +992,8 @@ def envelope_dict(msgid, data):
         "priority": [f"priority-{s}" for s in priority_header.split() if s.isdigit()],
         "message_id": parse_message_ids(envelope.message_id),
         "in_reply_to": parse_message_ids(envelope.in_reply_to),
-        "references": parse_message_ids(headers.get('References'))[-MAX_REFERENCES_IDS:]
+        "references": parse_message_ids(headers.get('References'))[-MAX_REFERENCES_IDS:],
+        "auth_results": parse_auth_results(headers)
     }
 
 
