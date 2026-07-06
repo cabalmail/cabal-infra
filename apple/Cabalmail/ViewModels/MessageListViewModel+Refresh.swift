@@ -362,6 +362,15 @@ extension MessageListViewModel {
     ///     against it, so a delete surfaces on the next hard reload /
     ///     folder switch instead. Same trade the non-default sorts already
     ///     took, and far better than collapsing a scrolled list to the top.
+    ///   * ...UNLESS the fetch now spans the whole folder. When STATUS
+    ///     reports no more messages than we just fetched (`fetched.count >=
+    ///     totalMessages`), the top page IS the entire folder, so any loaded
+    ///     UID absent from it is provably gone -- independent of any
+    ///     client/server sort divergence, because there is no unseen tail to
+    ///     mis-place. This is the bulk-archive-elsewhere case: the folder
+    ///     shrank below the loaded window, so the stale rows (which a plain
+    ///     `envelopes.count > pageSize` gate would have stranded until a hard
+    ///     reload) reconcile on the next pull/background refresh instead.
     /// An empty fetch (transient/blank top page) is never read as
     /// "everything vanished."
     func applyRefreshPage(
@@ -369,9 +378,17 @@ extension MessageListViewModel {
         uidNext: UInt32,
         uidValidity: UInt32
     ) async throws {
-        let paginatedBeyondTopPage = UInt32(envelopes.count) > pageSize
+        // The top page is authoritative over the loaded rows when either the
+        // window still fits in one top page, or the fetch spans the whole
+        // (possibly shrunken) folder -- see the doc comment above. The
+        // spans-folder path is additionally gated on the folder actually
+        // holding fewer messages than we have loaded, so a transiently low
+        // STATUS can't turn a full fetch into a mass prune of a deep window.
+        let windowFitsTopPage = UInt32(envelopes.count) <= pageSize
+        let fetchSpansFolder = UInt32(fetched.count) >= totalMessages
+            && UInt32(envelopes.count) > totalMessages
         let disappeared: [UInt32]
-        if !paginatedBeyondTopPage, !fetched.isEmpty {
+        if !fetched.isEmpty, windowFitsTopPage || fetchSpansFolder {
             let fetchedUIDs = Set(fetched.map(\.uid))
             disappeared = envelopes.map(\.uid).filter { !fetchedUIDs.contains($0) }
         } else {
