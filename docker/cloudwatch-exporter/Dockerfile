@@ -1,4 +1,4 @@
-FROM prom/cloudwatch-exporter:v0.17.0@sha256:840f7ad72c10c0c8be6859d801c127904a6eef51c53072032bfaa28246ccef18
+FROM prom/cloudwatch-exporter:v0.18.0@sha256:da88be5880dc8413639b67904bf98525552c84282eff74e54556e00956520512
 
 # Configs are baked in. Updating metrics requires a rebuild + redeploy,
 # which fits the existing CI flow (app.yml builds the image, the ECS
