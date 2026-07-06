@@ -215,6 +215,9 @@
 .envelope-indicators .icon { opacity: 0.75; }
 .envelope-row.flagged .indicator-flagged { color: var(--accent); opacity: 1; }
 .envelope-row.important .indicator-important { color: var(--ink-danger); opacity: 1; }
+/* Authentication warning (DMARC failure): the message could not be
+   authenticated as coming from its claimed sender. */
+.envelope-indicators .indicator-auth { color: var(--ink-danger); opacity: 1; }
 
 /* ---- Important rail (priority) ---- */
 .envelope-row.important .envelope-content::after {

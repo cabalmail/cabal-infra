@@ -25,6 +25,9 @@ import {
 import {
   extractName, extractEmail, formatReaderTimestamp, initialsFor,
 } from '../../utils/formatDate';
+import {
+  authState, methodVerdict, hasAuthData, AUTH_WARNING, AUTH_WARNING_COPY,
+} from '../../utils/authResults';
 import { folderMeta } from '../../utils/folderMeta';
 import './MessageOverlay.css';
 
@@ -373,6 +376,41 @@ function MessageOverlay({
     : 'Undisclosed recipients';
   const timestamp = formatReaderTimestamp(envelope.date);
 
+  // Authentication verdicts ride on the envelope (parsed server-side from
+  // the Authentication-Results header), same as subject/from — not on the
+  // fetch_message payload. Absent data renders as a muted "Not verified",
+  // never as a pass.
+  const authResults = envelope.auth_results;
+  const authStateValue = authState(authResults);
+  const authTitle = authStateValue === AUTH_WARNING
+    ? `${AUTH_WARNING_COPY} Click to view the original headers.`
+    : 'Authentication results. Click to view the original headers.';
+  const authLine = (
+    <div className={`reader-auth reader-auth--${authStateValue}`}>
+      <button
+        type="button"
+        className="reader-auth-line"
+        onClick={openHeaders}
+        title={authTitle}
+        aria-label="Authentication results — view original headers"
+      >
+        {hasAuthData(authResults) ? (
+          ['spf', 'dkim', 'dmarc'].map((method) => (
+            <span
+              key={method}
+              className={`reader-auth-chip reader-auth-chip--${methodVerdict(authResults[method])}`}
+            >
+              <span className="reader-auth-chip-label">{method.toUpperCase()}</span>
+              {typeof authResults[method] === 'string' ? authResults[method] : '—'}
+            </span>
+          ))
+        ) : (
+          <span className="reader-auth-none">Not verified</span>
+        )}
+      </button>
+    </div>
+  );
+
   return (
     <div className="reader" data-layout={sheetAttr} role="region" aria-label="Message">
       {phoneBackBar}
@@ -482,6 +520,7 @@ function MessageOverlay({
             <span className="reader-to-label">to</span>
             <span>{toList}</span>
           </div>
+          {authLine}
         </header>
 
         <ReaderBody

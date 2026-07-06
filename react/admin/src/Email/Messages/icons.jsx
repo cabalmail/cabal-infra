@@ -49,9 +49,16 @@ const PATHS = {
       <circle cx="11" cy="17" r="1" fill="currentColor" />
     </>
   ),
+  'shield-alert': (
+    <>
+      <path d="M11 3l7 2.5v5.2c0 4.3-2.8 7.2-7 8.3-4.2-1.1-7-4-7-8.3V5.5L11 3z" />
+      <path d="M11 8v4" />
+      <circle cx="11" cy="15" r="0.5" fill="currentColor" />
+    </>
+  ),
 };
 
-function Icon({ name, size = 16, className = '' }) {
+function Icon({ name, size = 16, className = '', title = null }) {
   const path = PATHS[name];
   if (!path) return null;
   return (
@@ -67,6 +74,7 @@ function Icon({ name, size = 16, className = '' }) {
       strokeLinejoin="round"
       aria-hidden="true"
     >
+      {title && <title>{title}</title>}
       {path}
     </svg>
   );
