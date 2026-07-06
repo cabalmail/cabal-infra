@@ -2,6 +2,7 @@
 folder, plus an optional FLAGGED count.'''
 import json
 from helper import get_imap_client # pylint: disable=import-error
+from helper import validate_folder_name # pylint: disable=import-error
 from helper import maintenance_guard # pylint: disable=import-error
 
 ATTRS = ['MESSAGES', 'UNSEEN', 'UIDVALIDITY', 'UIDNEXT']
@@ -28,13 +29,19 @@ def handler(event, _context):
     '''
     query_string = event['queryStringParameters']
     user = event['requestContext']['authorizer']['claims']['cognito:username']
-    folder = query_string['folder'].replace("/", ".")
+    try:
+        folder = validate_folder_name(query_string.get('folder')).replace("/", ".")
+    except ValueError as err:
+        return {
+            "statusCode": 400,
+            "body": json.dumps({"status": f"Invalid input: {err}"})
+        }
     want_flagged = query_string.get('flagged') in TRUTHY
     # SEARCH runs against the selected mailbox, so a flagged count needs the
     # target folder selected; otherwise stay on INBOX (STATUS reads any folder
     # regardless of selection -- the cheap path the Apple idle poll uses).
     selected = folder if want_flagged else 'INBOX'
-    client = get_imap_client(query_string['host'], user, selected, True)
+    client = get_imap_client(None, user, selected, True)
     status = client.folder_status(folder, ATTRS)
     body = {
         "messages": status.get(b'MESSAGES'),

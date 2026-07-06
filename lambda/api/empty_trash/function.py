@@ -4,6 +4,7 @@ from helper import ( # pylint: disable=import-error
     delete_prefix,
     get_imap_client,
     validate_trash_folder,
+    CACHE_BUCKET,
 )
 
 from helper import maintenance_guard # pylint: disable=import-error
@@ -21,9 +22,8 @@ def handler(event, _context):
         folder = validate_trash_folder(body.get('folder'))
     except ValueError as err:
         return _invalid(err)
-    host = body['host']
     imap_folder = folder.replace("/", ".")
-    client = get_imap_client(host, user, imap_folder)
+    client = get_imap_client(None, user, imap_folder)
     try:
         # "1:*" covers the whole mailbox without materializing a UID list,
         # so this stays one round trip however full the trash is. On an
@@ -40,7 +40,7 @@ def handler(event, _context):
         }
     client.logout()
     # Best effort: drop the folder's cached raw bodies too.
-    delete_prefix(host.replace("imap", "cache"), f"{user}/{imap_folder}/")
+    delete_prefix(CACHE_BUCKET, f"{user}/{imap_folder}/")
     return {
         "statusCode": 200,
         "body": json.dumps({

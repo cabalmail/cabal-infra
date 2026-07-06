@@ -97,13 +97,23 @@ struct AvatarView: View {
     /// the same swatch — easier to scan than randomly-rotating colors.
     /// Hash the full mailbox+host so two senders at the same domain
     /// don't collide visually.
+    ///
+    /// Uses a fixed FNV-1a hash over the UTF-8 bytes rather than
+    /// `String.hashValue`, which is seeded with a per-process random value
+    /// and so would pick a different color on every app launch.
     private var backgroundColor: Color {
         let key = "\(sender?.mailbox ?? "")@\(sender?.host ?? "")"
         let palette: [Color] = [
             .blue, .teal, .indigo, .purple, .pink,
             .orange, .brown, .green, .mint, .cyan
         ]
-        let index = abs(key.hashValue) % palette.count
+        // FNV-1a (64-bit): deterministic across launches and platforms.
+        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+        for byte in key.utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 0x0000_0100_0000_01b3
+        }
+        let index = Int(hash % UInt64(palette.count))
         return palette[index]
     }
 

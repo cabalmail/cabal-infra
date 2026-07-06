@@ -14,6 +14,9 @@ resource "aws_lb_target_group" "tier" {
   target_type          = "ip"
   vpc_id               = var.vpc_id
   deregistration_delay = var.deregistration_delay
+  # null = AWS default (disabled for ip-type TCP targets). See the
+  # per-function rationale on local.target_groups.
+  preserve_client_ip   = each.value.preserve_client_ip
 
   stickiness {
     type    = "source_ip"

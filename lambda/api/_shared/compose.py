@@ -16,6 +16,7 @@ from botocore.exceptions import ClientError # pylint: disable=import-error
 from helper import format_mailbox # pylint: disable=import-error
 from helper import get_object # pylint: disable=import-error
 from helper import user_authorized_for_sender # pylint: disable=import-error
+from helper import CACHE_BUCKET # pylint: disable=import-error
 
 # Attachments are uploaded to S3 via the /upload_url Lambda's presigned
 # PUT URLs (the cache bucket's 2-day lifecycle handles cleanup). Total
@@ -185,7 +186,7 @@ def compose_from_body(body, user):
     lookup, and MIME assembly. Raises ValueError on a rejected payload
     (callers translate it to a 400). Sender authorization is the caller's
     responsibility (see unauthorized_sender_response_or_none).'''
-    bucket = body['host'].replace('imap', 'cache')
+    bucket = CACHE_BUCKET
     validate_outbound_headers(body)
     attachments = load_attachments(body.get('attachments', []), bucket, user)
     # The visible From may carry the user's display-name preference, but the

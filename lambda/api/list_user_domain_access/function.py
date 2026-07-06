@@ -14,7 +14,7 @@ table = ddb.Table('cabal-user-domain-access')
 def handler(event, _context):
     '''Returns the full allow list as a flat array of {user, domain} items.'''
     groups = event['requestContext']['authorizer']['claims'].get('cognito:groups', '')
-    if 'admin' not in groups:
+    if 'admin' not in groups.strip('[]').replace(',', ' ').split():
         return {
             'statusCode': 403,
             'body': json.dumps({'Error': 'Admin access required'})

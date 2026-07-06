@@ -29,6 +29,7 @@ from helper import ( # pylint: disable=import-error
     maintenance_guard,
     parse_json_body,
     validate_uid,
+    CACHE_BUCKET,
 )
 
 
@@ -140,12 +141,11 @@ def _parse_replaces(body):
     return (validate_uid(uid), validate_uid(uidvalidity))
 
 
-def _drop_cached_raw(host, user, uid):
+def _drop_cached_raw(_host, user, uid):
     '''Best effort: drop the cached raw body so an expunged draft is not
     retrievable from the cache bucket afterwards (same hygiene as
-    purge_messages).'''
-    bucket = host.replace('imap', 'cache')
-    delete_object(bucket, f'{user}/{DRAFTS_FOLDER}/{uid}/raw')
+    purge_messages). `_host` is ignored; the bucket is derived server-side.'''
+    delete_object(CACHE_BUCKET, f'{user}/{DRAFTS_FOLDER}/{uid}/raw')
 
 
 def _invalid(err):

@@ -9,6 +9,7 @@ from helper import parse_json_body  # pylint: disable=import-error
 from helper import user_authorized_for_domain  # pylint: disable=import-error
 from helper import validate_dns_apex  # pylint: disable=import-error
 from helper import validate_dns_subdomain  # pylint: disable=import-error
+from helper import validate_local_part  # pylint: disable=import-error
 
 domains = json.loads(os.environ['DOMAINS'])
 control_domain = os.environ['CONTROL_DOMAIN']
@@ -48,6 +49,7 @@ def handler(event, _context):
     try:
         validate_dns_apex(body['tld'])
         validate_dns_subdomain(body['subdomain'])
+        validate_local_part(body['username'])
     except ValueError as err:
         return {
             'statusCode': 400,
@@ -71,23 +73,28 @@ def handler(event, _context):
                 'Error': f"Not permitted to create addresses on \"{body['tld']}\""
             })
         }
+    # Derive the address server-side rather than trusting body['address']: it is
+    # the DynamoDB primary key and the value user_authorized_for_sender matches
+    # on, so it must equal the real routing identity, not an arbitrary client
+    # string. username/subdomain/tld are all validated above.
+    address = f"{body['username']}@{body['subdomain']}.{body['tld']}"
     try:
         create_dns_records(domains[body['tld']], body['subdomain'], body['tld'])
-        record_address(user, body)
+        record_address(user, body, address)
         notify_containers()
     except Exception as err:  # pylint: disable=broad-exception-caught
-        print(f"Error creating address {body['address']}: {err}")
+        print(f"Error creating address {address}: {err}")
         return {
             'statusCode': 500,
             'body': json.dumps({
-                'address': body['address'],
+                'address': address,
                 'error': str(err)
             })
         }
     return {
         'statusCode': 201,
         'body': json.dumps({
-            'address': body['address']
+            'address': address
         })
     }
 
@@ -140,10 +147,10 @@ def create_dns_records(zone_id, subdomain, tld):
     r53.change_resource_record_sets(**params)
 
 
-def record_address(user, body):
+def record_address(user, body, address):
     '''Records the new address in DynamoDB'''
     table.put_item(Item={
-        'address': body['address'],
+        'address': address,
         'tld': body['tld'],
         'user': user,
         'username': body['username'],

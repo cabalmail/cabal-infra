@@ -123,8 +123,9 @@ extension MessageDetailView {
     /// densely during a drag, so skip sub-8pt deltas to avoid churning the save
     /// debounce.
     func reportPlainScroll(_ offsetY: CGFloat) {
+        guard offsetY.isFinite else { return }
         let offset = max(0, Int(offsetY))
-        if abs(offset - lastReportedPlainOffset) < 8 { return }
+        if let last = lastReportedPlainOffset, abs(offset - last) < 8 { return }
         lastReportedPlainOffset = offset
         reportMessageScroll(offset: offset, anchor: nil)
     }

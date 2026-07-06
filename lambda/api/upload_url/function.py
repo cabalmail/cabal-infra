@@ -17,6 +17,7 @@ import os
 import re
 import uuid
 from helper import sign_put_url # pylint: disable=import-error
+from helper import CACHE_BUCKET # pylint: disable=import-error
 
 KEY_PREFIX = 'outbound'
 MAX_FILES_PER_REQUEST = 32
@@ -55,10 +56,7 @@ def _build_uploads(event, user):
     if len(files) > MAX_FILES_PER_REQUEST:
         raise _RequestError(400, f"at most {MAX_FILES_PER_REQUEST} files per request")
 
-    host = body.get('host')
-    if not host or not isinstance(host, str):
-        raise _RequestError(400, "host is required")
-    bucket = host.replace('imap', 'cache')
+    bucket = CACHE_BUCKET
 
     uploads = []
     for index, entry in enumerate(files):
