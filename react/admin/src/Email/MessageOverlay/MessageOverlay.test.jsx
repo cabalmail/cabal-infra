@@ -323,4 +323,60 @@ describe('MessageOverlay (Reader)', () => {
       }
     });
   });
+
+  describe('authentication line', () => {
+    it('renders per-method chips colored by verdict for the warning state', async () => {
+      const { unmount, container } = renderOverlay({
+        envelope: {
+          ...testEnvelope,
+          auth_results: { spf: 'pass', dkim: 'fail', dmarc: 'fail' },
+        },
+      });
+      try {
+        await waitFor(() => expect(screen.getByText('Test Subject')).toBeInTheDocument());
+        expect(container.querySelector('.reader-auth--warning')).toBeTruthy();
+        const chips = container.querySelectorAll('.reader-auth-chip');
+        expect(chips.length).toBe(3);
+        expect(chips[0].className).toContain('reader-auth-chip--ok'); // SPF pass
+        expect(chips[1].className).toContain('reader-auth-chip--bad'); // DKIM fail
+        expect(chips[2].className).toContain('reader-auth-chip--bad'); // DMARC fail
+        expect(chips[2].textContent).toContain('DMARC');
+        expect(chips[2].textContent).toContain('fail');
+        // Warning copy avoids "dangerous" framing.
+        const line = container.querySelector('.reader-auth-line');
+        expect(line.title).toContain('could not be authenticated as coming from its claimed sender');
+      } finally {
+        unmount();
+      }
+    });
+
+    it('renders all three chips in the verified-ok state, with absent methods neutral', async () => {
+      const { unmount, container } = renderOverlay({
+        envelope: { ...testEnvelope, auth_results: { dkim: 'pass', dmarc: 'pass' } },
+      });
+      try {
+        await waitFor(() => expect(screen.getByText('Test Subject')).toBeInTheDocument());
+        expect(container.querySelector('.reader-auth--ok')).toBeTruthy();
+        const chips = container.querySelectorAll('.reader-auth-chip');
+        expect(chips.length).toBe(3);
+        // SPF was not evaluated: neutral chip, no verdict token.
+        expect(chips[0].className).toContain('reader-auth-chip--neutral');
+        expect(chips[0].textContent).toContain('SPF');
+      } finally {
+        unmount();
+      }
+    });
+
+    it('renders a muted "Not verified" when auth_results is absent — never a pass', async () => {
+      const { unmount, container } = renderOverlay(); // testEnvelope has no auth_results
+      try {
+        await waitFor(() => expect(screen.getByText('Test Subject')).toBeInTheDocument());
+        expect(container.querySelector('.reader-auth--not-verified')).toBeTruthy();
+        expect(container.querySelectorAll('.reader-auth-chip').length).toBe(0);
+        expect(screen.getByText('Not verified')).toBeInTheDocument();
+      } finally {
+        unmount();
+      }
+    });
+  });
 });

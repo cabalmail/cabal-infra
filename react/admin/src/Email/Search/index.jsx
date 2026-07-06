@@ -586,6 +586,7 @@ function Search({
                   from={e.from}
                   flags={e.flags}
                   struct={e.struct}
+                  auth_results={e.auth_results}
                   folder={!thisFolderOnly && e.folder ? e.folder : null}
                   is_checked={selected.has(id)}
                   dom_id={e.id}

@@ -8,6 +8,7 @@ import {
 import 'react-swipeable-list/dist/styles.css';
 import Icon from './icons';
 import BimiAvatar from './BimiAvatar';
+import { authState, AUTH_WARNING, AUTH_WARNING_COPY } from '../../utils/authResults';
 import formatDate, { extractName } from '../../utils/formatDate';
 
 function Envelope({
@@ -23,6 +24,7 @@ function Envelope({
   from,
   flags,
   struct,
+  auth_results,
   folder,
   is_checked,
   dom_id,
@@ -37,6 +39,10 @@ function Envelope({
   const hasAttachment = struct && struct[1] === 'mixed';
   const isImportant = Array.isArray(priority)
     && priority.some((p) => p === 'priority-1' || p === 'priority-2');
+  // Warning state only: verified-ok and not-verified show nothing in the
+  // list, so the indicator area's footprint varies exactly as it already
+  // does for the other flag-driven icons.
+  const authWarning = authState(auth_results) === AUTH_WARNING;
   const fromName = extractName(from && from[0]) || (from && from[0]) || '';
   const relDate = formatDate(date);
   // `folder` is only set when the row is rendered inside a cross-folder
@@ -141,6 +147,14 @@ function Envelope({
           </div>
         </div>
         <div className="envelope-indicators" aria-hidden="true">
+          {authWarning && (
+            <Icon
+              name="shield-alert"
+              size={13}
+              className="indicator-auth"
+              title={AUTH_WARNING_COPY}
+            />
+          )}
           {isImportant && <Icon name="important" size={13} className="indicator-important" />}
           {hasAttachment && <Icon name="paperclip" size={13} />}
           {answered && <Icon name="reply" size={13} />}
