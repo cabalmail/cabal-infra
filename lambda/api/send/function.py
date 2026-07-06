@@ -20,6 +20,7 @@ from helper import get_mpw # pylint: disable=import-error
 from helper import parse_json_body # pylint: disable=import-error
 from helper import upload_object # pylint: disable=import-error
 from helper import validate_uid # pylint: disable=import-error
+from helper import CACHE_BUCKET, SMTP_HOST # pylint: disable=import-error
 from helper import MaintenanceError, maintenance_response # pylint: disable=import-error
 
 # Sending is SMTP-first: outbound delivery never blocks on IMAP. The Bcc-free
@@ -99,7 +100,7 @@ def handler(event, _context):  # pylint: disable=too-many-return-statements
         if addr
     ]
 
-    return_from_send = send(msg, body['smtp_host'], sender, recipients)
+    return_from_send = send(msg, SMTP_HOST, sender, recipients)
     if return_from_send['statusCode'] != 200:
         # Delivery failed, so release the claim - the user's retry must be
         # allowed to actually send.
@@ -168,8 +169,7 @@ def _discard_draft_copy(body, user):
             # Drop the cached raw body so the expunged draft is not
             # retrievable from the cache bucket afterwards (same hygiene as
             # purge_messages).
-            bucket = body['host'].replace('imap', 'cache')
-            delete_object(bucket, f'{user}/{DRAFTS_FOLDER}/{uid}/raw')
+            delete_object(CACHE_BUCKET, f'{user}/{DRAFTS_FOLDER}/{uid}/raw')
     except Exception as err:  # pylint: disable=broad-except
         print(f'[send] WARN failed to discard draft copy: {err}')
 
@@ -184,11 +184,13 @@ def _append_sent_queue_url():
     return url
 
 
-def _queue_sent_copy(msg, host, user, message_id):
+def _queue_sent_copy(msg, _host, user, message_id):
     '''Stages the Bcc-free Sent copy to S3 and enqueues an append job. Best
     effort: a failure means the message was delivered but its Sent copy is not
-    recorded, which we log rather than surface as a send failure.'''
-    bucket = host.replace('imap', 'cache')
+    recorded, which we log rather than surface as a send failure.
+
+    `_host` is ignored; the cache bucket is derived server-side (CACHE_BUCKET).'''
+    bucket = CACHE_BUCKET
     key = f'{SENT_PENDING_PREFIX}/{user}/{uuid.uuid4()}'
     try:
         upload_object(bucket, key, 'message/rfc822', msg.as_string().encode())
@@ -198,7 +200,6 @@ def _queue_sent_copy(msg, host, user, message_id):
                 'bucket': bucket,
                 'key': key,
                 'user': user,
-                'host': host,
                 'message_id': message_id or '',
             })
         )

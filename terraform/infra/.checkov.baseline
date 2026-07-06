@@ -271,17 +271,6 @@
             ]
         },
         {
-            "file": "/modules/elb/main.tf",
-            "findings": [
-                {
-                    "resource": "module.load_balancer.aws_lb.elb",
-                    "check_ids": [
-                        "CKV_AWS_150"
-                    ]
-                }
-            ]
-        },
-        {
             "file": "/modules/front_door/main.tf",
             "findings": [
                 {
@@ -318,7 +307,6 @@
                     "resource": "module.monitoring.aws_lb.uptime",
                     "check_ids": [
                         "CKV2_AWS_28",
-                        "CKV_AWS_150",
                         "CKV_AWS_91"
                     ]
                 }

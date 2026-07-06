@@ -1,6 +1,11 @@
 '''Shared helpers for the Cabalmail Lambda API: IMAP client/auth, DynamoDB
 address lookups, S3 message caching and presigned URLs, envelope decoding, and
 the request-input validators used across the handlers.'''
+# This is a deliberately broad shared module; it sits just over pylint's
+# 1000-line max-module-lines heuristic. Splitting it into topical modules is
+# worthwhile but out of scope here, and would mean teaching build-api-one.sh a
+# new per-module bundling rule for every consumer zip.
+# pylint: disable=too-many-lines
 import email
 import functools
 import io
@@ -33,6 +38,36 @@ mpw = ssm.get_parameter(Name='/cabal/master_password',
 def get_mpw():
     """Returns the master password"""
     return mpw
+
+
+# Canonical mail-tier endpoints and cache bucket, derived server-side from the
+# environment's control domain -- NEVER from a request field.
+#
+# The IMAP/SMTP host and the S3 cache bucket used to be taken from a client
+# `host`/`smtp_host` parameter (bucket = host.replace("imap","cache")). Because
+# get_imap_client logs in with the shared master password ({user}*admin / SMTP
+# `master`), a client-chosen host let any authenticated user point the
+# connection at a server they control and capture that master credential -- a
+# full multi-tenant compromise. These values are fixed per environment (the ELB
+# publishes imap.<domain>/smtp-out.<domain>; the bucket is cache.<domain>), so
+# we derive them here and ignore whatever the client sends. `.get` with a blank
+# default keeps helper importable in any function that lacks CONTROL_DOMAIN;
+# such functions never touch these paths.
+CONTROL_DOMAIN = os.environ.get('CONTROL_DOMAIN', '')
+IMAP_HOST = f'imap.{CONTROL_DOMAIN}'
+SMTP_HOST = f'smtp-out.{CONTROL_DOMAIN}'
+CACHE_BUCKET = f'cache.{CONTROL_DOMAIN}'
+
+
+def is_admin(groups_claim):
+    '''True when the caller's `cognito:groups` claim contains the exact `admin`
+    group. The claim is a serialized list -- API Gateway may render it as
+    "admin", "admin,users", or "[admin users]" -- so we split on commas and
+    whitespace and match a whole element. A substring test (`'admin' in claim`)
+    would wrongly admit any group whose name merely contains "admin"
+    (e.g. "admin-readonly", "nonadmin").'''
+    members = (groups_claim or '').strip('[]').replace(',', ' ').split()
+    return 'admin' in members
 
 
 # ---------------------------------------------------------------------------
@@ -158,7 +193,7 @@ def maintenance_guard(handler):
 def admin_response_or_none(event):
     """Returns a 403 response when the caller lacks the admin group, else None"""
     groups = event['requestContext']['authorizer']['claims'].get('cognito:groups', '')
-    if 'admin' not in groups:
+    if not is_admin(groups):
         return {
             'statusCode': 403,
             'body': json.dumps({'Error': 'Admin access required'})
@@ -179,8 +214,8 @@ def find_managed_apex(domains_map, domain):
                 best_zone = zone_id
     return (best_apex, best_zone)
 
-def get_imap_client(host, user, folder, read_only=False):
-    '''Returns an IMAP client for host/user with folder selected.
+def get_imap_client(_host, user, folder, read_only=False):
+    '''Returns an IMAP client for the current user with folder selected.
 
     Raises MaintenanceError when a planned IMAP roll is in progress, so callers
     short-circuit to a friendly 503 (via maintenance_guard) instead of dialing a
@@ -191,9 +226,15 @@ def get_imap_client(host, user, folder, read_only=False):
     Connection handling (including the optional warm-invocation pool) lives in
     imap_session; this wrapper just applies the maintenance gate first, then
     delegates. With pooling off (the default) the returned object is a bare
-    IMAPClient connected/authenticated/selected exactly as before.'''
+    IMAPClient connected/authenticated/selected exactly as before.
+
+    The `_host` argument is accepted for call-site compatibility but
+    deliberately IGNORED: every IMAP connection authenticates with the shared
+    master password, so honoring a client-supplied host would let any
+    authenticated caller exfiltrate that credential to a server they control. We
+    always dial the environment's canonical IMAP_HOST instead.'''
     _raise_if_maintenance()
-    return open_imap_client(host, user, folder, read_only, mpw)
+    return open_imap_client(IMAP_HOST, user, folder, read_only, mpw)
 
 
 def user_authorized_for_sender(user, sender):
@@ -600,6 +641,20 @@ def validate_dns_subdomain(subdomain):
     return _validate_dns_name(subdomain, 1, 'subdomain')
 
 
+def validate_local_part(local):
+    '''Validates an address local part (the text before the @): rejects an empty
+    value or any embedded whitespace, then returns it unchanged. Whitespace is
+    the guard that matters -- the local part is written verbatim into the
+    sendmail virtusertable, where makemap rejects a leading space and treats a
+    tab as the key/value separator, so either wedges the map rebuild for a whole
+    tier and crash-loops the reconfigure sidecar (see generate-config.sh).'''
+    if not isinstance(local, str) or not local:
+        raise ValueError('username is required')
+    if any(ch.isspace() for ch in local):
+        raise ValueError(f'username must not contain whitespace: {local!r}')
+    return local
+
+
 class ZoneMismatchError(Exception):
     '''Raised when a hosted-zone id does not actually own the apex the DOMAINS
     env var maps it to. Signals operator/Terraform drift, not user error.'''
@@ -727,15 +782,18 @@ def unsubscribe_folder(folder, host, user):
     client.logout()
     return return_value
 
-def get_message(host, user, folder, msg_id):
-    '''Gets a message from cache on s3 or from imap server'''
-    bucket = host.replace("imap", "cache")
+def get_message(_host, user, folder, msg_id):
+    '''Gets a message from cache on s3 or from imap server.
+
+    `_host` is ignored (see get_imap_client); the cache bucket and IMAP target
+    are derived from the environment, never from the request.'''
+    bucket = CACHE_BUCKET
     email_body_raw = b''
     key = f"{user}/{folder}/{msg_id}/raw"
     if key_exists(bucket, key):
         email_body_raw = get_object(bucket, key)
     else:
-        client = get_imap_client(host, user, folder, True)
+        client = get_imap_client(IMAP_HOST, user, folder, True)
         message = client.fetch([msg_id],['RFC822'])
         email_body_raw = message[msg_id][b'RFC822']
         client.logout()
@@ -837,10 +895,13 @@ def key_exists(bucket, key):
 # the wire format stays in sync and pylint's duplicate-code check stays quiet.
 
 # References is not part of the RFC 3501 ENVELOPE, so it rides the same
-# header fetch as X-PRIORITY. imapclient keys the response dict by the
-# requested atom, so the constant and the lookup in envelope_dict must stay
-# in lockstep — hence the single shared key.
-ENVELOPE_HEADER_FIELDS_KEY = 'BODY[HEADER.FIELDS (X-PRIORITY REFERENCES)]'
+# header fetch as X-PRIORITY, as does Authentication-Results (stamped by
+# the smtp-in verification milters — phase 2 of
+# docs/0.10.x/inbound-auth-verification-plan.md). imapclient keys the
+# response dict by the requested atom, so the constant and the lookup in
+# envelope_dict must stay in lockstep — hence the single shared key.
+ENVELOPE_HEADER_FIELDS_KEY = \
+    'BODY[HEADER.FIELDS (X-PRIORITY REFERENCES AUTHENTICATION-RESULTS)]'
 
 ENVELOPE_FETCH_KEYS = [
     'ENVELOPE', 'FLAGS', 'BODYSTRUCTURE', ENVELOPE_HEADER_FIELDS_KEY
@@ -852,6 +913,43 @@ ENVELOPE_FETCH_KEYS = [
 MAX_REFERENCES_IDS = 20
 
 _MSGID_RE = re.compile(r'<[^<>]+>')
+
+# RFC 8601 method=result at the start of one ;-separated resinfo segment.
+# Only the verdict token is surfaced; comments and properties (header.d,
+# smtp.mailfrom, ...) stay in the raw header for the view-source modal.
+_AUTH_RESULT_RE = re.compile(r'^\s*(spf|dkim|dmarc)\s*=\s*([A-Za-z0-9]+)')
+
+
+def parse_auth_results(headers):
+    '''Extracts SPF/DKIM/DMARC verdicts from Authentication-Results headers.
+
+    Only headers whose authserv-id is exactly the environment's control
+    domain are trusted: the smtp-in milters stamp under that identity and
+    strip inbound headers claiming it (phase 1 of
+    docs/0.10.x/inbound-auth-verification-plan.md), so this check is
+    defense in depth against a forged header arriving by any other path.
+    The milters emit one header per method, most recent first; the first
+    verdict seen for a method wins.
+
+    Returns e.g. {"spf": "pass", "dkim": "pass", "dmarc": "fail"} with a
+    key per method found, or None when no trusted header exists
+    (pre-feature mail, internally-routed mail that bypassed smtp-in).
+    Clients must render None as "not verified", never as pass.
+    '''
+    if not CONTROL_DOMAIN:
+        return None
+    results = {}
+    for raw in headers.get_all('Authentication-Results') or []:
+        authserv, _, resinfo = str(raw).partition(';')
+        # authserv-id may carry an RFC 8601 version token ("example.com 1").
+        authserv_words = authserv.split()
+        if not authserv_words or authserv_words[0].lower() != CONTROL_DOMAIN.lower():
+            continue
+        for segment in resinfo.split(';'):
+            match = _AUTH_RESULT_RE.match(segment)
+            if match and match.group(1) not in results:
+                results[match.group(1)] = match.group(2).lower()
+    return results or None
 
 
 def parse_message_ids(raw):
@@ -894,7 +992,8 @@ def envelope_dict(msgid, data):
         "priority": [f"priority-{s}" for s in priority_header.split() if s.isdigit()],
         "message_id": parse_message_ids(envelope.message_id),
         "in_reply_to": parse_message_ids(envelope.in_reply_to),
-        "references": parse_message_ids(headers.get('References'))[-MAX_REFERENCES_IDS:]
+        "references": parse_message_ids(headers.get('References'))[-MAX_REFERENCES_IDS:],
+        "auth_results": parse_auth_results(headers)
     }
 
 

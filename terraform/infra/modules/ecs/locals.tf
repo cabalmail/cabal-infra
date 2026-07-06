@@ -60,11 +60,26 @@ locals {
   # operator-debugging window by 3x. The smtp tiers roll with overlap
   # (min_healthy=100), so they keep the relaxed 30s probe. Phase 1 of
   # docs/0.10.x/imap-deploy-downtime-plan.md.
+  # preserve_client_ip: NLB client IP preservation is disabled by default
+  # for ip-type TCP targets, which hands sendmail the NLB ENI's private
+  # address as the SMTP peer. On the relay TG that broke inbound SPF
+  # evaluation (phase 1 of docs/0.10.x/inbound-auth-verification-plan.md:
+  # opendmarc checked the sender's SPF record against the NLB's own IP
+  # and failed every external message), and it also keyed sendmail's
+  # confCONNECTION_RATE_THROTTLE and access_db to a single "client".
+  # smtp-in's SG already allows 25 from 0.0.0.0/0, so no SG change rides
+  # along. The imap TG must stay at the default: the NLB terminates TLS
+  # (993->143) and Dovecot's login_trusted_networks treats the NLB
+  # forwarding CIDRs as the secured path - preserving real client IPs
+  # there would break plaintext auth on forwarded connections.
+  # submission/starttls are left at the default too: smtp-out's Dovecot
+  # auth posture is tuned for NLB-fronted peers, and nothing there needs
+  # the real IP today.
   target_groups = {
-    imap       = { port = 143, health_check_interval = 10 }
-    relay      = { port = 25, health_check_interval = 30 }
-    submission = { port = 465, health_check_interval = 30 } # Dovecot submission (implicit TLS); NLB passes through to container port 465
-    starttls   = { port = 587, health_check_interval = 30 }
+    imap       = { port = 143, health_check_interval = 10, preserve_client_ip = null }
+    relay      = { port = 25, health_check_interval = 30, preserve_client_ip = "true" }
+    submission = { port = 465, health_check_interval = 30, preserve_client_ip = null } # Dovecot submission (implicit TLS); NLB passes through to container port 465
+    starttls   = { port = 587, health_check_interval = 30, preserve_client_ip = null }
   }
 
   # Flatten per-tier port lists into a map keyed by "tier-port" for

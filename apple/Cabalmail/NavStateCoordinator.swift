@@ -126,6 +126,12 @@ final class NavStateCoordinator {
         lastSeenUpdatedAt = max(lastSeenUpdatedAt, cursor.updatedAt ?? 0)
         // The folder must still exist (another client may have deleted it).
         guard folders.contains(where: { $0.path == cursor.folder }) else { return nil }
+        // A folder-only cursor pointing at INBOX is where launch already lands
+        // the user, so there's nothing to resume — don't offer the prompt.
+        if cursor.messageID == nil, cursor.uid == nil,
+           cursor.folder.caseInsensitiveCompare("INBOX") == .orderedSame {
+            return nil
+        }
         // A folder-only cursor has no message to verify; a message cursor must
         // still be reachable in that folder.
         if cursor.messageID != nil || cursor.uid != nil {

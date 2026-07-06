@@ -16,7 +16,7 @@ table = ddb.Table(table_name)
 def handler(event, _context):
     '''Returns DMARC report records in reverse chronological order'''
     groups = event['requestContext']['authorizer']['claims'].get('cognito:groups', '')
-    if 'admin' not in groups:
+    if 'admin' not in groups.strip('[]').replace(',', ' ').split():
         return {
             'statusCode': 403,
             'body': json.dumps({'Error': 'Admin access required'})

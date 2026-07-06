@@ -5,6 +5,89 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.40] - 2026-07-06
+
+### Added
+- Added a Settings → About → Acknowledgements screen to the iOS and macOS
+  apps that reproduces, in full, the MIT license texts for the bundled
+  `marked` and `turndown` JavaScript libraries the rich-text composer
+  ships. These attribution terms attach because the app is distributed
+  through the App Store, unlike the server-side images that run only on
+  our own infrastructure.
+- Inbound mail is now verified against the sender's SPF, DKIM, and DMARC
+  records at the smtp-in relay (OpenDKIM in verify mode plus OpenDMARC in
+  monitor mode, built from source for AL2023). Verdicts are stamped as an
+  `Authentication-Results` header under the control-domain authserv-id,
+  and forged inbound headers claiming that authserv-id are stripped.
+  Observe-only: no message is rejected or quarantined regardless of the
+  sender's published policy.
+
+### Changed
+- The Apple clients' launch splash now shows the Cabalmail mark (the same
+  asset as the folder-list sidebar branding) in place of the generic `tray`
+  system symbol.
+- The Apple clients no longer offer to resume where you left off when the
+  saved position is INBOX with no message selected. Launch already lands you
+  there, so the prompt was a no-op.
+
+### Removed
+- The unused `dompurify` dependency from the React admin client. It was
+  never imported; received email HTML is rendered in a sandboxed iframe with no
+  `allow-scripts`, which is what neutralizes scripts. Documentation that
+  described a DOMPurify sanitization step (and the long-replaced Draft.js
+  editor) is corrected to match.
+- Removed three more unused runtime dependencies from the admin web
+  client (`web-vitals`, `@tiptap/extension-color`,
+  `@tiptap/extension-text-style`); none were imported by application
+  code or present in the shipped bundle, so the generated third-party
+  notices are unaffected.
+
+### Fixed
+- Apple clients: the initials-avatar background color for a sender with no
+  BIMI logo or contact photo is now deterministic across app launches. It
+  previously used Swift's per-process-seeded `String.hashValue`, so the same
+  correspondent could show a different color each time the app was launched.
+- Fixed a crash in the Apple clients when opening a plain-text email. The
+  in-message scroll reporter used an `Int.min` sentinel for the last reported
+  offset, so the first scroll callback overflowed computing `offset -
+  lastReportedPlainOffset`. The sentinel is now optional and non-finite scroll
+  offsets are ignored.
+- New-address creation now rejects a local part (the text before the `@`)
+  that is empty or contains any whitespace. A stray space rode into the
+  generated sendmail `virtusertable`, where `makemap` rejects it and
+  crash-loops the reconfigure sidecar — silently stopping *every* new address
+  from propagating to the running mail tiers until the bad row was removed.
+  `generate-config.sh` now also skips such a row defensively so one malformed
+  entry can no longer wedge config regeneration for the whole fleet.
+- Inbound SMTP connections now reach smtp-in with the real client
+  address (NLB client IP preservation on the relay target group). SPF
+  had been evaluated against the load balancer's own ENI and failed for
+  every external sender; sendmail's connection-rate throttle and access
+  map likewise treated all inbound mail as one client.
+
+### Security
+- Tightened server-side validation on the address- and folder-management
+  endpoints: address revocation now derives the DNS records to delete from the
+  stored address row rather than client-supplied `subdomain`/`tld` (so a caller
+  can no longer target another user's records); new addresses store a
+  server-derived `address` key instead of a client-supplied one; the
+  folder-management endpoints (`new_folder`, `delete_folder`,
+  `subscribe_folder`, `unsubscribe_folder`, `folder_status`) now validate the
+  folder name like the read paths already did; and the admin-group check is an
+  exact membership test instead of a substring match.
+- Enabled deletion protection (`enable_deletion_protection = true`) on both
+  public load balancers - the production mail NLB and the monitoring ALB - so
+  an accidental console or `terraform destroy` deletion can no longer take the
+  mail path offline. The `destroy_terraform.yml` teardown strips the attribute
+  in its throwaway working copy (the same way it already strips
+  `lifecycle.prevent_destroy`), so a deliberate non-prod teardown still
+  proceeds. Clears the `CKV_AWS_150` scanner findings from the baseline.
+- The mail API no longer trusts the client-supplied `host`/`smtp_host`
+  parameters. The IMAP/SMTP endpoints and the S3 cache bucket are now derived
+  server-side from the environment's control domain, closing a path by which an
+  authenticated user could aim a connection at a server they control and
+  capture the shared IMAP/SMTP master credential.
+
 ## [0.10.39] - 2026-07-04
 
 ### Changed

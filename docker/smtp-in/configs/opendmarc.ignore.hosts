@@ -1,0 +1,4 @@
+# Connections opendmarc skips entirely: loopback only (sendmail's local
+# submissions and health probes; never internet mail).
+127.0.0.1
+::1

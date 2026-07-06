@@ -9,6 +9,13 @@ resource "aws_lb" "elb" {
   subnets                          = var.public_subnet_ids
   enable_cross_zone_load_balancing = true
 
+  # Guard the production mail path against an accidental console or
+  # `terraform destroy` deletion that would take email offline. A
+  # deliberate non-prod teardown still works: destroy_terraform.yml flips
+  # this to false in its throwaway working copy, the same way it strips
+  # lifecycle.prevent_destroy.
+  enable_deletion_protection = true
+
   # TLS-listener connections only (the IMAPS listener; SMTP is TCP
   # passthrough and never appears here) - see access_logs.tf for the
   # caveat and the bucket.

@@ -476,7 +476,7 @@ extension MailRootView {
             // title here (the sidebar column never showed one); the mark is
             // purely additive. iOS/iPadOS host theirs in the toolbar below.
             HStack {
-                CabalmailMark(size: 30)
+                CabalmailMark(size: 90)
                 Spacer()
             }
             .padding(.leading, 16)
@@ -533,12 +533,12 @@ extension MailRootView {
             // earlier systems render toolbar images plain anyway.
             if #available(iOS 26.0, visionOS 26.0, *) {
                 ToolbarItem(placement: .topBarLeading) {
-                    CabalmailMark(size: isWideSidebar ? 34 : 44)
+                    CabalmailMark(size: isWideSidebar ? 102 : 132)
                 }
                 .sharedBackgroundVisibility(.hidden)
             } else {
                 ToolbarItem(placement: .topBarLeading) {
-                    CabalmailMark(size: isWideSidebar ? 34 : 44)
+                    CabalmailMark(size: isWideSidebar ? 102 : 132)
                 }
             }
         }

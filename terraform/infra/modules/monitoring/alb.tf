@@ -14,6 +14,11 @@ resource "aws_lb" "uptime" {
   subnets            = var.public_subnet_ids
 
   drop_invalid_header_fields = true
+
+  # Match the mail NLB: guard against accidental deletion. A deliberate
+  # teardown still works because destroy_terraform.yml flips this to false
+  # in its throwaway working copy.
+  enable_deletion_protection = true
 }
 
 resource "aws_lb_listener" "https" {
