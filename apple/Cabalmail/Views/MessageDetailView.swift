@@ -250,6 +250,10 @@ struct MessageDetailView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+                    // Sender-authentication verdicts, rendered in all three
+                    // states ("Not verified" muted). Bucketing lives in
+                    // CabalmailKit; see `AuthResultsLine`.
+                    AuthResultsLine(results: envelope.authResults)
                 }
                 Spacer(minLength: 0)
             }
