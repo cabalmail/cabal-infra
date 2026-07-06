@@ -17,8 +17,14 @@ import UIKit
 ///    `/fetch_bimi` endpoint (which returns a presigned S3 URL for the
 ///    signed asset), so loading it can't leak read state to the sender's
 ///    domain directly.
-/// 3. A circle with the sender's initials. Always rendered as the base
-///    layer so the avatar slot is never empty during the async load.
+/// 3. A circle with the sender's initials. Rendered as the base layer
+///    while a photo or BIMI logo is still loading (and as the fallback
+///    when neither resolves), so the avatar slot is never empty. It is
+///    *not* drawn behind a successfully-loaded BIMI logo: those assets
+///    carry transparent margins, and a colored fill would show through
+///    as a background halo (e.g. UPS's shield on a red disc). Letting the
+///    transparency pass through blends the logo with the surrounding list
+///    in both light and dark mode.
 ///
 /// Gravatar is deliberately *not* a source. Querying gravatar.com keyed
 /// on the sender's email hash would opt the recipient into a third-party
@@ -34,25 +40,32 @@ struct AvatarView: View {
 
     var body: some View {
         ZStack {
-            initialsCircle
             if let contactPhotoData {
+                // Photos fill the slot; keep the colored base beneath so any
+                // scaled-to-fit margins read as a deliberate swatch, matching
+                // prior behavior.
+                initialsCircle
                 contactPhotoView(data: contactPhotoData)
             } else if let bimiURL {
                 AsyncImage(url: bimiURL) { phase in
                     switch phase {
                     case .success(let image):
+                        // No colored base behind a resolved BIMI logo — let its
+                        // transparent margins blend with the surrounding list.
                         image
                             .resizable()
                             .scaledToFit()
                             .frame(width: size, height: size)
                             .clipShape(Circle())
                     case .failure, .empty:
-                        Color.clear
+                        initialsCircle
                     @unknown default:
-                        Color.clear
+                        initialsCircle
                     }
                 }
                 .frame(width: size, height: size)
+            } else {
+                initialsCircle
             }
         }
         .frame(width: size, height: size)
