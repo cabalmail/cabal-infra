@@ -65,12 +65,20 @@ public struct ApiEnvelope: Sendable, Codable, Hashable {
     public let messageId: [String]?
     public let inReplyTo: [String]?
     public let references: [String]?
+    /// SPF/DKIM/DMARC verdicts parsed server-side from the trusted
+    /// `Authentication-Results` header. Optional (synthesized
+    /// `decodeIfPresent`, the `priority` pattern) so it tolerates both an
+    /// absent key and JSON `null` — pre-feature Lambdas, pre-feature mail,
+    /// and internally-routed mail all decode to nil, which renders as
+    /// "not verified", never as pass.
+    public let authResults: AuthResults?
 
     private enum CodingKeys: String, CodingKey {
         case id, date, subject, from, to, cc, flags, priority, references
         case structure = "struct"
         case messageId = "message_id"
         case inReplyTo = "in_reply_to"
+        case authResults = "auth_results"
     }
 
     public init(
@@ -85,7 +93,8 @@ public struct ApiEnvelope: Sendable, Codable, Hashable {
         priority: [String]?,
         messageId: [String]? = nil,
         inReplyTo: [String]? = nil,
-        references: [String]? = nil
+        references: [String]? = nil,
+        authResults: AuthResults? = nil
     ) {
         self.id = id
         self.date = date
@@ -99,6 +108,7 @@ public struct ApiEnvelope: Sendable, Codable, Hashable {
         self.messageId = messageId
         self.inReplyTo = inReplyTo
         self.references = references
+        self.authResults = authResults
     }
 }
 
@@ -303,12 +313,16 @@ public struct ApiSearchEnvelope: Sendable, Hashable, Codable {
     public let messageId: [String]?
     public let inReplyTo: [String]?
     public let references: [String]?
+    /// Auth verdicts; same shape and optionality as `ApiEnvelope` — the
+    /// search Lambda builds rows with the same `envelope_dict()`.
+    public let authResults: AuthResults?
 
     private enum CodingKeys: String, CodingKey {
         case id, date, subject, from, to, cc, flags, priority, folder, references
         case structure = "struct"
         case messageId = "message_id"
         case inReplyTo = "in_reply_to"
+        case authResults = "auth_results"
     }
 
     public init(
@@ -324,7 +338,8 @@ public struct ApiSearchEnvelope: Sendable, Hashable, Codable {
         folder: String,
         messageId: [String]? = nil,
         inReplyTo: [String]? = nil,
-        references: [String]? = nil
+        references: [String]? = nil,
+        authResults: AuthResults? = nil
     ) {
         self.id = id
         self.date = date
@@ -339,6 +354,7 @@ public struct ApiSearchEnvelope: Sendable, Hashable, Codable {
         self.messageId = messageId
         self.inReplyTo = inReplyTo
         self.references = references
+        self.authResults = authResults
     }
 }
 

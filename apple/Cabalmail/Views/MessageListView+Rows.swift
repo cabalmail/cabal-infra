@@ -368,6 +368,18 @@ private struct MessageRow: View {
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                    // Sender-authentication warning only — pass and
+                    // not-verified show nothing here (the quiet default),
+                    // so the indicator area's footprint matches the other
+                    // flag-driven icons. Copy says "could not be
+                    // authenticated", not "dangerous": forwarding
+                    // legitimately breaks these checks.
+                    if envelope.authVerification == .warning {
+                        Image(systemName: "exclamationmark.shield.fill")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                            .accessibilityLabel(AuthResultsLine.warningCopy)
+                    }
                     if envelope.hasAttachments {
                         Image(systemName: "paperclip")
                             .font(.caption)
