@@ -677,16 +677,6 @@ jobs:
       run: ../../.github/scripts/record-lambda-hashes.sh
     - name: plan-terraform
       id: plan-terraform
-      # TEMPORARY (diagnostic): TF_LOG=DEBUG surfaces the live AWS SDK
-      # HTTP request/retry lines so we can catch which refresh call wedges
-      # the plan - a multi-minute hang on
-      # module.admin.aws_s3_bucket_policy.admin_bucket that reproduces
-      # across runs. DEBUG (not TRACE) keeps request bodies out of the log
-      # but still shows the stuck endpoint call and any throttle/backoff
-      # loop. Revert once the culprit is identified; do not carry into
-      # steady-state CI (verbose, and includes signed-request metadata).
-      env:
-        TF_LOG: DEBUG
       run: ../../.github/scripts/plan-terraform.sh
 
   approval:
