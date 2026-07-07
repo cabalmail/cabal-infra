@@ -825,21 +825,37 @@ libraries now sourced from npm via the React manifest, the symlink
 convention has even less to recommend it. Revisit if a non-JS,
 non-npm-managed vendored dep ever appears.
 
-### Drafts: local only
+### Drafts: local buffer + cross-device sync
 
 `CabalmailKit.DraftStore` persists drafts as Codable JSON under the app
 support directory, keyed by UUID. `ComposeViewModel` autosaves every 5 s
-while the sheet is open, so a mid-compose app kill is recoverable.
+while the sheet is open, so a mid-compose app kill is recoverable — this
+local copy is the live editing buffer and the crash-recovery story.
 
-### Sent-folder APPEND: client-side after successful submission
+Drafts also sync across devices through the `/save_draft` Lambda, which
+owns a server-side lifecycle on the top-level `Drafts` mailbox. Server
+saves fire on compose close-without-send (always) and on a 60-second
+debounce while composing (skipped while the body is empty, while a send
+is in flight, or while another server save is running). The sync is
+last-writer-wins keyed on the returned `(uidvalidity, uid)`: each save
+passes the prior copy's coordinates as `replaces_*`, so the Lambda
+appends the new copy before expunging the old under a UIDVALIDITY guard
+whose worst-case failure is a duplicate draft, never a lost one. Opening
+a message in `Drafts` offers **Edit Draft**, reseeding compose from the
+fetched copy — recipients and subject from the envelope, Bcc and
+threading from the headers, body from the Markdown text part. Because
+both first-party composers are Markdown-canonical the round trip is
+lossless. See `docs/draft-sync-and-threading.md`.
 
-Neither mail tier auto-APPENDs to `Sent`; the React app's backend
-replicates the message into `Sent` from the `send` Lambda (see
-`lambda/api/send/function.py`). `CabalmailClient.send(_:)` mirrors that
-behavior: it stamps a shared `Message-ID`, submits via SMTP, and
-best-effort-APPENDs the same payload to `Sent` with `\Seen` set. The
-APPEND is best-effort because a failed Sent-folder write on an
-already-delivered message shouldn't surface as a send failure.
+### Sent-folder copy: server-side via `/send`
+
+Neither mail tier auto-APPENDs to `Sent`. The `/send` Lambda owns the
+whole outbound shuffle — Outbox APPEND, SMTP submission, and the Sent
+copy (staged Bcc-free and written by a decoupled queue consumer, see
+`lambda/api/append_sent`) — so `CabalmailClient.send(_:)` posts the
+compose payload and does no client-side APPEND. Sending from a synced
+draft passes the draft's `discard_draft_*` coordinates so the server
+best-effort expunges the Drafts copy once delivery succeeds.
 
 ### Compose scene
 
