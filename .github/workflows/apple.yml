@@ -461,14 +461,20 @@ jobs:
             --type ios \
             --apiKey "$ASC_KEY_ID" \
             --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tee "$LOG"
-          # altool writes timestamped "ERROR:" lines and returns 0 anyway in
-          # some releases, so we scan the log and fail the step ourselves if
-          # any error marker appears. The pattern matches anywhere in the
-          # line since altool prefixes errors with a timestamp.
-          if grep -qE '(UPLOAD FAILED|ERROR: |iris-code : STATE_ERROR)' "$LOG"; then
-            ERRORS=$(grep -cE '(UPLOAD FAILED|ERROR: )' "$LOG")
-            echo "::error::altool reported $ERRORS error line(s) despite exit code 0. Review the log above."
+          # altool's exit code is unreliable (0 on some validation failures),
+          # and its "ERROR:" lines are unreliable the other way: a transient
+          # chunk failure logs "ERROR: ... WILL RETRY PART n ..." and then
+          # recovers (this false-failed a real upload once - the log ended
+          # "UPLOAD SUCCEEDED with no errors"). Trust the final verdict
+          # banner instead: pass iff altool printed UPLOAD SUCCEEDED and no
+          # failure banner; recovered retries only warn.
+          if grep -qE '(UPLOAD FAILED|iris-code : STATE_ERROR)' "$LOG" \
+             || ! grep -q 'UPLOAD SUCCEEDED' "$LOG"; then
+            echo "::error::altool did not report a clean UPLOAD SUCCEEDED despite exit code 0. Review the log above."
             exit 1
+          fi
+          if grep -q 'ERROR: ' "$LOG"; then
+            echo "::warning::altool logged transient error(s) but recovered - final verdict was UPLOAD SUCCEEDED."
           fi
           echo "::notice::altool upload completed cleanly."
           {
@@ -739,14 +745,19 @@ jobs:
             --type osx \
             --apiKey "$ASC_KEY_ID" \
             --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tee "$LOG"
-          # altool writes timestamped "ERROR:" lines and returns 0 anyway in
-          # some releases, so we scan the log and fail the step ourselves if
-          # any error marker appears. The pattern matches anywhere in the
-          # line since altool prefixes errors with a timestamp.
-          if grep -qE '(UPLOAD FAILED|ERROR: |iris-code : STATE_ERROR)' "$LOG"; then
-            ERRORS=$(grep -cE '(UPLOAD FAILED|ERROR: )' "$LOG")
-            echo "::error::altool reported $ERRORS error line(s) despite exit code 0. Review the log above."
+          # altool's exit code is unreliable (0 on some validation failures),
+          # and its "ERROR:" lines are unreliable the other way: a transient
+          # chunk failure logs "ERROR: ... WILL RETRY PART n ..." and then
+          # recovers. Trust the final verdict banner instead: pass iff altool
+          # printed UPLOAD SUCCEEDED and no failure banner; recovered retries
+          # only warn. (Mirrors the iOS upload step.)
+          if grep -qE '(UPLOAD FAILED|iris-code : STATE_ERROR)' "$LOG" \
+             || ! grep -q 'UPLOAD SUCCEEDED' "$LOG"; then
+            echo "::error::altool did not report a clean UPLOAD SUCCEEDED despite exit code 0. Review the log above."
             exit 1
+          fi
+          if grep -q 'ERROR: ' "$LOG"; then
+            echo "::warning::altool logged transient error(s) but recovered - final verdict was UPLOAD SUCCEEDED."
           fi
           echo "::notice::altool upload completed cleanly."
 
