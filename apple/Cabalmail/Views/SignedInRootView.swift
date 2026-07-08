@@ -77,19 +77,28 @@ struct SignedInRootView: View {
     /// Those lists carry the full create/delete/request/revoke affordances, so
     /// there's a single list implementation per data type - the old dedicated
     /// management views were retired.
+    ///
+    /// Every tab wraps its content in `tabBarTrayShield()`: the floating bar
+    /// only draws the capsules, so without it, touches in the tray's margins
+    /// fall through to the rows visible behind the bar (see
+    /// `TabBarTrayShield.swift`).
     private var compactTabs: some View {
         TabView {
             Tab("Mail", systemImage: "tray") {
                 MailRootView()
+                    .tabBarTrayShield()
             }
             Tab("Addresses", systemImage: "at") {
                 AddressManagementTab()
+                    .tabBarTrayShield()
             }
             Tab("Folders", systemImage: "folder") {
                 FolderManagementTab()
+                    .tabBarTrayShield()
             }
             Tab("Settings", systemImage: "gear") {
                 SettingsView()
+                    .tabBarTrayShield()
             }
             // The search role detaches to the bottom-right, next to the tab bar.
             // On iOS 26 it adopts the morph (tab bar collapses to a dismiss
@@ -98,6 +107,7 @@ struct SignedInRootView: View {
             // `.searchable` inside `SearchView`.
             Tab(role: .search) {
                 SearchView()
+                    .tabBarTrayShield()
             }
         }
     }
