@@ -49,9 +49,13 @@ overwritten on every run.
 
 ## Geometry & palette
 
-The glyph is a 384-unit native mark (C-disc with arrow cutout + M envelope)
-placed on the 1024 icon canvas via `translate(94.8 145.52) scale(2.036)` —
-optically centered (geometric center with a −10px x correction). The color
+The glyph is a 384-unit native mark: a stylized letter **C** (a disc whose
+arrow of negative space cuts clear through to the disc's right edge, opening
+it) plus the M envelope, whose left edge covers the opening in composed
+treatments — only the standalone disc (the visionOS middle icon layer) shows
+the C open. It is placed on the 1024 icon canvas via
+`translate(94.8 145.52) scale(2.036)` — optically centered (geometric center
+with a −10px x correction). The color
 tokens (forest `#2E5235`, forest-deep `#1E3A24`, cream `#F4EBD6`, parchment
 `#E8DFC8`, ink `#0F1A12`, ink-soft `#16241A`) and the per-platform do-not
 list (no squircle mask, no baked shadow, tinted = white-on-transparent) live

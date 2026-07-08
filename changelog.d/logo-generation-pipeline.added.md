@@ -8,5 +8,8 @@
   version-pinned resvg + oxipng produce byte-identical, sRGB, ICC-free output
   with opaque icons flattened to RGB — and a new `Logo Assets` workflow
   regenerates on any source-vector change. Icons pick up the corrected
-  optically-centered placement (`translate(94.8 145.52) scale(2.036)`), and
-  derivatives are no longer hand-edited.
+  optically-centered placement (`translate(94.8 145.52) scale(2.036)`), the
+  disc now reads as a true stylized C (the arrow's negative space cuts
+  through its right edge — visible in the standalone visionOS middle layer,
+  covered by the M everywhere else), and derivatives are no longer
+  hand-edited.
