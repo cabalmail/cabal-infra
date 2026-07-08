@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<!--
+  Cabalmail mark - AUTHORITATIVE SOURCE (see vector/README.md).
+
+  Tight bounds: x 0-400, y 84-276 (400 x 192). Two shapes, currentColor fill:
+
+  C-disc:  circle cx 96, cy 180, r 96, with an arrow of negative space cut
+           clear through to the disc's right edge, so the disc reads as a
+           stylized letter C. Arrow tip (38,180); head joints (108,110) and
+           (108,250); shaft spans y 146-214 and opens through the circle at
+           x = 96 + sqrt(96^2 - 34^2) = 185.7775 (the big arc closes the C
+           the long way round). In composed treatments the M envelope (left
+           edge x 154) covers the opening, so the arrow reads as terminating
+           against the M; standalone (e.g. the visionOS middle icon layer)
+           the C is open.
+  M:       envelope, 5 nodes, single left edge, valley on top:
+           (154,84) (268,176) (400,84) (400,275) (154,275).
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 84 400 192">
+  <g fill="currentColor">
+    <path fill-rule="evenodd" d="M 185.7775 146 A 96 96 0 1 0 185.7775 214 L 108 214 L 108 250 L 38 180 L 108 110 L 108 146 Z"></path>
+    <path d="M 154 84 L 268 176 L 400 84 L 400 275 L 154 275 Z"></path>
+  </g>
+</svg>
