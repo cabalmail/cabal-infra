@@ -3,13 +3,15 @@ import CabalmailKit
 
 /// Signed-in root.
 ///
-/// The section layout (Mail / Addresses / Folders / Settings) branches on
-/// horizontal size class:
+/// The section layout (Mail / Addresses / Settings, plus a Search tab) branches
+/// on horizontal size class:
 ///
 /// - Compact (iPhone, iPad in narrow multitasking): a bottom `TabView`, one
 ///   tab per section. This is the natural compact idiom and the inner
 ///   `MailRootView` `NavigationSplitView` collapses to a stack here, so the
-///   two never compete for the left edge.
+///   two never compete for the left edge. There's no dedicated Folders tab —
+///   the Mail tab's sidebar `FolderListView` already browses and manages
+///   folders.
 /// - Regular (iPad / visionOS): just `MailRootView` — a single show/hide
 ///   sidebar owns the left edge, matching the macOS main window. Addresses /
 ///   Folders / Settings move into a modal `SettingsSheet`, opened by the
@@ -71,12 +73,13 @@ struct SignedInRootView: View {
     /// and the regular-width path never renders this, so the adaptive style's
     /// collision with the inner split view can't recur.
     ///
-    /// The Addresses / Folders tabs host the same `AddressListView` /
-    /// `FolderListView` the Mail sidebar uses (wrapped in `AddressManagementTab`
-    /// / `FolderManagementTab` for their own `NavigationStack` + selection).
-    /// Those lists carry the full create/delete/request/revoke affordances, so
+    /// The Addresses tab hosts the same `AddressListView` the Mail sidebar uses
+    /// (wrapped in `AddressManagementTab` for its own `NavigationStack` +
+    /// selection). That list carries the full request/revoke affordances, so
     /// there's a single list implementation per data type - the old dedicated
-    /// management views were retired.
+    /// management views were retired. Folders have no dedicated tab: the Mail
+    /// tab's sidebar `FolderListView` already browses and manages them
+    /// (create/delete/subscribe live on its rows and toolbar).
     ///
     /// Every tab wraps its content in `tabBarTrayShield()`: the floating bar
     /// only draws the capsules, so without it, touches in the tray's margins
@@ -90,10 +93,6 @@ struct SignedInRootView: View {
             }
             Tab("Addresses", systemImage: "at") {
                 AddressManagementTab()
-                    .tabBarTrayShield()
-            }
-            Tab("Folders", systemImage: "folder") {
-                FolderManagementTab()
                     .tabBarTrayShield()
             }
             Tab("Settings", systemImage: "gear") {
@@ -178,19 +177,6 @@ private struct AddressManagementTab: View {
     var body: some View {
         NavigationStack {
             AddressListView(selection: $selection, externalFilter: nil)
-        }
-    }
-}
-
-/// Compact-iPhone Folders tab: the shared `FolderListView` in its own
-/// `NavigationStack`. As with addresses, selection is local and inert — folder
-/// browsing lives in the Mail tab; this tab owns create/delete/subscribe.
-private struct FolderManagementTab: View {
-    @State private var selection: Folder?
-
-    var body: some View {
-        NavigationStack {
-            FolderListView(selection: $selection, externalFilter: nil)
         }
     }
 }
