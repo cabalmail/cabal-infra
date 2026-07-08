@@ -5,6 +5,55 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.43] - 2026-07-08
+
+### Added
+- **Single authoritative logo vector plus a one-command generator.**
+  `vector/cabalmail-logo.svg` is now the sole source of truth for the
+  Cabalmail mark, and `scripts/generate-logo-assets` (also `make logo`)
+  rebuilds every derivative from it: the Apple app icons (iOS light/dark/
+  tinted, a wired visionOS `AppIconVision.solidimagestack`, and the macOS
+  size ladder), the React client favicon/logo set, `docs/logo.png` and
+  `docs/mask.png`, and the front-door favicon. Generation is idempotent —
+  version-pinned resvg + oxipng produce byte-identical, sRGB, ICC-free output
+  with opaque icons flattened to RGB — and a new `Logo Assets` workflow
+  regenerates on any source-vector change. Icons pick up the corrected
+  optically-centered placement (`translate(94.8 145.52) scale(2.036)`), the
+  disc now reads as a true stylized C (the arrow's negative space cuts
+  through its right edge — visible in the standalone visionOS middle layer,
+  covered by the M everywhere else), and derivatives are no longer
+  hand-edited.
+
+### Changed
+- **Global search now lives in the reading-pane toolbar on iPad and Mac.** On
+  wide layouts the "Search all mail" field moved out of the left sidebar and
+  right-aligns above the message detail view; the sidebar keeps its search only
+  on compact iPhone. The duplicate inline subject that appeared above the reader
+  on iPad/iPhone is gone (the subject still shows in the message header).
+
+### Fixed
+- **TestFlight upload no longer fails on recovered network retries.** The
+  iOS/macOS upload steps guarded against altool's unreliable exit code by
+  failing on any `ERROR:` log line, which false-failed a successful upload
+  when a transient "connection was lost" chunk error was retried and the
+  final banner read `UPLOAD SUCCEEDED`. The guard now trusts altool's final
+  verdict: pass only on `UPLOAD SUCCEEDED` with no failure banner, warn on
+  recovered retries, and still fail on `UPLOAD FAILED`, `STATE_ERROR`, or a
+  missing verdict.
+- **Transparent backing behind BIMI sender avatars.** A resolved BIMI
+  logo no longer sits on the hash-colored initials disc, so logos with
+  transparent margins (e.g. the UPS shield) blend with the message list
+  in both light and dark mode instead of showing a colored halo. The
+  colored initials circle still renders while loading and as the fallback
+  when no logo or contact photo resolves.
+- **Inert tab-bar tray on iPhone.** The floating tab bar only draws its
+  capsules, so touches in the tray's margins (beside, between, and below
+  the capsules) fell through to the message list behind it — scrolling
+  the list or opening a message. The tray band now swallows those
+  touches; rows behind the bar stay visible for context but are no
+  longer interactive. The shield deactivates automatically wherever the
+  tab bar is hidden (e.g. the message reader).
+
 ## [0.10.42] - 2026-07-06
 
 ### Added

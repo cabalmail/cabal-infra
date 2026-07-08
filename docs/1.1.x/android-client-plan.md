@@ -6,6 +6,17 @@ The React admin app (`react/admin/`) and native Apple clients (`apple/`) current
 
 Administrative functionality (user management, DMARC reports, multi-user address assignment) is out of scope. Admins will continue to use the web app for those workflows.
 
+The Apple client has evolved substantially since this plan was first drafted (it was written against the 0.1.x-era feature set). Functional parity now includes several capabilities that shipped in the intervening releases and are reflected throughout the phases below:
+
+- **Cross-folder structured search** (`/search_envelopes`) as a first-class scope, not a query parameter — with a filter sheet and All / Unread / Flagged pills.
+- **Configurable sort** (received date, sent date, sender, subject) and **sliding-window virtualization** for large mailboxes.
+- **Bulk multi-select** for batch move / flag / read / dispose.
+- **Threading identity** on every envelope (`message_id` / `in_reply_to` / `references`), consumed for correct reply threading (the list itself stays flat — no conversation grouping in either client).
+- **Cross-device draft sync** via `/save_draft` (the plan's original "local-only drafts" is superseded).
+- **Resume cursor** via `/get_nav_state` / `/set_nav_state` — remember and offer to restore the last folder/message.
+- **Server-synced preferences** via `/get_preferences` / `/set_preferences` — the From display name plus theme / accent / density, shared with the web app.
+- **Address favorites** (`/set_favorite`) and **permanent delete / empty trash** (`/purge_messages`, `/empty_trash`).
+
 Scope of "Android client" for 1.1.0:
 - **Android phone** and **tablet** (single codebase with adaptive layouts via Compose `WindowSizeClass`)
 - **ChromeOS** compatibility comes for free via the phone/tablet target
@@ -36,8 +47,13 @@ Seven phases: project scaffolding and shared module; **CI/CD (early, so every su
 | MailCore2 vs swift-nio-imap spike | Neither -- API-backed | No library evaluation needed |
 | IDLE for foreground push | Polling (no IDLE over API) | Poll-based refresh from the start |
 | Amplify Swift for Cognito | Amplify Swift | Use Amplify Android |
-| `APPEND` for sent/drafts | `/send` handles Outbox + Sent server-side | Same -- no client-side APPEND |
+| `APPEND` for sent/drafts | `/send` handles Outbox + Sent; `/save_draft` owns the Drafts lifecycle | Client-side APPEND still unneeded, but drafts sync server-side (see Phase 5) |
 | MIME parsing for `fetchPart` | Fetch full body, parse MIME client-side | Same approach in Kotlin |
+| Local-only drafts | Cross-device sync via `/save_draft`, Markdown-canonical bodies | Same -- Markdown-canonical compose, server draft sync |
+| Flat list, no threading data | Envelopes carry `message_id`/`in_reply_to`/`references`; used for reply threading only | Same -- flat list, threading powers replies |
+| Search as an afterthought | Cross-folder structured search (`/search_envelopes`) + filter sheet + All/Unread/Flagged pills | Build search as a first-class scope |
+| No cross-device resume | Nav-state cursor (`/get_nav_state`/`/set_nav_state`) with restore prompt | Same -- resume cursor |
+| Prefs stored locally | Display name + theme/accent/density synced via `/get_preferences`/`/set_preferences` | Sync the shared prefs server-side (see Phase 6) |
 
 ### Stack decisions
 
@@ -330,23 +346,32 @@ Endpoints (mirroring the Apple `ApiBackedImapClient` + `ApiClient`):
 | Method | HTTP | Endpoint | Notes |
 |---|---|---|---|
 | `listFolders()` | GET | `/list_folders` | Returns folder tree |
-| `listEnvelopes(folder, page)` | GET | `/list_envelopes` | Paginated envelope list |
+| `folderStatus(folder)` | GET | `/folder_status` | STATUS: messages/unseen/uidvalidity/uidnext (+ optional flagged count) |
+| `listEnvelopes(folder, sort, offset, limit)` | GET | `/list_envelopes` | Positional (offset/limit) envelope window, sorted; carries threading + auth-result fields |
+| `searchEnvelopes(query, filters, cursor)` | GET | `/search_envelopes` | Structured search (single- or cross-folder), newest-first, opaque page cursor |
 | `fetchMessage(folder, uid)` | GET | `/fetch_message` | Full RFC 822 body |
 | `listAttachments(folder, uid)` | GET | `/list_attachments` | Attachment metadata |
 | `fetchAttachment(folder, uid, part)` | GET | `/fetch_attachment` | Returns presigned S3 URL |
 | `fetchInlineImage(folder, uid, part)` | GET | `/fetch_inline_image` | Inline image data |
-| `setFlag(folder, uids, flag, value)` | POST | `/set_flag` | Set/clear IMAP flags |
+| `setFlag(folder, uids, flag, value)` | POST | `/set_flag` | Set/clear one IMAP flag (`\Seen`, `\Flagged`, `\Answered`, `\Forwarded`) |
 | `moveMessages(folder, uids, dest)` | POST | `/move_messages` | Move between folders |
-| `send(message)` | POST | `/send` | Send; handles Outbox + Sent server-side |
-| `listAddresses()` | GET | `/list` | User's addresses |
+| `purgeMessages(folder, uids)` | POST | `/purge_messages` | Permanent expunge -- **trash folders only** |
+| `emptyTrash(folder)` | POST | `/empty_trash` | Expunge an entire trash folder |
+| `send(message)` | POST | `/send` | Send; handles Outbox + Sent server-side; optional `discard_draft_*` |
+| `saveDraft(message, op, replacesUid, replacesUidValidity)` | POST | `/save_draft` | Save/replace/discard a Drafts copy (UIDPLUS lifecycle) |
+| `listAddresses()` | GET | `/list` | User's addresses (includes favorite flag) |
 | `newAddress(subdomain, local, comment)` | POST | `/new` | Create address |
 | `revokeAddress(address)` | DELETE | `/revoke` | Delete address |
+| `setFavorite(address, favorite)` | POST | `/set_favorite` | Favorite/unfavorite an address (drives From-picker ordering) |
 | `fetchBimi(domain)` | GET | `/fetch_bimi` | BIMI logo lookup |
-| `listFoldersAdmin()` | GET | `/list_folders` | For folder management |
+| `getPreferences()` / `setPreferences(...)` | GET/PUT | `/get_preferences` `/set_preferences` | Server-synced prefs: `name`, `theme`, `accent`, `density` |
+| `getNavState()` / `setNavState(cursor)` | GET/POST | `/get_nav_state` `/set_nav_state` | Cross-device resume cursor |
 | `newFolder(name, parent)` | POST | `/new_folder` | Create folder |
-| `deleteFolder(name)` | DELETE | `/delete_folder` | Delete folder |
+| `deleteFolder(name)` | DELETE | `/delete_folder` | Delete folder (must be empty) |
 | `subscribeFolder(name)` | POST | `/subscribe_folder` | Subscribe |
 | `unsubscribeFolder(name)` | POST | `/unsubscribe_folder` | Unsubscribe |
+
+`/append_sent` exists but is an internal SQS consumer that `/send` enqueues -- the client never calls it directly.
 
 Ktor client configuration:
 - `ContentNegotiation` with `kotlinx.serialization` for JSON
@@ -360,15 +385,20 @@ Ktor client configuration:
 
 - `Config` -- runtime configuration from `config.json`
 - `Folder` -- name, delimiter, attributes, unread count
-- `Envelope` -- uid, from, to, cc, subject, date, flags, hasAttachments, size
+- `Envelope` -- uid, from, to, cc, subject, date, flags, hasAttachments, size, **threading identity** (`messageId`, `inReplyTo`, `references` -- lists of angle-bracketed ids, `references` capped at the newest 20 server-side), **auth results** (SPF/DKIM/DMARC verdicts), and **priority** (from `X-Priority`/`Importance`). All additive/optional -- tolerate their absence on pre-rollout envelopes.
 - `Message` -- envelope + raw body (RFC 822)
-- `Address` -- address string, subdomain, local part, comment, domain
+- `Address` -- address string, subdomain, local part, comment, domain, **favorite** flag
 - `Attachment` -- filename, content type, size, part ID
 - `BimiLogo` -- SVG URL or image data
+- `Preferences` -- server-synced `name` / `theme` / `accent` / `density` (see Phase 6)
+- `NavState` -- resume cursor: `folder`, `messageId`, `uid`, `uidValidity`, `listScroll`, `messageScroll`, `clientId` (stable per-install), `updatedAt` (server-stamped)
+- `Draft` -- id, from, to/cc/bcc, subject, Markdown body, `inReplyTo`/`references`, compose intent, and server coordinates (`serverUid`/`serverUidValidity`)
+
+Envelopes are the same wire shape across `/list_envelopes` and `/search_envelopes`, so a single decoder serves both. Threading fields ride the envelope but the message list stays a **flat list** -- no conversation grouping in either client. They exist so `ReplyBuilder` can construct a correct `References` chain (see Phase 5).
 
 ### 4. Caching
 
-- **Envelope cache**: `Room` database keyed by `(folder, uid)`. On reconnect, fetch only UIDs newer than the last cached UID.
+- **Envelope cache**: `Room` database keyed by `(folder, uid)`, backing the sliding window so a revisited folder paints from cache before the network refresh lands. LRU-bounded, not a full-folder mirror -- Cabalmail mailboxes can be very large, so the client caches the working window plus recent bands rather than syncing every envelope. A STATUS/UIDVALIDITY check invalidates the folder's cache on mismatch.
 - **Message body cache**: disk cache in the app's internal storage, keyed by `(folder, uid)`, evicted LRU with a configurable cap (default 200 MB).
 - **Address list**: in-memory `StateFlow` with invalidation on mutation.
 
@@ -398,18 +428,30 @@ First user-visible feature: a functional read-only mail client.
 
 `app/.../ui/mail/MessageListScreen.kt` -- middle pane on tablet, or navigated-to screen on phone.
 
-- Backed by `ApiClient.listEnvelopes(folder, page)` with page-based lazy loading (`LazyColumn` with `onAppear`-equivalent triggering next page fetch when the last item is composed).
-- Each row: sender, subject, snippet, date, read/unread indicator (from `\Seen`), attachment icon (from envelope metadata), flag indicator (from `\Flagged`).
-- Swipe actions via `SwipeToDismissBox`: swipe left -> `moveMessages` to Archive or Trash per the "Dispose action" setting (default: Archive); swipe right -> toggle flag/mark-read via `setFlag`.
-- `SearchBar` wired to the `/list_envelopes` search parameter -- server-side search.
-- Long-press context menu mirrors swipe actions for accessibility and discoverability.
+- **Windowed virtualization.** Backed by `ApiClient.listEnvelopes(folder, sort, offset, limit)` -- positional (offset/limit) paging, not page tokens. Hold a contiguous sliding window of envelopes keyed by list index, load the next/prior band as the user scrolls, and render placeholder rows for not-yet-loaded indices. This mirrors the Apple client's index-addressed virtualization and keeps large mailboxes responsive. `LazyColumn` with a scroll-position listener drives the window.
+- Each row: sender (with BIMI avatar / colored-initials fallback via `fetchBimi`), subject, snippet, date, read/unread indicator (from `\Seen`), attachment icon, flag indicator (from `\Flagged`), a **priority badge** when the envelope is flagged important, and an **auth-result warning** icon when SPF/DKIM/DMARC did not pass.
+- **Filter pills** (`FilterChip` row): All / Unread / Flagged, with counts sourced from `/folder_status` (unseen, flagged). Purely a display narrowing over the loaded window; resets to All on folder switch.
+- **Sort** (overflow menu): Date Received (default) / Date Sent / From / Subject, ascending or descending -- passed to `/list_envelopes`.
+- **Bulk multi-select.** A "Select" affordance turns rows into checkboxes and swaps the top bar for a contextual action bar (mark read/unread, flag, move, dispose, purge). Selection is keyed by UID so cross-folder search results route each operation to its true source folder. Selection clears after a move/dispose, persists after a flag toggle.
+- Swipe actions via `SwipeToDismissBox`: swipe left -> `moveMessages` to Archive or Trash per the "Dispose action" setting (default: Archive); swipe right -> toggle flag / mark-read via `setFlag`.
+- Long-press context menu mirrors swipe and bulk actions for accessibility and discoverability.
+- Pull-to-refresh re-STATUSes the folder and reconciles the top of the window.
+
+### 2a. Search
+
+Search is a **first-class scope**, not a query parameter on the folder list -- matching the Apple client's `MessageListScope.search`.
+
+- A `SearchBar` opens a cross-folder search backed by `ApiClient.searchEnvelopes(query, filters, cursor)` (`/search_envelopes`). With no folder it searches the user's subscribed folders (excluding Trash) and merges newest-first; each result carries its source folder so per-row operations route correctly.
+- A **filter sheet** exposes the structured predicates the endpoint accepts: `from`, `to`, `subject`, `since`/`before` (day-granular), `unread`, `flagged`, `has_attachment`, and a "this folder only" toggle. No raw IMAP-SEARCH syntax crosses the wire.
+- Results use the same row layout and the same opaque-cursor paging as the folder list.
 
 ### 3. Message detail
 
 `app/.../ui/mail/MessageDetailScreen.kt` -- trailing pane on tablet, or navigated-to screen on phone.
 
-- Headers: From (with BIMI logo via `ApiClient.fetchBimi`), To/Cc, date, subject.
+- Headers: From (with BIMI logo via `ApiClient.fetchBimi`), To/Cc, date, subject. **Auth-result chips** (SPF/DKIM/DMARC pass/fail) and a **priority** indicator when present.
 - Body: fetched via `ApiClient.fetchMessage(folder, uid)`. Messages are never auto-marked-as-read by default -- the user explicitly marks read via swipe, toolbar button, or context menu. An opt-in "mark read on open" setting is available (Phase 6) but defaults to off.
+- **Render mode.** HTML bodies support two modes, matching the Apple client: **Original** (author styling) and **Reader** (system font, capped line length, dark-mode aware). The default follows the "Body render mode" preference (Phase 6); a per-message toolbar toggle overrides it for the open message.
 - MIME parsed client-side. HTML bodies render in an Android `WebView` (`AndroidView` composable wrapper) with restrictive settings:
   - `settings.javaScriptEnabled = false`
   - Custom `WebViewClient` that intercepts all URL loads and blocks remote content by default
@@ -418,10 +460,19 @@ First user-visible feature: a functional read-only mail client.
 - Plain-text bodies render in a `SelectionContainer { Text(...) }`.
 - Inline images resolved by fetching via `ApiClient.fetchInlineImage` and injecting as `data:` URIs into the HTML before loading.
 - Attachments shown in a horizontal `LazyRow` below the body; tap downloads via `ApiClient.fetchAttachment` (presigned URL) and opens with `ACTION_VIEW` intent or the system file viewer.
+- Toolbar: reply / reply-all / forward, flag, mark read/unread, move, and dispose. In a **trash folder** the dispose action becomes **permanent delete** via `ApiClient.purgeMessages` (with confirmation); the folder list surfaces an **Empty Trash** action calling `ApiClient.emptyTrash`. Both are trash-scoped server-side.
 
 ### 4. Sanitization
 
 No JavaScript execution. Remote content blocked by default via `WebSettings.setBlockNetworkLoads(true)`. A toolbar button ("Load remote content") toggles network loads for the current message only -- does not persist. This mirrors the Apple client's `WKWebView` approach.
+
+### 5. Resume cursor
+
+The Apple client persists a navigation cursor server-side and offers to restore it. The Android client does the same via `/get_nav_state` / `/set_nav_state`.
+
+- On foreground/scroll settle, debounce-write the cursor (`folder`, `messageId`, `uid`/`uidValidity`, scroll positions, and a stable per-install `clientId`) via `setNavState`.
+- On launch, read the cursor. If it originated on **this** install, silently restore folder + message. If it came from a **different** device (different `clientId`, newer `updatedAt`), land in INBOX first and surface an opt-in "pick up where you left off" prompt rather than yanking the user elsewhere.
+- The `clientId` is a UUID stored in `DataStore` (not backed up / not synced) so each install is distinguishable.
 
 ### Phase 4 verification
 
@@ -429,6 +480,11 @@ No JavaScript execution. Remote content blocked by default via `WebSettings.setB
 2. Manual on tablet emulator (Pixel Tablet, API 35): confirm adaptive layout renders folder list + message list side by side, detail opens in trailing pane.
 3. Manual: open a message containing remote tracking pixels; confirm no network request fires until "Load remote content" is tapped.
 4. Manual: pull-to-refresh on the message list; confirm new messages appear.
+5. Manual: scroll a large folder (thousands of messages); confirm placeholder rows fill in as bands load and memory stays flat.
+6. Manual: toggle the All / Unread / Flagged pills and change sort; confirm the list and counts respond.
+7. Manual: run a cross-folder search with a filter (e.g. `has_attachment` + `unread`); confirm results span folders and per-row dispose routes to the correct source folder.
+8. Manual: multi-select several messages and bulk-move; confirm all move and selection clears.
+9. Manual: on this device, open a message and background the app; on a second device (or the web app), confirm the resume prompt offers that position on next launch. In a trash folder, permanently delete a message and confirm Empty Trash clears it.
 
 ---
 
@@ -444,20 +500,28 @@ Fields:
 - **From** -- an `ExposedDropdownMenuBox` seeded with `listAddresses()`, **no preselection by default**. The Send button is disabled until the user selects or creates an address. If the user has set a default From address in Settings, that address is preselected instead. The menu ends with a "**Create new address...**" item that opens a bottom sheet (subdomain picker + local-part field + comment) and calls `newAddress`; on success, the new address is selected.
 - **To**, **Cc**, **Bcc** -- chip-based input fields. Contact autocomplete from the system `ContactsContract` provider (with runtime permission) and/or a learned frequency list in Room.
 - **Subject** -- plain `TextField`.
-- **Body** -- rich text via a `TextField` with `AnnotatedString` support, or a minimal rich-text editor (bold/italic/links/lists). Toolbar provides formatting controls plus an "Attach" button using the Photo Picker (`PickVisualMedia` contract on API 33+, `ACTION_OPEN_DOCUMENT` fallback on 31-32) and the document picker (`OpenDocument` contract).
-- **Send** builds the message and submits via `ApiClient.send()`. The `/send` endpoint handles Outbox + Sent server-side (no client-side APPEND). While sending, the compose screen shows a progress indicator; on success it dismisses; on failure it remains open with a `Snackbar` error.
+- **Body -- Markdown-canonical.** Both first-party Apple composers persist the body as **Markdown** and emit the Markdown source as the message's text part, which is what makes cross-device draft sync lossless. The Android composer must do the same: whatever the editor surface (a formatting toolbar over an `AnnotatedString` buffer, or a minimal rich editor), the canonical form is Markdown and the wire body is the Markdown source. This keeps a draft saved on Android round-trippable on Apple/web and vice versa. The toolbar also carries an "Attach" button using the Photo Picker (`PickVisualMedia` on API 33+, `ACTION_OPEN_DOCUMENT` fallback on 31-32) and the document picker (`OpenDocument`).
+- The **From display name** on outgoing mail comes from the server-synced `name` preference (`/get_preferences`), so the header matches across web/Apple/Android.
+- **Send** builds the message and submits via `ApiClient.send()`. The `/send` endpoint handles Outbox + Sent server-side (no client-side APPEND) and, when sending from a synced draft, expunges the server draft copy via `discard_draft_uid`. While sending, the compose screen shows a progress indicator; on success it dismisses; on failure it remains open with a `Snackbar` error.
 
 ### 2. Reply / Reply All / Forward
 
 Triggered from the message detail toolbar. The compose screen opens pre-populated:
-- **From** defaults to the address the original was sent *to* (matching 0.3.x behavior). If multi-recipient, the first that exists in the user's address list is chosen.
-- **To** / **Cc** populated per reply semantics.
-- **Subject** prefixed with `Re:` or `Fwd:` if not already.
-- **Body** quotes the original with attribution line.
+- **From** defaults to the owned address that matches a recipient of the original, searched To -> Cc -> Bcc (matching the Apple `ReplyBuilder`). Revoked/unknown addresses fall back to no selection.
+- **To** / **Cc** populated per reply semantics, with reply-all deduplication.
+- **Subject** prefixed with `Re:` or `Fwd:` if not already (idempotent -- no `Re: Re:`).
+- **Threading.** Reply and reply-all set `In-Reply-To` to the original's Message-ID and build a `References` chain from the original's `references` (preferring the real chain, falling back to `[In-Reply-To, Message-ID]` for pre-rollout envelopes). Because an open message overlays headers parsed from the fetched body onto the envelope, replies thread correctly even off a cached envelope that predates the threading rollout. **Forward deliberately breaks the thread** (emits no threading headers).
+- **Body** quotes the original with an attribution line.
 
-### 3. Drafts
+### 3. Drafts -- local buffer + cross-device sync
 
-Drafts persist locally while being edited (Room database, autosaving every 5 seconds). On compose-screen close *without* send, the draft remains in Room for the next session. Cross-device draft sync (via IMAP `Drafts` folder) is deferred -- the API surface doesn't expose `APPEND` directly, and `/send` is the only write path. Local-only drafts are sufficient for 1.1.x.
+Cross-device draft sync **shipped for the Apple clients** via the `/save_draft` endpoint (see [`docs/draft-sync-and-threading.md`](../draft-sync-and-threading.md)); the original "local-only, deferred" plan is superseded. The Android client mirrors that model:
+
+- **Local buffer.** Each in-progress draft persists to local storage (Room or a per-draft JSON file), autosaved atomically on a short debounce (~5s). This is the live editing buffer and the crash-recovery story; it survives process death.
+- **Server sync.** Server saves go to the top-level `Drafts` mailbox via `/save_draft` and happen (a) on compose **close-without-send** (always) and (b) on a **60-second debounce** while composing -- skipped while the body is empty, while a send is running, or while another server save is in flight. Do not shorten the 60s floor: server saves are interactive IMAP writes against the single-task IMAP tier and the debounce bounds Lambda/EFS churn.
+- **Last-writer-wins, loss-free.** Each save records the returned `(uidvalidity, uid)` and passes them as `replaces_uid` / `replaces_uidvalidity` on the next save (and as `discard_draft_uid` on send). The endpoint appends the new copy *before* expunging the old and guards the expunge on matching UIDVALIDITY, so the worst-case failure is a duplicate draft, never a lost one.
+- **Resume / Edit Draft.** Opening a message in the `Drafts` folder offers **Edit Draft**, which seeds compose from the already-fetched message: recipients and subject from the envelope, Bcc and threading from the headers, and the body from the `text/plain` (Markdown) part -- lossless for first-party drafts precisely because compose is Markdown-canonical. An HTML-only foreign draft falls back to editing its HTML through the Markdown buffer.
+- **Discard** removes both the local buffer and the server copy (`op: discard`).
 
 ### 4. Share target
 
@@ -468,8 +532,10 @@ Register the app as a share target (`<intent-filter>` with `ACTION_SEND` / `ACTI
 1. Manual: compose and send to a personal address, confirm delivery and correct `From`.
 2. Manual: in compose, open the From picker, create a new address, confirm it becomes the selected From and appears in the Addresses screen.
 3. Manual: reply to a message, confirm From defaults to the addressee of the original.
-4. Manual: kill the app mid-compose, relaunch, confirm draft restored.
+4. Manual: kill the app mid-compose, relaunch, confirm draft restored from the local buffer.
 5. Manual: share an image from the Photos app into Cabalmail; confirm it appears as an attachment in compose.
+6. Manual: start a draft, wait for the 60s server save (or close without sending), then open the `Drafts` folder on a second device / the web app; confirm the draft appears and **Edit Draft** re-opens it with recipients, subject, body, and threading intact.
+7. Manual: reply within a thread; inspect the sent message's `In-Reply-To` / `References` headers and confirm they chain correctly. Forward the same message; confirm it starts a new thread (no threading headers).
 
 ---
 
@@ -481,6 +547,7 @@ Non-mail features, given their own destinations in the navigation graph.
 
 `app/.../ui/addresses/AddressesScreen.kt` -- mirrors the Apple Addresses tab:
 - Section "My Addresses": `ApiClient.listAddresses()`, with swipe-to-delete and long-press context menu calling `ApiClient.revokeAddress` (with confirmation dialog).
+- **Favorites.** A star toggle calls `ApiClient.setFavorite(address, favorite)`. Favorited addresses sort to the top of the list and to the top of the Compose **From** picker, so frequently-used identities are one tap away.
 - Section "Request New": bottom sheet with subdomain picker (`ExposedDropdownMenuBox`), local-part field, comment field, and "Create" button calling `ApiClient.newAddress`. Same validation rules as the web and Apple apps.
 - Pull-to-refresh.
 
@@ -494,37 +561,45 @@ Non-mail features, given their own destinations in the navigation graph.
 
 ### 3. Settings
 
-`app/.../ui/settings/SettingsScreen.kt` -- a dedicated navigation destination. All preferences stored via Jetpack `DataStore<Preferences>`.
+`app/.../ui/settings/SettingsScreen.kt` -- a dedicated navigation destination.
+
+**Two storage tiers.** A subset of preferences is **synced server-side** via `/get_preferences` / `/set_preferences` so they stay consistent across web, Apple, and Android: the From **display name**, **theme**, **accent**, and **density**. Everything else is Android-local behavior stored in Jetpack `DataStore<Preferences>`. (The Apple client syncs `name` via the server and the rest via iCloud; Android has no iCloud, so routing the shared visual prefs through the server endpoint is both the portable choice and the one that matches the web app.)
 
 **Account:**
 - Signed-in account display, sign-out button.
+- **Display name** (synced) -- free-text, used as the From header's display name at send time. Empty = no display name.
 
 **Reading:**
 
-| Preference | Options | Default | Notes |
-|---|---|---|---|
-| Mark as read | Manual / On open / After delay (2s) | **Manual** | Manual = never set `\Seen` automatically. Matches the Apple client default. |
-| Load remote content | Off / Ask / Always | **Off** | Controls whether `WebView` fetches remote resources. |
+| Preference | Options | Default | Storage | Notes |
+|---|---|---|---|---|
+| Mark as read | Manual / On open / After delay (2s) | **Manual** | local | Manual = never set `\Seen` automatically. Matches the Apple client default. |
+| Load remote content | Off / Ask / Always | **Off** | local | Controls whether `WebView` fetches remote resources. |
+| Body render mode | Original / Reader | **Original** | local | Default for HTML bodies; per-message toggle in the reader overrides it. |
+| Folder count display | Unread / Total / Both | **Unread** | local | What the badge on each folder shows. |
+| Default sort | Received / Sent / From / Subject (+ asc/desc) | **Received, desc** | local | Message-list sort order. |
 
 **Composing:**
 
-| Preference | Options | Default | Notes |
-|---|---|---|---|
-| Default From address | None / (list of addresses) | **None** | None = From picker starts empty; Send blocked until user picks. When set, preselects in new-compose (replies still default to original addressee). |
-| Signature | Text field | *(empty)* | Plain text, appended at compose time. |
+| Preference | Options | Default | Storage | Notes |
+|---|---|---|---|---|
+| Default From address | None / (list of addresses) | **None** | local | None = From picker starts empty; Send blocked until user picks. When set, preselects in new-compose (replies still default to original addressee). |
+| Signature | Text field | *(empty)* | local | Plain text, appended at compose time. |
 
 **Actions:**
 
-| Preference | Options | Default | Notes |
-|---|---|---|---|
-| Dispose action | Archive / Trash | **Archive** | Controls swipe-left and toolbar dispose throughout the app. |
+| Preference | Options | Default | Storage | Notes |
+|---|---|---|---|---|
+| Dispose action | Archive / Trash | **Archive** | local | Controls swipe-left and toolbar dispose throughout the app. |
 
 **Appearance:**
 
-| Preference | Options | Default | Notes |
-|---|---|---|---|
-| Theme | System / Light / Dark | **System** | Maps to `AppCompatDelegate.setDefaultNightMode()` or Compose `isSystemInDarkTheme()`. |
-| Dynamic color | On / Off | **On** | Material You dynamic color from wallpaper. API 31 guarantees support. |
+| Preference | Options | Default | Storage | Notes |
+|---|---|---|---|---|
+| Theme | System / Light / Dark | **System** | synced* | `light`/`dark` sync to the server; System is an Android-local choice that defers to `isSystemInDarkTheme()`. |
+| Accent | ink / oxblood / forest / azure / amber / plum | **forest** | synced | The shared palette used by web and Apple; seeds the Material 3 color scheme when dynamic color is off. |
+| Density | Compact / Normal / Roomy | **Compact** | synced | List/row density. |
+| Dynamic color | On / Off | **On** | local | Material You dynamic color from wallpaper (API 31+). An Android-native extra; when on, it takes precedence over the Accent seed. |
 
 **About:**
 - Version, build number, link to GitHub issues.
@@ -536,7 +611,9 @@ Non-mail features, given their own destinations in the navigation graph.
 3. Manual: change signature, compose a new message, confirm signature appended.
 4. Manual: open a message; confirm it stays unread (default: manual). Change setting to "On open"; open a message; confirm `\Seen` is set.
 5. Manual: set Default From to an address; open a new compose; confirm preselected. Clear the setting; confirm From picker is empty and Send is disabled.
-6. Manual: toggle theme to Dark; confirm immediate switch. Toggle Dynamic color off; confirm Material 3 falls back to the default seed color.
+6. Manual: toggle theme to Dark; confirm immediate switch. Toggle Dynamic color off; confirm Material 3 falls back to the selected **Accent** seed. Change **Density**; confirm row spacing responds.
+7. Manual: change theme/accent/density on Android, then open the web app; confirm the same values apply (server-synced). Set a **Display name** and send a message; confirm the From header carries it.
+8. Manual: favorite an address; confirm it sorts to the top of both the Addresses list and the Compose From picker.
 
 ---
 
@@ -556,7 +633,7 @@ Cross-cutting work to make each form factor feel native, plus robustness improve
 
 - `NavigationRail` (side) replaces bottom `NavigationBar` when `windowSizeClass.widthSizeClass >= WindowWidthSizeClass.Medium`.
 - `ListDetailPaneScaffold` for the mail flow (folder list | message list | detail) with adaptive column widths.
-- Keyboard shortcuts via `onKeyEvent` for hardware keyboards: Ctrl+N compose, Ctrl+R reply, Ctrl+Shift+R reply all, j/k navigation.
+- Keyboard shortcuts via `onKeyEvent` for hardware keyboards, mirroring the Apple client's set (Ctrl in place of Cmd): Ctrl+N compose, Ctrl+R reply, Ctrl+Shift+R reply all, Ctrl+Shift+U toggle read/unread, Ctrl+Shift+L toggle flag, and j/k row navigation.
 - Foldable hinge-aware layout via `WindowInfoTracker` -- avoid placing content on the hinge.
 
 ### 3. Notifications
@@ -614,5 +691,5 @@ Cross-cutting work to make each form factor feel native, plus robustness improve
 1. **HTTP client: Ktor vs Retrofit/OkHttp.** Ktor is more Kotlin-idiomatic and keeps a KMP door open; Retrofit has a larger community and more sample code. Both work. Default: Ktor.
 2. **Amplify Android vs hand-rolled Cognito SRP.** Amplify adds ~3-4 MB after R8 but provides token management, `EncryptedSharedPreferences` integration, and matches the iOS choice. Hand-rolling SRP saves size but costs development time. Default: Amplify.
 3. **`kit/` as `android-library` vs `java-library`.** If `kit/` could avoid Android dependencies it would build faster and be easier to unit test. But Amplify pulls in Android transitively, so `android-library` is likely required. Revisit if Amplify is replaced.
-4. **Rich text compose.** Jetpack Compose's `TextField` with `AnnotatedString` supports basic formatting but lacks a built-in toolbar or HTML export. Options: minimal custom toolbar (bold/italic/link only, export to HTML manually), or a third-party rich-text editor library. Spike in Phase 5.
-5. **Cross-device draft sync.** The API surface doesn't expose IMAP `APPEND`. Drafts are local-only in 1.1.x. If cross-device drafts are important, a `/save_draft` Lambda could be added in a future version.
+4. **Rich text compose (Markdown-canonical).** The export target is **Markdown, not HTML** -- the first-party composers persist Markdown and emit the Markdown source as the text part so drafts round-trip losslessly across clients (see Phase 5). Compose's `TextField` with `AnnotatedString` supports basic formatting but has no built-in toolbar; the open question is only the *editor surface*: a minimal custom toolbar (bold/italic/link/list) over a Markdown buffer, versus a WebView-hosted editor reusing the same `marked.js`/`turndown.js` pipeline the Apple/web composers use for byte-parity. The canonical format is settled either way. Spike in Phase 5.
+5. **Cross-device draft sync -- resolved.** `/save_draft` shipped (0.10.x) and the Apple clients use it; the Android client syncs drafts server-side rather than staying local-only (see Phase 5 and [`docs/draft-sync-and-threading.md`](../draft-sync-and-threading.md)). No new Lambda needed.

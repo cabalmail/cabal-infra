@@ -83,12 +83,12 @@ struct MailRootView: View {
     /// from the folder-load path (`landOnInboxAndOfferResume`) instead.
     @Environment(\.scenePhase) private var scenePhase
     /// Global-search model for the wide (iPad-regular / macOS) layout, owned
-    /// here so the sidebar search field and the content column share one query
+    /// here so the toolbar search field and the content column share one query
     /// and result set. The compact-width analogue is `SearchView` (the iPhone
     /// `Tab(role: .search)`); there's no bottom tab bar here, so search is
-    /// reached from the sidebar instead.
+    /// reached from the detail column's toolbar instead.
     @State private var searchModel: MessageListViewModel?
-    /// Focus on the sidebar search field. Drives the content-column swap: while
+    /// Focus on the global search field. Drives the content-column swap: while
     /// the field is focused (or holds a query / active search) the content
     /// column shows results instead of the selected folder.
     @FocusState private var searchFieldFocused: Bool
@@ -121,7 +121,7 @@ struct MailRootView: View {
     }
 
     /// Whether the content column should show search results rather than the
-    /// selected folder: the sidebar field is focused, holds a query, or a
+    /// selected folder: the search field is focused, holds a query, or a
     /// search is currently active.
     private var isSearching: Bool {
         guard let searchModel else { return false }
@@ -135,13 +135,13 @@ struct MailRootView: View {
         )
     }
 
-    /// Content column: global search results while the sidebar search field is
+    /// Content column: global search results while the search field is
     /// engaged, otherwise the selected folder's message list (or an empty-state
     /// prompt). Extracted so `body` can hang the Settings gear on its toolbar.
     @ViewBuilder
     private var contentColumn: some View {
         if isSearching, let searchModel {
-            // Global search owns the content column while the sidebar field
+            // Global search owns the content column while the search field
             // is engaged. Stable `.id` so it isn't torn down per keystroke;
             // the detail column still reads the selected message, against
             // the result's true mailbox via `crossFolderDetail`.
@@ -187,41 +187,7 @@ struct MailRootView: View {
             // macOS pass through untouched. See `resizableContentColumn`.
             resizableContentColumn(decoratedContentColumn)
         } detail: {
-            if listSelectionCount >= 2 {
-                // Multi-selection: no single message to read, so mirror Mail's
-                // "N Messages Selected" pane. Bulk actions live in the action
-                // bar beneath the message list.
-                ContentUnavailableView(
-                    "\(listSelectionCount) Messages Selected",
-                    systemImage: "envelope.badge",
-                    description: Text("Use the action bar below the list to act on them together.")
-                )
-                #if os(macOS)
-                .toolbar { emptyDetailToolbar }
-                #endif
-            } else if let folder = detailFolder, let selectedEnvelope {
-                MessageDetailView(
-                    folder: folder,
-                    envelope: selectedEnvelope
-                )
-                .id("\(folder.path)#\(selectedEnvelope.uid)")
-            } else {
-                ContentUnavailableView(
-                    "No message selected",
-                    systemImage: "envelope",
-                    description: Text("Pick a message from the list to read it.")
-                )
-                #if os(macOS)
-                // Reserve the detail column's toolbar slots with disabled
-                // stand-ins so the message-list toolbar (compose, reload)
-                // stays anchored above the list pane. Without these,
-                // NavigationSplitView's unified toolbar packs the list
-                // items at the trailing edge — visually above the empty
-                // detail pane — until a message is picked and the real
-                // detail toolbar shoves them back into place.
-                .toolbar { emptyDetailToolbar }
-                #endif
-            }
+            detailColumn
         }
         // Force the iPad split view to OVERLAY the sidebar rather than tile it,
         // so revealing folders floats over the message list instead of pushing
@@ -427,11 +393,73 @@ extension MailRootView {
         }
     }
 
-    /// Sidebar search field — the wide-layout entry to global search. Engaging
-    /// it (focus, a query, or an active search) swaps the content column to
-    /// cross-folder results; clearing and unfocusing it returns to the folder.
+    /// Detail column content: the reader for the selected message, a
+    /// multi-selection placeholder, or an empty-state prompt — plus the global
+    /// search field, hosted here (above the reading pane) on wide layouts.
+    ///
+    /// Search formerly lived at the top of the sidebar; on iPad-regular / macOS
+    /// it now right-aligns in this column's toolbar. Engaging it swaps the
+    /// *content* column to cross-folder results (via `isSearching`); the reader
+    /// shown here stays put until a result is picked. Compact iPhone keeps its
+    /// dedicated search tab (`SearchView`) and adds nothing here.
     @ViewBuilder
-    private var searchField: some View {
+    private var detailColumn: some View {
+        Group {
+            if listSelectionCount >= 2 {
+                // Multi-selection: no single message to read, so mirror Mail's
+                // "N Messages Selected" pane. Bulk actions live in the action
+                // bar beneath the message list.
+                ContentUnavailableView(
+                    "\(listSelectionCount) Messages Selected",
+                    systemImage: "envelope.badge",
+                    description: Text("Use the action bar below the list to act on them together.")
+                )
+                #if os(macOS)
+                .toolbar { emptyDetailToolbar }
+                #endif
+            } else if let folder = detailFolder, let selectedEnvelope {
+                MessageDetailView(
+                    folder: folder,
+                    envelope: selectedEnvelope
+                )
+                .id("\(folder.path)#\(selectedEnvelope.uid)")
+            } else {
+                ContentUnavailableView(
+                    "No message selected",
+                    systemImage: "envelope",
+                    description: Text("Pick a message from the list to read it.")
+                )
+                #if os(macOS)
+                // Reserve the detail column's toolbar slots with disabled
+                // stand-ins so the message-list toolbar (compose, reload)
+                // stays anchored above the list pane. Without these,
+                // NavigationSplitView's unified toolbar packs the list
+                // items at the trailing edge — visually above the empty
+                // detail pane — until a message is picked and the real
+                // detail toolbar shoves them back into place.
+                .toolbar { emptyDetailToolbar }
+                #endif
+            }
+        }
+        // Global search rides the reading pane's toolbar on wide layouts (its
+        // former home was the sidebar top). `.primaryAction` right-aligns it
+        // above the detail column. Compact iPhone (no `isWideSidebar`) reaches
+        // search through its dedicated tab instead, so nothing is added there.
+        .toolbar {
+            if isWideSidebar {
+                ToolbarItem(placement: .primaryAction) {
+                    toolbarSearchField
+                }
+            }
+        }
+    }
+
+    /// The search field itself — magnifying-glass icon, the query text field,
+    /// and a clear button — on a rounded translucent background. Shared by the
+    /// sidebar (compact) and toolbar (wide) hosts, which add their own outer
+    /// layout (`searchField` / `toolbarSearchField`).
+    @ViewBuilder
+    private var searchFieldCore: some View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
@@ -462,9 +490,27 @@ extension MailRootView {
             RoundedRectangle(cornerRadius: 7)
                 .fill(Color.secondary.opacity(0.12))
         )
-        .padding(.horizontal)
-        .padding(.top, 8)
-        .padding(.bottom, 4)
+    }
+
+    /// Sidebar host for the search field (compact iPhone): full column width
+    /// with the sidebar's edge padding. Engaging it (focus, a query, or an
+    /// active search) swaps the content column to cross-folder results; clearing
+    /// and unfocusing it returns to the folder.
+    @ViewBuilder
+    private var searchField: some View {
+        searchFieldCore
+            .padding(.horizontal)
+            .padding(.top, 8)
+            .padding(.bottom, 4)
+    }
+
+    /// Toolbar host for the search field (wide iPad-regular / macOS): a fixed
+    /// width so it right-aligns cleanly above the message detail column rather
+    /// than stretching. Same query/focus wiring as the sidebar host.
+    @ViewBuilder
+    private var toolbarSearchField: some View {
+        searchFieldCore
+            .frame(width: 260)
     }
 
     @ViewBuilder
@@ -483,7 +529,12 @@ extension MailRootView {
             .padding(.top, 12)
             #endif
 
-            searchField
+            // On wide layouts (iPad-regular / macOS) global search moved to the
+            // detail column's toolbar (see `detailColumn`); the sidebar keeps it
+            // only on compact iPhone, which has no reading-pane toolbar.
+            if !isWideSidebar {
+                searchField
+            }
 
             // Folders own the sidebar; addresses moved to the trailing inspector
             // (see `.inspector` in `body`). The wide layout's per-context filter —

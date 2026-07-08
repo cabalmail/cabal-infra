@@ -1,0 +1,79 @@
+---
+name: Logo Assets
+
+# Regenerate every logo derivative from vector/cabalmail-logo.svg whenever the
+# source vector (or the generator itself) changes, or on demand. The generator
+# fetches a version-pinned resvg + oxipng, so the linux runner produces the
+# same bytes a maintainer gets locally on macOS.
+#
+# Behaviour:
+#   - main   : drift gate only. main is protected (PR-merge only), so assets
+#              must already be regenerated in the PR. A mismatch fails the run.
+#   - stage / development / manual dispatch : regenerate and commit the result
+#              back to the branch (direct pushes are allowed on those).
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - stage
+      - development
+    paths:
+      - 'vector/cabalmail-logo.svg'
+      - 'scripts/generate-logo-assets'
+      - '.github/scripts/fetch-resvg.sh'
+      - '.github/workflows/logo-assets.yml'
+
+concurrency:
+  group: logo-assets-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  regenerate:
+    name: Regenerate logo assets
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+
+      - name: Regenerate from vector/cabalmail-logo.svg
+        run: ./scripts/generate-logo-assets
+
+      - name: Detect drift
+        id: drift
+        run: |
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Logo assets are already in sync with the source vector."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git --no-pager diff --stat
+          fi
+
+      # On protected main the assets must arrive already-regenerated (via the
+      # PR). A mismatch means someone edited the vector without running
+      # `make logo` — fail loudly instead of silently shipping stale art.
+      - name: Fail on drift (main)
+        if: steps.drift.outputs.changed == 'true' && github.ref_name == 'main'
+        run: |
+          echo "::error::Logo assets are stale relative to vector/cabalmail-logo.svg."
+          echo "Run 'make logo' and commit the result."
+          exit 1
+
+      # stage / development / manual dispatch: commit the regenerated assets
+      # back. The push touches only generated files, never the source vector,
+      # so it does not re-trigger this workflow.
+      - name: Commit regenerated assets
+        if: steps.drift.outputs.changed == 'true' && github.ref_name != 'main'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Regenerate logo assets from vector/cabalmail-logo.svg"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
