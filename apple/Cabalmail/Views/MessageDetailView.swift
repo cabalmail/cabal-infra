@@ -89,8 +89,18 @@ struct MessageDetailView: View {
                 }
             }
         }
+        #if os(macOS)
+        // macOS renders the subject in the window's title bar (its own chrome),
+        // separate from the reading area, so it doesn't duplicate the header
+        // block. iPad/iPhone suppress the inline title (see #else) because there
+        // it sat right above the header's copy of the subject.
         .navigationTitle(envelope.subject ?? "(no subject)")
-        #if os(iOS) || os(visionOS)
+        #else
+        // Suppress the inline nav-bar subject: it duplicated the subject shown
+        // in `headerBlock` right below it, and blanking it reclaims the detail
+        // column's top bar for the global search field that `MailRootView` hosts
+        // there on wide (iPad-regular) layouts.
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         // Reading a message uses the full bottom edge for the action toolbar;
         // the compact-width section `TabView`'s bottom tab bar would otherwise

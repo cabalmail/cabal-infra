@@ -14,8 +14,8 @@ import CabalmailKit
 /// archive / move land in the right folder.
 ///
 /// iPad / macOS reach the same `.search`-scope list through `MailRootView`'s
-/// sidebar search field instead (no bottom tab bar there), so this view is the
-/// compact-width surface only.
+/// reading-pane toolbar search field instead (no bottom tab bar there), so this
+/// view is the compact-width surface only.
 struct SearchView: View {
     @Environment(AppState.self) private var appState
     @Environment(Preferences.self) private var preferences

@@ -80,16 +80,24 @@ struct SignedInRootView: View {
     /// management views were retired. Folders have no dedicated tab: the Mail
     /// tab's sidebar `FolderListView` already browses and manages them
     /// (create/delete/subscribe live on its rows and toolbar).
+    ///
+    /// Every tab wraps its content in `tabBarTrayShield()`: the floating bar
+    /// only draws the capsules, so without it, touches in the tray's margins
+    /// fall through to the rows visible behind the bar (see
+    /// `TabBarTrayShield.swift`).
     private var compactTabs: some View {
         TabView {
             Tab("Mail", systemImage: "tray") {
                 MailRootView()
+                    .tabBarTrayShield()
             }
             Tab("Addresses", systemImage: "at") {
                 AddressManagementTab()
+                    .tabBarTrayShield()
             }
             Tab("Settings", systemImage: "gear") {
                 SettingsView()
+                    .tabBarTrayShield()
             }
             // The search role detaches to the bottom-right, next to the tab bar.
             // On iOS 26 it adopts the morph (tab bar collapses to a dismiss
@@ -98,6 +106,7 @@ struct SignedInRootView: View {
             // `.searchable` inside `SearchView`.
             Tab(role: .search) {
                 SearchView()
+                    .tabBarTrayShield()
             }
         }
     }
