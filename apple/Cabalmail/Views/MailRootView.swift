@@ -483,7 +483,14 @@ extension MailRootView {
             .padding(.top, 12)
             #endif
 
-            searchField
+            // The sidebar search field is the wide-layout (iPad-regular / macOS)
+            // entry to global search — those layouts have no bottom tab bar. On
+            // compact iPhone the dedicated Search tab (`SignedInRootView`'s
+            // `Tab(role: .search)`) owns search, so this field would be redundant
+            // above the folder list; omit it there.
+            if isWideSidebar {
+                searchField
+            }
 
             // Folders own the sidebar; addresses moved to the trailing inspector
             // (see `.inspector` in `body`). The wide layout's per-context filter —
