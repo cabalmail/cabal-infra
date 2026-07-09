@@ -601,72 +601,65 @@ References:
 
 ## App icons
 
-Real Cabalmail artwork is installed in both asset catalogs, rendered from
-the vector sources in [`apple/handoff/`](handoff/) (authored by Claude
-Design; see [`handoff/README.md`](handoff/README.md) for the full spec
-including geometry, color tokens, and the per-platform do-not list).
+Real Cabalmail artwork is installed in both asset catalogs, all of it
+generated from the single source vector at
+[`vector/cabalmail-logo.svg`](../vector/cabalmail-logo.svg) by
+[`scripts/generate-logo-assets`](../scripts/generate-logo-assets). Nothing
+under the asset catalogs is hand-edited — edit the vector and regenerate.
+See [`vector/README.md`](../vector/README.md) for the full spec (geometry,
+color tokens, placement transform, per-platform do-not list).
 
 ```
 apple/Cabalmail/Assets.xcassets/AppIcon.appiconset/
-  AppIcon-light.png      (1024×1024, from AppIcon-ios-light.svg)
-  AppIcon-dark.png       (1024×1024, from AppIcon-ios-dark.svg)
-  AppIcon-tinted.png     (1024×1024 RGBA, from AppIcon-ios-tinted.svg —
-                          white glyph on transparent; system tints the
-                          white pixels at runtime)
+  AppIcon-light.png      (1024×1024 RGB, forest glyph on cream gradient)
+  AppIcon-dark.png       (1024×1024 RGB, parchment glyph on ink gradient)
+  AppIcon-tinted.png     (1024×1024 RGBA — white glyph on transparent;
+                          system tints the white pixels at runtime)
+apple/Cabalmail/Assets.xcassets/AppIconVision.solidimagestack/
+  Back / Middle / Front layers  (1024×1024; opaque cream plate, forest
+                          C-disc, forest-deep M — composited with parallax)
 apple/CabalmailMac/Assets.xcassets/AppIcon.appiconset/
   icon_16x16.png … icon_512x512@2x.png    (the full 10-file macOS ladder,
-                                          re-rendered from the light SVG
-                                          at each exact size — no bitmap
-                                          downscaling)
+                          re-rendered from the light SVG at each exact size
+                          — no bitmap downscaling)
 ```
 
 `Contents.json` in the iOS catalog uses the iOS 17+ `appearances`
 convention (`luminosity: dark` / `luminosity: tinted`) rather than the
-legacy single-idiom layout.
+legacy single-idiom layout. Opaque icons are truecolor RGB (App Store
+forbids an alpha channel on opaque icons); the tinted and visionOS layers
+keep transparency.
 
-Both catalogs pass `xcrun actool` cleanly (iphoneos 18, macosx 15, xros 2).
+All catalogs pass `xcrun actool` cleanly (iphoneos 18, macosx 15, xros 2).
 
-### Regenerating from the SVG sources
+### Regenerating
 
 ```sh
-brew install librsvg                  # one-time
-cd apple
-
-# iOS / iPadOS / visionOS variants
-IOS="Cabalmail/Assets.xcassets/AppIcon.appiconset"
-rsvg-convert -w 1024 -h 1024 handoff/AppIcon-ios-light.svg   -o "$IOS/AppIcon-light.png"
-rsvg-convert -w 1024 -h 1024 handoff/AppIcon-ios-dark.svg    -o "$IOS/AppIcon-dark.png"
-rsvg-convert -w 1024 -h 1024 handoff/AppIcon-ios-tinted.svg  -o "$IOS/AppIcon-tinted.png"
-
-# macOS ladder
-MAC="CabalmailMac/Assets.xcassets/AppIcon.appiconset"
-for pair in 16:icon_16x16 32:icon_16x16@2x 32:icon_32x32 64:icon_32x32@2x \
-            128:icon_128x128 256:icon_128x128@2x 256:icon_256x256 512:icon_256x256@2x \
-            512:icon_512x512 1024:icon_512x512@2x; do
-  size="${pair%%:*}"; name="${pair##*:}"
-  rsvg-convert -w "$size" -h "$size" handoff/AppIcon-ios-light.svg -o "$MAC/${name}.png"
-done
+make logo            # or: ./scripts/generate-logo-assets
 ```
 
-Do **not** apply a squircle mask, bake a drop-shadow, or grayscale the
-tinted variant in any regen pipeline — iOS / macOS / visionOS each own
-those at runtime. The handoff README spells this out.
+One command regenerates every derivative (both Apple catalogs, the React
+client, the docs images, the front-door favicon) idempotently. The generator
+uses a version-pinned resvg + oxipng, so output is byte-identical across
+macOS and CI. Do **not** apply a squircle mask, bake a drop-shadow, or
+grayscale the tinted variant — iOS / macOS / visionOS each own those at
+runtime.
 
-### visionOS is currently on the shared iOS `.appiconset`
+### visionOS uses the layered `AppIconVision.solidimagestack`
 
-visionOS apps can ship a layered `AppIcon.solidimagestack` (back / middle
-/ front layers, composited with parallax on gaze focus). The three
-visionOS source layers already exist in `apple/handoff/`
-(`AppIcon-visionos-{back,middle,front}.svg`), but the current build does
-**not** install them. The `Cabalmail` target's visionOS destination is
-served by the same `AppIcon.appiconset` as iOS/iPadOS, which is a valid
-visionOS icon configuration — just not the layered one.
+The `Cabalmail` target's visionOS destination is served by a layered
+`AppIconVision.solidimagestack` (back / middle / front layers, composited
+with parallax on gaze focus), wired via a per-SDK icon-name override in
+`project.yml`:
 
-Adding the solidimagestack requires a new `AppIcon.solidimagestack`
-asset, per-layer `Content.imageset/Contents.json` files, and a
-per-platform icon name wired through `project.yml` (e.g.
-`ASSETCATALOG_COMPILER_APPICON_NAME` overridden for xros). Validating
-the parallax result requires a visionOS device in the loop.
+```yaml
+"ASSETCATALOG_COMPILER_APPICON_NAME[sdk=xros*]": AppIconVision
+```
+
+iOS / iPadOS keep the flat `AppIcon.appiconset`. The back plate is a
+fully-opaque 1024 bitmap (actool rejects a transparent back layer); the
+system applies the circular mask. Validating the parallax depth effect
+still requires a visionOS device in the loop.
 
 ## Architecture
 
@@ -825,21 +818,37 @@ libraries now sourced from npm via the React manifest, the symlink
 convention has even less to recommend it. Revisit if a non-JS,
 non-npm-managed vendored dep ever appears.
 
-### Drafts: local only
+### Drafts: local buffer + cross-device sync
 
 `CabalmailKit.DraftStore` persists drafts as Codable JSON under the app
 support directory, keyed by UUID. `ComposeViewModel` autosaves every 5 s
-while the sheet is open, so a mid-compose app kill is recoverable.
+while the sheet is open, so a mid-compose app kill is recoverable — this
+local copy is the live editing buffer and the crash-recovery story.
 
-### Sent-folder APPEND: client-side after successful submission
+Drafts also sync across devices through the `/save_draft` Lambda, which
+owns a server-side lifecycle on the top-level `Drafts` mailbox. Server
+saves fire on compose close-without-send (always) and on a 60-second
+debounce while composing (skipped while the body is empty, while a send
+is in flight, or while another server save is running). The sync is
+last-writer-wins keyed on the returned `(uidvalidity, uid)`: each save
+passes the prior copy's coordinates as `replaces_*`, so the Lambda
+appends the new copy before expunging the old under a UIDVALIDITY guard
+whose worst-case failure is a duplicate draft, never a lost one. Opening
+a message in `Drafts` offers **Edit Draft**, reseeding compose from the
+fetched copy — recipients and subject from the envelope, Bcc and
+threading from the headers, body from the Markdown text part. Because
+both first-party composers are Markdown-canonical the round trip is
+lossless. See `docs/draft-sync-and-threading.md`.
 
-Neither mail tier auto-APPENDs to `Sent`; the React app's backend
-replicates the message into `Sent` from the `send` Lambda (see
-`lambda/api/send/function.py`). `CabalmailClient.send(_:)` mirrors that
-behavior: it stamps a shared `Message-ID`, submits via SMTP, and
-best-effort-APPENDs the same payload to `Sent` with `\Seen` set. The
-APPEND is best-effort because a failed Sent-folder write on an
-already-delivered message shouldn't surface as a send failure.
+### Sent-folder copy: server-side via `/send`
+
+Neither mail tier auto-APPENDs to `Sent`. The `/send` Lambda owns the
+whole outbound shuffle — Outbox APPEND, SMTP submission, and the Sent
+copy (staged Bcc-free and written by a decoupled queue consumer, see
+`lambda/api/append_sent`) — so `CabalmailClient.send(_:)` posts the
+compose payload and does no client-side APPEND. Sending from a synced
+draft passes the draft's `discard_draft_*` coordinates so the server
+best-effort expunges the Drafts copy once delivery succeeds.
 
 ### Compose scene
 
