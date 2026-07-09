@@ -13,3 +13,4 @@ terraform/infra/backend.tf
 .claude/worktrees/
 .claude/memory/
 .DS_Store
+.cache/

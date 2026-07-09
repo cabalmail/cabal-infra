@@ -153,20 +153,28 @@ jobs:
             | xcbeautify --renderer github-actions
 
   # -----------------------------------------------------------------------
-  # Build the app targets for the two product platforms. Unsigned — this
+  # Build the app targets for the three product platforms. Unsigned — this
   # job only verifies the code compiles and links; signing happens in the
-  # upload jobs below.
+  # upload jobs below. visionOS gets its own leg because the Cabalmail
+  # scheme's iOS and xros compilations diverge (`#if os(visionOS)` paths,
+  # per-SDK availability): an API that is compile-time unavailable on
+  # visionOS builds green for iOS and only breaks here.
   # -----------------------------------------------------------------------
   app-build:
-    name: Build ${{ matrix.scheme }}
+    name: Build ${{ matrix.scheme }} (${{ matrix.platform }})
     runs-on: macos-15
     strategy:
       fail-fast: false
       matrix:
         include:
           - scheme: Cabalmail
+            platform: iOS
             destination: 'generic/platform=iOS'
+          - scheme: Cabalmail
+            platform: visionOS
+            destination: 'generic/platform=visionOS'
           - scheme: CabalmailMac
+            platform: macOS
             destination: 'generic/platform=macOS'
     steps:
       - name: Checkout
@@ -197,9 +205,9 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/Library/Developer/Xcode/DerivedData
-          key: dd-${{ runner.os }}-${{ matrix.scheme }}-${{ hashFiles('apple/project.yml', 'apple/CabalmailKit/Package.swift', 'apple/CabalmailKit/Package.resolved') }}
+          key: dd-${{ runner.os }}-${{ matrix.scheme }}-${{ matrix.platform }}-${{ hashFiles('apple/project.yml', 'apple/CabalmailKit/Package.swift', 'apple/CabalmailKit/Package.resolved') }}
           restore-keys: |
-            dd-${{ runner.os }}-${{ matrix.scheme }}-
+            dd-${{ runner.os }}-${{ matrix.scheme }}-${{ matrix.platform }}-
 
       - name: Build ${{ matrix.scheme }} (unsigned)
         working-directory: apple
@@ -223,15 +231,35 @@ jobs:
       run: echo "Approved"
 
   # -----------------------------------------------------------------------
-  # Signed archive + TestFlight upload for iOS/iPadOS/visionOS. Only runs
-  # on main or stage and only if the required secrets are configured.
+  # Signed archive + TestFlight upload for iOS/iPadOS and visionOS. Only
+  # runs on main or stage and only if the required secrets are configured.
+  # One matrix leg per App Store platform: the iOS archive covers
+  # iPhone/iPad (and used to be what Vision Pro installed, in compatibility
+  # mode); the visionOS leg ships the native xros build so the headset
+  # gets the layered AppIconVision stack, real windows, etc. Both legs
+  # sign with the same bundle ID, Apple Distribution certificate, and
+  # provisioning profile — modern App Store profiles list iOS and xrOS
+  # together. If the visionOS leg fails signing with a "doesn't include
+  # the xrOS platform" error, regenerate the App Store profile in the
+  # developer portal and refresh the IOS_APP_STORE_PROFILE secret.
   # -----------------------------------------------------------------------
   upload-ios:
-    name: Upload iOS to TestFlight
+    name: Upload ${{ matrix.platform }} to TestFlight
     needs: approval
     if: ${{ github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'stage') }}
     runs-on: macos-15
     environment: ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
+    strategy:
+      # Never cancel a leg mid-upload because the other leg failed.
+      fail-fast: false
+      matrix:
+        include:
+          - platform: iOS
+            destination: 'generic/platform=iOS'
+            altool_type: ios
+          - platform: visionOS
+            destination: 'generic/platform=visionOS'
+            altool_type: visionos
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
@@ -394,7 +422,7 @@ jobs:
             -workspace Cabalmail.xcworkspace \
             -scheme Cabalmail \
             -configuration Release \
-            -destination 'generic/platform=iOS' \
+            -destination '${{ matrix.destination }}' \
             -archivePath "$RUNNER_TEMP/Cabalmail.xcarchive" \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
             IOS_APP_STORE_PROFILE_UUID="$IOS_APP_STORE_PROFILE_UUID" \
@@ -412,7 +440,7 @@ jobs:
           # needs the `provisioningProfiles` dict to map each bundle ID to
           # a profile; the archive's embedded profile alone isn't always
           # consulted during export.
-          PLIST="$RUNNER_TEMP/ExportOptions-iOS.plist"
+          PLIST="$RUNNER_TEMP/ExportOptions-${{ matrix.altool_type }}.plist"
           cat > "$PLIST" <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -440,7 +468,7 @@ jobs:
           EOF
           xcodebuild -exportArchive \
             -archivePath "$RUNNER_TEMP/Cabalmail.xcarchive" \
-            -exportPath "$RUNNER_TEMP/export-ios" \
+            -exportPath "$RUNNER_TEMP/export-${{ matrix.altool_type }}" \
             -exportOptionsPlist "$PLIST" \
             | xcbeautify --renderer github-actions
 
@@ -451,28 +479,34 @@ jobs:
           ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
         run: |
           set -euo pipefail
-          IPA=$(ls "$RUNNER_TEMP/export-ios"/*.ipa | head -n1)
+          IPA=$(ls "$RUNNER_TEMP/export-${{ matrix.altool_type }}"/*.ipa | head -n1)
           echo "Uploading $IPA"
-          LOG="$RUNNER_TEMP/altool-ios.log"
+          LOG="$RUNNER_TEMP/altool-${{ matrix.altool_type }}.log"
           # altool returns 0 even on validation failure in some releases, so
           # we also grep for its failure banners and fail the step ourselves.
           xcrun altool --upload-app \
             -f "$IPA" \
-            --type ios \
+            --type ${{ matrix.altool_type }} \
             --apiKey "$ASC_KEY_ID" \
             --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tee "$LOG"
-          # altool writes timestamped "ERROR:" lines and returns 0 anyway in
-          # some releases, so we scan the log and fail the step ourselves if
-          # any error marker appears. The pattern matches anywhere in the
-          # line since altool prefixes errors with a timestamp.
-          if grep -qE '(UPLOAD FAILED|ERROR: |iris-code : STATE_ERROR)' "$LOG"; then
-            ERRORS=$(grep -cE '(UPLOAD FAILED|ERROR: )' "$LOG")
-            echo "::error::altool reported $ERRORS error line(s) despite exit code 0. Review the log above."
+          # altool's exit code is unreliable (0 on some validation failures),
+          # and its "ERROR:" lines are unreliable the other way: a transient
+          # chunk failure logs "ERROR: ... WILL RETRY PART n ..." and then
+          # recovers (this false-failed a real upload once - the log ended
+          # "UPLOAD SUCCEEDED with no errors"). Trust the final verdict
+          # banner instead: pass iff altool printed UPLOAD SUCCEEDED and no
+          # failure banner; recovered retries only warn.
+          if grep -qE '(UPLOAD FAILED|iris-code : STATE_ERROR)' "$LOG" \
+             || ! grep -q 'UPLOAD SUCCEEDED' "$LOG"; then
+            echo "::error::altool did not report a clean UPLOAD SUCCEEDED despite exit code 0. Review the log above."
             exit 1
+          fi
+          if grep -q 'ERROR: ' "$LOG"; then
+            echo "::warning::altool logged transient error(s) but recovered - final verdict was UPLOAD SUCCEEDED."
           fi
           echo "::notice::altool upload completed cleanly."
           {
-            echo "### iOS TestFlight upload"
+            echo "### ${{ matrix.platform }} TestFlight upload"
             echo ""
             echo "- Workflow run: \`${{ github.run_number }}\`"
             echo "- Environment: \`${{ github.ref_name == 'main' && 'prod' || 'stage' }}\`"
@@ -483,7 +517,10 @@ jobs:
         # Prod releases only - the stage track is the developer's own and
         # ships no notes. Best-effort: the binary is already uploaded, so the
         # script warns and exits 0 on any failure rather than failing release.
-        if: steps.check.outputs.enabled == 'true' && github.ref_name == 'main'
+        # iOS leg only: the script matches builds by CFBundleVersion, and the
+        # legs stamp different timestamps — one notes pass per release is
+        # enough until the script grows platform awareness.
+        if: steps.check.outputs.enabled == 'true' && github.ref_name == 'main' && matrix.platform == 'iOS'
         env:
           ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
@@ -739,14 +776,19 @@ jobs:
             --type osx \
             --apiKey "$ASC_KEY_ID" \
             --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tee "$LOG"
-          # altool writes timestamped "ERROR:" lines and returns 0 anyway in
-          # some releases, so we scan the log and fail the step ourselves if
-          # any error marker appears. The pattern matches anywhere in the
-          # line since altool prefixes errors with a timestamp.
-          if grep -qE '(UPLOAD FAILED|ERROR: |iris-code : STATE_ERROR)' "$LOG"; then
-            ERRORS=$(grep -cE '(UPLOAD FAILED|ERROR: )' "$LOG")
-            echo "::error::altool reported $ERRORS error line(s) despite exit code 0. Review the log above."
+          # altool's exit code is unreliable (0 on some validation failures),
+          # and its "ERROR:" lines are unreliable the other way: a transient
+          # chunk failure logs "ERROR: ... WILL RETRY PART n ..." and then
+          # recovers. Trust the final verdict banner instead: pass iff altool
+          # printed UPLOAD SUCCEEDED and no failure banner; recovered retries
+          # only warn. (Mirrors the iOS upload step.)
+          if grep -qE '(UPLOAD FAILED|iris-code : STATE_ERROR)' "$LOG" \
+             || ! grep -q 'UPLOAD SUCCEEDED' "$LOG"; then
+            echo "::error::altool did not report a clean UPLOAD SUCCEEDED despite exit code 0. Review the log above."
             exit 1
+          fi
+          if grep -q 'ERROR: ' "$LOG"; then
+            echo "::warning::altool logged transient error(s) but recovered - final verdict was UPLOAD SUCCEEDED."
           fi
           echo "::notice::altool upload completed cleanly."
 

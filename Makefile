@@ -101,3 +101,23 @@ apple-macos:    ; ./scripts/build-apple.sh macos
 apple-ios:      ; ./scripts/build-apple.sh ios
 apple-visionos: ; ./scripts/build-apple.sh visionos
 apple-kit-test: ; ./scripts/build-apple.sh kit-test
+
+# --- Brand logo assets -----------------------------------------------------
+# Regenerate every logo derivative (Apple icons, React favicon/logo set, docs
+# images, front-door favicon) from the single source vector/cabalmail-logo.svg.
+# Idempotent: pinned resvg + oxipng produce byte-identical output. The GitHub
+# workflow (.github/workflows/logo-assets.yml) runs the same command whenever
+# the source vector changes.
+#   make logo         # regenerate all derivatives
+#   make logo-check   # regenerate, then fail if anything drifted from git
+.PHONY: logo logo-check
+
+logo:
+	./scripts/generate-logo-assets
+
+# Drift gate: regenerate and fail if the tree changed (i.e. a committed asset
+# was hand-edited or is stale relative to the source vector).
+logo-check: logo
+	@git diff --quiet -- vector apple docs react front-door \
+	  || { echo "ERROR: logo assets are stale; run 'make logo' and commit."; \
+	       git --no-pager diff --stat -- vector apple docs react front-door; exit 1; }
