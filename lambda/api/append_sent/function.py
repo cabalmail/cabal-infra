@@ -10,7 +10,9 @@ serving. After the queue's maxReceiveCount the record lands in the DLQ.
 
 The event source mapping uses batch_size 1 so a single failing job retries on
 its own rather than dragging a whole batch with it.'''
+import errno
 import json
+import os
 from botocore.exceptions import ClientError # pylint: disable=import-error
 from helper import get_imap_client # pylint: disable=import-error
 from helper import get_object # pylint: disable=import-error
@@ -45,9 +47,25 @@ def _process(job):
 
     # Connect to INBOX (always present); create/select Sent ourselves so a fresh
     # mailbox without a Sent folder still works. get_imap_client raises during a
-    # planned IMAP roll, which is exactly when we WANT the job to retry, so it is
-    # deliberately not guarded here.
-    client = get_imap_client(None, user, 'INBOX')
+    # planned IMAP roll (MaintenanceError, not an OSError), which is exactly when
+    # we WANT the job to retry, so that path is deliberately not guarded here.
+    try:
+        client = get_imap_client(None, user, 'INBOX')
+    except OSError as err:
+        if err.errno == errno.EBUSY:
+            # The sandbox resolver can wedge such that getaddrinfo fails with
+            # EBUSY, and it sticks to this execution environment: every
+            # invocation here fails identically. Because SQS pins redelivery
+            # (batch_size 1) to the same warm container, the job would be
+            # trapped retrying forever until the DLQ, even though a fresh
+            # container resolves fine (interactive lambdas dodge this by
+            # retrying onto a different container). Crash the process so Lambda
+            # retires the poisoned container; SQS redelivers to a cold-started
+            # one. os._exit skips atexit/flush, so emit the log line first.
+            print('[append-sent] getaddrinfo EBUSY: resolver wedged in this '
+                  f'container, retiring it so redelivery lands fresh: {err}')
+            os._exit(1)  # pylint: disable=protected-access
+        raise
     try:
         try:
             client.create_folder('Sent')
