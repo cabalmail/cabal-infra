@@ -531,7 +531,16 @@ extension MailRootView {
             // glass capsule, which makes the decorative mark read as a button.
             // Detach it from the shared glass background where the API exists;
             // earlier systems render toolbar images plain anyway.
-            if #available(iOS 26.0, visionOS 26.0, *) {
+            #if os(visionOS)
+            // `.sharedBackgroundVisibility` has no visionOS availability (it
+            // won't compile even under `#available(visionOS 26.0)`), and this
+            // whole single-sidebar path is unused on visionOS anyway —
+            // `VisionSectionView` owns that platform. Emit the plain mark.
+            ToolbarItem(placement: .topBarLeading) {
+                CabalmailMark(size: isWideSidebar ? 102 : 132)
+            }
+            #else
+            if #available(iOS 26.0, *) {
                 ToolbarItem(placement: .topBarLeading) {
                     CabalmailMark(size: isWideSidebar ? 102 : 132)
                 }
@@ -541,6 +550,7 @@ extension MailRootView {
                     CabalmailMark(size: isWideSidebar ? 102 : 132)
                 }
             }
+            #endif
         }
         #endif
     }
