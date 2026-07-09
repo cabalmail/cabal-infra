@@ -12,11 +12,14 @@ import CabalmailKit
 ///   two never compete for the left edge. There's no dedicated Folders tab —
 ///   the Mail tab's sidebar `FolderListView` already browses and manages
 ///   folders.
-/// - Regular (iPad / visionOS): just `MailRootView` — a single show/hide
-///   sidebar owns the left edge, matching the macOS main window. Addresses /
-///   Folders / Settings move into a modal `SettingsSheet`, opened by the
-///   sidebar gear button or the ⌘, app command via
-///   `AppState.settingsRequestTick`.
+/// - Regular iPad: just `MailRootView` — a single show/hide sidebar owns the
+///   left edge, matching the macOS main window. Addresses / Folders / Settings
+///   move into a modal `SettingsSheet`, opened by the sidebar gear button or
+///   the ⌘, app command via `AppState.settingsRequestTick`.
+/// - visionOS: `VisionSectionView` — a floating leading tab bar (the visionOS
+///   `TabView` ornament), one tab per section. The iPad single-sidebar layout
+///   hid the folder list behind a reveal toggle visionOS never surfaced, so it
+///   gets the tab idiom instead (the folder list is its own tab there).
 /// - macOS renders `MailRootView` directly and reaches the three sections
 ///   through its dedicated Settings scene (⌘,, `SettingsTabsView`).
 ///
@@ -29,7 +32,11 @@ import CabalmailKit
 struct SignedInRootView: View {
     @Environment(AppState.self) private var appState
     @State private var isOffline = false
-    #if !os(macOS)
+    // iPad only: the regular-width branch below reads the size class and
+    // presents the Settings sheet. visionOS uses its own tab bar
+    // (`VisionSectionView`) and macOS its Settings scene, so neither compiles
+    // this state — guarding it to `os(iOS)` keeps them warning-clean.
+    #if os(iOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var settingsPresented = false
     #endif
@@ -48,6 +55,11 @@ struct SignedInRootView: View {
     private var sectionLayout: some View {
         #if os(macOS)
         MailRootView()
+        #elseif os(visionOS)
+        // A floating leading tab bar (Mail / Folders / Addresses / Settings /
+        // Search) rather than the iPad single-sidebar split — see
+        // `VisionSectionView`.
+        VisionSectionView()
         #else
         if horizontalSizeClass == .compact {
             compactTabs
@@ -67,7 +79,7 @@ struct SignedInRootView: View {
         #endif
     }
 
-    #if !os(macOS)
+    #if os(iOS)
     /// Compact-width section switcher: a plain bottom tab bar. No
     /// `.sidebarAdaptable` - at compact width there's no sidebar to adapt to,
     /// and the regular-width path never renders this, so the adaptive style's
@@ -167,11 +179,13 @@ struct SignedInRootView: View {
 }
 
 #if !os(macOS)
-/// Compact-iPhone Addresses tab: the shared `AddressListView` in its own
+/// Addresses tab for the compact-iPhone bottom bar and the visionOS tab bar
+/// (`VisionSectionView`): the shared `AddressListView` in its own
 /// `NavigationStack`. Selection is local and inert here (there's no adjacent
 /// message list to filter, as there is in the Mail sidebar) — the tab is a
 /// management surface, and request/revoke/favorite/copy live on the rows.
-private struct AddressManagementTab: View {
+/// Module-internal (not `private`) so `VisionSectionView` can reuse it.
+struct AddressManagementTab: View {
     @State private var selection: Address?
 
     var body: some View {
